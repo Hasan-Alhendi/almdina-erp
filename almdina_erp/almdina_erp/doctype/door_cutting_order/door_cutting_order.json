@@ -1,0 +1,323 @@
+{
+  "actions": [],
+  "autoname": "naming_series:",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "customer",
+    "order_date",
+    "status",
+    "external_reference",
+    "order_notes",
+    "board_section",
+    "board_item",
+    "board_material",
+    "board_color",
+    "board_thickness_mm",
+    "board_dimensions_column",
+    "full_board_length_mm",
+    "full_board_width_mm",
+    "board_rate_usd",
+    "cutting_cost_per_board_usd",
+    "cutting_settings_section",
+    "default_edge_type",
+    "kerf_mm",
+    "trim_margin_mm",
+    "packing_mode",
+    "pieces_section",
+    "pieces",
+    "totals_section",
+    "total_area_m2",
+    "total_edge_meters",
+    "required_boards",
+    "waste_area_m2",
+    "waste_percent",
+    "costs_column",
+    "mdf_cost_usd",
+    "cutting_cost_usd",
+    "edge_cost_usd",
+    "total_cost_usd",
+    "plan_section",
+    "packing_method",
+    "packing_score",
+    "engine_version",
+    "cutting_plan_json",
+    "cutting_plan_html"
+  ],
+  "fields": [
+    {
+      "default": "DCO-.YYYY.-.#####",
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "DCO-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Customer",
+      "options": "Customer",
+      "reqd": 1
+    },
+    {
+      "default": "Today",
+      "fieldname": "order_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "label": "Order Date",
+      "reqd": 1
+    },
+    {
+      "default": "Draft",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Draft\nPending Review\nApproved\nCutting In Progress\nCut Completed\nEdge Banding In Progress\nProduction In Progress\nQuality Check\nCompleted\nRejected\nOn Hold\nCancelled\nReplacement Required\nPartially Completed",
+      "read_only": 1
+    },
+    {
+      "fieldname": "external_reference",
+      "fieldtype": "Data",
+      "label": "External Reference"
+    },
+    {
+      "fieldname": "order_notes",
+      "fieldtype": "Small Text",
+      "label": "Order Notes"
+    },
+    {
+      "fieldname": "board_section",
+      "fieldtype": "Section Break",
+      "label": "Board"
+    },
+    {
+      "fieldname": "board_item",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Board Item",
+      "options": "Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "board_material",
+      "fieldtype": "Data",
+      "label": "Board Material",
+      "read_only": 1
+    },
+    {
+      "fieldname": "board_color",
+      "fieldtype": "Data",
+      "label": "Board Color",
+      "read_only": 1
+    },
+    {
+      "fieldname": "board_thickness_mm",
+      "fieldtype": "Float",
+      "label": "Board Thickness (MM)",
+      "read_only": 1
+    },
+    {
+      "fieldname": "board_dimensions_column",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "full_board_length_mm",
+      "fieldtype": "Float",
+      "label": "Board Length (MM)",
+      "read_only": 1
+    },
+    {
+      "fieldname": "full_board_width_mm",
+      "fieldtype": "Float",
+      "label": "Board Width (MM)",
+      "read_only": 1
+    },
+    {
+      "fieldname": "board_rate_usd",
+      "fieldtype": "Currency",
+      "label": "Board Rate USD",
+      "non_negative": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "cutting_cost_per_board_usd",
+      "fieldtype": "Currency",
+      "label": "Cutting Cost / Board USD",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "cutting_settings_section",
+      "fieldtype": "Section Break",
+      "label": "Cutting Settings"
+    },
+    {
+      "fieldname": "default_edge_type",
+      "fieldtype": "Link",
+      "label": "Default Edge Type",
+      "options": "Edge Banding Type"
+    },
+    {
+      "default": "3",
+      "fieldname": "kerf_mm",
+      "fieldtype": "Float",
+      "label": "Kerf (MM)",
+      "non_negative": 1,
+      "reqd": 1
+    },
+    {
+      "default": "5",
+      "fieldname": "trim_margin_mm",
+      "fieldtype": "Float",
+      "label": "Trim Margin (MM)",
+      "non_negative": 1,
+      "reqd": 1
+    },
+    {
+      "default": "Auto",
+      "fieldname": "packing_mode",
+      "fieldtype": "Select",
+      "label": "Packing Mode",
+      "options": "Auto\nMaxRects Best Short Side\nMaxRects Best Area\nMaxRects Bottom Left\nMaxRects Contact Point\nMaxRects Width\nMaxRects Length\nShelf Horizontal\nShelf Vertical\nShelf First Fit\nShelf Next Fit\nGuillotine Short Axis\nGuillotine Long Axis\nGuillotine Best Area Fit\nGuillotine Best Short Side Fit\nGuillotine Best Long Side Fit\nSkyline Bottom Left\nSkyline Best Fit",
+      "reqd": 1
+    },
+    {
+      "fieldname": "pieces_section",
+      "fieldtype": "Section Break",
+      "label": "Pieces"
+    },
+    {
+      "fieldname": "pieces",
+      "fieldtype": "Table",
+      "label": "Pieces",
+      "options": "Door Cutting Order Detail",
+      "reqd": 1
+    },
+    {
+      "fieldname": "totals_section",
+      "fieldtype": "Section Break",
+      "label": "Totals"
+    },
+    {
+      "fieldname": "total_area_m2",
+      "fieldtype": "Float",
+      "label": "Total Area M2",
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "total_edge_meters",
+      "fieldtype": "Float",
+      "label": "Total Edge Meters",
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "required_boards",
+      "fieldtype": "Int",
+      "label": "Required Boards",
+      "read_only": 1
+    },
+    {
+      "fieldname": "waste_area_m2",
+      "fieldtype": "Float",
+      "label": "Waste Area M2",
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "waste_percent",
+      "fieldtype": "Percent",
+      "label": "Waste Percent",
+      "precision": "2",
+      "read_only": 1
+    },
+    {
+      "fieldname": "costs_column",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "mdf_cost_usd",
+      "fieldtype": "Currency",
+      "label": "MDF Cost USD",
+      "read_only": 1
+    },
+    {
+      "fieldname": "cutting_cost_usd",
+      "fieldtype": "Currency",
+      "label": "Cutting Cost USD",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_cost_usd",
+      "fieldtype": "Currency",
+      "label": "Edge Cost USD",
+      "read_only": 1
+    },
+    {
+      "fieldname": "total_cost_usd",
+      "fieldtype": "Currency",
+      "label": "Total Cost USD",
+      "read_only": 1
+    },
+    {
+      "fieldname": "plan_section",
+      "fieldtype": "Section Break",
+      "label": "Cutting Plan"
+    },
+    {
+      "fieldname": "packing_method",
+      "fieldtype": "Data",
+      "label": "Packing Method",
+      "read_only": 1
+    },
+    {
+      "fieldname": "packing_score",
+      "fieldtype": "Data",
+      "label": "Packing Score",
+      "read_only": 1
+    },
+    {
+      "fieldname": "engine_version",
+      "fieldtype": "Data",
+      "label": "Engine Version",
+      "read_only": 1
+    },
+    {
+      "fieldname": "cutting_plan_json",
+      "fieldtype": "Long Text",
+      "hidden": 1,
+      "label": "Cutting Plan JSON",
+      "read_only": 1
+    },
+    {
+      "fieldname": "cutting_plan_html",
+      "fieldtype": "HTML",
+      "label": "Cutting Plan"
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Door Cutting Order",
+  "naming_rule": "By naming series field",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
