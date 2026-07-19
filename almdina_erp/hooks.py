@@ -6,5 +6,7 @@ app_email = ""
 app_license = "Proprietary"
 app_version = "1.0.0-dev"
 
+after_install = "almdina_erp.install.after_install"
+
 # Keep v1.0 business logic inside the app package. Client-side scripts are used
 # for interaction and preview only; authoritative calculations are server-side.
