@@ -1,0 +1,10 @@
+app_name = "almdina_erp"
+app_title = "Almdina ERP"
+app_publisher = "Horizon Tech"
+app_description = "MDF cutting, optimization, production and inventory management"
+app_email = ""
+app_license = "Proprietary"
+app_version = "1.0.0-dev"
+
+# Keep v1.0 business logic inside the app package. Client-side scripts are used
+# for interaction and preview only; authoritative calculations are server-side.
