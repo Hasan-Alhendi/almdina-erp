@@ -1,0 +1,134 @@
+{
+  "actions": [],
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "piece_no",
+    "width_cm",
+    "length_cm",
+    "qty",
+    "allow_rotation",
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+    "edge_type",
+    "edge_rate_usd",
+    "edge_cost_usd",
+    "area_m2",
+    "edge_meters",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "piece_no",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Piece No",
+      "read_only": 1
+    },
+    {
+      "fieldname": "width_cm",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Width (CM)",
+      "non_negative": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "length_cm",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Length (CM)",
+      "non_negative": 1,
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "qty",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Quantity",
+      "non_negative": 1,
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_rotation",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Allow Rotation"
+    },
+    {
+      "default": "0",
+      "fieldname": "edge_long_right",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Edge Long Right"
+    },
+    {
+      "default": "0",
+      "fieldname": "edge_long_left",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Edge Long Left"
+    },
+    {
+      "default": "0",
+      "fieldname": "edge_width_top",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Edge Width Top"
+    },
+    {
+      "default": "0",
+      "fieldname": "edge_width_bottom",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Edge Width Bottom"
+    },
+    {
+      "fieldname": "edge_type",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Edge Type",
+      "options": "Edge Banding Type"
+    },
+    {
+      "fieldname": "edge_rate_usd",
+      "fieldtype": "Currency",
+      "label": "Edge Rate USD",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_cost_usd",
+      "fieldtype": "Currency",
+      "label": "Edge Cost USD",
+      "read_only": 1
+    },
+    {
+      "fieldname": "area_m2",
+      "fieldtype": "Float",
+      "label": "Area M2",
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_meters",
+      "fieldtype": "Float",
+      "label": "Edge Meters",
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    }
+  ],
+  "istable": 1,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Door Cutting Order Detail"
+}
