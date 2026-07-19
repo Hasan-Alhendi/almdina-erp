@@ -1,0 +1,1 @@
+"""Almdina ERP business module."""
