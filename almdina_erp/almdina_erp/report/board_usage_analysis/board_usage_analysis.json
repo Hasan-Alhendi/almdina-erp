@@ -1,0 +1,20 @@
+{
+  "add_total_row": 1,
+  "columns": [],
+  "disabled": 0,
+  "doctype": "Report",
+  "filters": [],
+  "is_standard": "Yes",
+  "module": "Almdina ERP",
+  "name": "Board Usage Analysis",
+  "prepared_report": 0,
+  "ref_doctype": "Door Cutting Order",
+  "report_name": "Board Usage Analysis",
+  "report_type": "Script Report",
+  "roles": [
+    {"role":"Production Manager"},
+    {"role":"Stock Manager"},
+    {"role":"Accounts Management"},
+    {"role":"System Manager"}
+  ]
+}
