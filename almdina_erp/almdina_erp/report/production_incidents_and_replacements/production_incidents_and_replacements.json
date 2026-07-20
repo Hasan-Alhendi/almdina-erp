@@ -1,0 +1,19 @@
+{
+  "add_total_row": 1,
+  "columns": [],
+  "disabled": 0,
+  "doctype": "Report",
+  "filters": [],
+  "is_standard": "Yes",
+  "module": "Almdina ERP",
+  "name": "Production Incidents and Replacements",
+  "prepared_report": 0,
+  "ref_doctype": "Production Incident",
+  "report_name": "Production Incidents and Replacements",
+  "report_type": "Script Report",
+  "roles": [
+    {"role":"Production Manager"},
+    {"role":"Accounts Management"},
+    {"role":"System Manager"}
+  ]
+}
