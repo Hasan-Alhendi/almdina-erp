@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import frappe
@@ -21,6 +22,7 @@ class DoorCuttingOrder(Document):
     def validate(self) -> None:
         self._enforce_approved_immutability()
         self._set_piece_numbers()
+        self._validate_numeric_inputs()
         self._validate_piece_inputs()
         self._load_board_snapshot()
         self._calculate_piece_rows()
@@ -44,6 +46,31 @@ class DoorCuttingOrder(Document):
                 ).format(self.name)
             )
 
+    @staticmethod
+    def _finite(value: Any, label: str) -> float:
+        try:
+            number = float(value or 0)
+        except (TypeError, ValueError):
+            frappe.throw(_("{0} must be a valid numeric value.").format(label))
+        if not math.isfinite(number):
+            frappe.throw(_("{0} must be finite; NaN/Infinity are not allowed.").format(label))
+        return number
+
+    def _validate_numeric_inputs(self) -> None:
+        kerf = self._finite(self.kerf_mm, _("Kerf (MM)"))
+        trim = self._finite(self.trim_margin_mm, _("Trim Margin (MM)"))
+        board_rate = self._finite(self.board_rate_usd, _("Board Rate USD"))
+        cutting_cost = self._finite(self.cutting_cost_per_board_usd, _("Cutting Cost / Board USD"))
+
+        if kerf < 0:
+            frappe.throw(_("Kerf (MM) cannot be negative."))
+        if trim < 0:
+            frappe.throw(_("Trim Margin (MM) cannot be negative."))
+        if board_rate < 0:
+            frappe.throw(_("Board Rate USD cannot be negative."))
+        if cutting_cost < 0:
+            frappe.throw(_("Cutting Cost / Board USD cannot be negative."))
+
     def _set_piece_numbers(self) -> None:
         for index, row in enumerate(self.pieces or [], start=1):
             row.piece_no = index
@@ -53,11 +80,15 @@ class DoorCuttingOrder(Document):
             frappe.throw(_("At least one piece row is required."))
 
         for index, row in enumerate(self.pieces, start=1):
-            if flt(row.width_cm) <= 0:
+            width = self._finite(row.width_cm, _("Row {0} Width CM").format(index))
+            length = self._finite(row.length_cm, _("Row {0} Length CM").format(index))
+            qty_raw = self._finite(row.qty, _("Row {0} Quantity").format(index))
+
+            if width <= 0:
                 frappe.throw(_("Row {0}: Width must be greater than zero.").format(index))
-            if flt(row.length_cm) <= 0:
+            if length <= 0:
                 frappe.throw(_("Row {0}: Length must be greater than zero.").format(index))
-            if cint(row.qty) <= 0 or flt(row.qty) != cint(row.qty):
+            if qty_raw <= 0 or qty_raw != int(qty_raw):
                 frappe.throw(_("Row {0}: Quantity must be a positive integer.").format(index))
 
     def _load_board_snapshot(self) -> None:
@@ -74,6 +105,7 @@ class DoorCuttingOrder(Document):
                 "custom_board_thickness_mm",
                 "custom_board_color",
                 "custom_board_material",
+                "custom_board_rate_usd",
             ],
             as_dict=True,
         )
@@ -81,14 +113,21 @@ class DoorCuttingOrder(Document):
         if not board or not cint(board.custom_is_mdf):
             frappe.throw(_("Selected Item is not marked as an MDF/cutting board."))
 
-        self.full_board_length_mm = flt(board.custom_board_length_mm)
-        self.full_board_width_mm = flt(board.custom_board_width_mm)
-        self.board_thickness_mm = flt(board.custom_board_thickness_mm)
+        self.full_board_length_mm = self._finite(board.custom_board_length_mm, _("Board Length (MM)"))
+        self.full_board_width_mm = self._finite(board.custom_board_width_mm, _("Board Width (MM)"))
+        self.board_thickness_mm = self._finite(board.custom_board_thickness_mm, _("Board Thickness (MM)"))
         self.board_color = board.custom_board_color or ""
         self.board_material = board.custom_board_material or ""
 
+        # Item master provides the default only. A user with permission may
+        # override Board Rate on the editable order; approval freezes that rate.
+        if flt(self.board_rate_usd) <= 0 and flt(board.custom_board_rate_usd) > 0:
+            self.board_rate_usd = flt(board.custom_board_rate_usd)
+
         if self.full_board_length_mm <= 0 or self.full_board_width_mm <= 0:
             frappe.throw(_("Board dimensions are missing or invalid on Item {0}.").format(self.board_item))
+        if self.board_thickness_mm < 0:
+            frappe.throw(_("Board thickness cannot be negative on Item {0}.").format(self.board_item))
 
         trim_mm = flt(self.trim_margin_mm)
         usable_length_mm = self.full_board_length_mm - (trim_mm * 2)
@@ -222,12 +261,20 @@ class DoorCuttingOrder(Document):
     def _get_edge_rate(edge_type: str | None) -> float:
         if not edge_type:
             return 0.0
-        value = frappe.db.get_value(
+        row = frappe.db.get_value(
             "Edge Banding Type",
             edge_type,
-            "rate_usd_per_meter",
+            ["rate_usd_per_meter", "disabled"],
+            as_dict=True,
         )
-        return flt(value)
+        if not row:
+            frappe.throw(_("Edge Banding Type {0} does not exist.").format(edge_type))
+        if cint(row.disabled):
+            frappe.throw(_("Edge Banding Type {0} is disabled.").format(edge_type))
+        rate = flt(row.rate_usd_per_meter)
+        if not math.isfinite(rate) or rate < 0:
+            frappe.throw(_("Edge Banding Type {0} has an invalid rate.").format(edge_type))
+        return rate
 
 
 @frappe.whitelist()
