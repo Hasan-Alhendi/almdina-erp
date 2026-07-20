@@ -1,0 +1,102 @@
+{
+  "actions": [],
+  "autoname": "naming_series:",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "door_cutting_order",
+    "cutting_plan",
+    "warehouse",
+    "trigger_point",
+    "status",
+    "stock_entry",
+    "consumed_on",
+    "details_json"
+  ],
+  "fields": [
+    {
+      "default": "MCL-.YYYY.-.#####",
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "MCL-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "door_cutting_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Door Cutting Order",
+      "options": "Door Cutting Order",
+      "reqd": 1
+    },
+    {
+      "fieldname": "cutting_plan",
+      "fieldtype": "Link",
+      "label": "Approved Cutting Plan",
+      "options": "Cutting Plan",
+      "reqd": 1
+    },
+    {
+      "fieldname": "warehouse",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Warehouse",
+      "options": "Warehouse",
+      "reqd": 1
+    },
+    {
+      "fieldname": "trigger_point",
+      "fieldtype": "Select",
+      "label": "Consumption Trigger",
+      "options": "Cutting Start\nCutting Finish",
+      "read_only": 1
+    },
+    {
+      "default": "Draft",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Draft\nSubmitted\nReversed\nFailed",
+      "read_only": 1
+    },
+    {
+      "fieldname": "stock_entry",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Stock Entry",
+      "options": "Stock Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "consumed_on",
+      "fieldtype": "Datetime",
+      "label": "Consumed On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "details_json",
+      "fieldtype": "Long Text",
+      "label": "Material Details JSON",
+      "read_only": 1
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Material Consumption Log",
+  "naming_rule": "By naming series field",
+  "permissions": [
+    {
+      "create": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
