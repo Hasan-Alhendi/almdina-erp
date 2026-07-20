@@ -20,7 +20,7 @@ def get_settings() -> Any:
 def _approved_plan(order_name: str) -> Any:
     plan_name = frappe.db.get_value("Door Cutting Order", order_name, "approved_plan") or frappe.db.get_value(
         "Cutting Plan",
-        {"door_cutting_order": order_name, "status": "Approved"},
+        {"door_cutting_order": order_name, "status": "Approved", "plan_kind": "Order"},
         "name",
         order_by="revision desc",
     )
@@ -33,12 +33,23 @@ def _stock_balance(item_code: str, warehouse: str) -> float:
     return flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty"))
 
 
-def _active_reserved_qty(item_code: str, warehouse: str, exclude_order: str | None = None) -> float:
+def _active_reserved_qty(
+    item_code: str,
+    warehouse: str,
+    *,
+    exclude_reservation: str | None = None,
+) -> float:
+    """Return active reserved stock, excluding at most one exact reservation.
+
+    Never exclude by Door Cutting Order: replacement reservations belonging to
+    the same order are physically competing reservations and must still reduce
+    availability for the main order (and vice versa).
+    """
     conditions = ["parent.status = 'Active'", "child.item_code = %s", "child.warehouse = %s"]
     values: list[Any] = [item_code, warehouse]
-    if exclude_order:
-        conditions.append("parent.door_cutting_order != %s")
-        values.append(exclude_order)
+    if exclude_reservation:
+        conditions.append("parent.name != %s")
+        values.append(exclude_reservation)
 
     result = frappe.db.sql(
         f"""
@@ -50,6 +61,23 @@ def _active_reserved_qty(item_code: str, warehouse: str, exclude_order: str | No
         tuple(values),
     )
     return flt((result or [[0]])[0][0])
+
+
+def _main_order_reservation_name(order_name: str, plan_name: str) -> str | None:
+    rows = frappe.db.sql(
+        """
+        select name
+        from `tabMaterial Reservation`
+        where door_cutting_order = %s
+          and cutting_plan = %s
+          and status = 'Active'
+          and coalesce(replacement_piece, '') = ''
+        order by creation desc
+        limit 1
+        """,
+        (order_name, plan_name),
+    )
+    return rows[0][0] if rows else None
 
 
 def _meter_to_stock_qty(item_code: str, meters: float) -> tuple[float, str]:
@@ -148,6 +176,11 @@ def validate_stock_for_order(
     if not warehouse:
         frappe.throw(_("Set Default Warehouse in Almdina ERP Settings before approving/starting production."))
 
+    own_reservation = (
+        _main_order_reservation_name(order.name, plan.name)
+        if exclude_own_reservation
+        else None
+    )
     materials = _planned_materials(order, plan)
     shortages: list[dict[str, Any]] = []
     balances: list[dict[str, Any]] = []
@@ -157,7 +190,7 @@ def validate_stock_for_order(
         reserved_other = _active_reserved_qty(
             material["item_code"],
             warehouse,
-            exclude_order=order.name if exclude_own_reservation else None,
+            exclude_reservation=own_reservation,
         )
         available_qty = max(0.0, actual_qty - reserved_other)
         required_qty = flt(material["qty"])
@@ -165,7 +198,7 @@ def validate_stock_for_order(
             **material,
             "warehouse": warehouse,
             "actual_qty": actual_qty,
-            "reserved_by_other_orders": reserved_other,
+            "reserved_by_other_reservations": reserved_other,
             "available_qty": available_qty,
             "required_qty": required_qty,
             "shortage_qty": max(0, required_qty - available_qty),
@@ -183,7 +216,13 @@ def validate_stock_for_order(
         ]
         frappe.throw(_("Insufficient stock:\n{0}").format("\n".join(lines)))
 
-    return {"warehouse": warehouse, "materials": balances, "shortages": shortages, "is_available": not shortages}
+    return {
+        "warehouse": warehouse,
+        "materials": balances,
+        "shortages": shortages,
+        "is_available": not shortages,
+        "excluded_reservation": own_reservation,
+    }
 
 
 def create_order_reservation(order_name: str) -> dict[str, Any] | None:
@@ -193,29 +232,28 @@ def create_order_reservation(order_name: str) -> dict[str, Any] | None:
 
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan = _approved_plan(order_name)
-    existing = frappe.db.get_value(
-        "Material Reservation",
-        {"door_cutting_order": order.name, "cutting_plan": plan.name, "status": "Active"},
-        "name",
-    )
+    existing = _main_order_reservation_name(order.name, plan.name)
     if existing:
         return {"reservation": existing, "already_reserved": True}
 
     warehouse = settings.default_warehouse
+    if not warehouse:
+        frappe.throw(_("Set Default Warehouse in Almdina ERP Settings before approving production."))
     materials = _planned_materials(order, plan)
 
-    # Lock the Bin rows in a deterministic order before checking competing
-    # reservations so two approvals cannot overbook the same physical stock.
+    # Lock Bin rows in deterministic order. Replacement reservations for the
+    # same order are intentionally included in the competing reservations.
     for item_code in sorted({m["item_code"] for m in materials}):
         frappe.db.sql(
             "select name from `tabBin` where item_code = %s and warehouse = %s for update",
             (item_code, warehouse),
         )
 
-    availability = validate_stock_for_order(order.name, throw_on_shortage=True, exclude_own_reservation=True)
+    availability = validate_stock_for_order(order.name, throw_on_shortage=True, exclude_own_reservation=False)
     reservation = frappe.new_doc("Material Reservation")
     reservation.door_cutting_order = order.name
     reservation.cutting_plan = plan.name
+    reservation.replacement_piece = None
     reservation.status = "Active"
     reservation.reserved_on = now_datetime()
     for material in availability["materials"]:
@@ -233,12 +271,24 @@ def create_order_reservation(order_name: str) -> dict[str, Any] | None:
     return {"reservation": reservation.name, "already_reserved": False}
 
 
-def transition_order_reservation(order_name: str, new_status: str) -> list[str]:
-    names = frappe.get_all(
-        "Material Reservation",
-        filters={"door_cutting_order": order_name, "status": "Active"},
-        pluck="name",
-    )
+def transition_order_reservation(order_name: str, new_status: str, plan_name: str | None = None) -> list[str]:
+    conditions = [
+        "door_cutting_order = %s",
+        "status = 'Active'",
+        "coalesce(replacement_piece, '') = ''",
+    ]
+    values: list[Any] = [order_name]
+    if plan_name:
+        conditions.append("cutting_plan = %s")
+        values.append(plan_name)
+
+    names = [
+        row[0]
+        for row in frappe.db.sql(
+            f"select name from `tabMaterial Reservation` where {' and '.join(conditions)} for update",
+            tuple(values),
+        )
+    ]
     transitioned: list[str] = []
     for name in names:
         reservation = frappe.get_doc("Material Reservation", name)
@@ -326,7 +376,7 @@ def consume_planned_material_if_due(order_name: str, *, trigger: str) -> dict[st
     availability = validate_stock_for_order(order.name, throw_on_shortage=True, exclude_own_reservation=True)
     stock_entry = _make_material_issue(order, plan, availability["warehouse"], availability["materials"])
     consumed_remnants = _consume_reserved_remnants(order, plan)
-    consumed_reservations = transition_order_reservation(order.name, "Consumed")
+    consumed_reservations = transition_order_reservation(order.name, "Consumed", plan.name)
 
     log = frappe.new_doc("Material Consumption Log")
     log.door_cutting_order = order.name
