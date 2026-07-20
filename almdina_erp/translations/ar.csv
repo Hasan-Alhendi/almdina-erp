@@ -65,3 +65,37 @@ Confirm,تأكيد
 Continue,متابعة
 Cancel,إلغاء
 Finish,إنهاء
+Record Actual Consumption,تسجيل الاستهلاك الفعلي
+Actual Stock Qty,الكمية الفعلية بوحدة المخزون
+Planned,المخطط
+No planned stock materials are available for reconciliation.,لا توجد مواد مخزنية مخططة متاحة للتسوية.
+Differences above plan will issue extra stock; differences below plan will return stock to the warehouse. Continue?,الزيادة عن المخطط ستنشئ صرفًا إضافيًا والنقص عنه سيعيد المادة إلى المستودع. هل تريد المتابعة؟
+Reconciling actual consumption...,جاري تسوية الاستهلاك الفعلي...
+Actual Consumption Recorded,تم تسجيل الاستهلاك الفعلي
+Additional Material Issue,صرف مادة إضافي
+Material Return Receipt,إرجاع مادة إلى المخزون
+Material Variance Cost USD,فرق تكلفة المواد بالدولار
+Reconcile,تسوية
+Planned Total Cost USD,إجمالي التكلفة المخططة بالدولار
+Actual Cost USD,التكلفة الفعلية بالدولار
+Internal Loss Cost USD,تكلفة الخسارة الداخلية بالدولار
+Material Variance USD,فرق المواد بالدولار
+Reusable Remnant Area M2,مساحة البقايا القابلة لإعادة الاستخدام م²
+Reusable Area M2,المساحة القابلة لإعادة الاستخدام م²
+Scrap Area M2,مساحة الهدر غير القابل للاستخدام م²
+Total Source Area M2,إجمالي مساحة المصادر م²
+Waste Reconciled On,تاريخ تسوية الهدر
+Show Shortages Only,عرض حالات العجز فقط
+Order Status,حالة الطلب
+Material Kind,نوع المادة
+Required Stock Qty,الكمية المطلوبة من المخزون
+Physical Stock,المخزون الفعلي
+Reserved Elsewhere,المحجوز لطلبات أخرى
+Available After Reservations,المتاح بعد الحجوزات
+Shortage,العجز
+Business Unit,وحدة العمل
+Planned Business Qty,الكمية المخططة بوحدة العمل
+Board Rate USD,سعر اللوح بالدولار
+Cutting Cost / Board USD,تكلفة القص لكل لوح بالدولار
+Kerf (MM),سماكة القص مم
+Trim Margin (MM),هامش التشذيب مم
