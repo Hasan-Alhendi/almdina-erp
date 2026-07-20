@@ -3,231 +3,51 @@
   "autoname": "naming_series:",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": [
-    "naming_series",
-    "door_cutting_order",
-    "incident",
-    "original_piece_label",
-    "status",
-    "piece_section",
-    "board_item",
-    "width_cm",
-    "length_cm",
-    "qty",
-    "allow_rotation",
-    "edge_section",
-    "edge_long_right",
-    "edge_long_left",
-    "edge_width_top",
-    "edge_width_bottom",
-    "edge_type",
-    "source_section",
-    "source_preference",
-    "selected_remnant",
-    "cutting_plan",
-    "cost_section",
-    "internal_loss_cost_usd",
-    "charge_customer",
-    "completed_on",
-    "notes"
-  ],
+  "field_order": ["naming_series","door_cutting_order","incident","original_piece_label","status","piece_section","board_item","width_cm","length_cm","qty","allow_rotation","edge_section","edge_long_right","edge_long_left","edge_width_top","edge_width_bottom","edge_type","source_section","source_preference","selected_remnant","cutting_plan","cost_section","internal_loss_cost_usd","charge_customer","completed_on","notes"],
   "fields": [
-    {
-      "default": "RPL-.YYYY.-.#####",
-      "fieldname": "naming_series",
-      "fieldtype": "Select",
-      "label": "Naming Series",
-      "options": "RPL-.YYYY.-.#####",
-      "reqd": 1
-    },
-    {
-      "fieldname": "door_cutting_order",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Door Cutting Order",
-      "options": "Door Cutting Order",
-      "reqd": 1
-    },
-    {
-      "fieldname": "incident",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Production Incident",
-      "options": "Production Incident",
-      "reqd": 1
-    },
-    {
-      "fieldname": "original_piece_label",
-      "fieldtype": "Data",
-      "in_list_view": 1,
-      "label": "Original Piece Label",
-      "read_only": 1,
-      "reqd": 1
-    },
-    {
-      "default": "Planned",
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "label": "Status",
-      "options": "Planned\nIn Progress\nCompleted\nCancelled",
-      "read_only": 1,
-      "reqd": 1
-    },
-    {
-      "fieldname": "piece_section",
-      "fieldtype": "Section Break",
-      "label": "Replacement Piece"
-    },
-    {
-      "fieldname": "board_item",
-      "fieldtype": "Link",
-      "label": "Board Item",
-      "options": "Item",
-      "read_only": 1,
-      "reqd": 1
-    },
-    {
-      "fieldname": "width_cm",
-      "fieldtype": "Float",
-      "label": "Width CM",
-      "non_negative": 1,
-      "read_only": 1,
-      "reqd": 1
-    },
-    {
-      "fieldname": "length_cm",
-      "fieldtype": "Float",
-      "label": "Length CM",
-      "non_negative": 1,
-      "read_only": 1,
-      "reqd": 1
-    },
-    {
-      "default": "1",
-      "fieldname": "qty",
-      "fieldtype": "Int",
-      "label": "Quantity",
-      "read_only": 1,
-      "reqd": 1
-    },
-    {
-      "default": "0",
-      "fieldname": "allow_rotation",
-      "fieldtype": "Check",
-      "label": "Allow Rotation",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_section",
-      "fieldtype": "Section Break",
-      "label": "Edge Banding Snapshot"
-    },
-    {
-      "fieldname": "edge_long_right",
-      "fieldtype": "Check",
-      "label": "Edge Long Right",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_long_left",
-      "fieldtype": "Check",
-      "label": "Edge Long Left",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_width_top",
-      "fieldtype": "Check",
-      "label": "Edge Width Top",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_width_bottom",
-      "fieldtype": "Check",
-      "label": "Edge Width Bottom",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_type",
-      "fieldtype": "Link",
-      "label": "Edge Type",
-      "options": "Edge Banding Type",
-      "read_only": 1
-    },
-    {
-      "fieldname": "source_section",
-      "fieldtype": "Section Break",
-      "label": "Material Source"
-    },
-    {
-      "default": "Remnant First",
-      "fieldname": "source_preference",
-      "fieldtype": "Select",
-      "label": "Source Preference",
-      "options": "Remnant First\nFull Board",
-      "read_only": 1
-    },
-    {
-      "fieldname": "selected_remnant",
-      "fieldtype": "Link",
-      "label": "Selected Remnant",
-      "options": "Board Remnant",
-      "read_only": 1
-    },
-    {
-      "fieldname": "cutting_plan",
-      "fieldtype": "Link",
-      "label": "Replacement Cutting Plan",
-      "options": "Cutting Plan",
-      "read_only": 1
-    },
-    {
-      "fieldname": "cost_section",
-      "fieldtype": "Section Break",
-      "label": "Internal Cost"
-    },
-    {
-      "default": "0",
-      "fieldname": "internal_loss_cost_usd",
-      "fieldtype": "Currency",
-      "label": "Internal Loss Cost USD",
-      "non_negative": 1,
-      "read_only": 1
-    },
-    {
-      "default": "0",
-      "fieldname": "charge_customer",
-      "fieldtype": "Check",
-      "label": "Charge Customer",
-      "read_only": 1
-    },
-    {
-      "fieldname": "completed_on",
-      "fieldtype": "Datetime",
-      "label": "Completed On",
-      "read_only": 1
-    },
-    {
-      "fieldname": "notes",
-      "fieldtype": "Small Text",
-      "label": "Notes"
-    }
+    {"default":"RPL-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"RPL-.YYYY.-.#####","reqd":1},
+    {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
+    {"fieldname":"incident","fieldtype":"Link","in_list_view":1,"label":"Production Incident","options":"Production Incident","reqd":1},
+    {"fieldname":"original_piece_label","fieldtype":"Data","in_list_view":1,"label":"Original Piece Label","read_only":1,"reqd":1},
+    {"default":"Planned","fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Planned\nIn Progress\nCompleted\nCancelled","read_only":1,"reqd":1},
+    {"fieldname":"piece_section","fieldtype":"Section Break","label":"Replacement Piece"},
+    {"fieldname":"board_item","fieldtype":"Link","label":"Board Item","options":"Item","read_only":1,"reqd":1},
+    {"fieldname":"width_cm","fieldtype":"Float","label":"Width CM","non_negative":1,"read_only":1,"reqd":1},
+    {"fieldname":"length_cm","fieldtype":"Float","label":"Length CM","non_negative":1,"read_only":1,"reqd":1},
+    {"default":"1","fieldname":"qty","fieldtype":"Int","label":"Quantity","read_only":1,"reqd":1},
+    {"default":"0","fieldname":"allow_rotation","fieldtype":"Check","label":"Allow Rotation","read_only":1},
+    {"fieldname":"edge_section","fieldtype":"Section Break","label":"Edge Banding Snapshot"},
+    {"fieldname":"edge_long_right","fieldtype":"Check","label":"Edge Long Right","read_only":1},
+    {"fieldname":"edge_long_left","fieldtype":"Check","label":"Edge Long Left","read_only":1},
+    {"fieldname":"edge_width_top","fieldtype":"Check","label":"Edge Width Top","read_only":1},
+    {"fieldname":"edge_width_bottom","fieldtype":"Check","label":"Edge Width Bottom","read_only":1},
+    {"fieldname":"edge_type","fieldtype":"Link","label":"Edge Type","options":"Edge Banding Type","read_only":1},
+    {"fieldname":"source_section","fieldtype":"Section Break","label":"Material Source"},
+    {"default":"Remnant First","fieldname":"source_preference","fieldtype":"Select","label":"Source Preference","options":"Remnant First\nFull Board","read_only":1},
+    {"fieldname":"selected_remnant","fieldtype":"Link","label":"Selected Remnant","options":"Board Remnant","read_only":1},
+    {"fieldname":"cutting_plan","fieldtype":"Link","label":"Replacement Cutting Plan","options":"Cutting Plan","read_only":1},
+    {"fieldname":"cost_section","fieldtype":"Section Break","label":"Internal Cost","permlevel":1},
+    {"default":"0","fieldname":"internal_loss_cost_usd","fieldtype":"Currency","label":"Internal Loss Cost USD","non_negative":1,"read_only":1,"permlevel":1},
+    {"default":"0","fieldname":"charge_customer","fieldtype":"Check","label":"Charge Customer","read_only":1,"permlevel":1},
+    {"fieldname":"completed_on","fieldtype":"Datetime","label":"Completed On","read_only":1},
+    {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
   ],
   "links": [],
-  "module": "Almdina ERP",
-  "name": "Replacement Piece",
-  "naming_rule": "By naming series field",
-  "permissions": [
-    {
-      "create": 1,
-      "delete": 1,
-      "read": 1,
-      "report": 1,
-      "role": "System Manager",
-      "write": 1
-    }
+  "module":"Almdina ERP",
+  "name":"Replacement Piece",
+  "naming_rule":"By naming series field",
+  "permissions":[
+    {"read":1,"report":1,"role":"Cutting Operator"},
+    {"read":1,"report":1,"role":"Edge Operator"},
+    {"read":1,"report":1,"role":"Production Manager"},
+    {"read":1,"report":1,"role":"Stock Manager"},
+    {"read":1,"report":1,"role":"Accounts Management"},
+    {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1},
+    {"permlevel":1,"read":1,"role":"Production Manager"},
+    {"permlevel":1,"read":1,"role":"Accounts Management"},
+    {"permlevel":1,"read":1,"role":"System Manager"}
   ],
-  "sort_field": "modified",
-  "sort_order": "DESC",
-  "track_changes": 1
+  "sort_field":"modified",
+  "sort_order":"DESC",
+  "track_changes":1
 }
