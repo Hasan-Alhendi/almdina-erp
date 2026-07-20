@@ -1,0 +1,24 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "field:routing_name",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["routing_name", "disabled", "stages"],
+  "fields": [
+    {"fieldname":"routing_name","fieldtype":"Data","in_list_view":1,"label":"Routing Name","reqd":1,"unique":1},
+    {"default":"0","fieldname":"disabled","fieldtype":"Check","label":"Disabled"},
+    {"fieldname":"stages","fieldtype":"Table","label":"Stages","options":"Production Routing Stage","reqd":1}
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Production Routing",
+  "naming_rule": "By fieldname",
+  "permissions": [
+    {"read":1,"report":1,"role":"Production Manager"},
+    {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
+  ],
+  "sort_field":"modified",
+  "sort_order":"DESC",
+  "track_changes":1
+}
