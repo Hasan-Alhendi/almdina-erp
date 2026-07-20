@@ -19,6 +19,14 @@ EDGE_BANDING_TYPES: tuple[tuple[str, float], ...] = (
     ("قشاط 4سم لميع يدوي", 4.0),
 )
 
+ROLES = (
+    "Order Entry",
+    "Cutting Operator",
+    "Edge Operator",
+    "Production Manager",
+    "Stock Manager",
+    "Accounts Management",
+)
 
 ITEM_CUSTOM_FIELDS = {
     "Item": [
@@ -72,10 +80,27 @@ ITEM_CUSTOM_FIELDS = {
 }
 
 
-def after_install() -> None:
-    """Install only the v1.0 baseline master data required by the SRS."""
+def sync_setup() -> None:
     create_custom_fields(ITEM_CUSTOM_FIELDS, update=True)
+    seed_roles()
     seed_edge_banding_types()
+
+
+def after_install() -> None:
+    """Install the exact v1.0 baseline setup required by the SRS."""
+    sync_setup()
+
+
+def after_migrate() -> None:
+    """Keep required roles/master data/custom fields present after upgrades."""
+    sync_setup()
+
+
+def seed_roles() -> None:
+    for role_name in ROLES:
+        if frappe.db.exists("Role", role_name):
+            continue
+        frappe.get_doc({"doctype": "Role", "role_name": role_name}).insert(ignore_permissions=True)
 
 
 def seed_edge_banding_types() -> None:
