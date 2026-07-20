@@ -1,0 +1,285 @@
+{
+  "actions": [],
+  "autoname": "naming_series:",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "door_cutting_order",
+    "revision",
+    "status",
+    "approval_column",
+    "approved_by",
+    "approved_on",
+    "engine_section",
+    "method_key",
+    "method_label",
+    "score",
+    "engine_version",
+    "validation_column",
+    "validation_status",
+    "validation_errors",
+    "board_section",
+    "board_item",
+    "full_board_width_mm",
+    "full_board_length_mm",
+    "usable_board_width_mm",
+    "usable_board_length_mm",
+    "settings_column",
+    "kerf_mm",
+    "trim_margin_mm",
+    "totals_section",
+    "required_boards",
+    "used_area_m2",
+    "total_source_area_m2",
+    "waste_area_m2",
+    "waste_percent",
+    "sources_section",
+    "sources",
+    "placed_pieces_section",
+    "placed_pieces",
+    "snapshot_section",
+    "snapshot_json"
+  ],
+  "fields": [
+    {
+      "default": "CP-.YYYY.-.#####",
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "CP-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "door_cutting_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Door Cutting Order",
+      "options": "Door Cutting Order",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "revision",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Revision",
+      "read_only": 1
+    },
+    {
+      "default": "Draft",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Draft\nApproved\nSuperseded\nCancelled",
+      "reqd": 1
+    },
+    {
+      "fieldname": "approval_column",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "approved_by",
+      "fieldtype": "Link",
+      "label": "Approved By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "approved_on",
+      "fieldtype": "Datetime",
+      "label": "Approved On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "engine_section",
+      "fieldtype": "Section Break",
+      "label": "Optimization Engine"
+    },
+    {
+      "fieldname": "method_key",
+      "fieldtype": "Data",
+      "label": "Method Key",
+      "read_only": 1
+    },
+    {
+      "fieldname": "method_label",
+      "fieldtype": "Data",
+      "label": "Method Label",
+      "read_only": 1
+    },
+    {
+      "fieldname": "score",
+      "fieldtype": "Float",
+      "label": "Score",
+      "read_only": 1
+    },
+    {
+      "fieldname": "engine_version",
+      "fieldtype": "Data",
+      "label": "Engine Version",
+      "read_only": 1
+    },
+    {
+      "fieldname": "validation_column",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "validation_status",
+      "fieldtype": "Select",
+      "label": "Validation Status",
+      "options": "Pending\nValid\nInvalid",
+      "read_only": 1
+    },
+    {
+      "fieldname": "validation_errors",
+      "fieldtype": "Long Text",
+      "label": "Validation Errors",
+      "read_only": 1
+    },
+    {
+      "fieldname": "board_section",
+      "fieldtype": "Section Break",
+      "label": "Board Snapshot"
+    },
+    {
+      "fieldname": "board_item",
+      "fieldtype": "Link",
+      "label": "Board Item",
+      "options": "Item",
+      "read_only": 1
+    },
+    {
+      "fieldname": "full_board_width_mm",
+      "fieldtype": "Float",
+      "label": "Full Board Width MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "full_board_length_mm",
+      "fieldtype": "Float",
+      "label": "Full Board Length MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "usable_board_width_mm",
+      "fieldtype": "Float",
+      "label": "Usable Board Width MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "usable_board_length_mm",
+      "fieldtype": "Float",
+      "label": "Usable Board Length MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "settings_column",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "kerf_mm",
+      "fieldtype": "Float",
+      "label": "Kerf MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "trim_margin_mm",
+      "fieldtype": "Float",
+      "label": "Trim Margin MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "totals_section",
+      "fieldtype": "Section Break",
+      "label": "Totals"
+    },
+    {
+      "fieldname": "required_boards",
+      "fieldtype": "Int",
+      "label": "Required Boards",
+      "read_only": 1
+    },
+    {
+      "fieldname": "used_area_m2",
+      "fieldtype": "Float",
+      "label": "Used Area M2",
+      "precision": "4",
+      "read_only": 1
+    },
+    {
+      "fieldname": "total_source_area_m2",
+      "fieldtype": "Float",
+      "label": "Total Source Area M2",
+      "precision": "4",
+      "read_only": 1
+    },
+    {
+      "fieldname": "waste_area_m2",
+      "fieldtype": "Float",
+      "label": "Waste Area M2",
+      "precision": "4",
+      "read_only": 1
+    },
+    {
+      "fieldname": "waste_percent",
+      "fieldtype": "Percent",
+      "label": "Waste Percent",
+      "precision": "2",
+      "read_only": 1
+    },
+    {
+      "fieldname": "sources_section",
+      "fieldtype": "Section Break",
+      "label": "Source Sheets"
+    },
+    {
+      "fieldname": "sources",
+      "fieldtype": "Table",
+      "label": "Source Sheets",
+      "options": "Cutting Plan Source",
+      "read_only": 1
+    },
+    {
+      "fieldname": "placed_pieces_section",
+      "fieldtype": "Section Break",
+      "label": "Placed Pieces"
+    },
+    {
+      "fieldname": "placed_pieces",
+      "fieldtype": "Table",
+      "label": "Placed Pieces",
+      "options": "Cutting Plan Piece",
+      "read_only": 1
+    },
+    {
+      "fieldname": "snapshot_section",
+      "fieldtype": "Section Break",
+      "label": "Immutable Snapshot"
+    },
+    {
+      "fieldname": "snapshot_json",
+      "fieldtype": "Long Text",
+      "label": "Snapshot JSON",
+      "read_only": 1
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Cutting Plan",
+  "naming_rule": "By naming series field",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
