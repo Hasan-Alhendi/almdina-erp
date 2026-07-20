@@ -19,44 +19,44 @@
             if (frm.is_new()) return;
 
             if (frm.doc.cutting_plan) {
-                frm.add_custom_button(__("فتح خطة القص التعويضية"), () => {
+                frm.add_custom_button(__("Open Replacement Cutting Plan"), () => {
                     frappe.set_route("Form", "Cutting Plan", frm.doc.cutting_plan);
-                }, __("التعويض"));
+                }, __("Replacement"));
             }
 
             if (frm.doc.status === "Pending Approval" && has_role("Production Manager")) {
-                frm.add_custom_button(__("اعتماد التعويض"), () => {
+                frm.add_custom_button(__("Approve Replacement"), () => {
                     frappe.confirm(
-                        __("سيتم اختيار مصدر صالح، حجزه عند الحاجة، إنشاء Mini Cutting Plan معتمدة، وفحص المواد المخزنية. هل تريد المتابعة؟"),
+                        __("A valid source will be selected, reserved when needed, and an approved Mini Cutting Plan will be created with material validation. Continue?"),
                         () => call_action(frm, "approve_replacement").then(data => {
                             frappe.msgprint({
-                                title: __("تم اعتماد التعويض"),
+                                title: __("Replacement Approved"),
                                 indicator: "green",
                                 message: `${__("Cutting Plan")}: <b>${data.cutting_plan || ""}</b><br>${__("Remnant")}: ${data.selected_remnant || __("Full Board")}`,
                             });
                         })
                     );
-                }, __("التعويض"));
+                }, __("Replacement"));
             }
 
             if (frm.doc.status === "Approved" && (has_role("Cutting Operator") || has_role("Production Manager"))) {
-                frm.add_custom_button(__("بدء قص التعويض"), () => {
+                frm.add_custom_button(__("Start Replacement Cutting"), () => {
                     frappe.confirm(
-                        __("سيتم استهلاك المواد المحجوزة واعتبار المصدر مستخدمًا فعليًا. هل تريد البدء؟"),
+                        __("Reserved materials will be consumed and the selected source will be marked as physically used. Continue?"),
                         () => call_action(frm, "start_replacement")
                     );
-                }, __("التعويض"));
+                }, __("Replacement"));
             }
 
             if (frm.doc.status === "In Progress" && (has_role("Cutting Operator") || has_role("Production Manager"))) {
-                frm.add_custom_button(__("إنهاء التعويض"), () => {
+                frm.add_custom_button(__("Complete Replacement"), () => {
                     const fields = [];
                     if (has_role("Production Manager")) {
                         fields.push({
                             fieldname: "internal_loss_cost_usd",
                             fieldtype: "Currency",
                             label: __("Actual Internal Loss USD"),
-                            description: __("اتركه فارغًا لاستخدام التكلفة المخططة المثبتة عند الاعتماد."),
+                            description: __("Leave blank to use the planned cost frozen at approval."),
                         });
                     }
                     frappe.prompt(
@@ -65,26 +65,26 @@
                             internal_loss_cost_usd: values.internal_loss_cost_usd || null,
                         }).then(data => {
                             frappe.msgprint({
-                                title: __("اكتمل التعويض"),
+                                title: __("Replacement Completed"),
                                 indicator: "green",
                                 message: `${__("Generated Remnants")}: ${(data.generated_remnants || []).join(", ") || "-"}`,
                             });
                         }),
-                        __("إنهاء القطعة التعويضية"),
-                        __("إنهاء")
+                        __("Complete Replacement Piece"),
+                        __("Finish")
                     );
-                }, __("التعويض"));
+                }, __("Replacement"));
             }
 
             if (["Pending Approval", "Approved"].includes(frm.doc.status) && has_role("Production Manager")) {
-                frm.add_custom_button(__("إلغاء التعويض"), () => {
+                frm.add_custom_button(__("Cancel Replacement"), () => {
                     frappe.prompt(
-                        [{ fieldname: "reason", fieldtype: "Small Text", label: __("سبب الإلغاء"), reqd: 1 }],
+                        [{ fieldname: "reason", fieldtype: "Small Text", label: __("Cancellation Reason"), reqd: 1 }],
                         values => call_action(frm, "cancel_replacement", { reason: values.reason }),
-                        __("إلغاء التعويض"),
-                        __("تأكيد")
+                        __("Cancel Replacement"),
+                        __("Confirm")
                     );
-                }, __("التعويض"));
+                }, __("Replacement"));
             }
         },
     });
