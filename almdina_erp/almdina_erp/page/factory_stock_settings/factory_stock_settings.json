@@ -1,0 +1,19 @@
+{
+  "content": null,
+  "docstatus": 0,
+  "doctype": "Page",
+  "idx": 0,
+  "module": "Almdina ERP",
+  "name": "factory-stock-settings",
+  "page_name": "factory-stock-settings",
+  "roles": [
+    {"role":"Stock Manager"},
+    {"role":"Production Manager"},
+    {"role":"System Manager"}
+  ],
+  "script": null,
+  "standard": "Yes",
+  "style": null,
+  "system_page": 0,
+  "title": "Factory Stock Settings"
+}
