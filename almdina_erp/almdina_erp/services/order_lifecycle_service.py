@@ -105,6 +105,35 @@ def _cancel_stages(order_name: str, reason: str) -> list[str]:
     return cancelled
 
 
+def _cancel_unstarted_replacements(order_name: str, reason: str) -> list[str]:
+    replacements = frappe.get_all(
+        "Replacement Piece",
+        filters={"door_cutting_order": order_name, "status": ["!=", "Cancelled"]},
+        fields=["name", "status", "stock_entry"],
+    )
+
+    physically_started = [
+        row for row in replacements
+        if row.status in {"In Progress", "Completed"} or row.stock_entry
+    ]
+    if physically_started:
+        frappe.throw(
+            _(
+                "Order has replacement work that already consumed physical material ({0}). "
+                "Reconcile/reverse that replacement explicitly before cancelling the order."
+            ).format(", ".join(row.name for row in physically_started))
+        )
+
+    from almdina_erp.almdina_erp.services.replacement_service import cancel_replacement
+
+    cancelled: list[str] = []
+    for row in replacements:
+        if row.status in {"Pending Approval", "Approved"}:
+            cancel_replacement(row.name, reason=_("Order cancelled: {0}").format(reason))
+            cancelled.append(row.name)
+    return cancelled
+
+
 @frappe.whitelist()
 def cancel_order(
     order_name: str,
@@ -129,6 +158,8 @@ def cancel_order(
                 "Cutting is already completed. Reconcile physical stock/remnants before cancelling; automatic reversal is intentionally blocked."
             )
         )
+
+    cancelled_replacements = _cancel_unstarted_replacements(order.name, reason)
 
     submitted_consumption = frappe.db.exists(
         "Material Consumption Log",
@@ -170,4 +201,5 @@ def cancel_order(
         "released_remnants": released_remnants,
         "restored_source_remnants": restored_source_remnants,
         "cancelled_stages": cancelled_stages,
+        "cancelled_replacements": cancelled_replacements,
     }
