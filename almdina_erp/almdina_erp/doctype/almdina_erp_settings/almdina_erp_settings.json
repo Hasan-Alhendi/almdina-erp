@@ -1,0 +1,115 @@
+{
+  "actions": [],
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "stock_section",
+    "default_warehouse",
+    "reserve_stock_on_approval",
+    "stock_consumption_point",
+    "remnant_section",
+    "prefer_remnants_before_full_boards",
+    "min_remnant_width_mm",
+    "min_remnant_length_mm",
+    "min_remnant_area_m2",
+    "remnant_cost_policy",
+    "production_section",
+    "allow_stage_override",
+    "allow_unplaced_approval"
+  ],
+  "fields": [
+    {
+      "fieldname": "stock_section",
+      "fieldtype": "Section Break",
+      "label": "Stock Policy"
+    },
+    {
+      "fieldname": "default_warehouse",
+      "fieldtype": "Link",
+      "label": "Default Warehouse",
+      "options": "Warehouse"
+    },
+    {
+      "default": "0",
+      "fieldname": "reserve_stock_on_approval",
+      "fieldtype": "Check",
+      "label": "Reserve Stock On Approval"
+    },
+    {
+      "default": "Cutting Start",
+      "fieldname": "stock_consumption_point",
+      "fieldtype": "Select",
+      "label": "Stock Consumption Point",
+      "options": "Cutting Start\nCutting Finish"
+    },
+    {
+      "fieldname": "remnant_section",
+      "fieldtype": "Section Break",
+      "label": "Board Remnants"
+    },
+    {
+      "default": "1",
+      "fieldname": "prefer_remnants_before_full_boards",
+      "fieldtype": "Check",
+      "label": "Prefer Matching Remnants Before Full Boards"
+    },
+    {
+      "default": "300",
+      "fieldname": "min_remnant_width_mm",
+      "fieldtype": "Float",
+      "label": "Minimum Remnant Width MM",
+      "non_negative": 1
+    },
+    {
+      "default": "300",
+      "fieldname": "min_remnant_length_mm",
+      "fieldtype": "Float",
+      "label": "Minimum Remnant Length MM",
+      "non_negative": 1
+    },
+    {
+      "default": "0.09",
+      "fieldname": "min_remnant_area_m2",
+      "fieldtype": "Float",
+      "label": "Minimum Remnant Area M2",
+      "non_negative": 1
+    },
+    {
+      "default": "Zero",
+      "fieldname": "remnant_cost_policy",
+      "fieldtype": "Select",
+      "label": "Remnant Cost Policy",
+      "options": "Zero\nAverage Valuation\nConfigured Rate"
+    },
+    {
+      "fieldname": "production_section",
+      "fieldtype": "Section Break",
+      "label": "Production Controls"
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_stage_override",
+      "fieldtype": "Check",
+      "label": "Allow Authorized Stage Sequence Override"
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_unplaced_approval",
+      "fieldtype": "Check",
+      "label": "Allow Exceptional Approval With Unplaced Pieces"
+    }
+  ],
+  "issingle": 1,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Almdina ERP Settings",
+  "permissions": [
+    {
+      "create": 1,
+      "read": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "track_changes": 1
+}
