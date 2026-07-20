@@ -1,0 +1,117 @@
+{
+  "actions": [],
+  "autoname": "naming_series:",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "door_cutting_order",
+    "piece_label",
+    "production_stage",
+    "worker",
+    "incident_datetime",
+    "reason",
+    "status",
+    "requires_replacement",
+    "replacement_piece",
+    "description"
+  ],
+  "fields": [
+    {
+      "default": "INC-.YYYY.-.#####",
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "INC-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "door_cutting_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Door Cutting Order",
+      "options": "Door Cutting Order",
+      "reqd": 1
+    },
+    {
+      "fieldname": "piece_label",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Original Piece Label",
+      "reqd": 1
+    },
+    {
+      "fieldname": "production_stage",
+      "fieldtype": "Link",
+      "label": "Production Stage",
+      "options": "Production Stage"
+    },
+    {
+      "fieldname": "worker",
+      "fieldtype": "Link",
+      "label": "Worker",
+      "options": "User"
+    },
+    {
+      "default": "Now",
+      "fieldname": "incident_datetime",
+      "fieldtype": "Datetime",
+      "label": "Incident Date / Time",
+      "reqd": 1
+    },
+    {
+      "fieldname": "reason",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Reason",
+      "options": "Measurement Error\nCutting Error\nEdge Banding Error\nDamage\nLost Piece\nMaterial Defect\nOther",
+      "reqd": 1
+    },
+    {
+      "default": "Open",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Open\nReplacement Created\nResolved",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "requires_replacement",
+      "fieldtype": "Check",
+      "label": "Requires Replacement"
+    },
+    {
+      "fieldname": "replacement_piece",
+      "fieldtype": "Link",
+      "label": "Replacement Piece",
+      "options": "Replacement Piece",
+      "read_only": 1
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Text",
+      "label": "Description",
+      "reqd": 1
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Production Incident",
+  "naming_rule": "By naming series field",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
