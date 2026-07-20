@@ -118,16 +118,46 @@
         });
     }
 
+    function removeLegacyDxfButtons(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        frm.remove_custom_button("تصدير DXF");
+
+        // Some legacy scripts add the Arabic DXF button asynchronously after
+        // refresh/Ajax. Remove only that legacy label; never remove the secure
+        // translated "Export DXF" button installed below.
+        const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
+        if (!root) return;
+        $(root).find("button").filter(function () {
+            return $(this).text().trim() === "تصدير DXF";
+        }).remove();
+    }
+
+    function ensureLegacyObserver(frm) {
+        if (frm._almdina_secure_dxf_observer) return;
+        const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
+        const node = root && (root[0] || root);
+        if (!node || typeof MutationObserver === "undefined") return;
+
+        const observer = new MutationObserver(() => removeLegacyDxfButtons(frm));
+        observer.observe(node, { childList: true, subtree: true });
+        frm._almdina_secure_dxf_observer = observer;
+    }
+
     function installButton(frm) {
         if (frm.doctype !== "Door Cutting Order") return;
-        ["تصدير DXF", "Export DXF"].forEach(label => frm.remove_custom_button(label));
+        removeLegacyDxfButtons(frm);
+        frm.remove_custom_button("Export DXF");
         frm.add_custom_button(__("Export DXF"), () => validatedExport(frm));
+        ensureLegacyObserver(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
-            setTimeout(() => installButton(frm), 900);
-            if (frappe.after_ajax) frappe.after_ajax(() => installButton(frm));
+            installButton(frm);
+            [250, 900, 1600].forEach(delay => setTimeout(() => installButton(frm), delay));
+            if (frappe.after_ajax) {
+                frappe.after_ajax(() => setTimeout(() => installButton(frm), 0));
+            }
         },
     });
 })();
