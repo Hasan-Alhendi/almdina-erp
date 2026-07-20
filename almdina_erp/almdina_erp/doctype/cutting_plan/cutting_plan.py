@@ -10,10 +10,12 @@ class CuttingPlan(Document):
     def validate(self) -> None:
         if self.revision and self.revision < 1:
             frappe.throw(_("Cutting Plan revision must be at least 1."))
+        if self.plan_kind == "Replacement" and not self.replacement_piece:
+            frappe.throw(_("A Replacement cutting plan must reference its Replacement Piece."))
         self._enforce_approved_immutability()
 
     def on_update(self) -> None:
-        if self.status != "Approved":
+        if self.status != "Approved" or (self.plan_kind or "Order") != "Order":
             return
 
         old = self.get_doc_before_save()
