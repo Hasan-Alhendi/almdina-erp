@@ -4,99 +4,44 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": [
-    "naming_series",
-    "door_cutting_order",
-    "cutting_plan",
-    "warehouse",
-    "trigger_point",
-    "status",
-    "stock_entry",
-    "consumed_on",
-    "details_json"
+    "naming_series","door_cutting_order","cutting_plan","warehouse","trigger_point","status","stock_entry","consumed_on",
+    "actual_section","actual_recorded","actual_recorded_by","actual_recorded_on","adjustment_issue_stock_entry","adjustment_return_stock_entry","material_variance_cost_usd","variance_items",
+    "details_json","actual_details_json"
   ],
   "fields": [
-    {
-      "default": "MCL-.YYYY.-.#####",
-      "fieldname": "naming_series",
-      "fieldtype": "Select",
-      "label": "Naming Series",
-      "options": "MCL-.YYYY.-.#####",
-      "reqd": 1
-    },
-    {
-      "fieldname": "door_cutting_order",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Door Cutting Order",
-      "options": "Door Cutting Order",
-      "reqd": 1
-    },
-    {
-      "fieldname": "cutting_plan",
-      "fieldtype": "Link",
-      "label": "Approved Cutting Plan",
-      "options": "Cutting Plan",
-      "reqd": 1
-    },
-    {
-      "fieldname": "warehouse",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Warehouse",
-      "options": "Warehouse",
-      "reqd": 1
-    },
-    {
-      "fieldname": "trigger_point",
-      "fieldtype": "Select",
-      "label": "Consumption Trigger",
-      "options": "Cutting Start\nCutting Finish",
-      "read_only": 1
-    },
-    {
-      "default": "Draft",
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "label": "Status",
-      "options": "Draft\nSubmitted\nReversed\nFailed",
-      "read_only": 1
-    },
-    {
-      "fieldname": "stock_entry",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Stock Entry",
-      "options": "Stock Entry",
-      "read_only": 1
-    },
-    {
-      "fieldname": "consumed_on",
-      "fieldtype": "Datetime",
-      "label": "Consumed On",
-      "read_only": 1
-    },
-    {
-      "fieldname": "details_json",
-      "fieldtype": "Long Text",
-      "label": "Material Details JSON",
-      "read_only": 1
-    }
+    {"default":"MCL-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"MCL-.YYYY.-.#####","reqd":1},
+    {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
+    {"fieldname":"cutting_plan","fieldtype":"Link","label":"Approved Cutting Plan","options":"Cutting Plan","reqd":1},
+    {"fieldname":"warehouse","fieldtype":"Link","in_list_view":1,"label":"Warehouse","options":"Warehouse","reqd":1},
+    {"fieldname":"trigger_point","fieldtype":"Select","label":"Consumption Trigger","options":"Cutting Start\nCutting Finish","read_only":1},
+    {"default":"Draft","fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Draft\nSubmitted\nReversed\nFailed","read_only":1},
+    {"fieldname":"stock_entry","fieldtype":"Link","in_list_view":1,"label":"Stock Entry","options":"Stock Entry","read_only":1},
+    {"fieldname":"consumed_on","fieldtype":"Datetime","label":"Consumed On","read_only":1},
+    {"fieldname":"actual_section","fieldtype":"Section Break","label":"Actual Consumption"},
+    {"default":"0","fieldname":"actual_recorded","fieldtype":"Check","label":"Actual Consumption Recorded","read_only":1},
+    {"fieldname":"actual_recorded_by","fieldtype":"Link","label":"Actual Recorded By","options":"User","read_only":1},
+    {"fieldname":"actual_recorded_on","fieldtype":"Datetime","label":"Actual Recorded On","read_only":1},
+    {"fieldname":"adjustment_issue_stock_entry","fieldtype":"Link","label":"Additional Material Issue","options":"Stock Entry","read_only":1},
+    {"fieldname":"adjustment_return_stock_entry","fieldtype":"Link","label":"Material Return Receipt","options":"Stock Entry","read_only":1},
+    {"default":"0","fieldname":"material_variance_cost_usd","fieldtype":"Currency","label":"Material Variance Cost USD","read_only":1,"permlevel":1},
+    {"fieldname":"variance_items","fieldtype":"Table","label":"Planned vs Actual Materials","options":"Material Consumption Variance Item","read_only":1},
+    {"fieldname":"details_json","fieldtype":"Long Text","label":"Planned Material Details JSON","read_only":1},
+    {"fieldname":"actual_details_json","fieldtype":"Long Text","label":"Actual Material Details JSON","read_only":1}
   ],
   "links": [],
-  "module": "Almdina ERP",
-  "name": "Material Consumption Log",
-  "naming_rule": "By naming series field",
-  "permissions": [
-    {
-      "create": 1,
-      "read": 1,
-      "report": 1,
-      "role": "System Manager",
-      "write": 1
-    }
+  "module":"Almdina ERP",
+  "name":"Material Consumption Log",
+  "naming_rule":"By naming series field",
+  "permissions":[
+    {"read":1,"report":1,"role":"Production Manager"},
+    {"read":1,"report":1,"role":"Stock Manager"},
+    {"read":1,"report":1,"role":"Accounts Management"},
+    {"create":1,"read":1,"report":1,"role":"System Manager","write":1},
+    {"permlevel":1,"read":1,"role":"Production Manager"},
+    {"permlevel":1,"read":1,"role":"Accounts Management"},
+    {"permlevel":1,"read":1,"role":"System Manager"}
   ],
-  "sort_field": "modified",
-  "sort_order": "DESC",
-  "track_changes": 1
+  "sort_field":"modified",
+  "sort_order":"DESC",
+  "track_changes":1
 }
