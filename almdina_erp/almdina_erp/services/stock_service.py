@@ -19,6 +19,8 @@ def get_settings() -> Any:
 
 def _approved_plan(order_name: str) -> Any:
     plan_name = frappe.db.get_value(
+        "Door Cutting Order", order_name, "approved_plan"
+    ) or frappe.db.get_value(
         "Cutting Plan",
         {"door_cutting_order": order_name, "status": "Approved"},
         "name",
@@ -30,13 +32,7 @@ def _approved_plan(order_name: str) -> Any:
 
 
 def _stock_balance(item_code: str, warehouse: str) -> float:
-    return flt(
-        frappe.db.get_value(
-            "Bin",
-            {"item_code": item_code, "warehouse": warehouse},
-            "actual_qty",
-        )
-    )
+    return flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": warehouse}, "actual_qty"))
 
 
 def _meter_to_stock_qty(item_code: str, meters: float) -> tuple[float, str]:
@@ -53,17 +49,13 @@ def _meter_to_stock_qty(item_code: str, meters: float) -> tuple[float, str]:
         filters={"parent": item_code, "parenttype": "Item"},
         fields=["uom", "conversion_factor"],
     )
-    meter_row = next(
-        (row for row in rows if (row.uom or "").strip().lower() in METER_UOMS),
-        None,
-    )
+    meter_row = next((row for row in rows if (row.uom or "").strip().lower() in METER_UOMS), None)
     if not meter_row or flt(meter_row.conversion_factor) <= 0:
         frappe.throw(
-            _(
-                "Edge stock Item {0} uses Stock UOM {1}. Add a Meter UOM conversion before consumption."
-            ).format(item_code, stock_uom)
+            _("Edge stock Item {0} uses Stock UOM {1}. Add a Meter UOM conversion before consumption.").format(
+                item_code, stock_uom
+            )
         )
-
     return flt(meters) * flt(meter_row.conversion_factor), stock_uom
 
 
@@ -90,17 +82,14 @@ def _planned_materials(order: Any, plan: Any) -> list[dict[str, Any]]:
 
     for edge_type, meters in edge_meters.items():
         edge_master = frappe.db.get_value(
-            "Edge Banding Type",
-            edge_type,
-            ["item_code", "stock_uom", "disabled"],
-            as_dict=True,
+            "Edge Banding Type", edge_type, ["item_code", "stock_uom", "disabled"], as_dict=True
         )
         if not edge_master or cint(edge_master.disabled):
             frappe.throw(_("Edge Banding Type {0} is disabled or missing.").format(edge_type))
-
-        # Pricing-only edge types remain valid, but stock deduction requires a mapped Item.
         if not edge_master.item_code:
-            continue
+            frappe.throw(
+                _("Map Edge Banding Type {0} to a stock Item before approving/consuming this order.").format(edge_type)
+            )
 
         stock_qty, stock_uom = _meter_to_stock_qty(edge_master.item_code, meters)
         materials.append(
@@ -114,7 +103,6 @@ def _planned_materials(order: Any, plan: Any) -> list[dict[str, Any]]:
                 "stock_uom": stock_uom,
             }
         )
-
     return materials
 
 
@@ -153,15 +141,13 @@ def validate_stock_for_order(order_name: str, *, throw_on_shortage: bool = True)
         ]
         frappe.throw(_("Insufficient stock:\n{0}").format("\n".join(lines)))
 
-    return {
-        "warehouse": warehouse,
-        "materials": balances,
-        "shortages": shortages,
-        "is_available": not shortages,
-    }
+    return {"warehouse": warehouse, "materials": balances, "shortages": shortages, "is_available": not shortages}
 
 
-def _make_material_issue(order: Any, plan: Any, warehouse: str, materials: list[dict[str, Any]]) -> Any:
+def _make_material_issue(order: Any, plan: Any, warehouse: str, materials: list[dict[str, Any]]) -> Any | None:
+    if not any(flt(material.get("qty")) > 0 for material in materials):
+        return None
+
     company = frappe.db.get_value("Warehouse", warehouse, "company")
     if not company:
         frappe.throw(_("Warehouse {0} is not linked to a Company.").format(warehouse))
@@ -173,29 +159,47 @@ def _make_material_issue(order: Any, plan: Any, warehouse: str, materials: list[
         stock_entry.purpose = "Material Issue"
     if stock_entry.meta.has_field("company"):
         stock_entry.company = company
-    stock_entry.remarks = _("Almdina ERP planned material consumption for Door Cutting Order {0}, Cutting Plan {1}").format(
-        order.name, plan.name
-    )
+    stock_entry.remarks = _(
+        "Almdina ERP planned material consumption for Door Cutting Order {0}, Cutting Plan {1}"
+    ).format(order.name, plan.name)
 
     for material in materials:
         qty = flt(material["qty"])
         if qty <= 0:
             continue
-        stock_entry.append(
-            "items",
-            {
-                "item_code": material["item_code"],
-                "s_warehouse": warehouse,
-                "qty": qty,
-            },
-        )
-
-    if not stock_entry.items:
-        frappe.throw(_("There are no stock-managed materials to consume for this order."))
+        stock_entry.append("items", {"item_code": material["item_code"], "s_warehouse": warehouse, "qty": qty})
 
     stock_entry.insert(ignore_permissions=True)
     stock_entry.submit()
     return stock_entry
+
+
+def _consume_reserved_remnants(order: Any, plan: Any) -> list[str]:
+    consumed: list[str] = []
+    for source in plan.sources or []:
+        if source.source_type != "Remnant" or not source.remnant:
+            continue
+        rows = frappe.db.sql(
+            "select status, reserved_for_order from `tabBoard Remnant` where name = %s for update",
+            (source.remnant,),
+            as_dict=True,
+        )
+        if not rows:
+            frappe.throw(_("Remnant {0} no longer exists.").format(source.remnant))
+        state = rows[0]
+        if state.status == "Consumed":
+            consumed.append(source.remnant)
+            continue
+        if state.status != "Reserved" or state.reserved_for_order != order.name:
+            frappe.throw(_("Remnant {0} is not reserved for this order.").format(source.remnant))
+        frappe.db.set_value(
+            "Board Remnant",
+            source.remnant,
+            {"status": "Consumed", "reserved_for_order": None, "reservation_timestamp": None},
+            update_modified=True,
+        )
+        consumed.append(source.remnant)
+    return consumed
 
 
 def consume_planned_material_if_due(order_name: str, *, trigger: str) -> dict[str, Any] | None:
@@ -203,34 +207,22 @@ def consume_planned_material_if_due(order_name: str, *, trigger: str) -> dict[st
     if (settings.stock_consumption_point or "Cutting Start") != trigger:
         return None
 
-    # Serialize consumption attempts for the same order to guarantee idempotency.
-    frappe.db.sql(
-        "select name from `tabDoor Cutting Order` where name = %s for update",
-        (order_name,),
-    )
-
+    frappe.db.sql("select name from `tabDoor Cutting Order` where name = %s for update", (order_name,))
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan = _approved_plan(order_name)
 
     existing = frappe.db.get_value(
         "Material Consumption Log",
-        {
-            "door_cutting_order": order.name,
-            "cutting_plan": plan.name,
-            "status": "Submitted",
-        },
+        {"door_cutting_order": order.name, "cutting_plan": plan.name, "status": "Submitted"},
         ["name", "stock_entry"],
         as_dict=True,
     )
     if existing:
-        return {
-            "log": existing.name,
-            "stock_entry": existing.stock_entry,
-            "already_consumed": True,
-        }
+        return {"log": existing.name, "stock_entry": existing.stock_entry, "already_consumed": True}
 
     availability = validate_stock_for_order(order.name, throw_on_shortage=True)
     stock_entry = _make_material_issue(order, plan, availability["warehouse"], availability["materials"])
+    consumed_remnants = _consume_reserved_remnants(order, plan)
 
     log = frappe.new_doc("Material Consumption Log")
     log.door_cutting_order = order.name
@@ -238,14 +230,15 @@ def consume_planned_material_if_due(order_name: str, *, trigger: str) -> dict[st
     log.warehouse = availability["warehouse"]
     log.trigger_point = trigger
     log.status = "Submitted"
-    log.stock_entry = stock_entry.name
+    log.stock_entry = stock_entry.name if stock_entry else None
     log.consumed_on = now_datetime()
-    log.details_json = frappe.as_json(availability["materials"])
+    log.details_json = frappe.as_json({"stock_materials": availability["materials"], "consumed_remnants": consumed_remnants})
     log.insert(ignore_permissions=True)
 
     return {
         "log": log.name,
-        "stock_entry": stock_entry.name,
+        "stock_entry": stock_entry.name if stock_entry else None,
+        "consumed_remnants": consumed_remnants,
         "already_consumed": False,
     }
 
@@ -260,5 +253,4 @@ def check_order_stock(order_name: str) -> dict[str, Any]:
 def consume_order_materials(order_name: str) -> dict[str, Any] | None:
     require_any_role("Production Manager", "Stock Manager")
     settings = get_settings()
-    trigger = settings.stock_consumption_point or "Cutting Start"
-    return consume_planned_material_if_due(order_name, trigger=trigger)
+    return consume_planned_material_if_due(order_name, trigger=settings.stock_consumption_point or "Cutting Start")
