@@ -119,9 +119,9 @@ class DoorCuttingOrder(Document):
         self.board_color = board.custom_board_color or ""
         self.board_material = board.custom_board_material or ""
 
-        # Item master provides the default only. A user with permission may
-        # override Board Rate on the editable order; approval freezes that rate.
-        if flt(self.board_rate_usd) <= 0 and flt(board.custom_board_rate_usd) > 0:
+        # Item master supplies a default only when the field was truly omitted.
+        # Explicit zero is a valid manager-approved value and must remain zero.
+        if self.board_rate_usd in (None, "") and board.custom_board_rate_usd not in (None, ""):
             self.board_rate_usd = flt(board.custom_board_rate_usd)
 
         if self.full_board_length_mm <= 0 or self.full_board_width_mm <= 0:
@@ -198,7 +198,7 @@ class DoorCuttingOrder(Document):
 
         required_boards = len(plan["sheets"])
         mdf_cost = required_boards * flt(self.board_rate_usd)
-        cutting_cost = required_boards * flt(self.cutting_cost_per_board_usd or 1)
+        cutting_cost = required_boards * flt(self.cutting_cost_per_board_usd)
         total_cost = mdf_cost + cutting_cost + flt(self.edge_cost_usd)
         waste_area = max(0.0, flt(plan["waste_area_m2"]))
         total_board_area = flt(plan["total_board_area_m2"])
