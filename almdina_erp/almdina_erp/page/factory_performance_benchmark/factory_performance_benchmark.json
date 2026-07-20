@@ -1,0 +1,18 @@
+{
+  "content": null,
+  "docstatus": 0,
+  "doctype": "Page",
+  "idx": 0,
+  "module": "Almdina ERP",
+  "name": "factory-performance-benchmark",
+  "page_name": "factory-performance-benchmark",
+  "roles": [
+    {"role":"Production Manager"},
+    {"role":"System Manager"}
+  ],
+  "script": null,
+  "standard": "Yes",
+  "style": null,
+  "system_page": 0,
+  "title": "Factory Performance Benchmark"
+}
