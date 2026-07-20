@@ -7,7 +7,7 @@
     "naming_series","customer","order_date","status","revision","approved_plan","external_reference","order_notes",
     "board_section","board_item","board_material","board_color","board_thickness_mm","board_dimensions_column","full_board_length_mm","full_board_width_mm","board_rate_usd","cutting_cost_per_board_usd",
     "cutting_settings_section","default_edge_type","kerf_mm","trim_margin_mm","packing_mode","pieces_section","pieces",
-    "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","actual_cost_usd","internal_loss_cost_usd",
+    "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","material_variance_cost_usd","internal_loss_cost_usd","actual_cost_usd",
     "plan_section","packing_method","packing_score","engine_version","cutting_plan_json","cutting_plan_html"
   ],
   "fields": [
@@ -47,8 +47,9 @@
     {"fieldname":"cutting_cost_usd","fieldtype":"Currency","label":"Cutting Cost USD","read_only":1,"permlevel":1},
     {"fieldname":"edge_cost_usd","fieldtype":"Currency","label":"Edge Cost USD","read_only":1,"permlevel":1},
     {"fieldname":"total_cost_usd","fieldtype":"Currency","label":"Planned Total Cost USD","read_only":1,"permlevel":1},
-    {"default":"0","fieldname":"actual_cost_usd","fieldtype":"Currency","label":"Actual Cost USD","read_only":1,"permlevel":1},
+    {"default":"0","fieldname":"material_variance_cost_usd","fieldtype":"Currency","label":"Material Variance Cost USD","read_only":1,"permlevel":1},
     {"default":"0","fieldname":"internal_loss_cost_usd","fieldtype":"Currency","label":"Internal Loss Cost USD","read_only":1,"permlevel":1},
+    {"default":"0","fieldname":"actual_cost_usd","fieldtype":"Currency","label":"Actual Cost USD","read_only":1,"permlevel":1},
     {"fieldname":"plan_section","fieldtype":"Section Break","label":"Cutting Plan"},
     {"fieldname":"packing_method","fieldtype":"Data","label":"Packing Method","read_only":1},
     {"fieldname":"packing_score","fieldtype":"Data","label":"Packing Score","read_only":1},
@@ -57,10 +58,10 @@
     {"fieldname":"cutting_plan_html","fieldtype":"HTML","label":"Cutting Plan"}
   ],
   "links": [],
-  "module": "Almdina ERP",
-  "name": "Door Cutting Order",
-  "naming_rule": "By naming series field",
-  "permissions": [
+  "module":"Almdina ERP",
+  "name":"Door Cutting Order",
+  "naming_rule":"By naming series field",
+  "permissions":[
     {"create":1,"read":1,"report":1,"print":1,"email":1,"role":"Order Entry","write":1},
     {"read":1,"report":1,"print":1,"role":"Cutting Operator"},
     {"read":1,"report":1,"print":1,"role":"Edge Operator"},
