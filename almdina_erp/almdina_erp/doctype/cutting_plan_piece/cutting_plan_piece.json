@@ -1,0 +1,144 @@
+{
+  "actions": [],
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "sheet_no",
+    "piece_id",
+    "piece_label",
+    "source_piece_no",
+    "copy_no",
+    "x_mm",
+    "y_mm",
+    "width_mm",
+    "height_mm",
+    "original_width_cm",
+    "original_length_cm",
+    "rotated",
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+    "edge_type",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "sheet_no",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Sheet No",
+      "reqd": 1
+    },
+    {
+      "fieldname": "piece_id",
+      "fieldtype": "Int",
+      "label": "Piece ID",
+      "read_only": 1
+    },
+    {
+      "fieldname": "piece_label",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Piece Label",
+      "read_only": 1
+    },
+    {
+      "fieldname": "source_piece_no",
+      "fieldtype": "Int",
+      "label": "Source Piece No",
+      "read_only": 1
+    },
+    {
+      "fieldname": "copy_no",
+      "fieldtype": "Int",
+      "label": "Copy No",
+      "read_only": 1
+    },
+    {
+      "fieldname": "x_mm",
+      "fieldtype": "Float",
+      "label": "X MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "y_mm",
+      "fieldtype": "Float",
+      "label": "Y MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "width_mm",
+      "fieldtype": "Float",
+      "label": "Width MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "height_mm",
+      "fieldtype": "Float",
+      "label": "Height MM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "original_width_cm",
+      "fieldtype": "Float",
+      "label": "Original Width CM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "original_length_cm",
+      "fieldtype": "Float",
+      "label": "Original Length CM",
+      "read_only": 1
+    },
+    {
+      "fieldname": "rotated",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Rotated",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_long_right",
+      "fieldtype": "Check",
+      "label": "Edge Long Right",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_long_left",
+      "fieldtype": "Check",
+      "label": "Edge Long Left",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_width_top",
+      "fieldtype": "Check",
+      "label": "Edge Width Top",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_width_bottom",
+      "fieldtype": "Check",
+      "label": "Edge Width Bottom",
+      "read_only": 1
+    },
+    {
+      "fieldname": "edge_type",
+      "fieldtype": "Link",
+      "label": "Edge Type",
+      "options": "Edge Banding Type",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes",
+      "read_only": 1
+    }
+  ],
+  "istable": 1,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Cutting Plan Piece"
+}
