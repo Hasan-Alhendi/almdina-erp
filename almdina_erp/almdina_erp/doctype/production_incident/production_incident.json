@@ -26,6 +26,7 @@
     {"read":1,"report":1,"role":"Edge Operator"},
     {"read":1,"report":1,"role":"Production Manager"},
     {"read":1,"report":1,"role":"Stock Manager"},
+    {"read":1,"report":1,"role":"Accounts Management"},
     {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
   ],
   "sort_field":"modified",
