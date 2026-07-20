@@ -11,6 +11,7 @@ after_migrate = "almdina_erp.install.after_migrate"
 
 doctype_js = {
     "Door Cutting Order": "public/js/door_cutting_order_workflow.js",
+    "Production Stage": "public/js/production_stage.js",
 }
 
 # Keep v1.0 business logic inside the app package. Client-side scripts are used
