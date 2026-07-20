@@ -73,13 +73,20 @@ def approve_replacement(replacement_name: str) -> dict[str, Any]:
 
     from almdina_erp.almdina_erp.services.replacement_service import (
         _build_replacement_snapshot,
-        _create_mini_plan,
         _reserve_replacement_materials,
     )
+    from almdina_erp.almdina_erp.services.replacement_plan_service import create_mini_plan
 
     snapshot = _build_replacement_snapshot(order, replacement, remnant)
-    plan = _create_mini_plan(order, replacement, snapshot, remnant)
-    _reserve_replacement_materials(replacement, plan)
+    plan = create_mini_plan(order, replacement, snapshot, remnant)
+
+    # Physical remnant reservation is always required once selected so it cannot
+    # be assigned twice. Stock-item reservation follows the same optional factory
+    # policy as normal orders; start-time consumption will revalidate if disabled.
+    settings = frappe.get_single("Almdina ERP Settings")
+    material_reservation = None
+    if cint(settings.reserve_stock_on_approval):
+        material_reservation = _reserve_replacement_materials(replacement, plan)
 
     frappe.db.set_value(
         "Replacement Piece",
@@ -100,5 +107,6 @@ def approve_replacement(replacement_name: str) -> dict[str, Any]:
         "status": "Approved",
         "cutting_plan": plan.name,
         "selected_remnant": remnant.name if remnant else None,
+        "material_reservation": material_reservation,
         "planned_internal_loss_usd": flt(plan.total_cost_usd),
     }
