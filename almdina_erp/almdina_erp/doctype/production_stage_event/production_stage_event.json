@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "naming_series:",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["naming_series","door_cutting_order","production_stage","stage_type","event_type","event_time","actor","details_json"],
+  "fields": [
+    {"default":"PSE-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"PSE-.YYYY.-.#####","reqd":1},
+    {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
+    {"fieldname":"production_stage","fieldtype":"Link","in_list_view":1,"label":"Production Stage","options":"Production Stage","reqd":1},
+    {"fieldname":"stage_type","fieldtype":"Data","in_list_view":1,"label":"Stage Type","read_only":1},
+    {"fieldname":"event_type","fieldtype":"Select","in_list_view":1,"label":"Event Type","options":"Created\nStart\nPause\nResume\nFinish\nOverride\nCancel","read_only":1,"reqd":1},
+    {"fieldname":"event_time","fieldtype":"Datetime","in_list_view":1,"label":"Event Time","read_only":1,"reqd":1},
+    {"fieldname":"actor","fieldtype":"Link","label":"Actor","options":"User","read_only":1,"reqd":1},
+    {"fieldname":"details_json","fieldtype":"Long Text","label":"Details JSON","read_only":1}
+  ],
+  "links": [],
+  "module":"Almdina ERP",
+  "name":"Production Stage Event",
+  "naming_rule":"By naming series field",
+  "permissions":[
+    {"read":1,"report":1,"role":"Cutting Operator"},
+    {"read":1,"report":1,"role":"Edge Operator"},
+    {"read":1,"report":1,"role":"Production Manager"},
+    {"read":1,"report":1,"role":"System Manager"}
+  ],
+  "sort_field":"event_time",
+  "sort_order":"DESC"
+}
