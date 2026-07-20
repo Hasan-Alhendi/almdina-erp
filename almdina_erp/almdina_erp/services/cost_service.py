@@ -6,16 +6,8 @@ import frappe
 from frappe.utils import flt
 
 
-def get_order_cost_summary(order_name: str) -> dict[str, Any]:
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    planned_cost = flt(order.total_cost_usd)
-
-    if order.approved_plan:
-        planned_cost = flt(
-            frappe.db.get_value("Cutting Plan", order.approved_plan, "total_cost_usd")
-        ) or planned_cost
-
-    internal_loss = flt(
+def _internal_loss(order_name: str) -> float:
+    return flt(
         frappe.db.sql(
             """
             select coalesce(sum(internal_loss_cost_usd), 0)
@@ -27,6 +19,18 @@ def get_order_cost_summary(order_name: str) -> dict[str, Any]:
             (order_name,),
         )[0][0]
     )
+
+
+def get_order_cost_summary(order_name: str) -> dict[str, Any]:
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    planned_cost = flt(order.total_cost_usd)
+
+    if order.approved_plan:
+        planned_cost = flt(
+            frappe.db.get_value("Cutting Plan", order.approved_plan, "total_cost_usd")
+        ) or planned_cost
+
+    internal_loss = _internal_loss(order_name)
     actual_cost = planned_cost + internal_loss
 
     return {
@@ -57,8 +61,22 @@ def on_replacement_update(doc: Any, method: str | None = None) -> None:
 
 
 def on_order_plan_update(doc: Any, method: str | None = None) -> None:
-    if (doc.plan_kind or "Order") == "Order" and doc.status == "Approved" and doc.door_cutting_order:
-        sync_order_costs(doc.door_cutting_order)
+    if (doc.plan_kind or "Order") != "Order" or doc.status != "Approved" or not doc.door_cutting_order:
+        return
+
+    # This hook runs while the newly approved plan may not yet be linked into
+    # Door Cutting Order.approved_plan. Use this plan's frozen cost directly so
+    # Remnant-First approval cannot leave Actual Cost based on the old preview.
+    internal_loss = _internal_loss(doc.door_cutting_order)
+    frappe.db.set_value(
+        "Door Cutting Order",
+        doc.door_cutting_order,
+        {
+            "actual_cost_usd": flt(doc.total_cost_usd) + internal_loss,
+            "internal_loss_cost_usd": internal_loss,
+        },
+        update_modified=True,
+    )
 
 
 @frappe.whitelist()
