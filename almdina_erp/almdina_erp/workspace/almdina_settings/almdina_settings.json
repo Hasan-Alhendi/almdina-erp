@@ -1,0 +1,36 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"settings-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Factory Settings</b></span>\",\"col\":12}},{\"id\":\"production-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Defaults\",\"col\":4}},{\"id\":\"stock-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock & Remnant Policy\",\"col\":4}},{\"id\":\"routing\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Routing\",\"col\":4}},{\"id\":\"masters-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Master Data</b></span>\",\"col\":12}},{\"id\":\"edges\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Edge Banding Types\",\"col\":4}},{\"id\":\"full-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"System Factory Settings\",\"col\":4}}]",
+  "custom_blocks": [],
+  "docstatus": 0,
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "setting-gear",
+  "idx": 0,
+  "is_hidden": 0,
+  "label": "Almdina Settings",
+  "links": [
+    {"hidden":0,"is_query_report":0,"label":"Production Defaults","link_count":0,"link_to":"factory-production-settings","link_type":"Page","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"Stock & Remnant Policy","link_count":0,"link_to":"factory-stock-settings","link_type":"Page","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"Production Routing","link_count":0,"link_to":"Production Routing","link_type":"DocType","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"Edge Banding Types","link_count":0,"link_to":"Edge Banding Type","link_type":"DocType","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"System Factory Settings","link_count":0,"link_to":"Almdina ERP Settings","link_type":"DocType","onboard":0,"type":"Link"}
+  ],
+  "module": "Almdina ERP",
+  "name": "Almdina Settings",
+  "number_cards": [],
+  "parent_page": "Almdina ERP",
+  "public": 1,
+  "quick_lists": [],
+  "roles": [],
+  "sequence_id": 3,
+  "shortcuts": [
+    {"color":"Blue","label":"Production Defaults","link_to":"factory-production-settings","type":"Page"},
+    {"color":"Green","label":"Stock & Remnant Policy","link_to":"factory-stock-settings","type":"Page"},
+    {"color":"Orange","doc_view":"List","label":"Production Routing","link_to":"Production Routing","type":"DocType"},
+    {"color":"Grey","doc_view":"List","label":"Edge Banding Types","link_to":"Edge Banding Type","type":"DocType"},
+    {"color":"Red","doc_view":"Form","label":"System Factory Settings","link_to":"Almdina ERP Settings","type":"DocType"}
+  ],
+  "title": "Almdina Settings"
+}
