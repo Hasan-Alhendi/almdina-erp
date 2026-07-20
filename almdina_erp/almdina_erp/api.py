@@ -42,15 +42,35 @@ def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = No
     }
 
 
-def _approved_snapshot_for_order(order_name: str) -> str | None:
+def _approved_order_plan_name(order_name: str) -> str | None:
     if not order_name or order_name.startswith("new-"):
         return None
-    plan_name = frappe.db.get_value(
+
+    linked = frappe.db.get_value("Door Cutting Order", order_name, "approved_plan")
+    if linked:
+        valid = frappe.db.get_value(
+            "Cutting Plan",
+            linked,
+            ["name", "status", "plan_kind"],
+            as_dict=True,
+        )
+        if valid and valid.status == "Approved" and (valid.plan_kind or "Order") == "Order":
+            return valid.name
+
+    return frappe.db.get_value(
         "Cutting Plan",
-        {"door_cutting_order": order_name, "status": "Approved"},
+        {
+            "door_cutting_order": order_name,
+            "status": "Approved",
+            "plan_kind": "Order",
+        },
         "name",
-        order_by="revision desc",
+        order_by="revision desc, modified desc",
     )
+
+
+def _approved_snapshot_for_order(order_name: str) -> str | None:
+    plan_name = _approved_order_plan_name(order_name)
     if not plan_name:
         return None
     return frappe.db.get_value("Cutting Plan", plan_name, "snapshot_json")
@@ -58,7 +78,7 @@ def _approved_snapshot_for_order(order_name: str) -> str | None:
 
 @frappe.whitelist()
 def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
-    """Calculate an editable order without saving; locked orders use the Approved Snapshot."""
+    """Calculate an editable order without saving; locked orders use the Approved Order Snapshot."""
 
     payload = frappe.parse_json(doc) if isinstance(doc, str) else dict(doc or {})
     payload["doctype"] = "Door Cutting Order"
@@ -67,10 +87,11 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
     name = payload.get("name") or ""
 
     # Once approved, never regenerate a historical production plan from the
-    # current engine. The approved immutable snapshot is the source of truth for
-    # rendering, printing and DXF.
+    # current engine. Replacement Mini Plans are intentionally excluded: the
+    # order's linked immutable Order Plan is the only rendering/printing source.
     if status not in EDITABLE_ORDER_STATES and name and not name.startswith("new-"):
         stored = frappe.get_doc("Door Cutting Order", name)
+        stored.check_permission("read")
         approved_snapshot = _approved_snapshot_for_order(name)
         return _serialize_order_preview(
             stored,
@@ -109,15 +130,10 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_approved_cutting_plan_snapshot(order_name: str) -> dict[str, Any]:
-    """Return immutable plan metadata used by official print/DXF consumers."""
+    """Return immutable Order Plan metadata used by official print/DXF consumers."""
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
-    plan_name = frappe.db.get_value(
-        "Cutting Plan",
-        {"door_cutting_order": order_name, "status": "Approved"},
-        "name",
-        order_by="revision desc",
-    )
+    plan_name = _approved_order_plan_name(order_name)
     if not plan_name:
         return {"cutting_plan": None, "snapshot_json": order.cutting_plan_json}
     plan = frappe.get_doc("Cutting Plan", plan_name)
