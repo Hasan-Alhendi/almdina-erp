@@ -4,96 +4,30 @@
   "editable_grid": 1,
   "engine": "InnoDB",
   "field_order": [
-    "sheet_no",
-    "source_type",
-    "board_item",
-    "remnant",
-    "full_width_mm",
-    "full_length_mm",
-    "usable_width_mm",
-    "usable_length_mm",
-    "source_area_m2",
-    "used_area_m2",
-    "waste_area_m2"
+    "sheet_no","source_type","board_item","remnant","identity_section","material","color","thickness_mm",
+    "dimensions_section","full_width_mm","full_length_mm","usable_width_mm","usable_length_mm",
+    "source_area_m2","used_area_m2","waste_area_m2"
   ],
   "fields": [
-    {
-      "fieldname": "sheet_no",
-      "fieldtype": "Int",
-      "in_list_view": 1,
-      "label": "Sheet No",
-      "reqd": 1
-    },
-    {
-      "default": "Full Board",
-      "fieldname": "source_type",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "label": "Source Type",
-      "options": "Full Board\nRemnant",
-      "reqd": 1
-    },
-    {
-      "fieldname": "board_item",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Board Item",
-      "options": "Item"
-    },
-    {
-      "fieldname": "remnant",
-      "fieldtype": "Link",
-      "label": "Remnant",
-      "options": "Board Remnant"
-    },
-    {
-      "fieldname": "full_width_mm",
-      "fieldtype": "Float",
-      "label": "Full Width MM",
-      "read_only": 1
-    },
-    {
-      "fieldname": "full_length_mm",
-      "fieldtype": "Float",
-      "label": "Full Length MM",
-      "read_only": 1
-    },
-    {
-      "fieldname": "usable_width_mm",
-      "fieldtype": "Float",
-      "label": "Usable Width MM",
-      "read_only": 1
-    },
-    {
-      "fieldname": "usable_length_mm",
-      "fieldtype": "Float",
-      "label": "Usable Length MM",
-      "read_only": 1
-    },
-    {
-      "fieldname": "source_area_m2",
-      "fieldtype": "Float",
-      "label": "Source Area M2",
-      "precision": "4",
-      "read_only": 1
-    },
-    {
-      "fieldname": "used_area_m2",
-      "fieldtype": "Float",
-      "label": "Used Area M2",
-      "precision": "4",
-      "read_only": 1
-    },
-    {
-      "fieldname": "waste_area_m2",
-      "fieldtype": "Float",
-      "label": "Waste Area M2",
-      "precision": "4",
-      "read_only": 1
-    }
+    {"fieldname":"sheet_no","fieldtype":"Int","in_list_view":1,"label":"Sheet No","reqd":1},
+    {"default":"Full Board","fieldname":"source_type","fieldtype":"Select","in_list_view":1,"label":"Source Type","options":"Full Board\nRemnant","reqd":1},
+    {"fieldname":"board_item","fieldtype":"Link","in_list_view":1,"label":"Board Item","options":"Item"},
+    {"fieldname":"remnant","fieldtype":"Link","label":"Remnant","options":"Board Remnant"},
+    {"fieldname":"identity_section","fieldtype":"Section Break","label":"Material Identity Snapshot"},
+    {"fieldname":"material","fieldtype":"Data","label":"Material","read_only":1},
+    {"fieldname":"color","fieldtype":"Data","label":"Color","read_only":1},
+    {"fieldname":"thickness_mm","fieldtype":"Float","label":"Thickness MM","read_only":1},
+    {"fieldname":"dimensions_section","fieldtype":"Section Break","label":"Dimensions Snapshot"},
+    {"fieldname":"full_width_mm","fieldtype":"Float","label":"Full Width MM","read_only":1},
+    {"fieldname":"full_length_mm","fieldtype":"Float","label":"Full Length MM","read_only":1},
+    {"fieldname":"usable_width_mm","fieldtype":"Float","label":"Usable Width MM","read_only":1},
+    {"fieldname":"usable_length_mm","fieldtype":"Float","label":"Usable Length MM","read_only":1},
+    {"fieldname":"source_area_m2","fieldtype":"Float","label":"Source Area M2","precision":"4","read_only":1},
+    {"fieldname":"used_area_m2","fieldtype":"Float","label":"Used Area M2","precision":"4","read_only":1},
+    {"fieldname":"waste_area_m2","fieldtype":"Float","label":"Waste Area M2","precision":"4","read_only":1}
   ],
-  "istable": 1,
-  "links": [],
-  "module": "Almdina ERP",
-  "name": "Cutting Plan Source"
+  "istable":1,
+  "links":[],
+  "module":"Almdina ERP",
+  "name":"Cutting Plan Source"
 }
