@@ -9,6 +9,10 @@ app_version = "1.0.0-dev"
 after_install = "almdina_erp.install.after_install"
 after_migrate = "almdina_erp.install.after_migrate"
 
+app_include_js = [
+    "/assets/almdina_erp/js/order_lifecycle.js",
+]
+
 doctype_js = {
     "Door Cutting Order": "public/js/door_cutting_order_workflow.js",
     "Production Stage": "public/js/production_stage.js",
