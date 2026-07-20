@@ -21,9 +21,55 @@
         }).then(() => frm.reload_doc());
     }
 
+    function record_incident(frm) {
+        frappe.prompt(
+            [
+                { fieldname: "piece_label", fieldtype: "Data", label: __("رقم القطعة مثل 2.3"), reqd: 1 },
+                {
+                    fieldname: "reason",
+                    fieldtype: "Select",
+                    label: __("السبب"),
+                    options: ["Measurement Error", "Cutting Error", "Edge Banding Error", "Damage", "Lost Piece", "Material Defect", "Other"].join("\n"),
+                    reqd: 1,
+                },
+                { fieldname: "description", fieldtype: "Small Text", label: __("وصف الخطأ"), reqd: 1 },
+                { fieldname: "requires_replacement", fieldtype: "Check", label: __("تحتاج قطعة تعويضية"), default: 1 },
+            ],
+            values => {
+                frappe.call({
+                    method: "almdina_erp.almdina_erp.services.replacement_service.record_incident",
+                    args: {
+                        order_name: frm.doc.door_cutting_order,
+                        production_stage: frm.doc.name,
+                        piece_label: values.piece_label,
+                        reason: values.reason,
+                        description: values.description,
+                        requires_replacement: values.requires_replacement,
+                    },
+                    freeze: true,
+                    freeze_message: __("Recording incident..."),
+                }).then(r => {
+                    const result = r.message || {};
+                    let message = `${__("تم تسجيل الخطأ")}: ${result.incident || ""}`;
+                    if (result.replacement_piece) {
+                        message += `<br>${__("تم إنشاء قطعة تعويضية")}: <b>${result.replacement_piece}</b>`;
+                    }
+                    frappe.msgprint({ title: __("Production Incident"), indicator: "orange", message });
+                    frm.reload_doc();
+                });
+            },
+            __("تسجيل خطأ / قطعة تالفة"),
+            __("تسجيل")
+        );
+    }
+
     frappe.ui.form.on("Production Stage", {
         refresh(frm) {
             if (frm.is_new() || !can_operate(frm)) return;
+
+            if (["In Progress", "Paused", "Completed"].includes(frm.doc.status) && ["Cutting", "Edge Banding"].includes(frm.doc.stage_type)) {
+                frm.add_custom_button(__("تسجيل خطأ / قطعة تالفة"), () => record_incident(frm), __("مشاكل الإنتاج"));
+            }
 
             if (frm.doc.status === "Pending") {
                 frm.add_custom_button(__("بدء المرحلة"), () => {
