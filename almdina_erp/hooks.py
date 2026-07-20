@@ -19,5 +19,14 @@ doctype_js = {
     "Replacement Piece": "public/js/replacement_piece.js",
 }
 
+doc_events = {
+    "Replacement Piece": {
+        "on_update": "almdina_erp.almdina_erp.services.cost_service.on_replacement_update",
+    },
+    "Cutting Plan": {
+        "on_update": "almdina_erp.almdina_erp.services.cost_service.on_order_plan_update",
+    },
+}
+
 # Keep v1.0 business logic inside the app package. Client-side scripts are used
 # for interaction and preview only; authoritative calculations are server-side.
