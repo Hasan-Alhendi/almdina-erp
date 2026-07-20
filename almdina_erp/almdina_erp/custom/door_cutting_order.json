@@ -1,0 +1,48 @@
+{
+  "custom_fields": [],
+  "custom_perms": [],
+  "doctype": "Door Cutting Order",
+  "property_setters": [
+    {
+      "doc_type": "Door Cutting Order",
+      "doctype_or_field": "DocField",
+      "field_name": "kerf_mm",
+      "property": "default",
+      "property_type": "Text",
+      "value": ""
+    },
+    {
+      "doc_type": "Door Cutting Order",
+      "doctype_or_field": "DocField",
+      "field_name": "trim_margin_mm",
+      "property": "default",
+      "property_type": "Text",
+      "value": ""
+    },
+    {
+      "doc_type": "Door Cutting Order",
+      "doctype_or_field": "DocField",
+      "field_name": "cutting_cost_per_board_usd",
+      "property": "default",
+      "property_type": "Text",
+      "value": ""
+    },
+    {
+      "doc_type": "Door Cutting Order",
+      "doctype_or_field": "DocField",
+      "field_name": "cutting_cost_per_board_usd",
+      "property": "reqd",
+      "property_type": "Check",
+      "value": "1"
+    },
+    {
+      "doc_type": "Door Cutting Order",
+      "doctype_or_field": "DocField",
+      "field_name": "packing_mode",
+      "property": "default",
+      "property_type": "Text",
+      "value": ""
+    }
+  ],
+  "sync_on_migrate": 1
+}
