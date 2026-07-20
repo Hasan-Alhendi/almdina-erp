@@ -7,7 +7,7 @@
     "naming_series","door_cutting_order","incident","original_piece_label","status","approval_column","approved_by","approved_on",
     "piece_section","board_item","width_cm","length_cm","qty","allow_rotation",
     "edge_section","edge_long_right","edge_long_left","edge_width_top","edge_width_bottom","edge_type",
-    "source_section","source_preference","selected_remnant","cutting_plan","stock_entry","generated_remnant",
+    "source_section","source_preference","selected_remnant","cutting_plan","stock_entry","generated_remnant","generated_remnants_json",
     "execution_section","started_by","started_on","completed_by","completed_on",
     "cost_section","planned_internal_loss_usd","internal_loss_cost_usd","charge_customer","notes"
   ],
@@ -37,7 +37,8 @@
     {"fieldname":"selected_remnant","fieldtype":"Link","label":"Selected Remnant","options":"Board Remnant","read_only":1},
     {"fieldname":"cutting_plan","fieldtype":"Link","label":"Replacement Cutting Plan","options":"Cutting Plan","read_only":1},
     {"fieldname":"stock_entry","fieldtype":"Link","label":"Stock Entry","options":"Stock Entry","read_only":1},
-    {"fieldname":"generated_remnant","fieldtype":"Link","label":"Generated Remnant","options":"Board Remnant","read_only":1},
+    {"fieldname":"generated_remnant","fieldtype":"Link","label":"Largest Generated Remnant","options":"Board Remnant","read_only":1},
+    {"fieldname":"generated_remnants_json","fieldtype":"Long Text","label":"Generated Remnants JSON","read_only":1,"hidden":1},
     {"fieldname":"execution_section","fieldtype":"Section Break","label":"Execution"},
     {"fieldname":"started_by","fieldtype":"Link","label":"Started By","options":"User","read_only":1},
     {"fieldname":"started_on","fieldtype":"Datetime","label":"Started On","read_only":1},
