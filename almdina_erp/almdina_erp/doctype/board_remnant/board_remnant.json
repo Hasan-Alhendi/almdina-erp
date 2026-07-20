@@ -3,177 +3,41 @@
   "autoname": "naming_series:",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": [
-    "naming_series",
-    "status",
-    "board_item",
-    "warehouse",
-    "location",
-    "dimensions_section",
-    "length_mm",
-    "width_mm",
-    "thickness_mm",
-    "area_m2",
-    "identity_column",
-    "material",
-    "color",
-    "source_section",
-    "source_order",
-    "source_plan",
-    "parent_remnant",
-    "reservation_section",
-    "reserved_for_order",
-    "reservation_timestamp",
-    "notes"
-  ],
+  "field_order": ["naming_series","status","board_item","warehouse","location","dimensions_section","length_mm","width_mm","thickness_mm","area_m2","identity_column","material","color","source_section","source_order","source_plan","parent_remnant","reservation_section","reserved_for_order","reservation_timestamp","notes"],
   "fields": [
-    {
-      "default": "REM-.YYYY.-.#####",
-      "fieldname": "naming_series",
-      "fieldtype": "Select",
-      "label": "Naming Series",
-      "options": "REM-.YYYY.-.#####",
-      "reqd": 1
-    },
-    {
-      "default": "Available",
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "label": "Status",
-      "options": "Available\nReserved\nConsumed\nScrapped",
-      "reqd": 1
-    },
-    {
-      "fieldname": "board_item",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Board Item",
-      "options": "Item",
-      "reqd": 1
-    },
-    {
-      "fieldname": "warehouse",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Warehouse",
-      "options": "Warehouse"
-    },
-    {
-      "fieldname": "location",
-      "fieldtype": "Data",
-      "label": "Physical Location"
-    },
-    {
-      "fieldname": "dimensions_section",
-      "fieldtype": "Section Break",
-      "label": "Dimensions"
-    },
-    {
-      "fieldname": "length_mm",
-      "fieldtype": "Float",
-      "label": "Length (MM)",
-      "non_negative": 1,
-      "reqd": 1
-    },
-    {
-      "fieldname": "width_mm",
-      "fieldtype": "Float",
-      "label": "Width (MM)",
-      "non_negative": 1,
-      "reqd": 1
-    },
-    {
-      "fieldname": "thickness_mm",
-      "fieldtype": "Float",
-      "label": "Thickness (MM)",
-      "non_negative": 1
-    },
-    {
-      "fieldname": "area_m2",
-      "fieldtype": "Float",
-      "label": "Area M2",
-      "precision": "4",
-      "read_only": 1
-    },
-    {
-      "fieldname": "identity_column",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "material",
-      "fieldtype": "Data",
-      "label": "Material",
-      "read_only": 1
-    },
-    {
-      "fieldname": "color",
-      "fieldtype": "Data",
-      "label": "Color",
-      "read_only": 1
-    },
-    {
-      "fieldname": "source_section",
-      "fieldtype": "Section Break",
-      "label": "Source"
-    },
-    {
-      "fieldname": "source_order",
-      "fieldtype": "Link",
-      "label": "Source Order",
-      "options": "Door Cutting Order"
-    },
-    {
-      "fieldname": "source_plan",
-      "fieldtype": "Link",
-      "label": "Source Cutting Plan",
-      "options": "Cutting Plan"
-    },
-    {
-      "fieldname": "parent_remnant",
-      "fieldtype": "Link",
-      "label": "Parent Remnant",
-      "options": "Board Remnant"
-    },
-    {
-      "fieldname": "reservation_section",
-      "fieldtype": "Section Break",
-      "label": "Reservation"
-    },
-    {
-      "fieldname": "reserved_for_order",
-      "fieldtype": "Link",
-      "label": "Reserved For Order",
-      "options": "Door Cutting Order",
-      "read_only": 1
-    },
-    {
-      "fieldname": "reservation_timestamp",
-      "fieldtype": "Datetime",
-      "label": "Reservation Timestamp",
-      "read_only": 1
-    },
-    {
-      "fieldname": "notes",
-      "fieldtype": "Small Text",
-      "label": "Notes"
-    }
+    {"default":"REM-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"REM-.YYYY.-.#####","reqd":1},
+    {"default":"Available","fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Available\nReserved\nConsumed\nScrapped","read_only":1,"reqd":1},
+    {"fieldname":"board_item","fieldtype":"Link","in_list_view":1,"label":"Board Item","options":"Item","reqd":1},
+    {"fieldname":"warehouse","fieldtype":"Link","in_list_view":1,"label":"Warehouse","options":"Warehouse"},
+    {"fieldname":"location","fieldtype":"Data","label":"Physical Location"},
+    {"fieldname":"dimensions_section","fieldtype":"Section Break","label":"Dimensions"},
+    {"fieldname":"length_mm","fieldtype":"Float","label":"Length (MM)","non_negative":1,"reqd":1},
+    {"fieldname":"width_mm","fieldtype":"Float","label":"Width (MM)","non_negative":1,"reqd":1},
+    {"fieldname":"thickness_mm","fieldtype":"Float","label":"Thickness (MM)","non_negative":1},
+    {"fieldname":"area_m2","fieldtype":"Float","label":"Area M2","precision":"4","read_only":1},
+    {"fieldname":"identity_column","fieldtype":"Column Break"},
+    {"fieldname":"material","fieldtype":"Data","label":"Material","read_only":1},
+    {"fieldname":"color","fieldtype":"Data","label":"Color","read_only":1},
+    {"fieldname":"source_section","fieldtype":"Section Break","label":"Source"},
+    {"fieldname":"source_order","fieldtype":"Link","label":"Source Order","options":"Door Cutting Order","read_only":1},
+    {"fieldname":"source_plan","fieldtype":"Link","label":"Source Cutting Plan","options":"Cutting Plan","read_only":1},
+    {"fieldname":"parent_remnant","fieldtype":"Link","label":"Parent Remnant","options":"Board Remnant","read_only":1},
+    {"fieldname":"reservation_section","fieldtype":"Section Break","label":"Reservation"},
+    {"fieldname":"reserved_for_order","fieldtype":"Link","label":"Reserved For Order","options":"Door Cutting Order","read_only":1},
+    {"fieldname":"reservation_timestamp","fieldtype":"Datetime","label":"Reservation Timestamp","read_only":1},
+    {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
   ],
   "links": [],
-  "module": "Almdina ERP",
-  "name": "Board Remnant",
-  "naming_rule": "By naming series field",
-  "permissions": [
-    {
-      "create": 1,
-      "delete": 1,
-      "read": 1,
-      "report": 1,
-      "role": "System Manager",
-      "write": 1
-    }
+  "module":"Almdina ERP",
+  "name":"Board Remnant",
+  "naming_rule":"By naming series field",
+  "permissions":[
+    {"read":1,"report":1,"role":"Cutting Operator"},
+    {"read":1,"report":1,"role":"Production Manager"},
+    {"create":1,"read":1,"report":1,"role":"Stock Manager","write":1},
+    {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
   ],
-  "sort_field": "modified",
-  "sort_order": "DESC",
-  "track_changes": 1
+  "sort_field":"modified",
+  "sort_order":"DESC",
+  "track_changes":1
 }
