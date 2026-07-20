@@ -5,7 +5,7 @@
   "engine": "InnoDB",
   "field_order": [
     "naming_series","plan_kind","door_cutting_order","replacement_piece","revision","status","approval_column","approved_by","approved_on",
-    "engine_section","method_key","method_label","score","engine_version","validation_column","validation_status","validation_errors",
+    "engine_section","method_key","method_label","score","engine_version","validation_column","validation_status","validated_on","validation_errors",
     "board_section","board_item","full_board_width_mm","full_board_length_mm","usable_board_width_mm","usable_board_length_mm","settings_column","kerf_mm","trim_margin_mm",
     "totals_section","required_boards","used_area_m2","total_source_area_m2","waste_area_m2","waste_percent","reusable_remnant_area_m2","scrap_area_m2","waste_reconciled_on",
     "cost_section","board_rate_usd","cutting_cost_per_board_usd","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd",
@@ -28,6 +28,7 @@
     {"fieldname":"engine_version","fieldtype":"Data","label":"Engine Version","read_only":1},
     {"fieldname":"validation_column","fieldtype":"Column Break"},
     {"fieldname":"validation_status","fieldtype":"Select","label":"Validation Status","options":"Pending\nValid\nInvalid","read_only":1},
+    {"fieldname":"validated_on","fieldtype":"Datetime","label":"Validated On","read_only":1},
     {"fieldname":"validation_errors","fieldtype":"Long Text","label":"Validation Errors","read_only":1},
     {"fieldname":"board_section","fieldtype":"Section Break","label":"Board Snapshot"},
     {"fieldname":"board_item","fieldtype":"Link","label":"Board Item","options":"Item","read_only":1},
