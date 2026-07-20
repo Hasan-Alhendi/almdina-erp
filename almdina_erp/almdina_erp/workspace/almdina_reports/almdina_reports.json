@@ -1,0 +1,42 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"reports-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Factory Reports</b></span>\",\"col\":12}},{\"id\":\"summary\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Factory Operations Summary\",\"col\":3}},{\"id\":\"orders\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Factory Order Analysis\",\"col\":3}},{\"id\":\"performance\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Stage Performance\",\"col\":3}},{\"id\":\"remnants\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Remnant Inventory\",\"col\":3}},{\"id\":\"incidents\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Incidents and Replacements\",\"col\":3}},{\"id\":\"availability\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Order Stock Availability\",\"col\":3}},{\"id\":\"board-usage\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Board Usage Analysis\",\"col\":3}},{\"id\":\"piece-usage\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Piece Size Usage Analysis\",\"col\":3}}]",
+  "custom_blocks": [],
+  "docstatus": 0,
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "chart",
+  "idx": 0,
+  "is_hidden": 0,
+  "label": "Almdina Reports",
+  "links": [
+    {"hidden":0,"is_query_report":1,"label":"Factory Operations Summary","link_count":0,"link_to":"Factory Operations Summary","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Factory Order Analysis","link_count":0,"link_to":"Factory Order Analysis","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Production Stage Performance","link_count":0,"link_to":"Production Stage Performance","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Remnant Inventory","link_count":0,"link_to":"Remnant Inventory","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Production Incidents and Replacements","link_count":0,"link_to":"Production Incidents and Replacements","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Order Stock Availability","link_count":0,"link_to":"Order Stock Availability","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Board Usage Analysis","link_count":0,"link_to":"Board Usage Analysis","link_type":"Report","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":1,"label":"Piece Size Usage Analysis","link_count":0,"link_to":"Piece Size Usage Analysis","link_type":"Report","onboard":0,"type":"Link"}
+  ],
+  "module": "Almdina ERP",
+  "name": "Almdina Reports",
+  "number_cards": [],
+  "parent_page": "Almdina ERP",
+  "public": 1,
+  "quick_lists": [],
+  "roles": [],
+  "sequence_id": 2,
+  "shortcuts": [
+    {"color":"Blue","label":"Factory Operations Summary","link_to":"Factory Operations Summary","type":"Report"},
+    {"color":"Blue","label":"Factory Order Analysis","link_to":"Factory Order Analysis","type":"Report"},
+    {"color":"Orange","label":"Production Stage Performance","link_to":"Production Stage Performance","type":"Report"},
+    {"color":"Green","label":"Remnant Inventory","link_to":"Remnant Inventory","type":"Report"},
+    {"color":"Orange","label":"Production Incidents and Replacements","link_to":"Production Incidents and Replacements","type":"Report"},
+    {"color":"Red","label":"Order Stock Availability","link_to":"Order Stock Availability","type":"Report"},
+    {"color":"Green","label":"Board Usage Analysis","link_to":"Board Usage Analysis","type":"Report"},
+    {"color":"Blue","label":"Piece Size Usage Analysis","link_to":"Piece Size Usage Analysis","type":"Report"}
+  ],
+  "title": "Almdina Reports"
+}
