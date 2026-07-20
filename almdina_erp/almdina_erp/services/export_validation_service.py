@@ -44,18 +44,14 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
             errors.append(_("Piece label {0} is duplicated in the Cutting Plan.").format(label))
         seen_labels.add(label)
         pieces_by_sheet.setdefault(sheet_no, []).append(piece)
-
         source = source_by_sheet.get(sheet_no)
         if not source:
             errors.append(_("Piece {0} references missing source sheet {1}.").format(label, sheet_no))
             continue
 
-        x = flt(piece.x_mm)
-        y = flt(piece.y_mm)
-        width = flt(piece.width_mm)
-        height = flt(piece.height_mm)
-        usable_w = flt(source.usable_width_mm)
-        usable_h = flt(source.usable_length_mm)
+        x, y = flt(piece.x_mm), flt(piece.y_mm)
+        width, height = flt(piece.width_mm), flt(piece.height_mm)
+        usable_w, usable_h = flt(source.usable_width_mm), flt(source.usable_length_mm)
         if width <= 0 or height <= 0:
             errors.append(_("Piece {0} has invalid dimensions.").format(label))
         if x < -1e-7 or y < -1e-7 or x + width > usable_w + 1e-7 or y + height > usable_h + 1e-7:
@@ -67,11 +63,7 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
             for second in pieces[index + 1:]:
                 b = {"x": flt(second.x_mm), "y": flt(second.y_mm), "w": flt(second.width_mm), "h": flt(second.height_mm)}
                 if _rects_overlap(a, b):
-                    errors.append(
-                        _("Pieces {0} and {1} overlap on source sheet {2}.").format(
-                            first.piece_label, second.piece_label, sheet_no
-                        )
-                    )
+                    errors.append(_("Pieces {0} and {1} overlap on source sheet {2}.").format(first.piece_label, second.piece_label, sheet_no))
 
     for source in plan.sources or []:
         if source.board_item and source.board_item != plan.board_item:
@@ -80,12 +72,7 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
             if not source.remnant:
                 errors.append(_("Remnant source sheet {0} has no Board Remnant reference.").format(source.sheet_no))
             else:
-                remnant = frappe.db.get_value(
-                    "Board Remnant",
-                    source.remnant,
-                    ["board_item", "width_mm", "length_mm"],
-                    as_dict=True,
-                )
+                remnant = frappe.db.get_value("Board Remnant", source.remnant, ["board_item", "width_mm", "length_mm"], as_dict=True)
                 if not remnant:
                     errors.append(_("Board Remnant {0} no longer exists.").format(source.remnant))
                 else:
@@ -113,14 +100,9 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
             expected_piece = expected.get(piece.piece_label)
             if not expected_piece:
                 continue
-            width_cm = flt(piece.width_mm) / 10
-            height_cm = flt(piece.height_mm) / 10
+            width_cm, height_cm = flt(piece.width_mm) / 10, flt(piece.height_mm) / 10
             normal = abs(width_cm - expected_piece["width_cm"]) <= 0.001 and abs(height_cm - expected_piece["length_cm"]) <= 0.001
-            rotated = (
-                expected_piece["allow_rotation"]
-                and abs(width_cm - expected_piece["length_cm"]) <= 0.001
-                and abs(height_cm - expected_piece["width_cm"]) <= 0.001
-            )
+            rotated = expected_piece["allow_rotation"] and abs(width_cm - expected_piece["length_cm"]) <= 0.001 and abs(height_cm - expected_piece["width_cm"]) <= 0.001
             if not (normal or rotated):
                 errors.append(_("Piece {0} dimensions/orientation do not match the order request.").format(piece.piece_label))
             if cint(piece.rotated) and not expected_piece["allow_rotation"]:
@@ -139,102 +121,114 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
     for source in sorted(plan.sources or [], key=lambda row: int(row.sheet_no)):
         sheet_pieces: list[dict[str, Any]] = []
         for piece in pieces_by_sheet.get(int(source.sheet_no), []):
-            sheet_pieces.append(
-                {
-                    "id": cint(piece.piece_id),
-                    "label": piece.piece_label,
-                    "source_piece_no": cint(piece.source_piece_no),
-                    "copy_no": cint(piece.copy_no),
-                    "x": flt(piece.x_mm) / 10,
-                    "y": flt(piece.y_mm) / 10,
-                    "w": flt(piece.width_mm) / 10,
-                    "h": flt(piece.height_mm) / 10,
-                    "original_w": flt(piece.original_width_cm),
-                    "original_h": flt(piece.original_length_cm),
-                    "rotated": bool(cint(piece.rotated)),
-                    "edge_long_right": cint(piece.edge_long_right),
-                    "edge_long_left": cint(piece.edge_long_left),
-                    "edge_width_top": cint(piece.edge_width_top),
-                    "edge_width_bottom": cint(piece.edge_width_bottom),
-                    "edge_type": piece.edge_type or "",
-                    "notes": piece.notes or "",
-                    "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,
-                }
-            )
-        sheets.append(
-            {
-                "sheet_no": int(source.sheet_no),
-                "source_type": source.source_type,
-                "remnant": source.remnant,
-                "board_item": source.board_item,
-                "full_width_cm": flt(source.full_width_mm) / 10,
-                "full_length_cm": flt(source.full_length_mm) / 10,
-                "usable_width_cm": flt(source.usable_width_mm) / 10,
-                "usable_length_cm": flt(source.usable_length_mm) / 10,
-                "source_area_m2": flt(source.source_area_m2),
-                "pieces": sheet_pieces,
-            }
-        )
+            sheet_pieces.append({
+                "id": cint(piece.piece_id), "label": piece.piece_label,
+                "source_piece_no": cint(piece.source_piece_no), "copy_no": cint(piece.copy_no),
+                "x": flt(piece.x_mm) / 10, "y": flt(piece.y_mm) / 10,
+                "w": flt(piece.width_mm) / 10, "h": flt(piece.height_mm) / 10,
+                "original_w": flt(piece.original_width_cm), "original_h": flt(piece.original_length_cm),
+                "rotated": bool(cint(piece.rotated)),
+                "edge_long_right": cint(piece.edge_long_right), "edge_long_left": cint(piece.edge_long_left),
+                "edge_width_top": cint(piece.edge_width_top), "edge_width_bottom": cint(piece.edge_width_bottom),
+                "edge_type": piece.edge_type or "", "notes": piece.notes or "",
+                "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,
+            })
+        sheets.append({
+            "sheet_no": int(source.sheet_no), "source_type": source.source_type,
+            "remnant": source.remnant, "board_item": source.board_item,
+            "full_width_cm": flt(source.full_width_mm) / 10, "full_length_cm": flt(source.full_length_mm) / 10,
+            "usable_width_cm": flt(source.usable_width_mm) / 10, "usable_length_cm": flt(source.usable_length_mm) / 10,
+            "source_area_m2": flt(source.source_area_m2), "pieces": sheet_pieces,
+        })
 
-    snapshot.update(
-        {
-            "engine_version": plan.engine_version,
-            "method_key": plan.method_key,
-            "method_label": plan.method_label,
-            "full_board_width_cm": flt(plan.full_board_width_mm) / 10,
-            "full_board_length_cm": flt(plan.full_board_length_mm) / 10,
-            "usable_board_width_cm": flt(plan.usable_board_width_mm) / 10,
-            "usable_board_length_cm": flt(plan.usable_board_length_mm) / 10,
-            "kerf_cm": flt(plan.kerf_mm) / 10,
-            "trim_cm": flt(plan.trim_margin_mm) / 10,
-            "used_area_m2": flt(plan.used_area_m2),
-            "total_board_area_m2": flt(plan.total_source_area_m2),
-            "waste_area_m2": flt(plan.waste_area_m2),
-            "required_full_boards": cint(plan.required_boards),
-            "sheets": sheets,
-            "unplaced": [],
-            "validation": {"is_valid": True, "errors": []},
-        }
-    )
+    snapshot.update({
+        "engine_version": plan.engine_version, "method_key": plan.method_key, "method_label": plan.method_label,
+        "full_board_width_cm": flt(plan.full_board_width_mm) / 10, "full_board_length_cm": flt(plan.full_board_length_mm) / 10,
+        "usable_board_width_cm": flt(plan.usable_board_width_mm) / 10, "usable_board_length_cm": flt(plan.usable_board_length_mm) / 10,
+        "kerf_cm": flt(plan.kerf_mm) / 10, "trim_cm": flt(plan.trim_margin_mm) / 10,
+        "used_area_m2": flt(plan.used_area_m2), "total_board_area_m2": flt(plan.total_source_area_m2),
+        "waste_area_m2": flt(plan.waste_area_m2), "required_full_boards": cint(plan.required_boards),
+        "sheets": sheets, "unplaced": [], "validation": {"is_valid": True, "errors": []},
+    })
     return snapshot
 
 
-@frappe.whitelist()
-def get_validated_dxf_plan(order_name: str) -> dict[str, Any]:
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    order.check_permission("read")
-    if not order.approved_plan:
-        frappe.throw(_("Save and approve the order before exporting a production DXF."))
+def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    payload["doctype"] = "Door Cutting Order"
+    doc = frappe.get_doc(payload)
+    if doc.name and not doc.is_new():
+        doc.check_permission("read")
+    elif not frappe.has_permission("Door Cutting Order", "create"):
+        frappe.throw(_("You do not have permission to export an unsaved Door Cutting Order."), frappe.PermissionError)
 
-    plan = frappe.get_doc("Cutting Plan", order.approved_plan)
-    errors = validate_cutting_plan_document(plan)
-    if errors:
+    if doc.status not in {None, "", "Draft", "Rejected", "Pending Review"}:
+        frappe.throw(_("Approved/production DXF must come from the approved immutable Cutting Plan."))
+
+    doc._set_piece_numbers()
+    doc._validate_numeric_inputs()
+    doc._validate_piece_inputs()
+    doc._load_board_snapshot()
+    doc._calculate_piece_rows()
+    doc._calculate_cutting_plan()
+    snapshot = frappe.parse_json(doc.cutting_plan_json or "{}") or {}
+    validation = snapshot.get("validation") or {}
+    errors = list(validation.get("errors") or [])
+    if snapshot.get("unplaced"):
+        errors.append(_("Cutting Plan contains unplaced pieces."))
+    if not validation.get("is_valid") or errors:
         frappe.throw(_("DXF export blocked by geometry validation:\n{0}").format("\n".join(errors)))
 
-    snapshot = _plan_to_export_snapshot(plan)
-    manifest = {
-        "order": order.name,
-        "customer": order.customer,
-        "revision": cint(plan.revision),
-        "cutting_plan": plan.name,
-        "plan_kind": plan.plan_kind or "Order",
-        "units": "mm",
-        "engine_version": plan.engine_version,
-        "method_key": plan.method_key,
-        "method_label": plan.method_label,
-        "sheet_count": len(plan.sources or []),
-        "sources": [
-            {
-                "sheet_no": int(row.sheet_no),
-                "source_type": row.source_type,
-                "remnant": row.remnant,
-                "board_item": row.board_item,
-                "full_width_mm": flt(row.full_width_mm),
-                "full_length_mm": flt(row.full_length_mm),
-                "usable_width_mm": flt(row.usable_width_mm),
-                "usable_length_mm": flt(row.usable_length_mm),
+    for sheet in snapshot.get("sheets") or []:
+        sheet.setdefault("source_type", "Full Board")
+        sheet.setdefault("remnant", None)
+        sheet.setdefault("board_item", doc.board_item)
+        sheet.setdefault("full_width_cm", flt(snapshot.get("full_board_width_cm")))
+        sheet.setdefault("full_length_cm", flt(snapshot.get("full_board_length_cm")))
+        sheet.setdefault("usable_width_cm", flt(snapshot.get("usable_board_width_cm")))
+        sheet.setdefault("usable_length_cm", flt(snapshot.get("usable_board_length_cm")))
+        sheet.setdefault("source_area_m2", flt(sheet.get("w")) * flt(sheet.get("h")) / 10000)
+    snapshot["required_full_boards"] = len(snapshot.get("sheets") or [])
+    return doc, snapshot
+
+
+@frappe.whitelist()
+def get_validated_dxf_plan(order_name: str | None = None, doc: str | dict[str, Any] | None = None) -> dict[str, Any]:
+    if order_name:
+        order = frappe.get_doc("Door Cutting Order", order_name)
+        order.check_permission("read")
+        if order.approved_plan:
+            plan = frappe.get_doc("Cutting Plan", order.approved_plan)
+            errors = validate_cutting_plan_document(plan)
+            if errors:
+                frappe.throw(_("DXF export blocked by geometry validation:\n{0}").format("\n".join(errors)))
+            snapshot = _plan_to_export_snapshot(plan)
+            manifest = {
+                "order": order.name, "customer": order.customer, "revision": cint(plan.revision),
+                "cutting_plan": plan.name, "plan_kind": plan.plan_kind or "Order", "units": "mm",
+                "engine_version": plan.engine_version, "method_key": plan.method_key, "method_label": plan.method_label,
+                "sheet_count": len(plan.sources or []),
+                "sources": [{
+                    "sheet_no": int(row.sheet_no), "source_type": row.source_type, "remnant": row.remnant,
+                    "board_item": row.board_item, "full_width_mm": flt(row.full_width_mm), "full_length_mm": flt(row.full_length_mm),
+                    "usable_width_mm": flt(row.usable_width_mm), "usable_length_mm": flt(row.usable_length_mm),
+                } for row in (plan.sources or [])],
             }
-            for row in (plan.sources or [])
-        ],
+            return {"plan": snapshot, "manifest": manifest}
+
+    if doc is None:
+        frappe.throw(_("Editable DXF export requires the current Door Cutting Order document payload."))
+    payload = frappe.parse_json(doc) if isinstance(doc, str) else dict(doc or {})
+    editable, snapshot = _strict_editable_snapshot(payload)
+    manifest = {
+        "order": editable.name or "UNSAVED", "customer": editable.customer, "revision": cint(editable.revision or 1),
+        "cutting_plan": None, "plan_kind": "Draft Preview", "units": "mm", "engine_version": snapshot.get("engine_version"),
+        "method_key": snapshot.get("method_key"), "method_label": snapshot.get("method_label"),
+        "sheet_count": len(snapshot.get("sheets") or []),
+        "sources": [{
+            "sheet_no": int(sheet.get("sheet_no") or index + 1), "source_type": sheet.get("source_type") or "Full Board",
+            "remnant": sheet.get("remnant"), "board_item": editable.board_item,
+            "full_width_mm": flt(sheet.get("full_width_cm")) * 10, "full_length_mm": flt(sheet.get("full_length_cm")) * 10,
+            "usable_width_mm": flt(sheet.get("usable_width_cm")) * 10, "usable_length_mm": flt(sheet.get("usable_length_cm")) * 10,
+        } for index, sheet in enumerate(snapshot.get("sheets") or [])],
     }
     return {"plan": snapshot, "manifest": manifest}
