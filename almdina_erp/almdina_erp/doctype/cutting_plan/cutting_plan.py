@@ -3,7 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, now_datetime
 
 
 class CuttingPlan(Document):
@@ -14,6 +14,8 @@ class CuttingPlan(Document):
             frappe.throw(_("A Replacement cutting plan must reference its Replacement Piece."))
         if self.plan_kind == "Replacement":
             self._validate_replacement_plan()
+        if self.validation_status in {"Valid", "Invalid"} and not self.validated_on:
+            self.validated_on = now_datetime()
         self._enforce_approved_immutability()
 
     def _validate_replacement_plan(self) -> None:
