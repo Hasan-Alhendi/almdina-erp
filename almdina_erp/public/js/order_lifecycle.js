@@ -10,21 +10,21 @@
             if (frm.is_new() || !has_role("Production Manager")) return;
             if (["Cancelled", "Completed", "Draft", "Rejected"].includes(frm.doc.status)) return;
 
-            frm.add_custom_button(__("إلغاء الطلب"), () => {
+            frm.add_custom_button(__("Cancel Order"), () => {
                 frappe.prompt(
                     [
-                        { fieldname: "reason", fieldtype: "Small Text", label: __("سبب الإلغاء"), reqd: 1 },
+                        { fieldname: "reason", fieldtype: "Small Text", label: __("Cancellation Reason"), reqd: 1 },
                         {
                             fieldname: "reverse_stock",
                             fieldtype: "Check",
-                            label: __("عكس الحركات المخزنية المرسلة إن وجدت"),
+                            label: __("Reverse submitted stock movements if any"),
                             default: 0,
-                            description: __("لا تفعل هذا الخيار إلا إذا كانت المواد قابلة للإرجاع فعليًا ولم يكتمل القص."),
+                            description: __("Only enable this when materials can physically be returned and cutting has not completed."),
                         },
                     ],
                     values => {
                         frappe.confirm(
-                            __("الإلغاء عملية حساسة وقد تعكس حركة مخزون وتحرر حجوزات. هل تريد المتابعة؟"),
+                            __("Cancellation is sensitive and may reverse stock movements and release reservations. Continue?"),
                             () => frappe.call({
                                 method: "almdina_erp.almdina_erp.services.order_lifecycle_service.cancel_order",
                                 args: {
@@ -37,7 +37,7 @@
                             }).then(r => {
                                 const data = r.message || {};
                                 frappe.msgprint({
-                                    title: __("تم إلغاء الطلب"),
+                                    title: __("Order Cancelled"),
                                     indicator: "orange",
                                     message: `${__("Reversed Stock Entries")}: ${(data.reversed_stock_entries || []).join(", ") || "-"}<br>${__("Released Remnants")}: ${(data.released_remnants || []).join(", ") || "-"}`,
                                 });
@@ -45,10 +45,10 @@
                             })
                         );
                     },
-                    __("إلغاء الطلب"),
-                    __("متابعة")
+                    __("Cancel Order"),
+                    __("Continue")
                 );
-            }, __("دورة الطلب"));
+            }, __("Order Workflow"));
         },
     });
 })();
