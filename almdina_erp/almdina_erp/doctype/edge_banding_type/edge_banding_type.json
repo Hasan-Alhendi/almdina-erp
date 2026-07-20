@@ -7,6 +7,8 @@
   "field_order": [
     "edge_type_name",
     "rate_usd_per_meter",
+    "item_code",
+    "stock_uom",
     "disabled"
   ],
   "fields": [
@@ -25,6 +27,19 @@
       "label": "Rate USD / Meter",
       "non_negative": 1,
       "reqd": 1
+    },
+    {
+      "fieldname": "item_code",
+      "fieldtype": "Link",
+      "label": "Stock Item",
+      "options": "Item"
+    },
+    {
+      "fieldname": "stock_uom",
+      "fieldtype": "Link",
+      "label": "Stock UOM",
+      "options": "UOM",
+      "read_only": 1
     },
     {
       "default": "0",
