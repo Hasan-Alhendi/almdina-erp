@@ -3,11 +3,12 @@
   "autoname": "naming_series:",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["naming_series","door_cutting_order","cutting_plan","status","reserved_on","released_on","items"],
+  "field_order": ["naming_series","door_cutting_order","cutting_plan","replacement_piece","status","reserved_on","released_on","items"],
   "fields": [
     {"default":"MRS-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"MRS-.YYYY.-.#####","reqd":1},
     {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
     {"fieldname":"cutting_plan","fieldtype":"Link","in_list_view":1,"label":"Cutting Plan","options":"Cutting Plan","reqd":1},
+    {"fieldname":"replacement_piece","fieldtype":"Link","in_list_view":1,"label":"Replacement Piece","options":"Replacement Piece","read_only":1},
     {"default":"Active","fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Active\nConsumed\nReleased\nCancelled","read_only":1,"reqd":1},
     {"fieldname":"reserved_on","fieldtype":"Datetime","label":"Reserved On","read_only":1},
     {"fieldname":"released_on","fieldtype":"Datetime","label":"Released / Consumed On","read_only":1},
