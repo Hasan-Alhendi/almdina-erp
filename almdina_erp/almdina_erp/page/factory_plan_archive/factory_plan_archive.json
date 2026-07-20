@@ -1,0 +1,19 @@
+{
+  "content": null,
+  "docstatus": 0,
+  "doctype": "Page",
+  "idx": 0,
+  "module": "Almdina ERP",
+  "name": "factory-plan-archive",
+  "page_name": "factory-plan-archive",
+  "roles": [
+    {"role":"Production Manager"},
+    {"role":"Accounts Management"},
+    {"role":"System Manager"}
+  ],
+  "script": null,
+  "standard": "Yes",
+  "style": null,
+  "system_page": 0,
+  "title": "Factory Plan Archive"
+}
