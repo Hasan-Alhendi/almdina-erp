@@ -39,7 +39,9 @@ def create_plan_from_order(order: Any) -> Any:
     if not validation.get("is_valid"):
         frappe.throw(_("The cutting plan failed geometry validation and cannot be approved."))
     if unplaced:
-        frappe.throw(_("The cutting plan contains unplaced pieces and cannot be approved."))
+        settings = frappe.get_single("Almdina ERP Settings")
+        if not settings.allow_unplaced_approval:
+            frappe.throw(_("The cutting plan contains unplaced pieces and cannot be approved."))
 
     revision = next_revision(order.name)
     full_width_mm = flt(snapshot.get("full_board_width_cm")) * 10
@@ -58,8 +60,8 @@ def create_plan_from_order(order: Any) -> Any:
     plan.method_label = snapshot.get("method_label") or order.packing_method or ""
     plan.score = flt(snapshot.get("score"))
     plan.engine_version = snapshot.get("engine_version") or order.engine_version or ""
-    plan.validation_status = "Valid"
-    plan.validation_errors = ""
+    plan.validation_status = "Valid" if validation.get("is_valid") else "Invalid"
+    plan.validation_errors = "\n".join(validation.get("errors") or [])
     plan.board_item = order.board_item
     plan.full_board_width_mm = full_width_mm
     plan.full_board_length_mm = full_length_mm
@@ -168,7 +170,6 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
     if order.status not in {"Draft", "Rejected"}:
         frappe.throw(_("Only Draft or Rejected orders can be sent for review."))
 
-    # Normal save performs strict validation and authoritative recalculation.
     order.status = "Pending Review"
     order.save()
     return {"name": order.name, "status": order.status}
@@ -186,9 +187,15 @@ def approve_order(order_name: str) -> dict[str, Any]:
     plan = create_plan_from_order(order)
     approve_plan(plan)
 
+    # Availability is checked in the same DB transaction. Any shortage rolls
+    # back the approval/snapshot, so an Approved order never silently starts
+    # with known missing planned material.
+    from almdina_erp.almdina_erp.services.stock_service import validate_stock_for_order
+
+    validate_stock_for_order(order.name, throw_on_shortage=True)
+
     frappe.db.set_value("Door Cutting Order", order.name, "status", "Approved", update_modified=True)
 
-    # Production routing is created lazily here so approval has one transaction.
     from almdina_erp.almdina_erp.services.production_service import ensure_default_stages
 
     ensure_default_stages(order.name, approved_by=frappe.session.user)
