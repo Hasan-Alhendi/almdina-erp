@@ -30,60 +30,25 @@ ROLES = (
 
 ITEM_CUSTOM_FIELDS = {
     "Item": [
-        {
-            "fieldname": "custom_mdf_board_settings_section",
-            "label": "MDF / Cutting Board Settings",
-            "fieldtype": "Section Break",
-            "insert_after": "stock_uom",
-        },
-        {
-            "fieldname": "custom_is_mdf",
-            "label": "Is MDF Board",
-            "fieldtype": "Check",
-            "insert_after": "custom_mdf_board_settings_section",
-            "default": "0",
-        },
-        {
-            "fieldname": "custom_board_length_mm",
-            "label": "Board Length (MM)",
-            "fieldtype": "Float",
-            "insert_after": "custom_is_mdf",
-            "non_negative": 1,
-        },
-        {
-            "fieldname": "custom_board_width_mm",
-            "label": "Board Width (MM)",
-            "fieldtype": "Float",
-            "insert_after": "custom_board_length_mm",
-            "non_negative": 1,
-        },
-        {
-            "fieldname": "custom_board_thickness_mm",
-            "label": "Board Thickness (MM)",
-            "fieldtype": "Float",
-            "insert_after": "custom_board_width_mm",
-            "non_negative": 1,
-        },
-        {
-            "fieldname": "custom_board_color",
-            "label": "Board Color",
-            "fieldtype": "Data",
-            "insert_after": "custom_board_thickness_mm",
-        },
-        {
-            "fieldname": "custom_board_material",
-            "label": "Board Material",
-            "fieldtype": "Data",
-            "insert_after": "custom_board_color",
-        },
+        {"fieldname": "custom_mdf_board_settings_section", "label": "MDF / Cutting Board Settings", "fieldtype": "Section Break", "insert_after": "stock_uom"},
+        {"fieldname": "custom_is_mdf", "label": "Is MDF Board", "fieldtype": "Check", "insert_after": "custom_mdf_board_settings_section", "default": "0"},
+        {"fieldname": "custom_board_length_mm", "label": "Board Length (MM)", "fieldtype": "Float", "insert_after": "custom_is_mdf", "non_negative": 1},
+        {"fieldname": "custom_board_width_mm", "label": "Board Width (MM)", "fieldtype": "Float", "insert_after": "custom_board_length_mm", "non_negative": 1},
+        {"fieldname": "custom_board_thickness_mm", "label": "Board Thickness (MM)", "fieldtype": "Float", "insert_after": "custom_board_width_mm", "non_negative": 1},
+        {"fieldname": "custom_board_color", "label": "Board Color", "fieldtype": "Data", "insert_after": "custom_board_thickness_mm"},
+        {"fieldname": "custom_board_material", "label": "Board Material", "fieldtype": "Data", "insert_after": "custom_board_color"},
     ]
 }
+
+DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
 
 
 def sync_setup() -> None:
     create_custom_fields(ITEM_CUSTOM_FIELDS, update=True)
     seed_roles()
     seed_edge_banding_types()
+    seed_default_routing()
+    seed_settings_defaults()
 
 
 def after_install() -> None:
@@ -107,7 +72,6 @@ def seed_edge_banding_types() -> None:
     for edge_type_name, rate in EDGE_BANDING_TYPES:
         if frappe.db.exists("Edge Banding Type", edge_type_name):
             continue
-
         frappe.get_doc(
             {
                 "doctype": "Edge Banding Type",
@@ -116,3 +80,40 @@ def seed_edge_banding_types() -> None:
                 "disabled": 0,
             }
         ).insert(ignore_permissions=True)
+
+
+def seed_default_routing() -> None:
+    if frappe.db.exists("Production Routing", DEFAULT_ROUTING_NAME):
+        return
+
+    routing = frappe.new_doc("Production Routing")
+    routing.routing_name = DEFAULT_ROUTING_NAME
+    routing.disabled = 0
+    routing.append("stages", {"sequence": 10, "stage_type": "Review / Preparation", "required": 1, "auto_complete_if_not_applicable": 1})
+    routing.append("stages", {"sequence": 20, "stage_type": "Cutting", "required": 1, "auto_complete_if_not_applicable": 0})
+    routing.append("stages", {"sequence": 30, "stage_type": "Edge Banding", "required": 1, "auto_complete_if_not_applicable": 1})
+    routing.insert(ignore_permissions=True)
+
+
+def seed_settings_defaults() -> None:
+    settings = frappe.get_single("Almdina ERP Settings")
+    changed = False
+    defaults = {
+        "default_kerf_mm": 3,
+        "default_trim_margin_mm": 5,
+        "default_cutting_cost_per_board_usd": 1,
+        "default_packing_mode": "Auto",
+        "default_production_routing": DEFAULT_ROUTING_NAME,
+        "stock_consumption_point": "Cutting Start",
+        "prefer_remnants_before_full_boards": 1,
+        "min_remnant_width_mm": 300,
+        "min_remnant_length_mm": 300,
+        "min_remnant_area_m2": 0.09,
+        "remnant_cost_policy": "Zero",
+    }
+    for fieldname, value in defaults.items():
+        if settings.get(fieldname) in (None, ""):
+            settings.set(fieldname, value)
+            changed = True
+    if changed:
+        settings.save(ignore_permissions=True)
