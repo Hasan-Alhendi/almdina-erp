@@ -1,0 +1,32 @@
+{
+  "custom_fields": [],
+  "custom_perms": [],
+  "doctype": "Almdina ERP Settings",
+  "property_setters": [
+    {
+      "doc_type": "Almdina ERP Settings",
+      "doctype_or_field": "DocField",
+      "field_name": "allow_unplaced_approval",
+      "property": "default",
+      "property_type": "Text",
+      "value": "0"
+    },
+    {
+      "doc_type": "Almdina ERP Settings",
+      "doctype_or_field": "DocField",
+      "field_name": "allow_unplaced_approval",
+      "property": "read_only",
+      "property_type": "Check",
+      "value": "1"
+    },
+    {
+      "doc_type": "Almdina ERP Settings",
+      "doctype_or_field": "DocField",
+      "field_name": "allow_unplaced_approval",
+      "property": "hidden",
+      "property_type": "Check",
+      "value": "1"
+    }
+  ],
+  "sync_on_migrate": 1
+}
