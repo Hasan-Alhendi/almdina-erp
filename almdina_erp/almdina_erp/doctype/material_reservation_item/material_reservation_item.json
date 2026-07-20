@@ -1,0 +1,18 @@
+{
+  "actions": [],
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": ["item_code", "warehouse", "qty", "planned_unit", "planned_qty"],
+  "fields": [
+    {"fieldname":"item_code","fieldtype":"Link","in_list_view":1,"label":"Item","options":"Item","reqd":1},
+    {"fieldname":"warehouse","fieldtype":"Link","in_list_view":1,"label":"Warehouse","options":"Warehouse","reqd":1},
+    {"fieldname":"qty","fieldtype":"Float","in_list_view":1,"label":"Reserved Stock Qty","read_only":1,"reqd":1},
+    {"fieldname":"planned_unit","fieldtype":"Data","label":"Planned Unit","read_only":1},
+    {"fieldname":"planned_qty","fieldtype":"Float","label":"Planned Qty","read_only":1}
+  ],
+  "istable": 1,
+  "links": [],
+  "module":"Almdina ERP",
+  "name":"Material Reservation Item"
+}
