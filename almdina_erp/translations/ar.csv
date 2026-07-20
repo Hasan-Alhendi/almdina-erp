@@ -1,0 +1,67 @@
+Send for Review,إرسال للمراجعة
+Order Workflow,دورة الطلب
+Order sent for review.,تم إرسال الطلب للمراجعة.
+Approve Order,اعتماد الطلب
+The current cutting plan will be frozen as the approved snapshot and stock availability will be checked. Continue?,سيتم تثبيت خطة القص الحالية كنسخة معتمدة وفحص توفر المخزون. هل تريد المتابعة؟
+Order approved and cutting plan frozen.,تم اعتماد الطلب وتثبيت خطة القص.
+Reject and Return for Editing,رفض وإعادة للتعديل
+Rejection Reason,سبب الرفض
+Order rejected and returned for editing.,تم رفض الطلب وإعادته للتعديل.
+Reject Order,رفض الطلب
+Check Material Availability,فحص توفر المواد
+Stock,المخزون
+Stock Available,المخزون متوفر
+Stock Shortage,يوجد عجز في المخزون
+Production Stages,مراحل الإنتاج
+Cutting Plans,خطط القص
+Incidents and Replacements,الأخطاء والتعويضات
+View,عرض
+Start Stage,بدء المرحلة
+The start time and current worker will be recorded. Continue?,سيتم تسجيل وقت البدء والعامل الحالي. هل تريد المتابعة؟
+Pause,إيقاف مؤقت
+Pause Reason,سبب التوقف
+Pause Stage,إيقاف المرحلة مؤقتًا
+Finish Stage,إنهاء المرحلة
+Completed Quantity,الكمية المكتملة
+Notes,ملاحظات
+Resume,استئناف
+Record Incident / Damaged Piece,تسجيل خطأ / قطعة تالفة
+Production Problems,مشاكل الإنتاج
+Piece number such as 2.3,رقم القطعة مثل 2.3
+Reason,السبب
+Incident Description,وصف الخطأ
+Requires Replacement Piece,تحتاج قطعة تعويضية
+Recording incident...,جاري تسجيل الخطأ...
+Incident recorded,تم تسجيل الخطأ
+Replacement piece created,تم إنشاء قطعة تعويضية
+Record,تسجيل
+Open Replacement Cutting Plan,فتح خطة القص التعويضية
+Replacement,التعويض
+Approve Replacement,اعتماد التعويض
+A valid source will be selected, reserved when needed, and an approved Mini Cutting Plan will be created with material validation. Continue?,سيتم اختيار مصدر صالح، حجزه عند الحاجة، إنشاء Mini Cutting Plan معتمدة، وفحص المواد المخزنية. هل تريد المتابعة؟
+Replacement Approved,تم اعتماد التعويض
+Remnant,بقايا لوح
+Full Board,لوح كامل
+Start Replacement Cutting,بدء قص التعويض
+Reserved materials will be consumed and the selected source will be marked as physically used. Continue?,سيتم استهلاك المواد المحجوزة واعتبار المصدر مستخدمًا فعليًا. هل تريد البدء؟
+Complete Replacement,إنهاء التعويض
+Actual Internal Loss USD,الخسارة الداخلية الفعلية بالدولار
+Leave blank to use the planned cost frozen at approval.,اتركه فارغًا لاستخدام التكلفة المخططة المثبتة عند الاعتماد.
+Complete Replacement Piece,إنهاء القطعة التعويضية
+Replacement Completed,اكتمل التعويض
+Generated Remnants,البقايا الناتجة
+Cancel Replacement,إلغاء التعويض
+Cancellation Reason,سبب الإلغاء
+Cancel Order,إلغاء الطلب
+Reverse submitted stock movements if any,عكس الحركات المخزنية المرسلة إن وجدت
+Only enable this when materials can physically be returned and cutting has not completed.,لا تفعل هذا الخيار إلا إذا كانت المواد قابلة للإرجاع فعليًا ولم يكتمل القص.
+Cancellation is sensitive and may reverse stock movements and release reservations. Continue?,الإلغاء عملية حساسة وقد تعكس حركة مخزون وتحرر حجوزات. هل تريد المتابعة؟
+Cancelling order...,جاري إلغاء الطلب...
+Order Cancelled,تم إلغاء الطلب
+Released Remnants,البقايا المحررة
+Processing...,جاري التنفيذ...
+Processing replacement...,جاري تنفيذ التعويض...
+Confirm,تأكيد
+Continue,متابعة
+Cancel,إلغاء
+Finish,إنهاء
