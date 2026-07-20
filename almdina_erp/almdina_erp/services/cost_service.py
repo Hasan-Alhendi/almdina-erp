@@ -51,6 +51,16 @@ def sync_order_costs(order_name: str) -> dict[str, Any]:
     return summary
 
 
+def on_replacement_update(doc: Any, method: str | None = None) -> None:
+    if doc.door_cutting_order:
+        sync_order_costs(doc.door_cutting_order)
+
+
+def on_order_plan_update(doc: Any, method: str | None = None) -> None:
+    if (doc.plan_kind or "Order") == "Order" and doc.status == "Approved" and doc.door_cutting_order:
+        sync_order_costs(doc.door_cutting_order)
+
+
 @frappe.whitelist()
 def refresh_order_costs(order_name: str) -> dict[str, Any]:
     doc = frappe.get_doc("Door Cutting Order", order_name)
