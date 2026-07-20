@@ -19,11 +19,30 @@ ENGINE_VERSION = "1.0.0-baseline"
 
 class DoorCuttingOrder(Document):
     def validate(self) -> None:
+        self._enforce_approved_immutability()
         self._set_piece_numbers()
         self._validate_piece_inputs()
         self._load_board_snapshot()
         self._calculate_piece_rows()
         self._calculate_cutting_plan()
+
+    def _enforce_approved_immutability(self) -> None:
+        """Approved/production orders are historical records, not live calculators."""
+        if self.is_new() or self.flags.get("allow_approved_edit"):
+            return
+
+        old = self.get_doc_before_save()
+        if not old:
+            return
+
+        editable_states = {"Draft", "Pending Review", "Rejected"}
+        if old.status not in editable_states:
+            frappe.throw(
+                _(
+                    "Order {0} is already approved or in production and cannot be edited/recalculated in place. "
+                    "Create a controlled revision instead."
+                ).format(self.name)
+            )
 
     def _set_piece_numbers(self) -> None:
         for index, row in enumerate(self.pieces or [], start=1):
@@ -213,10 +232,11 @@ class DoorCuttingOrder(Document):
 
 @frappe.whitelist()
 def recalculate_order(order_name: str) -> dict[str, Any]:
-    """Recalculate a saved order server-side without creating stock movements."""
+    """Recalculate an editable saved order server-side without stock movement."""
     doc = frappe.get_doc("Door Cutting Order", order_name)
     doc.check_permission("write")
-    doc.validate()
+    if doc.status not in {"Draft", "Pending Review", "Rejected"}:
+        frappe.throw(_("Approved/production orders cannot be recalculated in place."))
     doc.save()
     return {
         "name": doc.name,
