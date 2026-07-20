@@ -28,5 +28,10 @@ doc_events = {
     },
 }
 
+override_whitelisted_methods = {
+    "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
+        "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
+}
+
 # Keep v1.0 business logic inside the app package. Client-side scripts are used
 # for interaction and preview only; authoritative calculations are server-side.
