@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, now_datetime
 
 from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 
@@ -90,6 +90,25 @@ def derive_free_rectangles(source: Any, pieces: list[Any], kerf_mm: float) -> li
     return _merge_adjacent(free)
 
 
+def _persist_waste_reconciliation(plan: Any, reusable_area: float) -> tuple[float, float]:
+    reusable = min(max(0.0, flt(reusable_area)), max(0.0, flt(plan.waste_area_m2)))
+    # Stable invariant required by SRS/reporting:
+    # Approved Waste = Reusable Remnants + Scrap.
+    # Kerf and non-storable free pieces therefore belong to Scrap.
+    scrap = max(0.0, flt(plan.waste_area_m2) - reusable)
+    frappe.db.set_value(
+        "Cutting Plan",
+        plan.name,
+        {
+            "reusable_remnant_area_m2": reusable,
+            "scrap_area_m2": scrap,
+            "waste_reconciled_on": now_datetime(),
+        },
+        update_modified=True,
+    )
+    return reusable, scrap
+
+
 def register_plan_remnants(order_name: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan_name = order.approved_plan
@@ -100,10 +119,19 @@ def register_plan_remnants(order_name: str) -> dict[str, Any]:
     existing = frappe.get_all(
         "Board Remnant",
         filters={"source_order": order.name, "source_plan": plan.name},
-        pluck="name",
+        fields=["name", "area_m2"],
     )
     if existing:
-        return {"created": existing, "already_generated": True}
+        reusable, scrap = _persist_waste_reconciliation(
+            plan,
+            sum(flt(row.area_m2) for row in existing),
+        )
+        return {
+            "created": [row.name for row in existing],
+            "already_generated": True,
+            "reusable_area_m2": reusable,
+            "scrap_area_m2": scrap,
+        }
 
     settings = frappe.get_single("Almdina ERP Settings")
     min_width = flt(settings.min_remnant_width_mm)
@@ -111,7 +139,6 @@ def register_plan_remnants(order_name: str) -> dict[str, Any]:
     min_area = flt(settings.min_remnant_area_m2)
     created: list[str] = []
     reusable_area = 0.0
-    scrap_area = 0.0
 
     pieces_by_sheet: dict[int, list[Any]] = {}
     for piece in plan.placed_pieces or []:
@@ -121,8 +148,17 @@ def register_plan_remnants(order_name: str) -> dict[str, Any]:
         free_rects = derive_free_rectangles(source, pieces_by_sheet.get(int(source.sheet_no), []), flt(plan.kerf_mm))
         parent_remnant = source.remnant if source.source_type == "Remnant" else None
         source_warehouse = settings.default_warehouse
+        source_location = ""
         if parent_remnant:
-            source_warehouse = frappe.db.get_value("Board Remnant", parent_remnant, "warehouse") or source_warehouse
+            parent = frappe.db.get_value(
+                "Board Remnant",
+                parent_remnant,
+                ["warehouse", "location"],
+                as_dict=True,
+            )
+            if parent:
+                source_warehouse = parent.warehouse or source_warehouse
+                source_location = parent.location or ""
 
         for rect in free_rects:
             width_mm = flt(rect["w"])
@@ -130,13 +166,13 @@ def register_plan_remnants(order_name: str) -> dict[str, Any]:
             area_m2 = width_mm * length_mm / 1_000_000
             qualifies = width_mm >= min_width and length_mm >= min_length and area_m2 >= min_area
             if not qualifies:
-                scrap_area += area_m2
                 continue
 
             remnant = frappe.new_doc("Board Remnant")
             remnant.status = "Available"
             remnant.board_item = order.board_item
             remnant.warehouse = source_warehouse
+            remnant.location = source_location
             remnant.length_mm = length_mm
             remnant.width_mm = width_mm
             remnant.thickness_mm = order.board_thickness_mm
@@ -148,8 +184,7 @@ def register_plan_remnants(order_name: str) -> dict[str, Any]:
             created.append(remnant.name)
             reusable_area += area_m2
 
-    # Store derived operational metrics inside the immutable plan's snapshot is
-    # intentionally avoided; actual remnants are separate auditable documents.
+    reusable_area, scrap_area = _persist_waste_reconciliation(plan, reusable_area)
     return {
         "created": created,
         "already_generated": False,
