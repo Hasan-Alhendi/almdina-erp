@@ -11,6 +11,7 @@ after_migrate = "almdina_erp.install.after_migrate"
 
 app_include_js = [
     "/assets/almdina_erp/js/order_lifecycle.js",
+    "/assets/almdina_erp/js/door_cutting_order_defaults.js",
 ]
 
 doctype_js = {
