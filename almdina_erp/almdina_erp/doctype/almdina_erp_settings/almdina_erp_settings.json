@@ -3,11 +3,17 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": [
+    "cutting_defaults_section","default_kerf_mm","default_trim_margin_mm","default_cutting_cost_per_board_usd","default_packing_mode",
     "stock_section","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
     "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
-    "production_section","allow_stage_override","allow_unplaced_approval"
+    "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval"
   ],
   "fields": [
+    {"fieldname":"cutting_defaults_section","fieldtype":"Section Break","label":"Cutting Defaults"},
+    {"default":"3","fieldname":"default_kerf_mm","fieldtype":"Float","label":"Default Kerf MM","non_negative":1},
+    {"default":"5","fieldname":"default_trim_margin_mm","fieldtype":"Float","label":"Default Trim Margin MM","non_negative":1},
+    {"default":"1","fieldname":"default_cutting_cost_per_board_usd","fieldtype":"Currency","label":"Default Cutting Cost / Board USD","non_negative":1},
+    {"default":"Auto","fieldname":"default_packing_mode","fieldtype":"Select","label":"Default Packing Mode","options":"Auto\nMaxRects Best Short Side\nMaxRects Best Area\nMaxRects Bottom Left\nMaxRects Contact Point\nMaxRects Width\nMaxRects Length\nShelf Horizontal\nShelf Vertical\nShelf First Fit\nShelf Next Fit\nGuillotine Short Axis\nGuillotine Long Axis\nGuillotine Best Area Fit\nGuillotine Best Short Side Fit\nGuillotine Best Long Side Fit\nSkyline Bottom Left\nSkyline Best Fit"},
     {"fieldname":"stock_section","fieldtype":"Section Break","label":"Stock Policy"},
     {"fieldname":"default_warehouse","fieldtype":"Link","label":"Default Warehouse","options":"Warehouse"},
     {"default":"0","fieldname":"reserve_stock_on_approval","fieldtype":"Check","label":"Reserve Stock On Approval"},
@@ -20,6 +26,7 @@
     {"default":"Zero","fieldname":"remnant_cost_policy","fieldtype":"Select","label":"Remnant Cost Policy","options":"Zero\nAverage Valuation\nConfigured Rate"},
     {"default":"0","fieldname":"remnant_rate_usd_per_m2","fieldtype":"Currency","label":"Configured Remnant Rate USD / M2","non_negative":1},
     {"fieldname":"production_section","fieldtype":"Section Break","label":"Production Controls"},
+    {"fieldname":"default_production_routing","fieldtype":"Link","label":"Default Production Routing","options":"Production Routing"},
     {"default":"0","fieldname":"allow_stage_override","fieldtype":"Check","label":"Allow Authorized Stage Sequence Override"},
     {"default":"0","fieldname":"allow_unplaced_approval","fieldtype":"Check","label":"Allow Exceptional Approval With Unplaced Pieces"}
   ],
