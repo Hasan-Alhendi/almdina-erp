@@ -27,10 +27,19 @@ def execute(filters: dict[str, Any] | None = None):
             o.waste_area_m2,
             o.waste_percent,
             coalesce(p.total_cost_usd, o.total_cost_usd, 0) as planned_cost_usd,
+            coalesce(m.material_variance_cost_usd, 0) as material_variance_cost_usd,
             coalesce(r.internal_loss_cost_usd, 0) as internal_loss_cost_usd,
-            coalesce(p.total_cost_usd, o.total_cost_usd, 0) + coalesce(r.internal_loss_cost_usd, 0) as actual_cost_usd
+            coalesce(p.total_cost_usd, o.total_cost_usd, 0)
+              + coalesce(m.material_variance_cost_usd, 0)
+              + coalesce(r.internal_loss_cost_usd, 0) as actual_cost_usd
         from `tabDoor Cutting Order` o
         left join `tabCutting Plan` p on p.name = o.approved_plan
+        left join (
+            select door_cutting_order, sum(material_variance_cost_usd) as material_variance_cost_usd
+            from `tabMaterial Consumption Log`
+            where status = 'Submitted' and coalesce(actual_recorded, 0) = 1
+            group by door_cutting_order
+        ) m on m.door_cutting_order = o.name
         left join (
             select door_cutting_order, sum(internal_loss_cost_usd) as internal_loss_cost_usd
             from `tabReplacement Piece`
@@ -82,6 +91,7 @@ def get_columns() -> list[dict[str, Any]]:
         {"label": _("Waste Area M2"), "fieldname": "waste_area_m2", "fieldtype": "Float", "precision": 3, "width": 110},
         {"label": _("Waste %"), "fieldname": "waste_percent", "fieldtype": "Percent", "width": 90},
         {"label": _("Planned Cost USD"), "fieldname": "planned_cost_usd", "fieldtype": "Currency", "width": 120},
+        {"label": _("Material Variance USD"), "fieldname": "material_variance_cost_usd", "fieldtype": "Currency", "width": 125},
         {"label": _("Internal Loss USD"), "fieldname": "internal_loss_cost_usd", "fieldtype": "Currency", "width": 120},
         {"label": _("Actual Cost USD"), "fieldname": "actual_cost_usd", "fieldtype": "Currency", "width": 120},
         {"label": _("Variance USD"), "fieldname": "variance_usd", "fieldtype": "Currency", "width": 110},
