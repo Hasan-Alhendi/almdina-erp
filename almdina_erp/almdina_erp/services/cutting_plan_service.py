@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt, now_datetime
+from frappe.utils import cint, flt, now_datetime
 
 
 def require_any_role(*roles: str) -> None:
@@ -15,20 +15,8 @@ def require_any_role(*roles: str) -> None:
         frappe.throw(_("You do not have permission for this operation."), frappe.PermissionError)
 
 
-def next_revision(order_name: str) -> int:
-    result = frappe.db.sql(
-        """
-        select coalesce(max(revision), 0)
-        from `tabCutting Plan`
-        where door_cutting_order = %s
-        """,
-        (order_name,),
-    )
-    return int((result or [[0]])[0][0] or 0) + 1
-
-
 def create_plan_from_order(order: Any) -> Any:
-    """Persist the current authoritative order plan as a separate immutable snapshot."""
+    """Persist the authoritative current order result as an immutable revision snapshot."""
 
     snapshot = frappe.parse_json(order.cutting_plan_json or "{}") or {}
     validation = snapshot.get("validation") or {}
@@ -43,7 +31,7 @@ def create_plan_from_order(order: Any) -> Any:
         if not settings.allow_unplaced_approval:
             frappe.throw(_("The cutting plan contains unplaced pieces and cannot be approved."))
 
-    revision = next_revision(order.name)
+    revision = max(1, cint(order.revision))
     full_width_mm = flt(snapshot.get("full_board_width_cm")) * 10
     full_length_mm = flt(snapshot.get("full_board_length_cm")) * 10
     usable_width_mm = flt(snapshot.get("usable_board_width_cm")) * 10
@@ -170,9 +158,14 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
     if order.status not in {"Draft", "Rejected"}:
         frappe.throw(_("Only Draft or Rejected orders can be sent for review."))
 
+    if order.status == "Rejected":
+        order.revision = max(1, cint(order.revision)) + 1
+    else:
+        order.revision = max(1, cint(order.revision))
+
     order.status = "Pending Review"
     order.save()
-    return {"name": order.name, "status": order.status}
+    return {"name": order.name, "status": order.status, "revision": order.revision}
 
 
 @frappe.whitelist()
@@ -182,19 +175,20 @@ def approve_order(order_name: str) -> dict[str, Any]:
     if order.status != "Pending Review":
         frappe.throw(_("Only orders in Pending Review can be approved."))
 
-    # Recalculate one final time immediately before creating the immutable plan.
     order.save(ignore_permissions=True)
     plan = create_plan_from_order(order)
     approve_plan(plan)
 
-    # Availability is checked in the same DB transaction. Any shortage rolls
-    # back the approval/snapshot, so an Approved order never silently starts
-    # with known missing planned material.
     from almdina_erp.almdina_erp.services.stock_service import validate_stock_for_order
 
     validate_stock_for_order(order.name, throw_on_shortage=True)
 
-    frappe.db.set_value("Door Cutting Order", order.name, "status", "Approved", update_modified=True)
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        {"status": "Approved", "approved_plan": plan.name},
+        update_modified=True,
+    )
 
     from almdina_erp.almdina_erp.services.production_service import ensure_default_stages
 
@@ -218,4 +212,4 @@ def reject_order(order_name: str, reason: str | None = None) -> dict[str, Any]:
     frappe.db.set_value("Door Cutting Order", order.name, "status", "Rejected", update_modified=True)
     if reason:
         order.add_comment("Comment", text=_("Review rejection reason: {0}").format(reason))
-    return {"name": order.name, "status": "Rejected"}
+    return {"name": order.name, "status": "Rejected", "revision": order.revision}
