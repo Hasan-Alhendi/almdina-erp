@@ -36,17 +36,26 @@ def _piece_rows(order: Any) -> list[dict[str, Any]]:
     ]
 
 
-def _lock_available_remnants(board_item: str) -> list[dict[str, Any]]:
+def _lock_available_remnants(order: Any) -> list[dict[str, Any]]:
     return frappe.db.sql(
         """
         select name, board_item, length_mm, width_mm, thickness_mm, material, color, area_m2,
                warehouse, location, parent_remnant
         from `tabBoard Remnant`
-        where board_item = %s and status = 'Available'
+        where board_item = %s
+          and status = 'Available'
+          and coalesce(material, '') = %s
+          and coalesce(color, '') = %s
+          and abs(coalesce(thickness_mm, 0) - %s) <= 0.001
         order by area_m2 asc, creation asc
         for update
         """,
-        (board_item,),
+        (
+            order.board_item,
+            order.board_material or "",
+            order.board_color or "",
+            flt(order.board_thickness_mm),
+        ),
         as_dict=True,
     )
 
@@ -65,8 +74,6 @@ def _pack_one_remnant(
     sheet = create_sheet(1, usable_w, usable_h)
     placed_ids: set[int] = set()
 
-    # A single physical remnant is one sheet. MaxRects is used only to decide
-    # which pieces fit that one source; it never fabricates a second remnant.
     for piece in sort_pieces(remaining, "area_desc"):
         position = find_best_position_maxrects(sheet, piece, "best_short_side")
         if not position:
@@ -81,6 +88,9 @@ def _pack_one_remnant(
     sheet["source_type"] = "Remnant"
     sheet["remnant"] = remnant["name"]
     sheet["board_item"] = remnant["board_item"]
+    sheet["material"] = remnant.get("material") or ""
+    sheet["color"] = remnant.get("color") or ""
+    sheet["thickness_mm"] = flt(remnant.get("thickness_mm"))
     sheet["full_width_cm"] = flt(remnant["width_mm"]) / 10
     sheet["full_length_cm"] = flt(remnant["length_mm"]) / 10
     sheet["usable_width_cm"] = usable_w
@@ -90,7 +100,7 @@ def _pack_one_remnant(
     return sheet, [piece for piece in remaining if int(piece["id"]) not in placed_ids]
 
 
-def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[str, Any]]) -> list[str]:
+def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[str, Any]], order: Any) -> list[str]:
     errors: list[str] = []
     expected = {int(piece["id"]): piece for piece in requested_pieces}
     seen: dict[int, int] = {}
@@ -100,6 +110,15 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
         board_w = flt(sheet.get("w"))
         board_h = flt(sheet.get("h"))
         pieces = sheet.get("pieces") or []
+
+        if sheet.get("board_item") != order.board_item:
+            errors.append(_("Source sheet {0} uses a different Board Item.").format(sheet.get("sheet_no")))
+        if (sheet.get("material") or "") != (order.board_material or ""):
+            errors.append(_("Source sheet {0} material does not match the order snapshot.").format(sheet.get("sheet_no")))
+        if (sheet.get("color") or "") != (order.board_color or ""):
+            errors.append(_("Source sheet {0} color does not match the order snapshot.").format(sheet.get("sheet_no")))
+        if abs(flt(sheet.get("thickness_mm")) - flt(order.board_thickness_mm)) > 0.001:
+            errors.append(_("Source sheet {0} thickness does not match the order snapshot.").format(sheet.get("sheet_no")))
 
         for placed in pieces:
             piece_id = int(placed["id"])
@@ -145,8 +164,7 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
 
 
 def build_approval_plan(order: Any) -> dict[str, Any]:
-    """Build the approval-time plan, prioritizing matching available remnants by policy."""
-
+    """Build approval plan, preferring physically matching remnants when enabled."""
     pieces = expand_piece_groups(_piece_rows(order))
     full_board_w_cm = flt(order.full_board_width_mm) / 10
     full_board_h_cm = flt(order.full_board_length_mm) / 10
@@ -161,7 +179,7 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
     used_remnants: list[str] = []
 
     if cint(settings.prefer_remnants_before_full_boards):
-        for remnant in _lock_available_remnants(order.board_item):
+        for remnant in _lock_available_remnants(order):
             if not remaining:
                 break
             sheet, remaining = _pack_one_remnant(remaining, remnant, kerf_cm, trim_cm)
@@ -190,6 +208,9 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         full_sheet["source_type"] = "Full Board"
         full_sheet["remnant"] = None
         full_sheet["board_item"] = order.board_item
+        full_sheet["material"] = order.board_material or ""
+        full_sheet["color"] = order.board_color or ""
+        full_sheet["thickness_mm"] = flt(order.board_thickness_mm)
         full_sheet["full_width_cm"] = full_board_w_cm
         full_sheet["full_length_cm"] = full_board_h_cm
         full_sheet["usable_width_cm"] = usable_full_w
@@ -206,10 +227,7 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
     plan = {
         "engine_version": order.engine_version or "1.0.0-baseline",
         "method_key": full_plan.get("method_key") or order.packing_mode or "Auto",
-        "method_label": (
-            ("Remnant First + " if used_remnants else "")
-            + (full_plan.get("method_label") or "No full board required")
-        ),
+        "method_label": (("Remnant First + " if used_remnants else "") + (full_plan.get("method_label") or "No full board required")),
         "score": len(unplaced) * 1_000_000_000 + full_board_count * 1_000_000 + waste_area * 1000,
         "full_board_width_cm": full_board_w_cm,
         "full_board_length_cm": full_board_h_cm,
@@ -226,7 +244,7 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         "unplaced": unplaced,
     }
 
-    validation_errors = _validate_variable_plan(plan, pieces)
+    validation_errors = _validate_variable_plan(plan, pieces, order)
     plan["validation"] = {"is_valid": not validation_errors, "errors": validation_errors}
     return plan
 
