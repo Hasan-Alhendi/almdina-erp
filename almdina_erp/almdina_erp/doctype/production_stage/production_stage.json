@@ -1,0 +1,170 @@
+{
+  "actions": [],
+  "autoname": "naming_series:",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "door_cutting_order",
+    "sequence",
+    "stage_type",
+    "status",
+    "piece_label",
+    "assignment_section",
+    "assigned_to",
+    "started_by",
+    "start_time",
+    "finished_by",
+    "finish_time",
+    "timing_column",
+    "paused_seconds",
+    "actual_working_seconds",
+    "completed_qty",
+    "pauses_section",
+    "pauses",
+    "notes"
+  ],
+  "fields": [
+    {
+      "default": "PST-.YYYY.-.#####",
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Naming Series",
+      "options": "PST-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "fieldname": "door_cutting_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Door Cutting Order",
+      "options": "Door Cutting Order",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sequence",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Sequence",
+      "reqd": 1
+    },
+    {
+      "fieldname": "stage_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Stage Type",
+      "options": "Review / Preparation\nCutting\nEdge Banding\nDrilling\nAssembly\nQuality Check\nPacking",
+      "reqd": 1
+    },
+    {
+      "default": "Pending",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Status",
+      "options": "Pending\nIn Progress\nPaused\nCompleted\nCancelled",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "piece_label",
+      "fieldtype": "Data",
+      "label": "Exceptional Piece Label"
+    },
+    {
+      "fieldname": "assignment_section",
+      "fieldtype": "Section Break",
+      "label": "Assignment & Timing"
+    },
+    {
+      "fieldname": "assigned_to",
+      "fieldtype": "Link",
+      "label": "Assigned To",
+      "options": "User"
+    },
+    {
+      "fieldname": "started_by",
+      "fieldtype": "Link",
+      "label": "Started By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "start_time",
+      "fieldtype": "Datetime",
+      "label": "Start Time",
+      "read_only": 1
+    },
+    {
+      "fieldname": "finished_by",
+      "fieldtype": "Link",
+      "label": "Finished By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "finish_time",
+      "fieldtype": "Datetime",
+      "label": "Finish Time",
+      "read_only": 1
+    },
+    {
+      "fieldname": "timing_column",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "0",
+      "fieldname": "paused_seconds",
+      "fieldtype": "Int",
+      "label": "Paused Seconds",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "actual_working_seconds",
+      "fieldtype": "Int",
+      "label": "Actual Working Seconds",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "completed_qty",
+      "fieldtype": "Int",
+      "label": "Completed Quantity"
+    },
+    {
+      "fieldname": "pauses_section",
+      "fieldtype": "Section Break",
+      "label": "Pause / Resume History"
+    },
+    {
+      "fieldname": "pauses",
+      "fieldtype": "Table",
+      "label": "Pauses",
+      "options": "Production Stage Pause",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Production Stage",
+  "naming_rule": "By naming series field",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "sequence",
+  "sort_order": "ASC",
+  "track_changes": 1
+}
