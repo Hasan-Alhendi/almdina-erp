@@ -65,3 +65,79 @@ def test_rotation_is_never_used_when_not_allowed():
             assert piece["rotated"] is False
             assert piece["w"] == 80
             assert piece["h"] == 120
+
+
+def test_validator_rejects_positive_area_overlap():
+    pieces = expand_piece_groups(
+        [
+            {"width_cm": 50, "length_cm": 50, "qty": 2, "allow_rotation": 0},
+        ]
+    )
+    plan = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "pieces": [
+                    {**pieces[0], "x": 0, "y": 0, "w": 50, "h": 50, "rotated": False},
+                    {**pieces[1], "x": 25, "y": 25, "w": 50, "h": 50, "rotated": False},
+                ],
+            }
+        ],
+        "unplaced": [],
+    }
+    errors = validate_plan(plan, pieces, 100, 100)
+    assert any("overlap" in error.lower() for error in errors)
+
+
+def test_validator_rejects_piece_outside_usable_bounds():
+    pieces = expand_piece_groups(
+        [{"width_cm": 60, "length_cm": 60, "qty": 1, "allow_rotation": 0}]
+    )
+    plan = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "pieces": [
+                    {**pieces[0], "x": 50, "y": 50, "w": 60, "h": 60, "rotated": False},
+                ],
+            }
+        ],
+        "unplaced": [],
+    }
+    errors = validate_plan(plan, pieces, 100, 100)
+    assert any("bounds" in error.lower() or "exceeds" in error.lower() for error in errors)
+
+
+def test_piece_larger_than_board_is_reported_unplaced():
+    pieces = expand_piece_groups(
+        [{"width_cm": 150, "length_cm": 120, "qty": 1, "allow_rotation": 1}]
+    )
+    plan = choose_best_plan(pieces, 100, 100, 0.3, "Auto")
+    assert len(plan["unplaced"]) == 1
+    errors = validate_plan(plan, pieces, 100, 100)
+    assert errors
+
+
+def test_edge_snapshot_survives_expansion_for_every_copy():
+    pieces = expand_piece_groups(
+        [
+            {
+                "width_cm": 40,
+                "length_cm": 80,
+                "qty": 2,
+                "allow_rotation": 1,
+                "edge_long_right": 1,
+                "edge_long_left": 0,
+                "edge_width_top": 1,
+                "edge_width_bottom": 0,
+                "edge_type": "قشاط 2سم عادي",
+            }
+        ]
+    )
+    assert len(pieces) == 2
+    for piece in pieces:
+        assert piece["edge_long_right"] == 1
+        assert piece["edge_long_left"] == 0
+        assert piece["edge_width_top"] == 1
+        assert piece["edge_width_bottom"] == 0
+        assert piece["edge_type"] == "قشاط 2سم عادي"
