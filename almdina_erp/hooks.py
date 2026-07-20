@@ -17,6 +17,7 @@ doctype_js = {
     "Door Cutting Order": "public/js/door_cutting_order_workflow.js",
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
+    "Material Consumption Log": "public/js/material_consumption_log.js",
 }
 
 doc_events = {
