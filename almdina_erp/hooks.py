@@ -34,6 +34,8 @@ doc_events = {
 override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.replacement_service.approve_replacement":
         "almdina_erp.almdina_erp.services.replacement_approval.approve_replacement",
+    "almdina_erp.almdina_erp.services.replacement_service.start_replacement":
+        "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
     "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
         "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
 }
