@@ -35,6 +35,7 @@ doctype_js = {
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_operator_ux.js",
+        "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/secure_dxf_export.js",
     ],
     "Production Stage": "public/js/production_stage.js",
