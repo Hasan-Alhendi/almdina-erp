@@ -36,7 +36,7 @@ def execute(filters: dict[str, Any] | None = None):
         as_dict=True,
     )
     for row in status_rows:
-        rows.append(_metric(_("Orders — {0}").format(row.status), row.count, _("Orders"), "Order Status"))
+        rows.append(_metric(_("Orders — {0}").format(_(row.status)), row.count, _("Orders"), _("Order Status")))
 
     active_count = frappe.db.count(
         "Door Cutting Order",
@@ -45,7 +45,7 @@ def execute(filters: dict[str, Any] | None = None):
             **_date_filter_dict(filters),
         },
     )
-    rows.append(_metric(_("Orders In Production / Attention"), active_count, _("Orders"), "Production"))
+    rows.append(_metric(_("Orders In Production / Attention"), active_count, _("Orders"), _("Production")))
 
     plan_totals = frappe.db.sql(
         f"""
@@ -99,16 +99,16 @@ def execute(filters: dict[str, Any] | None = None):
 
     rows.extend(
         [
-            _metric(_("Full Boards Used"), plan_totals.full_boards, _("Boards"), "Material"),
-            _metric(_("Total Source Area"), plan_totals.source_area, "m²", "Waste"),
-            _metric(_("Used Piece Area"), plan_totals.used_area, "m²", "Waste"),
-            _metric(_("Approved Waste Area"), plan_totals.waste_area, "m²", "Waste"),
-            _metric(_("Reusable Remnant Area"), plan_totals.reusable_area, "m²", "Waste"),
-            _metric(_("Scrap Area"), plan_totals.scrap_area, "m²", "Waste"),
-            _metric(_("Planned Cost"), plan_totals.planned_cost, "USD", "Cost"),
-            _metric(_("Material Variance Cost"), actual_cost.material_variance, "USD", "Cost"),
-            _metric(_("Internal Replacement Loss"), actual_cost.internal_loss, "USD", "Cost"),
-            _metric(_("Actual Cost"), actual_cost.actual_cost, "USD", "Cost"),
+            _metric(_("Full Boards Used"), plan_totals.full_boards, _("Boards"), _("Material")),
+            _metric(_("Total Source Area"), plan_totals.source_area, "m²", _("Waste")),
+            _metric(_("Used Piece Area"), plan_totals.used_area, "m²", _("Waste")),
+            _metric(_("Approved Waste Area"), plan_totals.waste_area, "m²", _("Waste")),
+            _metric(_("Reusable Remnant Area"), plan_totals.reusable_area, "m²", _("Waste")),
+            _metric(_("Scrap Area"), plan_totals.scrap_area, "m²", _("Waste")),
+            _metric(_("Planned Cost"), plan_totals.planned_cost, "USD", _("Cost")),
+            _metric(_("Material Variance Cost"), actual_cost.material_variance, "USD", _("Cost")),
+            _metric(_("Internal Replacement Loss"), actual_cost.internal_loss, "USD", _("Cost")),
+            _metric(_("Actual Cost"), actual_cost.actual_cost, "USD", _("Cost")),
         ]
     )
 
@@ -116,13 +116,13 @@ def execute(filters: dict[str, Any] | None = None):
     if filters.from_date:
         replacement_filters["creation"] = [">=", filters.from_date]
     open_replacements = frappe.db.count("Replacement Piece", filters=replacement_filters)
-    rows.append(_metric(_("Open Replacement Pieces"), open_replacements, _("Pieces"), "Quality"))
+    rows.append(_metric(_("Open Replacement Pieces"), open_replacements, _("Pieces"), _("Quality")))
 
     open_incidents_filters = {"status": ["!=", "Resolved"]}
     if filters.from_date:
         open_incidents_filters["incident_datetime"] = [">=", filters.from_date]
     open_incidents = frappe.db.count("Production Incident", filters=open_incidents_filters)
-    rows.append(_metric(_("Open Production Incidents"), open_incidents, _("Incidents"), "Quality"))
+    rows.append(_metric(_("Open Production Incidents"), open_incidents, _("Incidents"), _("Quality")))
 
     remnant_rows = frappe.db.sql(
         """
@@ -134,8 +134,9 @@ def execute(filters: dict[str, Any] | None = None):
         as_dict=True,
     )
     for row in remnant_rows:
-        rows.append(_metric(_("Remnants — {0}").format(row.status), row.count, _("Pieces"), "Remnants"))
-        rows.append(_metric(_("Remnant Area — {0}").format(row.status), row.area, "m²", "Remnants"))
+        translated_status = _(row.status)
+        rows.append(_metric(_("Remnants — {0}").format(translated_status), row.count, _("Pieces"), _("Remnants")))
+        rows.append(_metric(_("Remnant Area — {0}").format(translated_status), row.area, "m²", _("Remnants")))
 
     return get_columns(), rows
 
