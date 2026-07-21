@@ -63,6 +63,41 @@
         ["Skyline - Best Fit", "ترتيب خط الأفق - أفضل موضع"],
     ].sort((a, b) => b[0].length - a[0].length);
 
+    const packingOptions = {
+        "Auto": "تلقائي - اختيار أفضل طريقة",
+        "MaxRects Best Short Side": "ترتيب المستطيلات - أفضل ضلع قصير",
+        "MaxRects Best Area": "ترتيب المستطيلات - أفضل استغلال للمساحة",
+        "MaxRects Bottom Left": "ترتيب المستطيلات - من أسفل اليسار",
+        "MaxRects Contact Point": "ترتيب المستطيلات - أكبر تلامس",
+        "MaxRects Width": "ترتيب المستطيلات - الأعرض أولًا",
+        "MaxRects Length": "ترتيب المستطيلات - الأطول أولًا",
+        "Shelf Horizontal": "ترتيب صفوف أفقية",
+        "Shelf Vertical": "ترتيب أعمدة عمودية",
+        "Shelf First Fit": "ترتيب صفوف - أول مكان مناسب",
+        "Shelf Next Fit": "ترتيب صفوف - المكان التالي المناسب",
+        "Guillotine Short Axis": "قص متتابع - المحور القصير",
+        "Guillotine Long Axis": "قص متتابع - المحور الطويل",
+        "Guillotine Best Area Fit": "قص متتابع - أفضل استغلال للمساحة",
+        "Guillotine Best Short Side Fit": "قص متتابع - أفضل ضلع قصير",
+        "Guillotine Best Long Side Fit": "قص متتابع - أفضل ضلع طويل",
+        "Skyline Bottom Left": "ترتيب خط الأفق - من أسفل اليسار",
+        "Skyline Best Fit": "ترتيب خط الأفق - أفضل موضع",
+    };
+
+    const fieldOptionTranslations = {
+        packing_mode: packingOptions,
+        default_packing_mode: packingOptions,
+        stock_consumption_point: {
+            "Cutting Start": "عند بدء القص",
+            "Cutting Finish": "عند انتهاء القص",
+        },
+        remnant_cost_policy: {
+            "Zero": "بدون تكلفة",
+            "Average Valuation": "حسب متوسط تكلفة المخزون",
+            "Configured Rate": "حسب سعر محدد",
+        },
+    };
+
     function translateText(text) {
         let value = text;
         for (const [source, arabic] of replacements) {
@@ -77,6 +112,27 @@
         return ["SCRIPT", "STYLE", "CODE", "PRE", "TEXTAREA", "OPTION"].includes(parent.tagName);
     }
 
+    function localizeSelectOptions(root) {
+        const scope = root && root.querySelectorAll ? root : document;
+        for (const [fieldname, translations] of Object.entries(fieldOptionTranslations)) {
+            const controls = [];
+            if (scope.matches && scope.matches(`[data-fieldname="${fieldname}"]`)) controls.push(scope);
+            controls.push(...scope.querySelectorAll(`[data-fieldname="${fieldname}"]`));
+            for (const control of controls) {
+                control.querySelectorAll("option").forEach(option => {
+                    const storedValue = option.value;
+                    const source = storedValue || option.textContent.trim();
+                    const translated = translations[source];
+                    if (!translated) return;
+                    option.textContent = translated;
+                    // Preserve the stable machine value even when the browser had
+                    // inferred it from the original option text.
+                    option.value = storedValue || source;
+                });
+            }
+        }
+    }
+
     function process(root) {
         if (!root) return;
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -87,6 +143,7 @@
             const translated = translateText(node.nodeValue);
             if (translated !== node.nodeValue) node.nodeValue = translated;
         }
+        localizeSelectOptions(root);
     }
 
     function run() {
