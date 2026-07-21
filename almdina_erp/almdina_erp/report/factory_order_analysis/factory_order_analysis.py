@@ -58,6 +58,10 @@ def execute(filters: dict[str, Any] | None = None):
     )
 
     for row in rows:
+        # Status values are stored in English for workflow stability, but reports
+        # must display them in the active user language.
+        if row.status:
+            row.status = _(row.status)
         row.variance_usd = flt(row.actual_cost_usd) - flt(row.planned_cost_usd)
     return columns, rows
 
