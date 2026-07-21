@@ -22,6 +22,7 @@ after_install = "almdina_erp.install.after_install"
 after_migrate = "almdina_erp.install.after_migrate"
 
 app_include_js = [
+    "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/order_lifecycle.js",
     "/assets/almdina_erp/js/door_cutting_order_defaults.js",
     "/assets/almdina_erp/js/secure_dxf_export.js",
