@@ -39,10 +39,10 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
                     <td>${esc(row.order_date || "")}</td>
                     <td>${esc(row.revision || 1)}</td>
                     <td>${esc(row.board_item || "")}</td>
-                    <td>${esc(row.board_material || "")} / ${esc(row.board_color || "")} / ${esc(row.board_thickness_mm || "")} mm</td>
+                    <td>${esc(row.board_material || "")} / ${esc(row.board_color || "")} / ${esc(row.board_thickness_mm || "")} ${__("MM")}</td>
                     <td>${esc(row.required_boards || 0)}</td>
                     <td>${esc(row.waste_percent || 0)}</td>
-                    <td>${esc(row.packing_method || "")}</td>
+                    <td>${esc(__(row.packing_method || ""))}</td>
                     <td style="white-space:nowrap">
                         <button class="btn btn-sm btn-primary approve-order">${__("Approve")}</button>
                         <button class="btn btn-sm btn-default reject-order">${__("Reject")}</button>
