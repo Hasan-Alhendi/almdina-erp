@@ -18,7 +18,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
             <div class="frappe-card" style="padding:18px;max-width:920px">
                 <div class="row">
                     <div class="col-md-6"><b>${__("Default Production Routing")}</b><div>${escape(current.default_production_routing || "-")}</div></div>
-                    <div class="col-md-6"><b>${__("Default Packing Mode")}</b><div>${escape(current.default_packing_mode || "-")}</div></div>
+                    <div class="col-md-6"><b>${__("Default Packing Mode")}</b><div>${escape(__(current.default_packing_mode || "-"))}</div></div>
                 </div>
                 <hr>
                 <div class="row">
