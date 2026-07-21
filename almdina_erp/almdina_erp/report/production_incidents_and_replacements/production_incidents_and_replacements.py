@@ -59,6 +59,13 @@ def execute(filters: dict[str, Any] | None = None):
         values,
         as_dict=True,
     )
+    for row in data:
+        if row.reason:
+            row.reason = _(row.reason)
+        if row.incident_status:
+            row.incident_status = _(row.incident_status)
+        if row.replacement_status:
+            row.replacement_status = _(row.replacement_status)
     return get_columns(), data
 
 
