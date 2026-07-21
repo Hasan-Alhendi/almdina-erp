@@ -33,20 +33,25 @@ jobs:
           PY
           python -m compileall -q almdina_erp
 
-      - name: Validate Arabic factory operator localization
+      - name: Validate Arabic and operator UX regressions
         shell: bash
         run: |
           python - <<'PY'
-          from almdina_erp.tests import test_arabic_operator_localization as checks
+          from almdina_erp.tests import test_arabic_operator_localization as arabic_checks
+          from almdina_erp.tests import test_door_cutting_order_operator_ux as ux_checks
 
-          tests = [
-              getattr(checks, name)
-              for name in dir(checks)
-              if name.startswith('test_') and callable(getattr(checks, name))
-          ]
-          for test in tests:
-              test()
-          print(f'Validated {len(tests)} Arabic operator localization checks')
+          modules = [arabic_checks, ux_checks]
+          total = 0
+          for module in modules:
+              tests = [
+                  getattr(module, name)
+                  for name in dir(module)
+                  if name.startswith('test_') and callable(getattr(module, name))
+              ]
+              for test in tests:
+                  test()
+              total += len(tests)
+          print(f'Validated {total} Arabic/operator UX regression checks')
           PY
 
       - name: Validate JavaScript syntax
