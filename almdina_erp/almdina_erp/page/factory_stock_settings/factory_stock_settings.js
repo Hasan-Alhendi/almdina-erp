@@ -26,7 +26,7 @@ frappe.pages["factory-stock-settings"].on_page_load = function (wrapper) {
                 </div>
                 <hr>
                 <div class="row">
-                    <div class="col-md-6"><b>${__("Stock Consumption Point")}</b><div>${escape(current.stock_consumption_point || "-")}</div></div>
+                    <div class="col-md-6"><b>${__("Stock Consumption Point")}</b><div>${escape(__(current.stock_consumption_point || "-"))}</div></div>
                     <div class="col-md-6"><b>${__("Prefer Matching Remnants Before Full Boards")}</b><div>${yesNo(current.prefer_remnants_before_full_boards)}</div></div>
                 </div>
                 <hr>
@@ -37,7 +37,7 @@ frappe.pages["factory-stock-settings"].on_page_load = function (wrapper) {
                 </div>
                 <hr>
                 <div class="row">
-                    <div class="col-md-6"><b>${__("Remnant Cost Policy")}</b><div>${escape(current.remnant_cost_policy || "-")}</div></div>
+                    <div class="col-md-6"><b>${__("Remnant Cost Policy")}</b><div>${escape(__(current.remnant_cost_policy || "-"))}</div></div>
                     <div class="col-md-6"><b>${__("Configured Remnant Rate USD / M2")}</b><div>${escape(current.remnant_rate_usd_per_m2)}</div></div>
                 </div>
                 ${current.can_edit ? "" : `<hr><div class="text-muted">${__("Read-only for your current role.")}</div>`}
