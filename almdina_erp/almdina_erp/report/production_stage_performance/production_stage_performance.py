@@ -53,6 +53,10 @@ def execute(filters: dict[str, Any] | None = None):
     for row in data:
         row.paused_minutes = flt(row.paused_seconds) / 60
         row.working_minutes = flt(row.actual_working_seconds) / 60
+        if row.stage_type:
+            row.stage_type = _(row.stage_type)
+        if row.status:
+            row.status = _(row.status)
 
     return get_columns(), data
 
