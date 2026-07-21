@@ -6,6 +6,18 @@ app_email = ""
 app_license = "Proprietary"
 app_version = "1.0.0-dev"
 
+# Frappe v16 desktop/apps screen entry point. The title is translated through
+# translations/ar.csv so Arabic users see "إدارة المعمل" while English users
+# keep the English label. The route opens the root Almdina ERP workspace.
+add_to_apps_screen = [
+    {
+        "name": "almdina_erp",
+        "logo": "/assets/almdina_erp/images/factory-app.svg",
+        "title": "Factory Management",
+        "route": "/desk/almdina-erp",
+    }
+]
+
 after_install = "almdina_erp.install.after_install"
 after_migrate = "almdina_erp.install.after_migrate"
 
