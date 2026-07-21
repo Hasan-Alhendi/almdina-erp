@@ -100,15 +100,15 @@ def execute(filters: dict[str, Any] | None = None):
     rows.extend(
         [
             _metric(_("Full Boards Used"), plan_totals.full_boards, _("Boards"), _("Material")),
-            _metric(_("Total Source Area"), plan_totals.source_area, "m²", _("Waste")),
-            _metric(_("Used Piece Area"), plan_totals.used_area, "m²", _("Waste")),
-            _metric(_("Approved Waste Area"), plan_totals.waste_area, "m²", _("Waste")),
-            _metric(_("Reusable Remnant Area"), plan_totals.reusable_area, "m²", _("Waste")),
-            _metric(_("Scrap Area"), plan_totals.scrap_area, "m²", _("Waste")),
-            _metric(_("Planned Cost"), plan_totals.planned_cost, "USD", _("Cost")),
-            _metric(_("Material Variance Cost"), actual_cost.material_variance, "USD", _("Cost")),
-            _metric(_("Internal Replacement Loss"), actual_cost.internal_loss, "USD", _("Cost")),
-            _metric(_("Actual Cost"), actual_cost.actual_cost, "USD", _("Cost")),
+            _metric(_("Total Source Area"), plan_totals.source_area, "م²", _("Waste")),
+            _metric(_("Used Piece Area"), plan_totals.used_area, "م²", _("Waste")),
+            _metric(_("Approved Waste Area"), plan_totals.waste_area, "م²", _("Waste")),
+            _metric(_("Reusable Remnant Area"), plan_totals.reusable_area, "م²", _("Waste")),
+            _metric(_("Scrap Area"), plan_totals.scrap_area, "م²", _("Waste")),
+            _metric(_("Planned Cost"), plan_totals.planned_cost, "دولار", _("Cost")),
+            _metric(_("Material Variance Cost"), actual_cost.material_variance, "دولار", _("Cost")),
+            _metric(_("Internal Replacement Loss"), actual_cost.internal_loss, "دولار", _("Cost")),
+            _metric(_("Actual Cost"), actual_cost.actual_cost, "دولار", _("Cost")),
         ]
     )
 
@@ -136,7 +136,7 @@ def execute(filters: dict[str, Any] | None = None):
     for row in remnant_rows:
         translated_status = _(row.status)
         rows.append(_metric(_("Remnants — {0}").format(translated_status), row.count, _("Pieces"), _("Remnants")))
-        rows.append(_metric(_("Remnant Area — {0}").format(translated_status), row.area, "m²", _("Remnants")))
+        rows.append(_metric(_("Remnant Area — {0}").format(translated_status), row.area, "م²", _("Remnants")))
 
     return get_columns(), rows
 
