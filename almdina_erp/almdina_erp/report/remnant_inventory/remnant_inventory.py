@@ -53,6 +53,8 @@ def execute(filters: dict[str, Any] | None = None):
     current = getdate(today())
     for row in data:
         row.age_days = date_diff(current, getdate(row.creation)) if row.creation else 0
+        if row.status:
+            row.status = _(row.status)
     return get_columns(), data
 
 
