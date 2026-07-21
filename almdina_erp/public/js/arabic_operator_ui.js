@@ -112,23 +112,38 @@
         return ["SCRIPT", "STYLE", "CODE", "PRE", "TEXTAREA", "OPTION"].includes(parent.tagName);
     }
 
+    function translateOption(option, directTranslations = null) {
+        const storedValue = option.value;
+        const sourceText = option.textContent.trim();
+        if (!sourceText) return;
+        const sourceValue = storedValue || sourceText;
+        const translated = (directTranslations && directTranslations[sourceValue]) || __(sourceText);
+        if (!translated || translated === sourceText) return;
+        option.textContent = translated;
+        // Preserve the stable English/document value even when the browser had
+        // inferred it from the original option text.
+        option.value = storedValue || sourceValue;
+    }
+
     function localizeSelectOptions(root) {
         const scope = root && root.querySelectorAll ? root : document;
+
+        // First apply ordinary Frappe translations to every option while keeping
+        // the stored value untouched. This covers workflow statuses, stage types,
+        // incident reasons and other Select fields throughout the factory app.
+        const generalOptions = [];
+        if (scope.matches && scope.matches("option")) generalOptions.push(scope);
+        generalOptions.push(...scope.querySelectorAll("option"));
+        generalOptions.forEach(option => translateOption(option));
+
+        // Then guarantee the business-friendly wording for machine-key options
+        // whose displayed label intentionally differs from a literal translation.
         for (const [fieldname, translations] of Object.entries(fieldOptionTranslations)) {
             const controls = [];
             if (scope.matches && scope.matches(`[data-fieldname="${fieldname}"]`)) controls.push(scope);
             controls.push(...scope.querySelectorAll(`[data-fieldname="${fieldname}"]`));
             for (const control of controls) {
-                control.querySelectorAll("option").forEach(option => {
-                    const storedValue = option.value;
-                    const source = storedValue || option.textContent.trim();
-                    const translated = translations[source];
-                    if (!translated) return;
-                    option.textContent = translated;
-                    // Preserve the stable machine value even when the browser had
-                    // inferred it from the original option text.
-                    option.value = storedValue || source;
-                });
+                control.querySelectorAll("option").forEach(option => translateOption(option, translations));
             }
         }
     }
