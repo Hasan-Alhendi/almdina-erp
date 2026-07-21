@@ -1,102 +1,693 @@
+Almdina ERP,إدارة المعمل
+Factory Management,إدارة المعمل
+Factory Operations,التشغيل اليومي للمعمل
+Door Cutting Orders,طلبات قص الدرف
+Door Cutting Order,طلب قص
+Production Stages,مراحل تنفيذ الطلبات
+Production Stage,مرحلة تنفيذ
+Cutting Plans,خطط القص
+Cutting Plan,خطة قص
+Board Remnants,بقايا الألواح
+Board Remnant,بقايا لوح
+Replacement Pieces,القطع التعويضية
+Replacement Piece,قطعة تعويضية
+Material Consumption,استهلاك المواد
+Material Consumption Log,سجل استهلاك المواد
+Material Reservations,المواد المحجوزة للطلبات
+Material Reservation,حجز مواد طلب
+Production Incidents,أخطاء ومشاكل الإنتاج
+Production Incident,مشكلة إنتاج
+Factory Settings,إعدادات المعمل
+Almdina ERP Settings,إعدادات المعمل
+Stock & Control,المواد والمخزون والمتابعة
+Reports,تقارير المعمل
+Factory Reports,تقارير المعمل
+Almdina Reports,تقارير المعمل
+Factory Order Analysis,تحليل طلبات القص
+Production Stage Performance,أداء مراحل الإنتاج
+Remnant Inventory,مخزون بقايا الألواح
+Production Incidents and Replacements,أخطاء الإنتاج والقطع التعويضية
+Order Stock Availability,توفر مواد الطلبات
+Board Usage Analysis,تحليل استهلاك الألواح
+Piece Size Usage Analysis,تحليل المقاسات الأكثر استخدامًا
+Almdina Control Center,مركز متابعة المعمل
+Factory Control Center,مركز متابعة وتشغيل المعمل
+Approval Queue,طلبات بانتظار الاعتماد
+Factory Approval Queue,طلبات بانتظار الاعتماد
+Plan PDF Archive,أرشيف مخططات القص المعتمدة
+Factory Plan Archive,أرشيف مخططات القص المعتمدة
+Production Defaults,إعدادات التشغيل الافتراضية
+Stock & Remnant Policy,سياسة المخزون وبقايا الألواح
+Monitoring,المتابعة والرقابة
+Factory Operations Summary,ملخص حركة المعمل
+Almdina Settings,إعدادات المعمل
+Production Routing,تسلسل مراحل الإنتاج
+Production Routing Stage,مرحلة ضمن تسلسل الإنتاج
+Master Data,البيانات الأساسية
+Edge Banding Types,أنواع القشاط
+Edge Banding Type,نوع القشاط
+System Factory Settings,إعدادات المعمل المتقدمة
+Almdina Go-Live,فحص جاهزية المعمل
+Go-Live Validation,فحص الجاهزية قبل التشغيل
+System Preflight,فحص إعدادات المعمل
+Factory System Preflight,فحص جاهزية إعدادات المعمل
+Performance Benchmark,اختبار سرعة خطة القص
+Factory Performance Benchmark,اختبار سرعة محرك خطة القص
+Safe Approval Queue,اعتماد الطلبات الآمن
+Approved Plan PDF Archive,أرشيف مخططات القص المعتمدة
+Validation Evidence,نتائج وفحوص الجاهزية
+Stock Availability,توفر المواد بالمخزون
+Incidents & Replacements,الأخطاء والقطع التعويضية
+Incidents and Replacements,الأخطاء والقطع التعويضية
+Operations Summary,ملخص تشغيل المعمل
+Home,الرئيسية
+
+Naming Series,تسلسل الترقيم
+Customer,العميل
+Order,الطلب
+Order Date,تاريخ الطلب
+Status,الحالة
+Revision,رقم المراجعة
+Approved Cutting Plan,خطة القص المعتمدة
+External Reference,مرجع خارجي
+Order Notes,ملاحظات الطلب
+Board,اللوح
+Board Item,صنف اللوح
+Board Material,مادة اللوح
+Board Color,لون اللوح
+Board Thickness (MM),سماكة اللوح (مم)
+Board Length (MM),طول اللوح (مم)
+Board Width (MM),عرض اللوح (مم)
+Board Rate USD,سعر اللوح بالدولار
+Cutting Cost / Board USD,تكلفة قص اللوح بالدولار
+Cutting Settings,إعدادات القص
+Default Edge Type,نوع القشاط الافتراضي
+Kerf (MM),سماكة خط المنشار (مم)
+Trim Margin (MM),هامش تسوية حواف اللوح (مم)
+Packing Mode,طريقة ترتيب القطع على الألواح
+Pieces,الدرف
+Totals,الإجماليات
+Total Area M2,إجمالي مساحة الدرف م²
+Total Edge Meters,إجمالي أمتار القشاط
+Required Boards,عدد الألواح المطلوبة
+Waste Area M2,مساحة الهدر م²
+Waste Percent,نسبة الهدر
+Waste %,نسبة الهدر
+MDF Cost USD,تكلفة ألواح MDF بالدولار
+Cutting Cost USD,تكلفة القص بالدولار
+Edge Cost USD,تكلفة القشاط بالدولار
+Planned Total Cost USD,إجمالي التكلفة المخططة بالدولار
+Material Variance Cost USD,تكلفة فرق المواد بالدولار
+Internal Loss Cost USD,تكلفة الخسارة الداخلية بالدولار
+Actual Cost USD,التكلفة الفعلية بالدولار
+Packing Method,طريقة الترتيب المستخدمة
+Packing Score,تقييم كفاءة الترتيب
+Engine Version,إصدار محرك خطة القص
+Cutting Plan JSON,بيانات خطة القص الفنية
+Piece No,رقم الدرفة
+Width (CM),العرض (سم)
+Length (CM),الطول (سم)
+Width CM,العرض (سم)
+Length CM,الطول (سم)
+Quantity,العدد
+Allow Rotation,السماح بتدوير الدرفة
+Edge Long Right,قشاط على الطول - يمين
+Edge Long Left,قشاط على الطول - يسار
+Edge Width Top,قشاط على العرض - أعلى
+Edge Width Bottom,قشاط على العرض - أسفل
+Edge Type,نوع القشاط
+Edge Rate USD,سعر متر القشاط بالدولار
+Edge Cost USD,تكلفة القشاط بالدولار
+Area M2,المساحة م²
+Edge Meters,أمتار القشاط
+Notes,ملاحظات
+
+Draft,مسودة
+Pending Review,بانتظار المراجعة
+Approved,معتمد
+Cutting In Progress,قيد القص
+Cut Completed,تم القص
+Edge Banding In Progress,قيد تلبيس القشاط
+Production In Progress,قيد التنفيذ
+Quality Check,فحص الجودة
+Completed,مكتمل
+Rejected,معاد للتعديل
+On Hold,متوقف مؤقتًا
+Cancelled,ملغى
+Replacement Required,بحاجة إلى قطعة تعويضية
+Partially Completed,مكتمل جزئيًا
+Available,متاحة للاستخدام
+Reserved,محجوزة لطلب
+Consumed,تم استخدامها
+Scrapped,هدر / غير صالحة
+Superseded,تم استبدالها بنسخة أحدث
+Pending,بانتظار البدء
+Valid,سليمة
+Invalid,غير سليمة
+Active,نشط
+Released,تم فك الحجز
+Submitted,تم الصرف
+Reversed,تم عكس الحركة
+Failed,فشل التنفيذ
+Open,مفتوح
+Replacement Created,تم إنشاء قطعة تعويضية
+Resolved,تمت المعالجة
+Pending Approval,بانتظار الاعتماد
+In Progress,قيد التنفيذ
+Paused,متوقف مؤقتًا
+
+Review / Preparation,مراجعة وتجهيز الطلب
+Cutting,القص
+Edge Banding,تلبيس القشاط
+Drilling,التخريم
+Assembly,التجميع
+Packing,التغليف
+Created,تم الإنشاء
+Start,بدء
+Pause,إيقاف مؤقت
+Resume,استئناف العمل
+Finish,إنهاء
+Override,تجاوز بإذن
+Cancel,إلغاء
+Regular,عادي
+Glossy,لميع
+Golden,ذهبي
+Machine,على الماكينة
+Manual,يدوي
+Zero,بدون تكلفة
+Average Valuation,حسب متوسط تكلفة المخزون
+Configured Rate,حسب سعر محدد
+Remnant First,استخدام بقايا مناسبة أولًا
+Full Board,لوح كامل
+Remnant,بقايا لوح
+Meter,متر
+Board,لوح
+Order Entry,موظف إدخال الطلبات
+Cutting Operator,عامل القص
+Edge Operator,عامل القشاط
+Production Manager,مدير الإنتاج
+Stock Manager,مسؤول المخزون
+Accounts Management,الإدارة المالية
+
+Cutting Defaults,إعدادات القص الافتراضية
+Default Kerf MM,سماكة خط المنشار الافتراضية (مم)
+Default Trim Margin MM,هامش تسوية حواف اللوح الافتراضي (مم)
+Default Cutting Cost / Board USD,تكلفة قص اللوح الافتراضية بالدولار
+Default Packing Mode,طريقة ترتيب القطع الافتراضية
+Stock Policy,سياسة صرف وحجز المواد
+Default Warehouse,المستودع الافتراضي
+Reserve Stock On Approval,حجز المواد عند اعتماد الطلب
+Stock Consumption Point,وقت خصم المواد من المخزون
+Cutting Start,عند بدء القص
+Cutting Finish,عند انتهاء القص
+Board Remnants,بقايا الألواح
+Prefer Matching Remnants Before Full Boards,استخدام البقايا المناسبة قبل فتح لوح جديد
+Minimum Remnant Width MM,أقل عرض لبقايا لوح تُحفظ (مم)
+Minimum Remnant Length MM,أقل طول لبقايا لوح تُحفظ (مم)
+Minimum Remnant Area M2,أقل مساحة لبقايا لوح تُحفظ (م²)
+Remnant Cost Policy,طريقة احتساب تكلفة البقايا
+Configured Remnant Rate USD / M2,سعر البقايا المحدد لكل م² بالدولار
+Production Controls,ضوابط مراحل الإنتاج
+Default Production Routing,تسلسل مراحل الإنتاج الافتراضي
+Allow Authorized Stage Sequence Override,السماح للمخول بتجاوز ترتيب المراحل
+Allow Exceptional Approval With Unplaced Pieces,السماح استثنائيًا باعتماد خطة فيها قطع غير موزعة
+Factory Production Settings,إعدادات تشغيل المعمل
+Edit Production Defaults,تعديل إعدادات التشغيل الافتراضية
+Stage override policy is intentionally not editable from this limited Production Manager page.,تجاوز ترتيب مراحل الإنتاج متاح فقط للمستخدمين المخولين ولا يمكن تعديله من هذه الصفحة.
+Saving production defaults...,جاري حفظ إعدادات التشغيل...
+Production defaults updated.,تم تحديث إعدادات التشغيل.
+Factory Stock Settings,إعدادات مخزون المعمل
+Read-only for your current role.,هذه البيانات للعرض فقط حسب صلاحيات حسابك.
+Edit Stock Policy,تعديل سياسة المخزون
+Remnant Cost,تكلفة بقايا الألواح
+Saving stock policy...,جاري حفظ سياسة المخزون...
+Stock policy updated.,تم تحديث سياسة المخزون.
+Save,حفظ
+
+Physical Location,مكان التخزين الفعلي
+Dimensions,الأبعاد
+Length (MM),الطول (مم)
+Width (MM),العرض (مم)
+Thickness (MM),السماكة (مم)
+Material,المادة
+Color,اللون
+Source,المصدر
+Source Order,الطلب الذي نتجت عنه
+Source Cutting Plan,خطة القص التي نتجت عنها
+Parent Remnant,البقايا الأصلية
+Reservation,الحجز
+Reserved For Order,محجوزة للطلب
+Reservation Timestamp,وقت الحجز
+Plan Kind,نوع الخطة
+Approved By,اعتمدها
+Approved On,تاريخ الاعتماد
+Optimization Engine,محرك ترتيب خطة القص
+Method Key,رمز طريقة الترتيب
+Method Label,طريقة الترتيب المستخدمة
+Score,تقييم الخطة
+Validation Status,سلامة خطة القص
+Validated On,تاريخ فحص الخطة
+Validation Errors,أخطاء فحص الخطة
+Board Snapshot,بيانات اللوح وقت اعتماد الخطة
+Full Board Width MM,عرض اللوح الكامل (مم)
+Full Board Length MM,طول اللوح الكامل (مم)
+Usable Board Width MM,العرض المتاح للقص بعد التسوية (مم)
+Usable Board Length MM,الطول المتاح للقص بعد التسوية (مم)
+Kerf MM,سماكة خط المنشار (مم)
+Trim Margin MM,هامش تسوية الحواف (مم)
+Used Area M2,مساحة القطع المستخدمة م²
+Total Source Area M2,إجمالي مساحة الألواح والبقايا م²
+Reusable Remnant Area M2,مساحة البقايا القابلة لإعادة الاستخدام م²
+Scrap Area M2,مساحة الهدر غير القابل للاستخدام م²
+Waste Reconciled On,تاريخ تثبيت الهدر الفعلي
+Approved Cost Snapshot,التكلفة المثبتة وقت الاعتماد
+Source Sheets,الألواح والبقايا المستخدمة
+Placed Pieces,القطع الموزعة على الخطة
+Immutable Snapshot,نسخة الاعتماد الثابتة
+Snapshot JSON,البيانات الفنية لنسخة الاعتماد
+Sheet No,رقم اللوح
+Piece ID,معرف القطعة
+Piece Label,رقم القطعة
+Source Piece No,رقم الدرفة الأصلية
+Copy No,رقم النسخة
+X MM,الموقع الأفقي (مم)
+Y MM,الموقع العمودي (مم)
+Width MM,العرض (مم)
+Height MM,الارتفاع (مم)
+Original Width CM,العرض الأصلي (سم)
+Original Length CM,الطول الأصلي (سم)
+Rotated,تم تدويرها
+Source Type,نوع المصدر
+Material Identity Snapshot,هوية المادة وقت اعتماد الخطة
+Dimensions Snapshot,الأبعاد وقت اعتماد الخطة
+Full Width MM,العرض الكامل (مم)
+Full Length MM,الطول الكامل (مم)
+Usable Width MM,العرض المتاح للقص (مم)
+Usable Length MM,الطول المتاح للقص (مم)
+Source Area M2,مساحة المصدر م²
+
+Edge Type Name,اسم نوع القشاط
+English Name,الاسم الإنجليزي
+Finish Type,نوع التشطيب
+Application Method,طريقة تركيب القشاط
+Consumption UOM,وحدة احتساب الاستهلاك
+Rate USD / Meter,سعر المتر بالدولار
+Stock Item,صنف القشاط في المخزون
+Stock UOM,وحدة المخزون
+Disabled,موقوف
+
+Consumption Trigger,وقت خصم المواد
+Stock Entry,حركة المخزون
+Consumed On,تاريخ خصم المواد
+Actual Consumption,الاستهلاك الفعلي
+Actual Consumption Recorded,تم تسجيل الاستهلاك الفعلي
+Actual Recorded By,سجل الاستهلاك الفعلي
+Actual Recorded On,تاريخ تسجيل الاستهلاك الفعلي
+Additional Material Issue,صرف مواد إضافية
+Material Return Receipt,إرجاع مواد إلى المخزون
+Planned vs Actual Materials,مقارنة المواد المخططة بالاستهلاك الفعلي
+Planned Material Details JSON,تفاصيل المواد المخططة - بيانات فنية
+Actual Material Details JSON,تفاصيل المواد الفعلية - بيانات فنية
+Item,الصنف
+Planned Stock Qty,الكمية المخططة من المخزون
+Actual Stock Qty,الكمية الفعلية من المخزون
+Variance Stock Qty,فرق الكمية
+Planned Business Unit,وحدة الاستخدام المخططة
+Planned Business Qty,الكمية المخططة للاستخدام
+Variance Cost USD,تكلفة الفرق بالدولار
+Reserved On,تاريخ الحجز
+Released / Consumed On,تاريخ فك الحجز أو الاستهلاك
+Reserved Items,المواد المحجوزة
+Reserved Stock Qty,الكمية المحجوزة من المخزون
+Planned Unit,وحدة الاستخدام المخططة
+Planned Qty,الكمية المخططة
+
+Original Piece Label,رقم القطعة الأصلية
+Worker,العامل
+Incident Date / Time,تاريخ ووقت المشكلة
+Reason,السبب
+Requires Replacement,تحتاج قطعة تعويضية
+Description,الوصف
+Measurement Error,خطأ في القياس
+Cutting Error,خطأ أثناء القص
+Edge Banding Error,خطأ في القشاط
+Damage,تلف القطعة
+Lost Piece,فقدان القطعة
+Material Defect,عيب في المادة
+Other,سبب آخر
+Routing Name,اسم تسلسل الإنتاج
+Stages,المراحل
+Sequence,الترتيب
+Stage Type,مرحلة العمل
+Required,مطلوب
+Auto Complete If Not Applicable,تجاوزها تلقائيًا إذا لم تكن مطلوبة
+Exceptional Piece Label,رقم القطعة المرتبطة بالمرحلة
+Assignment & Timing,العامل ووقت التنفيذ
+Assigned To,العامل المكلف
+Started By,بدأها
+Start Time,وقت البدء
+Finished By,أنهى المرحلة
+Finish Time,وقت الانتهاء
+Paused Seconds,مدة التوقف (ثانية)
+Actual Working Seconds,وقت العمل الفعلي (ثانية)
+Completed Quantity,الكمية المنجزة
+Pause / Resume History,سجل التوقف والاستئناف
+Pauses,فترات التوقف
+Event Type,نوع الحركة
+Event Time,وقت الحركة
+Actor,نفذها
+Details JSON,التفاصيل الفنية
+Pause Start,بداية التوقف
+Pause End,نهاية التوقف
+Duration Seconds,مدة التوقف (ثانية)
+Paused By,أوقف العمل
+Resumed By,استأنف العمل
+Incident,المشكلة
+Incident Status,حالة المشكلة
+Replacement Status,حالة القطعة التعويضية
+Piece,القطعة
+Stage,المرحلة
+Date / Time,التاريخ والوقت
+Material Source,مصدر المادة
+Source Preference,أولوية مصدر المادة
+Selected Remnant,البقايا المختارة
+Replacement Cutting Plan,خطة قص القطعة التعويضية
+Largest Generated Remnant,أكبر بقايا ناتجة
+Generated Remnants JSON,بيانات البقايا الناتجة
+Execution,التنفيذ
+Started On,تاريخ البدء
+Completed By,أنهى التنفيذ
+Completed On,تاريخ الإنهاء
+Internal Cost,تكلفة الخطأ الداخلية
+Planned Internal Loss USD,الخسارة الداخلية المخططة بالدولار
+Actual Internal Loss USD,الخسارة الداخلية الفعلية بالدولار
+Actual Internal Loss Cost USD,الخسارة الداخلية الفعلية بالدولار
+Charge Customer,تحميل التكلفة على العميل
+
+MDF / Cutting Board Settings,بيانات لوح MDF للقص
+Is MDF Board,هذا الصنف لوح MDF مخصص للقص
+Board Length MM,طول اللوح (مم)
+Board Width MM,عرض اللوح (مم)
+Board Thickness MM,سماكة اللوح (مم)
+
 Send for Review,إرسال للمراجعة
 Order Workflow,دورة الطلب
 Order sent for review.,تم إرسال الطلب للمراجعة.
 Approve Order,اعتماد الطلب
-The current cutting plan will be frozen as the approved snapshot and stock availability will be checked. Continue?,سيتم تثبيت خطة القص الحالية كنسخة معتمدة وفحص توفر المخزون. هل تريد المتابعة؟
+The current cutting plan will be frozen as the approved snapshot and stock availability will be checked. Continue?,سيتم تثبيت خطة القص الحالية كنسخة معتمدة وفحص توفر المواد. هل تريد المتابعة؟
 Order approved and cutting plan frozen.,تم اعتماد الطلب وتثبيت خطة القص.
-Reject and Return for Editing,رفض وإعادة للتعديل
-Rejection Reason,سبب الرفض
-Order rejected and returned for editing.,تم رفض الطلب وإعادته للتعديل.
-Reject Order,رفض الطلب
+Reject and Return for Editing,إعادة للتعديل
+Rejection Reason,سبب الإعادة للتعديل
+Order rejected and returned for editing.,تمت إعادة الطلب للتعديل.
+Reject Order,إعادة الطلب للتعديل
 Check Material Availability,فحص توفر المواد
 Stock,المخزون
-Stock Available,المخزون متوفر
-Stock Shortage,يوجد عجز في المخزون
-Production Stages,مراحل الإنتاج
-Cutting Plans,خطط القص
-Incidents and Replacements,الأخطاء والتعويضات
+Stock Available,المواد متوفرة
+Stock Shortage,يوجد نقص في المواد
 View,عرض
 Start Stage,بدء المرحلة
-The start time and current worker will be recorded. Continue?,سيتم تسجيل وقت البدء والعامل الحالي. هل تريد المتابعة؟
-Pause,إيقاف مؤقت
+The start time and current worker will be recorded. Continue?,سيتم تسجيل وقت البدء والعامل المنفذ. هل تريد المتابعة؟
 Pause Reason,سبب التوقف
 Pause Stage,إيقاف المرحلة مؤقتًا
 Finish Stage,إنهاء المرحلة
-Completed Quantity,الكمية المكتملة
-Notes,ملاحظات
-Resume,استئناف
-Record Incident / Damaged Piece,تسجيل خطأ / قطعة تالفة
+Record Incident / Damaged Piece,تسجيل خطأ أو قطعة تالفة
 Production Problems,مشاكل الإنتاج
 Piece number such as 2.3,رقم القطعة مثل 2.3
-Reason,السبب
-Incident Description,وصف الخطأ
-Requires Replacement Piece,تحتاج قطعة تعويضية
-Recording incident...,جاري تسجيل الخطأ...
-Incident recorded,تم تسجيل الخطأ
+Incident Description,وصف المشكلة
+Requires Replacement Piece,تحتاج إلى قطعة تعويضية
+Recording incident...,جاري تسجيل المشكلة...
+Incident recorded,تم تسجيل المشكلة
 Replacement piece created,تم إنشاء قطعة تعويضية
 Record,تسجيل
-Open Replacement Cutting Plan,فتح خطة القص التعويضية
+Open Replacement Cutting Plan,فتح خطة قص القطعة التعويضية
 Replacement,التعويض
-Approve Replacement,اعتماد التعويض
-A valid source will be selected, reserved when needed, and an approved Mini Cutting Plan will be created with material validation. Continue?,سيتم اختيار مصدر صالح، حجزه عند الحاجة، إنشاء Mini Cutting Plan معتمدة، وفحص المواد المخزنية. هل تريد المتابعة؟
-Replacement Approved,تم اعتماد التعويض
-Remnant,بقايا لوح
-Full Board,لوح كامل
-Start Replacement Cutting,بدء قص التعويض
-Reserved materials will be consumed and the selected source will be marked as physically used. Continue?,سيتم استهلاك المواد المحجوزة واعتبار المصدر مستخدمًا فعليًا. هل تريد البدء؟
-Complete Replacement,إنهاء التعويض
-Actual Internal Loss USD,الخسارة الداخلية الفعلية بالدولار
-Leave blank to use the planned cost frozen at approval.,اتركه فارغًا لاستخدام التكلفة المخططة المثبتة عند الاعتماد.
+Approve Replacement,اعتماد القطعة التعويضية
+"A valid source will be selected, reserved when needed, and an approved Mini Cutting Plan will be created with material validation. Continue?",سيتم اختيار لوح أو بقايا مناسبة وحجزها عند الحاجة وإنشاء خطة قص معتمدة للقطعة التعويضية بعد فحص المواد. هل تريد المتابعة؟
+Replacement Approved,تم اعتماد القطعة التعويضية
+Start Replacement Cutting,بدء قص القطعة التعويضية
+Reserved materials will be consumed and the selected source will be marked as physically used. Continue?,سيتم خصم المواد المحجوزة واعتبار المصدر مستخدمًا فعليًا. هل تريد البدء؟
+Complete Replacement,إنهاء القطعة التعويضية
+Leave blank to use the planned cost frozen at approval.,اترك الحقل فارغًا لاعتماد التكلفة المخططة المثبتة وقت الاعتماد.
 Complete Replacement Piece,إنهاء القطعة التعويضية
-Replacement Completed,اكتمل التعويض
+Replacement Completed,اكتملت القطعة التعويضية
 Generated Remnants,البقايا الناتجة
-Cancel Replacement,إلغاء التعويض
+Cancel Replacement,إلغاء القطعة التعويضية
 Cancellation Reason,سبب الإلغاء
 Cancel Order,إلغاء الطلب
-Reverse submitted stock movements if any,عكس الحركات المخزنية المرسلة إن وجدت
-Only enable this when materials can physically be returned and cutting has not completed.,لا تفعل هذا الخيار إلا إذا كانت المواد قابلة للإرجاع فعليًا ولم يكتمل القص.
-Cancellation is sensitive and may reverse stock movements and release reservations. Continue?,الإلغاء عملية حساسة وقد تعكس حركة مخزون وتحرر حجوزات. هل تريد المتابعة؟
+Reverse submitted stock movements if any,عكس حركات المخزون المنفذة إن وجدت
+Only enable this when materials can physically be returned and cutting has not completed.,فعّل هذا الخيار فقط إذا كان يمكن إعادة المواد فعليًا إلى المخزون ولم يكتمل القص.
+Cancellation is sensitive and may reverse stock movements and release reservations. Continue?,إلغاء الطلب قد يعكس حركات المخزون ويفك حجوزات المواد. هل تريد المتابعة؟
 Cancelling order...,جاري إلغاء الطلب...
 Order Cancelled,تم إلغاء الطلب
-Released Remnants,البقايا المحررة
+Released Remnants,البقايا التي تم فك حجزها
 Processing...,جاري التنفيذ...
-Processing replacement...,جاري تنفيذ التعويض...
+Processing replacement...,جاري تنفيذ القطعة التعويضية...
 Confirm,تأكيد
 Continue,متابعة
-Cancel,إلغاء
-Finish,إنهاء
 Record Actual Consumption,تسجيل الاستهلاك الفعلي
-Actual Stock Qty,الكمية الفعلية بوحدة المخزون
-Planned,المخطط
-No planned stock materials are available for reconciliation.,لا توجد مواد مخزنية مخططة متاحة للتسوية.
-Differences above plan will issue extra stock; differences below plan will return stock to the warehouse. Continue?,الزيادة عن المخطط ستنشئ صرفًا إضافيًا والنقص عنه سيعيد المادة إلى المستودع. هل تريد المتابعة؟
+No planned stock materials are available for reconciliation.,لا توجد مواد مخططة يمكن تسوية استهلاكها.
+Differences above plan will issue extra stock; differences below plan will return stock to the warehouse. Continue?,أي زيادة عن المخطط ستُصرف من المخزون وأي نقص سيُعاد إلى المستودع. هل تريد المتابعة؟
 Reconciling actual consumption...,جاري تسوية الاستهلاك الفعلي...
-Actual Consumption Recorded,تم تسجيل الاستهلاك الفعلي
-Additional Material Issue,صرف مادة إضافي
-Material Return Receipt,إرجاع مادة إلى المخزون
-Material Variance Cost USD,فرق تكلفة المواد بالدولار
 Reconcile,تسوية
-Planned Total Cost USD,إجمالي التكلفة المخططة بالدولار
-Actual Cost USD,التكلفة الفعلية بالدولار
-Internal Loss Cost USD,تكلفة الخسارة الداخلية بالدولار
-Material Variance USD,فرق المواد بالدولار
-Reusable Remnant Area M2,مساحة البقايا القابلة لإعادة الاستخدام م²
-Reusable Area M2,المساحة القابلة لإعادة الاستخدام م²
-Scrap Area M2,مساحة الهدر غير القابل للاستخدام م²
-Total Source Area M2,إجمالي مساحة المصادر م²
-Waste Reconciled On,تاريخ تسوية الهدر
-Show Shortages Only,عرض حالات العجز فقط
+
+Loading pending review orders...,جاري تحميل الطلبات التي تنتظر المراجعة...
+No orders are waiting for review.,لا توجد طلبات بانتظار المراجعة.
+Date,التاريخ
+Material / Color / Thickness,المادة / اللون / السماكة
+Boards,عدد الألواح
+Method,طريقة ترتيب القص
+Actions,الإجراءات
+Approve,اعتماد
+Reject,إعادة للتعديل
+Approve this order using a database row lock and create its immutable production plan?,سيتم اعتماد الطلب وتثبيت خطة القص الحالية نهائيًا للتنفيذ. هل تريد المتابعة؟
+Approving order safely...,جاري اعتماد الطلب وتثبيت خطة القص...
+Order approved.,تم اعتماد الطلب.
+Order rejected and returned for revision.,تمت إعادة الطلب للتعديل.
+Refresh,تحديث
+Run Benchmark,تشغيل اختبار السرعة
+Repeats,عدد مرات الاختبار
+Packing Mode Override,طريقة ترتيب بديلة للاختبار
+Leave empty to use the order mode.,اتركه فارغًا لاستخدام طريقة الترتيب المحددة في الطلب.
+Select a Door Cutting Order first.,اختر طلب قص أولًا.
+Running cutting engine benchmark...,جاري اختبار سرعة محرك خطة القص...
+Target met on this run,الأداء ضمن الحد المطلوب في هذا الاختبار
+Target NOT met on this run,الأداء أبطأ من الحد المطلوب في هذا الاختبار
+Expanded Pieces,عدد القطع الفعلية
+Requested Mode,طريقة الترتيب المطلوبة
+Selected Method,طريقة الترتيب التي تم اختيارها
+Runs ms,أزمنة الاختبارات بالمللي ثانية
+Average ms,متوسط الزمن بالمللي ثانية
+Worst ms,أبطأ زمن بالمللي ثانية
+Unplaced,قطع لم يتم توزيعها
+"This benchmark is read-only and creates no stock movement or document changes. Record server specs, app commit SHA, result and evidence in UAT.",هذا الاختبار للقياس فقط ولا يغيّر المستندات أو المخزون.
+Generate and attach an immutable official PDF for an approved production cutting plan.,إنشاء وحفظ نسخة PDF رسمية ثابتة لخطة القص المعتمدة.
+Archive Approved Plan PDF,حفظ نسخة PDF للخطة المعتمدة
+Generating official PDF...,جاري إنشاء النسخة الرسمية PDF...
+Open Archived PDF,فتح النسخة المحفوظة
+PDF was already archived.,تم حفظ نسخة PDF لهذه الخطة مسبقًا.
+PDF archived successfully.,تم حفظ نسخة PDF للخطة بنجاح.
+Plan,الخطة
+
+No configuration blockers were found. Controlled UAT may proceed.,إعدادات المعمل الأساسية سليمة. يمكن بدء الاختبارات التشغيلية.
+Configuration blockers exist. Do not start controlled UAT yet.,توجد إعدادات ناقصة تمنع بدء الاختبار التشغيلي.
+Blockers,مشاكل مانعة
+Warnings,تنبيهات
+Check,الفحص
+Message,النتيجة
+Details,التفاصيل
+OK,سليم
+WARNING,تنبيه
+BLOCKER,مشكلة مانعة
+Running factory preflight checks...,جاري فحص جاهزية إعدادات المعمل...
+Running preflight...,جاري فحص الجاهزية...
+Run Preflight Again,إعادة فحص الجاهزية
+Default Warehouse Check,فحص المستودع الافتراضي
+Production Routing Check,فحص تسلسل مراحل الإنتاج
+Required Production Stages Check,فحص مراحل الإنتاج الأساسية
+Factory User Roles Check,فحص صلاحيات موظفي المعمل
+MDF Board Items Check,فحص أصناف ألواح MDF
+Edge Banding Master Data Check,فحص بيانات أنواع القشاط
+Edge Stock Mapping Check,فحص ربط القشاط بالمخزون
+Production Print Formats Check,فحص نماذج الطباعة
+Operational Reports Check,فحص تقارير التشغيل
+Company,الشركة
+Missing,مفقود
+Count,العدد
+Incomplete Records,سجلات غير مكتملة
+Unmapped Stock Items,أنواع غير مربوطة بالمخزون
+Problems,المشاكل
+Default Warehouse is configured and linked to a Company.,تم ضبط المستودع الافتراضي وربطه بالشركة.
+Configure a Default Warehouse linked to a Company.,يجب تحديد مستودع افتراضي مرتبط بالشركة.
+Default Production Routing is active.,تسلسل مراحل الإنتاج الافتراضي مفعّل.
+Configure an active Default Production Routing.,يجب اختيار تسلسل مراحل إنتاج افتراضي مفعّل.
+Routing contains the required v1.0 core stages.,تسلسل الإنتاج يحتوي المراحل الأساسية المطلوبة.
+Routing is missing one or more v1.0 core stages.,تسلسل الإنتاج ينقصه مرحلة أساسية أو أكثر.
+All required factory roles exist.,جميع صلاحيات موظفي المعمل المطلوبة موجودة.
+One or more required factory roles are missing.,توجد صلاحيات مطلوبة لموظفي المعمل غير موجودة.
+"MDF Items have valid physical identity, dimensions and whole-number stock UOM.",أصناف ألواح MDF تحتوي بيانات المقاس والسماكة والمادة واللون ووحدة المخزون بشكل صحيح.
+Fix MDF Item configuration before production.,يجب استكمال بيانات أصناف ألواح MDF قبل بدء الإنتاج.
+Enabled Edge Banding Types have valid structured master data.,بيانات أنواع القشاط المفعلة مكتملة وصحيحة.
+Fix incomplete Edge Banding Type master data.,يجب استكمال بيانات أنواع القشاط قبل التشغيل.
+All enabled Edge Banding Types are mapped to stock Items.,جميع أنواع القشاط المفعلة مربوطة بأصناف المخزون.
+Some enabled Edge Banding Types are not mapped to stock Items; orders using them cannot be approved for stock consumption.,بعض أنواع القشاط غير مربوطة بأصناف المخزون؛ لن يمكن اعتماد الطلبات التي تستخدمها لصرف المواد.
+Required production Print Formats are installed.,نماذج الطباعة المطلوبة للإنتاج مثبتة.
+Required production Print Formats are missing.,بعض نماذج الطباعة المطلوبة للإنتاج غير موجودة.
+Required operational reports are installed.,تقارير التشغيل المطلوبة موجودة.
+One or more operational reports are missing.,يوجد تقرير تشغيلي مطلوب أو أكثر غير موجود.
+dimensions,الأبعاد
+thickness,السماكة
+material,المادة
+color,اللون
+whole-number stock UOM,وحدة مخزون تعدّ بالأعداد الصحيحة
+rate,السعر
+width,العرض
+finish,نوع التشطيب
+application_method,طريقة تركيب القشاط
+
+From Date,من تاريخ
+To Date,إلى تاريخ
+Thickness MM,السماكة (مم)
+Orders,الطلبات
+Full Boards Used,الألواح الجديدة المستخدمة
+Remnants Used,بقايا الألواح المستخدمة
+Planned Waste Area M2,الهدر المخطط م²
+Full Boards,عدد الألواح الجديدة
+Planned Cost USD,التكلفة المخططة بالدولار
+Material Variance USD,فرق تكلفة المواد بالدولار
+Internal Loss USD,الخسارة الداخلية بالدولار
+Variance USD,فرق التكلفة بالدولار
+Total Quantity,إجمالي العدد
+Incident Status,حالة المشكلة
+Replacement Status,حالة القطعة التعويضية
+Mini Plan,خطة القص التعويضية
+Planned Loss USD,الخسارة المخططة بالدولار
+Actual Loss USD,الخسارة الفعلية بالدولار
+Start,البداية
+Finish,النهاية
+Paused Minutes,دقائق التوقف
+Working Minutes,دقائق العمل الفعلي
+Completed Qty,الكمية المنجزة
+Exceptional Piece,القطعة الاستثنائية
+Location,مكان التخزين
+Age Days,العمر بالأيام
+Reserved For,محجوزة للطلب
+Category,القسم
+Metric,البيان
+Value,القيمة
+Unit,الوحدة
+Orders In Production / Attention,طلبات قيد الإنتاج أو تحتاج متابعة
+Order Status,حالات الطلبات
+Production,الإنتاج
+Waste,الهدر والبقايا
+Cost,التكاليف
+Quality,الجودة والأخطاء
+Remnants,بقايا الألواح
+Total Source Area,إجمالي مساحة المواد المستخدمة
+Used Piece Area,مساحة القطع المطلوبة
+Approved Waste Area,مساحة الهدر المعتمدة
+Reusable Remnant Area,مساحة البقايا القابلة لإعادة الاستخدام
+Scrap Area,مساحة الهدر غير الصالح
+Planned Cost,التكلفة المخططة
+Material Variance Cost,فرق تكلفة المواد
+Internal Replacement Loss,خسائر القطع التعويضية الداخلية
+Actual Cost,التكلفة الفعلية
+Open Replacement Pieces,قطع تعويضية لم تكتمل
+Open Production Incidents,مشاكل إنتاج لم تُغلق
+Incidents,مشاكل
+Remnants — {0},بقايا الألواح — {0}
+Remnant Area — {0},مساحة البقايا — {0}
+Orders — {0},الطلبات — {0}
+
+Warehouse,المستودع
+Required,المطلوب
+Available,المتاح
+Shortage,النقص
+Show Shortages Only,عرض النواقص فقط
 Order Status,حالة الطلب
 Material Kind,نوع المادة
 Required Stock Qty,الكمية المطلوبة من المخزون
-Physical Stock,المخزون الفعلي
+Physical Stock,الرصيد الفعلي
 Reserved Elsewhere,المحجوز لطلبات أخرى
 Available After Reservations,المتاح بعد الحجوزات
-Shortage,العجز
-Business Unit,وحدة العمل
-Planned Business Qty,الكمية المخططة بوحدة العمل
-Board Rate USD,سعر اللوح بالدولار
-Cutting Cost / Board USD,تكلفة القص لكل لوح بالدولار
-Kerf (MM),سماكة القص مم
-Trim Margin (MM),هامش التشذيب مم
-Factory Management,إدارة المعمل
+Business Unit,وحدة الاستخدام
+No stock-managed materials are required from full-stock Items for this order.,لا توجد مواد مخزنية مطلوبة لهذا الطلب.
+
+You do not have permission for this operation.,ليست لديك صلاحية لتنفيذ هذه العملية.
+The order does not have a cutting plan to snapshot.,لا توجد خطة قص صالحة يمكن تثبيتها لهذا الطلب.
+The cutting plan failed geometry validation and cannot be approved.,خطة القص غير سليمة هندسيًا ولا يمكن اعتمادها.
+The cutting plan contains unplaced pieces and cannot be approved.,توجد قطع لم يتم توزيعها على الألواح لذلك لا يمكن اعتماد خطة القص.
+Only Draft cutting plans can be approved.,يمكن اعتماد خطط القص التي ما تزال مسودة فقط.
+Only a geometrically valid cutting plan can be approved.,لا يمكن اعتماد خطة قص إلا بعد التأكد من سلامتها هندسيًا.
+Only Draft or Rejected orders can be sent for review.,يمكن إرسال الطلب للمراجعة عندما يكون مسودة أو معادًا للتعديل فقط.
+Only orders in Pending Review can be approved.,يمكن اعتماد الطلبات التي تنتظر المراجعة فقط.
+"Approval plan is invalid:
+{0}","خطة القص المراد اعتمادها غير سليمة:
+{0}"
+Full boards: {0} | Waste: {1}% | Method: {2},ألواح جديدة: {0} | الهدر: {1}% | طريقة الترتيب: {2}
+Only orders in Pending Review can be rejected.,يمكن إعادة الطلب للتعديل عندما يكون بانتظار المراجعة فقط.
+Review rejection reason: {0},سبب إعادة الطلب للتعديل: {0}
+Order {0} has no approved Cutting Plan.,الطلب {0} لا يملك خطة قص معتمدة.
+Stock Item {0} does not exist.,صنف المخزون {0} غير موجود.
+Edge stock Item {0} uses Stock UOM {1}. Add a Meter UOM conversion before consumption.,صنف القشاط {0} يستخدم وحدة مخزون {1}. أضف تحويلًا إلى المتر قبل صرفه.
+Board Item {0} has no Stock UOM.,صنف اللوح {0} لا يملك وحدة مخزون.
+Board Item {0} must use a whole-number Stock UOM because planned consumption is counted in physical boards.,صنف اللوح {0} يجب أن يستخدم وحدة مخزون تعدّ بالألواح الصحيحة لأن الاستهلاك يُحسب بعدد الألواح.
+Edge Banding Type {0} is disabled or missing.,نوع القشاط {0} غير موجود أو موقوف.
+Map Edge Banding Type {0} to a stock Item before approving/consuming this order.,اربط نوع القشاط {0} بصنف في المخزون قبل اعتماد الطلب أو صرف مواده.
+Set Default Warehouse in Almdina ERP Settings before approving/starting production.,حدد المستودع الافتراضي في إعدادات المعمل قبل اعتماد الطلب أو بدء الإنتاج.
+"{0}: required {1}, available after reservations {2}, physical stock {3} in {4}","{0}: المطلوب {1}، المتاح بعد الحجوزات {2}، الرصيد الفعلي {3} في {4}"
+"Insufficient stock:
+{0}","المواد المتوفرة لا تكفي:
+{0}"
+Set Default Warehouse in Almdina ERP Settings before approving production.,حدد المستودع الافتراضي في إعدادات المعمل قبل اعتماد الإنتاج.
+Warehouse {0} is not linked to a Company.,المستودع {0} غير مرتبط بشركة.
+Almdina ERP material consumption | Door Cutting Order {0} | Cutting Plan {1},صرف مواد المعمل | طلب القص {0} | خطة القص {1}
+Remnant {0} no longer exists.,بقايا اللوح {0} لم تعد موجودة.
+Order {0} is already approved or in production and cannot be edited/recalculated in place. Create a controlled revision instead.,الطلب {0} معتمد أو دخل الإنتاج ولا يجوز تعديل بياناته مباشرة. أنشئ مراجعة جديدة للطلب بدلًا من ذلك.
+{0} must be a valid numeric value.,يجب أن تكون قيمة {0} رقمًا صالحًا.
+{0} must be finite; NaN/Infinity are not allowed.,قيمة {0} غير صالحة.
+Kerf (MM) cannot be negative.,سماكة خط المنشار لا يمكن أن تكون سالبة.
+Trim Margin (MM) cannot be negative.,هامش تسوية الحواف لا يمكن أن يكون سالبًا.
+Board Rate USD cannot be negative.,سعر اللوح لا يمكن أن يكون سالبًا.
+Cutting Cost / Board USD cannot be negative.,تكلفة قص اللوح لا يمكن أن تكون سالبة.
+At least one piece row is required.,أدخل درفة واحدة على الأقل في جدول الدرف.
+Row {0} Width CM,عرض الدرفة في السطر {0} (سم)
+Row {0} Length CM,طول الدرفة في السطر {0} (سم)
+Row {0} Quantity,عدد الدرف في السطر {0}
+Row {0}: Width must be greater than zero.,السطر {0}: يجب أن يكون العرض أكبر من صفر.
+Row {0}: Length must be greater than zero.,السطر {0}: يجب أن يكون الطول أكبر من صفر.
+Row {0}: Quantity must be a positive integer.,السطر {0}: يجب أن يكون العدد رقمًا صحيحًا أكبر من صفر.
+Board Item is required.,يجب اختيار صنف اللوح.
+Selected Item is not marked as an MDF/cutting board.,الصنف المختار غير معرف كلوح MDF مخصص للقص.
+Board dimensions are missing or invalid on Item {0}.,أبعاد اللوح غير مكتملة أو غير صحيحة في الصنف {0}.
+Board thickness cannot be negative on Item {0}.,سماكة اللوح لا يمكن أن تكون سالبة في الصنف {0}.
+Trim Margin leaves no usable board area.,هامش تسوية الحواف كبير لدرجة أنه لا يترك مساحة صالحة للقص.
+Edge Banding Type {0} does not exist.,نوع القشاط {0} غير موجود.
+Edge Banding Type {0} is disabled.,نوع القشاط {0} موقوف.
+Edge Banding Type {0} has an invalid rate.,سعر نوع القشاط {0} غير صالح.
+Approved/production orders cannot be recalculated in place.,لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج مباشرة.
+
+Export DXF,تصدير ملف القص DXF
+Validating DXF geometry on server...,جاري فحص سلامة مخطط DXF قبل التصدير...
+Validated cutting plan contains no sheets to export.,خطة القص التي تم فحصها لا تحتوي ألواحًا للتصدير.
+Validated DXF and manifest exported successfully.,تم تصدير ملف DXF المعتمد وملف بيانات التحقق بنجاح.
+
+Auto,تلقائي - اختيار أفضل طريقة
+MaxRects Best Short Side,المستطيلات القصوى - أفضل ضلع قصير
+MaxRects Best Area,المستطيلات القصوى - أفضل مساحة
+MaxRects Bottom Left,المستطيلات القصوى - من أسفل اليسار
+MaxRects Contact Point,المستطيلات القصوى - أكبر تلامس
+MaxRects Width,المستطيلات القصوى - حسب العرض
+MaxRects Length,المستطيلات القصوى - حسب الطول
+Shelf Horizontal,صفوف أفقية
+Shelf Vertical,صفوف عمودية
+Shelf First Fit,صفوف - أول مكان مناسب
+Shelf Next Fit,صفوف - المكان التالي المناسب
+Guillotine Short Axis,قص متتابع - المحور القصير
+Guillotine Long Axis,قص متتابع - المحور الطويل
+Guillotine Best Area Fit,قص متتابع - أفضل مساحة
+Guillotine Best Short Side Fit,قص متتابع - أفضل ضلع قصير
+Guillotine Best Long Side Fit,قص متتابع - أفضل ضلع طويل
+Skyline Bottom Left,خط الأفق - من أسفل اليسار
+Skyline Best Fit,خط الأفق - أفضل ترتيب
+Yes,نعم
+No,لا
