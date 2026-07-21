@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Factory Management</title>
+  <desc id="desc">Factory building icon for Almdina ERP</desc>
+  <rect width="512" height="512" rx="112" fill="#0b8df0"/>
+  <path d="M112 372V214l96 54v-54l96 54v-92h56v196H112Z" fill="none" stroke="#fff" stroke-width="28" stroke-linejoin="round"/>
+  <path d="M152 332h48m40 0h48m40 0h32" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+  <path d="M360 176v-44" stroke="#fff" stroke-width="28" stroke-linecap="round"/>
+</svg>
