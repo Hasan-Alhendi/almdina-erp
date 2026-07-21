@@ -21,16 +21,22 @@ add_to_apps_screen = [
 after_install = "almdina_erp.install.after_install"
 after_migrate = "almdina_erp.install.after_migrate"
 
+# Keep only genuinely global Desk behaviour here. Door Cutting Order scripts are
+# loaded through doctype_js below, which Frappe reads from the app source and
+# injects into FormMeta server-side. This avoids production UX depending on a
+# sites/assets symlink being present in the frontend container.
 app_include_js = [
     "/assets/almdina_erp/js/arabic_operator_ui.js",
-    "/assets/almdina_erp/js/order_lifecycle.js",
-    "/assets/almdina_erp/js/door_cutting_order_defaults.js",
-    "/assets/almdina_erp/js/door_cutting_order_operator_ux.js",
-    "/assets/almdina_erp/js/secure_dxf_export.js",
 ]
 
 doctype_js = {
-    "Door Cutting Order": "public/js/door_cutting_order_workflow.js",
+    "Door Cutting Order": [
+        "public/js/door_cutting_order_workflow.js",
+        "public/js/order_lifecycle.js",
+        "public/js/door_cutting_order_defaults.js",
+        "public/js/door_cutting_order_operator_ux.js",
+        "public/js/secure_dxf_export.js",
+    ],
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
     "Material Consumption Log": "public/js/material_consumption_log.js",
