@@ -63,11 +63,11 @@ frappe.pages["factory-performance-benchmark"].on_page_load = function (wrapper) 
                     <span class="indicator-pill ${indicator}">${esc(verdict)}</span>
                     <hr>
                     <b>${__("Expanded Pieces")}</b>: ${esc(data.expanded_pieces)}<br>
-                    <b>${__("Requested Mode")}</b>: ${esc(data.packing_mode_requested)}<br>
-                    <b>${__("Selected Method")}</b>: ${esc(data.method_selected)}<br>
+                    <b>${__("Requested Mode")}</b>: ${esc(__(data.packing_mode_requested || ""))}<br>
+                    <b>${__("Selected Method")}</b>: ${esc(__(data.method_selected || ""))}<br>
                     <b>${__("Runs ms")}</b>: ${esc((data.elapsed_ms || []).join(", "))}<br>
                     <b>${__("Average ms")}</b>: ${esc(data.average_ms)}<br>
-                    <b>${__("Worst ms")}</b>: ${esc(data.worst_ms)} / ${esc(data.target_ms)} target<br>
+                    <b>${__("Worst ms")}</b>: ${esc(data.worst_ms)} / ${esc(data.target_ms)} ${__("Target ms")}<br>
                     <b>${__("Required Boards")}</b>: ${esc(data.required_boards)}<br>
                     <b>${__("Unplaced")}</b>: ${esc(data.unplaced_count)}<br>
                     <b>${__("Waste Area M2")}</b>: ${esc(data.waste_area_m2)}
