@@ -57,7 +57,7 @@
     {"default":"0","fieldname":"actual_cost_usd","fieldtype":"Currency","label":"Actual Cost USD","read_only":1,"permlevel":1},
     {"fieldname":"plan_section","fieldtype":"Section Break","label":"Cutting Plan"},
     {"fieldname":"cutting_plan_html","fieldtype":"HTML","label":"Cutting Plan"},
-    {"collapsible":1,"fieldname":"technical_section","fieldtype":"Section Break","label":"Technical Details"},
+    {"collapsible":1,"fieldname":"technical_section","fieldtype":"Section Break","label":"Details"},
     {"fieldname":"packing_method","fieldtype":"Data","label":"Packing Method","read_only":1},
     {"fieldname":"packing_score","fieldtype":"Data","label":"Packing Score","read_only":1},
     {"fieldname":"engine_version","fieldtype":"Data","label":"Engine Version","read_only":1},
