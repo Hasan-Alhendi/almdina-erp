@@ -21,6 +21,10 @@ EDGE_BANDING_TYPES = (
 
 ROLES = ("Order Entry", "Cutting Operator", "Edge Operator", "Production Manager", "Stock Manager", "Accounts Management")
 
+REQUIRED_UOMS = (
+    {"name": "Meter", "must_be_whole_number": 0},
+)
+
 ITEM_CUSTOM_FIELDS = {
     "Item": [
         {"fieldname":"custom_mdf_board_settings_section","label":"MDF / Cutting Board Settings","fieldtype":"Section Break","insert_after":"stock_uom"},
@@ -40,6 +44,7 @@ DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
 def sync_setup() -> None:
     create_custom_fields(ITEM_CUSTOM_FIELDS, update=True)
     seed_roles()
+    seed_required_uoms()
     seed_edge_banding_types()
     seed_default_routing()
     seed_settings_defaults()
@@ -57,6 +62,25 @@ def seed_roles() -> None:
     for role_name in ROLES:
         if not frappe.db.exists("Role", role_name):
             frappe.get_doc({"doctype":"Role","role_name":role_name}).insert(ignore_permissions=True)
+
+
+def seed_required_uoms() -> None:
+    """Create UOM records that Almdina ERP references during fresh installation.
+
+    Fresh ERPNext sites do not always contain the same UOM master data.  The
+    Edge Banding Type seed data links to ``Meter``, so the linked UOM must be
+    created before those records are saved.  The function is intentionally
+    idempotent because it also runs from ``after_migrate``.
+    """
+    for row in REQUIRED_UOMS:
+        uom_name = row["name"]
+        if frappe.db.exists("UOM", uom_name):
+            continue
+
+        uom = frappe.new_doc("UOM")
+        uom.uom_name = uom_name
+        uom.must_be_whole_number = row["must_be_whole_number"]
+        uom.insert(ignore_permissions=True)
 
 
 def seed_edge_banding_types() -> None:
