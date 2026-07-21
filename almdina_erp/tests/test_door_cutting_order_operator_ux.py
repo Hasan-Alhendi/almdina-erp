@@ -125,6 +125,8 @@ def test_fast_editor_keeps_background_recalculation_separate_from_input_focus():
     assert "frm.refresh_field(\"pieces\")" not in source
 
 
-def test_operator_ux_bundle_is_loaded():
+def test_operator_ux_is_server_injected_via_doctype_js_not_static_asset_dependency():
     hooks = HOOKS.read_text(encoding="utf-8")
-    assert '"/assets/almdina_erp/js/door_cutting_order_operator_ux.js"' in hooks
+    assert '"public/js/door_cutting_order_operator_ux.js"' in hooks
+    assert '"Door Cutting Order": [' in hooks
+    assert '"/assets/almdina_erp/js/door_cutting_order_operator_ux.js"' not in hooks
