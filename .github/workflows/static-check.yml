@@ -33,6 +33,22 @@ jobs:
           PY
           python -m compileall -q almdina_erp
 
+      - name: Validate Arabic factory operator localization
+        shell: bash
+        run: |
+          python - <<'PY'
+          from almdina_erp.tests import test_arabic_operator_localization as checks
+
+          tests = [
+              getattr(checks, name)
+              for name in dir(checks)
+              if name.startswith('test_') and callable(getattr(checks, name))
+          ]
+          for test in tests:
+              test()
+          print(f'Validated {len(tests)} Arabic operator localization checks')
+          PY
+
       - name: Validate JavaScript syntax
         shell: bash
         run: |
