@@ -36,21 +36,31 @@ def test_order_form_uses_operator_first_tabs_and_summary_blocks():
     assert order.index("pieces") < order.index("results_tab") < order.index("cutting_plan_html")
 
 
-def test_measurement_keyboard_flow_is_width_tab_length_enter_next_width():
+def test_measurement_keyboard_flow_uses_native_tab_and_direct_row_activation():
     source = UX_JS.read_text(encoding="utf-8")
     required_fragments = [
         'event.key === "Tab" && !event.shiftKey && fieldname === "width_cm"',
-        'focusGridField(frm, docname, "length_cm"',
+        "Do not preventDefault and do not trigger a click. Native Tab is instant.",
         'event.key === "Enter" && fieldname === "length_cm"',
-        'target = grid.add_new_row()',
-        'focusGridField(frm, target.name, "width_cm"',
+        "target = grid.add_new_row(null, null, false, null, true)",
+        'focusGridFieldFast(frm, target.name, "width_cm"',
+        "gridRow.toggle_editable_row(true)",
+        "inputForGridField(gridRow, fieldname)",
         '$gridWrapper.off("keydown.dco_enter_add_row")',
     ]
     missing = [fragment for fragment in required_fragments if fragment not in source]
     assert not missing, f"Missing keyboard UX fragments: {missing}"
 
+    # Regression: the former implementation prevented Tab, clicked the next cell,
+    # and waited on setTimeout. That caused the visible pause reported by operators.
+    tab_block = source.split('if (event.key === "Tab" && !event.shiftKey && fieldname === "width_cm")', 1)[1]
+    tab_block = tab_block.split('if (event.key === "Enter" && fieldname === "length_cm")', 1)[0]
+    assert "preventDefault" not in tab_block
+    assert ".trigger(\"click\")" not in tab_block
+    assert "setTimeout" not in tab_block
 
-def test_edge_and_rotation_checks_are_one_click_without_row_activation():
+
+def test_edge_and_rotation_checks_are_persistent_one_click_buttons():
     source = UX_JS.read_text(encoding="utf-8")
     for fieldname in (
         "allow_rotation",
@@ -61,11 +71,26 @@ def test_edge_and_rotation_checks_are_one_click_without_row_activation():
     ):
         assert f'"{fieldname}"' in source
 
-    assert 'node.addEventListener("click", handler, true)' in source
-    assert "event.preventDefault()" in source
-    assert "event.stopImmediatePropagation()" in source
-    assert "frappe.model.set_value" in source
-    assert "gridRow.refresh_field" in source
+    required_fragments = [
+        'class: "dco-fast-check"',
+        'column.field_area && column.field_area.hide()',
+        'column.static_area.show()',
+        '$button.on("click.dco_fast_check"',
+        "event.stopImmediatePropagation()",
+        "setFastCheckVisual($button, nextValue)",
+        "frappe.model.set_value",
+        "gridRow.toggle_editable_row = function (...args)",
+    ]
+    missing = [fragment for fragment in required_fragments if fragment not in source]
+    assert not missing, f"Missing one-click checkbox UX fragments: {missing}"
+
+
+def test_operator_ux_avoids_slow_timer_based_focus_navigation():
+    source = UX_JS.read_text(encoding="utf-8")
+    assert "requestAnimationFrame" in source
+    assert "focusGridFieldFast" in source
+    assert "focusGridFieldNow" in source
+    assert "setTimeout(() => focusGridField" not in source
 
 
 def test_operator_ux_bundle_is_loaded():
