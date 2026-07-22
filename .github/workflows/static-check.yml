@@ -18,6 +18,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install optimizer test dependency
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check 'ortools>=9.15,<10'
+
       - name: Validate JSON and Python syntax
         shell: bash
         run: |
@@ -52,6 +57,23 @@ jobs:
                   test()
               total += len(tests)
           print(f'Validated {total} Arabic/operator UX regression checks')
+          PY
+
+      - name: Validate advanced cutting optimizer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from almdina_erp.tests import test_advanced_cutting_optimizer as checks
+
+          tests = [
+              getattr(checks, name)
+              for name in dir(checks)
+              if name.startswith('test_') and callable(getattr(checks, name))
+          ]
+          for test in tests:
+              print(f'Running {test.__name__}...')
+              test()
+          print(f'Validated {len(tests)} advanced optimizer regression checks')
           PY
 
       - name: Validate JavaScript syntax
