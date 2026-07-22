@@ -8,14 +8,14 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
 from almdina_erp.almdina_erp.services.cutting_engine import (
-    choose_best_plan,
     expand_piece_groups,
     round_value,
     validate_plan,
 )
 
-ENGINE_VERSION = "1.0.0-baseline"
+ENGINE_VERSION = "2.0.0-advanced"
 
 
 class DoorCuttingOrder(Document):
@@ -61,6 +61,7 @@ class DoorCuttingOrder(Document):
         trim = self._finite(self.trim_margin_mm, _("Trim Margin (MM)"))
         board_rate = self._finite(self.board_rate_usd, _("Board Rate USD"))
         cutting_cost = self._finite(self.cutting_cost_per_board_usd, _("Cutting Cost / Board USD"))
+        time_limit = self._finite(self.optimization_time_limit_sec or 10, _("Optimization Time Limit (Sec)"))
 
         if kerf < 0:
             frappe.throw(_("Kerf (MM) cannot be negative."))
@@ -70,6 +71,8 @@ class DoorCuttingOrder(Document):
             frappe.throw(_("Board Rate USD cannot be negative."))
         if cutting_cost < 0:
             frappe.throw(_("Cutting Cost / Board USD cannot be negative."))
+        if time_limit <= 0 or time_limit > 120:
+            frappe.throw(_("Optimization Time Limit must be greater than 0 and no more than 120 seconds."))
 
     def _set_piece_numbers(self) -> None:
         for index, row in enumerate(self.pieces or [], start=1):
@@ -181,12 +184,19 @@ class DoorCuttingOrder(Document):
 
         piece_rows = [self._piece_row_as_dict(row) for row in self.pieces]
         expanded = expand_piece_groups(piece_rows)
-        plan = choose_best_plan(
+        settings = frappe.get_single("Almdina ERP Settings")
+        plan = optimize_plan(
             expanded,
             usable_board_width_cm,
             usable_board_length_cm,
             kerf_cm,
-            self.packing_mode or "Auto",
+            selected_mode=self.packing_mode or "Auto Pro",
+            machine_type=self.cutting_machine_type or "Auto",
+            time_limit_sec=flt(self.optimization_time_limit_sec) or 10,
+            exact_piece_limit=cint(settings.optimal_search_piece_limit) or 40,
+            min_remnant_width_cm=flt(settings.min_remnant_width_mm) / 10,
+            min_remnant_length_cm=flt(settings.min_remnant_length_mm) / 10,
+            min_remnant_area_m2=flt(settings.min_remnant_area_m2),
         )
 
         validation_errors = validate_plan(
@@ -203,6 +213,7 @@ class DoorCuttingOrder(Document):
         waste_area = max(0.0, flt(plan["waste_area_m2"]))
         total_board_area = flt(plan["total_board_area_m2"])
         waste_percent = (waste_area / total_board_area * 100) if total_board_area else 0.0
+        metrics = plan.get("industrial_metrics") or {}
 
         self.required_boards = required_boards
         self.mdf_cost_usd = round_value(mdf_cost, 3)
@@ -213,15 +224,27 @@ class DoorCuttingOrder(Document):
         self.packing_method = plan["method_label"]
         self.packing_score = (
             f"ألواح: {required_boards} | هدر: {self.waste_percent}% | "
-            f"غير مدخل: {len(plan['unplaced'])} | الخوارزمية: {plan['method_label']}"
+            f"قصات تقديرية: {cint(metrics.get('estimated_cut_count'))} | "
+            f"أكبر بقايا مفيدة: {round_value(metrics.get('largest_reusable_free_area_m2'), 3)} م² | "
+            f"محاولات: {cint(plan.get('attempts'))} | الخوارزمية: {plan['method_label']}"
         )
         self.engine_version = ENGINE_VERSION
 
         snapshot = {
             "engine_version": ENGINE_VERSION,
+            "optimization_mode": plan.get("optimization_mode") or self.packing_mode or "Auto Pro",
+            "machine_type": self.cutting_machine_type or "Auto",
             "method_key": plan["method_key"],
             "method_label": plan["method_label"],
+            "ordering_strategy": plan.get("ordering_strategy") or "",
             "score": plan["score"],
+            "industrial_metrics": metrics,
+            "industrial_rank": list(plan.get("industrial_rank") or []),
+            "attempts": cint(plan.get("attempts")),
+            "search_elapsed_sec": flt(plan.get("search_elapsed_sec")),
+            "search_time_limit_sec": flt(plan.get("search_time_limit_sec")),
+            "solver_status": plan.get("solver_status") or "",
+            "solver_wall_time_sec": flt(plan.get("solver_wall_time_sec")),
             "full_board_width_cm": full_board_width_cm,
             "full_board_length_cm": full_board_length_cm,
             "usable_board_width_cm": usable_board_width_cm,
