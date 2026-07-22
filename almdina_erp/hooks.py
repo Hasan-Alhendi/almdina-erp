@@ -38,6 +38,7 @@ doctype_js = {
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order_plan_ux.js",
+        "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_header_ux.js",
         "public/js/secure_dxf_export.js",
     ],
