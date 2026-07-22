@@ -5,6 +5,20 @@
     const DXF_FORMAT_LABEL = "AutoCAD R12 ASCII";
     const DXF_UNITS = "mm";
 
+    function isArabic() {
+        const lang = String(
+            (frappe.boot && frappe.boot.lang) ||
+            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
+            document.documentElement.lang ||
+            ""
+        ).toLowerCase();
+        return lang === "ar" || lang.startsWith("ar-");
+    }
+
+    function buttonLabel() {
+        return isArabic() ? "تصدير DXF لأوتوكاد" : "Export DXF for AutoCAD";
+    }
+
     function num(value) {
         const result = Number(value);
         return Number.isFinite(result) ? result : 0;
@@ -16,7 +30,6 @@
 
     function dxfNumber(value) {
         const number = num(value);
-        // DXF must always use an ASCII dot as decimal separator and finite values only.
         return String(Math.round(number * 1000) / 1000);
     }
 
@@ -31,9 +44,6 @@
     }
 
     function line(layerName, x1, y1, x2, y2) {
-        // Intentionally use primitive LINE entities rather than legacy POLYLINE/VERTEX
-        // sequences. LINE is the simplest R12 entity and is extremely tolerant across
-        // AutoCAD versions/importers, including AutoCAD 2020.
         return (
             pair(0, "LINE") +
             pair(8, layerName || "0") +
@@ -76,11 +86,8 @@
             extmaxX = Math.max(extmaxX, offsetX + fullWidth);
             extmaxY = Math.max(extmaxY, offsetY + fullHeight);
 
-            // Full physical sheet outline: reference/preview layer only.
             entities += rectangle("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
 
-            // Piece geometry is exported in millimeters. The screen plan uses a
-            // top-left origin, while DXF uses a conventional bottom-left orientation.
             (sheet.pieces || []).forEach(piece => {
                 const pieceWidth = num(piece.w) * 10;
                 const pieceHeight = num(piece.h) * 10;
@@ -91,17 +98,12 @@
         });
 
         let dxf = "";
-
-        // HEADER. Keep this deliberately R12-minimal. $INSUNITS is not emitted in
-        // the AC1009 file because it belongs to newer drawing-unit semantics; all
-        // numeric coordinates are nevertheless explicitly generated in millimeters.
         dxf += pair(0, "SECTION") + pair(2, "HEADER");
         dxf += pair(9, "$ACADVER") + pair(1, DXF_VERSION);
         dxf += pair(9, "$EXTMIN") + pair(10, 0) + pair(20, 0) + pair(30, 0);
         dxf += pair(9, "$EXTMAX") + pair(10, dxfNumber(extmaxX)) + pair(20, dxfNumber(extmaxY)) + pair(30, 0);
         dxf += pair(0, "ENDSEC");
 
-        // R12 symbol tables. LTYPE must precede LAYER.
         dxf += pair(0, "SECTION") + pair(2, "TABLES");
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
@@ -110,11 +112,9 @@
         dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1);
         dxf += pair(0, "ENDTAB") + pair(0, "ENDSEC");
 
-        // Empty BLOCKS section improves compatibility with strict DXF readers.
         dxf += pair(0, "SECTION") + pair(2, "BLOCKS") + pair(0, "ENDSEC");
         dxf += pair(0, "SECTION") + pair(2, "ENTITIES") + entities + pair(0, "ENDSEC");
         dxf += pair(0, "EOF");
-
         return dxf;
     }
 
@@ -137,9 +137,6 @@
         if (!content.endsWith("0\r\nEOF\r\n")) {
             throw new Error("DXF EOF marker is missing.");
         }
-
-        // Every ASCII DXF record is a group-code/value pair: an even number of
-        // non-final split lines must therefore be present.
         const lines = content.split("\r\n");
         if (lines[lines.length - 1] === "") lines.pop();
         if (lines.length % 2 !== 0) {
@@ -173,13 +170,13 @@
             method: "almdina_erp.almdina_erp.services.export_validation_service.get_validated_dxf_plan",
             args,
             freeze: true,
-            freeze_message: __("Validating DXF geometry on server..."),
+            freeze_message: isArabic() ? "جاري التحقق من هندسة ملف DXF قبل التصدير..." : "Validating DXF geometry on server...",
         }).then(r => {
             const data = r.message || {};
             const plan = data.plan || {};
             const manifest = data.manifest || {};
             if (!(plan.sheets || []).length) {
-                frappe.throw(__("Validated cutting plan contains no sheets to export."));
+                frappe.throw(isArabic() ? "خطة القص المتحقق منها لا تحتوي على ألواح للتصدير." : "Validated cutting plan contains no sheets to export.");
             }
 
             const dxf = buildDxf(plan);
@@ -187,7 +184,9 @@
                 validateDxfText(dxf);
             } catch (error) {
                 console.error("DXF self-check failed", error);
-                frappe.throw(__("DXF export failed its compatibility self-check and was not downloaded."));
+                frappe.throw(isArabic()
+                    ? "فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف."
+                    : "DXF export failed its compatibility self-check and was not downloaded.");
             }
 
             const base = `cutting_plan_${safeName(frm.doc.name || "draft")}`;
@@ -204,10 +203,12 @@
                 },
             };
 
-            download(`${base}_AutoCAD_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
+            download(`${base}_AutoCAD2020_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
             download(`${base}_manifest.json`, JSON.stringify(exportManifest, null, 2), "application/json;charset=utf-8");
             frappe.show_alert({
-                message: __("Validated AutoCAD-compatible DXF and manifest exported successfully."),
+                message: isArabic()
+                    ? "تم تصدير ملف DXF متوافق مع AutoCAD مع ملف التحقق بنجاح."
+                    : "Validated AutoCAD-compatible DXF and manifest exported successfully.",
                 indicator: "green",
             });
         });
@@ -215,15 +216,16 @@
 
     function removeLegacyDxfButtons(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        frm.remove_custom_button("تصدير DXF");
 
-        // Remove only the old Arabic legacy exporter. The validated exporter below
-        // is installed with the canonical Export DXF label and server-side geometry
-        // validation.
+        // Old exporters used one of these labels. Keep the new AutoCAD-specific
+        // action untouched so there is exactly one trustworthy export path.
+        ["تصدير DXF", "Export DXF"].forEach(label => frm.remove_custom_button(label));
+
         const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
         if (!root) return;
         $(root).find("button").filter(function () {
-            return $(this).text().trim() === "تصدير DXF";
+            const text = $(this).text().trim();
+            return text === "تصدير DXF" || text === "Export DXF";
         }).remove();
     }
 
@@ -241,8 +243,9 @@
     function installButton(frm) {
         if (frm.doctype !== "Door Cutting Order") return;
         removeLegacyDxfButtons(frm);
-        frm.remove_custom_button("Export DXF");
-        frm.add_custom_button(__("Export DXF"), () => validatedExport(frm));
+        const label = buttonLabel();
+        frm.remove_custom_button(label);
+        frm.add_custom_button(label, () => validatedExport(frm));
         ensureLegacyObserver(frm);
     }
 
