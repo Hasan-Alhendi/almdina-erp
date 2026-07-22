@@ -44,8 +44,9 @@ jobs:
           python - <<'PY'
           from almdina_erp.tests import test_arabic_operator_localization as arabic_checks
           from almdina_erp.tests import test_door_cutting_order_operator_ux as ux_checks
+          from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_ux_checks
 
-          modules = [arabic_checks, ux_checks]
+          modules = [arabic_checks, ux_checks, plan_ux_checks]
           total = 0
           for module in modules:
               tests = [
@@ -56,7 +57,7 @@ jobs:
               for test in tests:
                   test()
               total += len(tests)
-          print(f'Validated {total} Arabic/operator UX regression checks')
+          print(f'Validated {total} Arabic/operator/plan UX regression checks')
           PY
 
       - name: Validate advanced cutting optimizer
