@@ -65,13 +65,7 @@ def seed_roles() -> None:
 
 
 def seed_required_uoms() -> None:
-    """Create UOM records that Almdina ERP references during fresh installation.
-
-    Fresh ERPNext sites do not always contain the same UOM master data.  The
-    Edge Banding Type seed data links to ``Meter``, so the linked UOM must be
-    created before those records are saved.  The function is intentionally
-    idempotent because it also runs from ``after_migrate``.
-    """
+    """Create UOM records that Almdina ERP references during fresh installation."""
     for row in REQUIRED_UOMS:
         uom_name = row["name"]
         if frappe.db.exists("UOM", uom_name):
@@ -116,17 +110,20 @@ def seed_settings_defaults() -> None:
     settings = frappe.get_single("Almdina ERP Settings")
     changed = False
     defaults = {
-        "default_kerf_mm":3,
-        "default_trim_margin_mm":5,
-        "default_cutting_cost_per_board_usd":1,
-        "default_packing_mode":"Auto",
-        "default_production_routing":DEFAULT_ROUTING_NAME,
-        "stock_consumption_point":"Cutting Start",
-        "prefer_remnants_before_full_boards":1,
-        "min_remnant_width_mm":300,
-        "min_remnant_length_mm":300,
-        "min_remnant_area_m2":0.09,
-        "remnant_cost_policy":"Zero",
+        "default_kerf_mm": 3,
+        "default_trim_margin_mm": 5,
+        "default_cutting_cost_per_board_usd": 1,
+        "default_packing_mode": "Auto Pro",
+        "default_cutting_machine_type": "Auto",
+        "default_optimization_time_limit_sec": 10,
+        "optimal_search_piece_limit": 40,
+        "default_production_routing": DEFAULT_ROUTING_NAME,
+        "stock_consumption_point": "Cutting Start",
+        "prefer_remnants_before_full_boards": 1,
+        "min_remnant_width_mm": 300,
+        "min_remnant_length_mm": 300,
+        "min_remnant_area_m2": 0.09,
+        "remnant_cost_policy": "Zero",
     }
     for fieldname, value in defaults.items():
         if settings.get(fieldname) in (None, ""):
