@@ -25,8 +25,6 @@ def _remnant_material_cost(order: Any, snapshot: dict[str, Any]) -> float:
     if settings.remnant_cost_policy == "Configured Rate":
         return area_m2 * flt(settings.remnant_rate_usd_per_m2)
 
-    # Average Valuation: valuation is stored per stock UOM board. Prorate the
-    # board valuation over the full board physical area to value reused material.
     warehouse = settings.default_warehouse
     valuation_rate = flt(
         frappe.db.get_value(
@@ -86,14 +84,25 @@ def create_plan_from_order(order: Any, snapshot_override: dict[str, Any] | None 
         "total_cost_usd": total_cost,
     }
 
+    metrics = snapshot.get("industrial_metrics") or {}
     plan = frappe.new_doc("Cutting Plan")
     plan.door_cutting_order = order.name
     plan.revision = revision
     plan.status = "Draft"
+    plan.optimization_mode = snapshot.get("optimization_mode") or order.packing_mode or ""
+    plan.machine_type = snapshot.get("machine_type") or order.cutting_machine_type or "Auto"
     plan.method_key = snapshot.get("method_key") or ""
     plan.method_label = snapshot.get("method_label") or order.packing_method or ""
+    plan.ordering_strategy = snapshot.get("ordering_strategy") or ""
     plan.score = flt(snapshot.get("score"))
     plan.engine_version = snapshot.get("engine_version") or order.engine_version or ""
+    plan.attempts = cint(snapshot.get("attempts"))
+    plan.solver_status = snapshot.get("solver_status") or ""
+    plan.search_elapsed_sec = flt(snapshot.get("search_elapsed_sec"))
+    plan.estimated_cut_count = cint(metrics.get("estimated_cut_count"))
+    plan.estimated_cut_length_m = flt(metrics.get("estimated_cut_length_cm")) / 100
+    plan.largest_reusable_free_area_m2 = flt(metrics.get("largest_reusable_free_area_m2"))
+    plan.rotation_count = cint(metrics.get("rotation_count"))
     plan.validation_status = "Valid" if validation.get("is_valid") else "Invalid"
     plan.validation_errors = "\n".join(validation.get("errors") or [])
     plan.board_item = order.board_item
@@ -230,8 +239,6 @@ def approve_order(order_name: str) -> dict[str, Any]:
     if order.status != "Pending Review":
         frappe.throw(_("Only orders in Pending Review can be approved."))
 
-    # Strictly recalculate current inputs first, then build an approval plan that
-    # can reuse matching remnants before opening new full boards.
     order.save(ignore_permissions=True)
 
     from almdina_erp.almdina_erp.services.remnant_planning import build_approval_plan, reserve_plan_remnants
