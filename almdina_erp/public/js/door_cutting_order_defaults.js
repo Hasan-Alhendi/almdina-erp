@@ -14,6 +14,8 @@
             if (values.trim_margin_mm !== undefined) updates.trim_margin_mm = values.trim_margin_mm;
             if (values.cutting_cost_per_board_usd !== undefined) updates.cutting_cost_per_board_usd = values.cutting_cost_per_board_usd;
             if (values.packing_mode) updates.packing_mode = values.packing_mode;
+            if (values.cutting_machine_type) updates.cutting_machine_type = values.cutting_machine_type;
+            if (values.optimization_time_limit_sec !== undefined) updates.optimization_time_limit_sec = values.optimization_time_limit_sec;
             return frm.set_value(updates);
         }).catch(error => console.error("Failed to load Almdina ERP order defaults", error));
     }
