@@ -66,10 +66,19 @@ def test_invoice_has_customer_print_action_and_a4_print_css():
     src = _ux()
     assert "طباعة فاتورة الزبون" in src
     assert "@page{size:A4 portrait" in src
-    assert "window.print()" in src
     assert "فاتورة تكلفة الطلب" in src
     assert "dimensionMark(row.width_cm,row.width_edge_count,true)" in src
     assert "dimensionMark(row.length_cm,row.length_edge_count,true)" in src
+
+
+def test_invoice_printing_uses_isolated_iframe_not_popup_window():
+    src = _ux()
+    assert 'document.createElement("iframe")' in src
+    assert 'frame.srcdoc = buildPrintHtml(frm)' in src
+    assert 'printWindow.print()' in src
+    assert 'printWindow.addEventListener("afterprint", cleanup' in src
+    assert 'window.open(' not in src
+    assert "اسمح بالنوافذ المنبثقة" not in src
 
 
 def test_cost_invoice_script_is_loaded_for_door_cutting_order():
