@@ -284,7 +284,7 @@
         return `<!doctype html>
 <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة الطلب ${esc(frm.doc.name || "")}</title>
 <style>
-@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}@media print{button{display:none!important}}
+@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
 </style></head><body>
 <div class="header"><div class="title"><h1>فاتورة تكلفة الطلب</h1><div class="muted">تفاصيل القياسات والمواد وخدمات القص والقشاط</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div></div>
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>إجمالي القشاط</b>${qty(frm.doc.total_edge_meters)} متر</div></div>
@@ -299,18 +299,59 @@ ${lines.map((line,index)=>`<tr><td>${index+1}</td><td class="right"><b>${esc(lin
 <div class="total-box"><span>الإجمالي النهائي</span><span class="amount">$ ${money(total)}</span></div>
 ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc.order_notes)}</div>` : ""}
 <div class="footer"><span>رقم الطلب: ${esc(frm.doc.name || "مسودة")}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
-<script>window.addEventListener('load',()=>{setTimeout(()=>window.print(),250)});<\/script></body></html>`;
+</body></html>`;
     }
 
     function printInvoice(frm) {
-        const popup = window.open("", "_blank", "noopener,noreferrer");
-        if (!popup) {
-            frappe.msgprint("تعذر فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.");
-            return;
-        }
-        popup.document.open();
-        popup.document.write(buildPrintHtml(frm));
-        popup.document.close();
+        // Print inside an isolated same-page iframe instead of opening a popup.
+        // This avoids browser popup blockers while keeping only the invoice in the print job.
+        const previous = document.getElementById("dco-customer-invoice-print-frame");
+        if (previous) previous.remove();
+
+        const frame = document.createElement("iframe");
+        frame.id = "dco-customer-invoice-print-frame";
+        frame.setAttribute("aria-hidden", "true");
+        frame.style.position = "fixed";
+        frame.style.right = "0";
+        frame.style.bottom = "0";
+        frame.style.width = "1px";
+        frame.style.height = "1px";
+        frame.style.border = "0";
+        frame.style.opacity = "0";
+        frame.style.pointerEvents = "none";
+        frame.style.zIndex = "-1";
+
+        let printed = false;
+        let cleaned = false;
+        const cleanup = () => {
+            if (cleaned) return;
+            cleaned = true;
+            if (frame.parentNode) frame.parentNode.removeChild(frame);
+        };
+
+        frame.onload = () => {
+            if (printed) return;
+            printed = true;
+            try {
+                const printWindow = frame.contentWindow;
+                if (!printWindow) throw new Error("Print iframe window is unavailable.");
+                printWindow.addEventListener("afterprint", cleanup, { once: true });
+                setTimeout(() => {
+                    printWindow.focus();
+                    printWindow.print();
+                }, 120);
+            } catch (error) {
+                console.error("Customer invoice print failed", error);
+                cleanup();
+                frappe.msgprint("تعذر تشغيل الطباعة من المتصفح. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+            }
+        };
+
+        frame.srcdoc = buildPrintHtml(frm);
+        document.body.appendChild(frame);
+
+        // Safety cleanup for browsers that do not fire afterprint.
+        setTimeout(cleanup, 120000);
     }
 
     function render(frm) {
