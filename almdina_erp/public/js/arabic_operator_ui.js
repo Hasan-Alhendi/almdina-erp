@@ -13,9 +13,6 @@
 
     if (!isArabic()) return;
 
-    // These values are generated/stored as stable English machine keys or were
-    // frozen into old approved snapshots before the Arabic operator layer was
-    // completed. Translate display text only; never mutate document values.
     const replacements = [
         ["Door Cutting Plan Production A4", "خطة القص للتنفيذ"],
         ["Door Cutting Plan Official", "خطة القص الرسمية المعتمدة"],
@@ -40,7 +37,16 @@
         ["Remnant Inventory", "مخزون بقايا الألواح"],
         ["Factory Management", "إدارة المعمل"],
         ["Stock & Control", "المواد والمخزون والمتابعة"],
+        ["Order Material and Cost Settings", "إعدادات مواد الطلب والتكلفة"],
+        ["Cutting Plan Controls", "التحكم بخطة القص"],
+        ["Optimization Time Limit (Sec)", "مهلة البحث عن أفضل خطة (ثانية)"],
+        ["Default Optimization Time Limit (Sec)", "مهلة البحث الافتراضية (ثانية)"],
+        ["Optimal Search Exact Piece Limit", "أقصى عدد قطع للبحث الأمثل الدقيق"],
+        ["Default Cutting Machine Type", "نوع ماكينة القص الافتراضية"],
+        ["Cutting Machine Type", "نوع ماكينة القص"],
         ["Almdina ERP", "إدارة المعمل"],
+        ["Auto Pro اختار: ", "التلقائي المتقدم اختار: "],
+        ["بحث معمق اختار: ", "البحث المعمق اختار: "],
         ["Auto اختار: ", "تلقائي - تم اختيار: "],
         ["Remnant First + ", "استخدام البقايا أولًا + "],
         ["No full board required", "لا حاجة إلى لوح جديد"],
@@ -64,7 +70,10 @@
     ].sort((a, b) => b[0].length - a[0].length);
 
     const packingOptions = {
-        "Auto": "تلقائي - اختيار أفضل طريقة",
+        "Auto": "تلقائي سريع",
+        "Auto Pro": "تلقائي متقدم - الأفضل للاستخدام اليومي",
+        "Deep Search": "بحث معمق",
+        "Optimal Search": "بحث أمثل",
         "MaxRects Best Short Side": "ترتيب المستطيلات - أفضل ضلع قصير",
         "MaxRects Best Area": "ترتيب المستطيلات - أفضل استغلال للمساحة",
         "MaxRects Bottom Left": "ترتيب المستطيلات - من أسفل اليسار",
@@ -84,9 +93,17 @@
         "Skyline Best Fit": "ترتيب خط الأفق - أفضل موضع",
     };
 
+    const machineOptions = {
+        "Auto": "تلقائي - بدون قيد ماكينة",
+        "CNC Router": "راوتر CNC",
+        "Panel Saw": "منشار ألواح",
+    };
+
     const fieldOptionTranslations = {
         packing_mode: packingOptions,
         default_packing_mode: packingOptions,
+        cutting_machine_type: machineOptions,
+        default_cutting_machine_type: machineOptions,
         stock_consumption_point: {
             "Cutting Start": "عند بدء القص",
             "Cutting Finish": "عند انتهاء القص",
@@ -120,24 +137,16 @@
         const translated = (directTranslations && directTranslations[sourceValue]) || __(sourceText);
         if (!translated || translated === sourceText) return;
         option.textContent = translated;
-        // Preserve the stable English/document value even when the browser had
-        // inferred it from the original option text.
         option.value = storedValue || sourceValue;
     }
 
     function localizeSelectOptions(root) {
         const scope = root && root.querySelectorAll ? root : document;
-
-        // First apply ordinary Frappe translations to every option while keeping
-        // the stored value untouched. This covers workflow statuses, stage types,
-        // incident reasons and other Select fields throughout the factory app.
         const generalOptions = [];
         if (scope.matches && scope.matches("option")) generalOptions.push(scope);
         generalOptions.push(...scope.querySelectorAll("option"));
         generalOptions.forEach(option => translateOption(option));
 
-        // Then guarantee the business-friendly wording for machine-key options
-        // whose displayed label intentionally differs from a literal translation.
         for (const [fieldname, translations] of Object.entries(fieldOptionTranslations)) {
             const controls = [];
             if (scope.matches && scope.matches(`[data-fieldname="${fieldname}"]`)) controls.push(scope);
