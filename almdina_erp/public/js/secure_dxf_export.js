@@ -1,6 +1,10 @@
 (() => {
     "use strict";
 
+    const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
+    const DXF_FORMAT_LABEL = "AutoCAD R12 ASCII";
+    const DXF_UNITS = "mm";
+
     function num(value) {
         const result = Number(value);
         return Number.isFinite(result) ? result : 0;
@@ -11,20 +15,46 @@
     }
 
     function dxfNumber(value) {
-        return String(Math.round(num(value) * 1000) / 1000);
+        const number = num(value);
+        // DXF must always use an ASCII dot as decimal separator and finite values only.
+        return String(Math.round(number * 1000) / 1000);
     }
 
     function layer(name, color) {
-        return pair(0, "LAYER") + pair(2, name) + pair(70, 0) + pair(62, color) + pair(6, "CONTINUOUS");
+        return (
+            pair(0, "LAYER") +
+            pair(2, name) +
+            pair(70, 0) +
+            pair(62, color) +
+            pair(6, "CONTINUOUS")
+        );
     }
 
-    function rect(layerName, x, y, width, height) {
-        const points = [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
-        let out = pair(0, "POLYLINE") + pair(8, layerName) + pair(66, 1) + pair(10, 0) + pair(20, 0) + pair(30, 0) + pair(70, 1);
-        points.forEach(point => {
-            out += pair(0, "VERTEX") + pair(8, layerName) + pair(10, dxfNumber(point[0])) + pair(20, dxfNumber(point[1])) + pair(30, 0);
-        });
-        return out + pair(0, "SEQEND") + pair(8, layerName);
+    function line(layerName, x1, y1, x2, y2) {
+        // Intentionally use primitive LINE entities rather than legacy POLYLINE/VERTEX
+        // sequences. LINE is the simplest R12 entity and is extremely tolerant across
+        // AutoCAD versions/importers, including AutoCAD 2020.
+        return (
+            pair(0, "LINE") +
+            pair(8, layerName || "0") +
+            pair(10, dxfNumber(x1)) +
+            pair(20, dxfNumber(y1)) +
+            pair(30, 0) +
+            pair(11, dxfNumber(x2)) +
+            pair(21, dxfNumber(y2)) +
+            pair(31, 0)
+        );
+    }
+
+    function rectangle(layerName, x, y, width, height) {
+        const x2 = x + width;
+        const y2 = y + height;
+        return (
+            line(layerName, x, y, x2, y) +
+            line(layerName, x2, y, x2, y2) +
+            line(layerName, x2, y2, x, y2) +
+            line(layerName, x, y2, x, y)
+        );
     }
 
     function buildDxf(plan) {
@@ -46,31 +76,75 @@
             extmaxX = Math.max(extmaxX, offsetX + fullWidth);
             extmaxY = Math.max(extmaxY, offsetY + fullHeight);
 
-            entities += rect("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
+            // Full physical sheet outline: reference/preview layer only.
+            entities += rectangle("SHEET_OUTLINE", offsetX, offsetY, fullWidth, fullHeight);
+
+            // Piece geometry is exported in millimeters. The screen plan uses a
+            // top-left origin, while DXF uses a conventional bottom-left orientation.
             (sheet.pieces || []).forEach(piece => {
                 const pieceWidth = num(piece.w) * 10;
                 const pieceHeight = num(piece.h) * 10;
                 const x = offsetX + trimMm + num(piece.x) * 10;
                 const y = offsetY + fullHeight - trimMm - num(piece.y) * 10 - pieceHeight;
-                entities += rect("CUT_PATH", x, y, pieceWidth, pieceHeight);
+                entities += rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
             });
         });
 
-        let dxf = pair(0, "SECTION") + pair(2, "HEADER");
-        dxf += pair(9, "$ACADVER") + pair(1, "AC1009");
-        dxf += pair(9, "$INSUNITS") + pair(70, 4);
+        let dxf = "";
+
+        // HEADER. Keep this deliberately R12-minimal. $INSUNITS is not emitted in
+        // the AC1009 file because it belongs to newer drawing-unit semantics; all
+        // numeric coordinates are nevertheless explicitly generated in millimeters.
+        dxf += pair(0, "SECTION") + pair(2, "HEADER");
+        dxf += pair(9, "$ACADVER") + pair(1, DXF_VERSION);
         dxf += pair(9, "$EXTMIN") + pair(10, 0) + pair(20, 0) + pair(30, 0);
         dxf += pair(9, "$EXTMAX") + pair(10, dxfNumber(extmaxX)) + pair(20, dxfNumber(extmaxY)) + pair(30, 0);
         dxf += pair(0, "ENDSEC");
+
+        // R12 symbol tables. LTYPE must precede LAYER.
         dxf += pair(0, "SECTION") + pair(2, "TABLES");
         dxf += pair(0, "TABLE") + pair(2, "LTYPE") + pair(70, 1);
         dxf += pair(0, "LTYPE") + pair(2, "CONTINUOUS") + pair(70, 0) + pair(3, "Solid line") + pair(72, 65) + pair(73, 0) + pair(40, 0);
         dxf += pair(0, "ENDTAB");
-        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 3) + layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1) + pair(0, "ENDTAB");
-        dxf += pair(0, "ENDSEC");
+        dxf += pair(0, "TABLE") + pair(2, "LAYER") + pair(70, 3);
+        dxf += layer("0", 7) + layer("SHEET_OUTLINE", 8) + layer("CUT_PATH", 1);
+        dxf += pair(0, "ENDTAB") + pair(0, "ENDSEC");
+
+        // Empty BLOCKS section improves compatibility with strict DXF readers.
         dxf += pair(0, "SECTION") + pair(2, "BLOCKS") + pair(0, "ENDSEC");
-        dxf += pair(0, "SECTION") + pair(2, "ENTITIES") + entities + pair(0, "ENDSEC") + pair(0, "EOF");
+        dxf += pair(0, "SECTION") + pair(2, "ENTITIES") + entities + pair(0, "ENDSEC");
+        dxf += pair(0, "EOF");
+
         return dxf;
+    }
+
+    function validateDxfText(content) {
+        if (!content || typeof content !== "string") {
+            throw new Error("DXF content is empty.");
+        }
+        if (content.includes("NaN") || content.includes("Infinity") || content.includes("undefined") || content.includes("null")) {
+            throw new Error("DXF contains an invalid numeric/value token.");
+        }
+        if (!content.includes(`$ACADVER\r\n1\r\n${DXF_VERSION}\r\n`)) {
+            throw new Error("DXF AutoCAD version header is missing.");
+        }
+        if (!content.includes("0\r\nSECTION\r\n2\r\nENTITIES\r\n")) {
+            throw new Error("DXF ENTITIES section is missing.");
+        }
+        if (!content.includes("0\r\nLINE\r\n")) {
+            throw new Error("DXF contains no LINE geometry.");
+        }
+        if (!content.endsWith("0\r\nEOF\r\n")) {
+            throw new Error("DXF EOF marker is missing.");
+        }
+
+        // Every ASCII DXF record is a group-code/value pair: an even number of
+        // non-final split lines must therefore be present.
+        const lines = content.split("\r\n");
+        if (lines[lines.length - 1] === "") lines.pop();
+        if (lines.length % 2 !== 0) {
+            throw new Error("DXF group-code/value pairs are incomplete.");
+        }
     }
 
     function download(filename, content, mimeType) {
@@ -108,11 +182,32 @@
                 frappe.throw(__("Validated cutting plan contains no sheets to export."));
             }
 
+            const dxf = buildDxf(plan);
+            try {
+                validateDxfText(dxf);
+            } catch (error) {
+                console.error("DXF self-check failed", error);
+                frappe.throw(__("DXF export failed its compatibility self-check and was not downloaded."));
+            }
+
             const base = `cutting_plan_${safeName(frm.doc.name || "draft")}`;
-            download(`${base}.dxf`, buildDxf(plan), "application/octet-stream");
-            download(`${base}_manifest.json`, JSON.stringify(manifest, null, 2), "application/json;charset=utf-8");
+            const exportManifest = {
+                ...manifest,
+                dxf_export: {
+                    format: DXF_FORMAT_LABEL,
+                    acadver: DXF_VERSION,
+                    coordinate_units: DXF_UNITS,
+                    geometry_entity: "LINE",
+                    cut_layer: "CUT_PATH",
+                    sheet_outline_layer: "SHEET_OUTLINE",
+                    compatibility_target: "AutoCAD 2020+",
+                },
+            };
+
+            download(`${base}_AutoCAD_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
+            download(`${base}_manifest.json`, JSON.stringify(exportManifest, null, 2), "application/json;charset=utf-8");
             frappe.show_alert({
-                message: __("Validated DXF and manifest exported successfully."),
+                message: __("Validated AutoCAD-compatible DXF and manifest exported successfully."),
                 indicator: "green",
             });
         });
@@ -122,9 +217,9 @@
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         frm.remove_custom_button("تصدير DXF");
 
-        // Some legacy scripts add the Arabic DXF button asynchronously after
-        // refresh/Ajax. Remove only that legacy label; never remove the secure
-        // translated "Export DXF" button installed below.
+        // Remove only the old Arabic legacy exporter. The validated exporter below
+        // is installed with the canonical Export DXF label and server-side geometry
+        // validation.
         const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
         if (!root) return;
         $(root).find("button").filter(function () {
