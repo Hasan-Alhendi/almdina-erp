@@ -31,15 +31,6 @@
         return n(value).toLocaleString("en-US", { maximumFractionDigits: 3 });
     }
 
-    function edgeSides(row) {
-        const sides = [];
-        if (row.edge_long_right) sides.push("طول يمين");
-        if (row.edge_long_left) sides.push("طول يسار");
-        if (row.edge_width_top) sides.push("عرض أعلى");
-        if (row.edge_width_bottom) sides.push("عرض أسفل");
-        return sides.length ? sides.join("، ") : "—";
-    }
-
     function pieces(frm) {
         return (frm.doc.pieces || []).map((row, index) => ({
             index: index + 1,
@@ -50,9 +41,20 @@
             edge_rate_usd: n(row.edge_rate_usd),
             edge_cost_usd: n(row.edge_cost_usd),
             edge_type: row.edge_type || frm.doc.default_edge_type || "",
-            edge_sides: edgeSides(row),
+            width_edge_count: Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom)),
+            length_edge_count: Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left)),
             notes: row.notes || "",
         }));
+    }
+
+    function dimensionMark(value, edgeCount, printMode = false) {
+        const count = Math.max(0, Math.min(2, Number(edgeCount || 0)));
+        const lines = Array.from({ length: count }, () => '<span class="dco-dimension-edge-line"></span>').join("");
+        return `
+            <div class="dco-dimension-mark${printMode ? " dco-dimension-mark--print" : ""}">
+                <span class="dco-dimension-value">${qty(value)}</span>
+                <span class="dco-dimension-lines dco-dimension-lines-${count}">${lines}</span>
+            </div>`;
     }
 
     function edgeGroups(frm) {
@@ -112,8 +114,6 @@
             });
         });
 
-        // If historical/approved data has an edge total but no row-level groups,
-        // keep the authoritative total visible rather than silently dropping it.
         if (!lines.some(line => line.type === "edge") && n(frm.doc.edge_cost_usd) > 0) {
             lines.push({
                 type: "edge",
@@ -148,11 +148,16 @@
                 .dco-cost-section-title h4{margin:0;font-size:14px;font-weight:900}
                 .dco-cost-section-title span{font-size:11px;color:var(--text-muted,#6c7680)}
                 .dco-cost-table-wrap{overflow:auto}
-                .dco-cost-table{width:100%;border-collapse:collapse;min-width:850px;font-size:12px}
+                .dco-cost-table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}
                 .dco-cost-table th{background:var(--subtle-fg,#f7f9fb);font-weight:900;white-space:nowrap}
                 .dco-cost-table th,.dco-cost-table td{padding:9px 10px;border-bottom:1px solid var(--border-color,#e7eaee);text-align:center;vertical-align:middle}
                 .dco-cost-table tbody tr:last-child td{border-bottom:0}
                 .dco-cost-table .text-start{text-align:right}
+                .dco-dimension-mark{display:inline-flex;min-width:54px;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.05}
+                .dco-dimension-value{font-weight:700;font-variant-numeric:tabular-nums}
+                .dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:6px;margin-top:1px}
+                .dco-dimension-edge-line{display:block;width:34px;height:1.5px;border-radius:999px;background:currentColor}
+                .dco-dimension-lines-0{visibility:hidden}
                 .dco-invoice-summary{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;padding:14px}
                 .dco-invoice-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
                 .dco-invoice-meta-item{padding:10px 12px;border:1px solid var(--border-color,#e3e6ea);border-radius:10px;background:var(--subtle-fg,#fafbfc)}
@@ -182,7 +187,6 @@
                         <th>العرض (سم)</th>
                         <th>الطول (سم)</th>
                         <th>العدد</th>
-                        <th>جهات القشاط</th>
                         <th>طول القشاط (م)</th>
                         <th>نوع القشاط</th>
                         <th>ملاحظات</th>
@@ -190,10 +194,9 @@
                     <tbody>${rows.map(row => `
                         <tr>
                             <td><b>${row.index}</b></td>
-                            <td>${qty(row.width_cm)}</td>
-                            <td>${qty(row.length_cm)}</td>
+                            <td>${dimensionMark(row.width_cm, row.width_edge_count)}</td>
+                            <td>${dimensionMark(row.length_cm, row.length_edge_count)}</td>
                             <td>${row.qty}</td>
-                            <td class="text-start">${esc(row.edge_sides)}</td>
                             <td><b>${qty(row.edge_meters)}</b></td>
                             <td>${esc(row.edge_type || "—")}</td>
                             <td class="text-start">${esc(row.notes || "—")}</td>
@@ -246,7 +249,10 @@
                 </div>
 
                 <div class="dco-cost-section">
-                    <div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>طول القشاط محسوب لكل سطر مع الكمية</span></div>
+                    <div class="dco-cost-section-title">
+                        <h4>جدول قياسات الطلب</h4>
+                        <span>خط واحد أسفل البعد = جهة قشاط واحدة، خطان = جهتان · طول القشاط محسوب مع الكمية</span>
+                    </div>
                     ${measurementRowsHtml(frm)}
                 </div>
 
@@ -278,13 +284,13 @@
         return `<!doctype html>
 <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة الطلب ${esc(frm.doc.name || "")}</title>
 <style>
-@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.invoice{font-size:10px}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}@media print{button{display:none!important}}
+@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}@media print{button{display:none!important}}
 </style></head><body>
 <div class="header"><div class="title"><h1>فاتورة تكلفة الطلب</h1><div class="muted">تفاصيل القياسات والمواد وخدمات القص والقشاط</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div></div>
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>إجمالي القشاط</b>${qty(frm.doc.total_edge_meters)} متر</div></div>
-<div class="section-title">جدول القياسات</div>
-<table class="table measurements"><thead><tr><th>#</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>جهات القشاط</th><th>طول القشاط م</th><th>نوع القشاط</th><th>ملاحظات</th></tr></thead><tbody>
-${rows.map(row => `<tr><td>${row.index}</td><td>${qty(row.width_cm)}</td><td>${qty(row.length_cm)}</td><td>${row.qty}</td><td class="right">${esc(row.edge_sides)}</td><td><b>${qty(row.edge_meters)}</b></td><td>${esc(row.edge_type || "—")}</td><td class="right">${esc(row.notes || "—")}</td></tr>`).join("")}
+<div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد جهات القشاط</span></div>
+<table class="table measurements"><thead><tr><th>#</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>طول القشاط م</th><th>نوع القشاط</th><th>ملاحظات</th></tr></thead><tbody>
+${rows.map(row => `<tr><td>${row.index}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td><b>${qty(row.edge_meters)}</b></td><td>${esc(row.edge_type || "—")}</td><td class="right">${esc(row.notes || "—")}</td></tr>`).join("")}
 </tbody></table>
 <div class="section-title">تفاصيل الفاتورة</div>
 <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>
