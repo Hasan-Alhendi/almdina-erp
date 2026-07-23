@@ -8,8 +8,6 @@
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            /* Door Cutting Order has many daily actions. Give the title its own row
-               and let actions wrap naturally instead of forcing the operator to zoom. */
             .page-head.dco-responsive-head {
                 height: auto !important;
                 min-height: 54px !important;
@@ -71,9 +69,6 @@
                 max-width: none !important;
             }
 
-            /* Keep the three primary workflow tabs visible while the operator scrolls.
-               The sticky element stays inside the form scroll container, so it does not
-               detach from the current document or cover another Desk page. */
             .dco-sticky-tabs {
                 position: sticky !important;
                 top: 0 !important;
@@ -99,7 +94,6 @@
                 white-space: nowrap !important;
             }
 
-            /* On narrower workstations keep every action reachable without shrinking text. */
             @media (max-width: 1200px) {
                 .page-head.dco-responsive-head .page-actions {
                     max-height: 116px;
@@ -112,6 +106,11 @@
         document.head.appendChild(style);
     }
 
+    function domNode(value) {
+        if (!value) return null;
+        return value.nodeType ? value : (value[0] && value[0].nodeType ? value[0] : null);
+    }
+
     function markCurrentHeader(frm) {
         installStyles();
 
@@ -119,7 +118,7 @@
             node.classList.remove("dco-responsive-head");
         });
 
-        const wrapper = frm && frm.wrapper;
+        const wrapper = domNode(frm && frm.wrapper);
         if (!wrapper) return;
 
         const pageContainer = wrapper.closest(".page-container") || wrapper.closest(".desk-page") || wrapper.parentElement;
@@ -129,12 +128,13 @@
     }
 
     function markStickyTabs(frm) {
-        if (!frm || !frm.wrapper) return;
+        if (!frm) return;
         frm.set_df_property("order_tab", "label", "الطلب");
         frm.set_df_property("results_tab", "label", "خطة القص");
         frm.set_df_property("cost_tab", "label", "تكلفة الطلب");
 
-        const wrapper = frm.wrapper;
+        const wrapper = domNode(frm.wrapper);
+        if (!wrapper) return;
         wrapper.querySelectorAll(".dco-sticky-tabs").forEach(node => node.classList.remove("dco-sticky-tabs"));
 
         const candidates = [
@@ -143,7 +143,6 @@
         ];
         if (!candidates.length) return;
 
-        // Prefer the outer form-tabs container when Frappe provides both nodes.
         const tabs = candidates.find(node => node.classList.contains("form-tabs")) || candidates[0];
         tabs.classList.add("dco-sticky-tabs");
     }
