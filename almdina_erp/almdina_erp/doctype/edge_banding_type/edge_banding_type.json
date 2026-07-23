@@ -4,11 +4,12 @@
   "autoname": "field:edge_type_name",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["edge_type_name","english_name","width_cm","finish_type","application_method","consumption_uom","rate_usd_per_meter","item_code","stock_uom","disabled"],
+  "field_order": ["edge_type_name","english_name","width_cm","edge_color","finish_type","application_method","consumption_uom","rate_usd_per_meter","item_code","stock_uom","disabled"],
   "fields": [
     {"fieldname":"edge_type_name","fieldtype":"Data","in_list_view":1,"label":"Edge Type Name","reqd":1,"unique":1},
     {"fieldname":"english_name","fieldtype":"Data","label":"English Name"},
     {"fieldname":"width_cm","fieldtype":"Float","in_list_view":1,"label":"Width CM","non_negative":1},
+    {"fieldname":"edge_color","fieldtype":"Data","in_list_view":1,"label":"Edge Color"},
     {"fieldname":"finish_type","fieldtype":"Select","label":"Finish Type","options":"Regular\nGlossy\nGolden"},
     {"fieldname":"application_method","fieldtype":"Select","label":"Application Method","options":"Machine\nManual"},
     {"default":"Meter","fieldname":"consumption_uom","fieldtype":"Link","label":"Consumption UOM","options":"UOM"},
