@@ -31,20 +31,54 @@
         return n(value).toLocaleString("en-US", { maximumFractionDigits: 3 });
     }
 
+    function effectiveEdgeType(frm, row) {
+        return row.edge_type || frm.doc.default_edge_type || "";
+    }
+
+    function loadEdgeColors(frm) {
+        const types = [...new Set((frm.doc.pieces || []).map(row => effectiveEdgeType(frm, row)).filter(Boolean))];
+        if (frm.doc.default_edge_type) types.push(frm.doc.default_edge_type);
+        const uniqueTypes = [...new Set(types)];
+        frm._dco_edge_color_map = frm._dco_edge_color_map || {};
+        const missing = uniqueTypes.filter(type => !(type in frm._dco_edge_color_map));
+        if (!missing.length) return Promise.resolve();
+
+        return Promise.all(missing.map(type =>
+            frappe.db.get_value("Edge Banding Type", type, "edge_color")
+                .then(r => {
+                    frm._dco_edge_color_map[type] = (r && r.message && r.message.edge_color) || "";
+                })
+                .catch(error => {
+                    console.warn(`Could not load edge color for ${type}`, error);
+                    frm._dco_edge_color_map[type] = "";
+                })
+        ));
+    }
+
     function pieces(frm) {
-        return (frm.doc.pieces || []).map((row, index) => ({
-            index: index + 1,
-            width_cm: n(row.width_cm),
-            length_cm: n(row.length_cm),
-            qty: Math.max(1, Math.trunc(n(row.qty) || 1)),
-            edge_meters: n(row.edge_meters),
-            edge_rate_usd: n(row.edge_rate_usd),
-            edge_cost_usd: n(row.edge_cost_usd),
-            edge_type: row.edge_type || frm.doc.default_edge_type || "",
-            width_edge_count: Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom)),
-            length_edge_count: Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left)),
-            notes: row.notes || "",
-        }));
+        const colorMap = frm._dco_edge_color_map || {};
+        return (frm.doc.pieces || []).map((row, index) => {
+            const edgeType = effectiveEdgeType(frm, row);
+            return {
+                index: index + 1,
+                width_cm: n(row.width_cm),
+                length_cm: n(row.length_cm),
+                qty: Math.max(1, Math.trunc(n(row.qty) || 1)),
+                edge_meters: n(row.edge_meters),
+                edge_rate_usd: n(row.edge_rate_usd),
+                edge_cost_usd: n(row.edge_cost_usd),
+                edge_type: edgeType,
+                edge_color: colorMap[edgeType] || "",
+                width_edge_count: Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom)),
+                length_edge_count: Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left)),
+                notes: row.notes || "",
+            };
+        });
+    }
+
+    function edgeColorLabel(frm) {
+        const colors = [...new Set(pieces(frm).map(row => row.edge_color).filter(Boolean))];
+        return colors.length ? colors.join("، ") : "—";
     }
 
     function dimensionMark(value, edgeCount, printMode = false) {
@@ -141,18 +175,19 @@
                 .dco-cost-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
                 .dco-cost-kpi{padding:14px 15px;border:1px solid var(--border-color,#dfe3e8);border-radius:13px;background:var(--card-bg,#fff)}
                 .dco-cost-kpi .label{display:block;font-size:11px;color:var(--text-muted,#6c7680);margin-bottom:5px}
-                .dco-cost-kpi .value{display:block;font-size:18px;font-weight:900;line-height:1.25}
+                .dco-cost-kpi .value{display:block;font-size:18px;font-weight:900;line-height:1.25;word-break:break-word}
                 .dco-cost-kpi.total{border-color:rgba(29,128,79,.28);background:rgba(29,128,79,.055)}
                 .dco-cost-section{margin-top:12px;border:1px solid var(--border-color,#dfe3e8);border-radius:15px;background:var(--card-bg,#fff);overflow:hidden}
                 .dco-cost-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border-color,#dfe3e8);background:var(--subtle-fg,#f8f9fa)}
                 .dco-cost-section-title h4{margin:0;font-size:14px;font-weight:900}
                 .dco-cost-section-title span{font-size:11px;color:var(--text-muted,#6c7680)}
                 .dco-cost-table-wrap{overflow:auto}
-                .dco-cost-table{width:100%;border-collapse:collapse;min-width:760px;font-size:12px}
+                .dco-cost-table{width:100%;border-collapse:collapse;min-width:700px;font-size:12px}
                 .dco-cost-table th{background:var(--subtle-fg,#f7f9fb);font-weight:900;white-space:nowrap}
                 .dco-cost-table th,.dco-cost-table td{padding:9px 10px;border-bottom:1px solid var(--border-color,#e7eaee);text-align:center;vertical-align:middle}
                 .dco-cost-table tbody tr:last-child td{border-bottom:0}
                 .dco-cost-table .text-start{text-align:right}
+                .dco-cost-table .dco-notes-col{width:34%;min-width:260px;white-space:normal;line-height:1.65}
                 .dco-dimension-mark{display:inline-flex;min-width:54px;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.05}
                 .dco-dimension-value{font-weight:700;font-variant-numeric:tabular-nums}
                 .dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:6px;margin-top:1px}
@@ -187,9 +222,8 @@
                         <th>العرض (سم)</th>
                         <th>الطول (سم)</th>
                         <th>العدد</th>
-                        <th>طول القشاط (م)</th>
                         <th>نوع القشاط</th>
-                        <th>ملاحظات</th>
+                        <th class="dco-notes-col">ملاحظات</th>
                     </tr></thead>
                     <tbody>${rows.map(row => `
                         <tr>
@@ -197,9 +231,8 @@
                             <td>${dimensionMark(row.width_cm, row.width_edge_count)}</td>
                             <td>${dimensionMark(row.length_cm, row.length_edge_count)}</td>
                             <td>${row.qty}</td>
-                            <td><b>${qty(row.edge_meters)}</b></td>
                             <td>${esc(row.edge_type || "—")}</td>
-                            <td class="text-start">${esc(row.notes || "—")}</td>
+                            <td class="text-start dco-notes-col">${esc(row.notes || "—")}</td>
                         </tr>`).join("")}</tbody>
                 </table>
             </div>`;
@@ -229,12 +262,13 @@
 
     function buildScreenHtml(frm) {
         const total = n(frm.doc.total_cost_usd);
+        const edgeColor = edgeColorLabel(frm);
         return `
             <div class="dco-cost-shell">
                 <div class="dco-cost-hero">
                     <div>
                         <h3>تكلفة الطلب والفاتورة</h3>
-                        <p>جدول القياسات مع طول القشاط، ثم تفاصيل تكلفة الألواح والقص والقشاط والإجمالي النهائي القابل للطباعة للزبون.</p>
+                        <p>جدول القياسات، ثم تفاصيل تكلفة الألواح والقص والقشاط والإجمالي النهائي القابل للطباعة للزبون.</p>
                     </div>
                     <div class="dco-cost-actions">
                         <button type="button" class="btn btn-primary btn-sm dco-print-customer-invoice">طباعة فاتورة الزبون</button>
@@ -243,7 +277,7 @@
 
                 <div class="dco-cost-kpis">
                     <div class="dco-cost-kpi"><span class="label">عدد الألواح</span><span class="value">${qty(frm.doc.required_boards)} لوح</span></div>
-                    <div class="dco-cost-kpi"><span class="label">إجمالي القشاط</span><span class="value">${qty(frm.doc.total_edge_meters)} م</span></div>
+                    <div class="dco-cost-kpi"><span class="label">لون القشاط</span><span class="value">${esc(edgeColor)}</span></div>
                     <div class="dco-cost-kpi"><span class="label">تكلفة القشاط</span><span class="value">$ ${money(frm.doc.edge_cost_usd)}</span></div>
                     <div class="dco-cost-kpi total"><span class="label">إجمالي تكلفة الطلب</span><span class="value">$ ${money(total)}</span></div>
                 </div>
@@ -251,7 +285,7 @@
                 <div class="dco-cost-section">
                     <div class="dco-cost-section-title">
                         <h4>جدول قياسات الطلب</h4>
-                        <span>خط واحد أسفل البعد = جهة قشاط واحدة، خطان = جهتان · طول القشاط محسوب مع الكمية</span>
+                        <span>خط واحد أسفل البعد = جهة قشاط واحدة، خطان = جهتان</span>
                     </div>
                     ${measurementRowsHtml(frm)}
                 </div>
@@ -280,17 +314,18 @@
         const rows = pieces(frm);
         const lines = invoiceLines(frm);
         const total = n(frm.doc.total_cost_usd);
+        const edgeColor = edgeColorLabel(frm);
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         return `<!doctype html>
 <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة الطلب ${esc(frm.doc.name || "")}</title>
 <style>
-@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
+@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.measurements .notes-col{width:36%;text-align:right;white-space:normal;line-height:1.55}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
 </style></head><body>
 <div class="header"><div class="title"><h1>فاتورة تكلفة الطلب</h1><div class="muted">تفاصيل القياسات والمواد وخدمات القص والقشاط</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div></div>
-<div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>إجمالي القشاط</b>${qty(frm.doc.total_edge_meters)} متر</div></div>
+<div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
 <div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد جهات القشاط</span></div>
-<table class="table measurements"><thead><tr><th>#</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>طول القشاط م</th><th>نوع القشاط</th><th>ملاحظات</th></tr></thead><tbody>
-${rows.map(row => `<tr><td>${row.index}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td><b>${qty(row.edge_meters)}</b></td><td>${esc(row.edge_type || "—")}</td><td class="right">${esc(row.notes || "—")}</td></tr>`).join("")}
+<table class="table measurements"><thead><tr><th>#</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>نوع القشاط</th><th class="notes-col">ملاحظات</th></tr></thead><tbody>
+${rows.map(row => `<tr><td>${row.index}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col">${esc(row.notes || "—")}</td></tr>`).join("")}
 </tbody></table>
 <div class="section-title">تفاصيل الفاتورة</div>
 <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>
@@ -303,8 +338,6 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
     }
 
     function printInvoice(frm) {
-        // Print inside an isolated same-page iframe instead of opening a popup.
-        // This avoids browser popup blockers while keeping only the invoice in the print job.
         const previous = document.getElementById("dco-customer-invoice-print-frame");
         if (previous) previous.remove();
 
@@ -349,14 +382,12 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
 
         frame.srcdoc = buildPrintHtml(frm);
         document.body.appendChild(frame);
-
-        // Safety cleanup for browsers that do not fire afterprint.
         setTimeout(cleanup, 120000);
     }
 
     function render(frm) {
         installStyles();
-        if (isArabic()) frm.set_df_property("cost_tab", "label", "تكلفة الطلب");
+        frm.set_df_property("cost_tab", "label", "تكلفة الطلب");
         const field = frm.fields_dict.order_cost_invoice_html;
         if (!field || !field.$wrapper) return;
         field.$wrapper.html(buildScreenHtml(frm));
@@ -364,7 +395,7 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
     }
 
     function scheduleRender(frm) {
-        requestAnimationFrame(() => render(frm));
+        loadEdgeColors(frm).finally(() => requestAnimationFrame(() => render(frm)));
     }
 
     frappe.ui.form.on("Door Cutting Order", {
