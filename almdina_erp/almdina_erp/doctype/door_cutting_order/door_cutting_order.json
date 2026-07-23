@@ -11,7 +11,6 @@
     "board_section","board_item","board_summary_html",
     "cutting_settings_section","default_edge_type","cutting_settings_column","cutting_cost_per_board_usd","board_rate_usd",
     "pieces_section","pieces_fast_entry","pieces",
-    "cost_tab","order_cost_invoice_html",
     "results_tab",
     "cut_geometry_section","kerf_mm","cut_geometry_column","trim_margin_mm",
     "optimizer_section","packing_mode","cutting_machine_type","optimizer_column","optimization_time_limit_sec","plan_control_actions",
@@ -19,6 +18,7 @@
     "plan_section","cutting_plan_html",
     "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","material_variance_cost_usd","internal_loss_cost_usd","actual_cost_usd",
     "technical_section","packing_method","packing_score","engine_version","cutting_plan_json",
+    "cost_tab","order_cost_invoice_html",
     "status","revision","approved_plan","board_material","board_color","board_thickness_mm","full_board_length_mm","full_board_width_mm"
   ],
   "fields": [
