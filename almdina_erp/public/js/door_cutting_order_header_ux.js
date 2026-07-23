@@ -71,6 +71,34 @@
                 max-width: none !important;
             }
 
+            /* Keep the three primary workflow tabs visible while the operator scrolls.
+               The sticky element stays inside the form scroll container, so it does not
+               detach from the current document or cover another Desk page. */
+            .dco-sticky-tabs {
+                position: sticky !important;
+                top: 0 !important;
+                z-index: 1050 !important;
+                background: var(--card-bg, #fff) !important;
+                border-bottom: 1px solid var(--border-color, #dfe3e8) !important;
+                box-shadow: 0 5px 14px rgba(15, 23, 42, .08) !important;
+                margin-bottom: 10px !important;
+            }
+
+            .dco-sticky-tabs .nav-tabs,
+            .dco-sticky-tabs .form-tabs-list {
+                background: var(--card-bg, #fff) !important;
+            }
+
+            .dco-sticky-tabs .nav-link,
+            .dco-sticky-tabs .form-tab {
+                font-weight: 800 !important;
+                min-height: 44px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                white-space: nowrap !important;
+            }
+
             /* On narrower workstations keep every action reachable without shrinking text. */
             @media (max-width: 1200px) {
                 .page-head.dco-responsive-head .page-actions {
@@ -87,8 +115,6 @@
     function markCurrentHeader(frm) {
         installStyles();
 
-        // Remove the marker from any previously opened form, then mark only the
-        // page-head that belongs to the current Door Cutting Order form.
         document.querySelectorAll(".page-head.dco-responsive-head").forEach(node => {
             node.classList.remove("dco-responsive-head");
         });
@@ -102,13 +128,42 @@
         if (head) head.classList.add("dco-responsive-head");
     }
 
+    function markStickyTabs(frm) {
+        if (!frm || !frm.wrapper) return;
+        frm.set_df_property("order_tab", "label", "الطلب");
+        frm.set_df_property("results_tab", "label", "خطة القص");
+        frm.set_df_property("cost_tab", "label", "تكلفة الطلب");
+
+        const wrapper = frm.wrapper;
+        wrapper.querySelectorAll(".dco-sticky-tabs").forEach(node => node.classList.remove("dco-sticky-tabs"));
+
+        const candidates = [
+            ...wrapper.querySelectorAll(".form-tabs"),
+            ...wrapper.querySelectorAll(".form-tabs-list"),
+        ];
+        if (!candidates.length) return;
+
+        // Prefer the outer form-tabs container when Frappe provides both nodes.
+        const tabs = candidates.find(node => node.classList.contains("form-tabs")) || candidates[0];
+        tabs.classList.add("dco-sticky-tabs");
+    }
+
+    function refreshHeaderUX(frm) {
+        markCurrentHeader(frm);
+        markStickyTabs(frm);
+        requestAnimationFrame(() => {
+            markCurrentHeader(frm);
+            markStickyTabs(frm);
+        });
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) {
-            markCurrentHeader(frm);
+            refreshHeaderUX(frm);
         },
         refresh(frm) {
-            markCurrentHeader(frm);
-            requestAnimationFrame(() => markCurrentHeader(frm));
+            refreshHeaderUX(frm);
+            setTimeout(() => markStickyTabs(frm), 180);
         },
     });
 })();
