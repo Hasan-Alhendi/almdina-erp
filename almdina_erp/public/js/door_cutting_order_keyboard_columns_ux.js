@@ -1,6 +1,7 @@
 (() => {
     "use strict";
 
+    const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const CHECK_COLUMNS = [
         { field: "allow_rotation", labelAr: "تدوير", labelEn: "Rotate" },
         { field: "edge_long_right", labelAr: "طول يمين", labelEn: "Long R" },
@@ -24,6 +25,10 @@
             ""
         ).toLowerCase();
         return lang === "ar" || lang.startsWith("ar-");
+    }
+
+    function isEditable(frm) {
+        return frm.doc.docstatus === 0 && EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft");
     }
 
     function installStyles() {
@@ -54,7 +59,9 @@
                     accent-color:var(--primary,#2490ef);
                 }
                 .dco-column-select-all input:disabled { cursor:not-allowed; opacity:.5; }
-                .dco-fast-table ${NAV_SELECTOR}:focus-visible {
+                .dco-fast-table input.dco-fast-input[data-field]:focus-visible,
+                .dco-fast-table select.dco-fast-select[data-field]:focus-visible,
+                .dco-fast-table button.dco-check-toggle[data-check-field]:focus-visible {
                     outline:2px solid var(--primary,#2490ef) !important;
                     outline-offset:1px;
                     box-shadow:0 0 0 3px rgba(36,144,239,.13) !important;
@@ -180,7 +187,7 @@
             return Boolean(row && row[fieldname]);
         });
         const checkedCount = values.filter(Boolean).length;
-        checkbox.disabled = rows.length === 0 || frm.doc.docstatus !== 0;
+        checkbox.disabled = rows.length === 0 || !isEditable(frm);
         checkbox.checked = values.length > 0 && checkedCount === values.length;
         checkbox.indeterminate = checkedCount > 0 && checkedCount < values.length;
         checkbox.title = checkbox.checked
@@ -239,6 +246,7 @@
     }
 
     function applyColumnToAll(frm, root, fieldname, targetValue) {
+        if (!isEditable(frm)) return;
         const changedRows = [];
         actualRows(root).forEach(tr => {
             const row = rowByName(frm, tr.dataset.rowName || "");
@@ -308,6 +316,10 @@
             if (!checkbox || !root.contains(checkbox)) return;
             event.preventDefault();
             event.stopPropagation();
+            if (!isEditable(frm)) {
+                refreshAllHeaderStates(frm, root);
+                return;
+            }
             const fieldname = checkbox.dataset.columnField;
             const rows = actualRows(root);
             const allChecked = rows.length > 0 && rows.every(tr => {
