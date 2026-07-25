@@ -6,6 +6,7 @@
     "cutting_defaults_section","default_kerf_mm","default_trim_margin_mm","default_cutting_cost_per_board_usd","default_packing_mode","default_cutting_machine_type","default_optimization_time_limit_sec","optimal_search_piece_limit",
     "stock_section","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
     "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
+    "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
     "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval"
   ],
   "fields": [
@@ -28,6 +29,11 @@
     {"default":"0.09","fieldname":"min_remnant_area_m2","fieldtype":"Float","label":"Minimum Remnant Area M2","non_negative":1},
     {"default":"Zero","fieldname":"remnant_cost_policy","fieldtype":"Select","label":"Remnant Cost Policy","options":"Zero\nAverage Valuation\nConfigured Rate"},
     {"default":"0","fieldname":"remnant_rate_usd_per_m2","fieldtype":"Currency","label":"Configured Remnant Rate USD / M2","non_negative":1},
+    {"fieldname":"special_shape_pricing_section","fieldtype":"Section Break","label":"Special Shape Estimate Defaults"},
+    {"default":"0","fieldname":"default_special_design_fee_usd","fieldtype":"Currency","label":"Default Special Design Fee USD / Piece","non_negative":1},
+    {"default":"0","fieldname":"default_special_cnc_fee_usd","fieldtype":"Currency","label":"Default Special CNC Fee USD / Piece","non_negative":1},
+    {"default":"0","fieldname":"default_special_manual_edge_fee_usd","fieldtype":"Currency","label":"Default Manual Edge Fee USD / Piece","non_negative":1},
+    {"default":"0","fieldname":"default_special_margin_percent","fieldtype":"Percent","label":"Default Special Shape Margin Percent","non_negative":1},
     {"fieldname":"production_section","fieldtype":"Section Break","label":"Production Controls"},
     {"fieldname":"default_production_routing","fieldtype":"Link","label":"Default Production Routing","options":"Production Routing"},
     {"default":"0","fieldname":"allow_stage_override","fieldtype":"Check","label":"Allow Authorized Stage Sequence Override"},
