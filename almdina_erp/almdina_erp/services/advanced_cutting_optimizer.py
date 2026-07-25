@@ -594,6 +594,7 @@ def _solve_cp_sat(
             "h": height_mm / 10,
             "original_w": num(piece.get("width_cm")),
             "original_h": num(piece.get("length_cm")),
+            "piece_type": piece.get("piece_type") or "Regular",
             "rotated": rotated,
             "area_m2": num(piece.get("area_m2")),
             "notes": piece.get("notes") or "",
