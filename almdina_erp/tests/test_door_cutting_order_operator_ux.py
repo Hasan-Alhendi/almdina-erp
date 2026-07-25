@@ -8,6 +8,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 FORM_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 UX_JS = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 KEYBOARD_COLUMNS_JS = APP_ROOT / "public" / "js" / "door_cutting_order_keyboard_columns_ux.js"
+COMPACT_MEASUREMENTS_JS = APP_ROOT / "public" / "js" / "door_cutting_order_compact_measurements_ux.js"
 HOOKS = APP_ROOT / "hooks.py"
 
 
@@ -112,6 +113,24 @@ def test_rotation_and_each_edge_side_have_independent_select_all_controls():
     assert not missing, f"Missing select-all fragments: {missing}"
 
 
+def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logic():
+    compact = COMPACT_MEASUREMENTS_JS.read_text(encoding="utf-8")
+    operator = UX_JS.read_text(encoding="utf-8")
+    hooks = HOOKS.read_text(encoding="utf-8")
+
+    assert ".dco-fast-table th.dco-col-calc" in compact
+    assert ".dco-fast-table td.dco-col-calc" in compact
+    assert "display: none !important" in compact
+    assert "aria-hidden" in compact
+    assert '"public/js/door_cutting_order_compact_measurements_ux.js"' in hooks
+
+    # Calculations remain in the model and in other views/invoices; only the two
+    # calculated columns are removed from the data-entry surface.
+    assert "localArea(row)" in operator
+    assert "localEdgeMeters(row)" in operator
+    assert "updateCalculatedCells" in operator
+
+
 def test_fast_measurements_editor_does_not_depend_on_frappe_active_grid_row():
     source = UX_JS.read_text(encoding="utf-8")
     forbidden = [
@@ -172,5 +191,6 @@ def test_operator_ux_is_server_injected_via_doctype_js_not_static_asset_dependen
     hooks = HOOKS.read_text(encoding="utf-8")
     assert '"public/js/door_cutting_order_operator_ux.js"' in hooks
     assert '"public/js/door_cutting_order_keyboard_columns_ux.js"' in hooks
+    assert '"public/js/door_cutting_order_compact_measurements_ux.js"' in hooks
     assert '"Door Cutting Order": [' in hooks
     assert '"/assets/almdina_erp/js/door_cutting_order_operator_ux.js"' not in hooks
