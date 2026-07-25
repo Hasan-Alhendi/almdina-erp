@@ -14,7 +14,7 @@
             }
 
             .dco-fast-table {
-                min-width: 940px !important;
+                min-width: 1180px !important;
             }
 
             .dco-fast-table .dco-col-edge-type {
