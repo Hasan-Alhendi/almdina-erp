@@ -15,6 +15,7 @@
     "height_mm",
     "original_width_cm",
     "original_length_cm",
+    "piece_type",
     "rotated",
     "edge_long_right",
     "edge_long_left",
@@ -90,6 +91,14 @@
       "fieldname": "original_length_cm",
       "fieldtype": "Float",
       "label": "Original Length CM",
+      "read_only": 1
+    },
+    {
+      "default": "Regular",
+      "fieldname": "piece_type",
+      "fieldtype": "Select",
+      "label": "Piece Type",
+      "options": "Regular\nSpecial",
       "read_only": 1
     },
     {
