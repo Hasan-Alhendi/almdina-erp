@@ -20,6 +20,7 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_type",
+        "piece_type",
         "notes",
     ]);
     let virtualSequence = 0;
@@ -105,7 +106,7 @@
                     padding:2px 6px; background:var(--card-bg,#fff); font-family:inherit; font-size:11px;
                 }
                 .dco-fast-entry-scroll { overflow:auto; max-height:68vh; }
-                .dco-fast-table { width:100%; min-width:1120px; border-collapse:separate; border-spacing:0; table-layout:fixed; }
+                .dco-fast-table { width:100%; min-width:1220px; border-collapse:separate; border-spacing:0; table-layout:fixed; }
                 .dco-fast-table th {
                     position:sticky; top:0; z-index:5; background:var(--card-bg,#fff); border-bottom:1px solid var(--border-color,#dfe3e8);
                     padding:8px 5px; font-size:12px; font-weight:800; text-align:center; white-space:nowrap;
@@ -116,6 +117,8 @@
                 .dco-fast-table .dco-col-no { width:54px; text-align:center; font-weight:800; }
                 .dco-fast-table .dco-col-number { width:105px; }
                 .dco-fast-table .dco-col-qty { width:70px; }
+                .dco-fast-table .dco-col-type { width:112px; }
+                .dco-fast-table .dco-col-sketch { width:132px; text-align:center; }
                 .dco-fast-table .dco-col-rotate { width:72px; text-align:center; }
                 .dco-fast-table .dco-col-edges { width:310px; }
                 .dco-fast-table .dco-col-edge-type { width:160px; }
@@ -146,6 +149,17 @@
                     width:32px; height:32px; border:0; border-radius:8px; background:transparent; cursor:pointer; font-size:18px; opacity:.6;
                 }
                 .dco-delete-row:hover { background:rgba(210,40,40,.09); opacity:1; }
+                .dco-special-sketch-button {
+                    width:100%; min-height:36px; border:1px dashed rgba(111,78,55,.45); border-radius:9px;
+                    background:linear-gradient(135deg,rgba(255,250,239,.95),rgba(248,239,219,.95)); color:#5d402d;
+                    cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+                    padding:5px 8px; font-size:11px; font-weight:800; transition:.15s ease;
+                }
+                .dco-special-sketch-button:hover { transform:translateY(-1px); border-style:solid; box-shadow:0 5px 14px rgba(83,58,40,.12); }
+                .dco-special-sketch-button.is-documented { border-style:solid; border-color:rgba(31,130,82,.35); background:rgba(31,130,82,.08); color:#17643f; }
+                .dco-special-sketch-button:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
+                .dco-special-row { background:rgba(176,112,28,.035); }
+                .dco-special-row .dco-edge-buttons { opacity:.42; }
                 .dco-fast-empty { padding:18px; text-align:center; color:var(--text-muted,#6c7680); }
                 .dco-fast-readonly-note { font-weight:700; opacity:.75; }
 
@@ -242,6 +256,7 @@
     }
 
     function localEdgeMeters(row) {
+        if ((row.piece_type || "Regular") === "Special") return 0;
         const qty = Math.max(0, num(row.qty));
         const longSides = Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left));
         const widthSides = Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom));
@@ -287,24 +302,35 @@
         const name = virtual ? `__virtual__${++virtualSequence}` : row.name;
         const index = virtual ? (frm.doc.pieces || []).length + 1 : (row.idx || row.piece_no || 1);
         const data = row || { qty:1 };
-        const toggle = (field,label,extra="") => `
-            <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
+        const pieceType = data.piece_type || "Regular";
+        const isSpecial = pieceType === "Special";
+        const toggle = (field,label,extra="",forceDisabled=false) => `
+            <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${forceDisabled ? "disabled" : disabled}>
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
+        const hasDrawing = Boolean(String(data.special_shape_drawing_json || "").trim());
         return `
-            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""}">
+            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""}">
                 <td class="dco-col-no"><span class="dco-row-number">${index}</span></td>
+                <td class="dco-col-type"><select class="dco-fast-select" data-field="piece_type" ${disabled}>
+                    <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
+                    <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
+                </select></td>
                 <td class="dco-col-number"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
                 <td class="dco-col-number"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
                 <td class="dco-col-edges"><div class="dco-edge-buttons">
-                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
-                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
-                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
-                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
+                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R", "", isSpecial)}
+                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L", "", isSpecial)}
+                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top", "", isSpecial)}
+                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom", "", isSpecial)}
                 </div></td>
                 <td class="dco-col-edge-type"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
+                <td class="dco-col-sketch"><button type="button" class="dco-special-sketch-button ${hasDrawing ? "is-documented" : ""}" ${isSpecial && editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes"}">
+                    <span aria-hidden="true">${hasDrawing ? "✓" : "✎"}</span>
+                    <span>${hasDrawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "ارسم" : "Sketch")}</span>
+                </button></td>
                 <td class="dco-col-calc" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
                 <td class="dco-col-notes"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
@@ -330,12 +356,14 @@
                     <table class="dco-fast-table">
                         <thead><tr>
                             <th class="dco-col-no">#</th>
+                            <th class="dco-col-type">${isArabic() ? "نوع الدرفة" : "Piece type"}</th>
                             <th class="dco-col-number">${isArabic() ? "العرض (سم)" : "Width (CM)"}</th>
                             <th class="dco-col-number">${isArabic() ? "الطول (سم)" : "Length (CM)"}</th>
                             <th class="dco-col-qty">${isArabic() ? "العدد" : "Qty"}</th>
                             <th class="dco-col-rotate">${isArabic() ? "تدوير" : "Rotate"}</th>
                             <th class="dco-col-edges">${isArabic() ? "جهات القشاط" : "Edge sides"}</th>
                             <th class="dco-col-edge-type">${isArabic() ? "نوع القشاط" : "Edge type"}</th>
+                            <th class="dco-col-sketch">${isArabic() ? "رسم توثيقي" : "Sketch"}</th>
                             <th class="dco-col-calc">${isArabic() ? "المساحة" : "Area"}</th>
                             <th class="dco-col-calc">${isArabic() ? "متر قشاط" : "Edge m"}</th>
                             <th class="dco-col-notes">${isArabic() ? "ملاحظات" : "Notes"}</th>
@@ -409,6 +437,12 @@
         if (NUMBER_FIELDS.has(fieldname)) value = num(value);
         if (fieldname === "qty") value = Math.max(1, Math.trunc(value || 1));
         row[fieldname] = value;
+        if (fieldname === "piece_type" && value === "Special") {
+            row.edge_long_right = 0;
+            row.edge_long_left = 0;
+            row.edge_width_top = 0;
+            row.edge_width_bottom = 0;
+        }
         frm.dirty();
         updateCalculatedCells(tr, row);
         if (trigger) triggerChildField(frm, row, fieldname, 0);
@@ -491,7 +525,10 @@
             const control = event.target.closest("[data-field]");
             if (!control || !root.contains(control)) return;
             const row = syncInputToModel(frm, control, false);
-            if (row) triggerChildField(frm, row, control.dataset.field, 0);
+            if (row) {
+                triggerChildField(frm, row, control.dataset.field, 0);
+                if (control.dataset.field === "piece_type") renderFastMeasurements(frm);
+            }
         });
 
         root.addEventListener("blur", event => {
@@ -548,6 +585,17 @@
                 event.preventDefault();
                 event.stopPropagation();
                 deleteRow(frm, del.closest("tr[data-row-name]"));
+                return;
+            }
+            const sketch = event.target.closest(".dco-special-sketch-button");
+            if (sketch && root.contains(sketch)) {
+                event.preventDefault();
+                event.stopPropagation();
+                const tr = sketch.closest("tr[data-row-name]");
+                const row = rowByName(frm, tr && tr.dataset.rowName);
+                if (row && window.AlmdinaSpecialShapeEditor) {
+                    window.AlmdinaSpecialShapeEditor.open(frm, row);
+                }
             }
         });
     }
@@ -582,4 +630,9 @@
         default_edge_type(frm) { refreshEdgeSelects(frm); },
         before_save(frm) { pruneEmptyTrailingRows(frm); },
     });
+
+    window.AlmdinaDoorCuttingFastEntry = Object.assign(
+        window.AlmdinaDoorCuttingFastEntry || {},
+        { render: renderFastMeasurements }
+    );
 })();

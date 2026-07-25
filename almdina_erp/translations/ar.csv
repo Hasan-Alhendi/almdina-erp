@@ -691,3 +691,29 @@ Skyline Bottom Left,خط الأفق - من أسفل اليسار
 Skyline Best Fit,خط الأفق - أفضل ترتيب
 Yes,نعم
 No,لا
+Piece Type,نوع الدرفة
+Regular,عادية
+Special,خاصة
+Special Shape Documentation,توثيق الدرفة الخاصة
+Special Shape Documentation Status,حالة توثيق الدرفة الخاصة
+Needs Documentation,تحتاج توثيقًا
+Documented,موثقة
+Not Required,غير مطلوب
+Estimated Special Unit Price USD,السعر التقديري للدرفة الخاصة
+Approved Special Unit Price USD,السعر المعتمد للدرفة الخاصة
+Final Special Unit Price USD,السعر النهائي للدرفة الخاصة
+Special Shape Price Status,حالة سعر الدرفة الخاصة
+Not Applicable,لا ينطبق
+Estimated,تقديري
+Approved,معتمد
+Customer Quote Total USD,إجمالي عرض الزبون
+Customer Quote Status,حالة عرض الزبون
+Automatic,تلقائي
+Partially Approved,معتمد جزئيًا
+Special Shape Estimate Defaults,إعدادات تقدير الدرف الخاصة
+Default Special Design Fee USD / Piece,أجرة التصميم الافتراضية للدرفة الخاصة
+Default Special CNC Fee USD / Piece,أجرة CNC الافتراضية للدرفة الخاصة
+Default Manual Edge Fee USD / Piece,أجرة القشاط اليدوي الافتراضية للدرفة الخاصة
+Default Special Shape Margin Percent,هامش ربح الدرفة الخاصة الافتراضي
+Document the special door drawing before review. Missing rows: {0}.,وثّق رسم الدرفة الخاصة قبل إرسال الطلب للمراجعة. الصفوف الناقصة: {0}.
+Accounts Management must approve every special door price before production approval. Pending rows: {0}.,يجب على المحاسب اعتماد سعر كل درفة خاصة قبل اعتماد الإنتاج. الصفوف المعلقة: {0}.

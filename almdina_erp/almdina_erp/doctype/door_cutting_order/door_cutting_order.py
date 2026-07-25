@@ -6,13 +6,17 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, now_datetime
 
 from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
 from almdina_erp.almdina_erp.services.cutting_engine import (
     expand_piece_groups,
     round_value,
     validate_plan,
+)
+from almdina_erp.almdina_erp.services.special_shape_service import (
+    has_special_price_approval_role,
+    validate_special_shape_drawing,
 )
 
 ENGINE_VERSION = "2.0.0-advanced"
@@ -24,6 +28,7 @@ class DoorCuttingOrder(Document):
         self._set_piece_numbers()
         self._validate_numeric_inputs()
         self._validate_piece_inputs()
+        self._validate_special_shape_rows()
         self._load_board_snapshot()
         self._calculate_piece_rows()
         self._calculate_cutting_plan()
@@ -94,6 +99,106 @@ class DoorCuttingOrder(Document):
             if qty_raw <= 0 or qty_raw != int(qty_raw):
                 frappe.throw(_("Row {0}: Quantity must be a positive integer.").format(index))
 
+    def _validate_special_shape_rows(self) -> None:
+        old_doc = None if self.is_new() else self.get_doc_before_save()
+        old_rows = {row.name: row for row in (old_doc.pieces or [])} if old_doc else {}
+        can_approve_price = has_special_price_approval_role()
+        approval_action = bool(self.flags.get("special_price_approval_action"))
+        protected_fields = (
+            "special_shape_custom_unit_price_usd",
+            "special_shape_price_status",
+            "special_shape_price_note",
+            "special_shape_price_approved_by",
+            "special_shape_price_approved_on",
+        )
+        geometry_fields = (
+            "piece_type",
+            "width_cm",
+            "length_cm",
+            "qty",
+            "special_shape_drawing_json",
+        )
+
+        for index, row in enumerate(self.pieces or [], start=1):
+            row.piece_type = row.piece_type or "Regular"
+            if row.piece_type not in {"Regular", "Special"}:
+                frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
+
+            old_row = old_rows.get(row.name)
+            drawing = validate_special_shape_drawing(row.special_shape_drawing_json)
+            drawing_changed = bool(
+                (
+                    old_row
+                    and str(old_row.special_shape_drawing_json or "")
+                    != str(row.special_shape_drawing_json or "")
+                )
+                or (not old_row and drawing)
+            )
+            geometry_changed = bool(
+                old_row
+                and any(
+                    str(getattr(old_row, fieldname, "") or "")
+                    != str(getattr(row, fieldname, "") or "")
+                    for fieldname in geometry_fields
+                )
+            )
+
+            if not can_approve_price and not approval_action:
+                protected_price_changed = False
+                if old_row:
+                    protected_price_changed = any(
+                        str(getattr(old_row, fieldname, "") or "")
+                        != str(getattr(row, fieldname, "") or "")
+                        for fieldname in protected_fields
+                    )
+                else:
+                    protected_price_changed = bool(
+                        flt(row.special_shape_custom_unit_price_usd)
+                        or row.special_shape_price_status == "Approved"
+                        or row.special_shape_price_note
+                        or row.special_shape_price_approved_by
+                        or row.special_shape_price_approved_on
+                    )
+                safe_geometry_invalidation = bool(
+                    geometry_changed
+                    and row.special_shape_price_status in {
+                        None,
+                        "",
+                        "Estimated",
+                        "Not Applicable",
+                    }
+                    and not flt(row.special_shape_custom_unit_price_usd)
+                    and not row.special_shape_price_note
+                    and not row.special_shape_price_approved_by
+                    and not row.special_shape_price_approved_on
+                )
+                if protected_price_changed and not safe_geometry_invalidation:
+                    frappe.throw(
+                        _(
+                            "Row {0}: only Accounts Management can change or approve "
+                            "the special door price."
+                        ).format(index),
+                        frappe.PermissionError,
+                    )
+
+            if drawing_changed:
+                row.special_shape_drawing_updated_by = frappe.session.user
+                row.special_shape_drawing_updated_on = now_datetime()
+
+            if row.piece_type == "Special":
+                row.special_shape_status = "Documented" if drawing and drawing.get("elements") else "Needs Documentation"
+            else:
+                row.special_shape_status = "Not Required"
+
+            if geometry_changed and not approval_action:
+                row.special_shape_custom_unit_price_usd = 0
+                row.special_shape_price_status = (
+                    "Estimated" if row.piece_type == "Special" else "Not Applicable"
+                )
+                row.special_shape_price_note = ""
+                row.special_shape_price_approved_by = ""
+                row.special_shape_price_approved_on = None
+
     def _load_board_snapshot(self) -> None:
         if not self.board_item:
             frappe.throw(_("Board Item is required."))
@@ -150,8 +255,9 @@ class DoorCuttingOrder(Document):
             length_cm = flt(row.length_cm)
             qty = cint(row.qty)
 
-            long_edges = cint(row.edge_long_right) + cint(row.edge_long_left)
-            width_edges = cint(row.edge_width_top) + cint(row.edge_width_bottom)
+            is_special = (row.piece_type or "Regular") == "Special"
+            long_edges = 0 if is_special else cint(row.edge_long_right) + cint(row.edge_long_left)
+            width_edges = 0 if is_special else cint(row.edge_width_top) + cint(row.edge_width_bottom)
 
             area_m2 = (width_cm * length_cm * qty) / 10000
             edge_meters = (((length_cm * long_edges) + (width_cm * width_edges)) * qty) / 100
@@ -229,6 +335,7 @@ class DoorCuttingOrder(Document):
             f"محاولات: {cint(plan.get('attempts'))} | الخوارزمية: {plan['method_label']}"
         )
         self.engine_version = ENGINE_VERSION
+        self._calculate_special_shape_pricing(settings)
 
         snapshot = {
             "engine_version": ENGINE_VERSION,
@@ -263,6 +370,128 @@ class DoorCuttingOrder(Document):
         }
         self.cutting_plan_json = frappe.as_json(snapshot)
 
+    def _calculate_special_shape_pricing(self, settings: Any) -> None:
+        """Replace each special row's automatic cost allocation with an inclusive quote price."""
+
+        special_rows = [
+            row for row in (self.pieces or []) if (row.piece_type or "Regular") == "Special"
+        ]
+        if not special_rows:
+            self.special_shapes_baseline_cost_usd = 0
+            self.special_shapes_estimated_total_usd = 0
+            self.special_shapes_final_total_usd = 0
+            self.customer_quote_total_usd = round_value(self.total_cost_usd, 3)
+            self.customer_quote_status = "Automatic"
+            for row in self.pieces or []:
+                row.special_shape_estimated_unit_price_usd = 0
+                row.special_shape_custom_unit_price_usd = 0
+                row.special_shape_final_unit_price_usd = 0
+                row.special_shape_price_status = "Not Applicable"
+            return
+
+        design_fee = self._finite(
+            settings.default_special_design_fee_usd or 0,
+            _("Default Special Design Fee USD / Piece"),
+        )
+        cnc_fee = self._finite(
+            settings.default_special_cnc_fee_usd or 0,
+            _("Default Special CNC Fee USD / Piece"),
+        )
+        manual_edge_fee = self._finite(
+            settings.default_special_manual_edge_fee_usd or 0,
+            _("Default Manual Edge Fee USD / Piece"),
+        )
+        margin_percent = self._finite(
+            settings.default_special_margin_percent or 0,
+            _("Default Special Shape Margin Percent"),
+        )
+        if min(design_fee, cnc_fee, manual_edge_fee, margin_percent) < 0:
+            frappe.throw(_("Special shape estimate defaults cannot be negative."))
+
+        total_area = flt(self.total_area_m2)
+        board_and_cutting_cost = flt(self.mdf_cost_usd) + flt(self.cutting_cost_usd)
+        baseline_total = 0.0
+        estimated_total = 0.0
+        final_total = 0.0
+        approved_count = 0
+
+        for row in special_rows:
+            qty = max(1, cint(row.qty))
+            area_share = (flt(row.area_m2) / total_area) if total_area else 0
+            allocated_total = (board_and_cutting_cost * area_share) + flt(row.edge_cost_usd)
+            baseline_unit = allocated_total / qty
+            estimated_unit = (
+                baseline_unit + design_fee + cnc_fee + manual_edge_fee
+            ) * (1 + (margin_percent / 100))
+            estimated_unit = round_value(estimated_unit, 3)
+
+            is_approved = bool(
+                row.special_shape_price_status == "Approved"
+                and row.special_shape_price_approved_by
+            )
+            final_unit = (
+                flt(row.special_shape_custom_unit_price_usd)
+                if is_approved
+                else estimated_unit
+            )
+
+            row.special_shape_estimated_unit_price_usd = estimated_unit
+            row.special_shape_final_unit_price_usd = round_value(final_unit, 3)
+            if is_approved:
+                approved_count += 1
+            else:
+                row.special_shape_price_status = "Estimated"
+                row.special_shape_custom_unit_price_usd = 0
+                row.special_shape_price_note = ""
+                row.special_shape_price_approved_by = ""
+                row.special_shape_price_approved_on = None
+
+            baseline_total += allocated_total
+            estimated_total += estimated_unit * qty
+            final_total += final_unit * qty
+
+        regular_automatic_total = max(0.0, flt(self.total_cost_usd) - baseline_total)
+        self.special_shapes_baseline_cost_usd = round_value(baseline_total, 3)
+        self.special_shapes_estimated_total_usd = round_value(estimated_total, 3)
+        self.special_shapes_final_total_usd = round_value(final_total, 3)
+        self.customer_quote_total_usd = round_value(regular_automatic_total + final_total, 3)
+
+        if approved_count == len(special_rows):
+            self.customer_quote_status = "Approved"
+        elif approved_count:
+            self.customer_quote_status = "Partially Approved"
+        else:
+            self.customer_quote_status = "Estimated"
+
+    def ensure_special_shapes_documented(self) -> None:
+        missing = [
+            str(row.piece_no or row.idx)
+            for row in (self.pieces or [])
+            if (row.piece_type or "Regular") == "Special"
+            and row.special_shape_status != "Documented"
+        ]
+        if missing:
+            frappe.throw(
+                _("Document the special door drawing before review. Missing rows: {0}.").format(
+                    ", ".join(missing)
+                )
+            )
+
+    def ensure_special_prices_approved(self) -> None:
+        pending = [
+            str(row.piece_no or row.idx)
+            for row in (self.pieces or [])
+            if (row.piece_type or "Regular") == "Special"
+            and row.special_shape_price_status != "Approved"
+        ]
+        if pending:
+            frappe.throw(
+                _(
+                    "Accounts Management must approve every special door price before "
+                    "production approval. Pending rows: {0}."
+                ).format(", ".join(pending))
+            )
+
     @staticmethod
     def _piece_row_as_dict(row: Any) -> dict[str, Any]:
         return {
@@ -270,13 +499,14 @@ class DoorCuttingOrder(Document):
             "length_cm": flt(row.length_cm),
             "qty": cint(row.qty),
             "allow_rotation": cint(row.allow_rotation),
-            "edge_long_right": cint(row.edge_long_right),
-            "edge_long_left": cint(row.edge_long_left),
-            "edge_width_top": cint(row.edge_width_top),
-            "edge_width_bottom": cint(row.edge_width_bottom),
+            "edge_long_right": 0 if row.piece_type == "Special" else cint(row.edge_long_right),
+            "edge_long_left": 0 if row.piece_type == "Special" else cint(row.edge_long_left),
+            "edge_width_top": 0 if row.piece_type == "Special" else cint(row.edge_width_top),
+            "edge_width_bottom": 0 if row.piece_type == "Special" else cint(row.edge_width_bottom),
             "edge_type": row.edge_type or "",
             "edge_rate_usd": flt(row.edge_rate_usd),
             "edge_cost_usd": flt(row.edge_cost_usd),
+            "piece_type": row.piece_type or "Regular",
             "notes": row.notes or "",
         }
 
@@ -321,5 +551,10 @@ def recalculate_order(order_name: str) -> dict[str, Any]:
         "cutting_cost_usd": doc.cutting_cost_usd,
         "edge_cost_usd": doc.edge_cost_usd,
         "total_cost_usd": doc.total_cost_usd,
+        "special_shapes_baseline_cost_usd": doc.special_shapes_baseline_cost_usd,
+        "special_shapes_estimated_total_usd": doc.special_shapes_estimated_total_usd,
+        "special_shapes_final_total_usd": doc.special_shapes_final_total_usd,
+        "customer_quote_total_usd": doc.customer_quote_total_usd,
+        "customer_quote_status": doc.customer_quote_status,
         "cutting_plan_json": doc.cutting_plan_json,
     }

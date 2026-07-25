@@ -60,7 +60,9 @@
         return (frm.doc.pieces || []).map((row, index) => {
             const edgeType = effectiveEdgeType(frm, row);
             return {
+                row_name: row.name,
                 index: index + 1,
+                piece_type: row.piece_type || "Regular",
                 width_cm: n(row.width_cm),
                 length_cm: n(row.length_cm),
                 qty: Math.max(1, Math.trunc(n(row.qty) || 1)),
@@ -72,8 +74,41 @@
                 width_edge_count: Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom)),
                 length_edge_count: Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left)),
                 notes: row.notes || "",
+                drawing_json: row.special_shape_drawing_json || "",
+                shape_status: row.special_shape_status || "Not Required",
+                estimated_unit_price: n(row.special_shape_estimated_unit_price_usd),
+                custom_unit_price: n(row.special_shape_custom_unit_price_usd),
+                final_unit_price: n(row.special_shape_final_unit_price_usd),
+                price_status: row.special_shape_price_status || "Not Applicable",
+                price_note: row.special_shape_price_note || "",
+                price_approved_by: row.special_shape_price_approved_by || "",
+                price_approved_on: row.special_shape_price_approved_on || "",
             };
         });
+    }
+
+    function specialRows(frm) {
+        return pieces(frm).filter(row => row.piece_type === "Special");
+    }
+
+    function quoteTotal(frm) {
+        return frm.doc.customer_quote_total_usd === undefined || frm.doc.customer_quote_total_usd === null
+            ? n(frm.doc.total_cost_usd)
+            : n(frm.doc.customer_quote_total_usd);
+    }
+
+    function quoteStatusLabel(status) {
+        return {
+            Automatic: "تلقائي",
+            Estimated: "تقديري",
+            "Partially Approved": "معتمد جزئيًا",
+            Approved: "معتمد",
+        }[status] || status || "تلقائي";
+    }
+
+    function canApproveSpecialPrice() {
+        const roles = (frappe.user_roles || []);
+        return roles.includes("Accounts Management") || roles.includes("System Manager");
     }
 
     function edgeColorLabel(frm) {
@@ -159,6 +194,29 @@
             });
         }
 
+        const specials = specialRows(frm);
+        const baseline = n(frm.doc.special_shapes_baseline_cost_usd);
+        if (specials.length && baseline > 0) {
+            lines.push({
+                type: "special-adjustment",
+                description: "استبعاد الحساب الآلي للدرف الخاصة — استُبدل بسعر شامل",
+                quantity: 1,
+                unit: "تسوية",
+                rate: -baseline,
+                amount: -baseline,
+            });
+        }
+        specials.forEach(row => {
+            lines.push({
+                type: "special",
+                description: `درفة خاصة رقم ${row.index} — سعر شامل`,
+                quantity: row.qty,
+                unit: "درفة",
+                rate: row.final_unit_price,
+                amount: row.final_unit_price * row.qty,
+            });
+        });
+
         return lines;
     }
 
@@ -172,7 +230,7 @@
                 .dco-cost-hero p{margin:0;color:var(--text-muted,#6c7680);font-size:12px;line-height:1.7}
                 .dco-cost-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-start}
                 .dco-cost-actions .btn{border-radius:9px;font-weight:800;min-height:36px}
-                .dco-cost-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+                .dco-cost-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:12px 0}
                 .dco-cost-kpi{padding:14px 15px;border:1px solid var(--border-color,#dfe3e8);border-radius:13px;background:var(--card-bg,#fff)}
                 .dco-cost-kpi .label{display:block;font-size:11px;color:var(--text-muted,#6c7680);margin-bottom:5px}
                 .dco-cost-kpi .value{display:block;font-size:18px;font-weight:900;line-height:1.25;word-break:break-word}
@@ -203,7 +261,21 @@
                 .dco-grand-total .amount{font-size:30px;font-weight:950;letter-spacing:.2px;direction:ltr;text-align:right}
                 .dco-grand-total .hint{font-size:10px;opacity:.72;margin-top:5px}
                 .dco-cost-empty{padding:28px;text-align:center;color:var(--text-muted,#6c7680)}
+                .dco-special-price-list{display:grid;gap:10px;padding:13px}
+                .dco-special-price-card{display:grid;grid-template-columns:minmax(210px,1.2fr) repeat(3,minmax(120px,.65fr)) auto;align-items:center;gap:10px;padding:13px;border:1px solid var(--border-color,#e0e5e9);border-radius:13px;background:var(--card-bg,#fff)}
+                .dco-special-price-identity{display:flex;align-items:center;gap:10px;min-width:0}
+                .dco-special-price-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#fff4d9,#f0d6a3);color:#6d471c;font-size:20px;flex:0 0 auto}
+                .dco-special-price-identity b{display:block;font-size:13px}.dco-special-price-identity small{display:block;color:var(--text-muted,#6c7680);font-size:10px;margin-top:3px}
+                .dco-special-price-cell{padding:8px 9px;border-radius:10px;background:var(--subtle-fg,#f7f9fa);min-height:51px}
+                .dco-special-price-cell .label{display:block;color:var(--text-muted,#6c7680);font-size:9px;margin-bottom:3px}.dco-special-price-cell .value{font-size:13px;font-weight:900;direction:ltr;text-align:right}
+                .dco-special-price-status{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;background:#fff4d8;color:#8a5a12}
+                .dco-special-price-status.is-approved{background:rgba(31,130,82,.1);color:#17643f}
+                .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:112px}
+                .dco-special-price-actions .btn{border-radius:8px;font-size:10px;font-weight:800}
+                .dco-special-price-note{grid-column:1/-1;padding:7px 10px;border-radius:8px;background:var(--subtle-fg,#f7f9fa);font-size:10px;color:var(--text-muted,#63717e)}
+                .dco-quote-state{display:inline-flex;align-items:center;margin-right:7px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800}
                 @media(max-width:900px){.dco-cost-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dco-invoice-summary{grid-template-columns:1fr}.dco-cost-hero{flex-direction:column}.dco-cost-actions{width:100%}}
+                @media(max-width:1050px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-identity,.dco-special-price-note{grid-column:1/-1}.dco-special-price-actions{flex-direction:row}}
                 @media(max-width:560px){.dco-cost-kpis,.dco-invoice-meta{grid-template-columns:1fr}.dco-cost-actions .btn{width:100%}}
             </style>
         `);
@@ -219,6 +291,7 @@
                 <table class="dco-cost-table">
                     <thead><tr>
                         <th>#</th>
+                        <th>النوع</th>
                         <th>العرض (سم)</th>
                         <th>الطول (سم)</th>
                         <th>العدد</th>
@@ -228,6 +301,7 @@
                     <tbody>${rows.map(row => `
                         <tr>
                             <td><b>${row.index}</b></td>
+                            <td>${row.piece_type === "Special" ? '<span class="dco-special-price-status">خاصة</span>' : "عادية"}</td>
                             <td>${dimensionMark(row.width_cm, row.width_edge_count)}</td>
                             <td>${dimensionMark(row.length_cm, row.length_edge_count)}</td>
                             <td>${row.qty}</td>
@@ -235,6 +309,41 @@
                             <td class="text-start dco-notes-col">${esc(row.notes || "—")}</td>
                         </tr>`).join("")}</tbody>
                 </table>
+            </div>`;
+    }
+
+    function specialPricingHtml(frm) {
+        const rows = specialRows(frm);
+        if (!rows.length) return "";
+        const approver = canApproveSpecialPrice();
+        const saved = !frm.is_new();
+        return `
+            <div class="dco-cost-section">
+                <div class="dco-cost-section-title">
+                    <h4>تسعير الدرف الخاصة</h4>
+                    <span>السعر شامل للدرفة ويستبدل تقديرها الآلي في عرض الزبون</span>
+                </div>
+                <div class="dco-special-price-list">
+                    ${rows.map(row => {
+                        const approved = row.price_status === "Approved";
+                        const documented = Boolean(row.drawing_json);
+                        return `<div class="dco-special-price-card" data-special-row="${esc(row.row_name)}">
+                            <div class="dco-special-price-identity">
+                                <span class="dco-special-price-icon">✦</span>
+                                <span><b>درفة خاصة رقم ${row.index}</b><small>${qty(row.width_cm)} × ${qty(row.length_cm)} سم — عدد ${row.qty} · ${documented ? "الرسم موثق" : "بانتظار الرسم"}</small></span>
+                            </div>
+                            <div class="dco-special-price-cell"><span class="label">تقدير النظام / الوحدة</span><span class="value">$ ${money(row.estimated_unit_price)}</span></div>
+                            <div class="dco-special-price-cell"><span class="label">السعر المعتمد / الوحدة</span><span class="value">${approved ? `$ ${money(row.custom_unit_price)}` : "—"}</span></div>
+                            <div class="dco-special-price-cell"><span class="label">الإجمالي المستخدم</span><span class="value">$ ${money(row.final_unit_price * row.qty)}</span></div>
+                            <div class="dco-special-price-actions">
+                                <button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>عرض الرسم</button>
+                                ${approver ? `<button type="button" class="btn ${approved ? "btn-default" : "btn-primary"} btn-xs dco-approve-special-price" ${saved && documented ? "" : "disabled"}>${approved ? "تعديل السعر" : "اعتماد سعر"}</button>` : ""}
+                                <span class="dco-special-price-status ${approved ? "is-approved" : ""}">${approved ? "✓ سعر معتمد" : "◷ سعر تقديري"}</span>
+                            </div>
+                            ${approved ? `<div class="dco-special-price-note">اعتمده ${esc(row.price_approved_by || "—")} في ${esc(row.price_approved_on || "—")} — ${esc(row.price_note || "")}</div>` : (!saved ? '<div class="dco-special-price-note">احفظ الطلب أولًا ليتمكن المحاسب من اعتماد السعر.</div>' : "")}
+                        </div>`;
+                    }).join("")}
+                </div>
             </div>`;
     }
 
@@ -261,14 +370,15 @@
     }
 
     function buildScreenHtml(frm) {
-        const total = n(frm.doc.total_cost_usd);
+        const total = quoteTotal(frm);
+        const internalCost = n(frm.doc.total_cost_usd);
         const edgeColor = edgeColorLabel(frm);
         return `
             <div class="dco-cost-shell">
                 <div class="dco-cost-hero">
                     <div>
-                        <h3>تكلفة الطلب والفاتورة</h3>
-                        <p>جدول القياسات، ثم تفاصيل تكلفة الألواح والقص والقشاط والإجمالي النهائي القابل للطباعة للزبون.</p>
+                        <h3>تكلفة الطلب وعرض السعر</h3>
+                        <p>التكلفة الداخلية تبقى مستقلة، والدرف الخاصة تظهر تقديرية حتى يعتمد المحاسب سعرها الشامل.</p>
                     </div>
                     <div class="dco-cost-actions">
                         <button type="button" class="btn btn-primary btn-sm dco-print-customer-invoice">طباعة فاتورة الزبون</button>
@@ -279,7 +389,8 @@
                     <div class="dco-cost-kpi"><span class="label">عدد الألواح</span><span class="value">${qty(frm.doc.required_boards)} لوح</span></div>
                     <div class="dco-cost-kpi"><span class="label">لون القشاط</span><span class="value">${esc(edgeColor)}</span></div>
                     <div class="dco-cost-kpi"><span class="label">تكلفة القشاط</span><span class="value">$ ${money(frm.doc.edge_cost_usd)}</span></div>
-                    <div class="dco-cost-kpi total"><span class="label">إجمالي تكلفة الطلب</span><span class="value">$ ${money(total)}</span></div>
+                    <div class="dco-cost-kpi"><span class="label">التكلفة الداخلية المخططة</span><span class="value">$ ${money(internalCost)}</span></div>
+                    <div class="dco-cost-kpi total"><span class="label">عرض الزبون — ${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</span><span class="value">$ ${money(total)}</span></div>
                 </div>
 
                 <div class="dco-cost-section">
@@ -289,6 +400,8 @@
                     </div>
                     ${measurementRowsHtml(frm)}
                 </div>
+
+                ${specialPricingHtml(frm)}
 
                 <div class="dco-cost-section">
                     <div class="dco-cost-section-title"><h4>تفاصيل الفاتورة</h4><span>التكلفة حسب خطة القص الحالية</span></div>
@@ -303,7 +416,7 @@
                         <div class="dco-grand-total">
                             <span class="label">الإجمالي النهائي</span>
                             <span class="amount">$ ${money(total)}</span>
-                            <span class="hint">ألواح + قص + قشاط</span>
+                            <span class="hint">عرض الزبون <span class="dco-quote-state">${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</span></span>
                         </div>
                     </div>
                 </div>
@@ -313,7 +426,7 @@
     function buildPrintHtml(frm) {
         const rows = pieces(frm);
         const lines = invoiceLines(frm);
-        const total = n(frm.doc.total_cost_usd);
+        const total = quoteTotal(frm);
         const edgeColor = edgeColorLabel(frm);
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         return `<!doctype html>
@@ -321,11 +434,11 @@
 <style>
 @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.measurements .notes-col{width:36%;text-align:right;white-space:normal;line-height:1.55}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
 </style></head><body>
-<div class="header"><div class="title"><h1>فاتورة تكلفة الطلب</h1><div class="muted">تفاصيل القياسات والمواد وخدمات القص والقشاط</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div></div>
+<div class="header"><div class="title"><h1>عرض سعر الطلب</h1><div class="muted">فاتورة تكلفة الطلب — تفاصيل القياسات والخدمات وتسعير الدرف الخاصة</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div><div class="muted">حالة السعر: ${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</div></div></div>
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
-<div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد جهات القشاط</span></div>
-<table class="table measurements"><thead><tr><th>#</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>نوع القشاط</th><th class="notes-col">ملاحظات</th></tr></thead><tbody>
-${rows.map(row => `<tr><td>${row.index}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col">${esc(row.notes || "—")}</td></tr>`).join("")}
+<div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد الحواف المطلوب تلبيسها</span></div>
+<table class="table measurements"><thead><tr><th>#</th><th>النوع</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>نوع القشاط</th><th class="notes-col">ملاحظات</th></tr></thead><tbody>
+${rows.map(row => `<tr><td>${row.index}</td><td>${row.piece_type === "Special" ? "خاصة" : "عادية"}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col">${esc(row.notes || "—")}</td></tr>`).join("")}
 </tbody></table>
 <div class="section-title">تفاصيل الفاتورة</div>
 <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>
@@ -385,13 +498,78 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
         setTimeout(cleanup, 120000);
     }
 
+    function sourcePiece(frm, rowName) {
+        return (frm.doc.pieces || []).find(row => row.name === rowName) || null;
+    }
+
+    function approveSpecialPrice(frm, rowName) {
+        const row = sourcePiece(frm, rowName);
+        if (!row) return;
+        frappe.prompt(
+            [
+                {
+                    fieldname: "unit_price_usd",
+                    fieldtype: "Currency",
+                    label: "السعر الشامل للدرفة الواحدة ($)",
+                    reqd: 1,
+                    non_negative: 1,
+                    default: n(row.special_shape_custom_unit_price_usd) || n(row.special_shape_estimated_unit_price_usd),
+                },
+                {
+                    fieldname: "note",
+                    fieldtype: "Small Text",
+                    label: "سبب أو ملاحظة التسعير",
+                    reqd: 1,
+                    default: row.special_shape_price_note || "",
+                    description: "مثال: يشمل تصميم CNC والقشاط اليدوي.",
+                },
+            ],
+            values => {
+                frappe.call({
+                    method: "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price",
+                    args: {
+                        order_name: frm.doc.name,
+                        piece_name: row.name,
+                        unit_price_usd: values.unit_price_usd,
+                        note: values.note,
+                    },
+                    freeze: true,
+                    freeze_message: "جاري اعتماد سعر الدرفة الخاصة...",
+                    callback(response) {
+                        if (!response.exc) {
+                            frappe.show_alert({ message: "تم اعتماد السعر الشامل وتحديث عرض الزبون.", indicator: "green" }, 5);
+                            frm.reload_doc();
+                        }
+                    },
+                });
+            },
+            `تسعير الدرفة الخاصة رقم ${row.idx || row.piece_no || ""}`,
+            row.special_shape_price_status === "Approved" ? "تحديث السعر" : "اعتماد السعر"
+        );
+    }
+
+    function bindCostActions(frm, wrapper) {
+        wrapper.find(".dco-print-customer-invoice").on("click", () => printInvoice(frm));
+        wrapper.find(".dco-view-special-sketch").on("click", function () {
+            const card = this.closest("[data-special-row]");
+            const row = sourcePiece(frm, card && card.dataset.specialRow);
+            if (row && window.AlmdinaSpecialShapeEditor) {
+                window.AlmdinaSpecialShapeEditor.view(frm, row);
+            }
+        });
+        wrapper.find(".dco-approve-special-price").on("click", function () {
+            const card = this.closest("[data-special-row]");
+            if (card) approveSpecialPrice(frm, card.dataset.specialRow);
+        });
+    }
+
     function render(frm) {
         installStyles();
         frm.set_df_property("cost_tab", "label", "تكلفة الطلب");
         const field = frm.fields_dict.order_cost_invoice_html;
         if (!field || !field.$wrapper) return;
         field.$wrapper.html(buildScreenHtml(frm));
-        field.$wrapper.find(".dco-print-customer-invoice").on("click", () => printInvoice(frm));
+        bindCostActions(frm, field.$wrapper);
     }
 
     function scheduleRender(frm) {
@@ -408,4 +586,6 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
         pieces_add(frm) { scheduleRender(frm); },
         pieces_remove(frm) { scheduleRender(frm); },
     });
+
+    window.AlmdinaOrderCostUX = { render: scheduleRender };
 })();
