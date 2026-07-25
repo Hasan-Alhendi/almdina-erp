@@ -25,6 +25,11 @@ def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = No
         "cutting_cost_usd": preview.cutting_cost_usd,
         "edge_cost_usd": preview.edge_cost_usd,
         "total_cost_usd": preview.total_cost_usd,
+        "special_shapes_baseline_cost_usd": preview.special_shapes_baseline_cost_usd,
+        "special_shapes_estimated_total_usd": preview.special_shapes_estimated_total_usd,
+        "special_shapes_final_total_usd": preview.special_shapes_final_total_usd,
+        "customer_quote_total_usd": preview.customer_quote_total_usd,
+        "customer_quote_status": preview.customer_quote_status,
         "packing_method": preview.packing_method,
         "packing_score": preview.packing_score,
         "engine_version": preview.engine_version,
@@ -36,6 +41,14 @@ def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = No
                 "edge_meters": row.edge_meters,
                 "edge_rate_usd": row.edge_rate_usd,
                 "edge_cost_usd": row.edge_cost_usd,
+                "special_shape_status": row.special_shape_status,
+                "special_shape_estimated_unit_price_usd": row.special_shape_estimated_unit_price_usd,
+                "special_shape_custom_unit_price_usd": row.special_shape_custom_unit_price_usd,
+                "special_shape_final_unit_price_usd": row.special_shape_final_unit_price_usd,
+                "special_shape_price_status": row.special_shape_price_status,
+                "special_shape_price_note": row.special_shape_price_note,
+                "special_shape_price_approved_by": row.special_shape_price_approved_by,
+                "special_shape_price_approved_on": row.special_shape_price_approved_on,
             }
             for row in (preview.pieces or [])
         ],
@@ -99,10 +112,15 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         )
 
     preview = frappe.get_doc(payload)
+    if name and not name.startswith("new-") and frappe.db.exists("Door Cutting Order", name):
+        stored = frappe.get_doc("Door Cutting Order", name)
+        stored.check_permission("read")
+        preview._doc_before_save = stored
 
     # Preserve legacy live-calculation behaviour without invoking the strict
     # save-time input validator on partially entered rows.
     preview._set_piece_numbers()
+    preview._validate_special_shape_rows()
     preview._calculate_piece_rows()
 
     has_complete_piece = any(
@@ -118,6 +136,13 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         preview.mdf_cost_usd = 0
         preview.cutting_cost_usd = 0
         preview.total_cost_usd = flt(preview.edge_cost_usd)
+        preview.special_shapes_baseline_cost_usd = 0
+        preview.special_shapes_estimated_total_usd = 0
+        preview.special_shapes_final_total_usd = 0
+        preview.customer_quote_total_usd = preview.total_cost_usd
+        preview.customer_quote_status = "Estimated" if any(
+            (row.piece_type or "Regular") == "Special" for row in (preview.pieces or [])
+        ) else "Automatic"
         preview.waste_area_m2 = 0
         preview.waste_percent = 0
         preview.packing_method = ""
