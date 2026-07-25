@@ -80,6 +80,11 @@
             "cutting_cost_usd",
             "edge_cost_usd",
             "total_cost_usd",
+            "special_shapes_baseline_cost_usd",
+            "special_shapes_estimated_total_usd",
+            "special_shapes_final_total_usd",
+            "customer_quote_total_usd",
+            "customer_quote_status",
             "packing_method",
             "packing_score",
             "engine_version",
@@ -97,10 +102,21 @@
             row.edge_meters = num(calculated.edge_meters);
             row.edge_rate_usd = num(calculated.edge_rate_usd);
             row.edge_cost_usd = num(calculated.edge_cost_usd);
+            row.special_shape_status = calculated.special_shape_status || row.special_shape_status;
+            row.special_shape_estimated_unit_price_usd = num(calculated.special_shape_estimated_unit_price_usd);
+            row.special_shape_custom_unit_price_usd = num(calculated.special_shape_custom_unit_price_usd);
+            row.special_shape_final_unit_price_usd = num(calculated.special_shape_final_unit_price_usd);
+            row.special_shape_price_status = calculated.special_shape_price_status || row.special_shape_price_status;
+            row.special_shape_price_note = calculated.special_shape_price_note || "";
+            row.special_shape_price_approved_by = calculated.special_shape_price_approved_by || "";
+            row.special_shape_price_approved_on = calculated.special_shape_price_approved_on || "";
         });
 
         frm.refresh_field("pieces");
         render_cutting_plan(frm);
+        if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
+            window.AlmdinaOrderCostUX.render(frm);
+        }
     }
 
     function recalculate_order(frm, options = {}) {
@@ -197,8 +213,12 @@
     }
 
     function render_piece_label(piece) {
+        const special = piece.piece_type === "Special"
+            ? '<span style="display:inline-block;margin-bottom:2px;padding:1px 5px;border-radius:999px;background:#fff1cf;color:#7a4c13;font-size:9px;font-weight:800">✦ خاصة · خام CNC</span><br>'
+            : "";
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
+                ${special}
                 <b>${escape_html(piece.label)}</b><br>
                 <span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span>
             </div>
@@ -220,7 +240,7 @@
         rows.forEach((row, index) => {
             html += `
                 <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
-                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${Math.max(0, Math.floor(num(row.qty)))}
+                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${Math.max(0, Math.floor(num(row.qty)))}${row.piece_type === "Special" ? " · ✦ خاصة (خام CNC)" : ""}
                 </span>
             `;
         });
@@ -757,6 +777,7 @@
         edge_width_top: schedule_recalculate,
         edge_width_bottom: schedule_recalculate,
         edge_type: schedule_recalculate,
+        piece_type: schedule_recalculate,
         notes: schedule_recalculate
     });
 })();
