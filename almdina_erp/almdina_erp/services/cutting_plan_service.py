@@ -175,6 +175,7 @@ def create_plan_from_order(order: Any, snapshot_override: dict[str, Any] | None 
                     "height_mm": flt(piece.get("h")) * 10,
                     "original_width_cm": flt(piece.get("original_w")),
                     "original_length_cm": flt(piece.get("original_h")),
+                    "piece_type": piece.get("piece_type") or "Regular",
                     "rotated": 1 if piece.get("rotated") else 0,
                     "edge_long_right": 1 if piece.get("edge_long_right") else 0,
                     "edge_long_left": 1 if piece.get("edge_long_left") else 0,
@@ -227,6 +228,7 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
     else:
         order.revision = max(1, cint(order.revision))
 
+    order.ensure_special_shapes_documented()
     order.status = "Pending Review"
     order.save()
     return {"name": order.name, "status": order.status, "revision": order.revision}
@@ -238,6 +240,8 @@ def approve_order(order_name: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
     if order.status != "Pending Review":
         frappe.throw(_("Only orders in Pending Review can be approved."))
+    order.ensure_special_shapes_documented()
+    order.ensure_special_prices_approved()
 
     order.save(ignore_permissions=True)
 
