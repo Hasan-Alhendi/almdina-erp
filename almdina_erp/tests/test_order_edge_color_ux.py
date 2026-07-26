@@ -30,22 +30,27 @@ def test_edge_color_is_defaulted_from_selected_edge_type_but_remains_editable():
     assert "apply_edge_color_default(frm, true)" in source
 
 
-def test_edge_color_appears_in_cost_measurements_invoice_and_fast_entry_context():
+def test_edge_color_remains_visible_once_in_cost_summary_and_fast_entry_context():
     source = _source(EDGE_COLOR_UX)
-    assert "patchMeasurementTable(frm, root)" in source
-    assert 'header.textContent = "لون القشاط"' in source
-    assert "patchInvoiceLines(frm, root)" in source
-    assert "patchInvoiceMeta(frm, root)" in source
+    assert "updateColorKpi(frm, root)" in source
     assert "patchFastEntryContext(frm)" in source
     assert "لون القشاط:" in source
+    assert "patchMeasurementTable" not in source
+    assert "patchInvoiceLines" not in source
+    assert "patchInvoiceMeta" not in source
 
 
-def test_customer_print_contains_edge_color_in_header_measurements_and_invoice():
+def test_customer_print_keeps_edge_type_and_removes_duplicate_edge_color():
     source = _source(EDGE_COLOR_UX)
     assert "printCustomerInvoice(frm)" in source
     assert "measurementTable.outerHTML" in source
     assert "invoiceTable.outerHTML" in source
-    assert '<div><b>لون القشاط</b>${esc(color)}</div>' in source
+    print_section = source.split("function printHtml(frm)", 1)[1].split(
+        "function printCustomerInvoice(frm)", 1
+    )[0]
+    assert '<div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div>' in print_section
+    assert "<b>لون القشاط</b>" not in print_section
+    assert "grid-template-columns:repeat(4" in print_section
     assert 'document.createElement("iframe")' in source
     assert 'event.stopImmediatePropagation()' in source
 
