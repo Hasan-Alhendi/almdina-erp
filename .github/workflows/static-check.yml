@@ -48,6 +48,7 @@ jobs:
           from almdina_erp.tests import test_dxf_autocad_compatibility as dxf_checks
           from almdina_erp.tests import test_order_cost_invoice_ux as cost_invoice_checks
           from almdina_erp.tests import test_door_cutting_order_fast_save as fast_save_checks
+          from almdina_erp.tests import test_measurement_resilience_ux as measurement_resilience_checks
 
           modules = [
               arabic_checks,
@@ -56,6 +57,7 @@ jobs:
               dxf_checks,
               cost_invoice_checks,
               fast_save_checks,
+              measurement_resilience_checks,
           ]
           total = 0
           for module in modules:
