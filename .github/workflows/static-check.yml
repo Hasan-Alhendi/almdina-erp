@@ -56,6 +56,7 @@ jobs:
           from almdina_erp.tests import test_door_cutting_order_save_pipeline_performance as save_pipeline_checks
           from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
           from almdina_erp.tests import test_special_shape_geometry_ux as special_shape_geometry_checks
+          from almdina_erp.tests import test_shape_print_ux as shape_print_checks
 
           modules = [
               arabic_checks,
@@ -72,6 +73,7 @@ jobs:
               save_pipeline_checks,
               order_surface_checks,
               special_shape_geometry_checks,
+              shape_print_checks,
           ]
           total = 0
           for module in modules:
@@ -118,3 +120,8 @@ jobs:
         shell: bash
         run: |
           node almdina_erp/tests/test_special_shape_geometry.js
+
+      - name: Validate printable door drawings
+        shell: bash
+        run: |
+          node almdina_erp/tests/test_shape_print.js
