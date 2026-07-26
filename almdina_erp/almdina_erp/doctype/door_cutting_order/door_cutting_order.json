@@ -17,7 +17,7 @@
     "plan_result_section","plan_controls_intro",
     "plan_section","cutting_plan_html",
     "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","special_shapes_baseline_cost_usd","special_shapes_estimated_total_usd","special_shapes_final_total_usd","customer_quote_total_usd","customer_quote_status","material_variance_cost_usd","internal_loss_cost_usd","actual_cost_usd",
-    "technical_section","packing_method","packing_score","engine_version","plan_needs_recalculation","calculated_plan_input_hash","cutting_plan_json",
+    "technical_section","packing_method","packing_score","engine_version","plan_needs_recalculation","calculated_plan_input_hash","calculated_plan_metadata_hash","cutting_plan_json",
     "cost_tab","order_cost_invoice_html",
     "status","revision","approved_plan","board_material","board_color","board_thickness_mm","full_board_length_mm","full_board_width_mm"
   ],
@@ -85,6 +85,7 @@
     {"fieldname":"engine_version","fieldtype":"Data","label":"Engine Version","read_only":1},
     {"default":"1","fieldname":"plan_needs_recalculation","fieldtype":"Check","hidden":1,"label":"Cutting Plan Needs Recalculation","read_only":1},
     {"fieldname":"calculated_plan_input_hash","fieldtype":"Data","hidden":1,"label":"Calculated Plan Input Hash","read_only":1},
+    {"fieldname":"calculated_plan_metadata_hash","fieldtype":"Data","hidden":1,"label":"Calculated Plan Metadata Hash","read_only":1},
     {"fieldname":"cutting_plan_json","fieldtype":"Long Text","hidden":1,"label":"Cutting Plan JSON","read_only":1},
     {"default":"Draft","fieldname":"status","fieldtype":"Select","hidden":1,"in_list_view":1,"label":"Status","options":"Draft\nPending Review\nApproved\nCutting In Progress\nCut Completed\nEdge Banding In Progress\nProduction In Progress\nQuality Check\nCompleted\nRejected\nOn Hold\nCancelled\nReplacement Required\nPartially Completed","read_only":1},
     {"default":"1","fieldname":"revision","fieldtype":"Int","hidden":1,"in_list_view":1,"label":"Revision","read_only":1},
