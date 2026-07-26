@@ -111,9 +111,9 @@
 
     function costTabIsActive(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
-        const node = field && field.wrapper;
+        const node = getNode(field && (field.wrapper || field.$wrapper));
         if (!node) return false;
-        const pane = node.closest ? node.closest(".tab-pane") : null;
+        const pane = node.closest(".tab-pane");
         return !pane || pane.classList.contains("active") || pane.classList.contains("show");
     }
 
