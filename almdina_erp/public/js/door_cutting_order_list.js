@@ -1,6 +1,7 @@
 (() => {
     "use strict";
 
+    frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings["Door Cutting Order"] || {};
     const originalOnload = existing.onload;
     const originalRefresh = existing.refresh;
