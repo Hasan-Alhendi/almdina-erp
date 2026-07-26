@@ -40,6 +40,7 @@ doctype_js = {
         "public/js/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
+        "public/js/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
@@ -52,10 +53,15 @@ doctype_js = {
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_header_ux.js",
         "public/js/secure_dxf_export.js",
+        "public/js/door_cutting_order_toolbar_stability_ux.js",
     ],
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
     "Material Consumption Log": "public/js/material_consumption_log.js",
+}
+
+doctype_list_js = {
+    "Door Cutting Order": "public/js/door_cutting_order_list.js",
 }
 
 # Keep the existing business controller as the authoritative base class while
