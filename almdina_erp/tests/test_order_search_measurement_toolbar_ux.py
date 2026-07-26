@@ -20,7 +20,19 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
     assert doctype["search_fields"] == "customer"
     source = text(LIST_UX)
     assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
+    assert "اسم العميل أو رقم الطلب" in source
     assert '"customer", "order_date", "status"' in source
+
+
+def test_visible_id_filter_is_replaced_with_combined_name_or_customer_search():
+    source = text(LIST_UX)
+    assert "const originalGetArgs = listview.get_args.bind(listview)" in source
+    assert "listview.get_args = function dcoCombinedSearchArgs()" in source
+    assert "args.filters = (args.filters || []).filter" in source
+    assert '[this.doctype, "name", "like", pattern]' in source
+    assert '[this.doctype, "customer", "like", pattern]' in source
+    assert "args.or_filters = [" in source
+    assert "listview._dcoCombinedSearchInstalled = true" in source
 
 
 def test_measurement_table_has_print_and_full_window_actions():
