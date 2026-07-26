@@ -100,6 +100,7 @@
   "module":"Almdina ERP",
   "name":"Door Cutting Order",
   "naming_rule":"By naming series field",
+  "search_fields":"customer",
   "permissions":[
     {"create":1,"read":1,"report":1,"print":1,"email":1,"role":"Order Entry","write":1},
     {"read":1,"report":1,"print":1,"role":"Cutting Operator"},
