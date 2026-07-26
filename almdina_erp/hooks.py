@@ -43,6 +43,7 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
+        "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_plan_ux.js",
         "public/js/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
