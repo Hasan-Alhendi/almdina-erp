@@ -141,3 +141,37 @@ def test_edge_snapshot_survives_expansion_for_every_copy():
         assert piece["edge_width_top"] == 1
         assert piece["edge_width_bottom"] == 0
         assert piece["edge_type"] == "قشاط 2سم عادي"
+
+
+def test_special_door_raw_rectangles_and_preliminary_edges_survive_cutting_plan():
+    pieces = expand_piece_groups(
+        [
+            {
+                "width_cm": 75,
+                "length_cm": 205,
+                "qty": 2,
+                "piece_type": "Special",
+                "allow_rotation": 1,
+                "edge_long_right": 1,
+                "edge_long_left": 1,
+                "edge_width_top": 1,
+                "edge_width_bottom": 0,
+                "edge_type": "قشاط 2سم عادي يدوي",
+            }
+        ]
+    )
+
+    assert len(pieces) == 2
+    assert all(piece["piece_type"] == "Special" for piece in pieces)
+    assert all(piece["edge_long_right"] == 1 for piece in pieces)
+    assert all(piece["edge_long_left"] == 1 for piece in pieces)
+    assert all(piece["edge_width_top"] == 1 for piece in pieces)
+
+    plan = choose_best_plan(pieces, 206, 279, 0.3, "Auto")
+    placed = [piece for sheet in plan["sheets"] for piece in sheet["pieces"]]
+
+    assert len(placed) == 2
+    assert all(piece["piece_type"] == "Special" for piece in placed)
+    assert all(piece["edge_type"] == "قشاط 2سم عادي يدوي" for piece in placed)
+    assert not plan["unplaced"]
+    assert not validate_plan(plan, pieces, 206, 279)

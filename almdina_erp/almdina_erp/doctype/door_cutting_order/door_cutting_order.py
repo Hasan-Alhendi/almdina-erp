@@ -102,6 +102,10 @@ class DoorCuttingOrder(Document):
     def _validate_special_shape_rows(self) -> None:
         old_doc = None if self.is_new() else self.get_doc_before_save()
         old_rows = {row.name: row for row in (old_doc.pieces or [])} if old_doc else {}
+        default_edge_changed = bool(
+            old_doc
+            and str(old_doc.default_edge_type or "") != str(self.default_edge_type or "")
+        )
         can_approve_price = has_special_price_approval_role()
         approval_action = bool(self.flags.get("special_price_approval_action"))
         protected_fields = (
@@ -116,6 +120,12 @@ class DoorCuttingOrder(Document):
             "width_cm",
             "length_cm",
             "qty",
+            "allow_rotation",
+            "edge_long_right",
+            "edge_long_left",
+            "edge_width_top",
+            "edge_width_bottom",
+            "edge_type",
             "special_shape_drawing_json",
         )
 
@@ -142,6 +152,14 @@ class DoorCuttingOrder(Document):
                     for fieldname in geometry_fields
                 )
             )
+            pricing_basis_changed = bool(
+                geometry_changed
+                or (
+                    default_edge_changed
+                    and row.piece_type == "Special"
+                    and not row.edge_type
+                )
+            )
 
             if not can_approve_price and not approval_action:
                 protected_price_changed = False
@@ -160,7 +178,7 @@ class DoorCuttingOrder(Document):
                         or row.special_shape_price_approved_on
                     )
                 safe_geometry_invalidation = bool(
-                    geometry_changed
+                    pricing_basis_changed
                     and row.special_shape_price_status in {
                         None,
                         "",
@@ -190,7 +208,7 @@ class DoorCuttingOrder(Document):
             else:
                 row.special_shape_status = "Not Required"
 
-            if geometry_changed and not approval_action:
+            if pricing_basis_changed and not approval_action:
                 row.special_shape_custom_unit_price_usd = 0
                 row.special_shape_price_status = (
                     "Estimated" if row.piece_type == "Special" else "Not Applicable"
@@ -255,9 +273,11 @@ class DoorCuttingOrder(Document):
             length_cm = flt(row.length_cm)
             qty = cint(row.qty)
 
-            is_special = (row.piece_type or "Regular") == "Special"
-            long_edges = 0 if is_special else cint(row.edge_long_right) + cint(row.edge_long_left)
-            width_edges = 0 if is_special else cint(row.edge_width_top) + cint(row.edge_width_bottom)
+            # A special door is planned as its rectangular CNC raw piece. The
+            # operator's selected sides are an initial edge-banding estimate:
+            # they intentionally participate in meters, cost and the quote.
+            long_edges = cint(row.edge_long_right) + cint(row.edge_long_left)
+            width_edges = cint(row.edge_width_top) + cint(row.edge_width_bottom)
 
             area_m2 = (width_cm * length_cm * qty) / 10000
             edge_meters = (((length_cm * long_edges) + (width_cm * width_edges)) * qty) / 100
@@ -361,6 +381,10 @@ class DoorCuttingOrder(Document):
             "used_area_m2": plan["used_area_m2"],
             "total_board_area_m2": plan["total_board_area_m2"],
             "waste_area_m2": plan["waste_area_m2"],
+            "special_shape_raw_summary": self._special_shape_raw_summary(
+                expanded,
+                plan,
+            ),
             "sheets": plan["sheets"],
             "unplaced": plan["unplaced"],
             "validation": {
@@ -371,7 +395,12 @@ class DoorCuttingOrder(Document):
         self.cutting_plan_json = frappe.as_json(snapshot)
 
     def _calculate_special_shape_pricing(self, settings: Any) -> None:
-        """Replace each special row's automatic cost allocation with an inclusive quote price."""
+        """Replace each special row's automatic allocation with an inclusive quote price.
+
+        The row edge cost is the operator's preliminary banding estimate. It
+        remains part of the baseline before design/CNC/manual-work fees and the
+        configured margin are added.
+        """
 
         special_rows = [
             row for row in (self.pieces or []) if (row.piece_type or "Regular") == "Special"
@@ -499,15 +528,44 @@ class DoorCuttingOrder(Document):
             "length_cm": flt(row.length_cm),
             "qty": cint(row.qty),
             "allow_rotation": cint(row.allow_rotation),
-            "edge_long_right": 0 if row.piece_type == "Special" else cint(row.edge_long_right),
-            "edge_long_left": 0 if row.piece_type == "Special" else cint(row.edge_long_left),
-            "edge_width_top": 0 if row.piece_type == "Special" else cint(row.edge_width_top),
-            "edge_width_bottom": 0 if row.piece_type == "Special" else cint(row.edge_width_bottom),
+            "edge_long_right": cint(row.edge_long_right),
+            "edge_long_left": cint(row.edge_long_left),
+            "edge_width_top": cint(row.edge_width_top),
+            "edge_width_bottom": cint(row.edge_width_bottom),
             "edge_type": row.edge_type or "",
             "edge_rate_usd": flt(row.edge_rate_usd),
             "edge_cost_usd": flt(row.edge_cost_usd),
             "piece_type": row.piece_type or "Regular",
             "notes": row.notes or "",
+        }
+
+    @staticmethod
+    def _special_shape_raw_summary(
+        expanded: list[dict[str, Any]],
+        plan: dict[str, Any],
+    ) -> dict[str, int | bool]:
+        """Expose auditable special-raw coverage to every plan renderer."""
+        requested_ids = {
+            cint(piece.get("id"))
+            for piece in (expanded or [])
+            if (piece.get("piece_type") or "Regular") == "Special"
+        }
+        placed_ids = {
+            cint(piece.get("id"))
+            for sheet in (plan.get("sheets") or [])
+            for piece in (sheet.get("pieces") or [])
+            if (piece.get("piece_type") or "Regular") == "Special"
+        }
+        unplaced_ids = {
+            cint(piece.get("id"))
+            for piece in (plan.get("unplaced") or [])
+            if (piece.get("piece_type") or "Regular") == "Special"
+        }
+        return {
+            "requested": len(requested_ids),
+            "placed": len(requested_ids.intersection(placed_ids)),
+            "unplaced": len(requested_ids.intersection(unplaced_ids)),
+            "complete": requested_ids.issubset(placed_ids) and not unplaced_ids,
         }
 
     @staticmethod

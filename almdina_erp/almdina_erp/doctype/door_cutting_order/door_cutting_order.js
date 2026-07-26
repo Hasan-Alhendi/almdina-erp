@@ -213,14 +213,56 @@
     }
 
     function render_piece_label(piece) {
+        const edge_count = [
+            piece.edge_long_right,
+            piece.edge_long_left,
+            piece.edge_width_top,
+            piece.edge_width_bottom
+        ].filter(Boolean).length;
         const special = piece.piece_type === "Special"
-            ? '<span style="display:inline-block;margin-bottom:2px;padding:1px 5px;border-radius:999px;background:#fff1cf;color:#7a4c13;font-size:9px;font-weight:800">✦ خاصة · خام CNC</span><br>'
+            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">✦ درفة خاصة · خام CNC</span><br>`
+            : "";
+        const preliminary_edge = piece.piece_type === "Special" && edge_count
+            ? `<br><span style="display:inline-block;margin-top:2px;color:#9c1c1c;font-size:8px;font-weight:800">قشاط مبدئي: ${edge_count} جهة</span>`
             : "";
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
                 ${special}
                 <b>${escape_html(piece.label)}</b><br>
                 <span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span>
+                ${preliminary_edge}
+            </div>
+        `;
+    }
+
+    function render_special_raw_coverage(frm, plan) {
+        const requested_from_rows = (frm.doc.pieces || []).reduce((total, row) => {
+            if ((row.piece_type || "Regular") !== "Special") return total;
+            return total + Math.max(0, Math.floor(num(row.qty)));
+        }, 0);
+        const placed_from_plan = (plan.sheets || []).reduce((total, sheet) => {
+            return total + (sheet.pieces || []).filter(piece => piece.piece_type === "Special").length;
+        }, 0);
+        const snapshot = plan.special_shape_raw_summary || {};
+        const requested = Number.isFinite(Number(snapshot.requested))
+            ? Number(snapshot.requested)
+            : requested_from_rows;
+        const placed = Number.isFinite(Number(snapshot.placed))
+            ? Number(snapshot.placed)
+            : placed_from_plan;
+        if (!requested) return "";
+
+        const complete = Boolean(snapshot.complete ?? (placed === requested));
+        const tone = complete
+            ? "border-color:#c9a66b;background:linear-gradient(135deg,#fff8e8,#fffdf8);color:#684117"
+            : "border-color:#dc7b72;background:#fff4f2;color:#9b2f26";
+        const message = complete
+            ? `تم إدخال جميع الدرف الخاصة في خطة القص كمستطيل خام: <b>${placed} من ${requested}</b>`
+            : `تنبيه: دخل خطة القص <b>${placed} من ${requested}</b> فقط من الدرف الخاصة. راجع المقاسات والقطع غير الموزعة.`;
+
+        return `
+            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:9px 12px;margin:8px 0 12px;font-size:12px;font-weight:700;${tone}">
+                <span style="font-size:16px;margin-left:6px">✦</span>${message}
             </div>
         `;
     }
@@ -288,6 +330,7 @@
                 </div>
 
                 ${render_piece_groups_summary(frm)}
+                ${render_special_raw_coverage(frm, plan)}
 
                 <div style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
         `;
@@ -311,9 +354,12 @@
                 const top = (num(piece.y) / board_h_cm) * 100;
                 const width = (num(piece.w) / board_w_cm) * 100;
                 const height = (num(piece.h) / board_h_cm) * 100;
+                const special_piece_style = piece.piece_type === "Special"
+                    ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
+                    : "border:1px solid #111;background:#e4f5ff;";
 
                 html += `
-                    <div class="dco-piece" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;border:1px solid #111;background:#e4f5ff;color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${special_piece_style}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${render_piece_edge_lines(piece)}
                         ${render_piece_label(piece)}
                     </div>
