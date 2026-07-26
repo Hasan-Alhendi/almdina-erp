@@ -154,44 +154,29 @@
         const specials = allRows.filter(row => row.piece_type === "Special");
         const regularRows = allRows.filter(row => row.piece_type !== "Special");
         const hasSpecialPricing = specials.length > 0;
-        const totalArea = allRows.reduce((sum, row) => sum + row.area_m2, 0);
-        const regularArea = regularRows.reduce((sum, row) => sum + row.area_m2, 0);
-        const regularAreaRatio = totalArea > 0 ? regularArea / totalArea : 0;
-        const materialAmount = hasSpecialPricing
-            ? n(frm.doc.mdf_cost_usd) * regularAreaRatio
-            : n(frm.doc.mdf_cost_usd);
-        const cuttingAmount = hasSpecialPricing
-            ? n(frm.doc.cutting_cost_usd) * regularAreaRatio
-            : n(frm.doc.cutting_cost_usd);
+        const boardRate = n(frm.doc.board_rate_usd);
+        const cuttingRate = n(frm.doc.cutting_cost_per_board_usd);
+        const materialAmount = boardCount * boardRate;
+        const cuttingAmount = boardCount * cuttingRate;
 
-        if (
-            (hasSpecialPricing && materialAmount > 0)
-            || (!hasSpecialPricing && (boardCount > 0 || materialAmount > 0))
-        ) {
+        if (boardCount > 0 || materialAmount > 0) {
             lines.push({
                 type: "material",
-                description: hasSpecialPricing
-                    ? `حصة خام MDF للدرف العادية${frm.doc.board_item ? ` — ${frm.doc.board_item}` : ""}`
-                    : `ألواح MDF${frm.doc.board_item ? ` — ${frm.doc.board_item}` : ""}`,
-                quantity: hasSpecialPricing ? 1 : boardCount,
-                unit: hasSpecialPricing ? "حصة" : "لوح",
-                rate: hasSpecialPricing ? materialAmount : n(frm.doc.board_rate_usd),
+                description: `ألواح MDF${frm.doc.board_item ? ` — ${frm.doc.board_item}` : ""}`,
+                quantity: boardCount,
+                unit: "لوح",
+                rate: boardRate,
                 amount: materialAmount,
             });
         }
 
-        if (
-            (hasSpecialPricing && cuttingAmount > 0)
-            || (!hasSpecialPricing && (boardCount > 0 || cuttingAmount > 0))
-        ) {
+        if (boardCount > 0 || cuttingAmount > 0) {
             lines.push({
                 type: "cutting",
-                description: hasSpecialPricing
-                    ? "حصة قص وتجهيز الدرف العادية"
-                    : "أجور قص وتجهيز الألواح",
-                quantity: hasSpecialPricing ? 1 : boardCount,
-                unit: hasSpecialPricing ? "حصة" : "لوح",
-                rate: hasSpecialPricing ? cuttingAmount : n(frm.doc.cutting_cost_per_board_usd),
+                description: "أجور قص وتجهيز الألواح",
+                quantity: boardCount,
+                unit: "لوح",
+                rate: cuttingRate,
                 amount: cuttingAmount,
             });
         }
