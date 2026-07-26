@@ -36,6 +36,7 @@ doctype_js = {
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
+        "public/js/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
