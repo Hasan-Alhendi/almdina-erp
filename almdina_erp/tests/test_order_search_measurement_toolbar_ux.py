@@ -35,14 +35,30 @@ def test_visible_id_filter_is_replaced_with_combined_name_or_customer_search():
     assert "listview._dcoCombinedSearchInstalled = true" in source
 
 
-def test_measurement_table_has_print_and_full_window_actions():
+def test_measurement_table_has_print_and_editable_full_screen_actions():
     source = text(MEASUREMENT_UX)
     assert 'class="btn btn-default btn-sm dco-print-measurements"' in source
-    assert "فتح الجدول في نافذة مستقلة" in source
-    assert "window.open(" in source
+    assert "فتح جدول الإدخال في نافذة مستقلة" in source
+    assert "openEditableMeasurements(frm)" in source
+    assert "dco-measurement-entry-window" in source
+    assert "host.appendChild(root)" in source
+    assert "placeholder.parentNode.insertBefore(state.root, state.placeholder)" in source
+    assert "window.open(" not in source
     assert "dco-measurements-print-frame" in source
-    assert "تفاصيل الأسعار والفاتورة" in source
-    assert "dco-measurement-print-table" in source
+
+
+def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_behaviour():
+    source = text(MEASUREMENT_UX)
+    assert 'root.querySelector(".dco-fast-entry-shell")' in source
+    assert "dco-entry-window-save" in source
+    assert "await Promise.resolve(frm.save())" in source
+    assert "dco-entry-window-print" in source
+    assert "dco-entry-window-close" in source
+    assert "إغلاق والعودة" in source
+    assert "توجد تعديلات غير محفوظة" in source
+    assert "جميع التعديلات محفوظة" in source
+    assert "height:100%;display:flex;flex-direction:column" in source
+    assert "max-height:none!important" in source
 
 
 def test_measurement_print_has_invoice_measurement_columns_without_invoice_totals():
@@ -82,7 +98,7 @@ def test_all_new_ux_layers_are_loaded_in_the_required_order():
     measurement = '"public/js/door_cutting_order_measurement_actions_ux.js"'
     secure_dxf = '"public/js/secure_dxf_export.js"'
     toolbar = '"public/js/door_cutting_order_toolbar_stability_ux.js"'
-    assert 'doctype_list_js = {' in hooks
+    assert "doctype_list_js = {" in hooks
     assert '"Door Cutting Order": "public/js/door_cutting_order_list.js"' in hooks
     assert measurement in hooks
     assert secure_dxf in hooks
