@@ -130,7 +130,14 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
 
     if preview.board_item and has_complete_piece:
         preview._load_board_snapshot()
-        preview._calculate_cutting_plan()
+
+        # The high-performance save refactor made plan calculation explicit and
+        # requires the cached settings plus a deterministic input fingerprint.
+        # Preview is an explicit calculation path, so provide both arguments
+        # instead of calling the old no-argument method signature.
+        settings = preview._get_settings()
+        input_fingerprint = preview._plan_input_fingerprint(settings)
+        preview._calculate_cutting_plan(settings, input_fingerprint)
     else:
         preview.required_boards = 0
         preview.mdf_cost_usd = 0
