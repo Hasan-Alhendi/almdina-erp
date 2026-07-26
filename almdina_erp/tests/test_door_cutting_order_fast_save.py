@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ORDER_PY = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
 ORDER_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
+PREVIEW_API = ROOT / "almdina_erp" / "api.py"
 FAST_SAVE_JS = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -28,6 +29,17 @@ def test_explicit_recalculation_sets_force_flag_before_save():
     recalculate = source.split("def recalculate_order(order_name: str)", 1)[1]
     assert "doc.flags.force_cutting_plan_recalculation = True" in recalculate
     assert "doc.save()" in recalculate
+
+
+def test_preview_api_uses_new_explicit_plan_calculation_contract():
+    source = _text(PREVIEW_API)
+    preview = source.split("def preview_door_cutting_order", 1)[1].split(
+        "@frappe.whitelist()\ndef get_approved_cutting_plan_snapshot", 1
+    )[0]
+    assert "settings = preview._get_settings()" in preview
+    assert "input_fingerprint = preview._plan_input_fingerprint(settings)" in preview
+    assert "preview._calculate_cutting_plan(settings, input_fingerprint)" in preview
+    assert "preview._calculate_cutting_plan()" not in preview
 
 
 def test_edge_rates_are_loaded_in_one_batch_query():
