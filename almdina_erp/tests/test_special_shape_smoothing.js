@@ -18,6 +18,8 @@ require(path.resolve(
 ));
 
 const normalize = global.window.AlmdinaSpecialShapeEditor.normalizePenStroke;
+const erasePenStroke = global.window.AlmdinaSpecialShapeEditor.erasePenStroke;
+const clientPointToCanvas = global.window.AlmdinaSpecialShapeEditor.clientPointToCanvas;
 
 function almostEqual(first, second, tolerance = 0.001) {
     return Math.abs(first - second) <= tolerance;
@@ -65,4 +67,68 @@ assert.ok(
     "The deliberate corner should remain near its original position"
 );
 
-console.log("Special-shape stroke smoothing checks passed");
+const straightPen = {
+    id: "pen-1",
+    type: "pen",
+    color: "#172033",
+    points: [[40, 200], [360, 200]],
+};
+const erasedMiddle = erasePenStroke(straightPen, [200, 200], [200, 200], 14);
+assert.equal(erasedMiddle.changed, true, "The eraser should detect a pen stroke");
+assert.equal(erasedMiddle.fragments.length, 2, "Erasing the middle should split the stroke");
+assert.ok(
+    erasedMiddle.fragments[0].points.at(-1)[0] < 190,
+    "The first fragment must stop before the erased circle"
+);
+assert.ok(
+    erasedMiddle.fragments[1].points[0][0] > 210,
+    "The second fragment must start after the erased circle"
+);
+assert.equal(
+    erasedMiddle.fragments[0].color,
+    straightPen.color,
+    "Partial erasing must retain pen styling"
+);
+
+const untouchedPen = erasePenStroke(straightPen, [500, 500], [540, 540], 14);
+assert.equal(untouchedPen.changed, false, "A distant eraser pass must leave the stroke untouched");
+assert.equal(untouchedPen.fragments[0], straightPen, "Untouched strokes should retain identity");
+
+const erasedBand = erasePenStroke(straightPen, [145, 200], [255, 200], 10);
+assert.equal(erasedBand.fragments.length, 2, "Dragging the eraser should clear a continuous band");
+assert.ok(
+    erasedBand.fragments[0].points.at(-1)[0] < 140
+    && erasedBand.fragments[1].points[0][0] > 260,
+    "The erased band must follow the complete pointer path"
+);
+
+const svgWithTransform = {
+    getScreenCTM() {
+        return {
+            inverse() {
+                return { marker: "inverse" };
+            },
+        };
+    },
+    createSVGPoint() {
+        return {
+            x: 0,
+            y: 0,
+            matrixTransform(matrix) {
+                assert.equal(matrix.marker, "inverse");
+                return {
+                    x: (this.x - 100) / 0.8,
+                    y: (this.y - 50) / 0.8,
+                };
+            },
+        };
+    },
+    getBoundingClientRect() {
+        throw new Error("The bounding-box approximation must not be used when CTM is available");
+    },
+};
+const mapped = clientPointToCanvas(svgWithTransform, 500, 310);
+assert.ok(almostEqual(mapped.x, 500), "Pointer X must follow the real SVG transform");
+assert.ok(almostEqual(mapped.y, 325), "Pointer Y must follow the real SVG transform");
+
+console.log("Special-shape drawing precision, smoothing, and eraser checks passed");

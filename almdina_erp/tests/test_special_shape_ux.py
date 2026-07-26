@@ -122,7 +122,12 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "fitNearlyStraightLine" in sketch
     assert "smoothCorners" in sketch
     assert "getCoalescedEvents" in sketch
-    assert "تنعيم الخط وتصحيح الميل البسيط مفعّلان تلقائيًا" in sketch
+    assert "clientPointToCanvas" in sketch
+    assert "getScreenCTM" in sketch
+    assert "erasePenStroke" in sketch
+    assert "dco-sketch-eraser-size" in sketch
+    assert "خط القلم لن يُحذف كاملًا" in sketch
+    assert "المؤشر يحدد نقطة الرسم بدقة" in sketch
 
 
 def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost():
