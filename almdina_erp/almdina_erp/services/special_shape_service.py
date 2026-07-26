@@ -172,7 +172,7 @@ def approve_special_piece_price(
     order_name: str,
     piece_name: str,
     unit_price_usd: float,
-    note: str,
+    note: str | None = None,
 ) -> dict[str, Any]:
     """Approve an inclusive customer unit price without granting accounting full order edit rights."""
 
@@ -197,8 +197,6 @@ def approve_special_piece_price(
     if price < 0:
         frappe.throw(_("Special Unit Price USD cannot be negative."))
     approval_note = str(note or "").strip()
-    if not approval_note:
-        frappe.throw(_("Write a short pricing note before approving the custom price."))
     if len(approval_note) > 500:
         frappe.throw(_("Pricing note cannot exceed 500 characters."))
 

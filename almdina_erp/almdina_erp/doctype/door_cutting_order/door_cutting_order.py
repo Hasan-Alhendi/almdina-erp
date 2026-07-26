@@ -6,7 +6,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import cint, flt, get_datetime, now_datetime
 
 from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
 from almdina_erp.almdina_erp.services.cutting_engine import (
@@ -108,26 +108,6 @@ class DoorCuttingOrder(Document):
         )
         can_approve_price = has_special_price_approval_role()
         approval_action = bool(self.flags.get("special_price_approval_action"))
-        protected_fields = (
-            "special_shape_custom_unit_price_usd",
-            "special_shape_price_status",
-            "special_shape_price_note",
-            "special_shape_price_approved_by",
-            "special_shape_price_approved_on",
-        )
-        geometry_fields = (
-            "piece_type",
-            "width_cm",
-            "length_cm",
-            "qty",
-            "allow_rotation",
-            "edge_long_right",
-            "edge_long_left",
-            "edge_width_top",
-            "edge_width_bottom",
-            "edge_type",
-            "special_shape_drawing_json",
-        )
 
         for index, row in enumerate(self.pieces or [], start=1):
             row.piece_type = row.piece_type or "Regular"
@@ -136,20 +116,46 @@ class DoorCuttingOrder(Document):
 
             old_row = old_rows.get(row.name)
             drawing = validate_special_shape_drawing(row.special_shape_drawing_json)
+            old_drawing = (
+                validate_special_shape_drawing(old_row.special_shape_drawing_json)
+                if old_row
+                else None
+            )
             drawing_changed = bool(
-                (
-                    old_row
-                    and str(old_row.special_shape_drawing_json or "")
-                    != str(row.special_shape_drawing_json or "")
-                )
+                (old_row and old_drawing != drawing)
                 or (not old_row and drawing)
             )
             geometry_changed = bool(
                 old_row
-                and any(
-                    str(getattr(old_row, fieldname, "") or "")
-                    != str(getattr(row, fieldname, "") or "")
-                    for fieldname in geometry_fields
+                and (
+                    str(old_row.piece_type or "Regular")
+                    != str(row.piece_type or "Regular")
+                    or not math.isclose(
+                        flt(old_row.width_cm),
+                        flt(row.width_cm),
+                        rel_tol=0,
+                        abs_tol=1e-9,
+                    )
+                    or not math.isclose(
+                        flt(old_row.length_cm),
+                        flt(row.length_cm),
+                        rel_tol=0,
+                        abs_tol=1e-9,
+                    )
+                    or cint(old_row.qty) != cint(row.qty)
+                    or any(
+                        cint(getattr(old_row, fieldname, 0))
+                        != cint(getattr(row, fieldname, 0))
+                        for fieldname in (
+                            "allow_rotation",
+                            "edge_long_right",
+                            "edge_long_left",
+                            "edge_width_top",
+                            "edge_width_bottom",
+                        )
+                    )
+                    or str(old_row.edge_type or "") != str(row.edge_type or "")
+                    or old_drawing != drawing
                 )
             )
             pricing_basis_changed = bool(
@@ -164,10 +170,33 @@ class DoorCuttingOrder(Document):
             if not can_approve_price and not approval_action:
                 protected_price_changed = False
                 if old_row:
-                    protected_price_changed = any(
-                        str(getattr(old_row, fieldname, "") or "")
-                        != str(getattr(row, fieldname, "") or "")
-                        for fieldname in protected_fields
+                    old_approved_on = (
+                        get_datetime(old_row.special_shape_price_approved_on)
+                        if old_row.special_shape_price_approved_on
+                        else None
+                    )
+                    approved_on = (
+                        get_datetime(row.special_shape_price_approved_on)
+                        if row.special_shape_price_approved_on
+                        else None
+                    )
+                    protected_price_changed = bool(
+                        not math.isclose(
+                            flt(old_row.special_shape_custom_unit_price_usd),
+                            flt(row.special_shape_custom_unit_price_usd),
+                            rel_tol=0,
+                            abs_tol=1e-9,
+                        )
+                        or any(
+                            str(getattr(old_row, fieldname, "") or "")
+                            != str(getattr(row, fieldname, "") or "")
+                            for fieldname in (
+                                "special_shape_price_status",
+                                "special_shape_price_note",
+                                "special_shape_price_approved_by",
+                            )
+                        )
+                        or old_approved_on != approved_on
                     )
                 else:
                     protected_price_changed = bool(

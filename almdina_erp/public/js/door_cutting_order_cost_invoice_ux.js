@@ -65,6 +65,7 @@
                 piece_type: row.piece_type || "Regular",
                 width_cm: n(row.width_cm),
                 length_cm: n(row.length_cm),
+                area_m2: n(row.area_m2),
                 qty: Math.max(1, Math.trunc(n(row.qty) || 1)),
                 edge_meters: n(row.edge_meters),
                 edge_rate_usd: n(row.edge_rate_usd),
@@ -126,9 +127,9 @@
             </div>`;
     }
 
-    function edgeGroups(frm) {
+    function edgeGroups(frm, sourceRows = pieces(frm)) {
         const groups = new Map();
-        pieces(frm).forEach(row => {
+        sourceRows.forEach(row => {
             if (row.edge_meters <= 0) return;
             const key = `${row.edge_type || "بدون نوع"}::${row.edge_rate_usd}`;
             if (!groups.has(key)) {
@@ -149,30 +150,53 @@
     function invoiceLines(frm) {
         const boardCount = n(frm.doc.required_boards);
         const lines = [];
+        const allRows = pieces(frm);
+        const specials = allRows.filter(row => row.piece_type === "Special");
+        const regularRows = allRows.filter(row => row.piece_type !== "Special");
+        const hasSpecialPricing = specials.length > 0;
+        const totalArea = allRows.reduce((sum, row) => sum + row.area_m2, 0);
+        const regularArea = regularRows.reduce((sum, row) => sum + row.area_m2, 0);
+        const regularAreaRatio = totalArea > 0 ? regularArea / totalArea : 0;
+        const materialAmount = hasSpecialPricing
+            ? n(frm.doc.mdf_cost_usd) * regularAreaRatio
+            : n(frm.doc.mdf_cost_usd);
+        const cuttingAmount = hasSpecialPricing
+            ? n(frm.doc.cutting_cost_usd) * regularAreaRatio
+            : n(frm.doc.cutting_cost_usd);
 
-        if (boardCount > 0 || n(frm.doc.mdf_cost_usd) > 0) {
+        if (
+            (hasSpecialPricing && materialAmount > 0)
+            || (!hasSpecialPricing && (boardCount > 0 || materialAmount > 0))
+        ) {
             lines.push({
                 type: "material",
-                description: `ألواح MDF${frm.doc.board_item ? ` — ${frm.doc.board_item}` : ""}`,
-                quantity: boardCount,
-                unit: "لوح",
-                rate: n(frm.doc.board_rate_usd),
-                amount: n(frm.doc.mdf_cost_usd),
+                description: hasSpecialPricing
+                    ? `حصة خام MDF للدرف العادية${frm.doc.board_item ? ` — ${frm.doc.board_item}` : ""}`
+                    : `ألواح MDF${frm.doc.board_item ? ` — ${frm.doc.board_item}` : ""}`,
+                quantity: hasSpecialPricing ? 1 : boardCount,
+                unit: hasSpecialPricing ? "حصة" : "لوح",
+                rate: hasSpecialPricing ? materialAmount : n(frm.doc.board_rate_usd),
+                amount: materialAmount,
             });
         }
 
-        if (boardCount > 0 || n(frm.doc.cutting_cost_usd) > 0) {
+        if (
+            (hasSpecialPricing && cuttingAmount > 0)
+            || (!hasSpecialPricing && (boardCount > 0 || cuttingAmount > 0))
+        ) {
             lines.push({
                 type: "cutting",
-                description: "أجور قص وتجهيز الألواح",
-                quantity: boardCount,
-                unit: "لوح",
-                rate: n(frm.doc.cutting_cost_per_board_usd),
-                amount: n(frm.doc.cutting_cost_usd),
+                description: hasSpecialPricing
+                    ? "حصة قص وتجهيز الدرف العادية"
+                    : "أجور قص وتجهيز الألواح",
+                quantity: hasSpecialPricing ? 1 : boardCount,
+                unit: hasSpecialPricing ? "حصة" : "لوح",
+                rate: hasSpecialPricing ? cuttingAmount : n(frm.doc.cutting_cost_per_board_usd),
+                amount: cuttingAmount,
             });
         }
 
-        edgeGroups(frm).forEach(group => {
+        edgeGroups(frm, hasSpecialPricing ? regularRows : allRows).forEach(group => {
             lines.push({
                 type: "edge",
                 description: `قشاط — ${group.edge_type}`,
@@ -183,7 +207,11 @@
             });
         });
 
-        if (!lines.some(line => line.type === "edge") && n(frm.doc.edge_cost_usd) > 0) {
+        if (
+            !hasSpecialPricing
+            && !lines.some(line => line.type === "edge")
+            && n(frm.doc.edge_cost_usd) > 0
+        ) {
             lines.push({
                 type: "edge",
                 description: "تكلفة القشاط",
@@ -194,26 +222,15 @@
             });
         }
 
-        const specials = specialRows(frm);
-        const baseline = n(frm.doc.special_shapes_baseline_cost_usd);
-        if (specials.length && baseline > 0) {
-            lines.push({
-                type: "special-adjustment",
-                description: "استبعاد الحساب الآلي للدرف الخاصة — استُبدل بسعر شامل",
-                quantity: 1,
-                unit: "تسوية",
-                rate: -baseline,
-                amount: -baseline,
-            });
-        }
         specials.forEach(row => {
             lines.push({
                 type: "special",
-                description: `درفة خاصة رقم ${row.index} — سعر شامل`,
+                description: `درفة خاصة رقم ${row.index} — ${row.price_status === "Approved" ? "سعر معتمد شامل" : "سعر تقديري شامل"}`,
                 quantity: row.qty,
                 unit: "درفة",
                 rate: row.final_unit_price,
                 amount: row.final_unit_price * row.qty,
+                note: row.price_note,
             });
         });
 
@@ -273,6 +290,7 @@
                 .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:112px}
                 .dco-special-price-actions .btn{border-radius:8px;font-size:10px;font-weight:800}
                 .dco-special-price-note{grid-column:1/-1;padding:7px 10px;border-radius:8px;background:var(--subtle-fg,#f7f9fa);font-size:10px;color:var(--text-muted,#63717e)}
+                .dco-invoice-line-note{display:block;margin-top:4px;color:var(--text-muted,#63717e);font-size:10px;font-weight:400;line-height:1.55}
                 .dco-quote-state{display:inline-flex;align-items:center;margin-right:7px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.16);font-size:10px;font-weight:800}
                 @media(max-width:900px){.dco-cost-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dco-invoice-summary{grid-template-columns:1fr}.dco-cost-hero{flex-direction:column}.dco-cost-actions{width:100%}}
                 @media(max-width:1050px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-identity,.dco-special-price-note{grid-column:1/-1}.dco-special-price-actions{flex-direction:row}}
@@ -341,7 +359,7 @@
                                 ${approver ? `<button type="button" class="btn ${approved ? "btn-default" : "btn-primary"} btn-xs dco-approve-special-price" ${saved && documented ? "" : "disabled"}>${approved ? "تعديل السعر" : "اعتماد سعر"}</button>` : ""}
                                 <span class="dco-special-price-status ${approved ? "is-approved" : ""}">${approved ? "✓ سعر معتمد" : "◷ سعر تقديري"}</span>
                             </div>
-                            ${approved ? `<div class="dco-special-price-note">اعتمده ${esc(row.price_approved_by || "—")} في ${esc(row.price_approved_on || "—")} — ${esc(row.price_note || "")}</div>` : (!saved ? '<div class="dco-special-price-note">احفظ الطلب أولًا ليتمكن المحاسب من اعتماد السعر.</div>' : "")}
+                            ${approved ? `<div class="dco-special-price-note">اعتمده ${esc(row.price_approved_by || "—")} في ${esc(row.price_approved_on || "—")}${row.price_note ? ` — ${esc(row.price_note)}` : ""}</div>` : (!saved ? '<div class="dco-special-price-note">احفظ الطلب أولًا ليتمكن المحاسب من اعتماد السعر.</div>' : "")}
                         </div>`;
                     }).join("")}
                 </div>
@@ -360,10 +378,10 @@
                     <tbody>${lines.map((line, index) => `
                         <tr>
                             <td>${index + 1}</td>
-                            <td class="text-start"><b>${esc(line.description)}</b></td>
+                            <td class="text-start"><b>${esc(line.description)}</b>${line.note ? `<span class="dco-invoice-line-note">ملاحظة السعر: ${esc(line.note)}</span>` : ""}</td>
                             <td>${qty(line.quantity)}</td>
                             <td>${esc(line.unit)}</td>
-                            <td>${line.rate ? money(line.rate) : "—"}</td>
+                            <td>${line.rate || line.rate === 0 ? money(line.rate) : "—"}</td>
                             <td><b>${money(line.amount)}</b></td>
                         </tr>`).join("")}</tbody>
                 </table>
@@ -433,7 +451,7 @@
         return `<!doctype html>
 <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة الطلب ${esc(frm.doc.name || "")}</title>
 <style>
-@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.measurements .notes-col{width:36%;text-align:right;white-space:normal;line-height:1.55}.invoice{font-size:10px}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
+@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.measurements .notes-col{width:36%;text-align:right;white-space:normal;line-height:1.55}.invoice{font-size:10px}.invoice .line-note{display:block;margin-top:3px;color:#555;font-size:8.5px;font-weight:400;line-height:1.45}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
 </style></head><body>
 <div class="header"><div class="title"><h1>عرض سعر الطلب</h1><div class="muted">فاتورة تكلفة الطلب — تفاصيل القياسات والخدمات وتسعير الدرف الخاصة</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div><div class="muted">حالة السعر: ${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</div></div></div>
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
@@ -443,7 +461,7 @@ ${rows.map(row => `<tr><td>${row.index}</td><td>${row.piece_type === "Special" ?
 </tbody></table>
 <div class="section-title">تفاصيل الفاتورة</div>
 <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>
-${lines.map((line,index)=>`<tr><td>${index+1}</td><td class="right"><b>${esc(line.description)}</b></td><td>${qty(line.quantity)}</td><td>${esc(line.unit)}</td><td>${line.rate?money(line.rate):"—"}</td><td><b>${money(line.amount)}</b></td></tr>`).join("")}
+${lines.map((line,index)=>`<tr><td>${index+1}</td><td class="right"><b>${esc(line.description)}</b>${line.note ? `<span class="line-note">ملاحظة السعر: ${esc(line.note)}</span>` : ""}</td><td>${qty(line.quantity)}</td><td>${esc(line.unit)}</td><td>${line.rate || line.rate === 0 ? money(line.rate) : "—"}</td><td><b>${money(line.amount)}</b></td></tr>`).join("")}
 </tbody></table>
 <div class="total-box"><span>الإجمالي النهائي</span><span class="amount">$ ${money(total)}</span></div>
 ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc.order_notes)}</div>` : ""}
@@ -514,15 +532,16 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
                     label: "السعر الشامل للدرفة الواحدة ($)",
                     reqd: 1,
                     non_negative: 1,
-                    default: n(row.special_shape_custom_unit_price_usd) || n(row.special_shape_estimated_unit_price_usd),
+                    default: row.special_shape_price_status === "Approved"
+                        ? n(row.special_shape_custom_unit_price_usd)
+                        : n(row.special_shape_estimated_unit_price_usd),
                 },
                 {
                     fieldname: "note",
                     fieldtype: "Small Text",
-                    label: "سبب أو ملاحظة التسعير",
-                    reqd: 1,
+                    label: "ملاحظة التسعير (اختياري)",
                     default: row.special_shape_price_note || "",
-                    description: "مثال: يشمل تصميم CNC والقشاط اليدوي.",
+                    description: "إذا كتبت ملاحظة فستظهر مع الدرفة في تفاصيل الفاتورة.",
                 },
             ],
             values => {
@@ -532,7 +551,7 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
                         order_name: frm.doc.name,
                         piece_name: row.name,
                         unit_price_usd: values.unit_price_usd,
-                        note: values.note,
+                        note: values.note || "",
                     },
                     freeze: true,
                     freeze_message: "جاري اعتماد سعر الدرفة الخاصة...",
@@ -554,9 +573,15 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
         wrapper.find(".dco-view-special-sketch").on("click", function () {
             const card = this.closest("[data-special-row]");
             const row = sourcePiece(frm, card && card.dataset.specialRow);
-            if (row && window.AlmdinaSpecialShapeEditor) {
-                window.AlmdinaSpecialShapeEditor.view(frm, row);
+            if (!row) {
+                frappe.msgprint("تعذر العثور على سطر الدرفة الخاصة. أعد تحميل الطلب ثم حاول مرة أخرى.");
+                return;
             }
+            if (!window.AlmdinaSpecialShapeEditor || !window.AlmdinaSpecialShapeEditor.view) {
+                frappe.msgprint("تعذر تحميل عارض الرسم. حدّث الصفحة تحديثًا إجباريًا ثم حاول مرة أخرى.");
+                return;
+            }
+            window.AlmdinaSpecialShapeEditor.view(frm, row);
         });
         wrapper.find(".dco-approve-special-price").on("click", function () {
             const card = this.closest("[data-special-row]");
