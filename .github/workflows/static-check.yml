@@ -53,6 +53,7 @@ jobs:
           from almdina_erp.tests import test_order_edge_color_ux as order_edge_color_checks
           from almdina_erp.tests import test_packing_score_field as packing_score_checks
           from almdina_erp.tests import test_special_shape_close_ux as special_shape_close_checks
+          from almdina_erp.tests import test_door_cutting_order_save_pipeline_performance as save_pipeline_checks
 
           modules = [
               arabic_checks,
@@ -66,6 +67,7 @@ jobs:
               order_edge_color_checks,
               packing_score_checks,
               special_shape_close_checks,
+              save_pipeline_checks,
           ]
           total = 0
           for module in modules:
