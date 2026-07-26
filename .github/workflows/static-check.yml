@@ -55,6 +55,7 @@ jobs:
           from almdina_erp.tests import test_special_shape_close_ux as special_shape_close_checks
           from almdina_erp.tests import test_door_cutting_order_save_pipeline_performance as save_pipeline_checks
           from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
+          from almdina_erp.tests import test_special_shape_geometry_ux as special_shape_geometry_checks
 
           modules = [
               arabic_checks,
@@ -70,6 +71,7 @@ jobs:
               special_shape_close_checks,
               save_pipeline_checks,
               order_surface_checks,
+              special_shape_geometry_checks,
           ]
           total = 0
           for module in modules:
@@ -111,3 +113,8 @@ jobs:
             count=$((count + 1))
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
+
+      - name: Validate special-shape exact geometry
+        shell: bash
+        run: |
+          node almdina_erp/tests/test_special_shape_geometry.js

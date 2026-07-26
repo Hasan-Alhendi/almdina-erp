@@ -195,6 +195,9 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                     "clipped_corner_position": piece.clipped_corner_position or "",
                     "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
                     "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
+                    "special_shape_geometry_json": (
+                        getattr(piece, "special_shape_geometry_json", "") or ""
+                    ),
                     "rotated": bool(cint(piece.rotated)),
                     "edge_long_right": cint(piece.edge_long_right),
                     "edge_long_left": cint(piece.edge_long_left),

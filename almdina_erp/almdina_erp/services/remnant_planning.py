@@ -28,6 +28,9 @@ def _piece_rows(order: Any) -> list[dict[str, Any]]:
             "clipped_corner_position": row.clipped_corner_position or "",
             "clipped_corner_width_cm": flt(row.clipped_corner_width_cm),
             "clipped_corner_length_cm": flt(row.clipped_corner_length_cm),
+            "special_shape_geometry_json": (
+                getattr(row, "special_shape_geometry_json", "") or ""
+            ),
             "allow_rotation": cint(row.allow_rotation),
             "edge_long_right": cint(row.edge_long_right),
             "edge_long_left": cint(row.edge_long_left),

@@ -53,14 +53,14 @@ def test_measurement_print_has_invoice_measurement_columns_without_invoice_total
     assert "تفاصيل الفاتورة" not in source
 
 
-def test_customer_invoice_no_longer_prints_duplicate_edge_color_column():
+def test_customer_invoice_prints_edge_color_once_in_header_without_table_columns():
     source = text(EDGE_COLOR_UX)
     print_section = source.split("function printHtml(frm)", 1)[1].split(
         "function printCustomerInvoice(frm)", 1
     )[0]
-    assert "grid-template-columns:repeat(4" in print_section
+    assert "grid-template-columns:repeat(5" in print_section
     assert "<b>نوع القشاط</b>" in print_section
-    assert "<b>لون القشاط</b>" not in print_section
+    assert print_section.count("<b>لون القشاط</b>") == 1
     assert "patchMeasurementTable" not in source
     assert "patchInvoiceLines" not in source
     assert "patchInvoiceMeta" not in source

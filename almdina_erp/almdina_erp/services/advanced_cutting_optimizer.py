@@ -598,6 +598,9 @@ def _solve_cp_sat(
             "clipped_corner_position": piece.get("clipped_corner_position") or "",
             "clipped_corner_width_cm": num(piece.get("clipped_corner_width_cm")),
             "clipped_corner_length_cm": num(piece.get("clipped_corner_length_cm")),
+            "special_shape_geometry_json": (
+                piece.get("special_shape_geometry_json") or ""
+            ),
             "rotated": rotated,
             "area_m2": num(piece.get("area_m2")),
             "notes": piece.get("notes") or "",

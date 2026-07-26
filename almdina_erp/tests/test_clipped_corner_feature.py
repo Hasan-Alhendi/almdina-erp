@@ -90,9 +90,12 @@ def test_cutting_plan_and_dxf_use_the_same_five_sided_geometry():
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
     editor = CORNER_UX.read_text(encoding="utf-8")
 
-    assert "AlmdinaClippedCornerGeometry.pointsAttribute(piece, 100, 100)" in order_js
+    assert "shapeGeometry = clipped" in order_js
+    assert "window.AlmdinaClippedCornerGeometry" in order_js
+    assert "shapeGeometry.pointsAttribute(piece, 100, 100)" in order_js
     assert "dco-clipped-corner-piece" in order_js
     assert "⌑ زاوية مقصوصة" in order_js
-    assert "closedPath(\"CUT_PATH\", geometry.dxfPoints" in secure_dxf
+    assert "clippedGeometry && clippedGeometry.isClipped(piece)" in secure_dxf
+    assert 'closedPath("CUT_PATH", pathGeometry.dxfPoints' in secure_dxf
     assert "ROTATED_POSITION" in editor
     assert "dxfPoints" in editor

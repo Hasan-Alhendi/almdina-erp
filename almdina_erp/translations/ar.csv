@@ -709,6 +709,7 @@ Top Left,أعلى اليسار
 Bottom Right,أسفل اليمين
 Bottom Left,أسفل اليسار
 Special Shape Documentation,توثيق الدرفة الخاصة
+Special Shape Exact Geometry,المسار الهندسي الدقيق للدرفة الخاصة
 Special Shape Documentation Status,حالة توثيق الدرفة الخاصة
 Needs Documentation,تحتاج توثيقًا
 Documented,موثقة
@@ -730,4 +731,23 @@ Default Special CNC Fee USD / Piece,أجرة CNC الافتراضية للدرف
 Default Manual Edge Fee USD / Piece,أجرة القشاط اليدوي الافتراضية للدرفة الخاصة
 Default Special Shape Margin Percent,هامش ربح الدرفة الخاصة الافتراضي
 Document the special door drawing before review. Missing rows: {0}.,وثّق رسم الدرفة الخاصة قبل إرسال الطلب للمراجعة. الصفوف الناقصة: {0}.
+Document the special door shape before review. Missing rows: {0}.,وثّق شكل الدرفة الخاصة قبل إرسال الطلب للمراجعة. الصفوف الناقصة: {0}.
+Document the special door shape before approving its price.,وثّق شكل الدرفة الخاصة قبل اعتماد سعرها.
 Accounts Management must approve every special door price before production approval. Pending rows: {0}.,يجب على المحاسب اعتماد سعر كل درفة خاصة قبل اعتماد الإنتاج. الصفوف المعلقة: {0}.
+Special shape geometry is too large.,بيانات المسار الهندسي للدرفة الخاصة كبيرة جدًا.
+Special shape geometry contains invalid JSON.,بيانات المسار الهندسي للدرفة الخاصة غير صالحة.
+Special shape geometry must be a JSON object.,يجب أن تكون بيانات المسار الهندسي كائن JSON.
+Unsupported special shape geometry version.,إصدار بيانات المسار الهندسي للدرفة الخاصة غير مدعوم.
+Special shape geometry must be a centimetre polygon.,يجب أن يكون المسار الهندسي مضلعًا بوحدة السنتيمتر.
+Special shape width and length must be greater than zero.,يجب أن يكون عرض وطول الدرفة الخاصة أكبر من صفر.
+Special shape geometry width does not match the piece width.,عرض المسار الهندسي لا يطابق عرض الدرفة.
+Special shape geometry length does not match the piece length.,طول المسار الهندسي لا يطابق طول الدرفة.
+Special shape geometry needs at least three vertices.,يحتاج المسار الهندسي للدرفة الخاصة إلى ثلاث زوايا على الأقل.
+Special shape geometry cannot exceed {0} vertices.,لا يمكن أن يتجاوز المسار الهندسي للدرفة الخاصة {0} زاوية.
+Special shape vertex {0} is invalid.,الزاوية رقم {0} في المسار الهندسي غير صالحة.
+Special shape vertex {0} is outside the raw piece.,الزاوية رقم {0} خارج مقاس خام الدرفة.
+Special shape geometry needs at least three distinct vertices.,يحتاج المسار الهندسي إلى ثلاث زوايا مختلفة على الأقل.
+Special shape geometry has duplicate adjacent vertices.,يحتوي المسار الهندسي على زوايا متجاورة متطابقة.
+Special shape geometry must touch all four raw-piece bounds.,يجب أن يلامس المسار الهندسي حدود عرض الخام وطوله الأربعة.
+Special shape geometry area must be greater than zero.,يجب أن تكون مساحة المسار الهندسي أكبر من صفر.
+Special shape geometry edges cannot intersect.,لا يجوز أن تتقاطع أضلاع المسار الهندسي.

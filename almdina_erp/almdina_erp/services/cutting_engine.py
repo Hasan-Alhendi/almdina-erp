@@ -88,6 +88,9 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "clipped_corner_position": row.get("clipped_corner_position") or "",
                     "clipped_corner_width_cm": num(row.get("clipped_corner_width_cm")),
                     "clipped_corner_length_cm": num(row.get("clipped_corner_length_cm")),
+                    "special_shape_geometry_json": (
+                        row.get("special_shape_geometry_json") or ""
+                    ),
                     "allow_rotation": 1 if row.get("allow_rotation") else 0,
                     "area_m2": (width_cm * length_cm) / 10000,
                     "notes": row.get("notes") or "",
@@ -142,6 +145,7 @@ def make_placed_piece(
         "clipped_corner_position": piece.get("clipped_corner_position") or "",
         "clipped_corner_width_cm": num(piece.get("clipped_corner_width_cm")),
         "clipped_corner_length_cm": num(piece.get("clipped_corner_length_cm")),
+        "special_shape_geometry_json": piece.get("special_shape_geometry_json") or "",
         "rotated": bool(rotated),
         "area_m2": num(piece.get("area_m2")),
         "notes": piece.get("notes") or "",

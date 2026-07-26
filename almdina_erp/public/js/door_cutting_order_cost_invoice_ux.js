@@ -82,6 +82,7 @@
                 length_edge_count: Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left)),
                 notes: row.notes || "",
                 drawing_json: row.special_shape_drawing_json || "",
+                geometry_json: row.special_shape_geometry_json || "",
                 shape_status: row.special_shape_status || "Not Required",
                 estimated_unit_price: n(row.special_shape_estimated_unit_price_usd),
                 custom_unit_price: n(row.special_shape_custom_unit_price_usd),
@@ -335,11 +336,12 @@
                 <div class="dco-special-price-list">
                     ${rows.map(row => {
                         const approved = row.price_status === "Approved";
-                        const documented = Boolean(row.drawing_json);
+                        const exactGeometry = Boolean(row.geometry_json);
+                        const documented = exactGeometry || Boolean(row.drawing_json);
                         return `<div class="dco-special-price-card" data-special-row="${esc(row.row_name)}">
                             <div class="dco-special-price-identity">
                                 <span class="dco-special-price-icon">✦</span>
-                                <span><b>درفة خاصة رقم ${row.index}</b><small>${qty(row.width_cm)} × ${qty(row.length_cm)} سم — عدد ${row.qty} · ${documented ? "الرسم موثق" : "بانتظار الرسم"}</small></span>
+                                <span><b>درفة خاصة رقم ${row.index}</b><small>${qty(row.width_cm)} × ${qty(row.length_cm)} سم — عدد ${row.qty} · ${exactGeometry ? "مسار هندسي موثق" : (documented ? "رسم توضيحي موثق" : "بانتظار الشكل")}</small></span>
                             </div>
                             <div class="dco-special-price-cell"><span class="label">القشاط المبدئي للسطر</span><span class="value">${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}</span></div>
                             <div class="dco-special-price-cell"><span class="label">تقدير النظام / الوحدة</span><span class="value">$ ${money(row.estimated_unit_price)}</span></div>

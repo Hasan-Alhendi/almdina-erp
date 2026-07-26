@@ -249,20 +249,43 @@
                 const width = usableW ? num(piece.w) / usableW * 100 : 0;
                 const height = usableH ? num(piece.h) / usableH * 100 : 0;
                 const clipped = piece.piece_type === "Clipped Corner";
-                const clippedPoints = clipped && window.AlmdinaClippedCornerGeometry
-                    ? window.AlmdinaClippedCornerGeometry.pointsAttribute(piece, 100, 100)
+                const exactSpecial = piece.piece_type === "Special"
+                    && window.AlmdinaSpecialShapeGeometry
+                    && window.AlmdinaSpecialShapeGeometry.isExact(piece);
+                const shapeGeometry = clipped
+                    ? window.AlmdinaClippedCornerGeometry
+                    : (exactSpecial ? window.AlmdinaSpecialShapeGeometry : null);
+                const shapePoints = shapeGeometry
+                    ? shapeGeometry.pointsAttribute(piece, 100, 100)
                     : "0,0 100,0 100,100 0,100";
-                const outline = clipped
-                    ? `<svg class="dco-clipped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1"><polygon points="${clippedPoints}" fill="#fff0c7" stroke="#8a5700" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
+                const shaped = clipped || exactSpecial;
+                const outline = shaped
+                    ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1"><polygon points="${shapePoints}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
                     : "";
-                const style = clipped
+                const style = shaped
                     ? "border:0;background:transparent;"
-                    : "border:1px solid #111;background:#e4f5ff;";
+                    : (piece.piece_type === "Special"
+                        ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);"
+                        : "border:1px solid #111;background:#e4f5ff;");
+                const shapeClip = shapePoints.split(" ").map(pair => {
+                    const [x, y] = pair.split(",");
+                    return `${x}% ${y}%`;
+                }).join(",");
+                const edgeLines = shaped
+                    ? `<span style="position:absolute;display:block;inset:0;z-index:3;clip-path:polygon(${shapeClip})">${render_edge_lines(piece)}</span>`
+                    : render_edge_lines(piece);
+                const badge = clipped
+                    ? '<span style="display:inline-block;padding:1px 4px;border-radius:999px;background:#8a5700;color:#fff;font-size:8px;font-weight:900">⌑ زاوية مقصوصة</span><br>'
+                    : (exactSpecial
+                        ? '<span style="display:inline-block;padding:1px 4px;border-radius:999px;background:#7a4c13;color:#fff;font-size:8px;font-weight:900">◆ مسار مخصص</span><br>'
+                        : (piece.piece_type === "Special"
+                            ? '<span style="display:inline-block;padding:1px 4px;border-radius:999px;background:#7a4c13;color:#fff;font-size:8px;font-weight:900">✦ خام CNC</span><br>'
+                            : ""));
                 html += `
-                    <div class="dco-piece ${clipped ? "dco-clipped-corner-piece" : ""}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${style}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${style}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${outline}
-                        ${render_edge_lines(piece)}
-                        <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">${clipped ? '<span style="display:inline-block;padding:1px 4px;border-radius:999px;background:#8a5700;color:#fff;font-size:8px;font-weight:900">⌑ زاوية مقصوصة</span><br>' : ""}<b>${escape_html(piece.label)}</b><br><span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span></div>
+                        ${edgeLines}
+                        <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">${badge}<b>${escape_html(piece.label)}</b><br><span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span></div>
                     </div>
                 `;
             });
@@ -352,9 +375,13 @@
                 const pieceH = num(piece.h) * 10;
                 const x = offsetX + trim + num(piece.x) * 10;
                 const y = offsetY + fullH - trim - num(piece.y) * 10 - pieceH;
-                const geometry = window.AlmdinaClippedCornerGeometry;
-                entities += geometry && geometry.isClipped(piece)
-                    ? dxf_path("CUT_PATH", geometry.dxfPoints(piece, x, y, pieceW, pieceH))
+                const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+                const specialGeometry = window.AlmdinaSpecialShapeGeometry;
+                const pathGeometry = clippedGeometry && clippedGeometry.isClipped(piece)
+                    ? clippedGeometry
+                    : (specialGeometry && specialGeometry.isExact(piece) ? specialGeometry : null);
+                entities += pathGeometry
+                    ? dxf_path("CUT_PATH", pathGeometry.dxfPoints(piece, x, y, pieceW, pieceH))
                     : dxf_rect("CUT_PATH", x, y, pieceW, pieceH);
             });
         });
