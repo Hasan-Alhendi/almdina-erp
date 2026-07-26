@@ -40,6 +40,15 @@
         return String(frm.doc.edge_color || "").trim() || "غير محدد";
     }
 
+    function shapePrint() {
+        return window.AlmdinaShapePrint || null;
+    }
+
+    function shapePrintCss() {
+        const renderer = shapePrint();
+        return renderer ? renderer.css : "";
+    }
+
     function sectionByTitle(root, title) {
         if (!root) return null;
         return [...root.querySelectorAll(".dco-cost-section")].find(section => {
@@ -99,6 +108,25 @@
         return clone;
     }
 
+    function patchMeasurementDrawings(frm, table) {
+        const renderer = shapePrint();
+        if (!renderer || !table) return;
+        const pieces = frm.doc.pieces || [];
+        [...table.querySelectorAll("tbody tr")].forEach((tableRow, index) => {
+            const piece = pieces[index];
+            const notesCell = tableRow.querySelector(".dco-notes-col");
+            if (!piece || !notesCell) return;
+            notesCell.innerHTML = renderer.notesCell(
+                piece,
+                piece.notes || "",
+                { label: `رسمة الدرفة رقم ${index + 1}` }
+            );
+            if (!renderer.hasVisual(piece)) return;
+            tableRow.classList.add("dco-row-with-sketch");
+            notesCell.classList.add("dco-notes-has-sketch");
+        });
+    }
+
     function printHtml(frm) {
         const root = getCostRoot(frm);
         patchCostView(frm);
@@ -106,6 +134,7 @@
         const invoice = sectionByTitle(root, "تفاصيل الفاتورة");
         const measurementTable = cleanClone(measurement && measurement.querySelector("table"));
         const invoiceTable = cleanClone(invoice && invoice.querySelector("table"));
+        patchMeasurementDrawings(frm, measurementTable);
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         const edgeColor = orderEdgeColor(frm);
 
@@ -113,6 +142,7 @@
 <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة الطلب ${esc(frm.doc.name || "")}</title>
 <style>
 @page{size:A4 portrait;margin:11mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:10.5px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:10px}.header h1{font-size:21px;margin:0 0 4px}.muted{color:#666;font-size:9px}.info{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:9px 0}.info>div{border:1px solid #aaa;border-radius:5px;padding:6px;min-width:0;word-break:break-word}.info b{display:block;font-size:8px;color:#555;margin-bottom:2px}.section-title{font-size:13px;font-weight:900;margin:12px 0 5px}.dco-cost-table{width:100%;border-collapse:collapse;font-size:8.8px;min-width:0!important}.dco-cost-table th,.dco-cost-table td{border:1px solid #999;padding:4px;text-align:center;vertical-align:middle}.dco-cost-table th{background:#eee;font-weight:900}.dco-cost-table .text-start,.dco-cost-table .dco-notes-col{text-align:right}.dco-cost-table .dco-notes-col{width:28%;white-space:normal;line-height:1.45}.dco-special-price-status{font-weight:800}.dco-dimension-mark{display:inline-flex;min-width:34px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1px;min-height:4px}.dco-dimension-edge-line{display:block;width:25px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total{margin-top:9px;margin-right:auto;width:45%;border:2px solid #111;padding:9px;display:flex;justify-content:space-between;align-items:center}.total b{font-size:13px}.total span{font-size:20px;font-weight:900;direction:ltr}.notes{margin-top:10px;padding:7px;border:1px solid #aaa;min-height:32px}.footer{margin-top:12px;border-top:1px solid #aaa;padding-top:5px;font-size:8px;color:#666;display:flex;justify-content:space-between}
+${shapePrintCss()}
 </style></head><body>
 <div class="header"><div><h1>عرض سعر الطلب</h1><div class="muted">تفاصيل القياسات والمواد والقص والقشاط</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div><div class="muted">حالة السعر: ${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</div></div></div>
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${esc(frm.doc.required_boards || 0)}</div><div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
