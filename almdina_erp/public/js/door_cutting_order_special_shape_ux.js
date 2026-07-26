@@ -532,6 +532,11 @@
 
         const root = dialog.fields_dict.special_shape_canvas.$wrapper
             .find(".dco-special-sketch-shell").get(0);
+        if (!root) {
+            dialog.hide();
+            frappe.msgprint("تعذر تجهيز نافذة الرسم. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+            return;
+        }
         const state = {
             frm,
             row,
@@ -550,7 +555,7 @@
         };
         if (readOnly) {
             root.querySelector(".dco-sketch-toolbar").style.display = "none";
-            root.querySelector(".dco-special-sketch-shell").style.gridTemplateColumns = "minmax(0,1fr) 230px";
+            root.style.gridTemplateColumns = "minmax(0,1fr) 230px";
             state.svg.style.cursor = "default";
             root.querySelector(".dco-sketch-fullscreen-button").addEventListener("click", event => {
                 dialog.$wrapper.toggleClass("dco-sketch-fullscreen");
