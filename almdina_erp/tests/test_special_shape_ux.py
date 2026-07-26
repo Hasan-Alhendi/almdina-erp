@@ -110,7 +110,7 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "AlmdinaSpecialShapeEditor.open" in operator
     assert '"public/js/door_cutting_order_special_shape_ux.js"' in hooks
 
-    for tool in ("pen", "line", "rectangle", "ellipse", "dimension", "note", "eraser"):
+    for tool in ("pen", "line", "rectangle", "ellipse", "dimension", "note", "select", "eraser"):
         assert f'key: "{tool}"' in sketch
     assert "pointerdown" in sketch
     assert "pointermove" in sketch
@@ -127,7 +127,13 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "erasePenStroke" in sketch
     assert "dco-sketch-eraser-size" in sketch
     assert "خط القلم لن يُحذف كاملًا" in sketch
-    assert "المؤشر يحدد نقطة الرسم بدقة" in sketch
+    assert "التنعيم وإغلاق النهايات يعملان أثناء الرسم" in sketch
+    assert "dco-sketch-selection-controls" in sketch
+    assert "translateElement" in sketch
+    assert "snapPenEndpoints" in sketch
+    assert "dco-sketch-zoom-in" in sketch
+    assert 'data-template="arch"' in sketch
+    assert "تعديلات لم تحفظ" in sketch
 
 
 def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost():
