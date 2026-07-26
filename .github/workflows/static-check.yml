@@ -51,6 +51,7 @@ jobs:
           from almdina_erp.tests import test_measurement_resilience_ux as measurement_resilience_checks
           from almdina_erp.tests import test_table_performance_ux as table_performance_checks
           from almdina_erp.tests import test_order_edge_color_ux as order_edge_color_checks
+          from almdina_erp.tests import test_packing_score_field as packing_score_checks
 
           modules = [
               arabic_checks,
@@ -62,6 +63,7 @@ jobs:
               measurement_resilience_checks,
               table_performance_checks,
               order_edge_color_checks,
+              packing_score_checks,
           ]
           total = 0
           for module in modules:
