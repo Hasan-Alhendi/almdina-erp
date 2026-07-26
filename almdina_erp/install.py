@@ -48,6 +48,7 @@ def sync_setup() -> None:
     seed_edge_banding_types()
     seed_default_routing()
     seed_settings_defaults()
+    sync_plan_recalculation_state()
 
 
 def after_install() -> None:
@@ -131,3 +132,25 @@ def seed_settings_defaults() -> None:
             changed = True
     if changed:
         settings.save(ignore_permissions=True)
+
+
+def sync_plan_recalculation_state() -> None:
+    """Keep existing valid plans usable after adding the fast-save freshness flag."""
+    try:
+        if not frappe.db.table_exists("Door Cutting Order"):
+            return
+        if not frappe.db.has_column("Door Cutting Order", "plan_needs_recalculation"):
+            return
+        frappe.db.sql(
+            """
+            update `tabDoor Cutting Order`
+               set plan_needs_recalculation = case
+                    when coalesce(cutting_plan_json, '') <> '' then 0
+                    else 1
+               end
+            """
+        )
+    except Exception:
+        # Fresh installs/migrations may invoke setup before every metadata cache is
+        # available. The normal document save path still sets the correct value.
+        frappe.log_error(frappe.get_traceback(), "Almdina plan freshness backfill")
