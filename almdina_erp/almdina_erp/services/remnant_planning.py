@@ -24,6 +24,7 @@ def _piece_rows(order: Any) -> list[dict[str, Any]]:
             "width_cm": flt(row.width_cm),
             "length_cm": flt(row.length_cm),
             "qty": cint(row.qty),
+            "piece_type": row.piece_type or "Regular",
             "allow_rotation": cint(row.allow_rotation),
             "edge_long_right": cint(row.edge_long_right),
             "edge_long_left": cint(row.edge_long_left),
@@ -267,6 +268,10 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         "waste_area_m2": waste_area,
         "required_full_boards": full_board_count,
         "used_remnants": used_remnants,
+        "special_shape_raw_summary": order._special_shape_raw_summary(pieces, {
+            "sheets": sheets,
+            "unplaced": unplaced,
+        }),
         "sheets": sheets,
         "unplaced": unplaced,
     }

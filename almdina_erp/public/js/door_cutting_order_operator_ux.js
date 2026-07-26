@@ -159,7 +159,15 @@
                 .dco-special-sketch-button.is-documented { border-style:solid; border-color:rgba(31,130,82,.35); background:rgba(31,130,82,.08); color:#17643f; }
                 .dco-special-sketch-button:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
                 .dco-special-row { background:rgba(176,112,28,.035); }
-                .dco-special-row .dco-edge-buttons { opacity:.42; }
+                .dco-special-row .dco-col-edges {
+                    background:linear-gradient(135deg,rgba(255,248,229,.78),rgba(255,252,244,.42));
+                }
+                .dco-special-row .dco-edge-buttons {
+                    padding:3px; border:1px dashed rgba(176,112,28,.35); border-radius:10px;
+                }
+                .dco-special-row .dco-check-toggle.is-checked {
+                    background:#b5701c; border-color:#b5701c;
+                }
                 .dco-fast-empty { padding:18px; text-align:center; color:var(--text-muted,#6c7680); }
                 .dco-fast-readonly-note { font-weight:700; opacity:.75; }
 
@@ -256,7 +264,6 @@
     }
 
     function localEdgeMeters(row) {
-        if ((row.piece_type || "Regular") === "Special") return 0;
         const qty = Math.max(0, num(row.qty));
         const longSides = Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left));
         const widthSides = Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom));
@@ -304,8 +311,8 @@
         const data = row || { qty:1 };
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
-        const toggle = (field,label,extra="",forceDisabled=false) => `
-            <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${forceDisabled ? "disabled" : disabled}>
+        const toggle = (field,label,extra="") => `
+            <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
         const hasDrawing = Boolean(String(data.special_shape_drawing_json || "").trim());
@@ -320,11 +327,11 @@
                 <td class="dco-col-number"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
-                <td class="dco-col-edges"><div class="dco-edge-buttons">
-                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R", "", isSpecial)}
-                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L", "", isSpecial)}
-                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top", "", isSpecial)}
-                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom", "", isSpecial)}
+                <td class="dco-col-edges"><div class="dco-edge-buttons" title="${isSpecial ? (isArabic() ? "قشاط مبدئي لتقدير السعر؛ يمكن اعتماده أو تعديله بعد تصميم CNC" : "Preliminary banding for the estimate; finalize after CNC design") : ""}">
+                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
+                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
+                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
+                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
                 </div></td>
                 <td class="dco-col-edge-type"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
                 <td class="dco-col-sketch"><button type="button" class="dco-special-sketch-button ${hasDrawing ? "is-documented" : ""}" ${isSpecial && editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes"}">
@@ -349,6 +356,7 @@
                         <b>${isArabic() ? "إدخال سريع:" : "Fast entry:"}</b>
                         <span>${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
                         <span>${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
+                        <span>${isArabic() ? "في الدرفة الخاصة: جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية." : "For a special door, selected edge sides are preliminary and feed the estimate."}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
                 </div>
@@ -437,12 +445,6 @@
         if (NUMBER_FIELDS.has(fieldname)) value = num(value);
         if (fieldname === "qty") value = Math.max(1, Math.trunc(value || 1));
         row[fieldname] = value;
-        if (fieldname === "piece_type" && value === "Special") {
-            row.edge_long_right = 0;
-            row.edge_long_left = 0;
-            row.edge_width_top = 0;
-            row.edge_width_bottom = 0;
-        }
         frm.dirty();
         updateCalculatedCells(tr, row);
         if (trigger) triggerChildField(frm, row, fieldname, 0);

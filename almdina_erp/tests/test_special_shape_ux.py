@@ -33,11 +33,19 @@ ORDER_PY = (
     / "door_cutting_order"
     / "door_cutting_order.py"
 )
+ORDER_JS = (
+    APP_ROOT
+    / "almdina_erp"
+    / "doctype"
+    / "door_cutting_order"
+    / "door_cutting_order.js"
+)
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 SKETCH_UX = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 COST_UX = APP_ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
+REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 CUTTING_PLAN_PIECE_JSON = (
     APP_ROOT
     / "almdina_erp"
@@ -112,9 +120,10 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "purpose: \"operator_documentation_only\"" in sketch
 
 
-def test_sketch_is_json_documentation_not_trusted_cnc_or_edge_geometry():
+def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost():
     service = SERVICE_PY.read_text(encoding="utf-8")
     order = ORDER_PY.read_text(encoding="utf-8")
+    operator = OPERATOR_UX.read_text(encoding="utf-8")
 
     assert "validate_special_shape_drawing" in service
     assert "MAX_DRAWING_BYTES" in service
@@ -122,10 +131,16 @@ def test_sketch_is_json_documentation_not_trusted_cnc_or_edge_geometry():
     assert "MAX_DRAWING_POINTS" in service
     assert 'ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}' in service
 
-    assert 'is_special = (row.piece_type or "Regular") == "Special"' in order
-    assert "long_edges = 0 if is_special" in order
-    assert "width_edges = 0 if is_special" in order
+    assert "long_edges = cint(row.edge_long_right) + cint(row.edge_long_left)" in order
+    assert "width_edges = cint(row.edge_width_top) + cint(row.edge_width_bottom)" in order
+    assert '"edge_long_right": cint(row.edge_long_right)' in order
+    assert '"edge_width_bottom": cint(row.edge_width_bottom)' in order
     assert "expand_piece_groups(piece_rows)" in order
+    assert "special_shape_raw_summary" in order
+
+    assert 'if ((row.piece_type || "Regular") === "Special") return 0' not in operator
+    assert 'fieldname === "piece_type" && value === "Special"' not in operator
+    assert "جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية" in operator
 
 
 def test_accounting_approval_is_role_checked_audited_and_invalidated_by_geometry_changes():
@@ -139,7 +154,18 @@ def test_accounting_approval_is_role_checked_audited_and_invalidated_by_geometry
     assert "order.save(ignore_permissions=True)" in service
 
     assert '"special_shape_drawing_json"' in order
-    assert "if geometry_changed and not approval_action" in order
+    for fieldname in (
+        "allow_rotation",
+        "edge_long_right",
+        "edge_long_left",
+        "edge_width_top",
+        "edge_width_bottom",
+        "edge_type",
+    ):
+        assert f'"{fieldname}"' in order
+    assert "default_edge_changed = bool(" in order
+    assert "pricing_basis_changed = bool(" in order
+    assert "if pricing_basis_changed and not approval_action" in order
     assert 'row.special_shape_price_status = (' in order
     assert 'row.special_shape_price_approved_by = ""' in order
 
@@ -155,8 +181,10 @@ def test_customer_quote_replaces_special_baseline_instead_of_mutating_internal_c
     assert "استبعاد الحساب الآلي للدرف الخاصة" in cost
     assert "درفة خاصة رقم" in cost
     assert "approve_special_piece_price" in cost
-    assert "السعر شامل للدرفة" in cost
+    assert "سعر شامل" in cost
     assert "التكلفة الداخلية المخططة" in cost
+    assert "القشاط المبدئي" in cost
+    assert "${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}" in cost
 
 
 def test_review_and_production_approval_gate_special_documentation_and_price():
@@ -170,3 +198,18 @@ def test_review_and_production_approval_gate_special_documentation_and_price():
     assert "order.ensure_special_prices_approved()" in service
     assert placed_piece_fields["piece_type"]["options"] == "Regular\nSpecial"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in service
+
+
+def test_cutting_plan_visually_audits_every_special_raw_piece():
+    order_js = ORDER_JS.read_text(encoding="utf-8")
+    order_py = ORDER_PY.read_text(encoding="utf-8")
+    remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
+
+    assert "render_special_raw_coverage(frm, plan)" in order_js
+    assert "dco-special-raw-piece" in order_js
+    assert "✦ درفة خاصة · خام CNC" in order_js
+    assert "قشاط مبدئي:" in order_js
+    assert '"special_shape_raw_summary": self._special_shape_raw_summary(' in order_py
+    assert '"complete": requested_ids.issubset(placed_ids) and not unplaced_ids' in order_py
+    assert '"piece_type": row.piece_type or "Regular"' in remnant_planning
+    assert '"special_shape_raw_summary": order._special_shape_raw_summary(' in remnant_planning

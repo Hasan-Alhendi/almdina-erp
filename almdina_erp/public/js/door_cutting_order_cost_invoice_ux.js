@@ -262,7 +262,7 @@
                 .dco-grand-total .hint{font-size:10px;opacity:.72;margin-top:5px}
                 .dco-cost-empty{padding:28px;text-align:center;color:var(--text-muted,#6c7680)}
                 .dco-special-price-list{display:grid;gap:10px;padding:13px}
-                .dco-special-price-card{display:grid;grid-template-columns:minmax(210px,1.2fr) repeat(3,minmax(120px,.65fr)) auto;align-items:center;gap:10px;padding:13px;border:1px solid var(--border-color,#e0e5e9);border-radius:13px;background:var(--card-bg,#fff)}
+                .dco-special-price-card{display:grid;grid-template-columns:minmax(210px,1.2fr) repeat(4,minmax(112px,.65fr)) auto;align-items:center;gap:10px;padding:13px;border:1px solid var(--border-color,#e0e5e9);border-radius:13px;background:var(--card-bg,#fff)}
                 .dco-special-price-identity{display:flex;align-items:center;gap:10px;min-width:0}
                 .dco-special-price-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#fff4d9,#f0d6a3);color:#6d471c;font-size:20px;flex:0 0 auto}
                 .dco-special-price-identity b{display:block;font-size:13px}.dco-special-price-identity small{display:block;color:var(--text-muted,#6c7680);font-size:10px;margin-top:3px}
@@ -321,7 +321,7 @@
             <div class="dco-cost-section">
                 <div class="dco-cost-section-title">
                     <h4>تسعير الدرف الخاصة</h4>
-                    <span>السعر شامل للدرفة ويستبدل تقديرها الآلي في عرض الزبون</span>
+                    <span>التقدير يشمل خام اللوح والقص والقشاط المبدئي والرسوم الخاصة، ويمكن للمحاسب اعتماد سعر شامل</span>
                 </div>
                 <div class="dco-special-price-list">
                     ${rows.map(row => {
@@ -332,6 +332,7 @@
                                 <span class="dco-special-price-icon">✦</span>
                                 <span><b>درفة خاصة رقم ${row.index}</b><small>${qty(row.width_cm)} × ${qty(row.length_cm)} سم — عدد ${row.qty} · ${documented ? "الرسم موثق" : "بانتظار الرسم"}</small></span>
                             </div>
+                            <div class="dco-special-price-cell"><span class="label">القشاط المبدئي للسطر</span><span class="value">${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}</span></div>
                             <div class="dco-special-price-cell"><span class="label">تقدير النظام / الوحدة</span><span class="value">$ ${money(row.estimated_unit_price)}</span></div>
                             <div class="dco-special-price-cell"><span class="label">السعر المعتمد / الوحدة</span><span class="value">${approved ? `$ ${money(row.custom_unit_price)}` : "—"}</span></div>
                             <div class="dco-special-price-cell"><span class="label">الإجمالي المستخدم</span><span class="value">$ ${money(row.final_unit_price * row.qty)}</span></div>
