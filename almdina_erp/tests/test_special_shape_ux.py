@@ -181,17 +181,20 @@ def test_accounting_approval_is_role_checked_audited_and_invalidated_by_geometry
     assert 'row.special_shape_price_approved_by = ""' in order
 
 
-def test_customer_quote_replaces_special_baseline_instead_of_mutating_internal_cost():
+def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     order = ORDER_PY.read_text(encoding="utf-8")
     cost = COST_UX.read_text(encoding="utf-8")
 
-    assert "regular_automatic_total = max(0.0, flt(self.total_cost_usd) - baseline_total)" in order
-    assert "self.customer_quote_total_usd = round_value(regular_automatic_total + final_total, 3)" in order
+    assert "invoice_base_total = board_and_cutting_cost + regular_edge_total" in order
+    assert "self.customer_quote_total_usd = round_value(invoice_base_total + final_total, 3)" in order
     assert "self.total_cost_usd = round_value(total_cost, 3)" in order
 
     assert "استبعاد الحساب الآلي للدرف الخاصة" not in cost
-    assert "حصة خام MDF للدرف العادية" in cost
-    assert "حصة قص وتجهيز الدرف العادية" in cost
+    assert "const materialAmount = boardCount * boardRate" in cost
+    assert "const cuttingAmount = boardCount * cuttingRate" in cost
+    assert "regularAreaRatio" not in cost
+    assert "حصة خام MDF" not in cost
+    assert "حصة قص وتجهيز" not in cost
     assert "درفة خاصة رقم" in cost
     assert "سعر معتمد شامل" in cost
     assert "approve_special_piece_price" in cost
