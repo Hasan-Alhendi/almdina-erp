@@ -64,10 +64,15 @@
             .page-head.dco-stable-actions-head .custom-actions > .btn,
             .page-head.dco-stable-actions-head .custom-actions > .btn-group,
             .page-head.dco-stable-actions-head .custom-actions > .dropdown {
+                display:inline-flex!important;
+                visibility:visible!important;
+                opacity:1!important;
                 flex:0 0 auto!important;
                 margin:0!important;
             }
             .page-head.dco-stable-actions-head .custom-actions .btn {
+                display:inline-flex!important;
+                align-items:center!important;
                 white-space:nowrap!important;
                 visibility:visible!important;
                 opacity:1!important;
@@ -110,7 +115,9 @@
             }
             seen.set(label, node);
             const order = ORDER.get(label);
-            if (order !== undefined) node.style.order = String(order);
+            if (order !== undefined && node.style.order !== String(order)) {
+                node.style.order = String(order);
+            }
         });
 
         head.querySelectorAll(".dropdown-menu").forEach(menu => {
@@ -135,7 +142,9 @@
         installStyles();
         const head = pageHead(frm);
         if (!head) return;
-        head.classList.add("dco-stable-actions-head");
+        if (!head.classList.contains("dco-stable-actions-head")) {
+            head.classList.add("dco-stable-actions-head");
+        }
         removeLegacyButtons(frm, head);
         dedupeButtons(head);
         removeEmptyGroups(head);
@@ -154,7 +163,9 @@
                 reconcile(frm);
             });
         });
-        observer.observe(head, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+        // Only structural changes need reconciliation. Observing our own class/style
+        // changes would create a needless feedback loop after every form refresh.
+        observer.observe(head, { childList: true, subtree: true });
         frm._dcoToolbarObserver = observer;
         frm._dcoToolbarObservedHead = head;
     }
