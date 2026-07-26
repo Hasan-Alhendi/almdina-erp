@@ -6,6 +6,9 @@
   "field_order": [
     "piece_no",
     "piece_type",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
     "width_cm",
     "length_cm",
     "qty",
@@ -46,8 +49,30 @@
       "fieldtype": "Select",
       "in_list_view": 1,
       "label": "Piece Type",
-      "options": "Regular\nSpecial",
+      "options": "Regular\nClipped Corner\nSpecial",
       "reqd": 1
+    },
+    {
+      "default": "Top Right",
+      "fieldname": "clipped_corner_position",
+      "fieldtype": "Select",
+      "hidden": 1,
+      "label": "Clipped Corner Position",
+      "options": "Top Right\nTop Left\nBottom Right\nBottom Left"
+    },
+    {
+      "fieldname": "clipped_corner_width_cm",
+      "fieldtype": "Float",
+      "hidden": 1,
+      "label": "Clipped Corner Width (CM)",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "clipped_corner_length_cm",
+      "fieldtype": "Float",
+      "hidden": 1,
+      "label": "Clipped Corner Length (CM)",
+      "non_negative": 1
     },
     {
       "fieldname": "width_cm",

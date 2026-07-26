@@ -248,10 +248,21 @@
                 const top = usableH ? num(piece.y) / usableH * 100 : 0;
                 const width = usableW ? num(piece.w) / usableW * 100 : 0;
                 const height = usableH ? num(piece.h) / usableH * 100 : 0;
+                const clipped = piece.piece_type === "Clipped Corner";
+                const clippedPoints = clipped && window.AlmdinaClippedCornerGeometry
+                    ? window.AlmdinaClippedCornerGeometry.pointsAttribute(piece, 100, 100)
+                    : "0,0 100,0 100,100 0,100";
+                const outline = clipped
+                    ? `<svg class="dco-clipped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1"><polygon points="${clippedPoints}" fill="#fff0c7" stroke="#8a5700" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
+                    : "";
+                const style = clipped
+                    ? "border:0;background:transparent;"
+                    : "border:1px solid #111;background:#e4f5ff;";
                 html += `
-                    <div class="dco-piece" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;border:1px solid #111;background:#e4f5ff;color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${clipped ? "dco-clipped-corner-piece" : ""}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${style}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                        ${outline}
                         ${render_edge_lines(piece)}
-                        <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;"><b>${escape_html(piece.label)}</b><br><span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span></div>
+                        <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">${clipped ? '<span style="display:inline-block;padding:1px 4px;border-radius:999px;background:#8a5700;color:#fff;font-size:8px;font-weight:900">⌑ زاوية مقصوصة</span><br>' : ""}<b>${escape_html(piece.label)}</b><br><span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span></div>
                     </div>
                 `;
             });
@@ -302,13 +313,16 @@
         return dxf_pair(0, "LAYER") + dxf_pair(2, name) + dxf_pair(70, 0) + dxf_pair(62, color) + dxf_pair(6, "CONTINUOUS");
     }
 
-    function dxf_rect(layer, x, y, w, h) {
-        const points = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+    function dxf_path(layer, points) {
         let out = dxf_pair(0, "POLYLINE") + dxf_pair(8, layer) + dxf_pair(66, 1) + dxf_pair(10, 0) + dxf_pair(20, 0) + dxf_pair(30, 0) + dxf_pair(70, 1);
         points.forEach(p => {
             out += dxf_pair(0, "VERTEX") + dxf_pair(8, layer) + dxf_pair(10, dxf_num(p[0])) + dxf_pair(20, dxf_num(p[1])) + dxf_pair(30, 0);
         });
         return out + dxf_pair(0, "SEQEND") + dxf_pair(8, layer);
+    }
+
+    function dxf_rect(layer, x, y, w, h) {
+        return dxf_path(layer, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
     }
 
     function source_aware_dxf(frm) {
@@ -338,7 +352,10 @@
                 const pieceH = num(piece.h) * 10;
                 const x = offsetX + trim + num(piece.x) * 10;
                 const y = offsetY + fullH - trim - num(piece.y) * 10 - pieceH;
-                entities += dxf_rect("CUT_PATH", x, y, pieceW, pieceH);
+                const geometry = window.AlmdinaClippedCornerGeometry;
+                entities += geometry && geometry.isClipped(piece)
+                    ? dxf_path("CUT_PATH", geometry.dxfPoints(piece, x, y, pieceW, pieceH))
+                    : dxf_rect("CUT_PATH", x, y, pieceW, pieceH);
             });
         });
 

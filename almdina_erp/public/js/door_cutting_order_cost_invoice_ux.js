@@ -31,6 +31,12 @@
         return n(value).toLocaleString("en-US", { maximumFractionDigits: 3 });
     }
 
+    function pieceTypeLabel(row) {
+        if (row.piece_type === "Special") return "خاصة";
+        if (row.piece_type === "Clipped Corner") return "زاوية مقصوصة";
+        return "عادية";
+    }
+
     function effectiveEdgeType(frm, row) {
         return row.edge_type || frm.doc.default_edge_type || "";
     }
@@ -304,7 +310,7 @@
                     <tbody>${rows.map(row => `
                         <tr>
                             <td><b>${row.index}</b></td>
-                            <td>${row.piece_type === "Special" ? '<span class="dco-special-price-status">خاصة</span>' : "عادية"}</td>
+                            <td>${row.piece_type === "Special" ? '<span class="dco-special-price-status">خاصة</span>' : pieceTypeLabel(row)}</td>
                             <td>${dimensionMark(row.width_cm, row.width_edge_count)}</td>
                             <td>${dimensionMark(row.length_cm, row.length_edge_count)}</td>
                             <td>${row.qty}</td>
@@ -442,7 +448,7 @@
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
 <div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد الحواف المطلوب تلبيسها</span></div>
 <table class="table measurements"><thead><tr><th>#</th><th>النوع</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>نوع القشاط</th><th class="notes-col">ملاحظات</th></tr></thead><tbody>
-${rows.map(row => `<tr><td>${row.index}</td><td>${row.piece_type === "Special" ? "خاصة" : "عادية"}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col">${esc(row.notes || "—")}</td></tr>`).join("")}
+${rows.map(row => `<tr><td>${row.index}</td><td>${pieceTypeLabel(row)}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col">${esc(row.notes || "—")}</td></tr>`).join("")}
 </tbody></table>
 <div class="section-title">تفاصيل الفاتورة</div>
 <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>

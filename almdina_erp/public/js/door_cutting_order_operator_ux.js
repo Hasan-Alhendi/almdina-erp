@@ -311,16 +311,28 @@
         const data = row || { qty:1 };
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
+        const isClipped = pieceType === "Clipped Corner";
         const toggle = (field,label,extra="") => `
             <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
         const hasDrawing = Boolean(String(data.special_shape_drawing_json || "").trim());
+        const cornerSummary = isClipped && window.AlmdinaClippedCornerGeometry
+            ? window.AlmdinaClippedCornerGeometry.summary(data)
+            : "";
+        const shapeIcon = isClipped ? "⌑" : (hasDrawing ? "✓" : "✎");
+        const shapeLabel = isClipped
+            ? (isArabic() ? "ضبط" : "Set")
+            : (hasDrawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "ارسم" : "Sketch"));
+        const shapeTitle = isClipped
+            ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+            : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
         return `
-            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""}">
+            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no"><span class="dco-row-number">${index}</span></td>
                 <td class="dco-col-type"><select class="dco-fast-select" data-field="piece_type" ${disabled}>
                     <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
+                    <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
                     <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
                 </select></td>
                 <td class="dco-col-number"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
@@ -334,9 +346,9 @@
                     ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
                 </div></td>
                 <td class="dco-col-edge-type"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
-                <td class="dco-col-sketch"><button type="button" class="dco-special-sketch-button ${hasDrawing ? "is-documented" : ""}" ${isSpecial && editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes"}">
-                    <span aria-hidden="true">${hasDrawing ? "✓" : "✎"}</span>
-                    <span>${hasDrawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "ارسم" : "Sketch")}</span>
+                <td class="dco-col-sketch"><button type="button" class="dco-special-sketch-button ${hasDrawing ? "is-documented" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
+                    <span aria-hidden="true">${shapeIcon}</span>
+                    <span>${shapeLabel}</span>
                 </button></td>
                 <td class="dco-col-calc" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
@@ -371,7 +383,7 @@
                             <th class="dco-col-rotate">${isArabic() ? "تدوير" : "Rotate"}</th>
                             <th class="dco-col-edges">${isArabic() ? "جهات القشاط" : "Edge sides"}</th>
                             <th class="dco-col-edge-type">${isArabic() ? "نوع القشاط" : "Edge type"}</th>
-                            <th class="dco-col-sketch">${isArabic() ? "رسم توثيقي" : "Sketch"}</th>
+                            <th class="dco-col-sketch">${isArabic() ? "الشكل" : "Shape"}</th>
                             <th class="dco-col-calc">${isArabic() ? "المساحة" : "Area"}</th>
                             <th class="dco-col-calc">${isArabic() ? "متر قشاط" : "Edge m"}</th>
                             <th class="dco-col-notes">${isArabic() ? "ملاحظات" : "Notes"}</th>
@@ -595,7 +607,9 @@
                 event.stopPropagation();
                 const tr = sketch.closest("tr[data-row-name]");
                 const row = rowByName(frm, tr && tr.dataset.rowName);
-                if (row && window.AlmdinaSpecialShapeEditor) {
+                if (row && row.piece_type === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
+                    window.AlmdinaClippedCornerEditor.open(frm, row);
+                } else if (row && window.AlmdinaSpecialShapeEditor) {
                     window.AlmdinaSpecialShapeEditor.open(frm, row);
                 }
             }

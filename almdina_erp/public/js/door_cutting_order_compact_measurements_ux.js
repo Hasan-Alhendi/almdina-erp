@@ -100,7 +100,7 @@
                 padding-inline:2px !important;
             }
             .dco-fast-table .dco-col-no { width:34px !important; }
-            .dco-fast-table .dco-col-type { width:92px !important; }
+            .dco-fast-table .dco-col-type { width:112px !important; }
             .dco-fast-table .dco-col-number { width:76px !important; }
             .dco-fast-table .dco-col-qty { width:54px !important; }
             .dco-fast-table .dco-col-rotate { width:46px !important; }
@@ -269,7 +269,7 @@
             }
 
             @media (max-width:900px) {
-                .dco-fast-table .dco-col-type { width:82px !important; }
+                .dco-fast-table .dco-col-type { width:102px !important; }
                 .dco-fast-table .dco-col-number { width:69px !important; }
                 .dco-fast-table .dco-col-qty { width:49px !important; }
                 .dco-fast-table .dco-col-rotate { width:42px !important; }
@@ -285,7 +285,7 @@
                 .dco-fast-table .dco-col-delete {
                     display:none !important;
                 }
-                .dco-fast-table .dco-col-type { width:72px !important; }
+                .dco-fast-table .dco-col-type { width:92px !important; }
                 .dco-fast-table .dco-col-number { width:61px !important; }
                 .dco-fast-table .dco-col-qty { width:45px !important; }
                 .dco-fast-table .dco-col-rotate { width:39px !important; }
@@ -334,7 +334,7 @@
         });
 
         const sketchHeader = root.querySelector("th.dco-col-sketch");
-        if (sketchHeader) sketchHeader.textContent = isArabic() ? "رسم" : "Sketch";
+        if (sketchHeader) sketchHeader.textContent = isArabic() ? "الشكل" : "Shape";
     }
 
     function observeRows(frm, root) {

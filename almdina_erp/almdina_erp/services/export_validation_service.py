@@ -191,6 +191,10 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                     "h": flt(piece.height_mm) / 10,
                     "original_w": flt(piece.original_width_cm),
                     "original_h": flt(piece.original_length_cm),
+                    "piece_type": piece.piece_type or "Regular",
+                    "clipped_corner_position": piece.clipped_corner_position or "",
+                    "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
+                    "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
                     "rotated": bool(cint(piece.rotated)),
                     "edge_long_right": cint(piece.edge_long_right),
                     "edge_long_left": cint(piece.edge_long_left),
@@ -259,9 +263,12 @@ def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, A
     doc._set_piece_numbers()
     doc._validate_numeric_inputs()
     doc._validate_piece_inputs()
+    doc._validate_special_shape_rows()
     doc._load_board_snapshot()
     doc._calculate_piece_rows()
-    doc._calculate_cutting_plan()
+    settings = doc._get_settings()
+    input_fingerprint = doc._plan_input_fingerprint(settings)
+    doc._calculate_cutting_plan(settings, input_fingerprint)
     snapshot = frappe.parse_json(doc.cutting_plan_json or "{}") or {}
     validation = snapshot.get("validation") or {}
     errors = list(validation.get("errors") or [])

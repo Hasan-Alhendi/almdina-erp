@@ -67,6 +67,16 @@
         );
     }
 
+    function closedPath(layerName, points) {
+        if (!Array.isArray(points) || points.length < 3) return "";
+        let result = "";
+        points.forEach((point, index) => {
+            const next = points[(index + 1) % points.length];
+            result += line(layerName, point[0], point[1], next[0], next[1]);
+        });
+        return result;
+    }
+
     function buildDxf(plan) {
         const sheets = plan.sheets || [];
         const perRow = 2;
@@ -93,7 +103,10 @@
                 const pieceHeight = num(piece.h) * 10;
                 const x = offsetX + trimMm + num(piece.x) * 10;
                 const y = offsetY + fullHeight - trimMm - num(piece.y) * 10 - pieceHeight;
-                entities += rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
+                const geometry = window.AlmdinaClippedCornerGeometry;
+                entities += geometry && geometry.isClipped(piece)
+                    ? closedPath("CUT_PATH", geometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight))
+                    : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
             });
         });
 
