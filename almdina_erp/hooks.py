@@ -57,6 +57,13 @@ doctype_js = {
     "Material Consumption Log": "public/js/material_consumption_log.js",
 }
 
+# Keep the existing business controller as the authoritative base class while
+# replacing expensive ordinary-save paths with a compatible optimized subclass.
+override_doctype_class = {
+    "Door Cutting Order":
+        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_fast.FastDoorCuttingOrder",
+}
+
 doc_events = {
     "Replacement Piece": {
         "on_update": "almdina_erp.almdina_erp.services.cost_service.on_replacement_update",
