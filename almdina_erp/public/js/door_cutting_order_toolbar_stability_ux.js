@@ -28,6 +28,13 @@
             .trim();
     }
 
+    function actionLabel(node) {
+        if (!node) return "";
+        if (node.matches("button,a")) return text(node);
+        const trigger = node.querySelector(":scope > button, :scope > a");
+        return text(trigger || node);
+    }
+
     function domNode(value) {
         if (!value) return null;
         return value.nodeType ? value : (value[0] && value[0].nodeType ? value[0] : null);
@@ -96,7 +103,7 @@
             if (REMOVE_LABELS.has(text(node))) {
                 const group = node.closest(".btn-group,.dropdown");
                 if (node.matches(".dropdown-item") && group) node.remove();
-                else (group && text(group) === text(node) ? group : node).remove();
+                else (group && actionLabel(group) === text(node) ? group : node).remove();
             }
         });
     }
@@ -107,7 +114,7 @@
             ".custom-actions > button,.custom-actions > a,.custom-actions > .btn-group,.custom-actions > .dropdown"
         )];
         candidates.forEach(node => {
-            const label = text(node);
+            const label = actionLabel(node);
             if (!label) return;
             if (seen.has(label)) {
                 node.remove();
