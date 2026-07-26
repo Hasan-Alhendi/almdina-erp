@@ -166,7 +166,7 @@
                             </button>`).join("")}
                         ${group.key === "draw" ? `
                             <div class="dco-sketch-template-grid" aria-label="أشكال جاهزة">
-                                <button type="button" class="dco-sketch-template" data-template="angled"><b>⌑</b>زاوية مقصوصة</button>
+                                <button type="button" class="dco-sketch-template" data-template="clipped-corner"><b>⌑</b>زاوية مقصوصة</button>
                                 <button type="button" class="dco-sketch-template" data-template="arch"><b>⌒</b>قوس علوي</button>
                                 <button type="button" class="dco-sketch-template" data-template="lshape"><b>⌞</b>شكل L</button>
                                 <button type="button" class="dco-sketch-template" data-template="trapezoid"><b>⬠</b>شكل مائل</button>
@@ -1034,8 +1034,8 @@
     }
 
     function templatePoints(template) {
-        if (template === "angled") {
-            return [[250, 155], [750, 155], [750, 500], [430, 500], [250, 330], [250, 155]];
+        if (template === "clipped-corner" || template === "angled") {
+            return [[250, 155], [750, 155], [750, 500], [430, 500], [250, 320], [250, 155]];
         }
         if (template === "lshape") {
             return [[250, 150], [750, 150], [750, 500], [500, 500], [500, 330], [250, 330], [250, 150]];
