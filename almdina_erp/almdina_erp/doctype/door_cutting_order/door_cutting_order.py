@@ -424,11 +424,12 @@ class DoorCuttingOrder(Document):
         self.cutting_plan_json = frappe.as_json(snapshot)
 
     def _calculate_special_shape_pricing(self, settings: Any) -> None:
-        """Replace each special row's automatic allocation with an inclusive quote price.
+        """Add each special row's inclusive price to the full board and cutting charges.
 
         The row edge cost is the operator's preliminary banding estimate. It
         remains part of the baseline before design/CNC/manual-work fees and the
-        configured margin are added.
+        configured margin are added. Special-row edge cost is not listed again
+        as a separate invoice line because it is included in that row's price.
         """
 
         special_rows = [
@@ -508,11 +509,16 @@ class DoorCuttingOrder(Document):
             estimated_total += estimated_unit * qty
             final_total += final_unit * qty
 
-        regular_automatic_total = max(0.0, flt(self.total_cost_usd) - baseline_total)
+        regular_edge_total = sum(
+            flt(row.edge_cost_usd)
+            for row in (self.pieces or [])
+            if (row.piece_type or "Regular") != "Special"
+        )
+        invoice_base_total = board_and_cutting_cost + regular_edge_total
         self.special_shapes_baseline_cost_usd = round_value(baseline_total, 3)
         self.special_shapes_estimated_total_usd = round_value(estimated_total, 3)
         self.special_shapes_final_total_usd = round_value(final_total, 3)
-        self.customer_quote_total_usd = round_value(regular_automatic_total + final_total, 3)
+        self.customer_quote_total_usd = round_value(invoice_base_total + final_total, 3)
 
         if approved_count == len(special_rows):
             self.customer_quote_status = "Approved"
