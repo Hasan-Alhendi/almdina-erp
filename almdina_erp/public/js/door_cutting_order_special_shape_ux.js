@@ -5,7 +5,7 @@
     const CANVAS_HEIGHT = 650;
     const COLORS = ["#172033", "#c2352a", "#1769aa"];
     const TOOLS = [
-        { key: "pen", icon: "✎", label: "قلم حر", hint: "ارسم الشكل بيدك" },
+        { key: "pen", icon: "✎", label: "قلم حر", hint: "مع تنعيم تلقائي" },
         { key: "line", icon: "╱", label: "خط", hint: "خط مستقيم" },
         { key: "rectangle", icon: "□", label: "مستطيل", hint: "شكل مستطيل" },
         { key: "ellipse", icon: "○", label: "دائرة", hint: "دائرة أو بيضاوي" },
@@ -131,7 +131,7 @@
                             <span class="dco-sketch-meta-pill">العدد <b>${esc(row.qty || 1)}</b></span>
                         </div>
                         <div style="display:flex;align-items:center;gap:8px">
-                            <div class="dco-sketch-notice"><span>!</span><span>رسم توثيقي للمصمم، وليس ملف CNC</span></div>
+                            <div class="dco-sketch-notice"><span>✓</span><span>تنعيم الخط وتصحيح الميل البسيط مفعّلان تلقائيًا</span></div>
                             <button type="button" class="dco-sketch-fullscreen-button">⛶ ملء الشاشة</button>
                         </div>
                     </div>
@@ -154,6 +154,7 @@
                         2. استخدم «قياس» وارسم سهمًا.<br>
                         3. اكتب القيمة الحقيقية مثل 85 سم.<br>
                         4. ضع ملاحظات المصمم على الورقة.<br><br>
+                        القلم الحر يزيل رجفة اليد تلقائيًا، ويحوّل الخط شبه المستقيم إلى خط نظيف.<br><br>
                         لا يشترط أن يكون الرسم متناسبًا؛ القياسات المكتوبة هي المرجع.
                     </div>
                 </aside>
@@ -275,17 +276,229 @@
         renderCanvas(state);
     }
 
-    function simplifyPoints(points) {
-        if (!points || points.length < 3) return points || [];
+    function pointDistance(first, second) {
+        return Math.hypot(second[0] - first[0], second[1] - first[1]);
+    }
+
+    function sanitizePoints(points) {
+        return (points || [])
+            .map(point => [Number(point && point[0]), Number(point && point[1])])
+            .filter(point => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+    }
+
+    function removeCrowdedPoints(points, minimumDistance = 1.8) {
+        const source = sanitizePoints(points);
+        if (source.length < 3) return source;
+        const result = [source[0]];
+        for (let index = 1; index < source.length - 1; index += 1) {
+            if (pointDistance(result[result.length - 1], source[index]) >= minimumDistance) {
+                result.push(source[index]);
+            }
+        }
+        const last = source[source.length - 1];
+        if (pointDistance(result[result.length - 1], last) >= 0.35) {
+            result.push(last);
+        } else if (result.length > 1) {
+            result[result.length - 1] = last;
+        }
+        return result;
+    }
+
+    function pointSegmentDistance(point, start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const lengthSquared = dx * dx + dy * dy;
+        if (!lengthSquared) return pointDistance(point, start);
+        const ratio = Math.max(0, Math.min(1,
+            ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / lengthSquared
+        ));
+        return Math.hypot(
+            point[0] - (start[0] + ratio * dx),
+            point[1] - (start[1] + ratio * dy)
+        );
+    }
+
+    function simplifyPolyline(points, tolerance) {
+        if (points.length < 3) return points.slice();
+        const keep = new Array(points.length).fill(false);
+        const stack = [[0, points.length - 1]];
+        keep[0] = true;
+        keep[points.length - 1] = true;
+
+        while (stack.length) {
+            const [startIndex, endIndex] = stack.pop();
+            let furthestIndex = -1;
+            let furthestDistance = tolerance;
+            for (let index = startIndex + 1; index < endIndex; index += 1) {
+                const distance = pointSegmentDistance(
+                    points[index],
+                    points[startIndex],
+                    points[endIndex]
+                );
+                if (distance > furthestDistance) {
+                    furthestDistance = distance;
+                    furthestIndex = index;
+                }
+            }
+            if (furthestIndex >= 0) {
+                keep[furthestIndex] = true;
+                stack.push([startIndex, furthestIndex], [furthestIndex, endIndex]);
+            }
+        }
+        return points.filter((point, index) => keep[index]);
+    }
+
+    function fitNearlyStraightLine(points) {
+        if (points.length < 2) return null;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (pointDistance(first, last) < 12) return null;
+
+        const center = points.reduce(
+            (sum, point) => [sum[0] + point[0], sum[1] + point[1]],
+            [0, 0]
+        ).map(value => value / points.length);
+        let xx = 0;
+        let xy = 0;
+        let yy = 0;
+        points.forEach(point => {
+            const dx = point[0] - center[0];
+            const dy = point[1] - center[1];
+            xx += dx * dx;
+            xy += dx * dy;
+            yy += dy * dy;
+        });
+
+        const angle = 0.5 * Math.atan2(2 * xy, xx - yy);
+        let ux = Math.cos(angle);
+        let uy = Math.sin(angle);
+        if ((last[0] - first[0]) * ux + (last[1] - first[1]) * uy < 0) {
+            ux *= -1;
+            uy *= -1;
+        }
+
+        const projections = [];
+        const deviations = [];
+        let minimumProjection = Infinity;
+        let maximumProjection = -Infinity;
+        points.forEach(point => {
+            const dx = point[0] - center[0];
+            const dy = point[1] - center[1];
+            const projection = dx * ux + dy * uy;
+            const deviation = Math.abs(-dx * uy + dy * ux);
+            projections.push(projection);
+            deviations.push(deviation);
+            minimumProjection = Math.min(minimumProjection, projection);
+            maximumProjection = Math.max(maximumProjection, projection);
+        });
+
+        const span = maximumProjection - minimumProjection;
+        if (span < 12) return null;
+        const rmsDeviation = Math.sqrt(
+            deviations.reduce((sum, value) => sum + value * value, 0) / deviations.length
+        );
+        const maximumDeviation = Math.max(...deviations);
+        const rmsLimit = Math.max(3.5, Math.min(7, span * 0.018 + 1.5));
+        const maximumLimit = Math.max(8, Math.min(16, span * 0.032 + 2));
+        let backwardsDistance = 0;
+        for (let index = 1; index < projections.length; index += 1) {
+            backwardsDistance += Math.max(0, projections[index - 1] - projections[index]);
+        }
+        if (
+            rmsDeviation > rmsLimit
+            || maximumDeviation > maximumLimit
+            || backwardsDistance > Math.max(7, span * 0.09)
+        ) {
+            return null;
+        }
+
+        let start = [
+            center[0] + minimumProjection * ux,
+            center[1] + minimumProjection * uy,
+        ];
+        let end = [
+            center[0] + maximumProjection * ux,
+            center[1] + maximumProjection * uy,
+        ];
+        const axisSnapAngle = 7 * Math.PI / 180;
+        const absoluteAngle = Math.abs(Math.atan2(uy, ux));
+        const horizontalAngle = Math.min(absoluteAngle, Math.abs(Math.PI - absoluteAngle));
+        const verticalAngle = Math.abs(Math.PI / 2 - absoluteAngle);
+        if (horizontalAngle <= axisSnapAngle) {
+            start = [start[0], center[1]];
+            end = [end[0], center[1]];
+        } else if (verticalAngle <= axisSnapAngle) {
+            start = [center[0], start[1]];
+            end = [center[0], end[1]];
+        }
+        return [start, end];
+    }
+
+    function smoothCorners(points) {
+        if (points.length < 3) return points.slice();
         const result = [points[0]];
         for (let index = 1; index < points.length - 1; index += 1) {
-            const previous = result[result.length - 1];
+            const previous = points[index - 1];
             const current = points[index];
-            const distance = Math.hypot(current[0] - previous[0], current[1] - previous[1]);
-            if (distance >= 2.5) result.push(current);
+            const next = points[index + 1];
+            const incomingLength = pointDistance(previous, current);
+            const outgoingLength = pointDistance(current, next);
+            if (!incomingLength || !outgoingLength) {
+                result.push(current);
+                continue;
+            }
+            const directionCosine = (
+                (current[0] - previous[0]) * (next[0] - current[0])
+                + (current[1] - previous[1]) * (next[1] - current[1])
+            ) / (incomingLength * outgoingLength);
+            if (directionCosine < 0.72) {
+                result.push(current);
+                continue;
+            }
+            result.push([
+                previous[0] * 0.2 + current[0] * 0.6 + next[0] * 0.2,
+                previous[1] * 0.2 + current[1] * 0.6 + next[1] * 0.2,
+            ]);
         }
         result.push(points[points.length - 1]);
         return result;
+    }
+
+    function normalizePenStroke(points) {
+        const spaced = removeCrowdedPoints(points);
+        if (spaced.length < 2) return spaced;
+
+        const straightLine = fitNearlyStraightLine(spaced);
+        if (straightLine) return straightLine;
+        if (spaced.length < 3) return spaced;
+
+        let result = simplifyPolyline(spaced, 2.1);
+        result = smoothCorners(result);
+        result = smoothCorners(result);
+        return simplifyPolyline(result, 1.15);
+    }
+
+    function appendPointerSamples(svg, event, points, forceLast = false) {
+        const rect = svg.getBoundingClientRect();
+        const samples = typeof event.getCoalescedEvents === "function"
+            ? event.getCoalescedEvents()
+            : [event];
+        const source = samples.length ? samples : [event];
+        source.forEach(sample => {
+            const point = [
+                Math.max(0, Math.min(CANVAS_WIDTH, (sample.clientX - rect.left) * CANVAS_WIDTH / rect.width)),
+                Math.max(0, Math.min(CANVAS_HEIGHT, (sample.clientY - rect.top) * CANVAS_HEIGHT / rect.height)),
+            ];
+            const previous = points[points.length - 1];
+            if (!previous || pointDistance(previous, point) >= 1.25) points.push(point);
+        });
+        if (forceLast && source[source.length - 1] !== event) {
+            const point = pointFromEvent(svg, event);
+            const previous = points[points.length - 1];
+            if (!previous || pointDistance(previous, [point.x, point.y]) >= 0.35) {
+                points.push([point.x, point.y]);
+            }
+        }
     }
 
     function promptText(title, label, defaultValue, callback) {
@@ -345,22 +558,24 @@
 
     function continueDrawing(state, event) {
         if (!state.draft || event.pointerId !== state.pointerId) return;
-        const point = pointFromEvent(state.svg, event);
         if (state.draft.type === "pen") {
-            state.draft.points.push([point.x, point.y]);
-        } else if (state.draft.type === "line" || state.draft.type === "dimension") {
-            state.draft.x2 = point.x;
-            state.draft.y2 = point.y;
-        } else if (state.draft.type === "rectangle") {
-            state.draft.x = Math.min(state.start.x, point.x);
-            state.draft.y = Math.min(state.start.y, point.y);
-            state.draft.width = Math.abs(point.x - state.start.x);
-            state.draft.height = Math.abs(point.y - state.start.y);
-        } else if (state.draft.type === "ellipse") {
-            state.draft.cx = (state.start.x + point.x) / 2;
-            state.draft.cy = (state.start.y + point.y) / 2;
-            state.draft.rx = Math.abs(point.x - state.start.x) / 2;
-            state.draft.ry = Math.abs(point.y - state.start.y) / 2;
+            appendPointerSamples(state.svg, event, state.draft.points);
+        } else {
+            const point = pointFromEvent(state.svg, event);
+            if (state.draft.type === "line" || state.draft.type === "dimension") {
+                state.draft.x2 = point.x;
+                state.draft.y2 = point.y;
+            } else if (state.draft.type === "rectangle") {
+                state.draft.x = Math.min(state.start.x, point.x);
+                state.draft.y = Math.min(state.start.y, point.y);
+                state.draft.width = Math.abs(point.x - state.start.x);
+                state.draft.height = Math.abs(point.y - state.start.y);
+            } else if (state.draft.type === "ellipse") {
+                state.draft.cx = (state.start.x + point.x) / 2;
+                state.draft.cy = (state.start.y + point.y) / 2;
+                state.draft.rx = Math.abs(point.x - state.start.x) / 2;
+                state.draft.ry = Math.abs(point.y - state.start.y) / 2;
+            }
         }
         renderCanvas(state);
         event.preventDefault();
@@ -368,13 +583,16 @@
 
     function finishDrawing(state, event) {
         if (!state.draft || event.pointerId !== state.pointerId) return;
+        if (state.draft.type === "pen" && event.type !== "pointercancel") {
+            appendPointerSamples(state.svg, event, state.draft.points, true);
+        }
         const element = clone(state.draft);
         state.draft = null;
         state.pointerId = null;
         try { state.svg.releasePointerCapture(event.pointerId); } catch (error) { /* pointer already released */ }
 
         if (element.type === "pen") {
-            element.points = simplifyPoints(element.points);
+            element.points = normalizePenStroke(element.points);
             if (element.points.length >= 2) addElement(state, element);
             else renderCanvas(state);
             return;
@@ -573,5 +791,6 @@
         open,
         view(frm, row) { open(frm, row, { readOnly: true }); },
         parseDrawing,
+        normalizePenStroke,
     };
 })();

@@ -118,6 +118,11 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "dco-sketch-undo" in sketch
     assert "dco-sketch-redo" in sketch
     assert "purpose: \"operator_documentation_only\"" in sketch
+    assert "normalizePenStroke" in sketch
+    assert "fitNearlyStraightLine" in sketch
+    assert "smoothCorners" in sketch
+    assert "getCoalescedEvents" in sketch
+    assert "تنعيم الخط وتصحيح الميل البسيط مفعّلان تلقائيًا" in sketch
 
 
 def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost():
