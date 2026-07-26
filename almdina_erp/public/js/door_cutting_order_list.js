@@ -6,17 +6,80 @@
     const originalOnload = existing.onload;
     const originalRefresh = existing.refresh;
 
+    function rootNode(listview) {
+        const wrapper = listview && listview.page && listview.page.wrapper;
+        return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
+    }
+
+    function searchField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict.name
+            : null;
+    }
+
     function searchInputs(listview) {
-        const page = listview && listview.page;
-        const wrapper = page && page.wrapper;
-        const root = wrapper && (wrapper[0] || wrapper);
+        const root = rootNode(listview);
         if (!root) return [];
         return [...root.querySelectorAll(
-            ".list-search input, .list-search .form-control, input[data-fieldname='_search'], input[placeholder*='ID']"
+            ".list-search input, .list-search .form-control, input[data-fieldname='name'], input[placeholder*='ID']"
         )];
     }
 
+    function normalizedTerm(value) {
+        return String(value || "")
+            .trim()
+            .replace(/^%+/, "")
+            .replace(/%+$/, "");
+    }
+
+    function isNameFilter(filter, doctype) {
+        return Array.isArray(filter)
+            && filter.length >= 4
+            && filter[0] === doctype
+            && filter[1] === "name";
+    }
+
+    function installCombinedSearch(listview) {
+        if (!listview || listview._dcoCombinedSearchInstalled || typeof listview.get_args !== "function") return;
+        const originalGetArgs = listview.get_args.bind(listview);
+
+        listview.get_args = function dcoCombinedSearchArgs() {
+            const args = originalGetArgs();
+            const field = searchField(this);
+            const term = normalizedTerm(field && typeof field.get_value === "function" ? field.get_value() : "");
+            if (!term) return args;
+
+            // Frappe's standard ID search produces a name filter. Replace only that
+            // filter with an OR group while leaving every other list filter as AND.
+            args.filters = (args.filters || []).filter(filter => !isNameFilter(filter, this.doctype));
+            const pattern = `%${term}%`;
+            args.or_filters = [
+                [this.doctype, "name", "like", pattern],
+                [this.doctype, "customer", "like", pattern],
+            ];
+            return args;
+        };
+
+        listview._dcoCombinedSearchInstalled = true;
+    }
+
     function applySearchHint(listview) {
+        const field = searchField(listview);
+        if (field && field.df) {
+            field.df.label = "اسم العميل أو رقم الطلب";
+            field.df.description = "ابحث باسم العميل أو رقم الطلب مثل DCO-2026-00004";
+        }
+        if (field && typeof field.set_label === "function") {
+            field.set_label("اسم العميل أو رقم الطلب");
+        }
+
+        const root = rootNode(listview);
+        if (root) {
+            const wrapper = field && field.wrapper ? (field.wrapper.nodeType ? field.wrapper : field.wrapper[0]) : null;
+            const label = wrapper && wrapper.querySelector(".control-label");
+            if (label) label.textContent = "اسم العميل أو رقم الطلب";
+        }
+
         searchInputs(listview).forEach(input => {
             input.placeholder = "ابحث باسم العميل أو رقم الطلب (ID)";
             input.setAttribute("aria-label", "البحث باسم العميل أو رقم الطلب");
@@ -25,6 +88,7 @@
     }
 
     function schedule(listview) {
+        installCombinedSearch(listview);
         applySearchHint(listview);
         requestAnimationFrame(() => applySearchHint(listview));
         setTimeout(() => applySearchHint(listview), 180);
