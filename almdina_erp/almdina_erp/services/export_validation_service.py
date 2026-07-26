@@ -6,6 +6,18 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+# Only the drawing operator needs the editable geometry; other shop-floor
+# operators work from the rendered plan and the approved production DXF.
+DXF_EXPORT_ROLES = ("عامل رسم", "Production Manager", "System Manager")
+
+
+def _assert_can_export_dxf() -> None:
+    if not set(frappe.get_roles()).intersection(DXF_EXPORT_ROLES):
+        frappe.throw(
+            _("You do not have permission to export the design as DXF."),
+            frappe.PermissionError,
+        )
+
 
 def _rects_overlap(a: dict[str, float], b: dict[str, float], tol: float = 1e-7) -> bool:
     return not (
@@ -291,6 +303,7 @@ def get_validated_dxf_plan(
     order_name: str | None = None,
     doc: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    _assert_can_export_dxf()
     if order_name:
         order = frappe.get_doc("Door Cutting Order", order_name)
         order.check_permission("read")

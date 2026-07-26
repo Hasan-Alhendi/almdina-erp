@@ -236,8 +236,10 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
 def approve_order(order_name: str) -> dict[str, Any]:
     require_any_role("Production Manager")
     order = frappe.get_doc("Door Cutting Order", order_name)
-    if order.status != "Pending Review":
-        frappe.throw(_("Only orders in Pending Review can be approved."))
+    # A factory manager owns both sides of the review, so a Draft can be approved
+    # directly without passing through Pending Review first.
+    if order.status not in {"Draft", "Rejected", "Pending Review"}:
+        frappe.throw(_("Only Draft, Rejected or Pending Review orders can be approved."))
 
     order.save(ignore_permissions=True)
 
@@ -275,14 +277,17 @@ def approve_order(order_name: str) -> dict[str, Any]:
                 plan.required_boards, plan.waste_percent, plan.method_label
             ),
             "cutting_plan_json": approved_snapshot_json,
+            "production_path": None,
+            "current_department": None,
+            "current_assignee": None,
+            "department_status": None,
+            "current_production_stage": None,
+            "drawing_dxf_status": "None",
         },
         update_modified=True,
     )
 
-    from almdina_erp.almdina_erp.services.production_service import ensure_default_stages
-
-    ensure_default_stages(order.name, approved_by=frappe.session.user)
-
+    # Shop-floor stages are created on explicit dispatch (Sharyoun or Drawing path).
     return {"name": order.name, "status": "Approved", "cutting_plan": plan.name, "revision": plan.revision}
 
 

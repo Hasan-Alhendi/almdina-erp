@@ -6,12 +6,17 @@ from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
 
+# Float fields are stored as decimal(21,9); engine scores must stay inside it.
+MAX_STORED_SCORE = 10**12 - 1
+
+
 class CuttingPlan(Document):
     def validate(self) -> None:
         if self.revision and self.revision < 1:
             frappe.throw(_("Cutting Plan revision must be at least 1."))
         if self.plan_kind == "Replacement" and not self.replacement_piece:
             frappe.throw(_("A Replacement cutting plan must reference its Replacement Piece."))
+        self.score = max(-MAX_STORED_SCORE, min(MAX_STORED_SCORE, flt(self.score)))
         self._populate_source_identity_snapshots()
         if self.plan_kind == "Replacement":
             self._validate_replacement_plan()

@@ -16,6 +16,10 @@ REQUIRED_ROLES = (
     "Production Manager",
     "Stock Manager",
     "Accounts Management",
+    "عامل رسم",
+    "عامل شريون",
+    "عامل CNC",
+    "عامل تقشيط",
 )
 
 REQUIRED_PRINT_FORMATS = (

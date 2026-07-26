@@ -679,6 +679,21 @@
     }
 
     function add_buttons(frm) {
+        // Always strip export for non-drawing operators, even if buttons were
+        // installed on an earlier refresh in this form session.
+        const roles = frappe.user_roles || [];
+        const can_export_dxf =
+            roles.includes("عامل رسم") ||
+            roles.includes("Production Manager") ||
+            roles.includes("System Manager");
+        if (!can_export_dxf) {
+            try {
+                frm.remove_custom_button("تصدير DXF");
+            } catch (e) {
+                /* ignore */
+            }
+        }
+
         if (frm._dco_added_buttons) return;
 
         frm.add_custom_button("إعادة حساب خطة القص", () => {
@@ -699,9 +714,13 @@
 
         frm.add_custom_button("طباعة خطة القص", () => print_cutting_plan(frm));
         frm.add_custom_button("طباعة جدول القياسات", () => print_measurements_table(frm));
-        frm.add_custom_button("تصدير DXF", () => {
-            recalculate_order(frm, { immediate: true }).then(() => export_cutting_plan_dxf(frm)).catch(() => {});
-        });
+        // DXF export is role-gated: Drawing operator + managers only.
+        // secure_dxf_export.js installs the validated AutoCAD exporter for them.
+        if (can_export_dxf) {
+            frm.add_custom_button("تصدير DXF", () => {
+                recalculate_order(frm, { immediate: true }).then(() => export_cutting_plan_dxf(frm)).catch(() => {});
+            });
+        }
 
         frm._dco_added_buttons = true;
     }

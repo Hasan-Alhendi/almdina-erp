@@ -65,10 +65,26 @@
         });
     }
 
+    function approve_then_dispatch(frm) {
+        return call_action(
+            "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order",
+            { order_name: frm.doc.name },
+            __("تم اعتماد الطلب وتثبيت خطة القص."),
+            frm
+        ).then(() => {
+            const open_dispatch = frappe.almdina && frappe.almdina.open_dispatch_dialog;
+            if (open_dispatch && !frm.doc.production_path) {
+                open_dispatch(frm);
+            }
+        });
+    }
+
     function add_review_actions(frm) {
         if (frm.is_new()) return;
 
-        if (["Draft", "Rejected"].includes(frm.doc.status) && (has_role("Order Entry") || has_role("Production Manager"))) {
+        const can_approve = has_role("Production Manager");
+
+        if (["Draft", "Rejected"].includes(frm.doc.status) && !can_approve && has_role("Order Entry")) {
             frm.add_custom_button(__("إرسال للمراجعة"), () => {
                 frm.save().then(() => call_action(
                     "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review",
@@ -79,19 +95,22 @@
             }, __("دورة الطلب"));
         }
 
-        if (frm.doc.status === "Pending Review" && has_role("Production Manager")) {
+        if (["Draft", "Rejected", "Pending Review"].includes(frm.doc.status) && can_approve) {
             frm.add_custom_button(__("اعتماد الطلب"), () => {
                 frappe.confirm(
-                    __("سيتم تثبيت خطة القص الحالية كنسخة معتمدة وفحص توفر المخزون. هل تريد المتابعة؟"),
-                    () => call_action(
-                        "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order",
-                        { order_name: frm.doc.name },
-                        __("تم اعتماد الطلب وتثبيت خطة القص."),
-                        frm
-                    )
+                    __("سيتم تثبيت خطة القص الحالية كنسخة معتمدة ثم اختيار مسار الإنتاج. هل تريد المتابعة؟"),
+                    () => {
+                        if (frm.is_dirty()) {
+                            frm.save().then(() => approve_then_dispatch(frm));
+                            return;
+                        }
+                        approve_then_dispatch(frm);
+                    }
                 );
             }, __("دورة الطلب"));
+        }
 
+        if (frm.doc.status === "Pending Review" && can_approve) {
             frm.add_custom_button(__("رفض وإعادة للتعديل"), () => {
                 frappe.prompt(
                     [{
@@ -125,7 +144,13 @@
             }).then(r => {
                 const data = r.message || {};
                 const rows = data.materials || [];
-                let html = `<div><b>${__("Warehouse")}:</b> ${escape_html(data.warehouse || "")}</div>`;
+                let html = "";
+                if (data.stock_control_disabled) {
+                    html += `<div style="color:#b45309;font-weight:700;margin-bottom:8px">${__(
+                        "فحص المخزون معطّل حالياً من إعدادات المعمل."
+                    )}</div>`;
+                }
+                html += `<div><b>${__("Warehouse")}:</b> ${escape_html(data.warehouse || "")}</div>`;
                 html += `<table class="table table-bordered" style="margin-top:10px"><thead><tr><th>${__("Item")}</th><th>${__("Required")}</th><th>${__("Available")}</th><th>${__("Shortage")}</th></tr></thead><tbody>`;
                 rows.forEach(row => {
                     html += `<tr><td>${escape_html(row.item_code || "")}</td><td>${row.required_qty}</td><td>${row.actual_qty}</td><td>${row.shortage_qty}</td></tr>`;
@@ -133,8 +158,12 @@
                 html += "</tbody></table>";
                 if (!rows.length) html += `<p>${__("No stock-managed materials are required from full-stock Items for this order.")}</p>`;
                 frappe.msgprint({
-                    title: data.is_available ? __("المخزون متوفر") : __("يوجد عجز في المخزون"),
-                    indicator: data.is_available ? "green" : "red",
+                    title: data.stock_control_disabled
+                        ? __("فحص المخزون معطّل")
+                        : data.is_available
+                        ? __("المخزون متوفر")
+                        : __("يوجد عجز في المخزون"),
+                    indicator: data.stock_control_disabled ? "orange" : data.is_available ? "green" : "red",
                     message: html,
                 });
             });
@@ -370,7 +399,10 @@
         frm.remove_custom_button("طباعة خطة القص");
         frm.remove_custom_button("تصدير DXF");
         frm.add_custom_button("طباعة خطة القص", () => print_source_aware(frm));
-        frm.add_custom_button("تصدير DXF", () => source_aware_dxf(frm));
+        // CNC / Sharyoun / Sanding must never get an export button from this path.
+        if (has_role("عامل رسم") || has_role("Production Manager")) {
+            frm.add_custom_button("تصدير DXF", () => source_aware_dxf(frm));
+        }
     }
 
     frappe.ui.form.on("Door Cutting Order", {

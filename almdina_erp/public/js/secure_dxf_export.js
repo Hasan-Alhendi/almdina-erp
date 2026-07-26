@@ -2,8 +2,15 @@
     "use strict";
 
     const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
-    const DXF_FORMAT_LABEL = "AutoCAD R12 ASCII";
-    const DXF_UNITS = "mm";
+
+    // Mirrors DXF_EXPORT_ROLES in export_validation_service.py.
+    const DXF_EXPORT_ROLES = ["عامل رسم", "Production Manager", "System Manager"];
+
+    function canExportDxf() {
+        const boot_roles = (frappe.boot && frappe.boot.user && frappe.boot.user.roles) || [];
+        const roles = (frappe.user_roles || []).concat(boot_roles);
+        return DXF_EXPORT_ROLES.some(role => roles.includes(role));
+    }
 
     function isArabic() {
         const lang = String(
@@ -162,91 +169,136 @@
         return String(value || "door_cutting_order").replace(/[^\w\-]+/g, "_");
     }
 
-    function validatedExport(frm) {
-        const args = { doc: JSON.stringify(frm.doc) };
-        if (!frm.is_new()) args.order_name = frm.doc.name;
+    function downloadValidatedPlan(data, orderName) {
+        const plan = (data && data.plan) || {};
+        if (!(plan.sheets || []).length) {
+            frappe.throw(isArabic() ? "خطة القص المتحقق منها لا تحتوي على ألواح للتصدير." : "Validated cutting plan contains no sheets to export.");
+        }
 
+        const dxf = buildDxf(plan);
+        try {
+            validateDxfText(dxf);
+        } catch (error) {
+            console.error("DXF self-check failed", error);
+            frappe.throw(isArabic()
+                ? "فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف."
+                : "DXF export failed its compatibility self-check and was not downloaded.");
+        }
+
+        const base = `cutting_plan_${safeName(orderName || "draft")}`;
+        download(`${base}_AutoCAD2020_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
+        frappe.show_alert({
+            message: isArabic()
+                ? "تم تصدير ملف DXF متوافق مع AutoCAD بنجاح."
+                : "Validated AutoCAD-compatible DXF exported successfully.",
+            indicator: "green",
+        });
+    }
+
+    function fetchValidatedPlan(args) {
         return frappe.call({
             method: "almdina_erp.almdina_erp.services.export_validation_service.get_validated_dxf_plan",
             args,
             freeze: true,
             freeze_message: isArabic() ? "جاري التحقق من هندسة ملف DXF قبل التصدير..." : "Validating DXF geometry on server...",
-        }).then(r => {
-            const data = r.message || {};
-            const plan = data.plan || {};
-            const manifest = data.manifest || {};
-            if (!(plan.sheets || []).length) {
-                frappe.throw(isArabic() ? "خطة القص المتحقق منها لا تحتوي على ألواح للتصدير." : "Validated cutting plan contains no sheets to export.");
-            }
-
-            const dxf = buildDxf(plan);
-            try {
-                validateDxfText(dxf);
-            } catch (error) {
-                console.error("DXF self-check failed", error);
-                frappe.throw(isArabic()
-                    ? "فشل ملف DXF في فحص التوافق الداخلي، لذلك تم منع تنزيل ملف تالف."
-                    : "DXF export failed its compatibility self-check and was not downloaded.");
-            }
-
-            const base = `cutting_plan_${safeName(frm.doc.name || "draft")}`;
-            const exportManifest = {
-                ...manifest,
-                dxf_export: {
-                    format: DXF_FORMAT_LABEL,
-                    acadver: DXF_VERSION,
-                    coordinate_units: DXF_UNITS,
-                    geometry_entity: "LINE",
-                    cut_layer: "CUT_PATH",
-                    sheet_outline_layer: "SHEET_OUTLINE",
-                    compatibility_target: "AutoCAD 2020+",
-                },
-            };
-
-            download(`${base}_AutoCAD2020_R12.dxf`, dxf, "application/dxf;charset=us-ascii");
-            download(`${base}_manifest.json`, JSON.stringify(exportManifest, null, 2), "application/json;charset=utf-8");
-            frappe.show_alert({
-                message: isArabic()
-                    ? "تم تصدير ملف DXF متوافق مع AutoCAD مع ملف التحقق بنجاح."
-                    : "Validated AutoCAD-compatible DXF and manifest exported successfully.",
-                indicator: "green",
-            });
         });
     }
 
-    function removeLegacyDxfButtons(frm) {
-        if (!frm || frm.doctype !== "Door Cutting Order") return;
+    function validatedExport(frm) {
+        const args = { doc: JSON.stringify(frm.doc) };
+        if (!frm.is_new()) args.order_name = frm.doc.name;
 
-        // Old exporters used one of these labels. Keep the new AutoCAD-specific
-        // action untouched so there is exactly one trustworthy export path.
-        ["تصدير DXF", "Export DXF"].forEach(label => frm.remove_custom_button(label));
+        return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name));
+    }
+
+    // Shared entry point so the shop-floor page can offer the same validated export.
+    function exportOrderDxf(orderName) {
+        return fetchValidatedPlan({ order_name: orderName }).then(r =>
+            downloadValidatedPlan(r.message, orderName)
+        );
+    }
+
+    frappe.provide("frappe.almdina");
+    frappe.almdina.export_order_dxf = exportOrderDxf;
+    frappe.almdina.can_export_dxf = canExportDxf;
+
+    // Every historical / alternate export label that must never appear for
+    // CNC / Sharyoun / Sanding operators.
+    const STRIP_EXPORT_LABELS = [
+        "تصدير DXF",
+        "Export DXF",
+        "تصدير DXF للرسم",
+        "تصدير DXF للتعديل",
+        "تصدير DXF لأوتوكاد",
+        "Export DXF for AutoCAD",
+    ];
+
+    function isExportButtonLabel(text) {
+        const t = String(text || "").trim();
+        if (STRIP_EXPORT_LABELS.includes(t)) return true;
+        // Catch translated / slightly varied labels that still mean "export DXF".
+        return /تصدير\s*DXF/i.test(t) || /^export\s*dxf/i.test(t);
+    }
+
+    function stripUnauthorizedExportButtons(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        if (canExportDxf()) {
+            // Allowed users: only remove the old insecure exporters; keep the
+            // single validated AutoCAD button installed below.
+            ["تصدير DXF", "Export DXF", "تصدير DXF للرسم"].forEach(label => {
+                try {
+                    frm.remove_custom_button(label);
+                    frm.remove_custom_button(label, __("الرسم / DXF"));
+                } catch (e) {
+                    /* ignore */
+                }
+            });
+        } else {
+            STRIP_EXPORT_LABELS.forEach(label => {
+                try {
+                    frm.remove_custom_button(label);
+                    frm.remove_custom_button(label, __("الرسم / DXF"));
+                } catch (e) {
+                    /* ignore */
+                }
+            });
+        }
 
         const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
         if (!root) return;
-        $(root).find("button").filter(function () {
-            const text = $(this).text().trim();
-            return text === "تصدير DXF" || text === "Export DXF";
-        }).remove();
+        $(root).find("button, a.btn").filter(function () {
+            return isExportButtonLabel($(this).text());
+        }).each(function () {
+            // Never strip the validated button for users who are allowed to export.
+            if (canExportDxf() && $(this).text().trim() === buttonLabel()) return;
+            $(this).remove();
+        });
     }
 
-    function ensureLegacyObserver(frm) {
+    function ensureExportStripObserver(frm) {
         if (frm._almdina_secure_dxf_observer) return;
         const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
         const node = root && (root[0] || root);
         if (!node || typeof MutationObserver === "undefined") return;
 
-        const observer = new MutationObserver(() => removeLegacyDxfButtons(frm));
+        const observer = new MutationObserver(() => stripUnauthorizedExportButtons(frm));
         observer.observe(node, { childList: true, subtree: true });
         frm._almdina_secure_dxf_observer = observer;
     }
 
     function installButton(frm) {
         if (frm.doctype !== "Door Cutting Order") return;
-        removeLegacyDxfButtons(frm);
+        stripUnauthorizedExportButtons(frm);
+        // Always watch: other scripts re-add export buttons after refresh.
+        ensureExportStripObserver(frm);
         const label = buttonLabel();
-        frm.remove_custom_button(label);
+        try {
+            frm.remove_custom_button(label);
+        } catch (e) {
+            /* ignore */
+        }
+        if (!canExportDxf()) return;
         frm.add_custom_button(label, () => validatedExport(frm));
-        ensureLegacyObserver(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
