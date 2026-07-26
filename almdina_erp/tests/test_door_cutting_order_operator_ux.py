@@ -120,7 +120,7 @@ def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logi
 
     assert ".dco-fast-table th.dco-col-calc" in compact
     assert ".dco-fast-table td.dco-col-calc" in compact
-    assert "display: none !important" in compact
+    assert "display:none !important" in compact or "display: none !important" in compact
     assert "aria-hidden" in compact
     assert '"public/js/door_cutting_order_compact_measurements_ux.js"' in hooks
 
@@ -129,6 +129,51 @@ def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logi
     assert "localArea(row)" in operator
     assert "localEdgeMeters(row)" in operator
     assert "updateCalculatedCells" in operator
+
+
+def test_measurement_table_fits_the_form_without_horizontal_scrolling():
+    source = COMPACT_MEASUREMENTS_JS.read_text(encoding="utf-8")
+
+    required = [
+        "overflow-x:hidden !important",
+        "min-width:0 !important",
+        "table-layout:fixed !important",
+        "scrollbar-gutter:stable",
+        ".dco-fast-table .dco-col-notes",
+        "width:auto !important",
+        ".dco-fast-table .dco-col-edges { width:188px !important; }",
+        "@media (max-width:900px)",
+        "@media (max-width:720px)",
+    ]
+    missing = [fragment for fragment in required if fragment not in source]
+    assert not missing, f"Missing responsive table-layout fragments: {missing}"
+    assert "min-width:1180px" not in source
+    assert "min-width:1220px" not in source
+
+
+def test_edge_cells_use_compact_visual_side_indicators_and_accessibility_labels():
+    source = COMPACT_MEASUREMENTS_JS.read_text(encoding="utf-8")
+    for fieldname in (
+        "edge_long_right",
+        "edge_long_left",
+        "edge_width_top",
+        "edge_width_bottom",
+    ):
+        assert f'data-check-field="{fieldname}"' in source
+        assert fieldname in source
+
+    required = [
+        ".dco-col-edges .dco-check-toggle::before",
+        ".dco-col-edges .dco-check-toggle::after",
+        "border-right:3px solid currentColor",
+        "border-left:3px solid currentColor",
+        "border-top:3px solid currentColor",
+        "border-bottom:3px solid currentColor",
+        'button.setAttribute("aria-label", label)',
+        "القشاط والتدوير بنقرة واحدة",
+    ]
+    missing = [fragment for fragment in required if fragment not in source]
+    assert not missing, f"Missing compact visual edge-control fragments: {missing}"
 
 
 def test_fast_measurements_editor_does_not_depend_on_frappe_active_grid_row():
