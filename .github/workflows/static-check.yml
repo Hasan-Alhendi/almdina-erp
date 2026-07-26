@@ -38,7 +38,7 @@ jobs:
           PY
           python -m compileall -q almdina_erp
 
-      - name: Validate Arabic and operator UX regressions
+      - name: Validate Arabic, UX, DXF, invoice, and fast-save regressions
         shell: bash
         run: |
           python - <<'PY'
@@ -47,8 +47,16 @@ jobs:
           from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_ux_checks
           from almdina_erp.tests import test_dxf_autocad_compatibility as dxf_checks
           from almdina_erp.tests import test_order_cost_invoice_ux as cost_invoice_checks
+          from almdina_erp.tests import test_door_cutting_order_fast_save as fast_save_checks
 
-          modules = [arabic_checks, ux_checks, plan_ux_checks, dxf_checks, cost_invoice_checks]
+          modules = [
+              arabic_checks,
+              ux_checks,
+              plan_ux_checks,
+              dxf_checks,
+              cost_invoice_checks,
+              fast_save_checks,
+          ]
           total = 0
           for module in modules:
               tests = [
@@ -59,7 +67,7 @@ jobs:
               for test in tests:
                   test()
               total += len(tests)
-          print(f'Validated {total} Arabic/operator/plan/DXF/cost-invoice regression checks')
+          print(f'Validated {total} UX/DXF/invoice/fast-save regression checks')
           PY
 
       - name: Validate advanced cutting optimizer
