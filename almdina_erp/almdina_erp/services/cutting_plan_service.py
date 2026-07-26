@@ -230,6 +230,8 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
 
     order.ensure_special_shapes_documented()
     order.status = "Pending Review"
+    if cint(order.plan_needs_recalculation) or not order.cutting_plan_json:
+        order.flags.force_cutting_plan_recalculation = True
     order.save()
     return {"name": order.name, "status": order.status, "revision": order.revision}
 
@@ -279,6 +281,7 @@ def approve_order(order_name: str) -> dict[str, Any]:
                 plan.required_boards, plan.waste_percent, plan.method_label
             ),
             "cutting_plan_json": approved_snapshot_json,
+            "plan_needs_recalculation": 0,
         },
         update_modified=True,
     )
