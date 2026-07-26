@@ -54,6 +54,7 @@ jobs:
           from almdina_erp.tests import test_packing_score_field as packing_score_checks
           from almdina_erp.tests import test_special_shape_close_ux as special_shape_close_checks
           from almdina_erp.tests import test_door_cutting_order_save_pipeline_performance as save_pipeline_checks
+          from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
 
           modules = [
               arabic_checks,
@@ -68,6 +69,7 @@ jobs:
               packing_score_checks,
               special_shape_close_checks,
               save_pipeline_checks,
+              order_surface_checks,
           ]
           total = 0
           for module in modules:
