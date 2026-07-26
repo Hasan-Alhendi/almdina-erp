@@ -146,25 +146,36 @@ def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost
 def test_accounting_approval_is_role_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
     order = ORDER_PY.read_text(encoding="utf-8")
+    cost = COST_UX.read_text(encoding="utf-8")
 
     assert 'SPECIAL_PRICE_APPROVER_ROLES = {"Accounts Management", "System Manager"}' in service
     assert "has_special_price_approval_role()" in service
     assert "special_shape_price_approved_by = frappe.session.user" in service
     assert "special_shape_price_approved_on = now_datetime()" in service
     assert "order.save(ignore_permissions=True)" in service
+    assert "note: str | None = None" in service
+    assert "Write a short pricing note before approving the custom price." not in service
+    assert 'label: "ملاحظة التسعير (اختياري)"' in cost
+    assert 'note: values.note || ""' in cost
+    assert 'row.special_shape_price_status === "Approved"' in cost
+    assert "? n(row.special_shape_custom_unit_price_usd)" in cost
 
-    assert '"special_shape_drawing_json"' in order
+    assert "row.special_shape_drawing_json" in order
     for fieldname in (
         "allow_rotation",
         "edge_long_right",
         "edge_long_left",
         "edge_width_top",
         "edge_width_bottom",
-        "edge_type",
     ):
         assert f'"{fieldname}"' in order
+    assert "old_row.edge_type" in order
+    assert "row.edge_type" in order
     assert "default_edge_changed = bool(" in order
     assert "pricing_basis_changed = bool(" in order
+    assert "math.isclose(" in order
+    assert "cint(getattr(old_row, fieldname, 0))" in order
+    assert "old_drawing != drawing" in order
     assert "if pricing_basis_changed and not approval_action" in order
     assert 'row.special_shape_price_status = (' in order
     assert 'row.special_shape_price_approved_by = ""' in order
@@ -178,13 +189,29 @@ def test_customer_quote_replaces_special_baseline_instead_of_mutating_internal_c
     assert "self.customer_quote_total_usd = round_value(regular_automatic_total + final_total, 3)" in order
     assert "self.total_cost_usd = round_value(total_cost, 3)" in order
 
-    assert "استبعاد الحساب الآلي للدرف الخاصة" in cost
+    assert "استبعاد الحساب الآلي للدرف الخاصة" not in cost
+    assert "حصة خام MDF للدرف العادية" in cost
+    assert "حصة قص وتجهيز الدرف العادية" in cost
     assert "درفة خاصة رقم" in cost
+    assert "سعر معتمد شامل" in cost
     assert "approve_special_piece_price" in cost
     assert "سعر شامل" in cost
     assert "التكلفة الداخلية المخططة" in cost
     assert "القشاط المبدئي" in cost
     assert "${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}" in cost
+    assert "ملاحظة السعر:" in cost
+
+
+def test_saved_special_price_and_read_only_sketch_survive_refresh():
+    order = ORDER_PY.read_text(encoding="utf-8")
+    cost = COST_UX.read_text(encoding="utf-8")
+    sketch = SKETCH_UX.read_text(encoding="utf-8")
+
+    assert "flt(old_row.width_cm)" in order
+    assert "cint(old_row.qty) != cint(row.qty)" in order
+    assert 'row.special_shape_price_status === "Approved"' in cost
+    assert 'root.style.gridTemplateColumns = "minmax(0,1fr) 230px"' in sketch
+    assert 'root.querySelector(".dco-special-sketch-shell").style.gridTemplateColumns' not in sketch
 
 
 def test_review_and_production_approval_gate_special_documentation_and_price():
