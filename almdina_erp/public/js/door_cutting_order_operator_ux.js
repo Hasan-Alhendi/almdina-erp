@@ -325,17 +325,15 @@
         const cornerSummary = isClipped && window.AlmdinaClippedCornerGeometry
             ? window.AlmdinaClippedCornerGeometry.summary(data)
             : "";
-        const shapeIcon = isClipped ? "⌑" : (hasExactGeometry ? "◆" : (hasDrawing ? "✓" : "✣"));
+        const shapeIcon = isClipped ? "⌑" : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
         const shapeLabel = isClipped
             ? (isArabic() ? "ضبط" : "Set")
-            : (hasExactGeometry
-                ? (isArabic() ? "هندسي" : "Exact")
-                : (hasDrawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "بناء" : "Build")));
+            : ((hasDrawing || hasExactGeometry)
+                ? (isArabic() ? "موثقة" : "Documented")
+                : (isArabic() ? "ارسم" : "Sketch"));
         const shapeTitle = isClipped
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-            : (hasExactGeometry
-                ? (isArabic() ? "تعديل مسار القص الهندسي الحقيقي" : "Edit the exact cut geometry")
-                : (isArabic() ? "بناء شكل الدرفة بالأبعاد والنقاط" : "Build the piece from dimensions and vertices"));
+            : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
         return `
             <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no"><span class="dco-row-number">${index}</span></td>

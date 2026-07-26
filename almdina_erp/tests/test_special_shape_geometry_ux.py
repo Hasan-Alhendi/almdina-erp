@@ -50,7 +50,7 @@ def test_exact_geometry_is_separate_from_legacy_documentation_and_persisted_in_p
     assert placed["special_shape_geometry_json"]["read_only"] == 1
 
 
-def test_geometry_module_loads_before_fast_table_and_builder_wraps_legacy_editor():
+def test_geometry_module_stays_available_but_classic_editor_remains_primary():
     hooks = HOOKS.read_text(encoding="utf-8")
     geometry_hook = '"public/js/door_cutting_order_special_shape_geometry.js"'
     operator_hook = '"public/js/door_cutting_order_operator_ux.js"'
@@ -58,14 +58,16 @@ def test_geometry_module_loads_before_fast_table_and_builder_wraps_legacy_editor
     builder_hook = '"public/js/door_cutting_order_special_shape_builder_ux.js"'
 
     assert geometry_hook in hooks
-    assert builder_hook in hooks
+    assert legacy_hook in hooks
+    assert builder_hook not in hooks
     assert hooks.index(geometry_hook) < hooks.index(operator_hook)
-    assert hooks.index(legacy_hook) < hooks.index(builder_hook)
+    assert hooks.index(operator_hook) < hooks.index(legacy_hook)
 
-    builder = BUILDER.read_text(encoding="utf-8")
-    assert "window.AlmdinaLegacySpecialShapeEditor = legacyEditor" in builder
-    assert "window.AlmdinaSpecialShapeEditor = Object.freeze" in builder
-    assert "الرسم الحر للتوضيح فقط" in builder
+    legacy = (ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js").read_text(
+        encoding="utf-8"
+    )
+    assert "window.AlmdinaSpecialShapeEditor = {" in legacy
+    assert "رسم الدرفة الخاصة رقم" in legacy
 
 
 def test_builder_is_dimension_driven_and_has_practical_polygon_controls():

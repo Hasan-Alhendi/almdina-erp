@@ -249,19 +249,17 @@
             sketch.classList.toggle("is-clipped-corner", clipped);
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
-            if (icon) icon.textContent = clipped ? "⌑" : (exact ? "◆" : (drawing ? "✓" : "✣"));
+            if (icon) icon.textContent = clipped ? "⌑" : ((drawing || exact) ? "✓" : "✎");
             if (label) {
                 label.textContent = clipped
                     ? (isArabic() ? "ضبط" : "Set")
-                    : (exact
-                        ? (isArabic() ? "هندسي" : "Exact")
-                        : (drawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "بناء" : "Build")));
+                    : ((drawing || exact)
+                        ? (isArabic() ? "موثقة" : "Documented")
+                        : (isArabic() ? "ارسم" : "Sketch"));
             }
             sketch.title = clipped
                 ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-                : (exact
-                    ? (isArabic() ? "تعديل مسار القص الهندسي الحقيقي" : "Edit the exact cut geometry")
-                    : (isArabic() ? "بناء شكل الدرفة بالأبعاد والنقاط" : "Build the piece from dimensions and vertices"));
+                : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
         }
 
         ensureRowSelector(frm, tr);
