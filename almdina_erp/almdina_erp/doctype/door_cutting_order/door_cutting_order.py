@@ -23,6 +23,8 @@ from almdina_erp.almdina_erp.services.special_shape_service import (
 
 ENGINE_VERSION = "2.1.0-fast-save"
 PLAN_INPUT_VERSION = 1
+PIECE_TYPES = {"Regular", "Clipped Corner", "Special"}
+CLIPPED_CORNER_POSITIONS = {"Top Right", "Top Left", "Bottom Right", "Bottom Left"}
 
 
 class DoorCuttingOrder(Document):
@@ -145,8 +147,51 @@ class DoorCuttingOrder(Document):
 
         for index, row in enumerate(self.pieces or [], start=1):
             row.piece_type = row.piece_type or "Regular"
-            if row.piece_type not in {"Regular", "Special"}:
+            if row.piece_type not in PIECE_TYPES:
                 frappe.throw(_("Row {0}: Piece Type is invalid.").format(index))
+
+            if row.piece_type == "Clipped Corner":
+                position = row.clipped_corner_position or "Top Right"
+                if position not in CLIPPED_CORNER_POSITIONS:
+                    frappe.throw(
+                        _("Row {0}: Clipped Corner Position is invalid.").format(index)
+                    )
+
+                piece_width = flt(row.width_cm)
+                piece_length = flt(row.length_cm)
+                cut_width = self._finite(
+                    row.clipped_corner_width_cm,
+                    _("Row {0} Clipped Corner Width CM").format(index),
+                )
+                cut_length = self._finite(
+                    row.clipped_corner_length_cm,
+                    _("Row {0} Clipped Corner Length CM").format(index),
+                )
+
+                # Live preview validates partially entered rows before the strict
+                # save-time piece validator. Defer size defaults until both outer
+                # dimensions exist so selecting the shape never interrupts entry.
+                if piece_width > 0 and piece_length > 0:
+                    if cut_width <= 0:
+                        cut_width = min(max(piece_width * 0.2, 1), piece_width * 0.45)
+                    if cut_length <= 0:
+                        cut_length = min(max(piece_length * 0.2, 1), piece_length * 0.45)
+                    if cut_width >= piece_width:
+                        frappe.throw(
+                            _("Row {0}: Clipped Corner Width must be smaller than the piece width.").format(
+                                index
+                            )
+                        )
+                    if cut_length >= piece_length:
+                        frappe.throw(
+                            _("Row {0}: Clipped Corner Length must be smaller than the piece length.").format(
+                                index
+                            )
+                        )
+
+                row.clipped_corner_position = position
+                row.clipped_corner_width_cm = round_value(cut_width, 3)
+                row.clipped_corner_length_cm = round_value(cut_length, 3)
 
             old_row = old_rows.get(row.name)
             drawing = validate_special_shape_drawing(row.special_shape_drawing_json)
@@ -177,6 +222,20 @@ class DoorCuttingOrder(Document):
                         abs_tol=1e-9,
                     )
                     or cint(old_row.qty) != cint(row.qty)
+                    or str(getattr(old_row, "clipped_corner_position", "") or "")
+                    != str(row.clipped_corner_position or "")
+                    or not math.isclose(
+                        flt(getattr(old_row, "clipped_corner_width_cm", 0)),
+                        flt(row.clipped_corner_width_cm),
+                        rel_tol=0,
+                        abs_tol=1e-9,
+                    )
+                    or not math.isclose(
+                        flt(getattr(old_row, "clipped_corner_length_cm", 0)),
+                        flt(row.clipped_corner_length_cm),
+                        rel_tol=0,
+                        abs_tol=1e-9,
+                    )
                     or any(
                         cint(getattr(old_row, fieldname, 0))
                         != cint(getattr(row, fieldname, 0))
@@ -476,6 +535,9 @@ class DoorCuttingOrder(Document):
             "area_m2",
             "notes",
             "piece_type",
+            "clipped_corner_position",
+            "clipped_corner_width_cm",
+            "clipped_corner_length_cm",
             "edge_long_right",
             "edge_long_left",
             "edge_width_top",
@@ -783,6 +845,9 @@ class DoorCuttingOrder(Document):
             "edge_rate_usd": flt(row.edge_rate_usd),
             "edge_cost_usd": flt(row.edge_cost_usd),
             "piece_type": row.piece_type or "Regular",
+            "clipped_corner_position": row.clipped_corner_position or "",
+            "clipped_corner_width_cm": flt(row.clipped_corner_width_cm),
+            "clipped_corner_length_cm": flt(row.clipped_corner_length_cm),
             "notes": row.notes or "",
         }
 

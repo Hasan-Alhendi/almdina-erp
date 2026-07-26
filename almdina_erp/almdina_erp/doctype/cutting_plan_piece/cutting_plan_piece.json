@@ -16,6 +16,9 @@
     "original_width_cm",
     "original_length_cm",
     "piece_type",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
     "rotated",
     "edge_long_right",
     "edge_long_left",
@@ -98,7 +101,26 @@
       "fieldname": "piece_type",
       "fieldtype": "Select",
       "label": "Piece Type",
-      "options": "Regular\nSpecial",
+      "options": "Regular\nClipped Corner\nSpecial",
+      "read_only": 1
+    },
+    {
+      "fieldname": "clipped_corner_position",
+      "fieldtype": "Select",
+      "label": "Clipped Corner Position",
+      "options": "Top Right\nTop Left\nBottom Right\nBottom Left",
+      "read_only": 1
+    },
+    {
+      "fieldname": "clipped_corner_width_cm",
+      "fieldtype": "Float",
+      "label": "Clipped Corner Width (CM)",
+      "read_only": 1
+    },
+    {
+      "fieldname": "clipped_corner_length_cm",
+      "fieldtype": "Float",
+      "label": "Clipped Corner Length (CM)",
       "read_only": 1
     },
     {

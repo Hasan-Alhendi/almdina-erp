@@ -149,7 +149,7 @@
     function resetVirtualClone(frm, clone) {
         clone.dataset.rowName = `__virtual__perf_${Date.now()}_${++virtualSequence}`;
         clone.classList.add("dco-virtual-row");
-        clone.classList.remove("dco-special-row", "dco-row-selected");
+        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-row-selected");
 
         const selectorCell = clone.querySelector(":scope > td.dco-select-col");
         if (selectorCell) selectorCell.replaceChildren();
@@ -174,7 +174,7 @@
         const sketch = clone.querySelector("button.dco-special-sketch-button");
         if (sketch) {
             sketch.disabled = true;
-            sketch.classList.remove("is-documented");
+            sketch.classList.remove("is-documented", "is-clipped-corner");
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
             if (icon) icon.textContent = "✎";
@@ -219,8 +219,10 @@
 
     function updatePieceTypeVisual(frm, tr, row) {
         const special = row.piece_type === "Special";
+        const clipped = row.piece_type === "Clipped Corner";
         const drawing = Boolean(String(row.special_shape_drawing_json || "").trim());
         tr.classList.toggle("dco-special-row", special);
+        tr.classList.toggle("dco-clipped-corner-row", clipped);
 
         const edgeButtons = tr.querySelector(".dco-edge-buttons");
         if (edgeButtons) {
@@ -233,15 +235,23 @@
 
         const sketch = tr.querySelector("button.dco-special-sketch-button");
         if (sketch) {
-            sketch.disabled = !(special && isEditable(frm));
-            sketch.classList.toggle("is-documented", drawing);
+            const cornerSummary = clipped && window.AlmdinaClippedCornerGeometry
+                ? window.AlmdinaClippedCornerGeometry.summary(row)
+                : "";
+            sketch.disabled = !((special || clipped) && isEditable(frm));
+            sketch.classList.toggle("is-documented", special && drawing);
+            sketch.classList.toggle("is-clipped-corner", clipped);
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
-            if (icon) icon.textContent = drawing ? "✓" : "✎";
-            if (label) label.textContent = drawing
-                ? (isArabic() ? "موثقة" : "Documented")
-                : (isArabic() ? "ارسم" : "Sketch");
-            sketch.title = isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes";
+            if (icon) icon.textContent = clipped ? "⌑" : (drawing ? "✓" : "✎");
+            if (label) {
+                label.textContent = clipped
+                    ? (isArabic() ? "ضبط" : "Set")
+                    : (drawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "ارسم" : "Sketch"));
+            }
+            sketch.title = clipped
+                ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
         }
 
         ensureRowSelector(frm, tr);
@@ -275,6 +285,9 @@
         if (!row) return;
 
         row.piece_type = control.value || "Regular";
+        if (row.piece_type === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
+            window.AlmdinaClippedCornerEditor.prepare(row);
+        }
         frm.dirty();
         updatePieceTypeVisual(frm, tr, row);
         ensureAllSelectors(frm, root);

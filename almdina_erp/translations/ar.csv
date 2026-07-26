@@ -656,6 +656,12 @@ Row {0} Quantity,عدد الدرف في السطر {0}
 Row {0}: Width must be greater than zero.,السطر {0}: يجب أن يكون العرض أكبر من صفر.
 Row {0}: Length must be greater than zero.,السطر {0}: يجب أن يكون الطول أكبر من صفر.
 Row {0}: Quantity must be a positive integer.,السطر {0}: يجب أن يكون العدد رقمًا صحيحًا أكبر من صفر.
+Row {0}: Piece Type is invalid.,السطر {0}: نوع الدرفة غير صالح.
+Row {0}: Clipped Corner Position is invalid.,السطر {0}: موضع الزاوية المقصوصة غير صالح.
+Row {0} Clipped Corner Width CM,قص الزاوية على عرض الدرفة في السطر {0} (سم)
+Row {0} Clipped Corner Length CM,قص الزاوية على طول الدرفة في السطر {0} (سم)
+Row {0}: Clipped Corner Width must be smaller than the piece width.,السطر {0}: قص الزاوية على جهة العرض يجب أن يكون أصغر من عرض الدرفة.
+Row {0}: Clipped Corner Length must be smaller than the piece length.,السطر {0}: قص الزاوية على جهة الطول يجب أن يكون أصغر من طول الدرفة.
 Board Item is required.,يجب اختيار صنف اللوح.
 Selected Item is not marked as an MDF/cutting board.,الصنف المختار غير معرف كلوح MDF مخصص للقص.
 Board dimensions are missing or invalid on Item {0}.,أبعاد اللوح غير مكتملة أو غير صحيحة في الصنف {0}.
@@ -693,7 +699,15 @@ Yes,نعم
 No,لا
 Piece Type,نوع الدرفة
 Regular,عادية
+Clipped Corner,زاوية مقصوصة
 Special,خاصة
+Clipped Corner Position,موضع الزاوية المقصوصة
+Clipped Corner Width (CM),قص الزاوية على العرض (سم)
+Clipped Corner Length (CM),قص الزاوية على الطول (سم)
+Top Right,أعلى اليمين
+Top Left,أعلى اليسار
+Bottom Right,أسفل اليمين
+Bottom Left,أسفل اليسار
 Special Shape Documentation,توثيق الدرفة الخاصة
 Special Shape Documentation Status,حالة توثيق الدرفة الخاصة
 Needs Documentation,تحتاج توثيقًا
