@@ -49,6 +49,7 @@ jobs:
           from almdina_erp.tests import test_order_cost_invoice_ux as cost_invoice_checks
           from almdina_erp.tests import test_door_cutting_order_fast_save as fast_save_checks
           from almdina_erp.tests import test_measurement_resilience_ux as measurement_resilience_checks
+          from almdina_erp.tests import test_table_performance_ux as table_performance_checks
 
           modules = [
               arabic_checks,
@@ -58,6 +59,7 @@ jobs:
               cost_invoice_checks,
               fast_save_checks,
               measurement_resilience_checks,
+              table_performance_checks,
           ]
           total = 0
           for module in modules:

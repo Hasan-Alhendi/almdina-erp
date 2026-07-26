@@ -212,11 +212,19 @@ assert.deepEqual(
     "The selection box should cover both the dimension line and its label"
 );
 
-for (const template of ["angled", "arch", "lshape", "trapezoid"]) {
+for (const template of ["clipped-corner", "arch", "lshape", "trapezoid"]) {
     const points = templatePoints(template);
     assert.ok(points.length >= 5, `${template} should produce a usable outline`);
     assert.deepEqual(points.at(-1), points[0], `${template} should be a closed outline`);
 }
+
+const clippedCorner = templatePoints("clipped-corner");
+assert.equal(clippedCorner.length, 6, "A clipped corner should have five sides and a closing point");
+assert.deepEqual(
+    clippedCorner.slice(3, 5),
+    [[430, 500], [250, 320]],
+    "The clipped-corner preset should include a visible diagonal cut"
+);
 
 assert.deepEqual(
     clampViewBox({ x: 950, y: 620, width: 250, height: 162.5 }),
