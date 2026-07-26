@@ -46,7 +46,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: pip
 
       - name: Set up Node.js
@@ -77,7 +77,7 @@ jobs:
         run: |
           bench init "$RUNNER_TEMP/frappe-bench" \
             --frappe-branch version-16 \
-            --python python3.12 \
+            --python python3.14 \
             --skip-redis-config-generation
 
       - name: Install ERPNext v16 and local app source

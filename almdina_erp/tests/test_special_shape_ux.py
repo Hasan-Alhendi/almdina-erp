@@ -132,6 +132,7 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "translateElement" in sketch
     assert "snapPenEndpoints" in sketch
     assert "dco-sketch-zoom-in" in sketch
+    assert 'data-template="clipped-corner"' in sketch
     assert 'data-template="arch"' in sketch
     assert "تعديلات لم تحفظ" in sketch
 
