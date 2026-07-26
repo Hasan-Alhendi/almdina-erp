@@ -134,6 +134,27 @@
             </div>`;
     }
 
+    function shapePrint() {
+        return window.AlmdinaShapePrint || null;
+    }
+
+    function rowHasDrawing(row) {
+        const renderer = shapePrint();
+        return Boolean(renderer && renderer.hasVisual(row));
+    }
+
+    function printNotesCell(row) {
+        const renderer = shapePrint();
+        return renderer
+            ? renderer.notesCell(row, row.notes, { label: `رسمة الدرفة رقم ${row.index}` })
+            : esc(row.notes || "—");
+    }
+
+    function shapePrintCss() {
+        const renderer = shapePrint();
+        return renderer ? renderer.css : "";
+    }
+
     function edgeGroups(frm, sourceRows = pieces(frm)) {
         const groups = new Map();
         sourceRows.forEach(row => {
@@ -445,12 +466,13 @@
 <html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>فاتورة الطلب ${esc(frm.doc.name || "")}</title>
 <style>
 @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#111;margin:0;font-size:11px;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}.title h1{font-size:22px;margin:0 0 5px}.muted{color:#666;font-size:10px}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 0}.info>div{border:1px solid #bbb;border-radius:6px;padding:7px}.info b{display:block;font-size:9px;color:#555;margin-bottom:3px}.section-title{font-size:14px;font-weight:800;margin:14px 0 6px}.table{width:100%;border-collapse:collapse}.table th,.table td{border:1px solid #999;padding:5px;text-align:center;vertical-align:middle}.table th{background:#eee;font-weight:800}.table .right{text-align:right}.measurements{font-size:9px}.measurements .notes-col{width:36%;text-align:right;white-space:normal;line-height:1.55}.invoice{font-size:10px}.invoice .line-note{display:block;margin-top:3px;color:#555;font-size:8.5px;font-weight:400;line-height:1.45}.dco-dimension-mark{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-dimension-value{font-weight:700}.dco-dimension-lines{display:flex;flex-direction:column;align-items:center;gap:1.5px;min-height:5px;margin-top:1px}.dco-dimension-edge-line{display:block;width:28px;height:1px;background:#111}.dco-dimension-lines-0{visibility:hidden}.total-box{margin-top:10px;margin-right:auto;width:45%;border:2px solid #111;padding:10px;display:flex;justify-content:space-between;align-items:center}.total-box span:first-child{font-size:14px;font-weight:800}.total-box .amount{font-size:22px;font-weight:900;direction:ltr}.notes{margin-top:12px;padding:8px;border:1px solid #bbb;min-height:36px}.footer{margin-top:14px;border-top:1px solid #bbb;padding-top:6px;font-size:9px;color:#666;display:flex;justify-content:space-between}
+${shapePrintCss()}
 </style></head><body>
 <div class="header"><div class="title"><h1>عرض سعر الطلب</h1><div class="muted">فاتورة تكلفة الطلب — تفاصيل القياسات والخدمات وتسعير الدرف الخاصة</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div><div class="muted">حالة السعر: ${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</div></div></div>
 <div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
 <div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد الحواف المطلوب تلبيسها</span></div>
 <table class="table measurements"><thead><tr><th>#</th><th>النوع</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>نوع القشاط</th><th class="notes-col">ملاحظات</th></tr></thead><tbody>
-${rows.map(row => `<tr><td>${row.index}</td><td>${pieceTypeLabel(row)}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col">${esc(row.notes || "—")}</td></tr>`).join("")}
+${rows.map(row => `<tr class="${rowHasDrawing(row) ? "dco-row-with-sketch" : ""}"><td>${row.index}</td><td>${pieceTypeLabel(row)}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col ${rowHasDrawing(row) ? "dco-notes-has-sketch" : ""}">${printNotesCell(row)}</td></tr>`).join("")}
 </tbody></table>
 <div class="section-title">تفاصيل الفاتورة</div>
 <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>
