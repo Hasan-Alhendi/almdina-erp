@@ -221,6 +221,11 @@
         const special = row.piece_type === "Special";
         const clipped = row.piece_type === "Clipped Corner";
         const drawing = Boolean(String(row.special_shape_drawing_json || "").trim());
+        const exact = Boolean(
+            special
+            && window.AlmdinaSpecialShapeGeometry
+            && window.AlmdinaSpecialShapeGeometry.isExact(row)
+        );
         tr.classList.toggle("dco-special-row", special);
         tr.classList.toggle("dco-clipped-corner-row", clipped);
 
@@ -239,15 +244,18 @@
                 ? window.AlmdinaClippedCornerGeometry.summary(row)
                 : "";
             sketch.disabled = !((special || clipped) && isEditable(frm));
-            sketch.classList.toggle("is-documented", special && drawing);
+            sketch.classList.toggle("is-documented", special && (drawing || exact));
+            sketch.classList.toggle("is-exact-geometry", exact);
             sketch.classList.toggle("is-clipped-corner", clipped);
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
-            if (icon) icon.textContent = clipped ? "⌑" : (drawing ? "✓" : "✎");
+            if (icon) icon.textContent = clipped ? "⌑" : ((drawing || exact) ? "✓" : "✎");
             if (label) {
                 label.textContent = clipped
                     ? (isArabic() ? "ضبط" : "Set")
-                    : (drawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "ارسم" : "Sketch"));
+                    : ((drawing || exact)
+                        ? (isArabic() ? "موثقة" : "Documented")
+                        : (isArabic() ? "ارسم" : "Sketch"));
             }
             sketch.title = clipped
                 ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`

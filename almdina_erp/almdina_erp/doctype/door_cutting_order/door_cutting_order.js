@@ -219,8 +219,11 @@
             piece.edge_width_top,
             piece.edge_width_bottom
         ].filter(Boolean).length;
+        const exact_special = piece.piece_type === "Special"
+            && window.AlmdinaSpecialShapeGeometry
+            && window.AlmdinaSpecialShapeGeometry.isExact(piece);
         const special = piece.piece_type === "Special"
-            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">✦ درفة خاصة · خام CNC</span><br>`
+            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
             : "";
         const clipped = piece.piece_type === "Clipped Corner"
             ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
@@ -364,20 +367,34 @@
                     ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
                     : "border:1px solid #111;background:#e4f5ff;";
                 const clipped = piece.piece_type === "Clipped Corner";
-                const clippedPoints = clipped && window.AlmdinaClippedCornerGeometry
-                    ? window.AlmdinaClippedCornerGeometry.pointsAttribute(piece, 100, 100)
+                const exactSpecial = piece.piece_type === "Special"
+                    && window.AlmdinaSpecialShapeGeometry
+                    && window.AlmdinaSpecialShapeGeometry.isExact(piece);
+                const shapeGeometry = clipped
+                    ? window.AlmdinaClippedCornerGeometry
+                    : (exactSpecial ? window.AlmdinaSpecialShapeGeometry : null);
+                const shapePoints = shapeGeometry
+                    ? shapeGeometry.pointsAttribute(piece, 100, 100)
                     : "0,0 100,0 100,100 0,100";
-                const clippedOutline = clipped
-                    ? `<svg class="dco-clipped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><polygon points="${clippedPoints}" fill="#fff0c7" stroke="#8a5700" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
+                const shaped = clipped || exactSpecial;
+                const shapeOutline = shaped
+                    ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><polygon points="${shapePoints}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
                     : "";
-                const pieceStyle = clipped
+                const pieceStyle = shaped
                     ? "border:0;background:transparent;box-shadow:none;"
                     : special_piece_style;
+                const shapeClip = shapePoints.split(" ").map(pair => {
+                    const [x, y] = pair.split(",");
+                    return `${x}% ${y}%`;
+                }).join(",");
+                const edgeLines = shaped
+                    ? `<span style="position:absolute;display:block;inset:0;z-index:3;clip-path:polygon(${shapeClip})">${render_piece_edge_lines(piece)}</span>`
+                    : render_piece_edge_lines(piece);
 
                 html += `
-                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
-                        ${clippedOutline}
-                        ${render_piece_edge_lines(piece)}
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                        ${shapeOutline}
+                        ${edgeLines}
                         ${render_piece_label(piece)}
                     </div>
                 `;
@@ -674,9 +691,13 @@
                 const piece_h_mm = num(piece.h) * 10;
                 const x_mm = sheet_offset_x + trim_mm + (num(piece.x) * 10);
                 const y_mm = sheet_offset_y + full_board_length_mm - trim_mm - (num(piece.y) * 10) - piece_h_mm;
-                const geometry = window.AlmdinaClippedCornerGeometry;
-                entities += geometry && geometry.isClipped(piece)
-                    ? dxf_polyline_points("CUT_PATH", geometry.dxfPoints(piece, x_mm, y_mm, piece_w_mm, piece_h_mm))
+                const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+                const specialGeometry = window.AlmdinaSpecialShapeGeometry;
+                const pathGeometry = clippedGeometry && clippedGeometry.isClipped(piece)
+                    ? clippedGeometry
+                    : (specialGeometry && specialGeometry.isExact(piece) ? specialGeometry : null);
+                entities += pathGeometry
+                    ? dxf_polyline_points("CUT_PATH", pathGeometry.dxfPoints(piece, x_mm, y_mm, piece_w_mm, piece_h_mm))
                     : dxf_polyline_rect("CUT_PATH", x_mm, y_mm, piece_w_mm, piece_h_mm);
             });
         });

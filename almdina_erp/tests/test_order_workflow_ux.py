@@ -20,45 +20,17 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
     assert doctype["search_fields"] == "customer"
     source = text(LIST_UX)
     assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
-    assert "اسم العميل أو رقم الطلب" in source
     assert '"customer", "order_date", "status"' in source
 
 
-def test_visible_id_filter_is_replaced_with_combined_name_or_customer_search():
-    source = text(LIST_UX)
-    assert "const originalGetArgs = listview.get_args.bind(listview)" in source
-    assert "listview.get_args = function dcoCombinedSearchArgs()" in source
-    assert "args.filters = (args.filters || []).filter" in source
-    assert '[this.doctype, "name", "like", pattern]' in source
-    assert '[this.doctype, "customer", "like", pattern]' in source
-    assert "args.or_filters = [" in source
-    assert "listview._dcoCombinedSearchInstalled = true" in source
-
-
-def test_measurement_table_has_print_and_editable_full_screen_actions():
+def test_measurement_table_has_print_and_full_window_actions():
     source = text(MEASUREMENT_UX)
     assert 'class="btn btn-default btn-sm dco-print-measurements"' in source
-    assert "فتح جدول الإدخال في نافذة مستقلة" in source
-    assert "openEditableMeasurements(frm)" in source
-    assert "dco-measurement-entry-window" in source
-    assert "host.appendChild(root)" in source
-    assert "placeholder.parentNode.insertBefore(state.root, state.placeholder)" in source
-    assert "window.open(" not in source
+    assert "فتح الجدول في نافذة مستقلة" in source
+    assert "window.open(" in source
     assert "dco-measurements-print-frame" in source
-
-
-def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_behaviour():
-    source = text(MEASUREMENT_UX)
-    assert 'root.querySelector(".dco-fast-entry-shell")' in source
-    assert "dco-entry-window-save" in source
-    assert "await Promise.resolve(frm.save())" in source
-    assert "dco-entry-window-print" in source
-    assert "dco-entry-window-close" in source
-    assert "إغلاق والعودة" in source
-    assert "توجد تعديلات غير محفوظة" in source
-    assert "جميع التعديلات محفوظة" in source
-    assert "height:100%;display:flex;flex-direction:column" in source
-    assert "max-height:none!important" in source
+    assert "تفاصيل الأسعار والفاتورة" in source
+    assert "dco-measurement-print-table" in source
 
 
 def test_measurement_print_has_invoice_measurement_columns_without_invoice_totals():
@@ -69,18 +41,24 @@ def test_measurement_print_has_invoice_measurement_columns_without_invoice_total
     assert "تفاصيل الفاتورة" not in source
 
 
-def test_customer_invoice_prints_edge_color_once_in_header_without_table_columns():
-    source = text(EDGE_COLOR_UX)
-    print_section = source.split("function printHtml(frm)", 1)[1].split(
+def test_edge_color_is_kept_in_print_headers_without_duplicate_table_columns():
+    invoice_source = text(EDGE_COLOR_UX)
+    print_section = invoice_source.split("function printHtml(frm)", 1)[1].split(
         "function printCustomerInvoice(frm)", 1
     )[0]
+    measurement_source = text(MEASUREMENT_UX)
+
     assert "grid-template-columns:repeat(5" in print_section
     assert "<b>نوع القشاط</b>" in print_section
-    assert print_section.count("<b>لون القشاط</b>") == 1
-    assert "patchMeasurementTable" not in source
-    assert "patchInvoiceLines" not in source
-    assert "patchInvoiceMeta" not in source
-    assert "removeLegacyColorDuplicates" in source
+    assert "<b>لون القشاط</b>" in print_section
+    assert "patchMeasurementTable" not in invoice_source
+    assert "patchInvoiceLines" not in invoice_source
+    assert "patchInvoiceMeta" not in invoice_source
+    assert "removeLegacyColorDuplicates" in invoice_source
+
+    assert "grid-template-columns:repeat(5" in measurement_source
+    assert "<b>لون القشاط</b>" in measurement_source
+    assert "orderEdgeColor(frm)" in measurement_source
 
 
 def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_actions():

@@ -132,8 +132,11 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "translateElement" in sketch
     assert "snapPenEndpoints" in sketch
     assert "dco-sketch-zoom-in" in sketch
+    assert 'data-template="single-slope"' in sketch
+    assert 'data-template="double-clipped"' in sketch
     assert 'data-template="clipped-corner"' in sketch
     assert 'data-template="arch"' in sketch
+    assert '"public/js/door_cutting_order_special_shape_builder_ux.js"' not in hooks
     assert "تعديلات لم تحفظ" in sketch
 
 

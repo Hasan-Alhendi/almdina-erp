@@ -212,11 +212,22 @@ assert.deepEqual(
     "The selection box should cover both the dimension line and its label"
 );
 
-for (const template of ["clipped-corner", "arch", "lshape", "trapezoid"]) {
+for (const template of ["single-slope", "double-clipped", "clipped-corner", "arch", "lshape", "trapezoid"]) {
     const points = templatePoints(template);
     assert.ok(points.length >= 5, `${template} should produce a usable outline`);
     assert.deepEqual(points.at(-1), points[0], `${template} should be a closed outline`);
 }
+
+assert.equal(
+    templatePoints("single-slope").length,
+    5,
+    "The single-slope preset should be a closed four-sided outline"
+);
+assert.equal(
+    templatePoints("double-clipped").length,
+    7,
+    "The double-clipped preset should include both upper cuts"
+);
 
 const clippedCorner = templatePoints("clipped-corner");
 assert.equal(clippedCorner.length, 6, "A clipped corner should have five sides and a closing point");

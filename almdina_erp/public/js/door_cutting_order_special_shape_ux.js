@@ -166,10 +166,12 @@
                             </button>`).join("")}
                         ${group.key === "draw" ? `
                             <div class="dco-sketch-template-grid" aria-label="أشكال جاهزة">
+                                <button type="button" class="dco-sketch-template" data-template="single-slope"><b>◩</b>طرف مائل</button>
+                                <button type="button" class="dco-sketch-template" data-template="double-clipped"><b>⬡</b>قصتان علويتان</button>
                                 <button type="button" class="dco-sketch-template" data-template="clipped-corner"><b>⌑</b>زاوية مقصوصة</button>
                                 <button type="button" class="dco-sketch-template" data-template="arch"><b>⌒</b>قوس علوي</button>
                                 <button type="button" class="dco-sketch-template" data-template="lshape"><b>⌞</b>شكل L</button>
-                                <button type="button" class="dco-sketch-template" data-template="trapezoid"><b>⬠</b>شكل مائل</button>
+                                <button type="button" class="dco-sketch-template" data-template="trapezoid"><b>⬠</b>شبه منحرف</button>
                             </div>` : ""}
                     `).join("")}
                     <div class="dco-sketch-divider"></div>
@@ -1034,6 +1036,12 @@
     }
 
     function templatePoints(template) {
+        if (template === "single-slope") {
+            return [[340, 150], [750, 150], [750, 500], [250, 500], [340, 150]];
+        }
+        if (template === "double-clipped") {
+            return [[340, 150], [660, 150], [750, 240], [750, 500], [250, 500], [250, 240], [340, 150]];
+        }
         if (template === "clipped-corner" || template === "angled") {
             return [[250, 155], [750, 155], [750, 500], [430, 500], [250, 320], [250, 155]];
         }
@@ -1665,14 +1673,14 @@
 
         const readOnly = Boolean(options.readOnly);
         const dialog = new frappe.ui.Dialog({
-            title: `ورقة توثيق الدرفة الخاصة رقم ${row.idx || row.piece_no || ""}`,
+            title: `رسم الدرفة الخاصة رقم ${row.idx || row.piece_no || ""}`,
             size: "extra-large",
             fields: [{
                 fieldname: "special_shape_canvas",
                 fieldtype: "HTML",
                 options: shellHtml(row),
             }],
-            primary_action_label: readOnly ? "إغلاق" : "حفظ التوثيق",
+            primary_action_label: readOnly ? "إغلاق" : "حفظ الرسم",
             primary_action() {
                 readOnly ? dialog.hide() : save(state);
             },

@@ -24,6 +24,7 @@
     "edge_meters",
     "notes",
     "special_shape_drawing_json",
+    "special_shape_geometry_json",
     "special_shape_status",
     "special_shape_drawing_updated_by",
     "special_shape_drawing_updated_on",
@@ -177,6 +178,12 @@
       "fieldtype": "Long Text",
       "hidden": 1,
       "label": "Special Shape Documentation"
+    },
+    {
+      "fieldname": "special_shape_geometry_json",
+      "fieldtype": "Long Text",
+      "hidden": 1,
+      "label": "Special Shape Exact Geometry"
     },
     {
       "default": "Not Required",

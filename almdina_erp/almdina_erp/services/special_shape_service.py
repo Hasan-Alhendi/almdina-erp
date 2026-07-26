@@ -17,6 +17,9 @@ MAX_DRAWING_BYTES = 300_000
 MAX_DRAWING_ELEMENTS = 400
 MAX_DRAWING_POINTS = 12_000
 MAX_NOTE_LENGTH = 500
+MAX_GEOMETRY_BYTES = 50_000
+MAX_GEOMETRY_VERTICES = 64
+GEOMETRY_EPSILON = 0.001
 
 
 def _finite_number(value: Any, label: str) -> float:
@@ -155,6 +158,223 @@ def validate_special_shape_drawing(raw_drawing: str | dict[str, Any] | None) -> 
     return drawing
 
 
+def _same_geometry_point(first: list[float], second: list[float]) -> bool:
+    return (
+        abs(first[0] - second[0]) <= GEOMETRY_EPSILON
+        and abs(first[1] - second[1]) <= GEOMETRY_EPSILON
+    )
+
+
+def _geometry_orientation(
+    first: list[float],
+    second: list[float],
+    third: list[float],
+) -> int:
+    value = (
+        (second[1] - first[1]) * (third[0] - second[0])
+        - (second[0] - first[0]) * (third[1] - second[1])
+    )
+    if abs(value) <= GEOMETRY_EPSILON:
+        return 0
+    return 1 if value > 0 else 2
+
+
+def _geometry_point_on_segment(
+    first: list[float],
+    point: list[float],
+    second: list[float],
+) -> bool:
+    return (
+        min(first[0], second[0]) - GEOMETRY_EPSILON
+        <= point[0]
+        <= max(first[0], second[0]) + GEOMETRY_EPSILON
+        and min(first[1], second[1]) - GEOMETRY_EPSILON
+        <= point[1]
+        <= max(first[1], second[1]) + GEOMETRY_EPSILON
+    )
+
+
+def _geometry_segments_intersect(
+    first_start: list[float],
+    first_end: list[float],
+    second_start: list[float],
+    second_end: list[float],
+) -> bool:
+    first_orientation = _geometry_orientation(first_start, first_end, second_start)
+    second_orientation = _geometry_orientation(first_start, first_end, second_end)
+    third_orientation = _geometry_orientation(second_start, second_end, first_start)
+    fourth_orientation = _geometry_orientation(second_start, second_end, first_end)
+    if (
+        first_orientation != second_orientation
+        and third_orientation != fourth_orientation
+    ):
+        return True
+    if first_orientation == 0 and _geometry_point_on_segment(
+        first_start, second_start, first_end
+    ):
+        return True
+    if second_orientation == 0 and _geometry_point_on_segment(
+        first_start, second_end, first_end
+    ):
+        return True
+    if third_orientation == 0 and _geometry_point_on_segment(
+        second_start, first_start, second_end
+    ):
+        return True
+    return fourth_orientation == 0 and _geometry_point_on_segment(
+        second_start, first_end, second_end
+    )
+
+
+def _geometry_has_self_intersection(points: list[list[float]]) -> bool:
+    count = len(points)
+    if count < 4:
+        return False
+    for first_index in range(count):
+        first_next = (first_index + 1) % count
+        for second_index in range(first_index + 1, count):
+            second_next = (second_index + 1) % count
+            if (
+                first_index == second_index
+                or first_next == second_index
+                or second_next == first_index
+                or (first_index == 0 and second_next == 0)
+            ):
+                continue
+            if _geometry_segments_intersect(
+                points[first_index],
+                points[first_next],
+                points[second_index],
+                points[second_next],
+            ):
+                return True
+    return False
+
+
+def _geometry_area(points: list[list[float]]) -> float:
+    return abs(
+        sum(
+            point[0] * points[(index + 1) % len(points)][1]
+            - points[(index + 1) % len(points)][0] * point[1]
+            for index, point in enumerate(points)
+        )
+    ) / 2
+
+
+def validate_special_shape_geometry(
+    raw_geometry: str | dict[str, Any] | None,
+    expected_width_cm: float | None = None,
+    expected_length_cm: float | None = None,
+) -> dict[str, Any] | None:
+    """Validate exact centimetre polygon geometry used by cutting-plan and DXF renderers."""
+
+    if raw_geometry in (None, ""):
+        return None
+
+    if isinstance(raw_geometry, str):
+        if len(raw_geometry.encode("utf-8")) > MAX_GEOMETRY_BYTES:
+            frappe.throw(_("Special shape geometry is too large."))
+        try:
+            geometry = json.loads(raw_geometry)
+        except (TypeError, ValueError):
+            frappe.throw(_("Special shape geometry contains invalid JSON."))
+    elif isinstance(raw_geometry, dict):
+        geometry = raw_geometry
+    else:
+        frappe.throw(_("Special shape geometry must be a JSON object."))
+
+    if not isinstance(geometry, dict):
+        frappe.throw(_("Special shape geometry must be a JSON object."))
+    try:
+        version = int(geometry.get("version") or 0)
+    except (TypeError, ValueError):
+        version = 0
+    if version != 1:
+        frappe.throw(_("Unsupported special shape geometry version."))
+    if geometry.get("kind") != "polygon" or geometry.get("units") != "cm":
+        frappe.throw(_("Special shape geometry must be a centimetre polygon."))
+
+    width = _finite_number(geometry.get("blank_width_cm"), _("Special Shape Width CM"))
+    length = _finite_number(geometry.get("blank_length_cm"), _("Special Shape Length CM"))
+    if width <= 0 or length <= 0:
+        frappe.throw(_("Special shape width and length must be greater than zero."))
+    if expected_width_cm and not math.isclose(
+        width,
+        flt(expected_width_cm),
+        rel_tol=0,
+        abs_tol=GEOMETRY_EPSILON,
+    ):
+        frappe.throw(_("Special shape geometry width does not match the piece width."))
+    if expected_length_cm and not math.isclose(
+        length,
+        flt(expected_length_cm),
+        rel_tol=0,
+        abs_tol=GEOMETRY_EPSILON,
+    ):
+        frappe.throw(_("Special shape geometry length does not match the piece length."))
+
+    raw_points = geometry.get("points")
+    if not isinstance(raw_points, list) or len(raw_points) < 3:
+        frappe.throw(_("Special shape geometry needs at least three vertices."))
+    if len(raw_points) > MAX_GEOMETRY_VERTICES:
+        frappe.throw(
+            _("Special shape geometry cannot exceed {0} vertices.").format(
+                MAX_GEOMETRY_VERTICES
+            )
+        )
+
+    points: list[list[float]] = []
+    for index, point in enumerate(raw_points, start=1):
+        if not isinstance(point, list) or len(point) != 2:
+            frappe.throw(_("Special shape vertex {0} is invalid.").format(index))
+        x = _finite_number(point[0], _("Special Shape Vertex X"))
+        y = _finite_number(point[1], _("Special Shape Vertex Y"))
+        if (
+            x < -GEOMETRY_EPSILON
+            or y < -GEOMETRY_EPSILON
+            or x > width + GEOMETRY_EPSILON
+            or y > length + GEOMETRY_EPSILON
+        ):
+            frappe.throw(_("Special shape vertex {0} is outside the raw piece.").format(index))
+        points.append([round(x, 3), round(y, 3)])
+
+    if len(points) > 1 and _same_geometry_point(points[0], points[-1]):
+        points.pop()
+    if len(points) < 3:
+        frappe.throw(_("Special shape geometry needs at least three distinct vertices."))
+    for index, point in enumerate(points):
+        if _same_geometry_point(point, points[(index + 1) % len(points)]):
+            frappe.throw(_("Special shape geometry has duplicate adjacent vertices."))
+
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    if (
+        abs(min(xs)) > GEOMETRY_EPSILON
+        or abs(max(xs) - width) > GEOMETRY_EPSILON
+        or abs(min(ys)) > GEOMETRY_EPSILON
+        or abs(max(ys) - length) > GEOMETRY_EPSILON
+    ):
+        frappe.throw(_("Special shape geometry must touch all four raw-piece bounds."))
+    if _geometry_area(points) <= GEOMETRY_EPSILON:
+        frappe.throw(_("Special shape geometry area must be greater than zero."))
+    if _geometry_has_self_intersection(points):
+        frappe.throw(_("Special shape geometry edges cannot intersect."))
+
+    template = str(geometry.get("template") or "custom").strip()
+    if len(template) > 80:
+        frappe.throw(_("Special shape template name is too long."))
+    return {
+        "version": 1,
+        "kind": "polygon",
+        "units": "cm",
+        "template": template or "custom",
+        "blank_width_cm": round(width, 3),
+        "blank_length_cm": round(length, 3),
+        "points": points,
+        "exact": True,
+    }
+
+
 def has_special_price_approval_role(user: str | None = None) -> bool:
     roles = set(frappe.get_roles(user or frappe.session.user))
     return bool(roles & SPECIAL_PRICE_APPROVER_ROLES)
@@ -191,7 +411,7 @@ def approve_special_piece_price(
     if (piece.piece_type or "Regular") != "Special":
         frappe.throw(_("Only a special door can receive a custom inclusive price."))
     if piece.special_shape_status != "Documented":
-        frappe.throw(_("Document the special door drawing before approving its price."))
+        frappe.throw(_("Document the special door shape before approving its price."))
 
     price = _finite_number(unit_price_usd, _("Special Unit Price USD"))
     if price < 0:

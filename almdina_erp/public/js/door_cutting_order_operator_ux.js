@@ -317,13 +317,20 @@
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
         const hasDrawing = Boolean(String(data.special_shape_drawing_json || "").trim());
+        const hasExactGeometry = Boolean(
+            isSpecial
+            && window.AlmdinaSpecialShapeGeometry
+            && window.AlmdinaSpecialShapeGeometry.isExact(data)
+        );
         const cornerSummary = isClipped && window.AlmdinaClippedCornerGeometry
             ? window.AlmdinaClippedCornerGeometry.summary(data)
             : "";
-        const shapeIcon = isClipped ? "⌑" : (hasDrawing ? "✓" : "✎");
+        const shapeIcon = isClipped ? "⌑" : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
         const shapeLabel = isClipped
             ? (isArabic() ? "ضبط" : "Set")
-            : (hasDrawing ? (isArabic() ? "موثقة" : "Documented") : (isArabic() ? "ارسم" : "Sketch"));
+            : ((hasDrawing || hasExactGeometry)
+                ? (isArabic() ? "موثقة" : "Documented")
+                : (isArabic() ? "ارسم" : "Sketch"));
         const shapeTitle = isClipped
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
             : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
@@ -346,7 +353,7 @@
                     ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
                 </div></td>
                 <td class="dco-col-edge-type"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
-                <td class="dco-col-sketch"><button type="button" class="dco-special-sketch-button ${hasDrawing ? "is-documented" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
+                <td class="dco-col-sketch"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
                     <span aria-hidden="true">${shapeIcon}</span>
                     <span>${shapeLabel}</span>
                 </button></td>

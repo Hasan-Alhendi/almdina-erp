@@ -179,6 +179,9 @@ def create_plan_from_order(order: Any, snapshot_override: dict[str, Any] | None 
                     "clipped_corner_position": piece.get("clipped_corner_position") or "",
                     "clipped_corner_width_cm": flt(piece.get("clipped_corner_width_cm")),
                     "clipped_corner_length_cm": flt(piece.get("clipped_corner_length_cm")),
+                    "special_shape_geometry_json": (
+                        piece.get("special_shape_geometry_json") or ""
+                    ),
                     "rotated": 1 if piece.get("rotated") else 0,
                     "edge_long_right": 1 if piece.get("edge_long_right") else 0,
                     "edge_long_left": 1 if piece.get("edge_long_left") else 0,

@@ -19,6 +19,7 @@ from almdina_erp.almdina_erp.services.cutting_engine import (
 from almdina_erp.almdina_erp.services.special_shape_service import (
     has_special_price_approval_role,
     validate_special_shape_drawing,
+    validate_special_shape_geometry,
 )
 
 ENGINE_VERSION = "2.1.0-fast-save"
@@ -200,9 +201,32 @@ class DoorCuttingOrder(Document):
                 if old_row
                 else None
             )
-            drawing_changed = bool(
+            special_geometry = (
+                validate_special_shape_geometry(
+                    getattr(row, "special_shape_geometry_json", ""),
+                    row.width_cm,
+                    row.length_cm,
+                )
+                if row.piece_type == "Special"
+                and getattr(row, "special_shape_geometry_json", "")
+                else None
+            )
+            old_special_geometry = (
+                validate_special_shape_geometry(
+                    getattr(old_row, "special_shape_geometry_json", ""),
+                    old_row.width_cm,
+                    old_row.length_cm,
+                )
+                if old_row
+                and (old_row.piece_type or "Regular") == "Special"
+                and getattr(old_row, "special_shape_geometry_json", "")
+                else None
+            )
+            documentation_changed = bool(
                 (old_row and old_drawing != drawing)
                 or (not old_row and drawing)
+                or (old_row and old_special_geometry != special_geometry)
+                or (not old_row and special_geometry)
             )
             geometry_changed = bool(
                 old_row
@@ -249,6 +273,7 @@ class DoorCuttingOrder(Document):
                     )
                     or str(old_row.edge_type or "") != str(row.edge_type or "")
                     or old_drawing != drawing
+                    or old_special_geometry != special_geometry
                 )
             )
             pricing_basis_changed = bool(
@@ -321,12 +346,16 @@ class DoorCuttingOrder(Document):
                         frappe.PermissionError,
                     )
 
-            if drawing_changed:
+            if documentation_changed:
                 row.special_shape_drawing_updated_by = frappe.session.user
                 row.special_shape_drawing_updated_on = now_datetime()
 
             if row.piece_type == "Special":
-                row.special_shape_status = "Documented" if drawing and drawing.get("elements") else "Needs Documentation"
+                row.special_shape_status = (
+                    "Documented"
+                    if special_geometry or (drawing and drawing.get("elements"))
+                    else "Needs Documentation"
+                )
             else:
                 row.special_shape_status = "Not Required"
 
@@ -538,6 +567,7 @@ class DoorCuttingOrder(Document):
             "clipped_corner_position",
             "clipped_corner_width_cm",
             "clipped_corner_length_cm",
+            "special_shape_geometry_json",
             "edge_long_right",
             "edge_long_left",
             "edge_width_top",
@@ -810,7 +840,7 @@ class DoorCuttingOrder(Document):
         ]
         if missing:
             frappe.throw(
-                _("Document the special door drawing before review. Missing rows: {0}.").format(
+                _("Document the special door shape before review. Missing rows: {0}.").format(
                     ", ".join(missing)
                 )
             )
@@ -848,6 +878,9 @@ class DoorCuttingOrder(Document):
             "clipped_corner_position": row.clipped_corner_position or "",
             "clipped_corner_width_cm": flt(row.clipped_corner_width_cm),
             "clipped_corner_length_cm": flt(row.clipped_corner_length_cm),
+            "special_shape_geometry_json": (
+                getattr(row, "special_shape_geometry_json", "") or ""
+            ),
             "notes": row.notes or "",
         }
 
