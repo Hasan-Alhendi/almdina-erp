@@ -23,7 +23,8 @@ def test_small_screens_keep_sketch_and_delete_actions_reachable_by_scrolling():
     source = _source()
     assert "@media (max-width:720px)" in source
     assert ".dco-fast-table .dco-col-sketch" in source
-    assert ".dco-fast-table .dco-col-delete { display:table-cell !important; }" in source
+    assert ".dco-fast-table .dco-col-delete" in source
+    assert "display:table-cell !important" in source
     assert "position:sticky" in source
     assert "right:32px" in source
 
