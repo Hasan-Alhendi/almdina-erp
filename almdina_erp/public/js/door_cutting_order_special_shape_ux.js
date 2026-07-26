@@ -3,6 +3,9 @@
 
     const CANVAS_WIDTH = 1000;
     const CANVAS_HEIGHT = 650;
+    const DEFAULT_ERASER_RADIUS = 14;
+    const MIN_ERASER_RADIUS = 8;
+    const MAX_ERASER_RADIUS = 36;
     const COLORS = ["#172033", "#c2352a", "#1769aa"];
     const TOOLS = [
         { key: "pen", icon: "✎", label: "قلم حر", hint: "مع تنعيم تلقائي" },
@@ -11,7 +14,7 @@
         { key: "ellipse", icon: "○", label: "دائرة", hint: "دائرة أو بيضاوي" },
         { key: "dimension", icon: "↔", label: "قياس", hint: "سهم مع قيمة حقيقية" },
         { key: "note", icon: "T", label: "ملاحظة", hint: "اكتب ملاحظة على الرسم" },
-        { key: "eraser", icon: "⌫", label: "ممحاة", hint: "اضغط على أي عنصر لحذفه" },
+        { key: "eraser", icon: "⌫", label: "ممحاة", hint: "اسحب لمسح جزء صغير" },
     ];
     let sequence = 0;
 
@@ -73,6 +76,12 @@
             .dco-sketch-colors{display:flex;gap:9px;padding:3px 5px}
             .dco-sketch-color{width:27px;height:27px;border:3px solid var(--card-bg,#fff);border-radius:999px;box-shadow:0 0 0 1px var(--border-color,#cfd6dc);cursor:pointer}
             .dco-sketch-color.is-active{box-shadow:0 0 0 3px rgba(36,144,239,.27)}
+            .dco-sketch-eraser-controls{display:none;padding:9px 8px;border:1px solid var(--border-color,#e1e6eb);border-radius:10px;background:var(--subtle-fg,#f7f9fa)}
+            .dco-sketch-eraser-controls.is-visible{display:block}
+            .dco-sketch-eraser-label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:10px;font-weight:800}
+            .dco-sketch-eraser-label b{color:var(--primary,#1674c5)}
+            .dco-sketch-eraser-size{width:100%;height:5px;accent-color:var(--primary,#1674c5);cursor:pointer}
+            .dco-sketch-eraser-scale{display:flex;justify-content:space-between;color:var(--text-muted,#71808e);font-size:8px;margin-top:3px}
             .dco-sketch-center{min-width:0;padding:14px;display:flex;flex-direction:column;gap:10px}
             .dco-sketch-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border-color,#e0e5e9);border-radius:12px;background:var(--card-bg,#fff)}
             .dco-sketch-piece-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -80,10 +89,10 @@
             .dco-sketch-meta-pill b{font-variant-numeric:tabular-nums}
             .dco-sketch-notice{display:flex;align-items:center;gap:7px;color:#8a5a12;background:#fff7df;border:1px solid #efd89a;border-radius:9px;padding:6px 10px;font-size:10px;font-weight:700}
             .dco-sketch-paper-wrap{position:relative;flex:1;display:grid;place-items:center;min-height:570px;padding:13px;border:1px solid var(--border-color,#d9dfe5);border-radius:15px;background:#e8ecef;overflow:auto}
-            .dco-sketch-paper{display:block;width:100%;height:auto;max-height:calc(100vh - 250px);min-height:500px;background:#fff;border-radius:5px;box-shadow:0 9px 28px rgba(28,38,50,.14);touch-action:none;cursor:crosshair;user-select:none}
-            .dco-sketch-paper[data-tool="eraser"]{cursor:not-allowed}
+            .dco-sketch-paper{display:block;width:100%;height:auto;min-height:0;max-height:calc(100vh - 250px);aspect-ratio:${CANVAS_WIDTH}/${CANVAS_HEIGHT};background:#fff;border-radius:5px;box-shadow:0 9px 28px rgba(28,38,50,.14);touch-action:none;cursor:none;user-select:none}
             .dco-sketch-paper[data-tool="note"]{cursor:text}
             .dco-sketch-element{pointer-events:all}
+            .dco-sketch-cursor-preview{pointer-events:none}
             .dco-sketch-note-bg{fill:#fff8c9;stroke:#e5cd62;stroke-width:1.5}
             .dco-sketch-sidebar{padding:14px 13px;background:var(--card-bg,#fff);border-right:1px solid var(--border-color,#e1e6eb);display:flex;flex-direction:column;gap:11px}
             .dco-sketch-side-card{border:1px solid var(--border-color,#e0e5e9);border-radius:12px;overflow:hidden}
@@ -97,7 +106,7 @@
             .dco-sketch-guide b{color:var(--text-color,#172033)}
             .dco-sketch-fullscreen-button{border:1px solid var(--border-color,#d8dde2);border-radius:8px;background:var(--card-bg,#fff);min-height:34px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:800}
             @media(max-width:1050px){.dco-special-sketch-shell{grid-template-columns:145px minmax(0,1fr)}.dco-sketch-sidebar{display:none}}
-            @media(max-width:700px){.dco-special-shape-modal .modal-dialog{width:100vw!important;margin:0!important}.dco-special-shape-modal .modal-content{min-height:100vh;border-radius:0}.dco-special-sketch-shell{display:flex;flex-direction:column;min-height:0}.dco-sketch-toolbar{order:2;flex-direction:row;overflow:auto;border:0;border-top:1px solid var(--border-color,#ddd);padding:8px}.dco-sketch-toolbar-title,.dco-sketch-divider,.dco-sketch-colors{display:none}.dco-sketch-tool{min-width:82px;flex-direction:column;justify-content:center;text-align:center}.dco-sketch-tool small{display:none}.dco-sketch-history{display:flex}.dco-sketch-icon-button{min-width:56px}.dco-sketch-center{padding:8px}.dco-sketch-paper-wrap{min-height:430px}.dco-sketch-paper{min-height:410px}}
+            @media(max-width:700px){.dco-special-shape-modal .modal-dialog{width:100vw!important;margin:0!important}.dco-special-shape-modal .modal-content{min-height:100vh;border-radius:0}.dco-special-sketch-shell{display:flex;flex-direction:column;min-height:0}.dco-sketch-toolbar{order:2;flex-direction:row;overflow:auto;border:0;border-top:1px solid var(--border-color,#ddd);padding:8px}.dco-sketch-toolbar-title,.dco-sketch-divider,.dco-sketch-colors{display:none}.dco-sketch-tool{min-width:82px;flex-direction:column;justify-content:center;text-align:center}.dco-sketch-tool small{display:none}.dco-sketch-eraser-controls{min-width:145px}.dco-sketch-history{display:flex}.dco-sketch-icon-button{min-width:56px}.dco-sketch-center{padding:8px}.dco-sketch-paper-wrap{min-height:430px}}
         `;
         document.head.appendChild(style);
     }
@@ -117,6 +126,14 @@
                     <div class="dco-sketch-colors">
                         ${COLORS.map((color, index) => `<button type="button" class="dco-sketch-color ${index === 0 ? "is-active" : ""}" data-color="${color}" style="background:${color}" title="اختيار اللون"></button>`).join("")}
                     </div>
+                    <div class="dco-sketch-eraser-controls" aria-hidden="true">
+                        <div class="dco-sketch-eraser-label">
+                            <span>حجم الممحاة</span>
+                            <b class="dco-sketch-eraser-value">صغيرة</b>
+                        </div>
+                        <input class="dco-sketch-eraser-size" type="range" min="${MIN_ERASER_RADIUS}" max="${MAX_ERASER_RADIUS}" step="2" value="${DEFAULT_ERASER_RADIUS}" aria-label="حجم الممحاة">
+                        <div class="dco-sketch-eraser-scale"><span>دقيقة</span><span>كبيرة</span></div>
+                    </div>
                     <div class="dco-sketch-history">
                         <button type="button" class="dco-sketch-icon-button dco-sketch-undo" title="تراجع (Ctrl+Z)">↶ تراجع</button>
                         <button type="button" class="dco-sketch-icon-button dco-sketch-redo" title="إعادة (Ctrl+Y)">↷ إعادة</button>
@@ -131,12 +148,12 @@
                             <span class="dco-sketch-meta-pill">العدد <b>${esc(row.qty || 1)}</b></span>
                         </div>
                         <div style="display:flex;align-items:center;gap:8px">
-                            <div class="dco-sketch-notice"><span>✓</span><span>تنعيم الخط وتصحيح الميل البسيط مفعّلان تلقائيًا</span></div>
+                            <div class="dco-sketch-notice"><span>✓</span><span class="dco-sketch-notice-text">المؤشر يحدد نقطة الرسم بدقة، والتنعيم يعمل تلقائيًا</span></div>
                             <button type="button" class="dco-sketch-fullscreen-button">⛶ ملء الشاشة</button>
                         </div>
                     </div>
                     <div class="dco-sketch-paper-wrap">
-                        <svg class="dco-sketch-paper" data-tool="pen" viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}" role="img" aria-label="ورقة رسم الدرفة الخاصة"></svg>
+                        <svg class="dco-sketch-paper" data-tool="pen" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="ورقة رسم الدرفة الخاصة"></svg>
                     </div>
                 </main>
                 <aside class="dco-sketch-sidebar">
@@ -155,6 +172,7 @@
                         3. اكتب القيمة الحقيقية مثل 85 سم.<br>
                         4. ضع ملاحظات المصمم على الورقة.<br><br>
                         القلم الحر يزيل رجفة اليد تلقائيًا، ويحوّل الخط شبه المستقيم إلى خط نظيف.<br><br>
+                        الممحاة تمسح الجزء الذي تمر فوقه من خط القلم فقط. ويمكنك تغيير حجمها.<br><br>
                         لا يشترط أن يكون الرسم متناسبًا؛ القياسات المكتوبة هي المرجع.
                     </div>
                 </aside>
@@ -229,10 +247,15 @@
             </defs>
             <rect x="0" y="0" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" fill="#fff"/>
             <rect x="0" y="0" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" fill="url(#dco-grid)"/>
-            ${items}${draft}`;
+            ${items}${draft}
+            <g class="dco-sketch-cursor-preview" display="none">
+                <circle class="dco-sketch-cursor-ring" cx="0" cy="0" r="4" fill="none" stroke="#1674c5" stroke-width="2" vector-effect="non-scaling-stroke"/>
+                <path class="dco-sketch-cursor-cross" d="M-7 0H7M0-7V7" fill="none" stroke="#1674c5" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+            </g>`;
         renderSidebar(state);
         state.root.querySelector(".dco-sketch-undo").disabled = state.undo.length === 0;
         state.root.querySelector(".dco-sketch-redo").disabled = state.redo.length === 0;
+        updateCursorPreview(state);
     }
 
     function renderSidebar(state) {
@@ -247,12 +270,67 @@
             : empty("لا توجد ملاحظات مكتوبة على الرسم.");
     }
 
-    function pointFromEvent(svg, event) {
+    function clientPointToCanvas(svg, clientX, clientY) {
+        try {
+            const matrix = svg.getScreenCTM && svg.getScreenCTM();
+            if (matrix && svg.createSVGPoint) {
+                const point = svg.createSVGPoint();
+                point.x = Number(clientX);
+                point.y = Number(clientY);
+                const transformed = point.matrixTransform(matrix.inverse());
+                return {
+                    x: Math.max(0, Math.min(CANVAS_WIDTH, transformed.x)),
+                    y: Math.max(0, Math.min(CANVAS_HEIGHT, transformed.y)),
+                };
+            }
+        } catch (error) {
+            // Some older browsers can briefly expose a non-invertible matrix while resizing.
+        }
         const rect = svg.getBoundingClientRect();
         return {
-            x: Math.max(0, Math.min(CANVAS_WIDTH, (event.clientX - rect.left) * CANVAS_WIDTH / rect.width)),
-            y: Math.max(0, Math.min(CANVAS_HEIGHT, (event.clientY - rect.top) * CANVAS_HEIGHT / rect.height)),
+            x: Math.max(0, Math.min(CANVAS_WIDTH, (Number(clientX) - rect.left) * CANVAS_WIDTH / rect.width)),
+            y: Math.max(0, Math.min(CANVAS_HEIGHT, (Number(clientY) - rect.top) * CANVAS_HEIGHT / rect.height)),
         };
+    }
+
+    function pointFromEvent(svg, event) {
+        return clientPointToCanvas(svg, event.clientX, event.clientY);
+    }
+
+    function updateCursorPreview(state, point = state.hoverPoint, visible = state.pointerInside) {
+        const preview = state.svg.querySelector(".dco-sketch-cursor-preview");
+        if (!preview) return;
+        if (!visible || !point || state.readOnly || state.tool === "note") {
+            preview.setAttribute("display", "none");
+            return;
+        }
+        const erasing = state.tool === "eraser";
+        const ring = preview.querySelector(".dco-sketch-cursor-ring");
+        const cross = preview.querySelector(".dco-sketch-cursor-cross");
+        const color = erasing ? "#d64545" : state.color;
+        preview.setAttribute("display", "");
+        preview.setAttribute("transform", `translate(${point.x} ${point.y})`);
+        ring.setAttribute("r", erasing ? state.eraserRadius : 4);
+        ring.setAttribute("stroke", color);
+        ring.setAttribute("fill", erasing ? "rgba(214,69,69,.10)" : "#fff");
+        cross.setAttribute("stroke", color);
+        cross.setAttribute("display", erasing ? "none" : "");
+    }
+
+    function cancelScheduledRender(state) {
+        if (state.renderFrame === null) return;
+        const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+        cancelFrame(state.renderFrame);
+        state.renderFrame = null;
+    }
+
+    function scheduleCanvasRender(state) {
+        if (state.renderFrame !== null) return;
+        const requestFrame = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+        state.renderFrame = requestFrame(() => {
+            state.renderFrame = null;
+            renderCanvas(state);
+        });
     }
 
     function snapshot(state) {
@@ -265,14 +343,6 @@
         snapshot(state);
         state.elements.push(element);
         state.draft = null;
-        renderCanvas(state);
-    }
-
-    function removeElement(state, elementId) {
-        const index = state.elements.findIndex(element => element.id === elementId);
-        if (index < 0) return;
-        snapshot(state);
-        state.elements.splice(index, 1);
         renderCanvas(state);
     }
 
@@ -316,6 +386,100 @@
             point[0] - (start[0] + ratio * dx),
             point[1] - (start[1] + ratio * dy)
         );
+    }
+
+    function densifyPolyline(points, maximumStep = 4) {
+        const source = sanitizePoints(points);
+        if (source.length < 2) return source;
+        const result = [source[0]];
+        for (let index = 1; index < source.length; index += 1) {
+            const start = source[index - 1];
+            const end = source[index];
+            const distance = pointDistance(start, end);
+            const steps = Math.max(1, Math.ceil(distance / Math.max(1, maximumStep)));
+            for (let step = 1; step <= steps; step += 1) {
+                const ratio = step / steps;
+                result.push([
+                    start[0] + (end[0] - start[0]) * ratio,
+                    start[1] + (end[1] - start[1]) * ratio,
+                ]);
+            }
+        }
+        return result;
+    }
+
+    function compactEraserFragment(points) {
+        const spaced = removeCrowdedPoints(points, 1);
+        if (spaced.length < 2 || pointDistance(spaced[0], spaced[spaced.length - 1]) < 1.5) {
+            return [];
+        }
+        return simplifyPolyline(spaced, 0.8);
+    }
+
+    function erasePenStroke(element, eraserStart, eraserEnd, radius = DEFAULT_ERASER_RADIUS) {
+        const safeRadius = Math.max(MIN_ERASER_RADIUS, Math.min(MAX_ERASER_RADIUS, Number(radius) || DEFAULT_ERASER_RADIUS));
+        const source = densifyPolyline(element && element.points, Math.max(2, safeRadius / 3));
+        if (source.length < 2) return { changed: false, fragments: [element] };
+
+        const keep = source.map(point =>
+            pointSegmentDistance(point, eraserStart, eraserEnd) > safeRadius
+        );
+        if (keep.every(Boolean)) return { changed: false, fragments: [element] };
+
+        const groups = [];
+        let current = [];
+        source.forEach((point, index) => {
+            if (keep[index]) {
+                current.push(point);
+            } else if (current.length) {
+                groups.push(current);
+                current = [];
+            }
+        });
+        if (current.length) groups.push(current);
+
+        const fragments = groups
+            .map(compactEraserFragment)
+            .filter(points => points.length >= 2)
+            .map((points, index) => ({
+                ...element,
+                id: index === 0 ? element.id : id("pen"),
+                points,
+            }));
+        return { changed: true, fragments };
+    }
+
+    function applyEraser(state, startPoint, endPoint, targetId = "") {
+        const eraserStart = [startPoint.x, startPoint.y];
+        const eraserEnd = [endPoint.x, endPoint.y];
+        let changed = false;
+        const elements = [];
+        state.elements.forEach(element => {
+            if (element.type === "pen") {
+                const result = erasePenStroke(
+                    element,
+                    eraserStart,
+                    eraserEnd,
+                    state.eraserRadius
+                );
+                changed = changed || result.changed;
+                elements.push(...result.fragments);
+                return;
+            }
+            if (targetId && element.id === targetId) {
+                changed = true;
+                return;
+            }
+            elements.push(element);
+        });
+        if (!changed) return false;
+        if (!state.eraseChanged) {
+            snapshot(state);
+            state.eraseChanged = true;
+        }
+        state.elements = elements;
+        scheduleCanvasRender(state);
+        return true;
     }
 
     function simplifyPolyline(points, tolerance) {
@@ -479,15 +643,15 @@
     }
 
     function appendPointerSamples(svg, event, points, forceLast = false) {
-        const rect = svg.getBoundingClientRect();
         const samples = typeof event.getCoalescedEvents === "function"
             ? event.getCoalescedEvents()
             : [event];
         const source = samples.length ? samples : [event];
         source.forEach(sample => {
+            const mapped = clientPointToCanvas(svg, sample.clientX, sample.clientY);
             const point = [
-                Math.max(0, Math.min(CANVAS_WIDTH, (sample.clientX - rect.left) * CANVAS_WIDTH / rect.width)),
-                Math.max(0, Math.min(CANVAS_HEIGHT, (sample.clientY - rect.top) * CANVAS_HEIGHT / rect.height)),
+                mapped.x,
+                mapped.y,
             ];
             const previous = points[points.length - 1];
             if (!previous || pointDistance(previous, point) >= 1.25) points.push(point);
@@ -519,10 +683,22 @@
     function beginDrawing(state, event) {
         if (event.button !== undefined && event.button !== 0) return;
         const point = pointFromEvent(state.svg, event);
+        state.pointerInside = true;
+        state.hoverPoint = point;
 
         if (state.tool === "eraser") {
-            const target = event.target.closest("[data-element-id]");
-            if (target) removeElement(state, target.dataset.elementId);
+            state.pointerId = event.pointerId;
+            state.erasing = true;
+            state.eraseChanged = false;
+            state.eraserLast = point;
+            state.svg.setPointerCapture(event.pointerId);
+            const target = event.target && event.target.closest
+                ? event.target.closest("[data-element-id]")
+                : null;
+            const targetId = target ? target.dataset.elementId : "";
+            applyEraser(state, point, point, targetId);
+            updateCursorPreview(state, point, true);
+            event.preventDefault();
             return;
         }
         if (state.tool === "note") {
@@ -557,11 +733,21 @@
     }
 
     function continueDrawing(state, event) {
+        const point = pointFromEvent(state.svg, event);
+        state.pointerInside = true;
+        state.hoverPoint = point;
+        updateCursorPreview(state, point, true);
+
+        if (state.erasing && event.pointerId === state.pointerId) {
+            applyEraser(state, state.eraserLast || point, point);
+            state.eraserLast = point;
+            event.preventDefault();
+            return;
+        }
         if (!state.draft || event.pointerId !== state.pointerId) return;
         if (state.draft.type === "pen") {
             appendPointerSamples(state.svg, event, state.draft.points);
         } else {
-            const point = pointFromEvent(state.svg, event);
             if (state.draft.type === "line" || state.draft.type === "dimension") {
                 state.draft.x2 = point.x;
                 state.draft.y2 = point.y;
@@ -577,12 +763,29 @@
                 state.draft.ry = Math.abs(point.y - state.start.y) / 2;
             }
         }
-        renderCanvas(state);
+        scheduleCanvasRender(state);
         event.preventDefault();
     }
 
     function finishDrawing(state, event) {
+        if (state.erasing && event.pointerId === state.pointerId) {
+            if (event.type !== "pointercancel") {
+                const point = pointFromEvent(state.svg, event);
+                state.hoverPoint = point;
+                applyEraser(state, state.eraserLast || point, point);
+            }
+            cancelScheduledRender(state);
+            state.erasing = false;
+            state.eraseChanged = false;
+            state.eraserLast = null;
+            state.pointerId = null;
+            try { state.svg.releasePointerCapture(event.pointerId); } catch (error) { /* pointer already released */ }
+            renderCanvas(state);
+            event.preventDefault();
+            return;
+        }
         if (!state.draft || event.pointerId !== state.pointerId) return;
+        cancelScheduledRender(state);
         if (state.draft.type === "pen" && event.type !== "pointercancel") {
             appendPointerSamples(state.svg, event, state.draft.points, true);
         }
@@ -591,6 +794,10 @@
         state.pointerId = null;
         try { state.svg.releasePointerCapture(event.pointerId); } catch (error) { /* pointer already released */ }
 
+        if (event.type === "pointercancel") {
+            renderCanvas(state);
+            return;
+        }
         if (element.type === "pen") {
             element.points = normalizePenStroke(element.points);
             if (element.points.length >= 2) addElement(state, element);
@@ -624,6 +831,16 @@
         state.root.querySelectorAll(".dco-sketch-tool").forEach(button => {
             button.classList.toggle("is-active", button.dataset.tool === tool);
         });
+        const eraserControls = state.root.querySelector(".dco-sketch-eraser-controls");
+        eraserControls.classList.toggle("is-visible", tool === "eraser");
+        eraserControls.setAttribute("aria-hidden", tool === "eraser" ? "false" : "true");
+        const notice = state.root.querySelector(".dco-sketch-notice-text");
+        notice.textContent = tool === "eraser"
+            ? "اسحب فوق الجزء المطلوب؛ خط القلم لن يُحذف كاملًا"
+            : tool === "pen"
+                ? "المؤشر يحدد نقطة الرسم بدقة، والتنعيم يعمل تلقائيًا"
+                : "ابدأ من النقطة الأولى واسحب حتى موضع النهاية";
+        updateCursorPreview(state);
     }
 
     function undo(state) {
@@ -648,7 +865,21 @@
             button.addEventListener("click", () => {
                 state.color = button.dataset.color;
                 state.root.querySelectorAll(".dco-sketch-color").forEach(item => item.classList.toggle("is-active", item === button));
+                updateCursorPreview(state);
             });
+        });
+        const eraserSize = state.root.querySelector(".dco-sketch-eraser-size");
+        eraserSize.addEventListener("input", () => {
+            state.eraserRadius = Math.max(
+                MIN_ERASER_RADIUS,
+                Math.min(MAX_ERASER_RADIUS, Number(eraserSize.value) || DEFAULT_ERASER_RADIUS)
+            );
+            state.root.querySelector(".dco-sketch-eraser-value").textContent = state.eraserRadius <= 14
+                ? "صغيرة"
+                : state.eraserRadius <= 24
+                    ? "متوسطة"
+                    : "كبيرة";
+            updateCursorPreview(state);
         });
         state.root.querySelector(".dco-sketch-undo").addEventListener("click", () => undo(state));
         state.root.querySelector(".dco-sketch-redo").addEventListener("click", () => redo(state));
@@ -670,6 +901,16 @@
         state.svg.addEventListener("pointermove", event => continueDrawing(state, event));
         state.svg.addEventListener("pointerup", event => finishDrawing(state, event));
         state.svg.addEventListener("pointercancel", event => finishDrawing(state, event));
+        state.svg.addEventListener("pointerenter", event => {
+            state.pointerInside = true;
+            state.hoverPoint = pointFromEvent(state.svg, event);
+            updateCursorPreview(state);
+        });
+        state.svg.addEventListener("pointerleave", () => {
+            if (state.draft || state.erasing) return;
+            state.pointerInside = false;
+            updateCursorPreview(state);
+        });
 
         state.keyHandler = event => {
             if (!state.dialog.$wrapper.is(":visible")) return;
@@ -681,10 +922,17 @@
             } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
                 event.preventDefault();
                 redo(state);
+            } else if (event.key.toLowerCase() === "p") {
+                event.preventDefault();
+                selectTool(state, "pen");
+            } else if (event.key.toLowerCase() === "e") {
+                event.preventDefault();
+                selectTool(state, "eraser");
             }
         };
         document.addEventListener("keydown", state.keyHandler);
         state.dialog.$wrapper.on("hidden.bs.modal.dco-special-shape", () => {
+            cancelScheduledRender(state);
             document.removeEventListener("keydown", state.keyHandler);
         });
     }
@@ -767,6 +1015,13 @@
             draft: null,
             start: null,
             pointerId: null,
+            pointerInside: false,
+            hoverPoint: null,
+            erasing: false,
+            eraseChanged: false,
+            eraserLast: null,
+            eraserRadius: DEFAULT_ERASER_RADIUS,
+            renderFrame: null,
             tool: "pen",
             color: COLORS[0],
             readOnly,
@@ -792,5 +1047,7 @@
         view(frm, row) { open(frm, row, { readOnly: true }); },
         parseDrawing,
         normalizePenStroke,
+        clientPointToCanvas,
+        erasePenStroke,
     };
 })();
