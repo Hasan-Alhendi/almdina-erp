@@ -96,12 +96,10 @@ def is_locked_status(status: str | None) -> bool:
 
 
 def user_can_edit_order(status: str | None = None, user: str | None = None) -> bool:
-    """Order Entry / Production Manager may keep editing after dispatch."""
-    if domain_is_locked_status(status):
-        return False
-    if domain_is_draft_like(status):
-        return True
-    return can_edit_order(status, _roles_for_user(user))
+    """Only draft-like orders are editable; roles do not unlock approved history."""
+
+    del user
+    return can_edit_order(status)
 
 
 def assert_order_editable(order: Any) -> None:
@@ -112,7 +110,7 @@ def assert_order_editable(order: Any) -> None:
         _(
             "Order {0} is already approved or in production and cannot be edited/recalculated in place. "
             "Create a controlled revision instead."
-        ).format(order_display_name(order)),
+        ).format(order_display_name(order))
     )
 
 
@@ -123,21 +121,9 @@ def enforce_order_immutability_on_save(order: Any, old: Any) -> None:
         return
 
     if user_can_edit_order(order_status(old)):
-        unlock_frozen_plan_for_editor(order)
         return
 
     if order.flags.get("force_cutting_plan_recalculation") and user_can_recalculate_drawing_system_plan(order):
         return
 
     assert_order_editable(order)
-
-
-def unlock_frozen_plan_for_editor(order: Any) -> None:
-    """Clear the immutable plan link so Order Entry edits remain the live source."""
-    if not getattr(order, "approved_plan", None):
-        return
-    if is_draft_like(getattr(order, "status", None)):
-        return
-    if not user_has_order_editor_role():
-        return
-    order.approved_plan = None
