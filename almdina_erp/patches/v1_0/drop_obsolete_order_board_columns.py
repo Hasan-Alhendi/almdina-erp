@@ -18,10 +18,11 @@ def execute() -> None:
     cleanup, so no legacy values need migration.
     """
 
+    doctype = "Door Cutting Order"
     table = "tabDoor Cutting Order"
-    if not frappe.db.table_exists(table):
+    if not frappe.db.table_exists(doctype):
         return
 
     for column in OBSOLETE_COLUMNS:
-        if frappe.db.has_column("Door Cutting Order", column):
+        if frappe.db.has_column(doctype, column):
             frappe.db.sql_ddl(f"alter table `{table}` drop column `{column}`")
