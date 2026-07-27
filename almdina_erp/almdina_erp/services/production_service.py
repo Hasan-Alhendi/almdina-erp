@@ -106,10 +106,17 @@ def ensure_default_stages(order_name: str, approved_by: str | None = None) -> li
 
 
 def _require_stage_role(stage: Any) -> None:
-    if stage.stage_type == "Cutting":
-        require_any_role("Cutting Operator", "Production Manager")
-    elif stage.stage_type == "Edge Banding":
-        require_any_role("Edge Operator", "Production Manager")
+    shop_floor_roles = {
+        "Sharyoun": ("عامل شريون", "Production Manager"),
+        "Drawing": ("عامل رسم", "Production Manager"),
+        "CNC": ("عامل CNC", "Production Manager"),
+        "Sanding": ("عامل تقشيط", "Production Manager"),
+        "Cutting": ("Cutting Operator", "Production Manager"),
+        "Edge Banding": ("Edge Operator", "Production Manager"),
+    }
+    roles = shop_floor_roles.get(stage.stage_type)
+    if roles:
+        require_any_role(*roles)
     else:
         require_any_role("Production Manager")
 
@@ -122,6 +129,14 @@ def _base_stages(order_name: str) -> list[Any]:
         order_by="sequence asc",
     )
     return [row for row in stages if not (row.piece_label or "")]
+
+
+SHOP_FLOOR_ORDER_STATUSES = {
+    "Sharyoun": "At Sharyoun",
+    "Drawing": "At Drawing",
+    "CNC": "At CNC",
+    "Sanding": "At Sanding",
+}
 
 
 def _assert_previous_stages_completed(stage: Any) -> None:
@@ -173,14 +188,44 @@ def sync_order_status(order_name: str) -> str:
         frappe.db.set_value("Door Cutting Order", order_name, "status", status, update_modified=True)
         return status
 
+    current = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        ["status", "production_path", "current_production_stage"],
+        as_dict=True,
+    )
+    if current and current.status in {"Ready for Delivery", "Delivered"}:
+        return current.status
+
+    # Shop-floor path owns status once dispatched.
+    if current and current.production_path:
+        if current.current_production_stage:
+            stage = frappe.db.get_value(
+                "Production Stage",
+                current.current_production_stage,
+                ["stage_type", "status"],
+                as_dict=True,
+            )
+            if stage and stage.status != "Cancelled":
+                mapped = SHOP_FLOOR_ORDER_STATUSES.get(stage.stage_type)
+                if mapped:
+                    frappe.db.set_value("Door Cutting Order", order_name, "status", mapped, update_modified=True)
+                    return mapped
+        if current.status and current.status.startswith("At "):
+            return current.status
+
     stages = _base_stages(order_name)
     if not stages:
-        return frappe.db.get_value("Door Cutting Order", order_name, "status") or "Draft"
+        return (current.status if current else None) or "Draft"
     if all(row.status in {"Completed", "Cancelled"} for row in stages):
-        status = "Completed"
+        # Prefer Ready for Delivery when the completed stages are shop-floor sanding.
+        sanding = next((row for row in stages if row.stage_type == "Sanding" and row.status == "Completed"), None)
+        status = "Ready for Delivery" if sanding else "Completed"
     else:
-        active = next((row for row in stages if row.status in {"In Progress", "Paused"}), None)
-        if active:
+        active = next((row for row in stages if row.status in {"In Progress", "Paused", "Pending"}), None)
+        if active and active.stage_type in SHOP_FLOOR_ORDER_STATUSES:
+            status = SHOP_FLOOR_ORDER_STATUSES[active.stage_type]
+        elif active:
             if active.stage_type == "Cutting":
                 status = "Cutting In Progress"
             elif active.stage_type == "Edge Banding":

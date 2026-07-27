@@ -4,7 +4,7 @@
   "engine": "InnoDB",
   "field_order": [
     "cutting_defaults_section","default_kerf_mm","default_trim_margin_mm","default_cutting_cost_per_board_usd","default_packing_mode","default_cutting_machine_type","default_optimization_time_limit_sec","optimal_search_piece_limit",
-    "stock_section","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
+    "stock_section","enforce_stock_control","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
     "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
     "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
     "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval"
@@ -19,6 +19,7 @@
     {"default":"10","fieldname":"default_optimization_time_limit_sec","fieldtype":"Float","label":"Default Optimization Time Limit (Sec)","non_negative":1},
     {"default":"40","fieldname":"optimal_search_piece_limit","fieldtype":"Int","label":"Optimal Search Exact Piece Limit","non_negative":1},
     {"fieldname":"stock_section","fieldtype":"Section Break","label":"Stock Policy"},
+    {"default":"1","fieldname":"enforce_stock_control","fieldtype":"Check","label":"Enforce Stock Availability and Consumption","description":"Turn off while the warehouse balances are still being prepared: approval, reservation and consumption will skip all stock checks."},
     {"fieldname":"default_warehouse","fieldtype":"Link","label":"Default Warehouse","options":"Warehouse"},
     {"default":"0","fieldname":"reserve_stock_on_approval","fieldtype":"Check","label":"Reserve Stock On Approval"},
     {"default":"Cutting Start","fieldname":"stock_consumption_point","fieldtype":"Select","label":"Stock Consumption Point","options":"Cutting Start\nCutting Finish"},
@@ -43,6 +44,9 @@
   "links":[],
   "module":"Almdina ERP",
   "name":"Almdina ERP Settings",
-  "permissions":[{"create":1,"read":1,"role":"System Manager","write":1}],
+  "permissions":[
+    {"create":1,"read":1,"role":"Production Manager","write":1},
+    {"create":1,"read":1,"role":"System Manager","write":1}
+  ],
   "track_changes":1
 }

@@ -17,6 +17,12 @@ def get_settings() -> Any:
     return frappe.get_single("Almdina ERP Settings")
 
 
+def stock_control_enabled(settings: Any | None = None) -> bool:
+    """Stock checks can be switched off while warehouse balances are being prepared."""
+    settings = settings or get_settings()
+    return bool(cint(settings.enforce_stock_control))
+
+
 def _approved_plan(order_name: str) -> Any:
     plan_name = frappe.db.get_value("Door Cutting Order", order_name, "approved_plan") or frappe.db.get_value(
         "Cutting Plan",
@@ -169,9 +175,19 @@ def validate_stock_for_order(
     throw_on_shortage: bool = True,
     exclude_own_reservation: bool = True,
 ) -> dict[str, Any]:
+    settings = get_settings()
+    if not stock_control_enabled(settings):
+        return {
+            "warehouse": settings.default_warehouse,
+            "materials": [],
+            "shortages": [],
+            "is_available": True,
+            "excluded_reservation": None,
+            "stock_control_disabled": True,
+        }
+
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan = _approved_plan(order_name)
-    settings = get_settings()
     warehouse = settings.default_warehouse
     if not warehouse:
         frappe.throw(_("Set Default Warehouse in Almdina ERP Settings before approving/starting production."))
@@ -227,6 +243,8 @@ def validate_stock_for_order(
 
 def create_order_reservation(order_name: str) -> dict[str, Any] | None:
     settings = get_settings()
+    if not stock_control_enabled(settings):
+        return None
     if not cint(settings.reserve_stock_on_approval):
         return None
 
@@ -357,6 +375,8 @@ def _consume_reserved_remnants(order: Any, plan: Any) -> list[str]:
 
 def consume_planned_material_if_due(order_name: str, *, trigger: str) -> dict[str, Any] | None:
     settings = get_settings()
+    if not stock_control_enabled(settings):
+        return None
     if (settings.stock_consumption_point or "Cutting Start") != trigger:
         return None
 

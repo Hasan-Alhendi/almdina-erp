@@ -27,6 +27,10 @@ after_migrate = "almdina_erp.install.after_migrate"
 # sites/assets symlink being present in the frontend container.
 app_include_js = [
     "/assets/almdina_erp/js/arabic_operator_ui.js",
+    "/assets/almdina_erp/js/shop_floor_desk.js",
+    "/assets/almdina_erp/js/order_entry_desk.js",
+    # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
+    "/assets/almdina_erp/js/secure_dxf_export.js",
 ]
 
 doctype_js = {
@@ -55,6 +59,7 @@ doctype_js = {
         "public/js/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_header_ux.js",
+        "public/js/shop_floor_order_ux.js",
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
     ],
@@ -82,6 +87,15 @@ doc_events = {
         "on_update": "almdina_erp.almdina_erp.services.cost_service.on_order_plan_update",
     },
 }
+
+permission_query_conditions = {
+    "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_query",
+    "Production Stage": "almdina_erp.permissions.production_stage_query",
+    "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
+}
+
+boot_session = "almdina_erp.permissions.boot_session"
+extend_bootinfo = ["almdina_erp.permissions.extend_bootinfo"]
 
 override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.replacement_service.approve_replacement":

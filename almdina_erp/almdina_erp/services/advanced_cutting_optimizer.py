@@ -247,16 +247,17 @@ def enrich_plan_metrics(
         int(result.get("complexity") or 0),
     )
     # Numeric compatibility score. Lexicographic industrial_rank remains the
-    # authoritative comparator for advanced modes.
+    # authoritative comparator for advanced modes. Weights keep their relative
+    # ratios but stay small enough for the decimal(21,9) Cutting Plan column.
     result["score"] = (
-        len(result.get("unplaced") or []) * 10**15
-        + len(result.get("sheets") or []) * 10**12
-        + panel_saw_penalty * 10**11
-        + cut_count * 10**6
-        + cut_length * 10**2
-        + rotations * 10
-        - reusable * 10**5
-        + int(result.get("complexity") or 0)
+        len(result.get("unplaced") or []) * 10**9
+        + len(result.get("sheets") or []) * 10**6
+        + panel_saw_penalty * 10**5
+        + cut_count
+        + cut_length * 10**-4
+        + rotations * 10**-5
+        - reusable * 10**-1
+        + int(result.get("complexity") or 0) * 10**-6
     )
     return result
 

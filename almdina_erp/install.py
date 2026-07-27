@@ -19,7 +19,50 @@ EDGE_BANDING_TYPES = (
     {"name":"قشاط 4سم لميع يدوي","english":"4cm Glossy Manual Edge","width":4,"finish":"Glossy","method":"Manual","rate":4.0},
 )
 
-ROLES = ("Order Entry", "Cutting Operator", "Edge Operator", "Production Manager", "Stock Manager", "Accounts Management")
+ROLES = (
+    "Order Entry",
+    "Cutting Operator",
+    "Edge Operator",
+    "Production Manager",
+    "Stock Manager",
+    "Accounts Management",
+    # Shop-floor operator roles
+    "عامل رسم",
+    "عامل شريون",
+    "عامل CNC",
+    "عامل تقشيط",
+)
+
+# Seeded on demand via seed_operator_users() — not auto-run on migrate.
+OPERATOR_USERS = (
+    {"email": "drawing@almdina.local", "first_name": "عامل", "last_name": "رسم", "role": "عامل رسم"},
+    {"email": "sharyoun@almdina.local", "first_name": "عامل", "last_name": "شريون", "role": "عامل شريون"},
+    {"email": "cnc@almdina.local", "first_name": "عامل", "last_name": "CNC", "role": "عامل CNC"},
+    {"email": "taqsheet@almdina.local", "first_name": "عامل", "last_name": "تقشيط", "role": "عامل تقشيط"},
+)
+
+# Seeded on demand via seed_order_entry_users().
+# This account runs the factory day to day, so it carries every factory role.
+ORDER_ENTRY_USERS = (
+    {
+        "email": "orders@almdina.local",
+        "first_name": "مدير",
+        "last_name": "المعمل",
+        "role": "Order Entry",
+        "extra_roles": (
+            "Production Manager",
+            "Stock Manager",
+            "Stock User",
+            "Item Manager",
+            "Accounts Management",
+            "Sales User",
+            "Cutting Operator",
+            "Edge Operator",
+        ),
+    },
+)
+
+DEFAULT_OPERATOR_PASSWORD = "Almdina@123"
 
 REQUIRED_UOMS = (
     {"name": "Meter", "must_be_whole_number": 0},
@@ -39,6 +82,8 @@ ITEM_CUSTOM_FIELDS = {
 }
 
 DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
+
+EDGE_ITEM_GROUP = "Raw Material"
 
 
 def sync_setup() -> None:
@@ -63,6 +108,84 @@ def seed_roles() -> None:
     for role_name in ROLES:
         if not frappe.db.exists("Role", role_name):
             frappe.get_doc({"doctype":"Role","role_name":role_name}).insert(ignore_permissions=True)
+
+
+def _upsert_desk_user(row: dict, password: str) -> str:
+    from frappe.utils.password import update_password
+
+    email = row["email"]
+    roles = ["Desk User", row["role"], *row.get("extra_roles", ())]
+
+    if frappe.db.exists("User", email):
+        user = frappe.get_doc("User", email)
+        user.enabled = 1
+        user.first_name = row["first_name"]
+        user.last_name = row["last_name"]
+        user.language = "ar"
+        existing = {r.role for r in user.roles}
+        for needed in roles:
+            if needed not in existing and frappe.db.exists("Role", needed):
+                user.append("roles", {"role": needed})
+        user.save(ignore_permissions=True)
+        update_password(email, password)
+        return f"updated:{email}"
+
+    user = frappe.get_doc(
+        {
+            "doctype": "User",
+            "email": email,
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "send_welcome_email": 0,
+            "user_type": "System User",
+            "language": "ar",
+            "enabled": 1,
+        }
+    )
+    user.insert(ignore_permissions=True)
+    user.add_roles(*[r for r in roles if frappe.db.exists("Role", r)])
+    update_password(email, password)
+    return f"created:{email}"
+
+
+def seed_operator_users(password: str | None = None) -> list[str]:
+    """Create Desk users for shop-floor operator roles.
+
+    Call explicitly, e.g.:
+      bench --site site1.local execute almdina_erp.install.seed_operator_users
+    """
+    from almdina_erp.permissions import apply_shop_floor_user_restrictions
+
+    seed_roles()
+    password = password or DEFAULT_OPERATOR_PASSWORD
+    results: list[str] = []
+
+    for row in OPERATOR_USERS:
+        results.append(_upsert_desk_user(row, password))
+        apply_shop_floor_user_restrictions(row["email"])
+
+    frappe.db.commit()
+    return results
+
+
+def seed_order_entry_users(password: str | None = None) -> list[str]:
+    """Create the order-entry Desk user limited to the Almdina factory app.
+
+    Call explicitly, e.g.:
+      bench --site site1.local execute almdina_erp.install.seed_order_entry_users
+    """
+    from almdina_erp.permissions import apply_order_entry_user_restrictions
+
+    seed_roles()
+    password = password or DEFAULT_OPERATOR_PASSWORD
+    results: list[str] = []
+
+    for row in ORDER_ENTRY_USERS:
+        results.append(_upsert_desk_user(row, password))
+        apply_order_entry_user_restrictions(row["email"])
+
+    frappe.db.commit()
+    return results
 
 
 def seed_required_uoms() -> None:
@@ -93,6 +216,39 @@ def seed_edge_banding_types() -> None:
         doc.rate_usd_per_meter = row["rate"]
         doc.disabled = 0
         doc.save(ignore_permissions=True)
+
+
+def seed_edge_banding_items(item_group: str = EDGE_ITEM_GROUP) -> list[str]:
+    """Create and link a stock Item for every enabled Edge Banding Type.
+
+    Call explicitly, e.g.:
+      bench --site site1.local execute almdina_erp.install.seed_edge_banding_items
+    """
+    results: list[str] = []
+
+    for name in frappe.get_all("Edge Banding Type", filters={"disabled": 0}, pluck="name"):
+        edge = frappe.get_doc("Edge Banding Type", name)
+        if edge.item_code and frappe.db.exists("Item", edge.item_code):
+            continue
+
+        item_code = edge.edge_type_name
+        if not frappe.db.exists("Item", item_code):
+            item = frappe.new_doc("Item")
+            item.item_code = item_code
+            item.item_name = edge.edge_type_name
+            item.item_group = item_group
+            item.stock_uom = edge.consumption_uom or "Meter"
+            item.is_stock_item = 1
+            item.description = edge.english_name or edge.edge_type_name
+            item.insert(ignore_permissions=True)
+            results.append(f"created:{item_code}")
+
+        edge.item_code = item_code
+        edge.save(ignore_permissions=True)
+        results.append(f"linked:{name}")
+
+    frappe.db.commit()
+    return results
 
 
 def seed_default_routing() -> None:

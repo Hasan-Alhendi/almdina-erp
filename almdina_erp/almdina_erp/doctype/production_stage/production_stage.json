@@ -8,7 +8,7 @@
     {"default":"PST-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"PST-.YYYY.-.#####","reqd":1},
     {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
     {"fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence","reqd":1},
-    {"fieldname":"stage_type","fieldtype":"Select","in_list_view":1,"label":"Stage Type","options":"Review / Preparation\nCutting\nEdge Banding\nDrilling\nAssembly\nQuality Check\nPacking","reqd":1},
+    {"fieldname":"stage_type","fieldtype":"Select","in_list_view":1,"label":"Stage Type","options":"Review / Preparation\nCutting\nEdge Banding\nDrilling\nAssembly\nQuality Check\nPacking\nSharyoun\nDrawing\nCNC\nSanding","reqd":1},
     {"default":"Pending","fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Pending\nIn Progress\nPaused\nCompleted\nCancelled","read_only":1,"reqd":1},
     {"fieldname":"piece_label","fieldtype":"Data","label":"Exceptional Piece Label"},
     {"fieldname":"assignment_section","fieldtype":"Section Break","label":"Assignment & Timing"},
@@ -32,7 +32,11 @@
   "permissions":[
     {"read":1,"report":1,"role":"Cutting Operator"},
     {"read":1,"report":1,"role":"Edge Operator"},
-    {"read":1,"report":1,"role":"Production Manager"},
+    {"read":1,"report":1,"role":"عامل رسم"},
+    {"read":1,"report":1,"role":"عامل شريون"},
+    {"read":1,"report":1,"role":"عامل CNC"},
+    {"read":1,"report":1,"role":"عامل تقشيط"},
+    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
     {"read":1,"report":1,"role":"Stock Manager"},
     {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
   ],
