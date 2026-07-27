@@ -17,7 +17,8 @@ def text(path: Path) -> str:
 
 def test_order_search_includes_customer_and_explains_id_or_customer_search():
     doctype = json.loads(text(DOCTYPE_JSON))
-    assert doctype["search_fields"] == "customer"
+    search_fields = {value.strip() for value in doctype["search_fields"].split(",") if value.strip()}
+    assert {"customer", "board_description"}.issubset(search_fields)
     source = text(LIST_UX)
     assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
     assert "اسم العميل أو رقم الطلب" in source
