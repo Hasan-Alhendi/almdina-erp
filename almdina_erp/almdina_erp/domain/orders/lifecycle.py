@@ -47,6 +47,22 @@ SHOP_FLOOR_ORDER_STATUSES: dict[str, str] = {
     "Sanding": "At Sanding",
 }
 
+STAGE_DEPARTMENTS: dict[str, str] = {
+    "Sharyoun": "شريون",
+    "Drawing": "رسم",
+    "CNC": "CNC",
+    "Sanding": "تقشيط",
+}
+
+DEPARTMENT_STATUS_BY_STAGE_STATUS: dict[str, str] = {
+    "Pending": "بحاجة للعمل",
+    "In Progress": "قيد العمل",
+    "Paused": "قيد العمل",
+    "Completed": "مكتمل",
+}
+
+SHOP_FLOOR_STAGE_TYPES = tuple(SHOP_FLOOR_ORDER_STATUSES)
+CUTTING_LIKE_STAGE_TYPES = frozenset({"Sharyoun", "CNC", "Cutting"})
 ACTIVE_STAGE_STATUSES = frozenset({"Pending", "In Progress", "Paused"})
 TERMINAL_STAGE_STATUSES = frozenset({"Completed", "Cancelled"})
 LOCKED_ORDER_STATUSES = frozenset({"Delivered", "Cancelled"})
@@ -79,6 +95,10 @@ def production_path_sequence(path: str) -> tuple[str, ...]:
         raise ValueError(f"Invalid production path: {path}") from exc
 
 
+def first_stage_type(path: str) -> str:
+    return production_path_sequence(path)[0]
+
+
 def next_stage_type(path: str, current_stage_type: str) -> str | None:
     sequence = production_path_sequence(path)
     try:
@@ -96,6 +116,30 @@ def stage_sequence(path: str, stage_type: str) -> int:
         return (sequence.index(stage_type) + 1) * 10
     except ValueError as exc:
         raise ValueError(f"Stage {stage_type} is not part of path {path}") from exc
+
+
+def department_for_stage_type(stage_type: str) -> str | None:
+    return STAGE_DEPARTMENTS.get(stage_type)
+
+
+def department_status_for_stage_status(stage_status: str) -> str | None:
+    return DEPARTMENT_STATUS_BY_STAGE_STATUS.get(stage_status)
+
+
+def resolve_shop_floor_stage_type(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("Select a stage to revert to.")
+    if raw in SHOP_FLOOR_STAGE_TYPES:
+        return raw
+    for stage_type, department in STAGE_DEPARTMENTS.items():
+        if raw == department:
+            return stage_type
+    return raw
+
+
+def is_cutting_like_stage(stage_type: str) -> bool:
+    return stage_type in CUTTING_LIKE_STAGE_TYPES
 
 
 def is_order_dispatched(*, production_path: str | None, current_stage: str | None) -> bool:
