@@ -32,6 +32,12 @@ class FrappeV16CIContractTests(unittest.TestCase):
         self.assertIn('redis-cli -h 127.0.0.1 -p 11000 ping', self.source)
         self.assertIn('Expected Node 24+', self.source)
 
+    def test_apps_txt_is_updated_as_normalized_lines(self) -> None:
+        self.assertIn('apps_path = Path("sites/apps.txt")', self.source)
+        self.assertIn('apps.append("almdina_erp")', self.source)
+        self.assertIn('apps_path.write_text("\\n".join(apps) + "\\n"', self.source)
+        self.assertNotIn('echo almdina_erp >> sites/apps.txt', self.source)
+
     def test_workflow_exercises_real_application_installation(self) -> None:
         required_steps = (
             'Initialize Frappe v16 bench',
