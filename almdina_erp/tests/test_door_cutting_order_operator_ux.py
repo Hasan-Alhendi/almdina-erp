@@ -19,7 +19,10 @@ def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_sur
     assert fields["order_tab"]["fieldtype"] == "Tab Break"
     assert fields["results_tab"]["fieldtype"] == "Tab Break"
     assert fields["operator_status_strip"]["fieldtype"] == "HTML"
-    assert fields["board_summary_html"]["fieldtype"] == "HTML"
+    assert "board_summary_html" not in fields
+    assert fields["board_description"]["fieldtype"] == "Data"
+    assert fields["board_length_cm"]["fieldtype"] == "Float"
+    assert fields["board_width_cm"]["fieldtype"] == "Float"
     assert fields["pieces_fast_entry"]["fieldtype"] == "HTML"
 
     # The native Frappe editable grid is kept only as the authoritative child-table
@@ -33,6 +36,7 @@ def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_sur
         "status",
         "revision",
         "approved_plan",
+        "board_item",
         "board_material",
         "board_color",
         "board_thickness_mm",
@@ -42,7 +46,8 @@ def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_sur
         assert fields[fieldname].get("hidden") == 1, fieldname
 
     order = payload["field_order"]
-    assert order.index("customer") < order.index("board_item") < order.index("pieces_fast_entry")
+    assert order.index("customer") < order.index("board_description") < order.index("pieces_fast_entry")
+    assert order.index("board_description") < order.index("board_length_cm") < order.index("board_width_cm")
     assert order.index("pieces_fast_entry") < order.index("pieces") < order.index("results_tab")
 
 

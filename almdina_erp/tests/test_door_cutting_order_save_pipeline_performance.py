@@ -5,6 +5,7 @@ import json
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 FAST_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_fast.py"
+TEXT_BOARD_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_text_board.py"
 SAVE_RENDER_UX = ROOT / "public" / "js" / "door_cutting_order_save_render_performance_ux.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -22,11 +23,13 @@ def test_plan_metadata_fingerprint_is_persisted_outside_large_json():
     assert field["read_only"] == 1
 
 
-def test_fast_controller_is_the_configured_doctype_override():
+def test_fast_controller_is_preserved_under_the_configured_text_board_override():
     hooks = HOOKS.read_text(encoding="utf-8")
+    text_board = TEXT_BOARD_CONTROLLER.read_text(encoding="utf-8")
     assert "override_doctype_class" in hooks
     assert '"Door Cutting Order"' in hooks
-    assert "door_cutting_order_fast.FastDoorCuttingOrder" in hooks
+    assert "door_cutting_order_text_board.TextBoardDoorCuttingOrder" in hooks
+    assert "class TextBoardDoorCuttingOrder(FastDoorCuttingOrder)" in text_board
 
 
 def test_modern_plan_reuse_does_not_parse_the_plan_json():
