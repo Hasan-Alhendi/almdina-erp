@@ -43,11 +43,13 @@ jobs:
       - name: Validate Python syntax
         run: python -m compileall -q almdina_erp
 
-      - name: Run order policy refactor tests
+      - name: Run refactor and CI contract tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_editability_domain \
-            almdina_erp.tests.test_order_edit_policy_adapter
+            almdina_erp.tests.test_order_edit_policy_adapter \
+            almdina_erp.tests.test_frappe_v16_ci_contract \
+            almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
 
       - name: Setup Node
         uses: actions/setup-node@v4

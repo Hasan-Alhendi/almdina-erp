@@ -15,12 +15,12 @@ permissions:
 
 jobs:
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     services:
       mariadb:
-        image: mariadb:10.6
+        image: mariadb:11.8
         env:
           MARIADB_ROOT_PASSWORD: root
         ports:
@@ -29,7 +29,7 @@ jobs:
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=15
+          --health-retries=20
       redis-cache:
         image: redis:7-alpine
         ports:
@@ -52,7 +52,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: yarn
 
       - name: Install system dependencies
@@ -63,6 +63,7 @@ jobs:
             libmariadb-dev \
             libffi-dev \
             libssl-dev \
+            pkg-config \
             wkhtmltopdf \
             xvfb \
             redis-tools
@@ -71,7 +72,26 @@ jobs:
       - name: Install Bench CLI
         run: |
           python -m pip install --upgrade pip
-          python -m pip install frappe-bench
+          python -m pip install --upgrade frappe-bench
+
+      - name: Verify Frappe v16 toolchain
+        run: |
+          set -euo pipefail
+          python --version
+          node --version
+          yarn --version
+          mariadb --version
+          bench --version
+          python - <<'PY'
+          import sys
+
+          if sys.version_info[:2] != (3, 14):
+              raise SystemExit(f"Expected Python 3.14, got {sys.version}")
+          PY
+          node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 24) { throw new Error(`Expected Node 24+, got ${process.version}`); }'
+          mariadb-admin ping -h 127.0.0.1 -uroot -proot --silent
+          redis-cli -h 127.0.0.1 -p 13000 ping | grep -qx PONG
+          redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Initialize Frappe v16 bench
         run: |
@@ -87,8 +107,20 @@ jobs:
           cd "$RUNNER_TEMP/frappe-bench"
           bench get-app erpnext --branch version-16
           git clone "$APP_SOURCE" apps/almdina_erp
-          ./env/bin/pip install -e apps/almdina_erp
-          grep -qxF almdina_erp sites/apps.txt || echo almdina_erp >> sites/apps.txt
+          ./env/bin/pip install -e 'apps/almdina_erp[test]'
+          python - <<'PY'
+          from pathlib import Path
+
+          apps_path = Path("sites/apps.txt")
+          apps = [
+              line.strip()
+              for line in apps_path.read_text(encoding="utf-8").splitlines()
+              if line.strip()
+          ]
+          if "almdina_erp" not in apps:
+              apps.append("almdina_erp")
+          apps_path.write_text("\n".join(apps) + "\n", encoding="utf-8")
+          PY
 
       - name: Configure Redis URLs
         run: |
@@ -99,25 +131,29 @@ jobs:
 
       - name: Create integration site
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench new-site test.localhost \
             --db-host 127.0.0.1 \
             --db-root-username root \
             --db-root-password root \
             --admin-password admin \
-            --no-mariadb-socket
+            --no-mariadb-socket \
+            --verbose 2>&1 | tee "$RUNNER_TEMP/new-site.log"
 
       - name: Install ERPNext and Almdina ERP
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
-          bench --site test.localhost install-app erpnext
-          bench --site test.localhost install-app almdina_erp
+          bench --site test.localhost install-app erpnext 2>&1 | tee "$RUNNER_TEMP/install-erpnext.log"
+          bench --site test.localhost install-app almdina_erp 2>&1 | tee "$RUNNER_TEMP/install-almdina.log"
 
       - name: Run migrate twice for idempotency
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
-          bench --site test.localhost migrate
-          bench --site test.localhost migrate
+          bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-first.log"
+          bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-second.log"
 
       - name: Verify installed apps and schema
         run: |
@@ -127,9 +163,39 @@ jobs:
 
       - name: Run Almdina ERP tests
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
-          bench --site test.localhost run-tests --app almdina_erp
+          bench --site test.localhost run-tests --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      - name: Collect integration diagnostics
+        if: failure()
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/integration-diagnostics"
+          for log in \
+            new-site.log \
+            install-erpnext.log \
+            install-almdina.log \
+            migrate-first.log \
+            migrate-second.log \
+            tests.log; do
+            cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          done
+          cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/frappe-bench/sites/test.localhost/site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          find "$RUNNER_TEMP/frappe-bench/sites" -maxdepth 2 -type f -print > "$RUNNER_TEMP/integration-diagnostics/site-files.txt" 2>&1
+          cd "$RUNNER_TEMP/frappe-bench" && bench version > "$RUNNER_TEMP/integration-diagnostics/bench-version.txt" 2>&1
+          mariadb -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION(); SHOW VARIABLES LIKE "character_set_server"; SHOW VARIABLES LIKE "collation_server"; SELECT User, Host FROM mysql.user;' > "$RUNNER_TEMP/integration-diagnostics/mariadb.txt" 2>&1
+
+      - name: Upload integration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frappe-v16-integration-diagnostics
+          path: ${{ runner.temp }}/integration-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Disable tests
         if: always()
