@@ -49,6 +49,7 @@ jobs:
             almdina_erp.tests.test_order_editability_domain \
             almdina_erp.tests.test_order_edit_policy_adapter \
             almdina_erp.tests.test_order_lifecycle_domain \
+            almdina_erp.tests.test_shop_floor_command_adapter \
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
 

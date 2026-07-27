@@ -109,6 +109,20 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
     "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
         "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
+    "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order",
+    "almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
+    "almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
+    "almdina_erp.almdina_erp.services.shop_floor_service.mark_delivered":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.mark_delivered",
+    "almdina_erp.almdina_erp.services.shop_floor_service.revert_department":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.revert_department",
+    "almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft",
 }
 
 # Keep v1.0 business logic inside the app package. Client-side scripts are used
