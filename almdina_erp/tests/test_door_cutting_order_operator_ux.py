@@ -37,13 +37,14 @@ def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_sur
         "revision",
         "approved_plan",
         "board_item",
-        "board_material",
-        "board_color",
-        "board_thickness_mm",
         "full_board_length_mm",
         "full_board_width_mm",
     ):
         assert fields[fieldname].get("hidden") == 1, fieldname
+
+    for deleted in ("board_material", "board_color", "board_thickness_mm"):
+        assert deleted not in fields
+        assert deleted not in payload["field_order"]
 
     order = payload["field_order"]
     assert order.index("customer") < order.index("board_description") < order.index("pieces_fast_entry")
