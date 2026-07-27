@@ -51,7 +51,9 @@ def test_database_cleanup_patch_drops_retired_columns_idempotently():
     source = _source(DROP_PATCH)
     for obsolete in ("board_material", "board_color", "board_thickness_mm"):
         assert f'"{obsolete}"' in source
-    assert 'frappe.db.has_column("Door Cutting Order", column)' in source
+    assert 'doctype = "Door Cutting Order"' in source
+    assert "frappe.db.table_exists(doctype)" in source
+    assert "frappe.db.has_column(doctype, column)" in source
     assert 'drop column `{column}`' in source
     assert "almdina_erp.patches.v1_0.drop_obsolete_order_board_columns" in _source(PATCHES_TXT)
 
