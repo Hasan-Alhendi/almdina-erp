@@ -26,43 +26,28 @@ ROLES = (
     "Production Manager",
     "Stock Manager",
     "Accounts Management",
-    # Shop-floor operator roles
     "عامل رسم",
     "عامل شريون",
     "عامل CNC",
     "عامل تقشيط",
 )
 
-# Seeded on demand via seed_operator_users() — not auto-run on migrate.
+# Convenience records used only by explicit administrative seed commands.
 OPERATOR_USERS = (
-    {"email": "drawing@almdina.local", "first_name": "عامل", "last_name": "رسم", "role": "عامل رسم"},
-    {"email": "sharyoun@almdina.local", "first_name": "عامل", "last_name": "شريون", "role": "عامل شريون"},
-    {"email": "cnc@almdina.local", "first_name": "عامل", "last_name": "CNC", "role": "عامل CNC"},
-    {"email": "taqsheet@almdina.local", "first_name": "عامل", "last_name": "تقشيط", "role": "عامل تقشيط"},
+    {"email": "drawing@almdina.local", "first_name": "عامل", "last_name": "رسم", "profile": "drawing_operator"},
+    {"email": "sharyoun@almdina.local", "first_name": "عامل", "last_name": "شريون", "profile": "sharyoun_operator"},
+    {"email": "cnc@almdina.local", "first_name": "عامل", "last_name": "CNC", "profile": "cnc_operator"},
+    {"email": "taqsheet@almdina.local", "first_name": "عامل", "last_name": "تقشيط", "profile": "sanding_operator"},
 )
 
-# Seeded on demand via seed_order_entry_users().
-# This account runs the factory day to day, so it carries every factory role.
 ORDER_ENTRY_USERS = (
     {
         "email": "orders@almdina.local",
-        "first_name": "مدير",
-        "last_name": "المعمل",
-        "role": "Order Entry",
-        "extra_roles": (
-            "Production Manager",
-            "Stock Manager",
-            "Stock User",
-            "Item Manager",
-            "Accounts Management",
-            "Sales User",
-            "Cutting Operator",
-            "Edge Operator",
-        ),
+        "first_name": "موظف",
+        "last_name": "الطلبات",
+        "profile": "order_entry",
     },
 )
-
-DEFAULT_OPERATOR_PASSWORD = "Almdina@123"
 
 REQUIRED_UOMS = (
     {"name": "Meter", "must_be_whole_number": 0},
@@ -82,7 +67,6 @@ ITEM_CUSTOM_FIELDS = {
 }
 
 DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
-
 EDGE_ITEM_GROUP = "Raw Material"
 
 
@@ -111,82 +95,45 @@ def seed_roles() -> None:
             frappe.get_doc({"doctype":"Role","role_name":role_name}).insert(ignore_permissions=True)
 
 
-def _upsert_desk_user(row: dict, password: str) -> str:
-    from frappe.utils.password import update_password
+def _require_explicit_password(password: str | None) -> str:
+    password = str(password or "")
+    if not password:
+        frappe.throw(
+            "Pass password explicitly. Almdina ERP does not store a default user password in source code."
+        )
+    return password
 
-    email = row["email"]
-    roles = ["Desk User", row["role"], *row.get("extra_roles", ())]
 
-    if frappe.db.exists("User", email):
-        user = frappe.get_doc("User", email)
-        user.enabled = 1
-        user.first_name = row["first_name"]
-        user.last_name = row["last_name"]
-        user.language = "ar"
-        existing = {r.role for r in user.roles}
-        for needed in roles:
-            if needed not in existing and frappe.db.exists("Role", needed):
-                user.append("roles", {"role": needed})
-        user.save(ignore_permissions=True)
-        update_password(email, password)
-        return f"updated:{email}"
+def _seed_users(rows: tuple[dict, ...], password: str | None) -> list[str]:
+    from almdina_erp.almdina_erp.application.security.provision_user import provision_user
 
-    user = frappe.get_doc(
-        {
-            "doctype": "User",
-            "email": email,
-            "first_name": row["first_name"],
-            "last_name": row["last_name"],
-            "send_welcome_email": 0,
-            "user_type": "System User",
-            "language": "ar",
-            "enabled": 1,
-        }
-    )
-    user.insert(ignore_permissions=True)
-    user.add_roles(*[r for r in roles if frappe.db.exists("Role", r)])
-    update_password(email, password)
-    return f"created:{email}"
+    seed_roles()
+    password = _require_explicit_password(password)
+    results: list[str] = []
+    for row in rows:
+        result = provision_user(
+            email=row["email"],
+            profile=row["profile"],
+            first_name=row["first_name"],
+            last_name=row.get("last_name", ""),
+            temporary_password=password,
+        )
+        action = "created" if result["created"] else "updated"
+        results.append(f"{action}:{row['email']}")
+    frappe.db.commit()
+    return results
 
 
 def seed_operator_users(password: str | None = None) -> list[str]:
-    """Create Desk users for shop-floor operator roles.
+    """Explicitly create the four shop-floor users with a runtime password."""
 
-    Call explicitly, e.g.:
-      bench --site site1.local execute almdina_erp.install.seed_operator_users
-    """
-    from almdina_erp.permissions import apply_shop_floor_user_restrictions
-
-    seed_roles()
-    password = password or DEFAULT_OPERATOR_PASSWORD
-    results: list[str] = []
-
-    for row in OPERATOR_USERS:
-        results.append(_upsert_desk_user(row, password))
-        apply_shop_floor_user_restrictions(row["email"])
-
-    frappe.db.commit()
-    return results
+    return _seed_users(OPERATOR_USERS, password)
 
 
 def seed_order_entry_users(password: str | None = None) -> list[str]:
-    """Create the order-entry Desk user limited to the Almdina factory app.
+    """Explicitly create the order-entry user with a runtime password."""
 
-    Call explicitly, e.g.:
-      bench --site site1.local execute almdina_erp.install.seed_order_entry_users
-    """
-    from almdina_erp.permissions import apply_order_entry_user_restrictions
-
-    seed_roles()
-    password = password or DEFAULT_OPERATOR_PASSWORD
-    results: list[str] = []
-
-    for row in ORDER_ENTRY_USERS:
-        results.append(_upsert_desk_user(row, password))
-        apply_order_entry_user_restrictions(row["email"])
-
-    frappe.db.commit()
-    return results
+    return _seed_users(ORDER_ENTRY_USERS, password)
 
 
 def seed_required_uoms() -> None:
@@ -308,8 +255,6 @@ def sync_plan_recalculation_state() -> None:
             """
         )
     except Exception:
-        # Fresh installs/migrations may invoke setup before every metadata cache is
-        # available. The normal document save path still sets the correct value.
         frappe.log_error(frappe.get_traceback(), "Almdina plan freshness backfill")
 
 
