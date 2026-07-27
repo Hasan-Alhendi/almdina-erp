@@ -92,12 +92,21 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             "handoff_to_next",
             "mark_delivered",
             "revert_department",
-            "return_order_to_draft",
         )
         for method in methods:
             old = f"almdina_erp.almdina_erp.services.shop_floor_service.{method}"
             new = f"almdina_erp.almdina_erp.services.shop_floor_commands.{method}"
             self.assertEqual(overrides.get(old), new)
+
+        revision_target = "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision"
+        self.assertEqual(
+            overrides.get("almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft"),
+            revision_target,
+        )
+        self.assertEqual(
+            overrides.get("almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft"),
+            revision_target,
+        )
 
     def test_command_adapter_does_not_redeclare_lifecycle_tables(self) -> None:
         source = COMMAND_PATH.read_text(encoding="utf-8")

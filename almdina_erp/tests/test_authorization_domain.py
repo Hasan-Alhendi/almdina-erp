@@ -20,9 +20,18 @@ class TestAuthorizationDomain(unittest.TestCase):
         roles = {"Order Entry"}
         self.assertTrue(has_capability(roles, Capability.CREATE_ORDER))
         self.assertTrue(has_capability(roles, Capability.EDIT_ORDER))
+        self.assertTrue(has_capability(roles, Capability.CREATE_ORDER_REVISION))
         self.assertFalse(has_capability(roles, Capability.APPROVE_ORDER))
         self.assertFalse(has_capability(roles, Capability.MANAGE_STOCK))
         self.assertFalse(has_capability(roles, Capability.EDIT_SPECIAL_PRICE))
+
+    def test_production_manager_can_create_revision_but_shop_floor_operator_cannot(self) -> None:
+        self.assertTrue(
+            has_capability({"Production Manager"}, Capability.CREATE_ORDER_REVISION)
+        )
+        self.assertFalse(
+            has_capability({"عامل رسم"}, Capability.CREATE_ORDER_REVISION)
+        )
 
     def test_specialized_roles_have_only_their_business_capabilities(self) -> None:
         self.assertTrue(

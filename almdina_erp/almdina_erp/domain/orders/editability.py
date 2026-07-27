@@ -28,12 +28,14 @@ def is_locked_status(status: str | None) -> bool:
 
 
 def can_edit_order(status: str | None, roles: Collection[str] = ()) -> bool:
-    """Evaluate order editability without consulting Frappe or the database."""
-    if is_locked_status(status):
-        return False
-    if is_draft_like(status):
-        return True
-    return has_any_role(roles, ORDER_EDITOR_ROLES)
+    """Only draft-like documents are editable in place.
+
+    The ``roles`` argument is retained for API compatibility, but privileged users
+    must create a controlled revision instead of modifying approved history.
+    """
+
+    del roles
+    return is_draft_like(status)
 
 
 def is_drawing_stage(

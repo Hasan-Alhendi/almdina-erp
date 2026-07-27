@@ -19,13 +19,11 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
                 self.assertTrue(is_draft_like(status))
                 self.assertTrue(can_edit_order(status, roles=()))
 
-    def test_production_orders_require_an_editor_role(self) -> None:
-        for role in ("Order Entry", "Production Manager", "System Manager"):
-            with self.subTest(role=role):
-                self.assertTrue(can_edit_order("Cutting In Progress", roles={role}))
-
-        self.assertFalse(can_edit_order("Cutting In Progress", roles=()))
-        self.assertFalse(can_edit_order("Cutting In Progress", roles={"Cutting Operator"}))
+    def test_approved_and_production_orders_are_immutable_for_every_role(self) -> None:
+        for status in ("Approved", "At Drawing", "Cutting In Progress", "Ready for Delivery"):
+            for role in ("Order Entry", "Production Manager", "System Manager", "Cutting Operator"):
+                with self.subTest(status=status, role=role):
+                    self.assertFalse(can_edit_order(status, roles={role}))
 
     def test_locked_orders_are_never_editable(self) -> None:
         for status in ("Delivered", "Cancelled"):

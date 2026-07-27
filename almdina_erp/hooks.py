@@ -67,6 +67,7 @@ doctype_js = {
         "public/js/shop_floor_order_ux.js",
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
+        "public/js/door_cutting_order_revision_ux.js",
     ],
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
@@ -124,7 +125,9 @@ override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.shop_floor_service.revert_department":
         "almdina_erp.almdina_erp.services.shop_floor_commands.revert_department",
     "almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft":
-        "almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft",
+        "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
+    "almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft":
+        "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
 }
 
 # Keep v1.0 business logic inside the app package. Client-side scripts are used
