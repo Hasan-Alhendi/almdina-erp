@@ -5,11 +5,14 @@ import unittest
 from pathlib import Path
 
 
-DOCTYPE_JSON = Path(
-    "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.json"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DOCTYPE_JSON = (
+    REPOSITORY_ROOT
+    / "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.json"
 )
-CONTROLLER = Path(
-    "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py"
+CONTROLLER = (
+    REPOSITORY_ROOT
+    / "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py"
 )
 
 
