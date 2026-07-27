@@ -45,7 +45,18 @@ def _piece_rows(order: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _stock_board_item(order: Any) -> str:
+    """Return the optional stock identity used only for safe remnant matching."""
+
+    return str(getattr(order, "board_item", "") or "").strip()
+
+
 def _lock_available_remnants(order: Any) -> list[dict[str, Any]]:
+    board_item = _stock_board_item(order)
+    if not board_item:
+        # Free-text board orders cannot be matched safely to physical remnants.
+        return []
+
     return frappe.db.sql(
         """
         select name, board_item, length_mm, width_mm, thickness_mm, material, color, area_m2,
@@ -53,18 +64,10 @@ def _lock_available_remnants(order: Any) -> list[dict[str, Any]]:
         from `tabBoard Remnant`
         where board_item = %s
           and status = 'Available'
-          and coalesce(material, '') = %s
-          and coalesce(color, '') = %s
-          and abs(coalesce(thickness_mm, 0) - %s) <= 0.001
         order by area_m2 asc, creation asc
         for update
         """,
-        (
-            order.board_item,
-            order.board_material or "",
-            order.board_color or "",
-            flt(order.board_thickness_mm),
-        ),
+        (board_item,),
         as_dict=True,
     )
 
@@ -121,20 +124,16 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
     expected = {int(piece["id"]): piece for piece in requested_pieces}
     seen: dict[int, int] = {}
     tolerance = 1e-7
+    expected_board_item = _stock_board_item(order)
 
     for sheet in plan.get("sheets") or []:
         board_w = flt(sheet.get("w"))
         board_h = flt(sheet.get("h"))
         pieces = sheet.get("pieces") or []
 
-        if sheet.get("board_item") != order.board_item:
+        sheet_board_item = str(sheet.get("board_item") or "").strip()
+        if expected_board_item and sheet_board_item and sheet_board_item != expected_board_item:
             errors.append(_("Source sheet {0} uses a different Board Item.").format(sheet.get("sheet_no")))
-        if (sheet.get("material") or "") != (order.board_material or ""):
-            errors.append(_("Source sheet {0} material does not match the order snapshot.").format(sheet.get("sheet_no")))
-        if (sheet.get("color") or "") != (order.board_color or ""):
-            errors.append(_("Source sheet {0} color does not match the order snapshot.").format(sheet.get("sheet_no")))
-        if abs(flt(sheet.get("thickness_mm")) - flt(order.board_thickness_mm)) > 0.001:
-            errors.append(_("Source sheet {0} thickness does not match the order snapshot.").format(sheet.get("sheet_no")))
 
         for placed in pieces:
             piece_id = int(placed["id"])
@@ -180,7 +179,8 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
 
 
 def build_approval_plan(order: Any) -> dict[str, Any]:
-    """Build approval plan, preferring physically matching remnants when enabled."""
+    """Build an approval plan and use remnants only with an exact stock Item mapping."""
+
     pieces = expand_piece_groups(_piece_rows(order))
     full_board_w_cm = flt(order.full_board_width_mm) / 10
     full_board_h_cm = flt(order.full_board_length_mm) / 10
@@ -194,8 +194,10 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
     remaining = list(pieces)
     sheets: list[dict[str, Any]] = []
     used_remnants: list[str] = []
+    stock_board_item = _stock_board_item(order)
+    board_description = str(getattr(order, "board_description", "") or "").strip()
 
-    if cint(settings.prefer_remnants_before_full_boards):
+    if stock_board_item and cint(settings.prefer_remnants_before_full_boards):
         for remnant in _lock_available_remnants(order):
             if not remaining:
                 break
@@ -203,6 +205,7 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
             if not sheet:
                 continue
             sheet["sheet_no"] = len(sheets) + 1
+            sheet["board_description"] = board_description
             sheets.append(sheet)
             used_remnants.append(remnant["name"])
 
@@ -233,10 +236,11 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         full_sheet["sheet_no"] = len(sheets) + 1
         full_sheet["source_type"] = "Full Board"
         full_sheet["remnant"] = None
-        full_sheet["board_item"] = order.board_item
-        full_sheet["material"] = order.board_material or ""
-        full_sheet["color"] = order.board_color or ""
-        full_sheet["thickness_mm"] = flt(order.board_thickness_mm)
+        full_sheet["board_item"] = stock_board_item
+        full_sheet["board_description"] = board_description
+        full_sheet["material"] = ""
+        full_sheet["color"] = ""
+        full_sheet["thickness_mm"] = 0
         full_sheet["full_width_cm"] = full_board_w_cm
         full_sheet["full_length_cm"] = full_board_h_cm
         full_sheet["usable_width_cm"] = usable_full_w
@@ -263,6 +267,7 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         "search_time_limit_sec": flt(full_plan.get("search_time_limit_sec")),
         "solver_status": full_plan.get("solver_status") or "",
         "solver_wall_time_sec": flt(full_plan.get("solver_wall_time_sec")),
+        "board_description": board_description,
         "full_board_width_cm": full_board_w_cm,
         "full_board_length_cm": full_board_h_cm,
         "usable_board_width_cm": usable_full_w,
