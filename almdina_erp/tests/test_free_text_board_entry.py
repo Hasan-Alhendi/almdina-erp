@@ -35,15 +35,26 @@ def test_board_length_and_width_are_visible_cm_fields_with_requested_defaults():
     assert fields["board_width_cm"]["fieldtype"] == "Float"
     assert fields["board_width_cm"]["default"] == "122"
     assert fields["board_width_cm"]["reqd"] == 1
+
+
+def test_obsolete_board_snapshot_fields_are_deleted_not_merely_hidden():
+    doc = json.loads(_source(DOCTYPE))
+    fields = {row["fieldname"]: row for row in doc["fields"]}
     for obsolete in ("board_material", "board_color", "board_thickness_mm"):
-        assert fields[obsolete]["hidden"] == 1
-        assert obsolete not in doc["field_order"][: doc["field_order"].index("cost_tab")]
+        assert obsolete not in fields
+        assert obsolete not in doc["field_order"]
 
 
-def test_client_defaults_do_not_query_item_master_and_sync_cm_to_mm():
+def test_client_defaults_do_not_query_item_master_or_read_legacy_snapshot_fields():
     source = _source(DEFAULTS)
     assert "get_board_defaults" not in source
     assert "apply_board_defaults" not in source
+    assert "board_material" not in source
+    assert "board_color" not in source
+    assert "board_thickness_mm" not in source
+    assert "frm.doc.board_item" not in source
+    assert "frm.doc.full_board_length_mm || 0" not in source
+    assert "frm.doc.full_board_width_mm || 0" not in source
     assert "board_description: \"صنف اللوح\"" in source
     assert "board_length_cm: \"طول اللوح (سم)\"" in source
     assert "board_width_cm: \"عرض اللوح (سم)\"" in source
@@ -51,23 +62,26 @@ def test_client_defaults_do_not_query_item_master_and_sync_cm_to_mm():
     assert "frm.doc.full_board_width_mm = width * 10" in source
 
 
-def test_server_controller_validates_text_and_converts_centimeters_for_optimizer():
+def test_server_controller_validates_only_new_board_inputs_and_converts_for_optimizer():
     source = _source(CONTROLLER)
     assert "class TextBoardDoorCuttingOrder(FastDoorCuttingOrder)" in source
     assert 'description = str(getattr(self, "board_description", "")' in source
     assert "self.full_board_length_mm = length_cm * 10" in source
     assert "self.full_board_width_mm = width_cm * 10" in source
+    assert "legacy_item" not in source
+    assert "board_material" not in source
+    assert "board_color" not in source
+    assert "board_thickness_mm" not in source
     assert "frappe.db.get_value(" not in source
     assert 'payload["board"]["description"]' in source
 
 
-def test_invoice_and_measurement_prints_use_board_description_without_saving_it_as_link():
+def test_invoice_and_measurement_prints_use_only_board_description_as_visible_label():
     source = _source(BOARD_UX)
-    assert "frm.doc.board_description || frm.doc.board_item" in source
+    assert 'String(frm.doc.board_description || "")' in source
+    assert "frm.doc.board_description || frm.doc.board_item" not in source
     assert "ألواح MDF — ${label}" in source
     assert "PRINT_TRIGGER_SELECTOR" in source
-    assert "frm.doc.board_item = description" in source
-    assert "frm.doc.board_item = previous" in source
 
 
 def test_free_text_board_layers_are_loaded_after_invoice_renderers():
