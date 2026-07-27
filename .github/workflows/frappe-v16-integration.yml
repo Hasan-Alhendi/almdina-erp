@@ -15,12 +15,12 @@ permissions:
 
 jobs:
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     services:
       mariadb:
-        image: mariadb:10.6
+        image: mariadb:11.8
         env:
           MARIADB_ROOT_PASSWORD: root
         ports:
@@ -29,7 +29,7 @@ jobs:
           --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=15
+          --health-retries=20
       redis-cache:
         image: redis:7-alpine
         ports:
@@ -52,7 +52,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: yarn
 
       - name: Install system dependencies
@@ -63,6 +63,7 @@ jobs:
             libmariadb-dev \
             libffi-dev \
             libssl-dev \
+            pkg-config \
             wkhtmltopdf \
             xvfb \
             redis-tools
@@ -71,7 +72,26 @@ jobs:
       - name: Install Bench CLI
         run: |
           python -m pip install --upgrade pip
-          python -m pip install frappe-bench
+          python -m pip install --upgrade frappe-bench
+
+      - name: Verify Frappe v16 toolchain
+        run: |
+          set -euo pipefail
+          python --version
+          node --version
+          yarn --version
+          mariadb --version
+          bench --version
+          python - <<'PY'
+          import sys
+
+          if sys.version_info[:2] != (3, 14):
+              raise SystemExit(f"Expected Python 3.14, got {sys.version}")
+          PY
+          node -e 'const major = Number(process.versions.node.split(".")[0]); if (major < 24) { throw new Error(`Expected Node 24+, got ${process.version}`); }'
+          mariadb-admin ping -h 127.0.0.1 -uroot -proot --silent
+          redis-cli -h 127.0.0.1 -p 13000 ping | grep -qx PONG
+          redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Initialize Frappe v16 bench
         run: |
