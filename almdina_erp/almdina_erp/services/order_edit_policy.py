@@ -66,9 +66,17 @@ def is_order_at_drawing_stage(order: Any) -> bool:
 
 
 def user_can_recalculate_drawing_system_plan(order: Any, user: str | None = None) -> bool:
+    roles = _roles_for_user(user)
+    if not has_any_role(roles, DRAWING_OPERATOR_ROLES):
+        return False
+
+    approved_plan = _value(order, "approved_plan")
+    if approved_plan:
+        return False
+
     return can_recalculate_drawing_system_plan(
-        roles=_roles_for_user(user),
-        approved_plan=_value(order, "approved_plan"),
+        roles=roles,
+        approved_plan=approved_plan,
         production_path=_value(order, "production_path"),
         status=order_status(order),
         current_stage_type=_current_stage_type(order),
