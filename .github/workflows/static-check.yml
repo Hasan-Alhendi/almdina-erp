@@ -38,7 +38,7 @@ jobs:
           PY
           python -m compileall -q almdina_erp
 
-      - name: Validate Arabic and operator UX regressions
+      - name: Validate Arabic, UX, DXF, invoice, and fast-save regressions
         shell: bash
         run: |
           python - <<'PY'
@@ -47,8 +47,34 @@ jobs:
           from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_ux_checks
           from almdina_erp.tests import test_dxf_autocad_compatibility as dxf_checks
           from almdina_erp.tests import test_order_cost_invoice_ux as cost_invoice_checks
+          from almdina_erp.tests import test_door_cutting_order_fast_save as fast_save_checks
+          from almdina_erp.tests import test_measurement_resilience_ux as measurement_resilience_checks
+          from almdina_erp.tests import test_table_performance_ux as table_performance_checks
+          from almdina_erp.tests import test_order_edge_color_ux as order_edge_color_checks
+          from almdina_erp.tests import test_packing_score_field as packing_score_checks
+          from almdina_erp.tests import test_special_shape_close_ux as special_shape_close_checks
+          from almdina_erp.tests import test_door_cutting_order_save_pipeline_performance as save_pipeline_checks
+          from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
+          from almdina_erp.tests import test_special_shape_geometry_ux as special_shape_geometry_checks
+          from almdina_erp.tests import test_shape_print_ux as shape_print_checks
 
-          modules = [arabic_checks, ux_checks, plan_ux_checks, dxf_checks, cost_invoice_checks]
+          modules = [
+              arabic_checks,
+              ux_checks,
+              plan_ux_checks,
+              dxf_checks,
+              cost_invoice_checks,
+              fast_save_checks,
+              measurement_resilience_checks,
+              table_performance_checks,
+              order_edge_color_checks,
+              packing_score_checks,
+              special_shape_close_checks,
+              save_pipeline_checks,
+              order_surface_checks,
+              special_shape_geometry_checks,
+              shape_print_checks,
+          ]
           total = 0
           for module in modules:
               tests = [
@@ -59,7 +85,7 @@ jobs:
               for test in tests:
                   test()
               total += len(tests)
-          print(f'Validated {total} Arabic/operator/plan/DXF/cost-invoice regression checks')
+          print(f'Validated {total} UX/DXF/invoice/fast-save regression checks')
           PY
 
       - name: Validate advanced cutting optimizer
@@ -89,3 +115,13 @@ jobs:
             count=$((count + 1))
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
+
+      - name: Validate special-shape exact geometry
+        shell: bash
+        run: |
+          node almdina_erp/tests/test_special_shape_geometry.js
+
+      - name: Validate printable door drawings
+        shell: bash
+        run: |
+          node almdina_erp/tests/test_shape_print.js

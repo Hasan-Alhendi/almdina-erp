@@ -80,6 +80,11 @@
             "cutting_cost_usd",
             "edge_cost_usd",
             "total_cost_usd",
+            "special_shapes_baseline_cost_usd",
+            "special_shapes_estimated_total_usd",
+            "special_shapes_final_total_usd",
+            "customer_quote_total_usd",
+            "customer_quote_status",
             "packing_method",
             "packing_score",
             "engine_version",
@@ -97,10 +102,21 @@
             row.edge_meters = num(calculated.edge_meters);
             row.edge_rate_usd = num(calculated.edge_rate_usd);
             row.edge_cost_usd = num(calculated.edge_cost_usd);
+            row.special_shape_status = calculated.special_shape_status || row.special_shape_status;
+            row.special_shape_estimated_unit_price_usd = num(calculated.special_shape_estimated_unit_price_usd);
+            row.special_shape_custom_unit_price_usd = num(calculated.special_shape_custom_unit_price_usd);
+            row.special_shape_final_unit_price_usd = num(calculated.special_shape_final_unit_price_usd);
+            row.special_shape_price_status = calculated.special_shape_price_status || row.special_shape_price_status;
+            row.special_shape_price_note = calculated.special_shape_price_note || "";
+            row.special_shape_price_approved_by = calculated.special_shape_price_approved_by || "";
+            row.special_shape_price_approved_on = calculated.special_shape_price_approved_on || "";
         });
 
         frm.refresh_field("pieces");
         render_cutting_plan(frm);
+        if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
+            window.AlmdinaOrderCostUX.render(frm);
+        }
     }
 
     function recalculate_order(frm, options = {}) {
@@ -197,10 +213,62 @@
     }
 
     function render_piece_label(piece) {
+        const edge_count = [
+            piece.edge_long_right,
+            piece.edge_long_left,
+            piece.edge_width_top,
+            piece.edge_width_bottom
+        ].filter(Boolean).length;
+        const exact_special = piece.piece_type === "Special"
+            && window.AlmdinaSpecialShapeGeometry
+            && window.AlmdinaSpecialShapeGeometry.isExact(piece);
+        const special = piece.piece_type === "Special"
+            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
+            : "";
+        const clipped = piece.piece_type === "Clipped Corner"
+            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
+            : "";
+        const preliminary_edge = piece.piece_type === "Special" && edge_count
+            ? `<br><span style="display:inline-block;margin-top:2px;color:#9c1c1c;font-size:8px;font-weight:800">قشاط مبدئي: ${edge_count} جهة</span>`
+            : "";
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
+                ${special}${clipped}
                 <b>${escape_html(piece.label)}</b><br>
                 <span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)} سم</span>
+                ${preliminary_edge}
+            </div>
+        `;
+    }
+
+    function render_special_raw_coverage(frm, plan) {
+        const requested_from_rows = (frm.doc.pieces || []).reduce((total, row) => {
+            if ((row.piece_type || "Regular") !== "Special") return total;
+            return total + Math.max(0, Math.floor(num(row.qty)));
+        }, 0);
+        const placed_from_plan = (plan.sheets || []).reduce((total, sheet) => {
+            return total + (sheet.pieces || []).filter(piece => piece.piece_type === "Special").length;
+        }, 0);
+        const snapshot = plan.special_shape_raw_summary || {};
+        const requested = Number.isFinite(Number(snapshot.requested))
+            ? Number(snapshot.requested)
+            : requested_from_rows;
+        const placed = Number.isFinite(Number(snapshot.placed))
+            ? Number(snapshot.placed)
+            : placed_from_plan;
+        if (!requested) return "";
+
+        const complete = Boolean(snapshot.complete ?? (placed === requested));
+        const tone = complete
+            ? "border-color:#c9a66b;background:linear-gradient(135deg,#fff8e8,#fffdf8);color:#684117"
+            : "border-color:#dc7b72;background:#fff4f2;color:#9b2f26";
+        const message = complete
+            ? `تم إدخال جميع الدرف الخاصة في خطة القص كمستطيل خام: <b>${placed} من ${requested}</b>`
+            : `تنبيه: دخل خطة القص <b>${placed} من ${requested}</b> فقط من الدرف الخاصة. راجع المقاسات والقطع غير الموزعة.`;
+
+        return `
+            <div class="dco-special-raw-coverage" style="direction:rtl;border:1px solid;border-radius:10px;padding:9px 12px;margin:8px 0 12px;font-size:12px;font-weight:700;${tone}">
+                <span style="font-size:16px;margin-left:6px">✦</span>${message}
             </div>
         `;
     }
@@ -218,9 +286,12 @@
         `;
 
         rows.forEach((row, index) => {
+            const typeLabel = row.piece_type === "Special"
+                ? " · ✦ خاصة (خام CNC)"
+                : (row.piece_type === "Clipped Corner" ? " · ⌑ زاوية مقصوصة" : "");
             html += `
                 <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
-                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${Math.max(0, Math.floor(num(row.qty)))}
+                    ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${Math.max(0, Math.floor(num(row.qty)))}${typeLabel}
                 </span>
             `;
         });
@@ -268,6 +339,7 @@
                 </div>
 
                 ${render_piece_groups_summary(frm)}
+                ${render_special_raw_coverage(frm, plan)}
 
                 <div style="font-size:12px;margin-bottom:8px;"><b>طريقة الترتيب:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}</div>
         `;
@@ -291,10 +363,38 @@
                 const top = (num(piece.y) / board_h_cm) * 100;
                 const width = (num(piece.w) / board_w_cm) * 100;
                 const height = (num(piece.h) / board_h_cm) * 100;
+                const special_piece_style = piece.piece_type === "Special"
+                    ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
+                    : "border:1px solid #111;background:#e4f5ff;";
+                const clipped = piece.piece_type === "Clipped Corner";
+                const exactSpecial = piece.piece_type === "Special"
+                    && window.AlmdinaSpecialShapeGeometry
+                    && window.AlmdinaSpecialShapeGeometry.isExact(piece);
+                const shapeGeometry = clipped
+                    ? window.AlmdinaClippedCornerGeometry
+                    : (exactSpecial ? window.AlmdinaSpecialShapeGeometry : null);
+                const shapePoints = shapeGeometry
+                    ? shapeGeometry.pointsAttribute(piece, 100, 100)
+                    : "0,0 100,0 100,100 0,100";
+                const shaped = clipped || exactSpecial;
+                const shapeOutline = shaped
+                    ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><polygon points="${shapePoints}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
+                    : "";
+                const pieceStyle = shaped
+                    ? "border:0;background:transparent;box-shadow:none;"
+                    : special_piece_style;
+                const shapeClip = shapePoints.split(" ").map(pair => {
+                    const [x, y] = pair.split(",");
+                    return `${x}% ${y}%`;
+                }).join(",");
+                const edgeLines = shaped
+                    ? `<span style="position:absolute;display:block;inset:0;z-index:3;clip-path:polygon(${shapeClip})">${render_piece_edge_lines(piece)}</span>`
+                    : render_piece_edge_lines(piece);
 
                 html += `
-                    <div class="dco-piece" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;border:1px solid #111;background:#e4f5ff;color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
-                        ${render_piece_edge_lines(piece)}
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:hidden;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                        ${shapeOutline}
+                        ${edgeLines}
                         ${render_piece_label(piece)}
                     </div>
                 `;
@@ -371,7 +471,9 @@
                     .dco-sheet-card + .dco-sheet-card { page-break-before:always !important;break-before:page !important; }
                     .dco-sheet-title { display:flex !important;justify-content:space-between !important;align-items:center !important;font-size:11px !important;font-weight:bold !important;margin-bottom:4px !important; }
                     .dco-sheet-board { border:2px solid #111 !important;background:linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),#fff !important;background-size:32px 32px !important;overflow:hidden !important;direction:ltr !important;margin:0 auto 5px auto !important; }
-                    .dco-piece { border:1px solid #111 !important;background:#e4f5ff !important;color:#111 !important;font-size:8px !important;line-height:1.1 !important;padding:1px !important;display:flex !important;align-items:center !important;justify-content:center !important; }
+                    .dco-piece:not(.dco-clipped-corner-piece) { border:1px solid #111 !important;background:#e4f5ff !important; }
+                    .dco-piece { color:#111 !important;font-size:8px !important;line-height:1.1 !important;padding:1px !important;display:flex !important;align-items:center !important;justify-content:center !important; }
+                    .dco-clipped-corner-piece { border:0 !important;background:transparent !important; }
                     .dco-piece-label { direction:ltr !important;text-align:center !important;color:#111 !important; }
                     .dco-piece b { font-size:9px !important;font-weight:bold !important; }
                     .dco-piece span,.dco-piece small { font-size:8px !important; }
@@ -507,14 +609,17 @@
         return dxf_pair(0, "LTYPE") + dxf_pair(2, "CONTINUOUS") + dxf_pair(70, 0) + dxf_pair(3, "Solid line") + dxf_pair(72, 65) + dxf_pair(73, 0) + dxf_pair(40, 0);
     }
 
-    function dxf_polyline_rect(layer, x, y, w, h) {
-        const points = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+    function dxf_polyline_points(layer, points) {
         let dxf = dxf_pair(0, "POLYLINE") + dxf_pair(8, layer || "CUT_PATH") + dxf_pair(66, 1) + dxf_pair(10, 0) + dxf_pair(20, 0) + dxf_pair(30, 0) + dxf_pair(70, 1);
         points.forEach(point => {
             dxf += dxf_pair(0, "VERTEX") + dxf_pair(8, layer || "CUT_PATH") + dxf_pair(10, dxf_num(point[0])) + dxf_pair(20, dxf_num(point[1])) + dxf_pair(30, 0);
         });
         dxf += dxf_pair(0, "SEQEND") + dxf_pair(8, layer || "CUT_PATH");
         return dxf;
+    }
+
+    function dxf_polyline_rect(layer, x, y, w, h) {
+        return dxf_polyline_points(layer, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
     }
 
     function make_dxf_document(entities, extmin_x, extmin_y, extmax_x, extmax_y) {
@@ -586,7 +691,14 @@
                 const piece_h_mm = num(piece.h) * 10;
                 const x_mm = sheet_offset_x + trim_mm + (num(piece.x) * 10);
                 const y_mm = sheet_offset_y + full_board_length_mm - trim_mm - (num(piece.y) * 10) - piece_h_mm;
-                entities += dxf_polyline_rect("CUT_PATH", x_mm, y_mm, piece_w_mm, piece_h_mm);
+                const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+                const specialGeometry = window.AlmdinaSpecialShapeGeometry;
+                const pathGeometry = clippedGeometry && clippedGeometry.isClipped(piece)
+                    ? clippedGeometry
+                    : (specialGeometry && specialGeometry.isExact(piece) ? specialGeometry : null);
+                entities += pathGeometry
+                    ? dxf_polyline_points("CUT_PATH", pathGeometry.dxfPoints(piece, x_mm, y_mm, piece_w_mm, piece_h_mm))
+                    : dxf_polyline_rect("CUT_PATH", x_mm, y_mm, piece_w_mm, piece_h_mm);
             });
         });
 
@@ -776,6 +888,10 @@
         edge_width_top: schedule_recalculate,
         edge_width_bottom: schedule_recalculate,
         edge_type: schedule_recalculate,
+        piece_type: schedule_recalculate,
+        clipped_corner_position: schedule_recalculate,
+        clipped_corner_width_cm: schedule_recalculate,
+        clipped_corner_length_cm: schedule_recalculate,
         notes: schedule_recalculate
     });
 })();

@@ -1,6 +1,27 @@
 (() => {
     "use strict";
 
+    function isArabic() {
+        const lang = String(
+            (frappe.boot && frappe.boot.lang) ||
+            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
+            document.documentElement.lang ||
+            ""
+        ).toLowerCase();
+        return lang === "ar" || lang.startsWith("ar-");
+    }
+
+    function translateOrderMaterialLabels(frm) {
+        if (!isArabic()) return;
+        frm.set_df_property("cutting_settings_section", "label", "إعدادات مواد وتكلفة الطلب");
+        frm.set_df_property("edge_color", "label", "لون القشاط");
+        frm.set_df_property(
+            "edge_color",
+            "description",
+            "يُجلب تلقائيًا من نوع القشاط، ويمكن تعديله لهذا الطلب."
+        );
+    }
+
     function apply_factory_defaults(frm) {
         if (!frm.is_new() || frm._almdina_factory_defaults_loaded) return;
         frm._almdina_factory_defaults_loaded = true;
@@ -40,13 +61,40 @@
         }).catch(error => console.error("Failed to load MDF board defaults", error));
     }
 
+    function apply_edge_color_default(frm, force = false) {
+        const requestedType = frm.doc.default_edge_type;
+        if (!requestedType) {
+            if (force && frm.doc.edge_color) return frm.set_value("edge_color", "");
+            return Promise.resolve();
+        }
+        if (!force && String(frm.doc.edge_color || "").trim()) return Promise.resolve();
+
+        return frappe.db.get_value("Edge Banding Type", requestedType, "edge_color")
+            .then(r => {
+                if (frm.doc.default_edge_type !== requestedType) return;
+                const color = (r && r.message && r.message.edge_color) || "";
+                if (force || !String(frm.doc.edge_color || "").trim()) {
+                    return frm.set_value("edge_color", color);
+                }
+            })
+            .catch(error => console.error("Failed to load edge color default", error));
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload(frm) {
+            translateOrderMaterialLabels(frm);
             apply_factory_defaults(frm);
             if (frm.is_new() && frm.doc.board_item) apply_board_defaults(frm);
+            if (frm.doc.default_edge_type && !frm.doc.edge_color) apply_edge_color_default(frm, false);
+        },
+        refresh(frm) {
+            translateOrderMaterialLabels(frm);
         },
         board_item(frm) {
             apply_board_defaults(frm);
+        },
+        default_edge_type(frm) {
+            apply_edge_color_default(frm, true);
         },
     });
 })();

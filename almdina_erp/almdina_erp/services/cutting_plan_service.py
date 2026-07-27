@@ -175,6 +175,13 @@ def create_plan_from_order(order: Any, snapshot_override: dict[str, Any] | None 
                     "height_mm": flt(piece.get("h")) * 10,
                     "original_width_cm": flt(piece.get("original_w")),
                     "original_length_cm": flt(piece.get("original_h")),
+                    "piece_type": piece.get("piece_type") or "Regular",
+                    "clipped_corner_position": piece.get("clipped_corner_position") or "",
+                    "clipped_corner_width_cm": flt(piece.get("clipped_corner_width_cm")),
+                    "clipped_corner_length_cm": flt(piece.get("clipped_corner_length_cm")),
+                    "special_shape_geometry_json": (
+                        piece.get("special_shape_geometry_json") or ""
+                    ),
                     "rotated": 1 if piece.get("rotated") else 0,
                     "edge_long_right": 1 if piece.get("edge_long_right") else 0,
                     "edge_long_left": 1 if piece.get("edge_long_left") else 0,
@@ -227,7 +234,10 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
     else:
         order.revision = max(1, cint(order.revision))
 
+    order.ensure_special_shapes_documented()
     order.status = "Pending Review"
+    if cint(order.plan_needs_recalculation) or not order.cutting_plan_json:
+        order.flags.force_cutting_plan_recalculation = True
     order.save()
     return {"name": order.name, "status": order.status, "revision": order.revision}
 
@@ -240,6 +250,8 @@ def approve_order(order_name: str) -> dict[str, Any]:
     # directly without passing through Pending Review first.
     if order.status not in {"Draft", "Rejected", "Pending Review"}:
         frappe.throw(_("Only Draft, Rejected or Pending Review orders can be approved."))
+    order.ensure_special_shapes_documented()
+    order.ensure_special_prices_approved()
 
     order.save(ignore_permissions=True)
 
@@ -277,6 +289,7 @@ def approve_order(order_name: str) -> dict[str, Any]:
                 plan.required_boards, plan.waste_percent, plan.method_label
             ),
             "cutting_plan_json": approved_snapshot_json,
+            "plan_needs_recalculation": 0,
             "production_path": None,
             "current_department": None,
             "current_assignee": None,

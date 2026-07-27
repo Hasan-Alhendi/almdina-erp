@@ -38,14 +38,29 @@ doctype_js = {
         "public/js/door_cutting_order_workflow.js",
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
+        "public/js/door_cutting_order_clipped_corner_ux.js",
+        "public/js/door_cutting_order_special_shape_geometry.js",
+        "public/js/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
+        "public/js/door_cutting_order_keyboard_columns_ux.js",
+        "public/js/door_cutting_order_compact_measurements_ux.js",
+        "public/js/door_cutting_order_measurement_actions_ux.js",
+        "public/js/door_cutting_order_special_shape_ux.js",
+        "public/js/door_cutting_order_special_shape_close_ux.js",
+        "public/js/door_cutting_order_measurement_resilience_ux.js",
+        "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
+        "public/js/door_cutting_order_edge_color_ux.js",
+        "public/js/door_cutting_order_save_render_performance_ux.js",
         "public/js/door_cutting_order_plan_ux.js",
+        "public/js/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_header_ux.js",
         "public/js/shop_floor_order_ux.js",
+        "public/js/secure_dxf_export.js",
+        "public/js/door_cutting_order_toolbar_stability_ux.js",
     ],
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
@@ -54,6 +69,13 @@ doctype_js = {
 
 doctype_list_js = {
     "Door Cutting Order": "public/js/door_cutting_order_list.js",
+}
+
+# Keep the existing business controller as the authoritative base class while
+# replacing expensive ordinary-save paths with a compatible optimized subclass.
+override_doctype_class = {
+    "Door Cutting Order":
+        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_fast.FastDoorCuttingOrder",
 }
 
 doc_events = {

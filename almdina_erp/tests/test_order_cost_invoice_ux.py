@@ -25,13 +25,15 @@ def test_primary_tabs_are_order_cutting_plan_then_order_cost():
     assert fields["order_cost_invoice_html"]["fieldtype"] == "HTML"
 
 
-def test_primary_tab_bar_is_sticky_and_labels_are_arabic():
+def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():
     src = HEADER_UX.read_text(encoding="utf-8")
     assert ".dco-sticky-tabs" in src
-    assert "position: sticky !important" in src
-    assert 'frm.set_df_property("order_tab", "label", "الطلب")' in src
-    assert 'frm.set_df_property("results_tab", "label", "خطة القص")' in src
-    assert 'frm.set_df_property("cost_tab", "label", "تكلفة الطلب")' in src
+    assert ".dco-sticky-tabs.dco-tabs-is-fixed" in src
+    assert "position: fixed !important" in src
+    assert 'order_tab: "الطلب"' in src
+    assert 'results_tab: "خطة القص"' in src
+    assert 'cost_tab: "تكلفة الطلب"' in src
+    assert 'frm.set_df_property(fieldname, "label", label)' in src
 
 
 def test_cost_measurements_remove_edge_length_and_keep_visual_directions():
@@ -79,8 +81,13 @@ def test_customer_invoice_breaks_down_boards_cutting_and_edge_banding():
     assert "ألواح MDF" in src
     assert "أجور قص وتجهيز الألواح" in src
     assert "قشاط —" in src
-    assert "frm.doc.mdf_cost_usd" in src
-    assert "frm.doc.cutting_cost_usd" in src
+    assert "const materialAmount = boardCount * boardRate" in src
+    assert "const cuttingAmount = boardCount * cuttingRate" in src
+    assert "quantity: boardCount" in src
+    assert 'unit: "لوح"' in src
+    assert "regularAreaRatio" not in src
+    assert "حصة خام MDF" not in src
+    assert "حصة قص وتجهيز" not in src
     assert "frm.doc.edge_cost_usd" in src
     assert "frm.doc.total_cost_usd" in src
 

@@ -5,6 +5,10 @@
   "engine": "InnoDB",
   "field_order": [
     "piece_no",
+    "piece_type",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
     "width_cm",
     "length_cm",
     "qty",
@@ -18,7 +22,19 @@
     "edge_cost_usd",
     "area_m2",
     "edge_meters",
-    "notes"
+    "notes",
+    "special_shape_drawing_json",
+    "special_shape_geometry_json",
+    "special_shape_status",
+    "special_shape_drawing_updated_by",
+    "special_shape_drawing_updated_on",
+    "special_shape_estimated_unit_price_usd",
+    "special_shape_custom_unit_price_usd",
+    "special_shape_final_unit_price_usd",
+    "special_shape_price_status",
+    "special_shape_price_note",
+    "special_shape_price_approved_by",
+    "special_shape_price_approved_on"
   ],
   "fields": [
     {
@@ -27,6 +43,37 @@
       "in_list_view": 1,
       "label": "Piece No",
       "read_only": 1
+    },
+    {
+      "default": "Regular",
+      "fieldname": "piece_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Piece Type",
+      "options": "Regular\nClipped Corner\nSpecial",
+      "reqd": 1
+    },
+    {
+      "default": "Top Right",
+      "fieldname": "clipped_corner_position",
+      "fieldtype": "Select",
+      "hidden": 1,
+      "label": "Clipped Corner Position",
+      "options": "Top Right\nTop Left\nBottom Right\nBottom Left"
+    },
+    {
+      "fieldname": "clipped_corner_width_cm",
+      "fieldtype": "Float",
+      "hidden": 1,
+      "label": "Clipped Corner Width (CM)",
+      "non_negative": 1
+    },
+    {
+      "fieldname": "clipped_corner_length_cm",
+      "fieldtype": "Float",
+      "hidden": 1,
+      "label": "Clipped Corner Length (CM)",
+      "non_negative": 1
     },
     {
       "fieldname": "width_cm",
@@ -125,6 +172,104 @@
       "fieldname": "notes",
       "fieldtype": "Small Text",
       "label": "Notes"
+    },
+    {
+      "fieldname": "special_shape_drawing_json",
+      "fieldtype": "Long Text",
+      "hidden": 1,
+      "label": "Special Shape Documentation"
+    },
+    {
+      "fieldname": "special_shape_geometry_json",
+      "fieldtype": "Long Text",
+      "hidden": 1,
+      "label": "Special Shape Exact Geometry"
+    },
+    {
+      "default": "Not Required",
+      "fieldname": "special_shape_status",
+      "fieldtype": "Select",
+      "hidden": 1,
+      "label": "Special Shape Documentation Status",
+      "options": "Not Required\nNeeds Documentation\nDocumented",
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_drawing_updated_by",
+      "fieldtype": "Link",
+      "hidden": 1,
+      "label": "Special Shape Drawing Updated By",
+      "options": "User",
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_drawing_updated_on",
+      "fieldtype": "Datetime",
+      "hidden": 1,
+      "label": "Special Shape Drawing Updated On",
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_estimated_unit_price_usd",
+      "fieldtype": "Currency",
+      "hidden": 1,
+      "label": "Estimated Special Unit Price USD",
+      "non_negative": 1,
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_custom_unit_price_usd",
+      "fieldtype": "Currency",
+      "hidden": 1,
+      "label": "Approved Special Unit Price USD",
+      "non_negative": 1,
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_final_unit_price_usd",
+      "fieldtype": "Currency",
+      "hidden": 1,
+      "label": "Final Special Unit Price USD",
+      "non_negative": 1,
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "default": "Not Applicable",
+      "fieldname": "special_shape_price_status",
+      "fieldtype": "Select",
+      "hidden": 1,
+      "label": "Special Shape Price Status",
+      "options": "Not Applicable\nEstimated\nApproved",
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_price_note",
+      "fieldtype": "Small Text",
+      "hidden": 1,
+      "label": "Special Shape Price Note",
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_price_approved_by",
+      "fieldtype": "Link",
+      "hidden": 1,
+      "label": "Special Shape Price Approved By",
+      "options": "User",
+      "permlevel": 1,
+      "read_only": 1
+    },
+    {
+      "fieldname": "special_shape_price_approved_on",
+      "fieldtype": "Datetime",
+      "hidden": 1,
+      "label": "Special Shape Price Approved On",
+      "permlevel": 1,
+      "read_only": 1
     }
   ],
   "istable": 1,
