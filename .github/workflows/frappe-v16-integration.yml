@@ -119,13 +119,34 @@ jobs:
 
       - name: Create integration site
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench new-site test.localhost \
             --db-host 127.0.0.1 \
             --db-root-username root \
             --db-root-password root \
             --admin-password admin \
-            --no-mariadb-socket
+            --no-mariadb-socket \
+            --verbose 2>&1 | tee "$RUNNER_TEMP/new-site.log"
+
+      - name: Collect site creation diagnostics
+        if: failure()
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/integration-diagnostics"
+          cp "$RUNNER_TEMP/new-site.log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          find "$RUNNER_TEMP/frappe-bench/sites" -maxdepth 2 -type f -print > "$RUNNER_TEMP/integration-diagnostics/site-files.txt" 2>&1
+          mariadb -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION(); SHOW VARIABLES LIKE "character_set_server"; SHOW VARIABLES LIKE "collation_server"; SELECT User, Host FROM mysql.user;' > "$RUNNER_TEMP/integration-diagnostics/mariadb.txt" 2>&1
+
+      - name: Upload site creation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frappe-v16-integration-diagnostics
+          path: ${{ runner.temp }}/integration-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Install ERPNext and Almdina ERP
         run: |
