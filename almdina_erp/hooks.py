@@ -99,8 +99,10 @@ permission_query_conditions = {
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
 }
 
-boot_session = "almdina_erp.permissions.boot_session"
-extend_bootinfo = ["almdina_erp.permissions.extend_bootinfo"]
+# Boot hooks are deliberately read-only. User provisioning and role assignment
+# happen only through explicit administrative commands.
+boot_session = "almdina_erp.boot.boot_session"
+extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
 override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.replacement_service.approve_replacement":
