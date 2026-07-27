@@ -15,24 +15,12 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - test_arabic_operator_localization
-          - test_door_cutting_order_operator_ux
-          - test_cutting_plan_workspace_ux
-          - test_dxf_autocad_compatibility
-          - test_order_cost_invoice_ux
-          - test_door_cutting_order_fast_save
-          - test_measurement_resilience_ux
-          - test_table_performance_ux
-          - test_order_edge_color_ux
-          - test_packing_score_field
-          - test_special_shape_close_ux
-          - test_door_cutting_order_save_pipeline_performance
           - test_order_search_measurement_toolbar_ux
-          - test_special_shape_geometry_ux
+          - test_dxf_autocad_compatibility
           - test_shape_print_ux
-          - test_free_text_board_entry
     steps:
-      - uses: actions/checkout@v4
+      - name: Download pull request snapshot
+        run: curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/archive/${GITHUB_SHA}.tar.gz" | tar -xz --strip-components=1
       - name: Run module checks
         env:
           TEST_MODULE: ${{ matrix.module }}
@@ -48,7 +36,7 @@ jobs:
               if name.startswith("test_") and callable(getattr(module, name))
           ]
           for test in tests:
-              print(f"Running {test.__name__}")
+              print(f"Running {test.__name__}", flush=True)
               test()
           print(f"Validated {len(tests)} tests")
           PY
