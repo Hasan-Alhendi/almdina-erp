@@ -81,15 +81,16 @@ def test_customer_invoice_breaks_down_boards_cutting_and_edge_banding():
     assert "ألواح MDF" in src
     assert "أجور قص وتجهيز الألواح" in src
     assert "قشاط —" in src
-    assert "const materialAmount = boardCount * boardRate" in src
-    assert "const cuttingAmount = boardCount * cuttingRate" in src
-    assert "quantity: boardCount" in src
+    assert "function boardLabel(frm)" in src
+    assert "function invoiceTotal(frm)" in src
+    assert "boardCount > 0 ? boardCount * boardRate : n(frm.doc.mdf_cost_usd)" in src
+    assert "boardCount > 0 ? boardCount * cuttingRate : n(frm.doc.cutting_cost_usd)" in src
     assert 'unit: "لوح"' in src
     assert "regularAreaRatio" not in src
     assert "حصة خام MDF" not in src
     assert "حصة قص وتجهيز" not in src
     assert "frm.doc.edge_cost_usd" in src
-    assert "frm.doc.total_cost_usd" in src
+    assert "board_rate_usd(frm) { scheduleRender(frm); }" in src
 
 
 def test_invoice_has_customer_print_action_and_a4_print_css():

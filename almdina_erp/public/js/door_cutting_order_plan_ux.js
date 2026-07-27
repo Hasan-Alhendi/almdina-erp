@@ -4,6 +4,9 @@
     const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
 
     function editable(frm) {
+        if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
+            return frappe.almdina.orderCanEdit(frm);
+        }
         return frm.doc.docstatus === 0 && EDITABLE_STATUSES.has(frm.doc.status || "Draft");
     }
 
@@ -353,8 +356,8 @@
             frappe.msgprint("لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج. يجب الحفاظ على الخطة المعتمدة كنسخة تاريخية ثابتة.");
             return;
         }
-        if (!frm.doc.board_item || !(frm.doc.pieces || []).length) {
-            frappe.msgprint("اختر اللوح وأدخل القياسات أولًا قبل حساب خطة القص.");
+        if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
+            frappe.msgprint("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
             return;
         }
 

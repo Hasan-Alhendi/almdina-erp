@@ -9,11 +9,31 @@ from frappe.utils import cint, flt
 EDITABLE_ORDER_STATES = {"Draft", "Pending Review", "Rejected"}
 
 
+def _use_locked_preview(status: str) -> bool:
+    from almdina_erp.almdina_erp.services.order_edit_policy import user_can_edit_order
+
+    if status in EDITABLE_ORDER_STATES:
+        return False
+    # Order Entry keeps live preview/edit after dispatch; shop-floor stays on the snapshot.
+    return not user_can_edit_order(status)
+
+
+def _board_ready_for_plan(preview: Any) -> bool:
+    return bool(
+        str(getattr(preview, "board_description", "") or "").strip()
+        or str(getattr(preview, "board_item", "") or "").strip()
+    )
+
+
 def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = None) -> dict[str, Any]:
+    board_description = (
+        str(getattr(preview, "board_description", "") or "").strip()
+        or str(getattr(preview, "board_item", "") or "").strip()
+    )
     return {
-        "board_material": preview.board_material,
-        "board_color": preview.board_color,
-        "board_thickness_mm": preview.board_thickness_mm,
+        "board_description": board_description,
+        "board_length_cm": flt(getattr(preview, "board_length_cm", 0)),
+        "board_width_cm": flt(getattr(preview, "board_width_cm", 0)),
         "full_board_length_mm": preview.full_board_length_mm,
         "full_board_width_mm": preview.full_board_width_mm,
         "total_area_m2": preview.total_area_m2,
@@ -32,8 +52,13 @@ def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = No
         "customer_quote_status": preview.customer_quote_status,
         "packing_method": preview.packing_method,
         "packing_score": preview.packing_score,
+        "packing_mode": getattr(preview, "packing_mode", None),
         "engine_version": preview.engine_version,
         "cutting_plan_json": cutting_plan_json if cutting_plan_json is not None else preview.cutting_plan_json,
+        "system_plan_json": getattr(preview, "system_plan_json", None) or preview.cutting_plan_json,
+        "custom_plan_json": getattr(preview, "custom_plan_json", None) or "",
+        "approved_plan_source": getattr(preview, "approved_plan_source", None) or "System",
+        "approved_plan": getattr(preview, "approved_plan", None),
         "pieces": [
             {
                 "piece_no": row.piece_no,
@@ -102,7 +127,7 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
     # Once approved, never regenerate a historical production plan from the
     # current engine. Replacement Mini Plans are intentionally excluded: the
     # order's linked immutable Order Plan is the only rendering/printing source.
-    if status not in EDITABLE_ORDER_STATES and name and not name.startswith("new-"):
+    if _use_locked_preview(status) and name and not name.startswith("new-"):
         stored = frappe.get_doc("Door Cutting Order", name)
         stored.check_permission("read")
         approved_snapshot = _approved_snapshot_for_order(name)
@@ -128,7 +153,7 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         for row in (preview.pieces or [])
     )
 
-    if preview.board_item and has_complete_piece:
+    if _board_ready_for_plan(preview) and has_complete_piece:
         preview._load_board_snapshot()
 
         # The high-performance save refactor made plan calculation explicit and

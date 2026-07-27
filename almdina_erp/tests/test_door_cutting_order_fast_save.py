@@ -40,6 +40,8 @@ def test_preview_api_uses_new_explicit_plan_calculation_contract():
     assert "input_fingerprint = preview._plan_input_fingerprint(settings)" in preview
     assert "preview._calculate_cutting_plan(settings, input_fingerprint)" in preview
     assert "preview._calculate_cutting_plan()" not in preview
+    assert "_board_ready_for_plan(preview)" in preview
+    assert "preview.board_item and has_complete_piece" not in preview
 
 
 def test_edge_rates_are_loaded_in_one_batch_query():

@@ -10,6 +10,9 @@
     };
 
     function editable(frm) {
+        if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
+            return frappe.almdina.orderCanEdit(frm);
+        }
         return frm.doc.docstatus === 0 && EDITABLE_STATUSES.has(frm.doc.status || "Draft");
     }
 
@@ -109,8 +112,8 @@
             frappe.msgprint("لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج.");
             return;
         }
-        if (!frm.doc.board_item || !(frm.doc.pieces || []).length) {
-            frappe.msgprint("اختر اللوح وأدخل القياسات أولًا قبل حساب خطة القص.");
+        if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
+            frappe.msgprint("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
             return;
         }
 
@@ -185,7 +188,9 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
-        board_item(frm) { markClientPlanStale(frm); },
+        board_description(frm) { markClientPlanStale(frm); },
+        board_length_cm(frm) { markClientPlanStale(frm); },
+        board_width_cm(frm) { markClientPlanStale(frm); },
         kerf_mm(frm) { markClientPlanStale(frm); },
         trim_margin_mm(frm) { markClientPlanStale(frm); },
         packing_mode(frm) { markClientPlanStale(frm); },

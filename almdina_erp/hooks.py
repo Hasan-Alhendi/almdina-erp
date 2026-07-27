@@ -31,6 +31,7 @@ app_include_js = [
     "/assets/almdina_erp/js/order_entry_desk.js",
     # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
     "/assets/almdina_erp/js/secure_dxf_export.js",
+    "/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js",
 ]
 
 doctype_js = {
@@ -59,6 +60,8 @@ doctype_js = {
         "public/js/door_cutting_order_text_board_plan_ux.js",
         "public/js/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
+        "public/js/door_cutting_order_plan_tabs_ux.js",
+        "public/js/door_cutting_order_drawing_plan_ux.js",
         "public/js/door_cutting_order_header_ux.js",
         "public/js/shop_floor_order_ux.js",
         "public/js/secure_dxf_export.js",

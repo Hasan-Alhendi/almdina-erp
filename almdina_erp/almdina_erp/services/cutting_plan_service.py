@@ -37,7 +37,12 @@ def _remnant_material_cost(order: Any, snapshot: dict[str, Any]) -> float:
     return (area_m2 / full_area_m2 * valuation_rate) if full_area_m2 else 0.0
 
 
-def create_plan_from_order(order: Any, snapshot_override: dict[str, Any] | None = None) -> Any:
+def create_plan_from_order(
+    order: Any,
+    snapshot_override: dict[str, Any] | None = None,
+    *,
+    plan_kind: str = "Order",
+) -> Any:
     """Persist the authoritative order result as an immutable revision snapshot."""
 
     snapshot = snapshot_override or frappe.parse_json(order.cutting_plan_json or "{}") or {}
@@ -86,6 +91,7 @@ def create_plan_from_order(order: Any, snapshot_override: dict[str, Any] | None 
 
     metrics = snapshot.get("industrial_metrics") or {}
     plan = frappe.new_doc("Cutting Plan")
+    plan.plan_kind = plan_kind
     plan.door_cutting_order = order.name
     plan.revision = revision
     plan.status = "Draft"
@@ -246,24 +252,104 @@ def submit_order_for_review(order_name: str) -> dict[str, Any]:
 def approve_order(order_name: str) -> dict[str, Any]:
     require_any_role("Production Manager")
     order = frappe.get_doc("Door Cutting Order", order_name)
-    # A factory manager owns both sides of the review, so a Draft can be approved
-    # directly without passing through Pending Review first.
     if order.status not in {"Draft", "Rejected", "Pending Review"}:
         frappe.throw(_("Only Draft, Rejected or Pending Review orders can be approved."))
+    return _lock_order_for_production(order)
+
+
+@frappe.whitelist()
+def send_order_to_production(order_name: str) -> dict[str, Any]:
+    """Backward-compatible alias: dispatch no longer locks the cutting plan here."""
+    require_any_role("Order Entry", "Production Manager")
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    order.check_permission("write")
+    from almdina_erp.almdina_erp.services.shop_floor_service import assert_order_ready_for_dispatch
+
+    assert_order_ready_for_dispatch(order)
+    return {"name": order.name, "status": order.status, "ready_for_dispatch": True}
+
+
+@frappe.whitelist()
+def lock_cutting_plan(order_name: str, plan_source: str = "System") -> dict[str, Any]:
+    """Persist the current cutting plan as the immutable production snapshot.
+
+    Only the drawing department locks plans. Order creators dispatch with the
+    live calculated plan; Sharyoun keeps using that plan without this step.
+    """
+    require_any_role("عامل رسم", "Production Manager")
+    plan_source = (plan_source or "System").strip()
+    if plan_source not in {"System", "Custom"}:
+        frappe.throw(_("Unsupported plan source: {0}").format(plan_source))
+
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    order.check_permission("read")
+    if order.approved_plan:
+        frappe.throw(_("This order already has a locked cutting plan."))
+    if order.production_path != "Drawing":
+        frappe.throw(_("Only orders on the Drawing path can lock a cutting plan from the shop floor."))
+    stage_type = (
+        frappe.db.get_value("Production Stage", order.current_production_stage, "stage_type")
+        if order.current_production_stage
+        else None
+    )
+    if order.status != "At Drawing" and stage_type != "Drawing":
+        frappe.throw(_("The order must be at the Drawing department before locking the cutting plan."))
+    return _lock_order_for_production(order, preserve_status=True, plan_source=plan_source)
+
+
+def _lock_order_for_production(
+    order: Any,
+    *,
+    preserve_status: bool = False,
+    plan_source: str = "System",
+) -> dict[str, Any]:
     order.ensure_special_shapes_documented()
     order.ensure_special_prices_approved()
 
-    order.save(ignore_permissions=True)
+    plan_kind = "Order"
+    approval_snapshot: dict[str, Any]
 
-    from almdina_erp.almdina_erp.services.remnant_planning import build_approval_plan, reserve_plan_remnants
+    if plan_source == "Custom":
+        from almdina_erp.almdina_erp.services.dual_plan_fields import get_custom_plan_json
 
-    approval_snapshot = build_approval_plan(order)
-    validation = approval_snapshot.get("validation") or {}
-    if not validation.get("is_valid"):
-        frappe.throw(_("Approval plan is invalid:\n{0}").format("\n".join(validation.get("errors") or [])))
-    reserve_plan_remnants(order.name, approval_snapshot)
+        custom_raw = get_custom_plan_json(order)
+        if not custom_raw:
+            frappe.throw(_("Upload and import a revised DXF before approving the custom plan."))
+        if not order.production_dxf:
+            frappe.throw(_("Upload a revised DXF before approving the custom plan."))
+        from almdina_erp.almdina_erp.services.dxf_import_service import validate_imported_plan
 
-    plan = create_plan_from_order(order, approval_snapshot)
+        approval_snapshot = frappe.parse_json(custom_raw) or {}
+        validation = validate_imported_plan(approval_snapshot, order)
+        if not validation.get("is_valid"):
+            frappe.throw(_("Custom plan is invalid:\n{0}").format("\n".join(validation.get("errors") or [])))
+        plan_kind = "Custom DXF"
+    else:
+        if cint(order.plan_needs_recalculation) or not order.cutting_plan_json:
+            order.flags.force_cutting_plan_recalculation = True
+        order.save(ignore_permissions=True)
+
+        from almdina_erp.almdina_erp.services.remnant_planning import build_approval_plan, reserve_plan_remnants
+
+        approval_snapshot = build_approval_plan(order)
+        validation = approval_snapshot.get("validation") or {}
+        if not validation.get("is_valid"):
+            frappe.throw(_("Approval plan is invalid:\n{0}").format("\n".join(validation.get("errors") or [])))
+        reserve_plan_remnants(order.name, approval_snapshot)
+
+    from almdina_erp.almdina_erp.services.dual_plan_fields import get_system_plan_json, has_dual_plan_field
+
+    if not get_system_plan_json(order) and order.cutting_plan_json and has_dual_plan_field("system_plan_json"):
+        frappe.db.set_value(
+            "Door Cutting Order",
+            order.name,
+            "system_plan_json",
+            order.cutting_plan_json,
+            update_modified=False,
+        )
+        order.system_plan_json = order.cutting_plan_json
+
+    plan = create_plan_from_order(order, approval_snapshot, plan_kind=plan_kind)
     approve_plan(plan)
 
     from almdina_erp.almdina_erp.services.stock_service import validate_stock_for_order
@@ -271,32 +357,43 @@ def approve_order(order_name: str) -> dict[str, Any]:
     validate_stock_for_order(order.name, throw_on_shortage=True)
 
     approved_snapshot_json = plan.snapshot_json
+    update_values: dict[str, Any] = {
+        "approved_plan": plan.name,
+        "approved_plan_source": plan_source,
+        "required_boards": plan.required_boards,
+        "waste_area_m2": plan.waste_area_m2,
+        "waste_percent": plan.waste_percent,
+        "mdf_cost_usd": plan.mdf_cost_usd,
+        "cutting_cost_usd": plan.cutting_cost_usd,
+        "edge_cost_usd": plan.edge_cost_usd,
+        "total_cost_usd": plan.total_cost_usd,
+        "packing_method": plan.method_label,
+        "packing_score": _("Full boards: {0} | Waste: {1}% | Method: {2}").format(
+            plan.required_boards, plan.waste_percent, plan.method_label
+        ),
+        "cutting_plan_json": approved_snapshot_json,
+        "plan_needs_recalculation": 0,
+    }
+    if preserve_status:
+        update_values["drawing_dxf_status"] = (
+            "Approved by Drawing" if plan_source == "Custom" else (order.drawing_dxf_status or "None")
+        )
+    else:
+        update_values.update(
+            {
+                "status": "Approved",
+                "production_path": None,
+                "current_department": None,
+                "current_assignee": None,
+                "department_status": None,
+                "current_production_stage": None,
+                "drawing_dxf_status": "None",
+            }
+        )
     frappe.db.set_value(
         "Door Cutting Order",
         order.name,
-        {
-            "status": "Approved",
-            "approved_plan": plan.name,
-            "required_boards": plan.required_boards,
-            "waste_area_m2": plan.waste_area_m2,
-            "waste_percent": plan.waste_percent,
-            "mdf_cost_usd": plan.mdf_cost_usd,
-            "cutting_cost_usd": plan.cutting_cost_usd,
-            "edge_cost_usd": plan.edge_cost_usd,
-            "total_cost_usd": plan.total_cost_usd,
-            "packing_method": plan.method_label,
-            "packing_score": _("Full boards: {0} | Waste: {1}% | Method: {2}").format(
-                plan.required_boards, plan.waste_percent, plan.method_label
-            ),
-            "cutting_plan_json": approved_snapshot_json,
-            "plan_needs_recalculation": 0,
-            "production_path": None,
-            "current_department": None,
-            "current_assignee": None,
-            "department_status": None,
-            "current_production_stage": None,
-            "drawing_dxf_status": "None",
-        },
+        update_values,
         update_modified=True,
     )
 

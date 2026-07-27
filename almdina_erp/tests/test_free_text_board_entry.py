@@ -122,6 +122,34 @@ def test_invoice_and_measurement_prints_use_only_board_description_as_visible_la
     assert "PRINT_TRIGGER_SELECTOR" in source
 
 
+def test_fast_save_and_plan_controls_use_free_text_board_validation():
+    fast_save = _source(ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js")
+    plan_ux = _source(ROOT / "public" / "js" / "door_cutting_order_plan_ux.js")
+    board_ux = _source(BOARD_UX)
+    assert "function canCalculatePlan(frm)" in board_ux
+    assert "AlmdinaBoardTextUX.canCalculatePlan" in fast_save
+    assert "AlmdinaBoardTextUX.canCalculatePlan" in plan_ux
+    assert "!frm.doc.board_item" not in fast_save
+    assert "!frm.doc.board_item" not in plan_ux
+    assert "اختر اللوح وأدخل القياسات" not in fast_save
+    assert "اختر اللوح وأدخل القياسات" not in plan_ux
+
+
+def test_preview_api_serializes_free_text_board_fields_only():
+    source = _source(ROOT / "almdina_erp" / "api.py")
+    preview_block = source.split("def _serialize_order_preview", 1)[1].split(
+        "def _approved_order_plan_name", 1
+    )[0]
+    assert '"board_description"' in preview_block
+    assert '"board_length_cm"' in preview_block
+    assert '"board_width_cm"' in preview_block
+    assert "board_material" not in preview_block
+    assert "board_color" not in preview_block
+    assert "board_thickness_mm" not in preview_block
+    assert "def _board_ready_for_plan" in source
+    assert "preview.board_item and has_complete_piece" not in source
+
+
 def test_free_text_board_layers_are_loaded_after_invoice_renderers():
     hooks = _source(HOOKS)
     invoice = '"public/js/door_cutting_order_cost_invoice_ux.js"'
@@ -129,3 +157,15 @@ def test_free_text_board_layers_are_loaded_after_invoice_renderers():
     board_text = '"public/js/door_cutting_order_board_text_ux.js"'
     assert hooks.index(invoice) < hooks.index(edge_color) < hooks.index(board_text)
     assert "door_cutting_order_text_board.TextBoardDoorCuttingOrder" in hooks
+
+
+def test_cutting_plan_uses_safe_board_identity_helpers():
+    cutting_plan = _source(ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.py")
+    identity = _source(ROOT / "almdina_erp" / "services" / "order_board_identity.py")
+    assert "order_board_material" in identity
+    assert "order_board_color" in identity
+    assert "order_board_thickness_mm" in identity
+    assert "order.board_material" not in cutting_plan
+    assert "order.board_color" not in cutting_plan
+    assert "order.board_thickness_mm" not in cutting_plan
+    assert "order_board_material(order)" in cutting_plan

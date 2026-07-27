@@ -273,6 +273,8 @@
 	frappe.almdina.open_dispatch_dialog = open_dispatch_dialog;
 
 	function add_dispatch_button(frm) {
+		// Order Entry uses the workflow button on draft orders; keep this helper
+		// only for legacy approved-but-not-dispatched rows.
 		if (is_shop_floor_only()) return;
 		if (frm.is_new() || frm.doc.status !== "Approved" || !is_dispatcher()) return;
 		if (frm.doc.production_path || frm.doc.current_production_stage) return;
@@ -297,7 +299,7 @@
 		}
 
 		if (frm.doc.production_path && frm.doc.status !== "Delivered") {
-			frm.add_custom_button(__("إرجاع لحالة سابقة"), () => {
+			frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => {
 				frappe
 					.call({
 						method: "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets",
@@ -309,22 +311,22 @@
 							frappe.msgprint(__("لا توجد مراحل يمكن الرجوع إليها."));
 							return;
 						}
+						const labelToType = {};
+						const options = rows.map((row) => {
+							const label = row.label || __(row.stage_type);
+							labelToType[label] = row.stage_type;
+							return label;
+						});
 						frappe.prompt(
 							[
 								{
-									fieldname: "target_stage",
+									fieldname: "target_stage_label",
 									fieldtype: "Select",
 									label: __("المرحلة"),
-									options: rows.map((row) => `${row.name}`).join("\n"),
+									options: options.join("\n"),
 									reqd: 1,
-									description: rows
-										.map(
-											(row) =>
-												`${row.name}: ${__(row.stage_type)} (${__(row.status)}) → ${
-													row.assigned_to || "-"
-												}`
-										)
-										.join(" | "),
+									default: options[0],
+									description: __("اختر المرحلة بالاسم للعودة إليها."),
 								},
 							],
 							(values) =>
@@ -332,12 +334,12 @@
 									"almdina_erp.almdina_erp.services.shop_floor_service.revert_department",
 									{
 										order_name: frm.doc.name,
-										target_stage: values.target_stage,
+										target_stage_type: labelToType[values.target_stage_label] || values.target_stage_label,
 									},
 									__("تم إرجاع الطلب للمرحلة المحددة."),
 									frm
 								),
-							__("إرجاع لحالة سابقة"),
+							__("إرجاع لمرحلة سابقة"),
 							__("إرجاع")
 						);
 					});
@@ -353,6 +355,36 @@
 		if (!atDrawing) return;
 
 		if (has_role("عامل رسم") || has_role("Production Manager")) {
+			if (!frm.doc.approved_plan) {
+				frm.add_custom_button(__("اعتماد خطة النظام"), () => {
+					frappe.confirm(
+						__("سيتم اعتماد خطة النظام الحالية كنسخة إنتاج ثابتة. هل تريد المتابعة؟"),
+						() =>
+							call_action(
+								"almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan",
+								{ order_name: frm.doc.name, plan_source: "System" },
+								__("تم اعتماد خطة النظام."),
+								frm
+							)
+					);
+				}, __("الرسم / DXF"));
+
+				if (frm.doc.custom_plan_json && frm.doc.production_dxf) {
+					frm.add_custom_button(__("اعتماد الخطة المرفوعة"), () => {
+						frappe.confirm(
+							__("سيتم اعتماد الخطة المستوردة من DXF كنسخة إنتاج ثابتة. هل تريد المتابعة؟"),
+							() =>
+								call_action(
+									"almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan",
+									{ order_name: frm.doc.name, plan_source: "Custom" },
+									__("تم اعتماد الخطة المرفوعة."),
+									frm
+								)
+						);
+					}, __("الرسم / DXF"));
+				}
+			}
+
 			// Prefer the validated AutoCAD exporter when available.
 			frm.add_custom_button(__("تصدير DXF للرسم"), () => {
 				const exporter = frappe.almdina && frappe.almdina.export_order_dxf;
@@ -389,18 +421,28 @@
 				});
 			}, __("الرسم / DXF"));
 
-			if (frm.doc.production_dxf && frm.doc.drawing_dxf_status !== "Approved by Drawing") {
+			if (frm.doc.custom_plan_json && frm.doc.production_dxf && frm.doc.drawing_dxf_status !== "Approved by Drawing") {
 				frm.add_custom_button(__("اعتماد الرسم"), () => {
-					frappe.confirm(__("اعتماد ملف DXF الحالي كمصدر للـ CNC؟"), () =>
+					frappe.confirm(__("اعتماد الخطة المرفوعة من DXF كمصدر للإنتاج؟"), () =>
 						call_action(
 							"almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf",
 							{ order_name: frm.doc.name },
-							__("تم اعتماد الرسم."),
+							__("تم اعتماد الخطة المرفوعة."),
 							frm
 						)
 					);
 				}, __("الرسم / DXF"));
 			}
+
+			frm.add_custom_button(__("طباعة خطة القص"), () => {
+				if (window.AlmdinaDrawingPlanUX && window.AlmdinaDrawingPlanUX.printActivePlan) {
+					window.AlmdinaDrawingPlanUX.printActivePlan(frm);
+					return;
+				}
+				if (window.AlmdinaCuttingPlanRender && window.AlmdinaCuttingPlanRender.print) {
+					window.AlmdinaCuttingPlanRender.print(frm);
+				}
+			}, __("الرسم / DXF"));
 		}
 
 		if (frm.doc.production_dxf && (has_role("عامل CNC") || has_role("عامل رسم") || is_dispatcher())) {
@@ -418,19 +460,27 @@
 			assignedToMe || has_role("Production Manager") || has_role("System Manager");
 		if (!canOperate) return;
 
-		if (frm.doc.department_status === "بحاجة للعمل") {
-			frm.add_custom_button(__("بدء العمل"), () => {
-				call_action(
-					"almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
-					{ stage_name: stageName },
-					__("تم بدء العمل."),
-					frm
-				);
-			}, __("صالة الإنتاج"));
-		}
+		frappe.db.get_value("Production Stage", stageName, ["status", "stage_type"]).then((r) => {
+			const stageStatus = (r.message && r.message.status) || "";
+			const stageType = (r.message && r.message.stage_type) || frm.doc.current_department;
 
-		if (frm.doc.department_status === "قيد العمل") {
-			const isSanding = frm.doc.current_department === "تقشيط";
+			if (stageStatus === "Pending") {
+				frm.add_custom_button(__("بدء العمل"), () => {
+					call_action(
+						"almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
+						{ stage_name: stageName },
+						__("تم بدء العمل."),
+						frm
+					);
+				}, __("صالة الإنتاج"));
+				return;
+			}
+
+			if (!["In Progress", "Paused"].includes(stageStatus)) {
+				return;
+			}
+
+			const isSanding = stageType === "Sanding" || frm.doc.current_department === "تقشيط";
 			frm.add_custom_button(isSanding ? __("جاهزة للتسليم") : __("إرسال للقسم التالي"), () => {
 				if (isSanding) {
 					frappe.confirm(__("تأكيد إنهاء التقشيط؟"), () =>
@@ -475,7 +525,7 @@
 						);
 					});
 			}, __("صالة الإنتاج"));
-		}
+		});
 	}
 
 	frappe.ui.form.on("Door Cutting Order", {

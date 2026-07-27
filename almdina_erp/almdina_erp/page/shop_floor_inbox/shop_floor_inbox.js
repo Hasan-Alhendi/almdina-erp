@@ -181,6 +181,151 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function has_custom_plan(d) {
+		if (!d || !d.custom_plan_json) return false;
+		try {
+			const plan = typeof d.custom_plan_json === "object" ? d.custom_plan_json : JSON.parse(d.custom_plan_json);
+			return Boolean(plan && plan.sheets && plan.sheets.length);
+		} catch (error) {
+			return false;
+		}
+	}
+
+	function empty_custom_plan_html() {
+		return `<div style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${__(
+			"لا يوجد خطة مرفوعة"
+		)}</div>`;
+	}
+
+	function build_plan_tabs_html(d) {
+		if (!d.show_dual_tabs) {
+			return d.cutting_plan_html || `<div class="text-muted">${__("لا توجد خطة قص للعرض.")}</div>`;
+		}
+		const approved = d.approved_plan_source || "System";
+		const badge = (tab) =>
+			d.approved_plan && approved === tab
+				? '<span style="margin-right:6px;font-size:10px;background:#15803d;color:#fff;border-radius:999px;padding:2px 8px;">معتمدة للإنتاج</span>'
+				: "";
+		const active = d.active_plan_source === "Custom" && has_custom_plan(d) ? "Custom" : "System";
+		const systemHtml = d.system_plan_html || `<div class="text-muted">${__("لا توجد خطة نظام.")}</div>`;
+		const customHtml = has_custom_plan(d) ? d.custom_plan_html || empty_custom_plan_html() : empty_custom_plan_html();
+		return `
+			<div class="dco-drawing-plan-inbox-host"></div>
+			<div class="almdina-sf-plan-tabs" data-active-tab="${active}">
+				<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+					<button type="button" class="btn btn-sm btn-default sf-plan-tab ${active === "System" ? "btn-primary" : ""}" data-plan-tab="System">
+						${badge("System")}${__("خطة النظام")}
+					</button>
+					<button type="button" class="btn btn-sm btn-default sf-plan-tab ${active === "Custom" ? "btn-primary" : ""}" data-plan-tab="Custom">
+						${badge("Custom")}${__("الخطة المرفوعة")}
+					</button>
+				</div>
+				<div class="sf-plan-tab-panel" data-plan-panel="System" style="${active === "System" ? "" : "display:none;"}">${systemHtml}</div>
+				<div class="sf-plan-tab-panel" data-plan-panel="Custom" style="${active === "Custom" ? "" : "display:none;"}">${customHtml}</div>
+			</div>
+		`;
+	}
+
+	function bind_plan_tabs($detail, d) {
+		$detail.find(".sf-plan-tab").on("click", function onTab() {
+			const tab = $(this).attr("data-plan-tab");
+			$detail.find(".sf-plan-tab").removeClass("btn-primary");
+			$(this).addClass("btn-primary");
+			$detail.find(".sf-plan-tab-panel").hide();
+			$detail.find(`[data-plan-panel="${tab}"]`).show();
+			$detail.find(".almdina-sf-plan-tabs").attr("data-active-tab", tab);
+		});
+		$detail.find(".print-plan").on("click", () => {
+			const tab = $detail.find(".almdina-sf-plan-tabs").attr("data-active-tab") || "System";
+			const html =
+				tab === "Custom"
+					? has_custom_plan(d)
+						? d.custom_plan_html
+						: ""
+					: d.system_plan_html || d.cutting_plan_html;
+			if (!html) {
+				frappe.msgprint(__("لا يوجد مخطط قص للطباعة."));
+				return;
+			}
+			const win = window.open("", "_blank");
+			if (!win) {
+				frappe.msgprint(__("المتصفح منع فتح نافذة الطباعة."));
+				return;
+			}
+			win.document.open();
+			win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(
+				__("خطة قص")
+			)}</title><style>@page{size:A4 portrait;margin:6mm}body{font-family:Arial,Tahoma,sans-serif;direction:rtl;padding:5mm}</style></head><body>${html}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},700);};<\/script></body></html>`);
+			win.document.close();
+		});
+	}
+
+	function resolveStageContext(d, meta) {
+		return {
+			order: d.name || meta.order,
+			stage: d.active_stage_name || d.current_production_stage || meta.stage,
+			status: d.active_stage_status || meta.status,
+			stageType: d.current_stage_type || meta.stageType,
+			next: d.can_handoff_to || meta.next,
+		};
+	}
+
+	function buildDetailActionsHtml(d, meta) {
+		const ctx = resolveStageContext(d, meta);
+		const canStart = mode === "inbox" && Boolean(d.can_start_stage);
+		const canHandoff = mode === "inbox" && Boolean(d.can_handoff_stage);
+		const isSanding = ctx.stageType === "Sanding";
+
+		let actions = `<button type="button" class="btn btn-default back-to-list">${__("رجوع")}</button>`;
+		if (canStart) {
+			actions += ` <button type="button" class="btn btn-primary start-stage">${__("بدء العمل")}</button>`;
+		}
+		if (canHandoff) {
+			actions += ` <button type="button" class="btn btn-success handoff-stage">${
+				isSanding ? __("جاهزة للتسليم") : __("إرسال للقسم التالي")
+			}</button>`;
+		}
+		if (ctx.stageType === "Drawing" && mode === "inbox" && can_export_dxf()) {
+			actions += ` <button type="button" class="btn btn-default export-dxf">${__(
+				"تصدير DXF للتعديل"
+			)}</button>`;
+			actions += ` <button type="button" class="btn btn-default upload-dxf">${__("رفع DXF")}</button>`;
+			actions += ` <button type="button" class="btn btn-default print-plan">${__("طباعة خطة القص")}</button>`;
+			if (!d.approved_plan) {
+				actions += ` <button type="button" class="btn btn-primary approve-system-plan">${__(
+					"اعتماد خطة النظام"
+				)}</button>`;
+			}
+			if (has_custom_plan(d) && d.production_dxf && d.drawing_dxf_status !== "Approved by Drawing") {
+				actions += ` <button type="button" class="btn btn-primary approve-dxf">${__(
+					"اعتماد الخطة المرفوعة"
+				)}</button>`;
+			}
+		}
+		return actions;
+	}
+
+	function stageStatusLabel(d, meta) {
+		const ctx = resolveStageContext(d, meta);
+		if (d.department_status) return d.department_status;
+		return status_label(ctx.status);
+	}
+
+	function bindDetailActions($detail, d, meta) {
+		const ctx = resolveStageContext(d, meta);
+		meta = { ...meta, ...ctx };
+		$detail.find(".back-to-list").on("click", () => {
+			$detail.hide().empty();
+			$content.find(".almdina-sf-list-title, .almdina-sf-list").show();
+		});
+		$detail.find(".start-stage").on("click", () => start_stage(meta));
+		$detail.find(".handoff-stage").on("click", () => handoff_stage(meta));
+		$detail.find(".export-dxf").on("click", () => export_dxf(meta.order));
+		$detail.find(".upload-dxf").on("click", () => upload_dxf(meta.order));
+		$detail.find(".approve-dxf").on("click", () => approve_dxf(meta.order));
+		$detail.find(".approve-system-plan").on("click", () => approve_system_plan(meta.order));
+	}
+
 	function open_detail(meta) {
 		selectedOrder = meta.order;
 		selectedStage = meta.stage;
@@ -195,33 +340,14 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 			})
 			.then((r) => {
 				const d = r.message || {};
-				const canStart = mode === "inbox" && meta.status === "Pending";
-				const canHandoff = mode === "inbox" && ["In Progress", "Paused"].includes(meta.status);
-				const isSanding = meta.stageType === "Sanding";
+				const actions = buildDetailActionsHtml(d, meta);
+				const ctx = resolveStageContext(d, meta);
+				meta = { ...meta, ...ctx };
 				const showDxf =
 					Boolean(d.production_dxf) &&
-					(meta.stageType === "Drawing" ||
-						meta.stageType === "CNC" ||
+					(ctx.stageType === "Drawing" ||
+						ctx.stageType === "CNC" ||
 						d.drawing_dxf_status === "Approved by Drawing");
-
-				let actions = `<button type="button" class="btn btn-default back-to-list">${__("رجوع")}</button>`;
-				if (canStart) {
-					actions += ` <button type="button" class="btn btn-primary start-stage">${__("بدء العمل")}</button>`;
-				}
-				if (canHandoff) {
-					actions += ` <button type="button" class="btn btn-success handoff-stage">${
-						isSanding ? __("جاهزة للتسليم") : __("إرسال للقسم التالي")
-					}</button>`;
-				}
-				if (meta.stageType === "Drawing" && mode === "inbox" && can_export_dxf()) {
-					actions += ` <button type="button" class="btn btn-default export-dxf">${__(
-						"تصدير DXF للتعديل"
-					)}</button>`;
-					actions += ` <button type="button" class="btn btn-default upload-dxf">${__("رفع DXF")}</button>`;
-					if (d.production_dxf && d.drawing_dxf_status !== "Approved by Drawing") {
-						actions += ` <button type="button" class="btn btn-primary approve-dxf">${__("اعتماد الرسم")}</button>`;
-					}
-				}
 
 				$detail.html(`
 					<div class="frappe-card" style="padding:14px;border-radius:14px">
@@ -229,10 +355,8 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 							<h3 class="almdina-sf-detail-title">${esc(d.name || meta.order)}</h3>
 							<div class="text-muted">${esc(d.customer || "")}</div>
 							<div style="font-size:13px;margin-top:4px">${__("القسم")}: <b>${esc(
-								d.current_department || meta.stageType || ""
-							)}</b> · ${__("الحالة")}: <b>${esc(
-					d.department_status || status_label(meta.status)
-				)}</b></div>
+								d.current_department || ctx.stageType || ""
+							)}</b> · ${__("الحالة")}: <b>${esc(stageStatusLabel(d, meta))}</b></div>
 						</div>
 						<div class="almdina-sf-actions">${actions}</div>
 						${
@@ -250,34 +374,60 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 						}
 						<div style="margin:8px 0 10px"><b>${__("خطة القص والرسومات")}</b></div>
 						<div class="almdina-sf-plan-wrap cutting-plan-wrap">
-							${d.cutting_plan_html || `<div class="text-muted">${__("لا توجد خطة قص للعرض.")}</div>`}
+							${build_plan_tabs_html(d)}
 						</div>
 					</div>
 				`);
 
-				$detail.find(".back-to-list").on("click", () => {
-					$detail.hide().empty();
-					$content.find(".almdina-sf-list-title, .almdina-sf-list").show();
-				});
-				$detail.find(".start-stage").on("click", () => start_stage(meta.stage));
-				$detail.find(".handoff-stage").on("click", () => handoff_stage(meta));
-				$detail.find(".export-dxf").on("click", () => export_dxf(meta.order));
-				$detail.find(".upload-dxf").on("click", () => upload_dxf(meta.order));
-				$detail.find(".approve-dxf").on("click", () => approve_dxf(meta.order));
+				bindDetailActions($detail, d, meta);
+				bind_plan_tabs($detail, d);
+				if (window.AlmdinaDrawingPlanUX && window.AlmdinaDrawingPlanUX.renderInboxPanel) {
+					const refreshInboxPlan = (preview) => {
+						if (preview) {
+							if (preview.system_plan_json) d.system_plan_json = preview.system_plan_json;
+							if (preview.cutting_plan_json) d.cutting_plan_json = preview.cutting_plan_json;
+							if (preview.packing_mode) d.packing_mode = preview.packing_mode;
+						}
+						return frappe
+							.call({
+								method: "almdina_erp.almdina_erp.services.shop_floor_service.get_order_shop_floor_detail",
+								args: { order_name: meta.order },
+							})
+							.then((response) => {
+								const fresh = response.message || {};
+								Object.assign(d, fresh);
+								$detail.find(".almdina-sf-plan-wrap").html(build_plan_tabs_html(d));
+								bind_plan_tabs($detail, d);
+								window.AlmdinaDrawingPlanUX.renderInboxPanel(
+									$detail.find(".dco-drawing-plan-inbox-host"),
+									meta,
+									d,
+									refreshInboxPlan
+								);
+							});
+					};
+					window.AlmdinaDrawingPlanUX.renderInboxPanel(
+						$detail.find(".dco-drawing-plan-inbox-host"),
+						meta,
+						d,
+						refreshInboxPlan
+					);
+				}
 			});
 	}
 
-	function start_stage(stage) {
+	function start_stage(meta) {
 		frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
-				args: { stage_name: stage },
+				args: { stage_name: meta.stage },
 				freeze: true,
 				freeze_message: __("بدء العمل..."),
 			})
 			.then(() => {
 				frappe.show_alert({ message: __("تم بدء العمل."), indicator: "green" });
 				load();
+				open_detail({ ...meta, status: "In Progress" });
 			});
 	}
 
@@ -327,12 +477,14 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 								freeze: true,
 							})
 							.then(() => {
-								frappe.show_alert({
-									message: __("تم إرسال الطلب للقسم التالي."),
-									indicator: "green",
-								});
-								load();
-							}),
+						frappe.show_alert({
+							message: __("تم إرسال الطلب للقسم التالي."),
+							indicator: "green",
+						});
+						load();
+						$content.find(".shop-floor-detail").hide().empty();
+						$content.find(".almdina-sf-list-title, .almdina-sf-list").show();
+					}),
 					__("إرسال للقسم التالي"),
 					__("إرسال")
 				);
@@ -378,8 +530,29 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 		});
 	}
 
+	function approve_system_plan(orderName) {
+		frappe.confirm(__("اعتماد خطة النظام الحالية كنسخة إنتاج ثابتة؟"), () =>
+			frappe
+				.call({
+					method: "almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan",
+					args: { order_name: orderName, plan_source: "System" },
+					freeze: true,
+				})
+				.then(() => {
+					frappe.show_alert({ message: __("تم اعتماد خطة النظام."), indicator: "green" });
+					open_detail({
+						order: selectedOrder,
+						stage: selectedStage,
+						status: "In Progress",
+						stageType: "Drawing",
+						next: "CNC",
+					});
+				})
+		);
+	}
+
 	function approve_dxf(orderName) {
-		frappe.confirm(__("اعتماد ملف DXF الحالي كمصدر للـ CNC؟"), () =>
+		frappe.confirm(__("اعتماد الخطة المرفوعة من DXF كمصدر للإنتاج؟"), () =>
 			frappe
 				.call({
 					method: "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf",
@@ -387,7 +560,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 					freeze: true,
 				})
 				.then(() => {
-					frappe.show_alert({ message: __("تم اعتماد الرسم."), indicator: "green" });
+					frappe.show_alert({ message: __("تم اعتماد الخطة المرفوعة."), indicator: "green" });
 					open_detail({
 						order: selectedOrder,
 						stage: selectedStage,

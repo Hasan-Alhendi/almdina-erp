@@ -42,19 +42,16 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
     assert "patchInvoiceMeta" not in source
 
 
-def test_customer_print_contains_edge_color_in_header_only():
-    source = _source(EDGE_COLOR_UX)
-    print_section = source.split("function printHtml(frm)", 1)[1].split(
-        "function printCustomerInvoice(frm)", 1
-    )[0]
-    assert "printCustomerInvoice(frm)" in source
-    assert "measurementTable.outerHTML" in source
-    assert "invoiceTable.outerHTML" in source
-    assert 'const edgeColor = orderEdgeColor(frm)' in print_section
-    assert '<div><b>لون القشاط</b>${esc(edgeColor)}</div>' in print_section
-    assert "grid-template-columns:repeat(5" in print_section
-    assert 'document.createElement("iframe")' in source
-    assert 'event.stopImmediatePropagation()' in source
+def test_customer_print_uses_single_invoice_renderer_from_cost_tab():
+    cost = _source(ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js")
+    edge = _source(EDGE_COLOR_UX)
+    assert "function invoiceTotal(frm)" in cost
+    assert "invoiceLines(frm).reduce" in cost
+    assert "board_rate_usd(frm) { scheduleRender(frm); }" in cost
+    assert "cutting_cost_per_board_usd(frm) { scheduleRender(frm); }" in cost
+    assert "printInvoice," in cost
+    assert "function printHtml(frm)" not in edge
+    assert "event.stopImmediatePropagation()" not in edge
 
 
 def test_measurement_print_and_standalone_header_contain_edge_color():

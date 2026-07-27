@@ -66,3 +66,10 @@ def test_legacy_workflow_exporter_is_identifiable_for_removal():
     secure = _source(SECURE_DXF)
     assert 'frm.add_custom_button("تصدير DXF"' in workflow
     assert 'text === "تصدير DXF" || text === "Export DXF"' in secure
+
+
+def test_dxf_import_service_is_wired_for_round_trip():
+    importer = ROOT / "almdina_erp" / "services" / "dxf_import_service.py"
+    src = _source(importer)
+    assert "def parse_production_dxf" in src
+    assert "_parse_r12_lines" in src

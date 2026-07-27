@@ -45,6 +45,9 @@
     }
 
     function isEditable(frm) {
+        if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
+            return frappe.almdina.orderCanEdit(frm);
+        }
         return frm.doc.docstatus === 0 && EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft");
     }
 
@@ -203,17 +206,20 @@
     function renderBoardSummary(frm) {
         const field = frm.fields_dict.board_summary_html;
         if (!field || !field.$wrapper) return;
-        if (!frm.doc.board_item) {
-            field.$wrapper.html(`<div class="dco-fast-entry-toolbar" style="margin-top:10px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px">${isArabic() ? "اختر صنف اللوح أولًا، وستظهر هنا المادة واللون والسماكة والمقاس تلقائيًا." : "Select a board item to load its material, color, thickness and size."}</div>`);
+        const boardDescription = String(frm.doc.board_description || "").trim();
+        if (!boardDescription) {
+            field.$wrapper.html(`<div class="dco-fast-entry-toolbar" style="margin-top:10px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px">${isArabic() ? "أدخل صنف اللوح ومقاساته أولًا." : "Enter the board description and dimensions first."}</div>`);
             return;
         }
-        const dimensions = frm.doc.full_board_width_mm && frm.doc.full_board_length_mm
-            ? `${frm.doc.full_board_width_mm} × ${frm.doc.full_board_length_mm} ${isArabic() ? "مم" : "mm"}`
-            : "—";
+        const lengthCm = Number(frm.doc.board_length_cm || 0);
+        const widthCm = Number(frm.doc.board_width_cm || 0);
+        const dimensions = lengthCm > 0 && widthCm > 0
+            ? `${widthCm} × ${lengthCm} ${isArabic() ? "سم" : "cm"}`
+            : (frm.doc.full_board_width_mm && frm.doc.full_board_length_mm
+                ? `${frm.doc.full_board_width_mm} × ${frm.doc.full_board_length_mm} ${isArabic() ? "مم" : "mm"}`
+                : "—");
         const tiles = [
-            [__("Board Material"), frm.doc.board_material || "—"],
-            [__("Board Color"), frm.doc.board_color || "—"],
-            [__("Board Thickness (MM)"), frm.doc.board_thickness_mm ? `${frm.doc.board_thickness_mm} ${isArabic() ? "مم" : "mm"}` : "—"],
+            [isArabic() ? "صنف اللوح" : "Board Item", boardDescription],
             [isArabic() ? "المقاس الكامل للوح" : "Full Board Size", dimensions],
         ];
         field.$wrapper.html(`<div class="dco-board-summary">${tiles.map(([label,value]) => `<div class="dco-summary-tile"><span class="dco-label">${escapeHtml(label)}</span><span class="dco-value">${escapeHtml(value)}</span></div>`).join("")}</div>`);

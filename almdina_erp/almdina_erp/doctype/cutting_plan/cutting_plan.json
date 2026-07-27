@@ -14,7 +14,7 @@
   ],
   "fields": [
     {"default":"CP-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"CP-.YYYY.-.#####","reqd":1},
-    {"default":"Order","fieldname":"plan_kind","fieldtype":"Select","in_list_view":1,"label":"Plan Kind","options":"Order\nReplacement","read_only":1,"reqd":1},
+    {"default":"Order","fieldname":"plan_kind","fieldtype":"Select","in_list_view":1,"label":"Plan Kind","options":"Order\nReplacement\nCustom DXF","read_only":1,"reqd":1},
     {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
     {"fieldname":"replacement_piece","fieldtype":"Link","in_list_view":1,"label":"Replacement Piece","options":"Replacement Piece","read_only":1},
     {"default":"1","fieldname":"revision","fieldtype":"Int","in_list_view":1,"label":"Revision","read_only":1},

@@ -91,13 +91,11 @@ class FastDoorCuttingOrder(BaseDoorCuttingOrder):
         if self.is_new() or self.flags.get("allow_approved_edit"):
             return
         old = self._old_header()
-        if old and old.status not in _EDITABLE_STATES:
-            frappe.throw(
-                _(
-                    "Order {0} is already approved or in production and cannot be edited/recalculated in place. "
-                    "Create a controlled revision instead."
-                ).format(self.name)
-            )
+        if not old:
+            return
+        from almdina_erp.almdina_erp.services.order_edit_policy import enforce_order_immutability_on_save
+
+        enforce_order_immutability_on_save(self, old)
 
     @staticmethod
     def _drawing_token(raw: Any) -> str:
@@ -398,7 +396,7 @@ class FastDoorCuttingOrder(BaseDoorCuttingOrder):
         self.calculated_plan_input_hash = input_fingerprint
         self.calculated_plan_metadata_hash = metadata_fingerprint
         self.plan_needs_recalculation = 0
-        self.cutting_plan_json = frappe.as_json(snapshot)
+        self._set_cutting_plan_json(snapshot)
         self._refresh_costs_from_plan(settings, snapshot)
 
     def _calculate_cutting_plan(self, settings: Any, input_fingerprint: str) -> None:

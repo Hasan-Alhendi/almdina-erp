@@ -94,6 +94,7 @@ def sync_setup() -> None:
     seed_default_routing()
     seed_settings_defaults()
     sync_plan_recalculation_state()
+    sync_dual_plan_json_backfill()
 
 
 def after_install() -> None:
@@ -310,3 +311,22 @@ def sync_plan_recalculation_state() -> None:
         # Fresh installs/migrations may invoke setup before every metadata cache is
         # available. The normal document save path still sets the correct value.
         frappe.log_error(frappe.get_traceback(), "Almdina plan freshness backfill")
+
+
+def sync_dual_plan_json_backfill() -> None:
+    """Copy existing cutting plans into system_plan_json after the dual-plan fields land."""
+    try:
+        if not frappe.db.table_exists("Door Cutting Order"):
+            return
+        if not frappe.db.has_column("Door Cutting Order", "system_plan_json"):
+            return
+        frappe.db.sql(
+            """
+            update `tabDoor Cutting Order`
+               set system_plan_json = cutting_plan_json
+             where coalesce(system_plan_json, '') = ''
+               and coalesce(cutting_plan_json, '') <> ''
+            """
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Almdina dual-plan JSON backfill")

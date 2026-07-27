@@ -292,20 +292,78 @@ def _strict_editable_snapshot(payload: dict[str, Any]) -> tuple[Any, dict[str, A
     if not validation.get("is_valid") or errors:
         frappe.throw(_("DXF export blocked by geometry validation:\n{0}").format("\n".join(errors)))
 
+    snapshot = _enrich_export_snapshot(snapshot, doc)
+    return doc, snapshot
+
+
+def _enrich_export_snapshot(snapshot: dict[str, Any], order: Any) -> dict[str, Any]:
     for sheet in snapshot.get("sheets") or []:
         sheet.setdefault("source_type", "Full Board")
         sheet.setdefault("remnant", None)
-        sheet.setdefault("board_item", doc.board_item)
-        sheet.setdefault("material", doc.board_material or "")
-        sheet.setdefault("color", doc.board_color or "")
-        sheet.setdefault("thickness_mm", flt(doc.board_thickness_mm))
+        sheet.setdefault("board_item", order.board_item)
+        sheet.setdefault("material", getattr(order, "board_material", None) or "")
+        sheet.setdefault("color", getattr(order, "board_color", None) or "")
+        sheet.setdefault("thickness_mm", flt(getattr(order, "board_thickness_mm", 0)))
         sheet.setdefault("full_width_cm", flt(snapshot.get("full_board_width_cm")))
         sheet.setdefault("full_length_cm", flt(snapshot.get("full_board_length_cm")))
         sheet.setdefault("usable_width_cm", flt(snapshot.get("usable_board_width_cm")))
         sheet.setdefault("usable_length_cm", flt(snapshot.get("usable_board_length_cm")))
         sheet.setdefault("source_area_m2", flt(sheet.get("w")) * flt(sheet.get("h")) / 10000)
     snapshot["required_full_boards"] = len(snapshot.get("sheets") or [])
-    return doc, snapshot
+    return snapshot
+
+
+def _validate_snapshot_for_export(snapshot: dict[str, Any]) -> None:
+    validation = snapshot.get("validation") or {}
+    errors = list(validation.get("errors") or [])
+    if snapshot.get("unplaced"):
+        errors.append(_("Cutting Plan contains unplaced pieces."))
+    if not snapshot.get("sheets"):
+        frappe.throw(_("The order does not have a cutting plan to export."))
+    if not validation.get("is_valid") or errors:
+        frappe.throw(_("DXF export blocked by geometry validation:\n{0}").format("\n".join(errors)))
+
+
+def _stored_order_export_snapshot(order: Any) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.services.dual_plan_fields import get_system_plan_json
+
+    raw = get_system_plan_json(order)
+    if not raw:
+        frappe.throw(_("The order does not have a cutting plan to export."))
+    snapshot = frappe.parse_json(raw) or {}
+    _validate_snapshot_for_export(snapshot)
+    return _enrich_export_snapshot(snapshot, order)
+
+
+def _manifest_from_order_snapshot(order: Any, snapshot: dict[str, Any], *, plan_kind: str) -> dict[str, Any]:
+    return {
+        "order": order.name,
+        "customer": order.customer,
+        "revision": cint(order.revision or 1),
+        "cutting_plan": order.approved_plan,
+        "plan_kind": plan_kind,
+        "units": "mm",
+        "engine_version": snapshot.get("engine_version"),
+        "method_key": snapshot.get("method_key"),
+        "method_label": snapshot.get("method_label"),
+        "sheet_count": len(snapshot.get("sheets") or []),
+        "sources": [
+            {
+                "sheet_no": int(sheet.get("sheet_no") or index + 1),
+                "source_type": sheet.get("source_type") or "Full Board",
+                "remnant": sheet.get("remnant"),
+                "board_item": order.board_item,
+                "material": sheet.get("material") or getattr(order, "board_material", None) or "",
+                "color": sheet.get("color") or getattr(order, "board_color", None) or "",
+                "thickness_mm": flt(sheet.get("thickness_mm") or getattr(order, "board_thickness_mm", 0)),
+                "full_width_mm": flt(sheet.get("full_width_cm")) * 10,
+                "full_length_mm": flt(sheet.get("full_length_cm")) * 10,
+                "usable_width_mm": flt(sheet.get("usable_width_cm")) * 10,
+                "usable_length_mm": flt(sheet.get("usable_length_cm")) * 10,
+            }
+            for index, sheet in enumerate(snapshot.get("sheets") or [])
+        ],
+    }
 
 
 @frappe.whitelist()
@@ -352,6 +410,12 @@ def get_validated_dxf_plan(
                 ],
             }
             return {"plan": snapshot, "manifest": manifest}
+
+        snapshot = _stored_order_export_snapshot(order)
+        return {
+            "plan": snapshot,
+            "manifest": _manifest_from_order_snapshot(order, snapshot, plan_kind="System Plan"),
+        }
 
     if doc is None:
         frappe.throw(_("Editable DXF export requires the current Door Cutting Order document payload."))

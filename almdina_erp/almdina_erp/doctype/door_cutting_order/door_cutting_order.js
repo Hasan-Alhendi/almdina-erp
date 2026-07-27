@@ -66,9 +66,9 @@
         if (!data) return;
 
         [
-            "board_material",
-            "board_color",
-            "board_thickness_mm",
+            "board_description",
+            "board_length_cm",
+            "board_width_cm",
             "full_board_length_mm",
             "full_board_width_mm",
             "total_area_m2",
@@ -412,10 +412,15 @@
     }
 
     function render_cutting_plan(frm) {
-        const plan = parse_plan(frm);
         const wrapper = frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper;
         if (!wrapper) return;
 
+        if (window.AlmdinaPlanTabsUX && window.AlmdinaPlanTabsUX.shouldShowPlanTabs(frm)) {
+            window.AlmdinaPlanTabsUX.renderDualTabs(frm);
+            return;
+        }
+
+        const plan = parse_plan(frm);
         if (!plan || !plan.sheets || !plan.sheets.length) {
             wrapper.empty();
             return;
@@ -863,6 +868,9 @@
         },
 
         customer: schedule_recalculate,
+        board_description: schedule_recalculate,
+        board_length_cm: schedule_recalculate,
+        board_width_cm: schedule_recalculate,
         board_item: schedule_recalculate,
         board_rate_usd: schedule_recalculate,
         default_edge_type: schedule_recalculate,
@@ -894,4 +902,9 @@
         clipped_corner_length_cm: schedule_recalculate,
         notes: schedule_recalculate
     });
+    window.AlmdinaCuttingPlanRender = {
+        build: build_cutting_plan_html,
+        parse: parse_plan,
+        print: print_cutting_plan,
+    };
 })();

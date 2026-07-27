@@ -17,7 +17,7 @@
     "plan_result_section","plan_controls_intro",
     "plan_section","cutting_plan_html",
     "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","material_variance_cost_usd","internal_loss_cost_usd","actual_cost_usd",
-    "technical_section","packing_method","packing_score","engine_version","cutting_plan_json",
+    "technical_section","packing_method","packing_score","engine_version","cutting_plan_json","system_plan_json","custom_plan_json","approved_plan_source",
     "shop_floor_section","production_path","current_department","shop_floor_column","current_assignee","department_status","current_production_stage","production_dxf","drawing_dxf_status",
     "cost_tab","order_cost_invoice_html",
     "status","revision","approved_plan","board_item","full_board_length_mm","full_board_width_mm"
@@ -91,6 +91,9 @@
     {"fieldname":"calculated_plan_input_hash","fieldtype":"Data","hidden":1,"label":"Calculated Plan Input Hash","read_only":1},
     {"fieldname":"calculated_plan_metadata_hash","fieldtype":"Data","hidden":1,"label":"Calculated Plan Metadata Hash","read_only":1},
     {"fieldname":"cutting_plan_json","fieldtype":"Long Text","hidden":1,"label":"Cutting Plan JSON","read_only":1},
+    {"fieldname":"system_plan_json","fieldtype":"Long Text","hidden":1,"label":"System Plan JSON","read_only":1},
+    {"fieldname":"custom_plan_json","fieldtype":"Long Text","hidden":1,"label":"Custom Plan JSON","read_only":1},
+    {"default":"System","fieldname":"approved_plan_source","fieldtype":"Select","hidden":1,"label":"Approved Plan Source","options":"System\nCustom","read_only":1},
     {"collapsible":1,"fieldname":"shop_floor_section","fieldtype":"Section Break","label":"Shop Floor Tracking"},
     {"fieldname":"production_path","fieldtype":"Select","in_list_view":1,"label":"Production Path","options":"\nSharyoun\nDrawing","read_only":1},
     {"fieldname":"current_department","fieldtype":"Select","in_list_view":1,"label":"Current Department","options":"\nشريون\nرسم\nCNC\nتقشيط\nجاهز للتسليم\nتم التسليم\nتسليم","read_only":1},

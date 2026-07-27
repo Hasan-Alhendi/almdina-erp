@@ -1,9 +1,28 @@
 (() => {
     "use strict";
 
+    const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
+    const LOCKED = new Set(["Delivered", "Cancelled"]);
+
     function has_role(role) {
         return (frappe.user_roles || []).includes("System Manager") || (frappe.user_roles || []).includes(role);
     }
+
+    function is_order_editor() {
+        return has_role("Order Entry") || has_role("Production Manager");
+    }
+
+    function order_can_edit(frm) {
+        if (!frm || !frm.doc || frm.doc.docstatus !== 0) return false;
+        const status = frm.doc.status || "Draft";
+        if (LOCKED.has(status)) return false;
+        if (DRAFT_LIKE.has(status)) return true;
+        return is_order_editor();
+    }
+
+    frappe.provide("frappe.almdina");
+    frappe.almdina.orderCanEdit = order_can_edit;
+    frappe.almdina.isOrderEditor = is_order_editor;
 
     function escape_html(value) {
         return String(value || "")
@@ -65,68 +84,52 @@
         });
     }
 
-    function approve_then_dispatch(frm) {
-        return call_action(
-            "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order",
-            { order_name: frm.doc.name },
-            __("تم اعتماد الطلب وتثبيت خطة القص."),
-            frm
-        ).then(() => {
-            const open_dispatch = frappe.almdina && frappe.almdina.open_dispatch_dialog;
-            if (open_dispatch && !frm.doc.production_path) {
-                open_dispatch(frm);
-            }
-        });
+    function can_send_to_production(frm) {
+        return (has_role("Order Entry") || has_role("Production Manager"))
+            && ["Draft", "Rejected"].includes(frm.doc.status);
     }
 
-    function add_review_actions(frm) {
+    function send_to_production(frm) {
+        if (!frm.doc.cutting_plan_json || Number(frm.doc.plan_needs_recalculation || 0) === 1) {
+            frappe.msgprint(__("أعد حساب خطة القص قبل إرسال الطلب للإنتاج."));
+            return;
+        }
+        frappe.confirm(
+            __("سيتم إرسال الطلب مباشرة للعامل المختار دون تثبيت خطة القص. تثبيت الخطة يتم لاحقًا من عامل الرسم عند مسار الرسم. هل تريد المتابعة؟"),
+            () => {
+                const open_dispatch = () => {
+                    const dispatch = frappe.almdina && frappe.almdina.open_dispatch_dialog;
+                    if (dispatch) dispatch(frm);
+                };
+                if (frm.is_dirty()) {
+                    frm.save().then(open_dispatch);
+                    return;
+                }
+                open_dispatch();
+            }
+        );
+    }
+
+    function add_production_actions(frm) {
         if (frm.is_new()) return;
 
-        const can_approve = has_role("Production Manager");
-
-        if (["Draft", "Rejected"].includes(frm.doc.status) && !can_approve && has_role("Order Entry")) {
-            frm.add_custom_button(__("إرسال للمراجعة"), () => {
-                frm.save().then(() => call_action(
-                    "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review",
-                    { order_name: frm.doc.name },
-                    __("تم إرسال الطلب للمراجعة."),
-                    frm
-                ));
-            }, __("دورة الطلب"));
+        if (can_send_to_production(frm)) {
+            frm.add_custom_button(__("إرسال للإنتاج"), () => send_to_production(frm), __("دورة الطلب"));
         }
 
-        if (["Draft", "Rejected", "Pending Review"].includes(frm.doc.status) && can_approve) {
-            frm.add_custom_button(__("اعتماد الطلب"), () => {
+        if (
+            is_order_editor()
+            && !["Draft", "Rejected", "Delivered", "Cancelled"].includes(frm.doc.status || "Draft")
+        ) {
+            frm.add_custom_button(__("إعادة للمسودة"), () => {
                 frappe.confirm(
-                    __("سيتم تثبيت خطة القص الحالية كنسخة معتمدة ثم اختيار مسار الإنتاج. هل تريد المتابعة؟"),
-                    () => {
-                        if (frm.is_dirty()) {
-                            frm.save().then(() => approve_then_dispatch(frm));
-                            return;
-                        }
-                        approve_then_dispatch(frm);
-                    }
-                );
-            }, __("دورة الطلب"));
-        }
-
-        if (frm.doc.status === "Pending Review" && can_approve) {
-            frm.add_custom_button(__("رفض وإعادة للتعديل"), () => {
-                frappe.prompt(
-                    [{
-                        fieldname: "reason",
-                        fieldtype: "Small Text",
-                        label: __("سبب الرفض"),
-                        reqd: 1,
-                    }],
-                    values => call_action(
-                        "almdina_erp.almdina_erp.services.cutting_plan_service.reject_order",
-                        { order_name: frm.doc.name, reason: values.reason },
-                        __("تم رفض الطلب وإعادته للتعديل."),
+                    __("سيتم إلغاء مراحل الإنتاج الحالية وإعادة الطلب للمسودة حتى تستطيع تعديله بالكامل. هل تريد المتابعة؟"),
+                    () => call_action(
+                        "almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft",
+                        { order_name: frm.doc.name },
+                        __("تمت إعادة الطلب للمسودة."),
                         frm
-                    ),
-                    __("رفض الطلب"),
-                    __("تأكيد")
+                    )
                 );
             }, __("دورة الطلب"));
         }
@@ -451,7 +454,7 @@
 
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
-            add_review_actions(frm);
+            add_production_actions(frm);
             add_stock_action(frm);
             add_related_views(frm);
             setTimeout(() => install_source_aware_outputs(frm), 400);

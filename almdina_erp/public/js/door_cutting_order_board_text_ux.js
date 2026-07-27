@@ -12,6 +12,25 @@
         return String(frm.doc.board_description || "").trim() || "—";
     }
 
+    function isBoardReady(frm) {
+        return !!String(frm.doc.board_description || "").trim();
+    }
+
+    function hasMeasurablePieces(frm) {
+        return (frm.doc.pieces || []).some(row => (
+            Number(row.width_cm || 0) > 0
+            && Number(row.length_cm || 0) > 0
+            && Number(row.qty || 0) > 0
+        ));
+    }
+
+    function canCalculatePlan(frm) {
+        return isBoardReady(frm)
+            && Number(frm.doc.board_length_cm || 0) > 0
+            && Number(frm.doc.board_width_cm || 0) > 0
+            && hasMeasurablePieces(frm);
+    }
+
     function patchCostView(frm) {
         const field = frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
         const root = field && field.$wrapper ? field.$wrapper.get(0) : null;
@@ -100,6 +119,9 @@
     window.AlmdinaBoardTextUX = {
         refresh,
         label: boardLabel,
+        isBoardReady,
+        hasMeasurablePieces,
+        canCalculatePlan,
         withBoardDescriptionForPrint,
     };
 })();

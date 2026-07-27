@@ -10,6 +10,9 @@
     ].join(",");
 
     function editable(frm) {
+        if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
+            return frappe.almdina.orderCanEdit(frm);
+        }
         return frm.doc.docstatus === 0 && EDITABLE_STATUSES.has(frm.doc.status || "Draft");
     }
 

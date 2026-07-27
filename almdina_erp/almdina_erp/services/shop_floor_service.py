@@ -224,14 +224,23 @@ def get_handoff_workers(stage_name: str) -> list[dict[str, str]]:
 	return get_users_for_role(STAGE_ROLE[next_type])
 
 
+def assert_order_ready_for_dispatch(order: Any) -> None:
+	if order.production_path or order.current_production_stage:
+		frappe.throw(_("Order {0} is already dispatched.").format(order.name))
+	if order.status not in {"Draft", "Rejected", "Approved"}:
+		frappe.throw(_("Only draft or rejected orders can be sent to production."))
+	if not order.cutting_plan_json:
+		frappe.throw(_("Calculate a cutting plan before sending the order to production."))
+	if cint(order.plan_needs_recalculation):
+		frappe.throw(_("Recalculate the cutting plan before sending the order to production."))
+	order.ensure_special_shapes_documented()
+
+
 @frappe.whitelist()
 def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
 	require_any_role(*DISPATCH_ROLES)
 	order = frappe.get_doc("Door Cutting Order", order_name)
-	if order.status != "Approved":
-		frappe.throw(_("Only approved orders can be dispatched to the shop floor."))
-	if order.production_path or order.current_production_stage:
-		frappe.throw(_("Order {0} is already dispatched.").format(order_name))
+	assert_order_ready_for_dispatch(order)
 
 	sequence = _path_sequence(path)
 	first_stage_type = sequence[0]
@@ -391,7 +400,7 @@ def mark_delivered(order_name: str) -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def revert_department(order_name: str, target_stage: str) -> dict[str, Any]:
+def revert_department(order_name: str, target_stage: str | None = None, target_stage_type: str | None = None) -> dict[str, Any]:
 	require_any_role("Production Manager", "System Manager", "Order Entry")
 	order = frappe.get_doc("Door Cutting Order", order_name)
 	if order.status == "Delivered":
@@ -399,7 +408,24 @@ def revert_department(order_name: str, target_stage: str) -> dict[str, Any]:
 	if not order.production_path:
 		frappe.throw(_("Order is not on the shop-floor path."))
 
-	stage = frappe.get_doc("Production Stage", target_stage)
+	stage_type = _resolve_revert_stage_type(target_stage_type or target_stage)
+	candidates = frappe.get_all(
+		"Production Stage",
+		filters={
+			"door_cutting_order": order_name,
+			"stage_type": stage_type,
+		},
+		fields=["name", "piece_label", "sequence"],
+		order_by="sequence asc",
+	)
+	stage_name = next((row.name for row in candidates if not row.piece_label), None)
+	if not stage_name and target_stage and frappe.db.exists("Production Stage", target_stage):
+		# Legacy callers may still pass a Production Stage name.
+		stage_name = target_stage
+	if not stage_name:
+		frappe.throw(_("No shop-floor stage found for {0}.").format(_(stage_type or target_stage or "")))
+
+	stage = frappe.get_doc("Production Stage", stage_name)
 	if stage.door_cutting_order != order_name:
 		frappe.throw(_("Stage does not belong to this order."))
 	if stage.stage_type not in SHOP_FLOOR_STAGE_TYPES:
@@ -419,7 +445,7 @@ def revert_department(order_name: str, target_stage: str) -> dict[str, Any]:
 		doc = frappe.get_doc("Production Stage", row.name)
 		doc.status = "Cancelled"
 		doc.save(ignore_permissions=True)
-		_log_event(doc, "Cancel", {"reason": "Reverted to earlier stage", "target": target_stage})
+		_log_event(doc, "Cancel", {"reason": "Reverted to earlier stage", "target": stage.stage_type})
 
 	stage.status = "Pending"
 	stage.started_by = None
@@ -437,9 +463,71 @@ def revert_department(order_name: str, target_stage: str) -> dict[str, Any]:
 	return {
 		"name": order_name,
 		"stage": stage.name,
+		"stage_type": stage.stage_type,
 		"status": STAGE_ORDER_STATUS[stage.stage_type],
 		"department_status": "بحاجة للعمل",
 	}
+
+
+def _resolve_revert_stage_type(value: str | None) -> str:
+	raw = str(value or "").strip()
+	if not raw:
+		frappe.throw(_("Select a stage to revert to."))
+	if raw in SHOP_FLOOR_STAGE_TYPES:
+		return raw
+	# Accept Arabic department labels from the UI select.
+	for stage_type, label in STAGE_DEPARTMENT.items():
+		if raw == label or raw == _(label) or raw == _(stage_type):
+			return stage_type
+	# Legacy Production Stage name fallback is handled by the caller.
+	return raw
+
+
+@frappe.whitelist()
+def return_order_to_draft(order_name: str) -> dict[str, Any]:
+	"""Order Entry may reopen a dispatched order as Draft for full re-editing."""
+	require_any_role(*DISPATCH_ROLES)
+	order = frappe.get_doc("Door Cutting Order", order_name)
+	order.check_permission("write")
+	if order.status in {"Draft", "Rejected"}:
+		frappe.throw(_("Order is already editable as a draft."))
+	if order.status in {"Delivered", "Cancelled"}:
+		frappe.throw(_("Delivered or cancelled orders cannot return to draft."))
+
+	stages = frappe.get_all(
+		"Production Stage",
+		filters={
+			"door_cutting_order": order_name,
+			"status": ["in", ["Pending", "In Progress", "Paused", "Completed"]],
+			"stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
+		},
+		fields=["name", "piece_label"],
+	)
+	for row in stages:
+		if row.piece_label:
+			continue
+		doc = frappe.get_doc("Production Stage", row.name)
+		doc.status = "Cancelled"
+		doc.save(ignore_permissions=True)
+		_log_event(doc, "Cancel", {"reason": "Returned to draft", "shop_floor": True})
+
+	frappe.db.set_value(
+		"Door Cutting Order",
+		order_name,
+		{
+			"status": "Draft",
+			"approved_plan": None,
+			"production_path": None,
+			"current_department": None,
+			"current_assignee": None,
+			"department_status": None,
+			"current_production_stage": None,
+			"drawing_dxf_status": "None",
+			"production_dxf": None,
+		},
+		update_modified=True,
+	)
+	return {"name": order_name, "status": "Draft"}
 
 
 @frappe.whitelist()
@@ -458,7 +546,92 @@ def get_revert_targets(order_name: str) -> list[dict[str, Any]]:
 		fields=["name", "stage_type", "status", "sequence", "assigned_to", "piece_label"],
 		order_by="sequence asc",
 	)
-	return [row for row in rows if not row.piece_label]
+	targets = []
+	seen = set()
+	for row in rows:
+		if row.piece_label or row.stage_type in seen:
+			continue
+		seen.add(row.stage_type)
+		targets.append(
+			{
+				"name": row.name,
+				"stage_type": row.stage_type,
+				"label": STAGE_DEPARTMENT.get(row.stage_type, row.stage_type),
+				"status": row.status,
+				"sequence": row.sequence,
+				"assigned_to": row.assigned_to,
+			}
+		)
+	return targets
+
+
+def _filter_active_shop_floor_stages(stages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	"""Hide stale stage rows that are no longer the order's current production stage."""
+	if not stages:
+		return []
+	order_names = list({row.get("door_cutting_order") for row in stages if row.get("door_cutting_order")})
+	if not order_names:
+		return stages
+	current_by_order = {
+		row.name: row.current_production_stage
+		for row in frappe.get_all(
+			"Door Cutting Order",
+			filters={"name": ["in", order_names]},
+			fields=["name", "current_production_stage"],
+		)
+	}
+	kept: list[dict[str, Any]] = []
+	for stage in stages:
+		order_name = stage.get("door_cutting_order")
+		current = current_by_order.get(order_name)
+		if current and stage.get("name") != current:
+			continue
+		kept.append(stage)
+	return kept
+
+
+def _active_stage_snapshot(order: Any) -> dict[str, Any]:
+	stage_name = getattr(order, "current_production_stage", None) or (
+		order.get("current_production_stage") if isinstance(order, dict) else None
+	)
+	if not stage_name:
+		return {
+			"active_stage_name": None,
+			"active_stage_status": None,
+			"active_stage_type": None,
+			"can_start_stage": False,
+			"can_handoff_stage": False,
+			"can_handoff_to": None,
+		}
+	stage_row = frappe.db.get_value(
+		"Production Stage",
+		stage_name,
+		["name", "status", "stage_type"],
+		as_dict=True,
+	)
+	if not stage_row:
+		return {
+			"active_stage_name": stage_name,
+			"active_stage_status": None,
+			"active_stage_type": None,
+			"can_start_stage": False,
+			"can_handoff_stage": False,
+			"can_handoff_to": None,
+		}
+	production_path = getattr(order, "production_path", None) or (
+		order.get("production_path") if isinstance(order, dict) else None
+	)
+	stage_status = stage_row.status
+	return {
+		"active_stage_name": stage_row.name,
+		"active_stage_status": stage_status,
+		"active_stage_type": stage_row.stage_type,
+		"can_start_stage": stage_status == "Pending",
+		"can_handoff_stage": stage_status in {"In Progress", "Paused"},
+		"can_handoff_to": _next_stage_type(production_path or "", stage_row.stage_type)
+		if production_path
+		else None,
+	}
 
 
 @frappe.whitelist()
@@ -488,7 +661,7 @@ def get_my_inbox() -> list[dict[str, Any]]:
 		],
 		order_by="modified desc",
 	)
-	return _enrich_stage_rows(stages)
+	return _enrich_stage_rows(_filter_active_shop_floor_stages(stages))
 
 
 @frappe.whitelist()
@@ -520,8 +693,35 @@ def get_my_archive() -> list[dict[str, Any]]:
 	return _enrich_stage_rows(stages)
 
 
-def _parse_plan_snapshot(order: Any) -> dict[str, Any]:
+def _parse_plan_snapshot(order: Any, plan_source: str | None = None) -> dict[str, Any]:
 	"""Load the approved/order cutting plan snapshot used for shop-floor rendering."""
+	if plan_source == "System":
+		from almdina_erp.almdina_erp.services.dual_plan_fields import get_system_plan_json
+
+		raw = getattr(order, "system_plan_json", None) or (
+			order.get("system_plan_json") if isinstance(order, dict) else None
+		)
+		if not raw:
+			raw = get_system_plan_json(order)
+		if raw:
+			parsed = frappe.parse_json(raw) or {}
+			if parsed:
+				return parsed
+		return {}
+	if plan_source == "Custom":
+		from almdina_erp.almdina_erp.services.dual_plan_fields import get_custom_plan_json
+
+		raw = getattr(order, "custom_plan_json", None) or (
+			order.get("custom_plan_json") if isinstance(order, dict) else None
+		)
+		if not raw:
+			raw = get_custom_plan_json(order)
+		if raw:
+			parsed = frappe.parse_json(raw) or {}
+			if parsed:
+				return parsed
+		return {}
+
 	snapshot = None
 	approved_plan = getattr(order, "approved_plan", None) or (
 		order.get("approved_plan") if isinstance(order, dict) else None
@@ -537,6 +737,50 @@ def _parse_plan_snapshot(order: Any) -> dict[str, Any]:
 		if raw:
 			snapshot = frappe.parse_json(raw) or {}
 	return snapshot if isinstance(snapshot, dict) else {}
+
+
+def _user_can_view_dual_plans() -> bool:
+	roles = set(frappe.get_roles())
+	return bool(
+		roles.intersection({"Order Entry", "Production Manager", "System Manager", "عامل رسم"})
+	)
+
+
+def _active_plan_source_for_viewer(order: Any) -> str:
+	if _user_can_view_dual_plans():
+		return (getattr(order, "approved_plan_source", None) or "System") if order.approved_plan else "System"
+	return getattr(order, "approved_plan_source", None) or "System"
+
+
+def _plan_snapshot_bundle(order: Any) -> dict[str, Any]:
+	system_snapshot = _parse_plan_snapshot(order, "System")
+	custom_snapshot = _parse_plan_snapshot(order, "Custom")
+	active_source = _active_plan_source_for_viewer(order)
+	active_snapshot = custom_snapshot if active_source == "Custom" and custom_snapshot.get("sheets") else system_snapshot
+	if order.approved_plan and not _user_can_view_dual_plans():
+		active_snapshot = _parse_plan_snapshot(order)
+	return {
+		"system_plan_json": frappe.as_json(system_snapshot) if system_snapshot else "",
+		"custom_plan_json": frappe.as_json(custom_snapshot) if custom_snapshot.get("sheets") else "",
+		"approved_plan_source": getattr(order, "approved_plan_source", None) or "System",
+		"active_plan_source": active_source,
+		"system_plan_html": _render_shop_floor_plan_html(
+			order_name=order.name,
+			customer=order.customer,
+			snapshot=system_snapshot,
+		),
+		"custom_plan_html": _render_shop_floor_plan_html(
+			order_name=order.name,
+			customer=order.customer,
+			snapshot=custom_snapshot,
+		) if custom_snapshot.get("sheets") else "",
+		"active_plan_html": _render_shop_floor_plan_html(
+			order_name=order.name,
+			customer=order.customer,
+			snapshot=active_snapshot,
+		),
+		"show_dual_tabs": _user_can_view_dual_plans(),
+	}
 
 
 def _fmt_cm(value: Any) -> str:
@@ -790,13 +1034,16 @@ def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
 		order_by="sequence asc",
 	)
 	stages = [row for row in stages if not row.piece_label]
-	snapshot = _parse_plan_snapshot(order)
-	plan_html = _render_shop_floor_plan_html(
-		order_name=order.name,
-		customer=order.customer,
-		snapshot=snapshot,
-	)
+	plan_bundle = _plan_snapshot_bundle(order)
 	pieces_html = _render_shop_floor_pieces_html(order)
+	current_stage_type = None
+	stage_snapshot = _active_stage_snapshot(order)
+	current_stage_type = stage_snapshot.get("active_stage_type")
+	can_recalculate_drawing_plan = bool(
+		order.production_path == "Drawing"
+		and not order.approved_plan
+		and (current_stage_type == "Drawing" or order.status == "At Drawing")
+	)
 	return {
 		"name": order.name,
 		"customer": order.customer,
@@ -806,9 +1053,27 @@ def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
 		"current_assignee": order.current_assignee,
 		"department_status": order.department_status,
 		"current_production_stage": order.current_production_stage,
+		"active_stage_name": stage_snapshot.get("active_stage_name"),
+		"active_stage_status": stage_snapshot.get("active_stage_status"),
+		"can_start_stage": stage_snapshot.get("can_start_stage"),
+		"can_handoff_stage": stage_snapshot.get("can_handoff_stage"),
+		"can_handoff_to": stage_snapshot.get("can_handoff_to"),
 		"approved_plan": order.approved_plan,
 		"pieces_html": pieces_html,
-		"cutting_plan_html": plan_html,
+		"cutting_plan_html": plan_bundle["active_plan_html"],
+		"system_plan_html": plan_bundle["system_plan_html"],
+		"custom_plan_html": plan_bundle["custom_plan_html"],
+		"system_plan_json": plan_bundle["system_plan_json"],
+		"custom_plan_json": plan_bundle["custom_plan_json"],
+		"approved_plan_source": plan_bundle["approved_plan_source"],
+		"active_plan_source": plan_bundle["active_plan_source"],
+		"show_dual_tabs": plan_bundle["show_dual_tabs"],
+		"packing_mode": order.packing_mode,
+		"kerf_mm": order.kerf_mm,
+		"trim_margin_mm": order.trim_margin_mm,
+		"cutting_machine_type": order.cutting_machine_type,
+		"current_stage_type": current_stage_type,
+		"can_recalculate_drawing_plan": can_recalculate_drawing_plan,
 		"production_dxf": order.production_dxf,
 		"drawing_dxf_status": order.drawing_dxf_status,
 		"stages": stages,
@@ -845,58 +1110,103 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
 		frappe.throw(_("Attach a DXF file."))
 	if not str(file_url).lower().endswith(".dxf"):
 		frappe.throw(_("Production file must be a .dxf attachment."))
+	order = frappe.get_doc("Door Cutting Order", order_name)
+	from almdina_erp.almdina_erp.services.dxf_import_service import parse_production_dxf, validate_imported_plan
+
+	custom_snapshot = parse_production_dxf(file_url, order)
+	validation = validate_imported_plan(custom_snapshot, order)
+	if not validation.get("is_valid"):
+		frappe.throw(_("Imported DXF plan is invalid:\n{0}").format("\n".join(validation.get("errors") or [])))
+	from almdina_erp.almdina_erp.services.dual_plan_fields import has_dual_plan_field
+
+	update_values: dict[str, Any] = {
+		"production_dxf": file_url,
+		"drawing_dxf_status": "Uploaded",
+	}
+	if has_dual_plan_field("custom_plan_json"):
+		update_values["custom_plan_json"] = frappe.as_json(custom_snapshot)
 	frappe.db.set_value(
 		"Door Cutting Order",
 		order_name,
-		{"production_dxf": file_url, "drawing_dxf_status": "Uploaded"},
+		update_values,
 		update_modified=True,
 	)
-	return {"name": order_name, "production_dxf": file_url, "drawing_dxf_status": "Uploaded"}
+	return {
+		"name": order_name,
+		"production_dxf": file_url,
+		"drawing_dxf_status": "Uploaded",
+		"custom_plan_json": frappe.as_json(custom_snapshot),
+	}
+
+
+@frappe.whitelist()
+def recalculate_drawing_plan(
+	order_name: str,
+	packing_mode: str | None = None,
+	cutting_machine_type: str | None = None,
+	kerf_mm: float | None = None,
+	trim_margin_mm: float | None = None,
+) -> dict[str, Any]:
+	"""Recalculate the system cutting plan for drawing operators without full order edit."""
+	require_any_role("عامل رسم", "Production Manager", "System Manager")
+	_assert_order_at_drawing(order_name)
+	order = frappe.get_doc("Door Cutting Order", order_name)
+	order.check_permission("read")
+	if order.approved_plan:
+		frappe.throw(_("This order already has a locked cutting plan."))
+
+	if packing_mode:
+		order.packing_mode = packing_mode
+	if cutting_machine_type:
+		order.cutting_machine_type = cutting_machine_type
+	if kerf_mm is not None:
+		order.kerf_mm = kerf_mm
+	if trim_margin_mm is not None:
+		order.trim_margin_mm = trim_margin_mm
+
+	order.flags.force_cutting_plan_recalculation = True
+	order.save(ignore_permissions=True)
+
+	from almdina_erp.almdina_erp.api import _serialize_order_preview
+
+	return _serialize_order_preview(order)
 
 
 @frappe.whitelist()
 def approve_production_dxf(order_name: str) -> dict[str, Any]:
 	require_any_role("عامل رسم", "Production Manager", "System Manager")
 	_assert_order_at_drawing(order_name)
-	order = frappe.get_doc("Door Cutting Order", order_name)
-	if not order.production_dxf:
-		frappe.throw(_("Upload a revised DXF before approving."))
-	frappe.db.set_value(
-		"Door Cutting Order",
-		order_name,
-		"drawing_dxf_status",
-		"Approved by Drawing",
-		update_modified=True,
-	)
-	return {"name": order_name, "drawing_dxf_status": "Approved by Drawing", "production_dxf": order.production_dxf}
+	from almdina_erp.almdina_erp.services.cutting_plan_service import lock_cutting_plan
+
+	return lock_cutting_plan(order_name, plan_source="Custom")
 
 
 def _assert_order_at_drawing(order_name: str) -> None:
+	from almdina_erp.almdina_erp.services.order_edit_policy import is_order_at_drawing_stage
+
 	row = frappe.db.get_value(
 		"Door Cutting Order",
 		order_name,
-		["status", "production_path", "current_production_stage"],
+		["name", "status", "production_path", "current_production_stage"],
 		as_dict=True,
 	)
 	if not row:
 		frappe.throw(_("Order not found."))
-	if row.production_path != "Drawing":
-		frappe.throw(_("DXF actions are only available on the Drawing path."))
-	stage_type = None
-	if row.current_production_stage:
-		stage_type = frappe.db.get_value("Production Stage", row.current_production_stage, "stage_type")
-	if stage_type != "Drawing" and row.status != "At Drawing":
+	if not is_order_at_drawing_stage(row):
 		frappe.throw(_("DXF actions are only available while the order is at Drawing."))
 
 
 # Keep sync_order_status import used by callers that finish legacy stages after shop-floor work.
 __all__ = [
+	"assert_order_ready_for_dispatch",
 	"dispatch_order",
 	"start_my_stage",
 	"handoff_to_next",
 	"mark_delivered",
 	"revert_department",
+	"return_order_to_draft",
 	"get_my_inbox",
 	"get_my_archive",
 	"sync_order_status",
+	"recalculate_drawing_plan",
 ]

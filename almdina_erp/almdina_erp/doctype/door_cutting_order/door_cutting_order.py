@@ -71,7 +71,7 @@ class DoorCuttingOrder(Document):
         return frappe.get_cached_doc("Almdina ERP Settings")
 
     def _enforce_approved_immutability(self) -> None:
-        """Approved/production orders are historical records, not live calculators."""
+        """Shop-floor workers keep historical records frozen; Order Entry may still edit."""
         if self.is_new() or self.flags.get("allow_approved_edit"):
             return
 
@@ -79,14 +79,10 @@ class DoorCuttingOrder(Document):
         if not old:
             return
 
-        editable_states = {"Draft", "Pending Review", "Rejected"}
-        if old.status not in editable_states:
-            frappe.throw(
-                _(
-                    "Order {0} is already approved or in production and cannot be edited/recalculated in place. "
-                    "Create a controlled revision instead."
-                ).format(self.name)
-            )
+        from almdina_erp.almdina_erp.services.order_edit_policy import enforce_order_immutability_on_save
+
+        old = self._get_old_doc()
+        enforce_order_immutability_on_save(self, old)
 
     @staticmethod
     def _finite(value: Any, label: str) -> float:
@@ -585,8 +581,12 @@ class DoorCuttingOrder(Document):
                     if fieldname in current:
                         placed[fieldname] = current[fieldname]
 
-        snapshot["special_shape_raw_summary"] = self._special_shape_raw_summary(expanded, snapshot)
-        return expanded
+    def _set_cutting_plan_json(self, snapshot: dict[str, Any] | str) -> None:
+        payload = snapshot if isinstance(snapshot, str) else frappe.as_json(snapshot)
+        self.cutting_plan_json = payload
+        from almdina_erp.almdina_erp.services.dual_plan_fields import set_system_plan_json_if_available
+
+        set_system_plan_json_if_available(self, payload)
 
     def _refresh_costs_from_plan(self, settings: Any, snapshot: dict[str, Any]) -> None:
         required_boards = len(snapshot.get("sheets") or [])
@@ -617,7 +617,7 @@ class DoorCuttingOrder(Document):
         snapshot["input_fingerprint"] = input_fingerprint
         self.calculated_plan_input_hash = input_fingerprint
         self.plan_needs_recalculation = 0
-        self.cutting_plan_json = frappe.as_json(snapshot)
+        self._set_cutting_plan_json(snapshot)
         self._refresh_costs_from_plan(settings, snapshot)
 
     def _mark_plan_for_recalculation(self, settings: Any) -> None:
@@ -625,6 +625,10 @@ class DoorCuttingOrder(Document):
         self.plan_needs_recalculation = 1
         self.calculated_plan_input_hash = ""
         self.cutting_plan_json = ""
+        from almdina_erp.almdina_erp.services.dual_plan_fields import has_dual_plan_field
+
+        if has_dual_plan_field("system_plan_json"):
+            self.system_plan_json = ""
         self.required_boards = 0
         self.waste_area_m2 = 0
         self.waste_percent = 0
@@ -730,7 +734,7 @@ class DoorCuttingOrder(Document):
                 "errors": validation_errors,
             },
         }
-        self.cutting_plan_json = frappe.as_json(snapshot)
+        self._set_cutting_plan_json(snapshot)
         self.calculated_plan_input_hash = input_fingerprint
         self.plan_needs_recalculation = 0
 
@@ -916,10 +920,11 @@ class DoorCuttingOrder(Document):
 @frappe.whitelist()
 def recalculate_order(order_name: str) -> dict[str, Any]:
     """Run the expensive optimizer only from the explicit plan action."""
+    from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
+
     doc = frappe.get_doc("Door Cutting Order", order_name)
     doc.check_permission("write")
-    if doc.status not in {"Draft", "Pending Review", "Rejected"}:
-        frappe.throw(_("Approved/production orders cannot be recalculated in place."))
+    assert_order_editable(doc)
     doc.flags.force_cutting_plan_recalculation = True
     doc.save()
     return {
