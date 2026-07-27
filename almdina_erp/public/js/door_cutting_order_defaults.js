@@ -61,22 +61,18 @@
 
     function applyBoardTextDefaults(frm) {
         let changed = false;
-        if (!String(frm.doc.board_description || "").trim() && frm.doc.board_item) {
-            frm.doc.board_description = frm.doc.board_item;
-            changed = true;
-        }
         if (!Number(frm.doc.board_length_cm)) {
-            frm.doc.board_length_cm = Number(frm.doc.full_board_length_mm || 0) / 10 || 244;
+            frm.doc.board_length_cm = 244;
             changed = true;
         }
         if (!Number(frm.doc.board_width_cm)) {
-            frm.doc.board_width_cm = Number(frm.doc.full_board_width_mm || 0) / 10 || 122;
+            frm.doc.board_width_cm = 122;
             changed = true;
         }
-        frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm || 244) * 10;
-        frm.doc.full_board_width_mm = Number(frm.doc.board_width_cm || 122) * 10;
+        frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm) * 10;
+        frm.doc.full_board_width_mm = Number(frm.doc.board_width_cm) * 10;
         if (changed) {
-            ["board_description", "board_length_cm", "board_width_cm"].forEach(fieldname => {
+            ["board_length_cm", "board_width_cm"].forEach(fieldname => {
                 if (frm.fields_dict[fieldname]) frm.refresh_field(fieldname);
             });
         }
