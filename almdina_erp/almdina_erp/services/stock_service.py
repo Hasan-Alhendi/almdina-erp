@@ -127,11 +127,12 @@ def _planned_materials(order: Any, plan: Any) -> list[dict[str, Any]]:
     materials: list[dict[str, Any]] = []
 
     full_board_count = sum(1 for source in (plan.sources or []) if source.source_type == "Full Board")
-    if full_board_count:
-        _validate_board_stock_uom(order.board_item)
+    board_item = str(getattr(order, "board_item", "") or "").strip()
+    if full_board_count and board_item:
+        _validate_board_stock_uom(board_item)
         materials.append(
             {
-                "item_code": order.board_item,
+                "item_code": board_item,
                 "qty": flt(full_board_count),
                 "kind": "Board",
                 "planned_unit": "Board",
@@ -188,7 +189,19 @@ def validate_stock_for_order(
 
     order = frappe.get_doc("Door Cutting Order", order_name)
     plan = _approved_plan(order_name)
+    materials = _planned_materials(order, plan)
     warehouse = settings.default_warehouse
+
+    if not materials:
+        return {
+            "warehouse": warehouse,
+            "materials": [],
+            "shortages": [],
+            "is_available": True,
+            "excluded_reservation": None,
+            "no_stock_linked_materials": True,
+        }
+
     if not warehouse:
         frappe.throw(_("Set Default Warehouse in Almdina ERP Settings before approving/starting production."))
 
@@ -197,7 +210,6 @@ def validate_stock_for_order(
         if exclude_own_reservation
         else None
     )
-    materials = _planned_materials(order, plan)
     shortages: list[dict[str, Any]] = []
     balances: list[dict[str, Any]] = []
 
@@ -254,10 +266,13 @@ def create_order_reservation(order_name: str) -> dict[str, Any] | None:
     if existing:
         return {"reservation": existing, "already_reserved": True}
 
+    materials = _planned_materials(order, plan)
+    if not materials:
+        return None
+
     warehouse = settings.default_warehouse
     if not warehouse:
         frappe.throw(_("Set Default Warehouse in Almdina ERP Settings before approving production."))
-    materials = _planned_materials(order, plan)
 
     # Lock Bin rows in deterministic order. Replacement reservations for the
     # same order are intentionally included in the competing reservations.
