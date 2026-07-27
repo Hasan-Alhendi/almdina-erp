@@ -7,11 +7,17 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 PLAN_UX = APP_ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
+ALGORITHM_PALETTE_UX = APP_ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
 CONTENT_UX = APP_ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
+HOOKS = APP_ROOT / "hooks.py"
+
+
+def _doctype_payload() -> dict:
+    return json.loads(DOCTYPE_JSON.read_text(encoding="utf-8"))
 
 
 def _field_order() -> list[str]:
-    return json.loads(DOCTYPE_JSON.read_text(encoding="utf-8"))["field_order"]
+    return _doctype_payload()["field_order"]
 
 
 def test_cut_execution_fields_are_grouped_together():
@@ -56,3 +62,36 @@ def test_plan_workspace_uses_distinct_visual_groups():
         assert class_name in js
     assert "أوامر خطة القص" in js
     assert "إعادة الحساب بالإعدادات الحالية" in js
+
+
+def test_algorithm_palette_exposes_every_packing_mode_without_replacing_current_recalculate_action():
+    payload = _doctype_payload()
+    packing_field = next(field for field in payload["fields"] if field.get("fieldname") == "packing_mode")
+    modes = [mode for mode in packing_field["options"].splitlines() if mode]
+    palette = ALGORITHM_PALETTE_UX.read_text(encoding="utf-8")
+    plan_ux = PLAN_UX.read_text(encoding="utf-8")
+    hooks = HOOKS.read_text(encoding="utf-8")
+
+    assert '"public/js/door_cutting_order_algorithm_palette_ux.js"' in hooks
+    assert hooks.index('"public/js/door_cutting_order_plan_ux.js"') < hooks.index(
+        '"public/js/door_cutting_order_algorithm_palette_ux.js"'
+    )
+    for mode in modes:
+        assert f'value: "{mode}"' in palette, mode
+
+    for group_label in (
+        "الاختيارات الذكية",
+        "المستطيلات القصوى",
+        "الصفوف",
+        "القص المتتابع",
+        "خط الأفق",
+    ):
+        assert group_label in palette
+
+    assert "dco-algorithm-search" in palette
+    assert "dco-algorithm-choice is-active" not in palette
+    assert 'class="dco-algorithm-choice${active ? " is-active" : ""}"' in palette
+    assert 'await frm.set_value("packing_mode", mode)' in palette
+    assert '$recalculate.trigger("click")' in palette
+    assert "إعادة الحساب بالإعدادات الحالية" in plan_ux
+    assert "زر «إعادة الحساب بالإعدادات الحالية» يبقى متاحًا" in palette
