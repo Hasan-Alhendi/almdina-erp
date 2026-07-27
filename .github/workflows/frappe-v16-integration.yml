@@ -141,36 +141,19 @@ jobs:
             --no-mariadb-socket \
             --verbose 2>&1 | tee "$RUNNER_TEMP/new-site.log"
 
-      - name: Collect site creation diagnostics
-        if: failure()
-        run: |
-          set +e
-          mkdir -p "$RUNNER_TEMP/integration-diagnostics"
-          cp "$RUNNER_TEMP/new-site.log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
-          find "$RUNNER_TEMP/frappe-bench/sites" -maxdepth 2 -type f -print > "$RUNNER_TEMP/integration-diagnostics/site-files.txt" 2>&1
-          mariadb -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION(); SHOW VARIABLES LIKE "character_set_server"; SHOW VARIABLES LIKE "collation_server"; SELECT User, Host FROM mysql.user;' > "$RUNNER_TEMP/integration-diagnostics/mariadb.txt" 2>&1
-
-      - name: Upload site creation diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frappe-v16-integration-diagnostics
-          path: ${{ runner.temp }}/integration-diagnostics
-          if-no-files-found: warn
-          retention-days: 7
-
       - name: Install ERPNext and Almdina ERP
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
-          bench --site test.localhost install-app erpnext
-          bench --site test.localhost install-app almdina_erp
+          bench --site test.localhost install-app erpnext 2>&1 | tee "$RUNNER_TEMP/install-erpnext.log"
+          bench --site test.localhost install-app almdina_erp 2>&1 | tee "$RUNNER_TEMP/install-almdina.log"
 
       - name: Run migrate twice for idempotency
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
-          bench --site test.localhost migrate
-          bench --site test.localhost migrate
+          bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-first.log"
+          bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-second.log"
 
       - name: Verify installed apps and schema
         run: |
@@ -180,9 +163,39 @@ jobs:
 
       - name: Run Almdina ERP tests
         run: |
+          set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
-          bench --site test.localhost run-tests --app almdina_erp
+          bench --site test.localhost run-tests --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      - name: Collect integration diagnostics
+        if: failure()
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/integration-diagnostics"
+          for log in \
+            new-site.log \
+            install-erpnext.log \
+            install-almdina.log \
+            migrate-first.log \
+            migrate-second.log \
+            tests.log; do
+            cp "$RUNNER_TEMP/$log" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          done
+          cp "$RUNNER_TEMP/frappe-bench/sites/common_site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/frappe-bench/sites/test.localhost/site_config.json" "$RUNNER_TEMP/integration-diagnostics/" 2>/dev/null || true
+          find "$RUNNER_TEMP/frappe-bench/sites" -maxdepth 2 -type f -print > "$RUNNER_TEMP/integration-diagnostics/site-files.txt" 2>&1
+          cd "$RUNNER_TEMP/frappe-bench" && bench version > "$RUNNER_TEMP/integration-diagnostics/bench-version.txt" 2>&1
+          mariadb -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION(); SHOW VARIABLES LIKE "character_set_server"; SHOW VARIABLES LIKE "collation_server"; SELECT User, Host FROM mysql.user;' > "$RUNNER_TEMP/integration-diagnostics/mariadb.txt" 2>&1
+
+      - name: Upload integration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frappe-v16-integration-diagnostics
+          path: ${{ runner.temp }}/integration-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Disable tests
         if: always()
