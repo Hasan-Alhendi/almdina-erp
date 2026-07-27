@@ -20,7 +20,7 @@
     "technical_section","packing_method","packing_score","engine_version","cutting_plan_json","system_plan_json","custom_plan_json","approved_plan_source",
     "shop_floor_section","production_path","current_department","shop_floor_column","current_assignee","department_status","current_production_stage","production_dxf","drawing_dxf_status",
     "cost_tab","order_cost_invoice_html",
-    "status","revision","approved_plan","board_item","full_board_length_mm","full_board_width_mm"
+    "status","revision","revision_of","revision_root","superseded_by","revision_reason","approved_plan","board_item","full_board_length_mm","full_board_width_mm"
   ],
   "fields": [
     {"default":"DCO-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","hidden":1,"label":"Naming Series","options":"DCO-.YYYY.-.#####","reqd":1},
@@ -105,6 +105,10 @@
     {"default":"None","fieldname":"drawing_dxf_status","fieldtype":"Select","label":"Drawing DXF Status","options":"None\nExported\nUploaded\nApproved by Drawing","read_only":1},
     {"default":"Draft","fieldname":"status","fieldtype":"Select","hidden":1,"in_list_view":1,"label":"Status","options":"Draft\nPending Review\nApproved\nAt Sharyoun\nAt Drawing\nAt CNC\nAt Sanding\nReady for Delivery\nDelivered\nCutting In Progress\nCut Completed\nEdge Banding In Progress\nProduction In Progress\nQuality Check\nCompleted\nRejected\nOn Hold\nCancelled\nReplacement Required\nPartially Completed","read_only":1},
     {"default":"1","fieldname":"revision","fieldtype":"Int","hidden":1,"in_list_view":1,"label":"Revision","read_only":1},
+    {"fieldname":"revision_of","fieldtype":"Link","hidden":1,"label":"Revision Of","options":"Door Cutting Order","read_only":1},
+    {"fieldname":"revision_root","fieldtype":"Link","hidden":1,"label":"Revision Root","options":"Door Cutting Order","read_only":1},
+    {"fieldname":"superseded_by","fieldtype":"Link","hidden":1,"label":"Superseded By","options":"Door Cutting Order","read_only":1},
+    {"fieldname":"revision_reason","fieldtype":"Small Text","hidden":1,"label":"Revision Reason","read_only":1},
     {"fieldname":"approved_plan","fieldtype":"Link","hidden":1,"label":"Approved Cutting Plan","options":"Cutting Plan","read_only":1},
     {"fieldname":"board_item","fieldtype":"Link","hidden":1,"label":"Stock Board Item","options":"Item"},
     {"fieldname":"full_board_length_mm","fieldtype":"Float","hidden":1,"label":"Board Length (MM)","read_only":1},
