@@ -9,7 +9,7 @@
     ].join(",");
 
     function boardLabel(frm) {
-        return String(frm.doc.board_description || frm.doc.board_item || "").trim() || "—";
+        return String(frm.doc.board_description || "").trim() || "—";
     }
 
     function patchCostView(frm) {
