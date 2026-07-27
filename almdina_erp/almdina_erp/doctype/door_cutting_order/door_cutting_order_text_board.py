@@ -12,30 +12,23 @@ from .door_cutting_order_fast import FastDoorCuttingOrder
 class TextBoardDoorCuttingOrder(FastDoorCuttingOrder):
     """Door Cutting Order using a free-text board description.
 
-    The operator no longer needs to select an Item master just to enter an order.
-    Board dimensions are entered in centimeters and synchronized to the existing
-    millimeter snapshot fields used by the optimizer. The hidden ``board_item``
-    Link is preserved for legacy orders and optional future stock linkage.
+    The operator enters the board description and dimensions directly. Centimeter
+    dimensions are synchronized to the internal millimeter snapshot fields used
+    by the optimizer. ``board_item`` remains an optional internal stock mapping;
+    it is not part of order-entry UX.
     """
 
     def _load_board_snapshot(self) -> None:
         description = str(getattr(self, "board_description", "") or "").strip()
-        legacy_item = str(getattr(self, "board_item", "") or "").strip()
-        if not description and legacy_item:
-            description = legacy_item
         if not description:
             frappe.throw(_("Board description is required."))
 
         length_cm = self._finite(
-            getattr(self, "board_length_cm", None)
-            or (flt(getattr(self, "full_board_length_mm", 0)) / 10)
-            or 244,
+            getattr(self, "board_length_cm", None) or 244,
             _("Board Length (CM)"),
         )
         width_cm = self._finite(
-            getattr(self, "board_width_cm", None)
-            or (flt(getattr(self, "full_board_width_mm", 0)) / 10)
-            or 122,
+            getattr(self, "board_width_cm", None) or 122,
             _("Board Width (CM)"),
         )
         if length_cm <= 0:
@@ -49,12 +42,6 @@ class TextBoardDoorCuttingOrder(FastDoorCuttingOrder):
         self.full_board_length_mm = length_cm * 10
         self.full_board_width_mm = width_cm * 10
 
-        # These old snapshot fields are intentionally no longer operator inputs.
-        # Keep them empty so they do not reappear in summaries or printed output.
-        self.board_material = ""
-        self.board_color = ""
-        self.board_thickness_mm = 0
-
         trim_mm = flt(self.trim_margin_mm)
         usable_length_mm = self.full_board_length_mm - (trim_mm * 2)
         usable_width_mm = self.full_board_width_mm - (trim_mm * 2)
@@ -64,10 +51,7 @@ class TextBoardDoorCuttingOrder(FastDoorCuttingOrder):
     def _plan_input_payload(self, settings: Any, source: Any | None = None) -> dict[str, Any]:
         payload = super()._plan_input_payload(settings, source)
         source = source or self
-        payload.setdefault("board", {})["item"] = str(
-            getattr(source, "board_description", "")
-            or getattr(source, "board_item", "")
-            or ""
-        ).strip()
-        payload["board"]["description"] = payload["board"]["item"]
+        description = str(getattr(source, "board_description", "") or "").strip()
+        payload.setdefault("board", {})["item"] = description
+        payload["board"]["description"] = description
         return payload
