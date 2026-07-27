@@ -8,7 +8,7 @@
     "order_tab",
     "operator_status_strip",
     "order_details_section","customer","order_date","order_details_column","external_reference","order_notes",
-    "board_section","board_item","board_summary_html",
+    "board_section","board_description","board_length_column","board_length_cm","board_width_column","board_width_cm",
     "cutting_settings_section","default_edge_type","edge_color","cutting_settings_column","cutting_cost_per_board_usd","board_rate_usd",
     "pieces_section","pieces_fast_entry","pieces",
     "results_tab",
@@ -19,7 +19,7 @@
     "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","special_shapes_baseline_cost_usd","special_shapes_estimated_total_usd","special_shapes_final_total_usd","customer_quote_total_usd","customer_quote_status","material_variance_cost_usd","internal_loss_cost_usd","actual_cost_usd",
     "technical_section","packing_method","packing_score","engine_version","plan_needs_recalculation","calculated_plan_input_hash","calculated_plan_metadata_hash","cutting_plan_json",
     "cost_tab","order_cost_invoice_html",
-    "status","revision","approved_plan","board_material","board_color","board_thickness_mm","full_board_length_mm","full_board_width_mm"
+    "status","revision","approved_plan","board_item","board_material","board_color","board_thickness_mm","full_board_length_mm","full_board_width_mm"
   ],
   "fields": [
     {"default":"DCO-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","hidden":1,"label":"Naming Series","options":"DCO-.YYYY.-.#####","reqd":1},
@@ -32,8 +32,11 @@
     {"fieldname":"external_reference","fieldtype":"Data","label":"External Reference"},
     {"fieldname":"order_notes","fieldtype":"Small Text","label":"Order Notes"},
     {"fieldname":"board_section","fieldtype":"Section Break","label":"Board"},
-    {"fieldname":"board_item","fieldtype":"Link","in_list_view":1,"label":"Board Item","options":"Item","reqd":1},
-    {"fieldname":"board_summary_html","fieldtype":"HTML"},
+    {"description":"اكتب وصف اللوح مباشرة، مثال: MDF أبيض 18 مم.","fieldname":"board_description","fieldtype":"Data","in_list_view":1,"label":"Board Item","reqd":1},
+    {"fieldname":"board_length_column","fieldtype":"Column Break"},
+    {"default":"244","fieldname":"board_length_cm","fieldtype":"Float","label":"Board Length (CM)","non_negative":1,"reqd":1},
+    {"fieldname":"board_width_column","fieldtype":"Column Break"},
+    {"default":"122","fieldname":"board_width_cm","fieldtype":"Float","label":"Board Width (CM)","non_negative":1,"reqd":1},
     {"fieldname":"cutting_settings_section","fieldtype":"Section Break","label":"Order Material and Cost Settings"},
     {"fieldname":"default_edge_type","fieldtype":"Link","label":"Default Edge Type","options":"Edge Banding Type"},
     {"description":"Defaulted from the selected edge type and editable for this order.","fieldname":"edge_color","fieldtype":"Data","label":"Edge Color"},
@@ -90,6 +93,7 @@
     {"default":"Draft","fieldname":"status","fieldtype":"Select","hidden":1,"in_list_view":1,"label":"Status","options":"Draft\nPending Review\nApproved\nCutting In Progress\nCut Completed\nEdge Banding In Progress\nProduction In Progress\nQuality Check\nCompleted\nRejected\nOn Hold\nCancelled\nReplacement Required\nPartially Completed","read_only":1},
     {"default":"1","fieldname":"revision","fieldtype":"Int","hidden":1,"in_list_view":1,"label":"Revision","read_only":1},
     {"fieldname":"approved_plan","fieldtype":"Link","hidden":1,"label":"Approved Cutting Plan","options":"Cutting Plan","read_only":1},
+    {"fieldname":"board_item","fieldtype":"Link","hidden":1,"label":"Linked Stock Board Item","options":"Item"},
     {"fieldname":"board_material","fieldtype":"Data","hidden":1,"label":"Board Material","read_only":1},
     {"fieldname":"board_color","fieldtype":"Data","hidden":1,"label":"Board Color","read_only":1},
     {"fieldname":"board_thickness_mm","fieldtype":"Float","hidden":1,"label":"Board Thickness (MM)","read_only":1},
@@ -100,7 +104,7 @@
   "module":"Almdina ERP",
   "name":"Door Cutting Order",
   "naming_rule":"By naming series field",
-  "search_fields":"customer",
+  "search_fields":"customer,board_description",
   "permissions":[
     {"create":1,"read":1,"report":1,"print":1,"email":1,"role":"Order Entry","write":1},
     {"read":1,"report":1,"print":1,"role":"Cutting Operator"},
