@@ -4,8 +4,9 @@ import unittest
 from pathlib import Path
 
 
-WORKFLOW = Path(".github/workflows/frappe-v16-integration.yml")
-PYPROJECT = Path("pyproject.toml")
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOW = REPOSITORY_ROOT / ".github/workflows/frappe-v16-integration.yml"
+PYPROJECT = REPOSITORY_ROOT / "pyproject.toml"
 
 
 class FrappeV16CIContractTests(unittest.TestCase):
