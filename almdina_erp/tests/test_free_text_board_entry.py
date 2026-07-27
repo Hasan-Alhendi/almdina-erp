@@ -8,6 +8,7 @@ DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 BOARD_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
 CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_text_board.py"
 REMNANT_PLANNING = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
+STOCK_SERVICE = ROOT / "almdina_erp" / "services" / "stock_service.py"
 DROP_PATCH = ROOT / "patches" / "v1_0" / "drop_obsolete_order_board_columns.py"
 PATCHES_TXT = ROOT / "patches.txt"
 HOOKS = ROOT / "hooks.py"
@@ -99,6 +100,18 @@ def test_remnant_planning_uses_only_optional_stock_item_identity():
     assert "order.board_color" not in source
     assert "order.board_thickness_mm" not in source
     assert 'full_sheet["board_description"] = board_description' in source
+
+
+def test_stock_service_skips_unmapped_board_stock_but_keeps_edge_stock():
+    source = _source(STOCK_SERVICE)
+    assert 'board_item = str(getattr(order, "board_item", "") or "").strip()' in source
+    assert "if full_board_count and board_item:" in source
+    assert "if not materials:" in source
+    assert '"no_stock_linked_materials": True' in source
+    assert 'frappe.db.get_value(\n            "Edge Banding Type"' in source
+    assert "order.board_material" not in source
+    assert "order.board_color" not in source
+    assert "order.board_thickness_mm" not in source
 
 
 def test_invoice_and_measurement_prints_use_only_board_description_as_visible_label():
