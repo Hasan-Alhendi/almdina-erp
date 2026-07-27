@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     can_return_to_draft,
     can_revert_department,
     first_stage_type,
+    is_order_dispatched,
     next_stage_type,
     order_status_for_stage_type,
     production_path_sequence,
@@ -23,15 +24,11 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
 from almdina_erp.almdina_erp.services import shop_floor_service as legacy
 
 
-def _throw_transition(message: str) -> None:
-    frappe.throw(_(message))
-
-
 def _transition(current_status: str, event: str, message: str) -> str:
     try:
         return transition_stage(current_status, event)
     except ValueError:
-        _throw_transition(message)
+        frappe.throw(_(message))
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -43,16 +40,15 @@ def _next_stage(path: str, stage_type: str) -> str | None:
     raise AssertionError("frappe.throw must interrupt execution")
 
 
-def _path(path: str) -> tuple[str, ...]:
+def _validate_path(path: str) -> None:
     try:
-        return production_path_sequence(path)
+        production_path_sequence(path)
     except ValueError:
         frappe.throw(_("Invalid production path: {0}").format(path))
-    raise AssertionError("frappe.throw must interrupt execution")
 
 
 def assert_order_ready_for_dispatch(order: Any) -> None:
-    if legacy.is_order_dispatched(
+    if is_order_dispatched(
         production_path=order.production_path,
         current_stage=order.current_production_stage,
     ):
@@ -83,7 +79,7 @@ def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
     assert_order_ready_for_dispatch(order)
 
-    sequence = _path(path)
+    _validate_path(path)
     first_type = first_stage_type(path)
     legacy._assert_user_has_role(assignee, legacy.STAGE_ROLE[first_type])
 
@@ -111,7 +107,6 @@ def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
         "status": order_status_for_stage_type(first_type),
         "current_assignee": assignee,
         "department_status": "بحاجة للعمل",
-        "path_sequence": sequence,
     }
 
 
@@ -264,6 +259,7 @@ def revert_department(
         stage_type = resolve_shop_floor_stage_type(raw_target)
     except ValueError:
         frappe.throw(_("Select a stage to revert to."))
+        raise AssertionError("frappe.throw must interrupt execution")
 
     candidates = frappe.get_all(
         "Production Stage",
