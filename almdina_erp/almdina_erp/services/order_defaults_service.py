@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
-from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import flt
 
 
 @frappe.whitelist()
@@ -17,32 +16,4 @@ def get_order_defaults() -> dict[str, Any]:
         "packing_mode": settings.default_packing_mode or "Auto Pro",
         "cutting_machine_type": settings.default_cutting_machine_type or "Auto",
         "optimization_time_limit_sec": flt(settings.default_optimization_time_limit_sec) or 10,
-    }
-
-
-@frappe.whitelist()
-def get_board_defaults(board_item: str) -> dict[str, Any]:
-    row = frappe.db.get_value(
-        "Item",
-        board_item,
-        [
-            "custom_is_mdf",
-            "custom_board_length_mm",
-            "custom_board_width_mm",
-            "custom_board_thickness_mm",
-            "custom_board_color",
-            "custom_board_material",
-            "custom_board_rate_usd",
-        ],
-        as_dict=True,
-    )
-    if not row or not cint(row.custom_is_mdf):
-        frappe.throw(_("Selected Item is not marked as an MDF/cutting board."))
-    return {
-        "board_length_mm": flt(row.custom_board_length_mm),
-        "board_width_mm": flt(row.custom_board_width_mm),
-        "board_thickness_mm": flt(row.custom_board_thickness_mm),
-        "board_color": row.custom_board_color or "",
-        "board_material": row.custom_board_material or "",
-        "board_rate_usd": flt(row.custom_board_rate_usd),
     }
