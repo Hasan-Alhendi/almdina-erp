@@ -107,7 +107,7 @@ jobs:
           cd "$RUNNER_TEMP/frappe-bench"
           bench get-app erpnext --branch version-16
           git clone "$APP_SOURCE" apps/almdina_erp
-          ./env/bin/pip install -e apps/almdina_erp
+          ./env/bin/pip install -e 'apps/almdina_erp[test]'
           python - <<'PY'
           from pathlib import Path
 
