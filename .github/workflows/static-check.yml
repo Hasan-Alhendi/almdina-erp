@@ -57,6 +57,7 @@ jobs:
           from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
           from almdina_erp.tests import test_special_shape_geometry_ux as special_shape_geometry_checks
           from almdina_erp.tests import test_shape_print_ux as shape_print_checks
+          from almdina_erp.tests import test_free_text_board_entry as free_text_board_checks
 
           modules = [
               arabic_checks,
@@ -74,6 +75,7 @@ jobs:
               order_surface_checks,
               special_shape_geometry_checks,
               shape_print_checks,
+              free_text_board_checks,
           ]
           total = 0
           for module in modules:
