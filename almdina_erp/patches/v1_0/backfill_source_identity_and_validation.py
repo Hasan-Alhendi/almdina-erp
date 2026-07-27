@@ -15,7 +15,7 @@ def execute() -> None:
 
 
 def _backfill_cutting_plan_source_identity() -> None:
-    if not frappe.db.table_exists("tabCutting Plan Source"):
+    if not frappe.db.table_exists("Cutting Plan Source"):
         return
 
     rows = frappe.get_all(
@@ -51,7 +51,7 @@ def _backfill_cutting_plan_source_identity() -> None:
 
 
 def _backfill_validation_timestamps() -> None:
-    if not frappe.db.table_exists("tabCutting Plan"):
+    if not frappe.db.table_exists("Cutting Plan"):
         return
 
     frappe.db.sql(
