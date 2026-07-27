@@ -7,6 +7,7 @@ DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cuttin
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 BOARD_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
 CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_text_board.py"
+REMNANT_PLANNING = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 DROP_PATCH = ROOT / "patches" / "v1_0" / "drop_obsolete_order_board_columns.py"
 PATCHES_TXT = ROOT / "patches.txt"
 HOOKS = ROOT / "hooks.py"
@@ -87,6 +88,17 @@ def test_server_controller_validates_only_new_board_inputs_and_converts_for_opti
     assert "board_thickness_mm" not in source
     assert "frappe.db.get_value(" not in source
     assert 'payload["board"]["description"]' in source
+
+
+def test_remnant_planning_uses_only_optional_stock_item_identity():
+    source = _source(REMNANT_PLANNING)
+    assert "def _stock_board_item(order" in source
+    assert "if not board_item:" in source
+    assert "if stock_board_item and cint(settings.prefer_remnants_before_full_boards):" in source
+    assert "order.board_material" not in source
+    assert "order.board_color" not in source
+    assert "order.board_thickness_mm" not in source
+    assert 'full_sheet["board_description"] = board_description' in source
 
 
 def test_invoice_and_measurement_prints_use_only_board_description_as_visible_label():
