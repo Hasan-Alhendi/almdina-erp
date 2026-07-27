@@ -8,6 +8,7 @@ class Capability:
 
     CREATE_ORDER = "create_order"
     EDIT_ORDER = "edit_order"
+    CREATE_ORDER_REVISION = "create_order_revision"
     SUBMIT_ORDER = "submit_order"
     APPROVE_ORDER = "approve_order"
     DISPATCH_ORDER = "dispatch_order"
@@ -44,12 +45,14 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
         {
             Capability.CREATE_ORDER,
             Capability.EDIT_ORDER,
+            Capability.CREATE_ORDER_REVISION,
             Capability.SUBMIT_ORDER,
         }
     ),
     "Production Manager": frozenset(
         {
             Capability.EDIT_ORDER,
+            Capability.CREATE_ORDER_REVISION,
             Capability.SUBMIT_ORDER,
             Capability.APPROVE_ORDER,
             Capability.DISPATCH_ORDER,
