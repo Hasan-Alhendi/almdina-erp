@@ -5,12 +5,14 @@ from pathlib import Path
 
 
 WORKFLOW = Path(".github/workflows/frappe-v16-integration.yml")
+PYPROJECT = Path("pyproject.toml")
 
 
 class FrappeV16CIContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = WORKFLOW.read_text(encoding="utf-8")
+        cls.pyproject = PYPROJECT.read_text(encoding="utf-8")
 
     def test_supported_frappe_v16_runtime_versions_are_used(self) -> None:
         self.assertIn('runs-on: ubuntu-24.04', self.source)
@@ -37,6 +39,11 @@ class FrappeV16CIContractTests(unittest.TestCase):
         self.assertIn('apps.append("almdina_erp")', self.source)
         self.assertIn('apps_path.write_text("\\n".join(apps) + "\\n"', self.source)
         self.assertNotIn('echo almdina_erp >> sites/apps.txt', self.source)
+
+    def test_test_dependencies_are_declared_and_installed(self) -> None:
+        self.assertIn('[project.optional-dependencies]', self.pyproject)
+        self.assertIn('pytest>=9.0,<10', self.pyproject)
+        self.assertIn("pip install -e 'apps/almdina_erp[test]'", self.source)
 
     def test_workflow_exercises_real_application_installation(self) -> None:
         required_steps = (
