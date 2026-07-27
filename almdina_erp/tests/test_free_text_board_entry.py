@@ -7,6 +7,8 @@ DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cuttin
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 BOARD_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
 CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_text_board.py"
+DROP_PATCH = ROOT / "patches" / "v1_0" / "drop_obsolete_order_board_columns.py"
+PATCHES_TXT = ROOT / "patches.txt"
 HOOKS = ROOT / "hooks.py"
 
 
@@ -43,6 +45,15 @@ def test_obsolete_board_snapshot_fields_are_deleted_not_merely_hidden():
     for obsolete in ("board_material", "board_color", "board_thickness_mm"):
         assert obsolete not in fields
         assert obsolete not in doc["field_order"]
+
+
+def test_database_cleanup_patch_drops_retired_columns_idempotently():
+    source = _source(DROP_PATCH)
+    for obsolete in ("board_material", "board_color", "board_thickness_mm"):
+        assert f'"{obsolete}"' in source
+    assert 'frappe.db.has_column("Door Cutting Order", column)' in source
+    assert 'drop column `{column}`' in source
+    assert "almdina_erp.patches.v1_0.drop_obsolete_order_board_columns" in _source(PATCHES_TXT)
 
 
 def test_client_defaults_do_not_query_item_master_or_read_legacy_snapshot_fields():
