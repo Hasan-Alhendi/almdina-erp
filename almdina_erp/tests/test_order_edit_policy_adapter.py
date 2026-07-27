@@ -69,24 +69,15 @@ class AdapterHarness:
 
 
 class TestOrderEditPolicyAdapter(unittest.TestCase):
-    def test_draft_and_locked_statuses_do_not_fetch_roles(self) -> None:
+    def test_editability_is_status_driven_and_never_fetches_roles(self) -> None:
         harness = AdapterHarness(roles={"System Manager"})
         policy = harness.load()
 
         self.assertTrue(policy.user_can_edit_order("Draft"))
+        self.assertFalse(policy.user_can_edit_order("Approved"))
+        self.assertFalse(policy.user_can_edit_order("Cutting In Progress", "worker@example.com"))
         self.assertFalse(policy.user_can_edit_order("Delivered"))
         self.assertEqual(harness.role_calls, [])
-
-    def test_production_status_delegates_role_resolution_to_frappe(self) -> None:
-        allowed = AdapterHarness(roles={"Order Entry"})
-        allowed_policy = allowed.load()
-        self.assertTrue(allowed_policy.user_can_edit_order("Cutting In Progress", "worker@example.com"))
-        self.assertEqual(allowed.role_calls, ["worker@example.com"])
-
-        denied = AdapterHarness(roles={"Cutting Operator"})
-        denied_policy = denied.load()
-        self.assertFalse(denied_policy.user_can_edit_order("Cutting In Progress"))
-        self.assertEqual(denied.role_calls, [None])
 
     def test_drawing_recalculation_short_circuits_before_database_lookup(self) -> None:
         no_role = AdapterHarness(roles={"Order Entry"})
