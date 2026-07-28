@@ -1,6 +1,8 @@
 name: Static baseline checks
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -11,13 +13,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Diagnose UX regression
-        id: diagnose
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install optimizer test dependency
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check 'ortools>=9.15,<10'
+
+      - name: Validate JSON and Python syntax
         shell: bash
         run: |
           python - <<'PY'
-          import traceback
+          import json
           from pathlib import Path
+
+          files = sorted(Path('.').rglob('*.json'))
+          for path in files:
+              with path.open('r', encoding='utf-8') as handle:
+                  json.load(handle)
+          print(f'Validated {len(files)} JSON files')
+          PY
+          python -m compileall -q almdina_erp
+
+      - name: Validate Arabic, UX, DXF, invoice, and fast-save regressions
+        shell: bash
+        run: |
+          python - <<'PY'
           from almdina_erp.tests import test_arabic_operator_localization as arabic_checks
           from almdina_erp.tests import test_door_cutting_order_operator_ux as ux_checks
           from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_ux_checks
@@ -35,32 +59,71 @@ jobs:
           from almdina_erp.tests import test_shape_print_ux as shape_print_checks
           from almdina_erp.tests import test_free_text_board_entry as free_text_board_checks
 
-          modules = [arabic_checks, ux_checks, plan_ux_checks, dxf_checks, cost_invoice_checks,
-              fast_save_checks, measurement_resilience_checks, table_performance_checks,
-              order_edge_color_checks, packing_score_checks, special_shape_close_checks,
-              save_pipeline_checks, order_surface_checks, special_shape_geometry_checks,
-              shape_print_checks, free_text_board_checks]
-          report = Path('ux-diagnostic.txt')
+          modules = [
+              arabic_checks,
+              ux_checks,
+              plan_ux_checks,
+              dxf_checks,
+              cost_invoice_checks,
+              fast_save_checks,
+              measurement_resilience_checks,
+              table_performance_checks,
+              order_edge_color_checks,
+              packing_score_checks,
+              special_shape_close_checks,
+              save_pipeline_checks,
+              order_surface_checks,
+              special_shape_geometry_checks,
+              shape_print_checks,
+              free_text_board_checks,
+          ]
+          total = 0
           for module in modules:
-              for name in sorted(dir(module)):
-                  test = getattr(module, name)
-                  if not name.startswith('test_') or not callable(test):
-                      continue
-                  try:
-                      test()
-                  except Exception:
-                      report.write_text(
-                          f'FAILED {module.__name__}.{name}\n\n{traceback.format_exc()}',
-                          encoding='utf-8',
-                      )
-                      raise
-          report.write_text('ALL UX REGRESSION TESTS PASSED\n', encoding='utf-8')
+              tests = [
+                  getattr(module, name)
+                  for name in dir(module)
+                  if name.startswith('test_') and callable(getattr(module, name))
+              ]
+              for test in tests:
+                  test()
+              total += len(tests)
+          print(f'Validated {total} UX/DXF/invoice/fast-save regression checks')
           PY
 
-      - name: Upload UX diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ux-diagnostic
-          path: ux-diagnostic.txt
-          if-no-files-found: error
+      - name: Validate advanced cutting optimizer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from almdina_erp.tests import test_advanced_cutting_optimizer as checks
+
+          tests = [
+              getattr(checks, name)
+              for name in dir(checks)
+              if name.startswith('test_') and callable(getattr(checks, name))
+          ]
+          for test in tests:
+              print(f'Running {test.__name__}...')
+              test()
+          print(f'Validated {len(tests)} advanced optimizer regression checks')
+          PY
+
+      - name: Validate JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+            count=$((count + 1))
+          done < <(find almdina_erp -type f -name '*.js' -print0)
+          echo "Validated ${count} JavaScript files"
+
+      - name: Validate special-shape exact geometry
+        shell: bash
+        run: |
+          node almdina_erp/tests/test_special_shape_geometry.js
+
+      - name: Validate printable door drawings
+        shell: bash
+        run: |
+          node almdina_erp/tests/test_shape_print.js
