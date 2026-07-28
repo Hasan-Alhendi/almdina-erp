@@ -51,7 +51,7 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
         frappe.throw = throw
         return frappe
 
-    def test_approval_prepares_and_finalizes_revision_in_one_command(self) -> None:
+    def test_approval_locks_chain_then_prepares_and_finalizes_revision(self) -> None:
         calls: list[Any] = []
         order = SimpleNamespace(name="DCO-REV-2", status="Pending Review")
         fake_frappe = self.fake_frappe(order, calls)
@@ -66,6 +66,9 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
         cutting._lock_order_for_production = lock_order
 
         activation = types.ModuleType(ACTIVATION_MODULE)
+        activation.load_locked_revision_order = lambda name: calls.append(
+            ("chain_lock", name)
+        ) or order
         activation.prepare_revision_activation = lambda candidate: calls.append(
             ("prepare", candidate.name)
         ) or "context"
@@ -88,13 +91,14 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
         result = service.approve_order(order.name)
 
         self.assertEqual(result["revision_activation"]["replaced_revision"], "DCO-REV-1")
+        self.assertLess(calls.index(("chain_lock", order.name)), calls.index(("prepare", order.name)))
         self.assertLess(calls.index(("prepare", order.name)), calls.index(("approve_plan", order.name)))
         self.assertLess(
             calls.index(("approve_plan", order.name)),
             calls.index(("finalize", order.name, "context", "PLAN-REV-2")),
         )
 
-    def test_dispatch_validates_revision_before_creating_production_stage(self) -> None:
+    def test_dispatch_locks_chain_and_validates_revision_before_stage_creation(self) -> None:
         calls: list[Any] = []
         order = SimpleNamespace(
             name="DCO-CURRENT",
@@ -116,6 +120,9 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
         cutting.require_any_role = lambda *roles: calls.append(("roles", roles))
 
         activation = types.ModuleType(ACTIVATION_MODULE)
+        activation.load_locked_revision_order = lambda name: calls.append(
+            ("chain_lock", name)
+        ) or order
         activation.assert_order_revision_dispatchable = lambda candidate: calls.append(
             ("revision_guard", candidate.name)
         )
@@ -133,6 +140,10 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
         result = service.dispatch_order(order.name, "Drawing", "worker@example.com")
 
         self.assertEqual(result["production_path"], "Drawing")
+        self.assertLess(
+            calls.index(("chain_lock", order.name)),
+            calls.index(("revision_guard", order.name)),
+        )
         self.assertLess(
             calls.index(("revision_guard", order.name)),
             calls.index(("dispatch", order.name, "Drawing", "worker@example.com")),
