@@ -83,36 +83,68 @@
             [{
                 fieldname: "reason",
                 fieldtype: "Small Text",
-                label: __("سبب إنشاء نسخة التعديل"),
+                label: __("سبب إعادة الطلب للتعديل"),
+                description: __("سيُحفظ السبب في سجل النسخة الجديدة، ولن يتم تعديل الطلب التاريخي الأصلي."),
                 reqd: 1,
             }],
-            values => frappe.call({
-                method: "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
-                args: { order_name: frm.doc.name, reason: values.reason },
-                freeze: true,
-                freeze_message: __("جاري إنشاء نسخة تعديل مستقلة..."),
-            }).then(r => {
-                const data = r.message || {};
-                if (!data.name) return;
-                frappe.show_alert({
-                    message: data.already_exists
-                        ? __("توجد نسخة تعديل مرتبطة بهذا الطلب.")
-                        : __("تم إنشاء نسخة تعديل مع الحفاظ على الطلب والخطة الأصلية."),
-                    indicator: data.already_exists ? "orange" : "green",
+            values => {
+                const reason = String(values.reason || "").trim();
+                if (!reason) {
+                    frappe.msgprint(__("اكتب سبب إعادة الطلب للتعديل."));
+                    return;
+                }
+                return frappe.call({
+                    method: "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
+                    args: { order_name: frm.doc.name, reason },
+                    freeze: true,
+                    freeze_message: __("جاري إنشاء نسخة تعديل مستقلة..."),
+                }).then(r => {
+                    const data = r.message || {};
+                    if (!data.name) return;
+                    frappe.show_alert({
+                        message: data.already_exists
+                            ? __("توجد نسخة تعديل مرتبطة بهذا الطلب.")
+                            : __("تم إنشاء نسخة مسودة للتعديل مع الحفاظ على الطلب والخطة الأصلية."),
+                        indicator: data.already_exists ? "orange" : "green",
+                    });
+                    frappe.set_route("Form", "Door Cutting Order", data.name);
                 });
-                frappe.set_route("Form", "Door Cutting Order", data.name);
-            }),
-            __("إنشاء نسخة تعديل"),
-            __("إنشاء النسخة")
+            },
+            __("إعادة الطلب للتعديل"),
+            __("إنشاء النسخة المسودة")
         );
     }
 
+    function installLegacyReturnButtonGuard(frm) {
+        const pageRoot = frm.page && frm.page.wrapper && (frm.page.wrapper[0] || frm.page.wrapper);
+        const root = pageRoot && pageRoot.addEventListener ? pageRoot : document;
+        if (root._dcoRevisionReturnButtonGuard) return;
+
+        root._dcoRevisionReturnButtonGuard = true;
+        root.addEventListener("click", event => {
+            const button = event.target && event.target.closest
+                ? event.target.closest("button,.btn")
+                : null;
+            if (!button) return;
+            if (root !== document && !root.contains(button)) return;
+            const label = String(button.textContent || "").replace(/\s+/g, " ").trim();
+            if (!label.includes(__("إعادة للمسودة")) && !label.includes("إعادة للمسودة")) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            openRevision(frm);
+        }, true);
+    }
+
     installImmutableEditPolicy();
+    frappe.almdina.openOrderRevisionDialog = openRevision;
 
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
             applyImmutableFields(frm);
             renderRevisionState(frm);
+            installLegacyReturnButtonGuard(frm);
             frm.remove_custom_button(__("إعادة للمسودة"), __("دورة الطلب"));
 
             if (frm.doc.revision_of) {
