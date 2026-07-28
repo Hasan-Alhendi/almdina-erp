@@ -80,7 +80,7 @@ def create_stage(
 def close_open_pause(stage: Any, resumed_by: str) -> None:
     """Preserve the historical document-based pause helper signature."""
 
-    production_stage_repository.close_open_pause(stage.name, resumed_by)
+    production_stage_repository.close_open_pause(stage, resumed_by)
 
 
 __all__ = [
