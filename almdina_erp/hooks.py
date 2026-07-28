@@ -116,6 +116,8 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
     "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
         "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
+    "almdina_erp.almdina_erp.services.stock_service.check_order_stock":
+        "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":
