@@ -13,6 +13,14 @@ from almdina_erp.almdina_erp.domain.orders.cut_dimensions import (
 )
 
 
+_EDGE_SIDE_FIELDS = (
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+)
+
+
 class FrappeOrderCutDimensionAdapter:
     """Apply the pure edge-allowance policy to Frappe child rows."""
 
@@ -22,22 +30,18 @@ class FrappeOrderCutDimensionAdapter:
     def calculate_rows(self) -> None:
         thicknesses = self._edge_thickness_map()
         for index, row in enumerate(self.document.pieces or [], start=1):
+            selected_edge = any(
+                cint(getattr(row, fieldname, 0))
+                for fieldname in _EDGE_SIDE_FIELDS
+            )
             effective_edge_type = str(
                 row.edge_type or self.document.default_edge_type or ""
             )
-            selected_edge = any(
-                cint(getattr(row, fieldname, 0))
-                for fieldname in (
-                    "edge_long_right",
-                    "edge_long_left",
-                    "edge_width_top",
-                    "edge_width_bottom",
-                )
-            )
-            thickness_mm = (
-                thicknesses.get(effective_edge_type, 0.0)
-                if selected_edge and effective_edge_type
-                else 0.0
+            thickness_mm = self._resolve_thickness(
+                index=index,
+                selected_edge=selected_edge,
+                edge_type=effective_edge_type,
+                thicknesses=thicknesses,
             )
 
             try:
@@ -63,6 +67,39 @@ class FrappeOrderCutDimensionAdapter:
                 result.cut_length_cm,
             )
 
+    @staticmethod
+    def _resolve_thickness(
+        *,
+        index: int,
+        selected_edge: bool,
+        edge_type: str,
+        thicknesses: dict[str, float],
+    ) -> float:
+        if not selected_edge:
+            return 0.0
+        if not edge_type:
+            frappe.throw(
+                _("Row {0}: Select an Edge Type before choosing edge sides.").format(
+                    index
+                )
+            )
+        if edge_type not in thicknesses:
+            frappe.throw(
+                _("Row {0}: Edge Banding Type {1} does not exist.").format(
+                    index,
+                    edge_type,
+                )
+            )
+
+        thickness_mm = thicknesses[edge_type]
+        if thickness_mm <= 0:
+            frappe.throw(
+                _(
+                    "Row {0}: Edge Banding Type {1} must have a thickness greater than zero."
+                ).format(index, edge_type)
+            )
+        return thickness_mm
+
     def _edge_thickness_map(self) -> dict[str, float]:
         names = {
             str(edge_type)
@@ -86,7 +123,7 @@ class FrappeOrderCutDimensionAdapter:
             fields=["name", "thickness_mm"],
         )
         thicknesses = {
-            str(row.name): max(0.0, flt(row.thickness_mm))
+            str(row.name): flt(row.thickness_mm)
             for row in rows
         }
         flags._edge_thickness_names = cache_key
