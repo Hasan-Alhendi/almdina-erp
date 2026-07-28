@@ -173,6 +173,25 @@ class TestOrderRevisionServiceAdapter(unittest.TestCase):
         self.assertTrue(
             any(call[2:] == ("superseded_by", "DCO-REVISION-00002") for call in harness.db.set_calls)
         )
+        self.assertIn("Reason: Customer changed the measurements", harness.source.comments[0])
+
+    def test_revision_can_be_created_without_a_reason(self) -> None:
+        harness = RevisionHarness()
+        service = harness.load()
+
+        result = service.create_order_revision("DCO-ORIGINAL-00001")
+
+        revised = harness.revised
+        self.assertIsNotNone(revised)
+        assert revised is not None
+        self.assertEqual(revised.revision_reason, "")
+        self.assertTrue(revised.inserted)
+        self.assertEqual(result["name"], "DCO-REVISION-00002")
+        self.assertFalse(result["already_exists"])
+        self.assertEqual(
+            harness.source.comments,
+            ["Controlled revision DCO-REVISION-00002 created."],
+        )
 
 
 if __name__ == "__main__":
