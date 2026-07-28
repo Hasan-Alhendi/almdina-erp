@@ -89,8 +89,8 @@ class FakeCuttingEngine:
                 {
                     "sheet_no": 1,
                     "pieces": [
-                        {"id": 1, "label": "1.1"},
-                        {"id": 2, "label": "2.1"},
+                        {"id": 1, "label": "1.1", "piece_type": "Special"},
+                        {"id": 2, "label": "2.1", "piece_type": "Regular"},
                     ],
                 }
             ],
