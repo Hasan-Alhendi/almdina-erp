@@ -98,6 +98,12 @@ jobs:
             almdina_erp.tests.test_cutting_plan_application \
             almdina_erp.tests.test_cutting_plan_architecture
 
+      - name: Run cutting-domain strategy tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_cutting_domain_strategies \
+            almdina_erp.tests.test_cutting_domain_architecture
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

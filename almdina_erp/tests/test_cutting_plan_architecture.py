@@ -31,10 +31,11 @@ class TestCuttingPlanArchitecture(unittest.TestCase):
                 self.assertNotIn(".services", source)
                 self.assertNotIn(".infrastructure", source)
 
-    def test_legacy_engine_is_the_only_adapter_to_existing_optimizers(self) -> None:
+    def test_engine_adapter_points_to_the_pure_cutting_domain(self) -> None:
         source = ENGINE_ADAPTER_PATH.read_text(encoding="utf-8")
-        self.assertIn("services.advanced_cutting_optimizer", source)
-        self.assertIn("services.cutting_engine", source)
+        self.assertIn("domain.cutting", source)
+        self.assertNotIn("services.advanced_cutting_optimizer", source)
+        self.assertNotIn("services.cutting_engine", source)
         self.assertIn("class LegacyCuttingEngineAdapter", source)
         self.assertIn("def expand_pieces", source)
         self.assertIn("def optimize", source)
@@ -48,7 +49,10 @@ class TestCuttingPlanArchitecture(unittest.TestCase):
         self.assertIn("refresh_plan_metadata", source)
         self.assertIn("plan_invalidation_state", source)
         self.assertNotIn("advanced_cutting_optimizer", source)
-        self.assertNotIn("from almdina_erp.almdina_erp.services.cutting_engine", source)
+        self.assertNotIn(
+            "from almdina_erp.almdina_erp.services.cutting_engine",
+            source,
+        )
         self.assertNotIn("validate_plan(", source)
         self.assertNotIn("expand_piece_groups(", source)
         self.assertNotIn('"industrial_metrics": metrics', source)
