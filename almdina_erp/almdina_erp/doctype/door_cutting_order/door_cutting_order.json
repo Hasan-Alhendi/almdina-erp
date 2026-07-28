@@ -46,7 +46,7 @@
     {"fieldname":"board_rate_usd","fieldtype":"Currency","label":"Board Rate USD","non_negative":1,"permlevel":1},
     {"fieldname":"pieces_section","fieldtype":"Section Break","label":"Pieces"},
     {"fieldname":"pieces_fast_entry","fieldtype":"HTML","label":"Fast Measurements Entry"},
-    {"fieldname":"pieces","fieldtype":"Table","hidden":1,"label":"Pieces","options":"Door Cutting Order Detail"},
+    {"fieldname":"pieces","fieldtype":"Table","hidden":1,"label":"Pieces","options":"Door Cutting Order Detail","reqd":1},
     {"fieldname":"cost_tab","fieldtype":"Tab Break","label":"Order Cost"},
     {"fieldname":"order_cost_invoice_html","fieldtype":"HTML","label":"Order Cost and Customer Invoice"},
     {"fieldname":"results_tab","fieldtype":"Tab Break","label":"Cutting Plan"},
