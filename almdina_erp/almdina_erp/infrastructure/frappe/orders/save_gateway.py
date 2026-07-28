@@ -5,10 +5,9 @@ from typing import Any
 from almdina_erp.almdina_erp.application.cutting.version import ENGINE_VERSION
 
 from .costing_adapter import FrappeOrderCostingAdapter
-from .cut_dimension_adapter import FrappeOrderCutDimensionAdapter
-from .cut_dimension_plan_adapter import FrappeCutDimensionPlanAdapter
 from .document_access import FrappeOrderDocumentAccess
 from .piece_policy_adapter import FrappeOrderPiecePolicyAdapter
+from .plan_adapter import FrappeOrderPlanAdapter
 
 
 class FrappeDoorCuttingOrderSaveGateway:
@@ -21,13 +20,12 @@ class FrappeDoorCuttingOrderSaveGateway:
             document,
             self.access,
         )
-        self.cut_dimensions = FrappeOrderCutDimensionAdapter(document)
         self.costing = FrappeOrderCostingAdapter(
             document,
             self.access,
             engine_version=ENGINE_VERSION,
         )
-        self.plan = FrappeCutDimensionPlanAdapter(
+        self.plan = FrappeOrderPlanAdapter(
             document,
             self.access,
             self.costing,
@@ -50,9 +48,6 @@ class FrappeDoorCuttingOrderSaveGateway:
 
     def load_board_snapshot(self) -> None:
         self.access.load_board_snapshot()
-
-    def calculate_cut_dimensions(self) -> None:
-        self.cut_dimensions.calculate_rows()
 
     def calculate_piece_costs(self) -> None:
         self.costing.calculate_piece_rows()

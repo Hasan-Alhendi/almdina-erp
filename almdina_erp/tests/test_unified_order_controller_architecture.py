@@ -87,10 +87,8 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         expected = {
             "document_access.py",
             "piece_policy_adapter.py",
-            "cut_dimension_adapter.py",
             "costing_adapter.py",
             "plan_adapter.py",
-            "cut_dimension_plan_adapter.py",
             "save_gateway.py",
         }
         existing = {path.name for path in ORDER_ADAPTER_DIR.glob("*.py")}
@@ -101,11 +99,9 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         )
         self.assertIn("FrappeOrderDocumentAccess", gateway)
         self.assertIn("FrappeOrderPiecePolicyAdapter", gateway)
-        self.assertIn("FrappeOrderCutDimensionAdapter", gateway)
         self.assertIn("FrappeOrderCostingAdapter", gateway)
-        self.assertIn("FrappeCutDimensionPlanAdapter", gateway)
+        self.assertIn("FrappeOrderPlanAdapter", gateway)
         self.assertNotIn("domain.orders.costing", gateway)
-        self.assertNotIn("domain.orders.cut_dimensions", gateway)
         self.assertNotIn("optimize_order_plan", gateway)
         self.assertNotIn("frappe.db", gateway)
 
