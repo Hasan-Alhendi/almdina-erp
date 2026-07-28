@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 BOARD_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
+DEFAULTS_UX = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 COST_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
@@ -50,7 +51,7 @@ def test_board_text_ux_syncs_visible_controls_before_save():
 
 
 def test_board_text_ux_keeps_default_dimensions_and_hidden_mm_snapshot_in_sync():
-    source = _source(BOARD_UX)
+    source = _source(DEFAULTS_UX)
     assert "frm.doc.board_length_cm = 244" in source
     assert "frm.doc.board_width_cm = 122" in source
     assert "frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm) * 10" in source
@@ -58,7 +59,7 @@ def test_board_text_ux_keeps_default_dimensions_and_hidden_mm_snapshot_in_sync()
 
 
 def test_board_form_labels_and_help_are_operator_friendly():
-    source = _source(BOARD_UX)
+    source = _source(DEFAULTS_UX)
     for text in (
         "صنف اللوح",
         "طول اللوح (سم)",
