@@ -4,42 +4,17 @@
     const STYLE_ID = "dco-side-edge-profile-css";
     const SIDE_ORDER = ["long_right", "long_left", "width_top", "width_bottom"];
     const SIDES = {
-        long_right: {
-            selectedField: "edge_long_right",
-            overrideField: "edge_long_right_type_override",
-            labelAr: "الطول الأيمن",
-            labelEn: "Right long edge",
-            axis: "long",
-        },
-        long_left: {
-            selectedField: "edge_long_left",
-            overrideField: "edge_long_left_type_override",
-            labelAr: "الطول الأيسر",
-            labelEn: "Left long edge",
-            axis: "long",
-        },
-        width_top: {
-            selectedField: "edge_width_top",
-            overrideField: "edge_width_top_type_override",
-            labelAr: "العرض العلوي",
-            labelEn: "Top width edge",
-            axis: "width",
-        },
-        width_bottom: {
-            selectedField: "edge_width_bottom",
-            overrideField: "edge_width_bottom_type_override",
-            labelAr: "العرض السفلي",
-            labelEn: "Bottom width edge",
-            axis: "width",
-        },
+        long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", labelAr: "الطول الأيمن", labelEn: "Right long edge", axis: "long" },
+        long_left: { selectedField: "edge_long_left", overrideField: "edge_long_left_type_override", labelAr: "الطول الأيسر", labelEn: "Left long edge", axis: "long" },
+        width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", labelAr: "العرض العلوي", labelEn: "Top width edge", axis: "width" },
+        width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", labelAr: "العرض السفلي", labelEn: "Bottom width edge", axis: "width" },
     };
 
     function isArabic() {
         const lang = String(
             (frappe.boot && frappe.boot.lang) ||
             (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
+            document.documentElement.lang || ""
         ).toLowerCase();
         return lang === "ar" || lang.startsWith("ar-");
     }
@@ -60,9 +35,7 @@
     }
 
     function format(value, decimals = 3) {
-        return round(value, decimals).toLocaleString("en-US", {
-            maximumFractionDigits: decimals,
-        });
+        return round(value, decimals).toLocaleString("en-US", { maximumFractionDigits: decimals });
     }
 
     function money(value) {
@@ -83,9 +56,7 @@
 
     function materialize(frm, tr) {
         let row = rowByName(frm, tr && tr.dataset.rowName);
-        if (row || !tr || !String(tr.dataset.rowName || "").startsWith("__virtual__")) {
-            return row;
-        }
+        if (row || !tr || !String(tr.dataset.rowName || "").startsWith("__virtual__")) return row;
         const qtyInput = tr.querySelector("input[data-field='qty']");
         if (qtyInput) qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
         return rowByName(frm, tr.dataset.rowName);
@@ -103,14 +74,7 @@
         if (frm._dco_side_edge_profiles_loading) return frm._dco_side_edge_profiles_loading;
 
         frm._dco_side_edge_profiles_loading = frappe.db.get_list("Edge Banding Type", {
-            fields: [
-                "name",
-                "edge_type_name",
-                "width_cm",
-                "thickness_mm",
-                "rate_usd_per_meter",
-                "edge_color",
-            ],
+            fields: ["name", "edge_type_name", "width_cm", "thickness_mm", "rate_usd_per_meter", "edge_color"],
             filters: { disabled: 0 },
             order_by: "width_cm asc, edge_type_name asc",
             limit: 200,
@@ -303,9 +267,7 @@
             }
             .dco-col-edges .dco-check-toggle.is-checked>.dco-side-profile-trigger{opacity:.9}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger:hover{opacity:1;transform:translateY(-1px);border-color:var(--primary,#2490ef)}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{
-                opacity:1;background:#fff6db;border-color:#d7a514;color:#8b6400;box-shadow:0 2px 6px rgba(185,132,0,.2)
-            }
+            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{opacity:1;background:#fff6db;border-color:#d7a514;color:#8b6400;box-shadow:0 2px 6px rgba(185,132,0,.2)}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-missing{background:#fff0f0;border-color:#df5a5a;color:#b72d2d;opacity:1}
             .dco-side-edge-help{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:rgba(36,144,239,.08);font-weight:700}
             .dco-side-edge-help b{font-size:12px}
@@ -324,22 +286,18 @@
         const config = SIDES[side];
         const label = isArabic() ? config.labelAr : config.labelEn;
         if (!sideSelected(row, side)) {
-            return isArabic()
-                ? `${label}: فعّل القشاط أولًا`
-                : `${label}: enable edge banding first`;
+            return isArabic() ? `${label}: فعّل القشاط أولًا` : `${label}: enable edge banding first`;
         }
         const type = effectiveType(frm, row, side);
         const profile = profileFor(frm, row, side);
-        const mode = overrideType(row, side)
-            ? (isArabic() ? "مخصص" : "Custom")
-            : (isArabic() ? "افتراضي" : "Default");
+        const mode = overrideType(row, side) ? (isArabic() ? "مخصص" : "Custom") : (isArabic() ? "افتراضي" : "Default");
         const meta = profile
             ? `${format(profile.thickness_mm)} مم · $ ${money(profile.rate_usd_per_meter)}/م`
             : (isArabic() ? "نوع غير متاح" : "Unavailable profile");
         return `${label} — ${type || "—"} — ${mode} — ${meta}`;
     }
 
-    function decorateToggle(frm, tr, row, toggle) {
+    function decorateToggle(frm, row, toggle) {
         const side = sideFromToggle(toggle);
         if (!side) return;
         let indicator = toggle.querySelector(":scope > .dco-side-profile-trigger");
@@ -370,14 +328,9 @@
             edge_width_top: tr.querySelector("[data-check-field='edge_width_top']")?.classList.contains("is-checked") ? 1 : 0,
             edge_width_bottom: tr.querySelector("[data-check-field='edge_width_bottom']")?.classList.contains("is-checked") ? 1 : 0,
         };
-        const result = calculate(frm, row);
-        syncPreviewFields(rowByName(frm, tr.dataset.rowName), result);
-        tr.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
-            decorateToggle(frm, tr, row, toggle);
-        });
-        tr.querySelectorAll(":scope > td.dco-col-edge-type").forEach(cell => {
-            cell.setAttribute("aria-hidden", "true");
-        });
+        syncPreviewFields(rowByName(frm, tr.dataset.rowName), calculate(frm, row));
+        tr.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => decorateToggle(frm, row, toggle));
+        tr.querySelectorAll(":scope > td.dco-col-edge-type").forEach(cell => cell.setAttribute("aria-hidden", "true"));
     }
 
     function renderHelp(root) {
@@ -507,6 +460,9 @@
             event.stopImmediatePropagation();
         }, true);
 
+        // Capture phase is essential: the legacy edge-toggle handler is registered
+        // earlier on the same root. The indicator must open its dialog without also
+        // toggling the side underneath it.
         root.addEventListener("click", event => {
             const indicator = event.target.closest(".dco-side-profile-trigger");
             if (indicator && root.contains(indicator)) {
@@ -528,7 +484,7 @@
                 if (!row) return;
                 if (!clearOverrideWhenDisabled(frm, row, side)) schedule(frm);
             });
-        });
+        }, true);
 
         let queued = false;
         const observer = new MutationObserver(() => {
@@ -550,18 +506,12 @@
     }
 
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) {
-            ensureProfiles(frm).finally(() => schedule(frm));
-        },
-        refresh(frm) {
-            ensureProfiles(frm).finally(() => schedule(frm));
-        },
-        default_edge_type(frm) {
-            schedule(frm);
-        },
+        onload_post_render(frm) { ensureProfiles(frm).finally(() => schedule(frm)); },
+        refresh(frm) { ensureProfiles(frm).finally(() => schedule(frm)); },
+        default_edge_type(frm) { schedule(frm); },
     });
 
-    const childHandlers = {
+    frappe.ui.form.on("Door Cutting Order Detail", {
         edge_long_right(frm) { schedule(frm); },
         edge_long_left(frm) { schedule(frm); },
         edge_width_top(frm) { schedule(frm); },
@@ -573,8 +523,7 @@
         width_cm(frm) { schedule(frm); },
         length_cm(frm) { schedule(frm); },
         qty(frm) { schedule(frm); },
-    };
-    frappe.ui.form.on("Door Cutting Order Detail", childHandlers);
+    });
 
     window.AlmdinaMultiEdgeBanding = {
         ensureProfiles,
