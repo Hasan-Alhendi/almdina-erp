@@ -24,7 +24,7 @@ REPOSITORY_PATH = (
 QUERY_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
 DXF_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
 LEGACY_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_service.py"
-HOOKS_PATH = ROOT / "almdina_erp" / "hooks.py"
+HOOKS_PATH = ROOT / "hooks.py"
 
 
 class TestShopFloorQueryArchitecture(unittest.TestCase):
