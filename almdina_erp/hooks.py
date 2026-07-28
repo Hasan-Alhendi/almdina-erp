@@ -78,11 +78,11 @@ doctype_list_js = {
     "Door Cutting Order": "public/js/door_cutting_order_list.js",
 }
 
-# Keep the optimized controller as the authoritative business base, then add the
-# free-text board input layer used by order-entry operators.
+# Keep the optimized and free-text controllers as compatibility bases. The
+# active controller adapts Frappe rows to pure Domain piece and pricing rules.
 override_doctype_class = {
     "Door Cutting Order":
-        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_text_board.TextBoardDoorCuttingOrder",
+        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_domain.DomainDoorCuttingOrder",
 }
 
 doc_events = {
