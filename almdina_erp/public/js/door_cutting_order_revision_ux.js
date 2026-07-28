@@ -79,6 +79,8 @@
     }
 
     function openRevision(frm) {
+        if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return;
+
         frappe.prompt(
             [{
                 fieldname: "reason",
@@ -115,20 +117,24 @@
         );
     }
 
-    function installLegacyReturnButtonGuard(frm) {
-        const pageRoot = frm.page && frm.page.wrapper && (frm.page.wrapper[0] || frm.page.wrapper);
-        const root = pageRoot && pageRoot.addEventListener ? pageRoot : document;
-        if (root._dcoRevisionReturnButtonGuard) return;
+    function isLegacyReturnButton(button) {
+        if (!button) return false;
+        const label = String(button.textContent || "").replace(/\s+/g, " ").trim();
+        return label.includes(__("إعادة للمسودة")) || label.includes("إعادة للمسودة");
+    }
 
-        root._dcoRevisionReturnButtonGuard = true;
-        root.addEventListener("click", event => {
+    function installLegacyReturnButtonGuard() {
+        if (document._dcoRevisionReturnButtonGuard) return;
+
+        document._dcoRevisionReturnButtonGuard = true;
+        document.addEventListener("click", event => {
             const button = event.target && event.target.closest
                 ? event.target.closest("button,.btn")
                 : null;
-            if (!button) return;
-            if (root !== document && !root.contains(button)) return;
-            const label = String(button.textContent || "").replace(/\s+/g, " ").trim();
-            if (!label.includes(__("إعادة للمسودة")) && !label.includes("إعادة للمسودة")) return;
+            if (!isLegacyReturnButton(button)) return;
+
+            const frm = frappe.almdina && frappe.almdina.currentOrderRevisionForm;
+            if (!canCreateRevision(frm)) return;
 
             event.preventDefault();
             event.stopPropagation();
@@ -138,13 +144,14 @@
     }
 
     installImmutableEditPolicy();
+    installLegacyReturnButtonGuard();
     frappe.almdina.openOrderRevisionDialog = openRevision;
 
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
+            frappe.almdina.currentOrderRevisionForm = frm;
             applyImmutableFields(frm);
             renderRevisionState(frm);
-            installLegacyReturnButtonGuard(frm);
             frm.remove_custom_button(__("إعادة للمسودة"), __("دورة الطلب"));
 
             if (frm.doc.revision_of) {
