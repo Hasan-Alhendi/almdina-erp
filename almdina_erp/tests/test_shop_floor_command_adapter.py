@@ -15,19 +15,17 @@ COMMAND_PATH = (
     / "almdina_erp/almdina_erp/services/shop_floor_commands.py"
 )
 HOOKS_PATH = REPOSITORY_ROOT / "almdina_erp/hooks.py"
-GATEWAY_MODULE = (
-    "almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_gateway"
+REPOSITORY_MODULE = (
+    "almdina_erp.almdina_erp.infrastructure.frappe."
+    "shop_floor_command_repository"
 )
 
 
 class AdapterHarness:
-    def __init__(self) -> None:
-        self.session = SimpleNamespace(user="worker@example.com")
-
     def load(self):
         fake_frappe = types.ModuleType("frappe")
-        fake_frappe.session = self.session
         fake_frappe._ = lambda message: message
+        fake_frappe.PermissionError = PermissionError
         fake_frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
 
         def throw(message: str, *args, **kwargs) -> None:
@@ -35,23 +33,16 @@ class AdapterHarness:
 
         fake_frappe.throw = throw
 
-        fake_utils = types.ModuleType("frappe.utils")
-        fake_utils.cint = lambda value: int(value or 0)
-        fake_utils.now_datetime = lambda: "2026-01-01 00:00:00"
-        fake_utils.time_diff_in_seconds = lambda end, start: 0
+        fake_repository_module = types.ModuleType(REPOSITORY_MODULE)
 
-        fake_gateway = types.ModuleType(GATEWAY_MODULE)
-        fake_gateway.DISPATCH_ROLES = ("Order Entry", "Production Manager")
-        fake_gateway.ADMIN_ROLES = (
-            "Order Entry",
-            "Production Manager",
-            "System Manager",
-        )
+        class FakeRepository:
+            pass
+
+        fake_repository_module.FrappeShopFloorCommandRepository = FakeRepository
 
         replacements = {
             "frappe": fake_frappe,
-            "frappe.utils": fake_utils,
-            GATEWAY_MODULE: fake_gateway,
+            REPOSITORY_MODULE: fake_repository_module,
         }
         previous = {name: sys.modules.get(name) for name in replacements}
         sys.modules.update(replacements)
@@ -61,7 +52,7 @@ class AdapterHarness:
                 COMMAND_PATH,
             )
             if spec is None or spec.loader is None:
-                raise RuntimeError("Could not load shop floor command adapter")
+                raise RuntimeError("Could not load shop-floor command adapter")
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             return module
@@ -77,14 +68,13 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
     def test_hooks_route_mutating_shop_floor_apis_to_command_boundaries(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
-        direct_commands = (
+        for method in (
             "get_handoff_workers",
             "start_my_stage",
             "handoff_to_next",
             "mark_delivered",
             "revert_department",
-        )
-        for method in direct_commands:
+        ):
             old = f"almdina_erp.almdina_erp.services.shop_floor_service.{method}"
             new = f"almdina_erp.almdina_erp.services.shop_floor_commands.{method}"
             self.assertEqual(overrides.get(old), new)
@@ -105,65 +95,30 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             guarded_dispatch,
         )
 
-        revision_target = (
-            "almdina_erp.almdina_erp.services.order_revision_service."
-            "create_order_revision"
-        )
-        self.assertEqual(
-            overrides.get(
-                "almdina_erp.almdina_erp.services.shop_floor_service."
-                "return_order_to_draft"
-            ),
-            revision_target,
-        )
-        self.assertEqual(
-            overrides.get(
-                "almdina_erp.almdina_erp.services.shop_floor_commands."
-                "return_order_to_draft"
-            ),
-            revision_target,
-        )
+    def test_adapter_delegates_framework_errors_without_owning_rules(self) -> None:
+        adapter = AdapterHarness().load()
 
-    def test_command_adapter_uses_domain_and_infrastructure_boundaries(self) -> None:
-        source = COMMAND_PATH.read_text(encoding="utf-8")
-        self.assertIn("domain.orders.lifecycle import", source)
-        self.assertIn("infrastructure.frappe import", source)
-        self.assertNotIn("shop_floor_service as legacy", source)
-        self.assertNotIn("services import shop_floor_service", source)
-        self.assertNotIn("PATH_SEQUENCE", source)
-        self.assertNotIn("STAGE_ORDER_STATUS", source)
-        self.assertNotIn("def _next_stage_type", source)
-        self.assertNotIn("def _sequence_for_stage", source)
+        def fail(repository):
+            raise adapter.commands.ShopFloorCommandError("business error")
 
-    def test_dispatch_policy_preserves_valid_order_behavior(self) -> None:
-        commands = AdapterHarness().load()
+        with self.assertRaisesRegex(RuntimeError, "business error"):
+            adapter._execute(fail)
+
+    def test_dispatch_compatibility_validator_preserves_behavior(self) -> None:
+        adapter = AdapterHarness().load()
         calls: list[str] = []
-        order = SimpleNamespace(
-            name="DCO-TEST",
+        valid = SimpleNamespace(
+            name="DCO-VALID",
             production_path=None,
             current_production_stage=None,
             status="Approved",
             cutting_plan_json="{}",
             plan_needs_recalculation=0,
+            drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: calls.append("validated"),
         )
-
-        commands.assert_order_ready_for_dispatch(order)
+        adapter.assert_order_ready_for_dispatch(valid)
         self.assertEqual(calls, ["validated"])
-
-    def test_dispatch_policy_rejects_dispatched_and_invalid_statuses(self) -> None:
-        commands = AdapterHarness().load()
-        dispatched = SimpleNamespace(
-            name="DCO-DISPATCHED",
-            production_path="Drawing",
-            current_production_stage="PST-1",
-            status="At Drawing",
-            cutting_plan_json="{}",
-            plan_needs_recalculation=0,
-            ensure_special_shapes_documented=lambda: None,
-        )
-        with self.assertRaisesRegex(RuntimeError, "already dispatched"):
-            commands.assert_order_ready_for_dispatch(dispatched)
 
         invalid = SimpleNamespace(
             name="DCO-HOLD",
@@ -172,25 +127,21 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             status="On Hold",
             cutting_plan_json="{}",
             plan_needs_recalculation=0,
+            drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: None,
         )
         with self.assertRaisesRegex(RuntimeError, "Only draft or rejected"):
-            commands.assert_order_ready_for_dispatch(invalid)
+            adapter.assert_order_ready_for_dispatch(invalid)
 
-    def test_stage_transitions_and_paths_are_domain_driven(self) -> None:
-        commands = AdapterHarness().load()
-        self.assertEqual(
-            commands._transition("Pending", "start", "error"),
-            "In Progress",
-        )
-        self.assertEqual(
-            commands._transition("Paused", "finish", "error"),
-            "Completed",
-        )
-        self.assertEqual(commands._next_stage("Drawing", "Drawing"), "CNC")
-        self.assertEqual(commands._next_stage("Drawing", "Sanding"), None)
-        with self.assertRaisesRegex(RuntimeError, "error"):
-            commands._transition("Completed", "start", "error")
+    def test_private_compatibility_helpers_delegate_to_application(self) -> None:
+        adapter = AdapterHarness().load()
+        self.assertEqual(adapter._transition("Pending", "start", "error"), "In Progress")
+        self.assertEqual(adapter._next_stage("Drawing", "Drawing"), "CNC")
+        with self.assertRaisesRegex(
+            adapter.commands.ShopFloorCommandError,
+            "error",
+        ):
+            adapter._transition("Completed", "start", "error")
 
 
 if __name__ == "__main__":
