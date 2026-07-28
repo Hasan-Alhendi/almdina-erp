@@ -50,11 +50,15 @@ class TestBoardInputSyncContract(unittest.TestCase):
         self.assertIn("syncInputs,", source)
 
     def test_plan_actions_flush_board_controls_before_validation(self) -> None:
-        for path in (FAST_SAVE_UX, TEXT_BOARD_PLAN_UX):
+        cases = (
+            (FAST_SAVE_UX, "if (!boardUX || !boardUX.canCalculatePlan(frm))"),
+            (TEXT_BOARD_PLAN_UX, "if (!validatePlanInputs(frm)"),
+        )
+        for path, validation_token in cases:
             source = path.read_text(encoding="utf-8")
             with self.subTest(path=path.name):
                 sync_index = source.index("await boardUX.syncInputs(frm)")
-                validation_index = source.index("canCalculatePlan(frm)") if path == FAST_SAVE_UX else source.index("validatePlanInputs(frm)")
+                validation_index = source.index(validation_token)
                 self.assertLess(sync_index, validation_index)
 
     def test_doctype_uses_free_text_board_field_not_hidden_stock_item(self) -> None:
