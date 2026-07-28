@@ -49,15 +49,17 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("FrappeShopFloorQueryRepository", source)
         self.assertIn("present_order_detail", source)
 
-    def test_legacy_service_is_only_a_small_compatibility_facade(self) -> None:
+    def test_legacy_service_is_only_a_small_lazy_compatibility_facade(self) -> None:
         source = LEGACY_PATH.read_text(encoding="utf-8")
-        self.assertLess(len(source.splitlines()), 150)
+        self.assertLess(len(source.splitlines()), 160)
         self.assertNotIn("frappe.db", source)
         self.assertNotIn("frappe.get_all", source)
         self.assertNotIn("dco-sheet-card", source)
-        self.assertIn("services.shop_floor_query_service import", source)
-        self.assertIn("services.shop_floor_dxf_service import", source)
-        self.assertIn("services.shop_floor_commands import", source)
+        self.assertIn("from importlib import import_module", source)
+        self.assertIn("services.shop_floor_query_service", source)
+        self.assertIn("services.shop_floor_dxf_service", source)
+        self.assertIn("services.shop_floor_commands", source)
+        self.assertNotIn("from almdina_erp.almdina_erp.services.shop_floor_commands import", source)
 
     def test_hooks_route_legacy_reads_and_dxf_actions_to_focused_services(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
