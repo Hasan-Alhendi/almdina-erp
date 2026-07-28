@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 
 from almdina_erp.almdina_erp.application.shop_floor import queries
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
+from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_query_repository import (
     FrappeShopFloorQueryRepository,
 )
@@ -24,18 +24,20 @@ def _permission_error(error: queries.ShopFloorPermissionDenied) -> None:
 
 @frappe.whitelist()
 def get_dispatch_options() -> dict[str, Any]:
-    shop_floor_gateway.require_roles(*shop_floor_gateway.DISPATCH_ROLES)
+    shop_floor_authorization.require_roles(*shop_floor_authorization.DISPATCH_ROLES)
     result = queries.get_dispatch_options(_repository)
     for path in result["paths"]:
         first_stage_type = path.pop("first_stage_type")
         path["label"] = _(path["label"])
-        path["first_role"] = shop_floor_gateway.STAGE_ROLE_BY_TYPE[first_stage_type]
+        path["first_role"] = shop_floor_authorization.STAGE_ROLE_BY_TYPE[
+            first_stage_type
+        ]
     return result
 
 
 @frappe.whitelist()
 def get_revert_targets(order_name: str) -> list[dict[str, Any]]:
-    shop_floor_gateway.require_roles(*shop_floor_gateway.ADMIN_ROLES)
+    shop_floor_authorization.require_roles(*shop_floor_authorization.ADMIN_ROLES)
     return queries.get_revert_targets(_repository, order_name)
 
 
