@@ -48,16 +48,21 @@ def test_measurement_print_places_drawing_inside_notes_without_adding_a_column()
     assert "<th>الرسم</th>" not in source
 
 
-def test_customer_invoice_print_includes_drawing_in_both_print_paths():
+def test_customer_invoice_print_includes_drawing_in_the_canonical_print_path():
     invoice = text(INVOICE)
     edge_color = text(EDGE_COLOR)
     assert "renderer.notesCell(row, row.notes" in invoice
     assert "${printNotesCell(row)}" in invoice
     assert "${shapePrintCss()}" in invoice
-    assert "patchMeasurementDrawings(frm, measurementTable)" in edge_color
-    assert "renderer.notesCell(" in edge_color
-    assert "${shapePrintCss()}" in edge_color
-    assert "dco-row-with-sketch" in edge_color
+    assert "dco-row-with-sketch" in invoice
+    assert "function buildPrintHtml(frm)" in invoice
+    assert "frame.srcdoc = buildPrintHtml(frm)" in invoice
+
+    # Edge color is now a presentation-only patch. It must not rebuild or fork
+    # the invoice print HTML, which keeps a single authoritative print path.
+    assert "patchMeasurementDrawings" not in edge_color
+    assert "renderer.notesCell(" not in edge_color
+    assert "removeLegacyColorDuplicates" in edge_color
 
 
 def test_print_css_keeps_drawn_piece_row_together_and_preserves_long_notes():
