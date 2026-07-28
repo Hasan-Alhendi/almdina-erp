@@ -116,6 +116,24 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
     "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
         "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
+        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":
+        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_revert_targets",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_my_inbox":
+        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_inbox",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_my_archive":
+        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_archive",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_order_shop_floor_detail":
+        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_shop_floor_detail",
+    "almdina_erp.almdina_erp.services.shop_floor_service.mark_dxf_exported":
+        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.mark_dxf_exported",
+    "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf":
+        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.upload_production_dxf",
+    "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan":
+        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.recalculate_drawing_plan",
+    "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf":
+        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers":
         "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
     "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order":
