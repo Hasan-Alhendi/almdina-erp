@@ -86,6 +86,12 @@ jobs:
       - name: Run plan payload and fingerprint tests
         run: python -m unittest -v almdina_erp.tests.test_order_plan_payloads
 
+      - name: Run order costing tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_order_costing_domain \
+            almdina_erp.tests.test_order_costing_architecture
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
