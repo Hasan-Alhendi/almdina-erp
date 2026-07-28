@@ -110,6 +110,13 @@ jobs:
             almdina_erp.tests.test_order_save_application \
             almdina_erp.tests.test_unified_order_controller_architecture
 
+      - name: Run inventory availability tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_inventory_domain \
+            almdina_erp.tests.test_stock_availability_application \
+            almdina_erp.tests.test_stock_availability_architecture
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
