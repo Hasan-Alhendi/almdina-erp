@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from almdina_erp.almdina_erp.domain.cutting.primitives import expand_piece_groups
+from almdina_erp.almdina_erp.domain.cutting.strategies.maxrects import pack_maxrects
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DETAIL = (
@@ -22,8 +25,6 @@ PLACED = (
 ORDER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
 ORDER_JS = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.js"
 SERVICE = ROOT / "almdina_erp" / "services" / "special_shape_service.py"
-ENGINE = ROOT / "almdina_erp" / "services" / "cutting_engine.py"
-ADVANCED = ROOT / "almdina_erp" / "services" / "advanced_cutting_optimizer.py"
 PLAN = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 EXPORT = ROOT / "almdina_erp" / "services" / "export_validation_service.py"
@@ -115,7 +116,25 @@ def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geomet
 
 
 def test_exact_geometry_survives_every_packing_and_approved_export_path():
-    for path in (ENGINE, ADVANCED, PLAN, REMNANTS, EXPORT):
+    geometry_json = '{"version":1,"points":[[0,0],[60,0],[60,80],[0,80]]}'
+    expanded = expand_piece_groups(
+        [
+            {
+                "width_cm": 60,
+                "length_cm": 80,
+                "qty": 1,
+                "piece_type": "Special",
+                "special_shape_geometry_json": geometry_json,
+            }
+        ]
+    )
+    assert expanded[0]["special_shape_geometry_json"] == geometry_json
+
+    packed = pack_maxrects(expanded, 122, 244, 0.3, "best_short_side")
+    placed = packed["sheets"][0]["pieces"][0]
+    assert placed["special_shape_geometry_json"] == geometry_json
+
+    for path in (PLAN, REMNANTS, EXPORT):
         source = path.read_text(encoding="utf-8")
         assert "special_shape_geometry_json" in source, path
 

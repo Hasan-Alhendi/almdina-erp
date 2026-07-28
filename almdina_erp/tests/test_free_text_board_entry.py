@@ -6,7 +6,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 BOARD_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
-CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_text_board.py"
+ACTIVE_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_controller.py"
+DOCUMENT_ACCESS = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "document_access.py"
+PLAN_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "plan_adapter.py"
 REMNANT_PLANNING = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 STOCK_SERVICE = ROOT / "almdina_erp" / "services" / "stock_service.py"
 DROP_PATCH = ROOT / "patches" / "v1_0" / "drop_obsolete_order_board_columns.py"
@@ -78,17 +80,27 @@ def test_client_defaults_do_not_query_item_master_or_read_legacy_snapshot_fields
 
 
 def test_server_controller_validates_only_new_board_inputs_and_converts_for_optimizer():
-    source = _source(CONTROLLER)
-    assert "class TextBoardDoorCuttingOrder(FastDoorCuttingOrder)" in source
-    assert 'description = str(getattr(self, "board_description", "")' in source
-    assert "self.full_board_length_mm = length_cm * 10" in source
-    assert "self.full_board_width_mm = width_cm * 10" in source
-    assert "legacy_item" not in source
-    assert "board_material" not in source
-    assert "board_color" not in source
-    assert "board_thickness_mm" not in source
-    assert "frappe.db.get_value(" not in source
-    assert 'payload["board"]["description"]' in source
+    controller = _source(ACTIVE_CONTROLLER)
+    access = _source(DOCUMENT_ACCESS)
+    plan_adapter = _source(PLAN_ADAPTER)
+    board_block = access.split("def load_board_snapshot", 1)[1].split(
+        "def edge_rate_map", 1
+    )[0]
+    payload_block = plan_adapter.split("def _plan_input_payload", 1)[1].split(
+        "def plan_input_fingerprint", 1
+    )[0]
+
+    assert "class DoorCuttingOrderController(DoorCuttingOrder)" in controller
+    assert "process_order_save(self._gateway())" in controller
+    assert 'getattr(self.document, "board_description", "")' in board_block
+    assert "self.document.full_board_length_mm = length_cm * 10" in board_block
+    assert "self.document.full_board_width_mm = width_cm * 10" in board_block
+    assert "legacy_item" not in board_block
+    assert "board_material" not in board_block
+    assert "board_color" not in board_block
+    assert "board_thickness_mm" not in board_block
+    assert "frappe.db.get_value(" not in board_block
+    assert 'payload["board"]["description"] = description' in payload_block
 
 
 def test_remnant_planning_uses_only_optional_stock_item_identity():
@@ -156,7 +168,7 @@ def test_free_text_board_layers_are_loaded_after_invoice_renderers():
     edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
     board_text = '"public/js/door_cutting_order_board_text_ux.js"'
     assert hooks.index(invoice) < hooks.index(edge_color) < hooks.index(board_text)
-    assert "door_cutting_order_text_board.TextBoardDoorCuttingOrder" in hooks
+    assert "door_cutting_order_controller.DoorCuttingOrderController" in hooks
 
 
 def test_cutting_plan_uses_safe_board_identity_helpers():
