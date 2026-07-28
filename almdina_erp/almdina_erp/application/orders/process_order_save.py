@@ -24,6 +24,8 @@ class OrderSaveGateway(Protocol):
 
     def load_board_snapshot(self) -> None: ...
 
+    def calculate_cut_dimensions(self) -> None: ...
+
     def calculate_piece_costs(self) -> None: ...
 
     def plan_input_fingerprint(self) -> str: ...
@@ -58,6 +60,7 @@ def process_order_save(gateway: OrderSaveGateway) -> OrderSaveOutcome:
     gateway.validate_piece_inputs()
     gateway.validate_piece_policies()
     gateway.load_board_snapshot()
+    gateway.calculate_cut_dimensions()
     gateway.calculate_piece_costs()
 
     input_fingerprint = gateway.plan_input_fingerprint()
