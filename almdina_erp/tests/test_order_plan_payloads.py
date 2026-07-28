@@ -123,7 +123,7 @@ class TestPlanPayloadApplication(unittest.TestCase):
             },
         )
 
-    def test_metadata_payload_hashes_drawing_without_changing_contract(self) -> None:
+    def test_metadata_payload_preserves_four_effective_side_profiles(self) -> None:
         drawing = '{"version":1,"elements":[]}'
         payload = build_plan_metadata_payload(
             default_edge_type="2cm Normal",
@@ -133,7 +133,7 @@ class TestPlanPayloadApplication(unittest.TestCase):
                     index=1,
                     piece_type="Special",
                     edge_long_right=1,
-                    edge_long_left=0,
+                    edge_long_left=1,
                     edge_width_top=1,
                     edge_width_bottom=0,
                     edge_type="",
@@ -143,17 +143,25 @@ class TestPlanPayloadApplication(unittest.TestCase):
                     notes="Flower shape",
                     drawing_token=drawing,
                     special_shape_status="Documented",
+                    edge_long_right_type="2cm Glossy",
+                    edge_long_left_type="2cm Normal",
+                    edge_width_top_type="2cm Gold",
                 )
             ],
         )
 
         self.assertEqual(payload["default_edge_type"], "2cm Normal")
         self.assertEqual(payload["edge_color"], "White")
+        piece = payload["pieces"][0]
+        self.assertEqual(piece["edge_long_right_type"], "2cm Glossy")
+        self.assertEqual(piece["edge_long_left_type"], "2cm Normal")
+        self.assertEqual(piece["edge_width_top_type"], "2cm Gold")
+        self.assertEqual(piece["edge_width_bottom_type"], "")
         self.assertEqual(
-            payload["pieces"][0]["drawing_hash"],
+            piece["drawing_hash"],
             hashlib.sha256(drawing.encode("utf-8")).hexdigest(),
         )
-        self.assertEqual(payload["pieces"][0]["special_shape_status"], "Documented")
+        self.assertEqual(piece["special_shape_status"], "Documented")
 
     def test_fingerprint_matches_the_previous_canonical_algorithm(self) -> None:
         payload = {"version": 1, "pieces": [{"index": 1, "qty": 2}]}
