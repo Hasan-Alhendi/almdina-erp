@@ -47,6 +47,7 @@ doctype_js = {
         "public/js/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
+        "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
