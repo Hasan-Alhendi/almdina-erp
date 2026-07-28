@@ -53,9 +53,8 @@
     }
 
     function metadata(result) {
-        if (result.missingLongType) return isArabic() ? "حدد قشاط الطول" : "Select long edge";
-        if (result.missingWidthType) return isArabic() ? "حدد قشاط العرض" : "Select width edge";
-        if (result.unknownLongType || result.unknownWidthType) return isArabic() ? "تحميل بيانات القشاط…" : "Loading edge data…";
+        if (result.missingType) return isArabic() ? "اختر القشاط الافتراضي" : "Select default edge";
+        if (result.unknownType) return isArabic() ? "تحميل بيانات القشاط…" : "Loading edge data…";
         const parts = [];
         if (result.widthDeductionMm) {
             parts.push(isArabic()
@@ -73,9 +72,10 @@
     function tooltip(result) {
         const finalSize = `${format(result.finalWidth)} × ${format(result.finalLength)}`;
         const cutSize = `${format(result.cutWidth)} × ${format(result.cutLength)}`;
-        const profiles = [];
-        if (result.longCount) profiles.push(`${isArabic() ? "الطول" : "Long"}: ${result.longType || "—"} (${format(result.longThickness)} mm)`);
-        if (result.widthCount) profiles.push(`${isArabic() ? "العرض" : "Width"}: ${result.widthType || "—"} (${format(result.widthThickness)} mm)`);
+        const profiles = result.selectedSides.map(item => {
+            const mode = item.custom ? (isArabic() ? "مخصص" : "custom") : (isArabic() ? "افتراضي" : "default");
+            return `${item.type || "—"} (${format(item.thickness)} mm, ${mode})`;
+        });
         return isArabic()
             ? `القياس النهائي: ${finalSize} سم | قياس القص: ${cutSize} سم${profiles.length ? ` | ${profiles.join(" | ")}` : ""}`
             : `Finished: ${finalSize} cm | Cut: ${cutSize} cm${profiles.length ? ` | ${profiles.join(" | ")}` : ""}`;
@@ -90,8 +90,8 @@
             return;
         }
         const result = api.calculate(frm, row);
-        const warning = result.missingLongType || result.missingWidthType || result.unknownLongType || result.unknownWidthType || !result.valid;
-        const unchanged = !result.longCount && !result.widthCount;
+        const warning = result.missingType || result.unknownType || !result.valid;
+        const unchanged = !result.selectedSides.length;
         const label = result.valid ? `${format(result.cutWidth)} × ${format(result.cutLength)}` : "—";
         const meta = metadata(result);
         const title = tooltip(result);
@@ -116,8 +116,8 @@
         }
         header.textContent = isArabic() ? "مقاس القص" : "Cut size";
         header.title = isArabic()
-            ? "القياس النهائي بعد خصم سماكة قشاط الطول وقشاط العرض كلٌ حسب نوعه"
-            : "Finished size after deducting each axis edge thickness";
+            ? "القياس النهائي بعد خصم سماكة القشاط الفعلية لكل ضلع"
+            : "Finished size after deducting the effective thickness of each side";
     }
 
     function ensureRows(frm, root) {
@@ -140,14 +140,14 @@
         const hint = document.createElement("span");
         hint.className = "dco-cut-rule-hint";
         hint.textContent = isArabic()
-            ? "المدخل نهائي ← الخصم حسب سماكة كل نوع"
-            : "Finished input → deduction follows each profile";
+            ? "المدخل نهائي ← الخصم حسب سماكة كل ضلع"
+            : "Finished input → deduction follows each side";
         help.appendChild(hint);
     }
 
     function bind(frm, root) {
-        if (root._dcoAxisCutPreviewBound) return;
-        root._dcoAxisCutPreviewBound = true;
+        if (root._dcoSideCutPreviewBound) return;
+        root._dcoSideCutPreviewBound = true;
         let queued = false;
         const scheduleApply = () => {
             if (queued) return;
@@ -160,10 +160,10 @@
         root.addEventListener("input", scheduleApply);
         root.addEventListener("change", scheduleApply);
         root.addEventListener("click", scheduleApply);
-        root.addEventListener("dco:multi-edge-change", scheduleApply);
+        root.addEventListener("dco:side-edge-change", scheduleApply);
         const observer = new MutationObserver(scheduleApply);
         observer.observe(root, { childList: true, subtree: true });
-        root._dcoAxisCutPreviewObserver = observer;
+        root._dcoSideCutPreviewObserver = observer;
     }
 
     function apply(frm) {
@@ -191,8 +191,10 @@
     frappe.ui.form.on("Door Cutting Order Detail", {
         width_cm(frm) { schedule(frm); },
         length_cm(frm) { schedule(frm); },
-        edge_long_type(frm) { schedule(frm); },
-        edge_width_type(frm) { schedule(frm); },
+        edge_long_right_type_override(frm) { schedule(frm); },
+        edge_long_left_type_override(frm) { schedule(frm); },
+        edge_width_top_type_override(frm) { schedule(frm); },
+        edge_width_bottom_type_override(frm) { schedule(frm); },
         edge_long_right(frm) { schedule(frm); },
         edge_long_left(frm) { schedule(frm); },
         edge_width_top(frm) { schedule(frm); },

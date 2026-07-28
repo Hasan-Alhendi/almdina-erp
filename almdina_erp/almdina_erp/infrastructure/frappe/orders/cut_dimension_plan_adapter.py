@@ -14,7 +14,7 @@ from .plan_adapter import FrappeOrderPlanAdapter
 
 
 class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
-    """Feed raw cutting sizes and per-axis edge metadata to the plan."""
+    """Feed raw cutting sizes and per-side edge metadata to the plan."""
 
     @staticmethod
     def piece_row_as_dict(row: Any) -> dict[str, Any]:
@@ -27,6 +27,13 @@ class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
         data["length_cm"] = flt(getattr(row, "cut_length_cm", 0)) or flt(
             row.length_cm
         )
+        for fieldname in (
+            "edge_long_right_type_override",
+            "edge_long_left_type_override",
+            "edge_width_top_type_override",
+            "edge_width_bottom_type_override",
+        ):
+            data[fieldname] = str(getattr(row, fieldname, "") or "")
         data["edge_long_type"] = str(row.edge_long_type or "")
         data["edge_width_type"] = str(row.edge_width_type or "")
         data["edge_long_thickness_mm"] = flt(row.edge_long_thickness_mm)
@@ -46,8 +53,8 @@ class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
     ) -> dict[str, Any]:
         payload = super()._plan_input_payload(source)
         source_document = source or self.document
-        payload["version"] = 3
-        payload["edge_allowance_policy"] = "per_axis_edge_profile"
+        payload["version"] = 4
+        payload["edge_allowance_policy"] = "per_side_edge_profile"
 
         for item, row in zip(
             payload.get("pieces") or [],
@@ -61,6 +68,20 @@ class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
             )
 
         return payload
+
+    def _effective_side_type(
+        self,
+        row: Any,
+        selected_field: str,
+        override_field: str,
+    ) -> str:
+        if not cint(getattr(row, selected_field, 0)):
+            return ""
+        return str(
+            getattr(row, override_field, "")
+            or self.document.default_edge_type
+            or ""
+        )
 
     def _plan_metadata_payload(self) -> dict[str, Any]:
         return build_plan_metadata_payload(
@@ -102,6 +123,26 @@ class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
                     ),
                     edge_width_cost_usd=self.access.normalized_number(
                         row.edge_width_cost_usd
+                    ),
+                    edge_long_right_type=self._effective_side_type(
+                        row,
+                        "edge_long_right",
+                        "edge_long_right_type_override",
+                    ),
+                    edge_long_left_type=self._effective_side_type(
+                        row,
+                        "edge_long_left",
+                        "edge_long_left_type_override",
+                    ),
+                    edge_width_top_type=self._effective_side_type(
+                        row,
+                        "edge_width_top",
+                        "edge_width_top_type_override",
+                    ),
+                    edge_width_bottom_type=self._effective_side_type(
+                        row,
+                        "edge_width_bottom",
+                        "edge_width_bottom_type_override",
                     ),
                 )
                 for index, row in enumerate(

@@ -12,12 +12,18 @@ class CutDimensionError(ValueError):
 class CutDimensionInput:
     final_width_cm: float
     final_length_cm: float
-    long_edge_thickness_mm: float = 0
-    width_edge_thickness_mm: float = 0
     edge_long_right: int = 0
     edge_long_left: int = 0
     edge_width_top: int = 0
     edge_width_bottom: int = 0
+    edge_long_right_thickness_mm: float | None = None
+    edge_long_left_thickness_mm: float | None = None
+    edge_width_top_thickness_mm: float | None = None
+    edge_width_bottom_thickness_mm: float | None = None
+    # Transitional axis defaults keep the pure policy compatible with callers that
+    # still provide one profile per axis. Side values always take precedence.
+    long_edge_thickness_mm: float = 0
+    width_edge_thickness_mm: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +32,10 @@ class CutDimensionResult:
     final_length_cm: float
     cut_width_cm: float
     cut_length_cm: float
+    edge_long_right_thickness_mm: float
+    edge_long_left_thickness_mm: float
+    edge_width_top_thickness_mm: float
+    edge_width_bottom_thickness_mm: float
     long_edge_thickness_mm: float
     width_edge_thickness_mm: float
     width_deduction_mm: float
@@ -33,42 +43,46 @@ class CutDimensionResult:
 
 
 def calculate_cut_dimensions(piece: CutDimensionInput) -> CutDimensionResult:
-    """Calculate the raw board size from the requested finished size.
+    """Calculate raw cutting size from the finished size and four side profiles.
 
-    Selected long sides use the long-axis edge profile and reduce cutting width.
-    Selected width sides use the width-axis edge profile and reduce cutting length.
+    Every selected long side reduces the cutting width by its own thickness.
+    Every selected width side reduces the cutting length by its own thickness.
     """
 
     final_width = _finite(piece.final_width_cm, "final_width")
     final_length = _finite(piece.final_length_cm, "final_length")
-    long_thickness = _finite(
-        piece.long_edge_thickness_mm,
-        "long_edge_thickness",
-    )
-    width_thickness = _finite(
-        piece.width_edge_thickness_mm,
-        "width_edge_thickness",
-    )
-
     if final_width <= 0:
         raise CutDimensionError("final_width_not_positive")
     if final_length <= 0:
         raise CutDimensionError("final_length_not_positive")
-    if long_thickness < 0:
-        raise CutDimensionError("long_edge_thickness_negative")
-    if width_thickness < 0:
-        raise CutDimensionError("width_edge_thickness_negative")
 
-    long_side_count = _selected_count(
-        piece.edge_long_right,
-        piece.edge_long_left,
+    right = _side_thickness(
+        selected=piece.edge_long_right,
+        side_value=piece.edge_long_right_thickness_mm,
+        axis_value=piece.long_edge_thickness_mm,
+        fieldname="edge_long_right_thickness",
     )
-    width_side_count = _selected_count(
-        piece.edge_width_top,
-        piece.edge_width_bottom,
+    left = _side_thickness(
+        selected=piece.edge_long_left,
+        side_value=piece.edge_long_left_thickness_mm,
+        axis_value=piece.long_edge_thickness_mm,
+        fieldname="edge_long_left_thickness",
     )
-    width_deduction_mm = long_thickness * long_side_count
-    length_deduction_mm = width_thickness * width_side_count
+    top = _side_thickness(
+        selected=piece.edge_width_top,
+        side_value=piece.edge_width_top_thickness_mm,
+        axis_value=piece.width_edge_thickness_mm,
+        fieldname="edge_width_top_thickness",
+    )
+    bottom = _side_thickness(
+        selected=piece.edge_width_bottom,
+        side_value=piece.edge_width_bottom_thickness_mm,
+        axis_value=piece.width_edge_thickness_mm,
+        fieldname="edge_width_bottom_thickness",
+    )
+
+    width_deduction_mm = right + left
+    length_deduction_mm = top + bottom
     cut_width = final_width - (width_deduction_mm / 10)
     cut_length = final_length - (length_deduction_mm / 10)
 
@@ -82,15 +96,42 @@ def calculate_cut_dimensions(piece: CutDimensionInput) -> CutDimensionResult:
         final_length_cm=_round(final_length),
         cut_width_cm=_round(cut_width),
         cut_length_cm=_round(cut_length),
-        long_edge_thickness_mm=_round(long_thickness),
-        width_edge_thickness_mm=_round(width_thickness),
+        edge_long_right_thickness_mm=_round(right),
+        edge_long_left_thickness_mm=_round(left),
+        edge_width_top_thickness_mm=_round(top),
+        edge_width_bottom_thickness_mm=_round(bottom),
+        long_edge_thickness_mm=_common_selected_value(
+            (piece.edge_long_right, right),
+            (piece.edge_long_left, left),
+        ),
+        width_edge_thickness_mm=_common_selected_value(
+            (piece.edge_width_top, top),
+            (piece.edge_width_bottom, bottom),
+        ),
         width_deduction_mm=_round(width_deduction_mm),
         length_deduction_mm=_round(length_deduction_mm),
     )
 
 
-def _selected_count(*values: int) -> int:
-    return sum(1 for value in values if bool(value))
+def _side_thickness(
+    *,
+    selected: int,
+    side_value: float | None,
+    axis_value: float,
+    fieldname: str,
+) -> float:
+    if not bool(selected):
+        return 0.0
+    source = axis_value if side_value is None else side_value
+    thickness = _finite(source, fieldname)
+    if thickness < 0:
+        raise CutDimensionError(f"{fieldname}_negative")
+    return thickness
+
+
+def _common_selected_value(*values: tuple[int, float]) -> float:
+    selected = {_round(value) for enabled, value in values if bool(enabled)}
+    return selected.pop() if len(selected) == 1 else 0.0
 
 
 def _finite(value: float, fieldname: str) -> float:

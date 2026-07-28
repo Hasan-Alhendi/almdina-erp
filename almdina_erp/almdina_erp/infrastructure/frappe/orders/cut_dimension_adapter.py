@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable
 
 import frappe
 from frappe import _
@@ -12,11 +12,16 @@ from almdina_erp.almdina_erp.domain.orders.cut_dimensions import (
     calculate_cut_dimensions,
 )
 
-from .edge_profile_repository import FrappeEdgeProfileRepository
+from .edge_profile_repository import (
+    AXIS_SIDES,
+    SIDE_CONFIG,
+    EdgeProfile,
+    FrappeEdgeProfileRepository,
+)
 
 
 class FrappeOrderCutDimensionAdapter:
-    """Apply per-axis edge allowance to Frappe child rows."""
+    """Apply per-side edge allowance to Frappe child rows."""
 
     def __init__(
         self,
@@ -28,32 +33,41 @@ class FrappeOrderCutDimensionAdapter:
 
     def calculate_rows(self) -> None:
         for index, row in enumerate(self.document.pieces or [], start=1):
-            long_profile = self.profiles.profile_for(row, "long", index)
-            width_profile = self.profiles.profile_for(row, "width", index)
-
-            row.edge_long_type = long_profile.name if long_profile else ""
-            row.edge_width_type = width_profile.name if width_profile else ""
+            resolved = self.profiles.effective_profiles(row, index)
+            self._clear_inactive_overrides(row)
 
             try:
                 result = calculate_cut_dimensions(
                     CutDimensionInput(
                         final_width_cm=flt(row.width_cm),
                         final_length_cm=flt(row.length_cm),
-                        long_edge_thickness_mm=(
-                            long_profile.thickness_mm if long_profile else 0
-                        ),
-                        width_edge_thickness_mm=(
-                            width_profile.thickness_mm if width_profile else 0
-                        ),
                         edge_long_right=cint(row.edge_long_right),
                         edge_long_left=cint(row.edge_long_left),
                         edge_width_top=cint(row.edge_width_top),
                         edge_width_bottom=cint(row.edge_width_bottom),
+                        edge_long_right_thickness_mm=self._thickness(
+                            resolved["long_right"]
+                        ),
+                        edge_long_left_thickness_mm=self._thickness(
+                            resolved["long_left"]
+                        ),
+                        edge_width_top_thickness_mm=self._thickness(
+                            resolved["width_top"]
+                        ),
+                        edge_width_bottom_thickness_mm=self._thickness(
+                            resolved["width_bottom"]
+                        ),
                     )
                 )
             except CutDimensionError as error:
                 self._raise_validation_error(index, str(error))
 
+            long_profiles = self._selected_profiles(resolved, "long")
+            width_profiles = self._selected_profiles(resolved, "width")
+            all_profiles = (*long_profiles, *width_profiles)
+
+            row.edge_long_type = self._common_profile_name(long_profiles)
+            row.edge_width_type = self._common_profile_name(width_profiles)
             row.edge_long_thickness_mm = result.long_edge_thickness_mm
             row.edge_width_thickness_mm = result.width_edge_thickness_mm
             row.cut_width_cm = result.cut_width_cm
@@ -62,17 +76,45 @@ class FrappeOrderCutDimensionAdapter:
                 result.cut_width_cm,
                 result.cut_length_cm,
             )
-            self._sync_legacy_summary(row, long_profile, width_profile)
+            row.edge_type = self._common_profile_name(all_profiles)
+            row.edge_thickness_mm = self._common_profile_value(
+                all_profiles,
+                "thickness_mm",
+            )
 
     @staticmethod
-    def _sync_legacy_summary(row: Any, long_profile: Any, width_profile: Any) -> None:
-        profiles = [profile for profile in (long_profile, width_profile) if profile]
-        names = {profile.name for profile in profiles}
-        thicknesses = {profile.thickness_mm for profile in profiles}
-        row.edge_type = names.pop() if len(names) == 1 else ""
-        row.edge_thickness_mm = (
-            thicknesses.pop() if len(thicknesses) == 1 else 0
+    def _clear_inactive_overrides(row: Any) -> None:
+        for selected_field, override_field, _ in SIDE_CONFIG.values():
+            if not cint(getattr(row, selected_field, 0)):
+                setattr(row, override_field, "")
+
+    @staticmethod
+    def _thickness(profile: EdgeProfile | None) -> float:
+        return profile.thickness_mm if profile else 0
+
+    @staticmethod
+    def _selected_profiles(
+        resolved: dict[str, EdgeProfile | None],
+        axis: str,
+    ) -> tuple[EdgeProfile, ...]:
+        return tuple(
+            profile
+            for side in AXIS_SIDES[axis]
+            if (profile := resolved[side]) is not None
         )
+
+    @staticmethod
+    def _common_profile_name(profiles: Iterable[EdgeProfile]) -> str:
+        names = {profile.name for profile in profiles}
+        return names.pop() if len(names) == 1 else ""
+
+    @staticmethod
+    def _common_profile_value(
+        profiles: Iterable[EdgeProfile],
+        fieldname: str,
+    ) -> float:
+        values = {float(getattr(profile, fieldname)) for profile in profiles}
+        return values.pop() if len(values) == 1 else 0
 
     @staticmethod
     def _size_label(width_cm: float, length_cm: float) -> str:
@@ -81,12 +123,6 @@ class FrappeOrderCutDimensionAdapter:
     @staticmethod
     def _raise_validation_error(index: int, code: str) -> None:
         messages = {
-            "long_edge_thickness_negative": _(
-                "Row {0}: Long edge thickness cannot be negative."
-            ),
-            "width_edge_thickness_negative": _(
-                "Row {0}: Width edge thickness cannot be negative."
-            ),
             "cut_width_not_positive": _(
                 "Row {0}: Edge allowance leaves no valid cutting width."
             ),

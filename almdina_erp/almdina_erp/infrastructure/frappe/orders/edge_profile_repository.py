@@ -10,6 +10,40 @@ from frappe.utils import cint, flt
 
 
 EdgeAxis = Literal["long", "width"]
+EdgeSide = Literal[
+    "long_right",
+    "long_left",
+    "width_top",
+    "width_bottom",
+]
+
+SIDE_CONFIG: dict[EdgeSide, tuple[str, str, str]] = {
+    "long_right": (
+        "edge_long_right",
+        "edge_long_right_type_override",
+        "Long Right",
+    ),
+    "long_left": (
+        "edge_long_left",
+        "edge_long_left_type_override",
+        "Long Left",
+    ),
+    "width_top": (
+        "edge_width_top",
+        "edge_width_top_type_override",
+        "Width Top",
+    ),
+    "width_bottom": (
+        "edge_width_bottom",
+        "edge_width_bottom_type_override",
+        "Width Bottom",
+    ),
+}
+
+AXIS_SIDES: dict[EdgeAxis, tuple[EdgeSide, EdgeSide]] = {
+    "long": ("long_right", "long_left"),
+    "width": ("width_top", "width_bottom"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,43 +55,70 @@ class EdgeProfile:
 
 
 class FrappeEdgeProfileRepository:
-    """Load and validate edge master data once per order save."""
+    """Load edge master data once and resolve one effective profile per side."""
 
     def __init__(self, document: Any) -> None:
         self.document = document
 
-    def axis_is_selected(self, row: Any, axis: EdgeAxis) -> bool:
-        if axis == "long":
-            return bool(cint(row.edge_long_right) or cint(row.edge_long_left))
-        return bool(cint(row.edge_width_top) or cint(row.edge_width_bottom))
+    def side_is_selected(self, row: Any, side: EdgeSide) -> bool:
+        selected_field, _, _ = SIDE_CONFIG[side]
+        return bool(cint(getattr(row, selected_field, 0)))
 
-    def effective_type(self, row: Any, axis: EdgeAxis, index: int) -> str:
-        if not self.axis_is_selected(row, axis):
+    def axis_is_selected(self, row: Any, axis: EdgeAxis) -> bool:
+        return any(self.side_is_selected(row, side) for side in AXIS_SIDES[axis])
+
+    def effective_type(self, row: Any, side: EdgeSide, index: int) -> str:
+        if not self.side_is_selected(row, side):
             return ""
 
-        fieldname = "edge_long_type" if axis == "long" else "edge_width_type"
+        _, override_field, side_label = SIDE_CONFIG[side]
         edge_type = str(
-            getattr(row, fieldname, "")
+            getattr(row, override_field, "")
             or self.document.default_edge_type
             or ""
         ).strip()
         if edge_type:
             return edge_type
 
-        axis_label = _("Long") if axis == "long" else _("Width")
         frappe.throw(
-            _("Row {0}: Select a {1} Edge Type before choosing its edge sides.").format(
-                index,
-                axis_label,
-            )
+            _(
+                "Row {0}: Select a default Edge Type before choosing the {1} edge."
+            ).format(index, _(side_label))
         )
         return ""
 
-    def profile_for(self, row: Any, axis: EdgeAxis, index: int) -> EdgeProfile | None:
-        edge_type = self.effective_type(row, axis, index)
+    def profile_for_side(
+        self,
+        row: Any,
+        side: EdgeSide,
+        index: int,
+    ) -> EdgeProfile | None:
+        edge_type = self.effective_type(row, side, index)
         if not edge_type:
             return None
         return self.profiles()[edge_type]
+
+    def profiles_for_axis(
+        self,
+        row: Any,
+        axis: EdgeAxis,
+        index: int,
+    ) -> tuple[EdgeProfile, ...]:
+        return tuple(
+            profile
+            for side in AXIS_SIDES[axis]
+            if (profile := self.profile_for_side(row, side, index)) is not None
+        )
+
+    def effective_profiles(
+        self,
+        row: Any,
+        index: int,
+    ) -> dict[EdgeSide, EdgeProfile | None]:
+        return {
+            side: self.profile_for_side(row, side, index)
+            for side in SIDE_CONFIG
+        }
 
     def profiles(self) -> dict[str, EdgeProfile]:
         flags = self.document.flags
@@ -134,15 +195,18 @@ class FrappeEdgeProfileRepository:
     def _required_names(self) -> set[str]:
         names: set[str] = set()
         for index, row in enumerate(self.document.pieces or [], start=1):
-            for axis in ("long", "width"):
-                edge_type = self.effective_type(row, axis, index)
+            for side in SIDE_CONFIG:
+                edge_type = self.effective_type(row, side, index)
                 if edge_type:
                     names.add(edge_type)
         return names
 
 
 __all__ = [
+    "AXIS_SIDES",
+    "SIDE_CONFIG",
     "EdgeAxis",
     "EdgeProfile",
+    "EdgeSide",
     "FrappeEdgeProfileRepository",
 ]

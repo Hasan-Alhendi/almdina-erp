@@ -64,6 +64,10 @@ class PlanMetadataPiece:
     edge_width_rate_usd: float = 0
     edge_long_cost_usd: float = 0
     edge_width_cost_usd: float = 0
+    edge_long_right_type: str = ""
+    edge_long_left_type: str = ""
+    edge_width_top_type: str = ""
+    edge_width_bottom_type: str = ""
 
 
 def build_plan_input_payload(
@@ -128,6 +132,26 @@ def build_plan_metadata_payload(
                 "edge_long_left": piece.edge_long_left,
                 "edge_width_top": piece.edge_width_top,
                 "edge_width_bottom": piece.edge_width_bottom,
+                "edge_long_right_type": (
+                    piece.edge_long_right_type
+                    or piece.edge_long_type
+                    or piece.edge_type
+                ),
+                "edge_long_left_type": (
+                    piece.edge_long_left_type
+                    or piece.edge_long_type
+                    or piece.edge_type
+                ),
+                "edge_width_top_type": (
+                    piece.edge_width_top_type
+                    or piece.edge_width_type
+                    or piece.edge_type
+                ),
+                "edge_width_bottom_type": (
+                    piece.edge_width_bottom_type
+                    or piece.edge_width_type
+                    or piece.edge_type
+                ),
                 "edge_long_type": piece.edge_long_type or piece.edge_type,
                 "edge_width_type": piece.edge_width_type or piece.edge_type,
                 "edge_long_rate_usd": (

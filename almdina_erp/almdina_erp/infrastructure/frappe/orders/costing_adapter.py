@@ -48,8 +48,18 @@ class FrappeOrderCostingAdapter:
                     edge_long_left=cint(row.edge_long_left),
                     edge_width_top=cint(row.edge_width_top),
                     edge_width_bottom=cint(row.edge_width_bottom),
-                    edge_long_type=str(row.edge_long_type or ""),
-                    edge_width_type=str(row.edge_width_type or ""),
+                    edge_long_right_type=str(
+                        row.edge_long_right_type_override or ""
+                    ),
+                    edge_long_left_type=str(
+                        row.edge_long_left_type_override or ""
+                    ),
+                    edge_width_top_type=str(
+                        row.edge_width_top_type_override or ""
+                    ),
+                    edge_width_bottom_type=str(
+                        row.edge_width_bottom_type_override or ""
+                    ),
                 )
                 for row in (self.document.pieces or [])
             ),
