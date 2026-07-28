@@ -51,7 +51,7 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertIn("def _validate_clipped_corner", source)
         self.assertNotIn("math.isclose", source)
 
-    def test_active_controller_is_direct_and_thin(self) -> None:
+    def test_active_controller_is_framework_compatible_and_thin(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         self.assertEqual(
             hooks["override_doctype_class"]["Door Cutting Order"],
@@ -59,8 +59,10 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
             "door_cutting_order_controller.DoorCuttingOrderController",
         )
         source = CONTROLLER_PATH.read_text(encoding="utf-8")
-        self.assertIn("class DoorCuttingOrderController(Document)", source)
+        self.assertIn("class DoorCuttingOrderController(DoorCuttingOrder)", source)
+        self.assertIn("from .door_cutting_order import DoorCuttingOrder", source)
         self.assertIn("FrappeDoorCuttingOrderSaveGateway", source)
+        self.assertNotIn("frappe.model.document import Document", source)
 
     def test_old_domain_controller_remains_available_for_compatibility(self) -> None:
         source = LEGACY_DOMAIN_CONTROLLER_PATH.read_text(encoding="utf-8")
