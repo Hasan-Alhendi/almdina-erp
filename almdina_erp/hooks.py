@@ -78,11 +78,11 @@ doctype_list_js = {
     "Door Cutting Order": "public/js/door_cutting_order_list.js",
 }
 
-# Compatibility controllers remain as bases. The active controller delegates
-# piece, pricing, costing, plan reuse, metadata refresh, and optimization orchestration.
+# The production controller is intentionally thin and inherits directly from
+# Frappe Document. Historical controller layers remain import-compatible only.
 override_doctype_class = {
     "Door Cutting Order":
-        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_plan.PlanDoorCuttingOrder",
+        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_controller.DoorCuttingOrderController",
 }
 
 doc_events = {
