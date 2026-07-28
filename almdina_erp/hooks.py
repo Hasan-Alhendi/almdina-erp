@@ -78,11 +78,11 @@ doctype_list_js = {
     "Door Cutting Order": "public/js/door_cutting_order_list.js",
 }
 
-# Keep the optimized and free-text controllers as compatibility bases. The
-# active controller adapts Frappe rows to pure Domain piece and pricing rules.
+# Compatibility controllers remain as bases. The active controller delegates
+# piece, pricing, and costing decisions to pure Domain policies.
 override_doctype_class = {
     "Door Cutting Order":
-        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_domain.DomainDoorCuttingOrder",
+        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_costing.CostingDoorCuttingOrder",
 }
 
 doc_events = {
