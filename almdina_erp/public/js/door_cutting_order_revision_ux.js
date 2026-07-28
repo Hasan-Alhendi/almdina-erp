@@ -27,6 +27,10 @@
         return roles.includes("System Manager") || roles.includes(role);
     }
 
+    function revisionState(frm) {
+        return (frm && frm.doc && frm.doc.revision_state) || "Current";
+    }
+
     function isEditableDraft(frm) {
         return Boolean(
             frm && frm.doc && frm.doc.docstatus === 0 && DRAFT_LIKE.has(frm.doc.status || "Draft")
@@ -37,6 +41,7 @@
         if (!frm || frm.is_new()) return false;
         const status = frm.doc.status || "Draft";
         if (DRAFT_LIKE.has(status) || TERMINAL.has(status)) return false;
+        if (revisionState(frm) === "Superseded") return false;
         return hasRole("Order Entry") || hasRole("Production Manager");
     }
 
@@ -47,6 +52,30 @@
 
     function applyImmutableFields(frm) {
         frm.toggle_enable(ORDER_INPUT_FIELDS, isEditableDraft(frm));
+    }
+
+    function renderRevisionState(frm) {
+        const state = revisionState(frm);
+        if (state === "Pending Activation") {
+            frm.set_intro(
+                __("هذه نسخة تعديل غير مفعّلة. يمكن تجهيزها ومراجعتها، لكنها لن تُرسل للإنتاج قبل اعتمادها واستبدال النسخة السابقة بأمان."),
+                "orange"
+            );
+            return;
+        }
+        if (state === "Superseded") {
+            frm.set_intro(
+                __("هذه نسخة تاريخية تم استبدالها بنسخة أحدث، وهي للقراءة والتوثيق فقط ولا يمكن إرسالها للإنتاج."),
+                "red"
+            );
+            return;
+        }
+        if (frm.doc.revision_of) {
+            frm.set_intro(
+                __("هذه هي النسخة الحالية المفعّلة ضمن سلسلة مراجعات الطلب."),
+                "green"
+            );
+        }
     }
 
     function openRevision(frm) {
@@ -83,6 +112,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
             applyImmutableFields(frm);
+            renderRevisionState(frm);
             frm.remove_custom_button(__("إعادة للمسودة"), __("دورة الطلب"));
 
             if (frm.doc.revision_of) {
