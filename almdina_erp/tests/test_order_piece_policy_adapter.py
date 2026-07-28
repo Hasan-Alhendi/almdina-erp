@@ -21,6 +21,13 @@ COSTING_ADAPTER_PATH = (
     / "door_cutting_order"
     / "door_cutting_order_costing.py"
 )
+PLAN_ADAPTER_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "doctype"
+    / "door_cutting_order"
+    / "door_cutting_order_plan.py"
+)
 FAST_CONTROLLER_PATH = (
     ROOT
     / "almdina_erp"
@@ -41,7 +48,7 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertNotIn(".doctype", source)
         self.assertIn("class SpecialShapeDecision", source)
 
-    def test_active_controller_adapts_rows_to_domain_policy(self) -> None:
+    def test_domain_controller_adapts_rows_to_piece_policy(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
         self.assertIn("class DomainDoorCuttingOrder", source)
         self.assertIn("TextBoardDoorCuttingOrder", source)
@@ -51,17 +58,22 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertIn("def _validate_clipped_corner", source)
         self.assertNotIn("math.isclose", source)
 
-    def test_active_controller_composes_piece_policy_and_costing(self) -> None:
+    def test_active_controller_composes_piece_costing_and_plan_layers(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         self.assertEqual(
             hooks["override_doctype_class"]["Door Cutting Order"],
             "almdina_erp.almdina_erp.doctype.door_cutting_order."
-            "door_cutting_order_costing.CostingDoorCuttingOrder",
+            "door_cutting_order_plan.PlanDoorCuttingOrder",
         )
         costing_source = COSTING_ADAPTER_PATH.read_text(encoding="utf-8")
         self.assertIn(
             "class CostingDoorCuttingOrder(DomainDoorCuttingOrder)",
             costing_source,
+        )
+        plan_source = PLAN_ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            "class PlanDoorCuttingOrder(CostingDoorCuttingOrder)",
+            plan_source,
         )
 
     def test_legacy_fast_controller_remains_a_compatibility_base(self) -> None:
