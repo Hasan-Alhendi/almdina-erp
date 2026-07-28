@@ -10,7 +10,6 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     SHOP_FLOOR_STAGE_TYPES,
     can_dispatch_from_status,
     can_mark_delivered,
-    can_return_to_draft,
     can_revert_department,
     first_stage_type,
     is_order_dispatched,
@@ -21,7 +20,9 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     stage_sequence,
     transition_stage,
 )
-from almdina_erp.almdina_erp.services import shop_floor_service as legacy
+from almdina_erp.almdina_erp.infrastructure.frappe import (
+    shop_floor_gateway as gateway,
+)
 
 
 def _transition(current_status: str, event: str, message: str) -> str:
@@ -64,41 +65,38 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 
 @frappe.whitelist()
 def get_handoff_workers(stage_name: str) -> list[dict[str, str]]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    legacy._require_stage_assignee_or_admin(stage)
-    order_path = frappe.db.get_value("Door Cutting Order", stage.door_cutting_order, "production_path")
+    stage = gateway.get_stage(stage_name)
+    gateway.require_stage_assignee_or_admin(stage)
+    order_path = gateway.get_order_path(stage.door_cutting_order)
     next_type = _next_stage(order_path, stage.stage_type)
     if not next_type:
         return []
-    return legacy.get_users_for_role(legacy.STAGE_ROLE[next_type])
+    return gateway.get_users_for_stage(next_type)
 
 
 @frappe.whitelist()
 def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
-    legacy.require_any_role(*legacy.DISPATCH_ROLES)
-    order = frappe.get_doc("Door Cutting Order", order_name)
+    gateway.require_roles(*gateway.DISPATCH_ROLES)
+    order = gateway.get_order(order_name)
     assert_order_ready_for_dispatch(order)
 
     _validate_path(path)
     first_type = first_stage_type(path)
-    legacy._assert_user_has_role(assignee, legacy.STAGE_ROLE[first_type])
+    gateway.assert_enabled_user_has_stage_role(assignee, first_type)
+    gateway.cancel_non_shop_floor_active_stages(order_name)
 
-    legacy_stages = frappe.get_all(
-        "Production Stage",
-        filters={
-            "door_cutting_order": order_name,
-            "status": ["in", ["Pending", "In Progress", "Paused"]],
-        },
-        fields=["name", "piece_label", "stage_type"],
+    stage = gateway.create_stage(
+        order_name,
+        first_type,
+        assignee,
+        stage_sequence(path, first_type),
     )
-    for row in legacy_stages:
-        if row.piece_label or row.stage_type in SHOP_FLOOR_STAGE_TYPES:
-            continue
-        frappe.db.set_value("Production Stage", row.name, "status", "Cancelled", update_modified=True)
-
-    stage = legacy._create_stage(order_name, first_type, assignee, stage_sequence(path, first_type))
-    legacy._set_order_tracking(order_name, path=path, stage=stage)
-    legacy._log_event(stage, "Created", {"path": path, "assignee": assignee, "shop_floor_dispatch": True})
+    gateway.set_order_tracking(order_name, path=path, stage=stage)
+    gateway.log_event(
+        stage,
+        "Created",
+        {"path": path, "assignee": assignee, "shop_floor_dispatch": True},
+    )
 
     return {
         "name": order_name,
@@ -112,15 +110,19 @@ def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def start_my_stage(stage_name: str) -> dict[str, Any]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    legacy._require_stage_assignee_or_admin(stage)
+    stage = gateway.get_stage(stage_name)
+    gateway.require_stage_assignee_or_admin(stage)
     target_status = _transition(
         stage.status,
         "start",
         "Only a stage that needs work can be started.",
     )
 
-    legacy._maybe_consume_stock(stage.door_cutting_order, stage.stage_type, "Cutting Start")
+    gateway.maybe_consume_stock(
+        stage.door_cutting_order,
+        stage.stage_type,
+        "Cutting Start",
+    )
 
     stage.started_by = frappe.session.user
     stage.start_time = now_datetime()
@@ -128,61 +130,87 @@ def start_my_stage(stage_name: str) -> dict[str, Any]:
     if not stage.assigned_to:
         stage.assigned_to = frappe.session.user
     stage.save(ignore_permissions=True)
-    legacy._log_event(stage, "Start", {"assigned_to": stage.assigned_to, "shop_floor": True})
-    legacy._set_order_tracking(stage.door_cutting_order, stage=stage)
+    gateway.log_event(
+        stage,
+        "Start",
+        {"assigned_to": stage.assigned_to, "shop_floor": True},
+    )
+    gateway.set_order_tracking(stage.door_cutting_order, stage=stage)
     return {
         "stage": stage.name,
         "status": stage.status,
-        "order_status": frappe.db.get_value("Door Cutting Order", stage.door_cutting_order, "status"),
+        "order_status": gateway.get_order_status(stage.door_cutting_order),
         "department_status": "قيد العمل",
     }
 
 
 @frappe.whitelist()
-def handoff_to_next(stage_name: str, next_assignee: str | None = None) -> dict[str, Any]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    legacy._require_stage_assignee_or_admin(stage)
+def handoff_to_next(
+    stage_name: str,
+    next_assignee: str | None = None,
+) -> dict[str, Any]:
+    stage = gateway.get_stage(stage_name)
+    gateway.require_stage_assignee_or_admin(stage)
     target_status = _transition(
         stage.status,
         "finish",
         "Start the stage before sending it to the next department.",
     )
 
-    order = frappe.get_doc("Door Cutting Order", stage.door_cutting_order)
+    order = gateway.get_order(stage.door_cutting_order)
     path = order.production_path
     if not path:
         frappe.throw(_("Order has no production path."))
 
-    if stage.stage_type == "Drawing" and (order.drawing_dxf_status or "None") != "Approved by Drawing":
+    if (
+        stage.stage_type == "Drawing"
+        and (order.drawing_dxf_status or "None") != "Approved by Drawing"
+    ):
         frappe.throw(_("Approve the production DXF before sending the order to CNC."))
 
     next_type = _next_stage(path, stage.stage_type)
 
     if stage.status == "Paused":
-        from almdina_erp.almdina_erp.services.production_service import _close_open_pause
-
-        _close_open_pause(stage, frappe.session.user)
+        gateway.close_open_pause(stage, frappe.session.user)
 
     finish_time = now_datetime()
     stage.finish_time = finish_time
     stage.finished_by = frappe.session.user
     stage.status = target_status
-    stage.completed_qty = legacy._required_piece_qty(stage.door_cutting_order)
+    stage.completed_qty = gateway.required_piece_qty(stage.door_cutting_order)
     if stage.start_time:
-        total_seconds = max(0, cint(time_diff_in_seconds(finish_time, stage.start_time)))
-        stage.actual_working_seconds = max(0, total_seconds - cint(stage.paused_seconds))
+        total_seconds = max(
+            0,
+            cint(time_diff_in_seconds(finish_time, stage.start_time)),
+        )
+        stage.actual_working_seconds = max(
+            0,
+            total_seconds - cint(stage.paused_seconds),
+        )
     stage.save(ignore_permissions=True)
 
-    remnants = legacy._maybe_register_remnants(stage.door_cutting_order, stage.stage_type)
-    legacy._maybe_consume_stock(stage.door_cutting_order, stage.stage_type, "Cutting Finish")
-    legacy._log_event(
+    remnants = gateway.maybe_register_remnants(
+        stage.door_cutting_order,
+        stage.stage_type,
+    )
+    gateway.maybe_consume_stock(
+        stage.door_cutting_order,
+        stage.stage_type,
+        "Cutting Finish",
+    )
+    gateway.log_event(
         stage,
         "Finish",
-        {"shop_floor": True, "handoff": True, "next_stage_type": next_type, "remnants": remnants or {}},
+        {
+            "shop_floor": True,
+            "handoff": True,
+            "next_stage_type": next_type,
+            "remnants": remnants or {},
+        },
     )
 
     if not next_type:
-        legacy._set_order_tracking(
+        gateway.set_order_tracking(
             stage.door_cutting_order,
             status="Ready for Delivery",
             department="جاهز للتسليم",
@@ -199,19 +227,23 @@ def handoff_to_next(stage_name: str, next_assignee: str | None = None) -> dict[s
 
     if not next_assignee:
         frappe.throw(_("Select the next worker."))
-    legacy._assert_user_has_role(next_assignee, legacy.STAGE_ROLE[next_type])
+    gateway.assert_enabled_user_has_stage_role(next_assignee, next_type)
 
-    next_stage = legacy._create_stage(
+    next_stage = gateway.create_stage(
         stage.door_cutting_order,
         next_type,
         next_assignee,
         stage_sequence(path, next_type),
     )
-    legacy._set_order_tracking(stage.door_cutting_order, stage=next_stage)
-    legacy._log_event(
+    gateway.set_order_tracking(stage.door_cutting_order, stage=next_stage)
+    gateway.log_event(
         next_stage,
         "Created",
-        {"from_stage": stage.name, "assignee": next_assignee, "shop_floor_handoff": True},
+        {
+            "from_stage": stage.name,
+            "assignee": next_assignee,
+            "shop_floor_handoff": True,
+        },
     )
 
     return {
@@ -226,11 +258,11 @@ def handoff_to_next(stage_name: str, next_assignee: str | None = None) -> dict[s
 
 @frappe.whitelist()
 def mark_delivered(order_name: str) -> dict[str, Any]:
-    legacy.require_any_role(*legacy.ADMIN_ROLES)
-    status = frappe.db.get_value("Door Cutting Order", order_name, "status")
+    gateway.require_roles(*gateway.ADMIN_ROLES)
+    status = gateway.get_order_status(order_name)
     if not can_mark_delivered(status):
         frappe.throw(_("Only orders ready for delivery can be marked as delivered."))
-    legacy._set_order_tracking(
+    gateway.set_order_tracking(
         order_name,
         status="Delivered",
         department="تم التسليم",
@@ -247,11 +279,14 @@ def revert_department(
     target_stage: str | None = None,
     target_stage_type: str | None = None,
 ) -> dict[str, Any]:
-    legacy.require_any_role("Production Manager", "System Manager", "Order Entry")
-    order = frappe.get_doc("Door Cutting Order", order_name)
+    gateway.require_roles("Production Manager", "System Manager", "Order Entry")
+    order = gateway.get_order(order_name)
     if order.status == "Delivered":
         frappe.throw(_("Delivered orders cannot be reverted."))
-    if not can_revert_department(order.status, production_path=order.production_path):
+    if not can_revert_department(
+        order.status,
+        production_path=order.production_path,
+    ):
         frappe.throw(_("Order is not on the shop-floor path."))
 
     raw_target = target_stage_type or target_stage
@@ -261,36 +296,38 @@ def revert_department(
         frappe.throw(_("Select a stage to revert to."))
         raise AssertionError("frappe.throw must interrupt execution")
 
-    candidates = frappe.get_all(
-        "Production Stage",
-        filters={"door_cutting_order": order_name, "stage_type": stage_type},
-        fields=["name", "piece_label", "sequence"],
-        order_by="sequence asc",
+    candidates = gateway.get_revert_stage_candidates(order_name, stage_type)
+    stage_name = next(
+        (row.name for row in candidates if not row.piece_label),
+        None,
     )
-    stage_name = next((row.name for row in candidates if not row.piece_label), None)
-    if not stage_name and target_stage and frappe.db.exists("Production Stage", target_stage):
+    if not stage_name and target_stage and gateway.stage_exists(target_stage):
         stage_name = target_stage
     if not stage_name:
-        frappe.throw(_("No shop-floor stage found for {0}.").format(_(stage_type or target_stage or "")))
+        frappe.throw(
+            _("No shop-floor stage found for {0}.").format(
+                _(stage_type or target_stage or "")
+            )
+        )
 
-    stage = frappe.get_doc("Production Stage", stage_name)
+    stage = gateway.get_stage(stage_name)
     if stage.door_cutting_order != order_name:
         frappe.throw(_("Stage does not belong to this order."))
     if stage.stage_type not in SHOP_FLOOR_STAGE_TYPES:
         frappe.throw(_("Only shop-floor stages can be reverted to."))
 
-    later = frappe.get_all(
-        "Production Stage",
-        filters={"door_cutting_order": order_name, "sequence": [">", stage.sequence]},
-        fields=["name", "piece_label"],
-    )
+    later = gateway.get_later_stages(order_name, stage.sequence)
     for row in later:
         if row.piece_label:
             continue
-        doc = frappe.get_doc("Production Stage", row.name)
+        doc = gateway.get_stage(row.name)
         doc.status = transition_stage(doc.status, "cancel")
         doc.save(ignore_permissions=True)
-        legacy._log_event(doc, "Cancel", {"reason": "Reverted to earlier stage", "target": stage.stage_type})
+        gateway.log_event(
+            doc,
+            "Cancel",
+            {"reason": "Reverted to earlier stage", "target": stage.stage_type},
+        )
 
     stage.status = transition_stage(stage.status, "reopen")
     stage.started_by = None
@@ -302,8 +339,12 @@ def revert_department(
     stage.completed_qty = 0
     stage.pauses = []
     stage.save(ignore_permissions=True)
-    legacy._log_event(stage, "Override", {"reopened": True, "shop_floor_revert": True})
-    legacy._set_order_tracking(order_name, stage=stage)
+    gateway.log_event(
+        stage,
+        "Override",
+        {"reopened": True, "shop_floor_revert": True},
+    )
+    gateway.set_order_tracking(order_name, stage=stage)
 
     return {
         "name": order_name,
@@ -316,45 +357,13 @@ def revert_department(
 
 @frappe.whitelist()
 def return_order_to_draft(order_name: str) -> dict[str, Any]:
-    legacy.require_any_role(*legacy.DISPATCH_ROLES)
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    order.check_permission("write")
-    if order.status in {"Draft", "Rejected"}:
-        frappe.throw(_("Order is already editable as a draft."))
-    if not can_return_to_draft(order.status):
-        frappe.throw(_("Delivered or cancelled orders cannot return to draft."))
+    """Compatibility endpoint: immutable orders now create controlled revisions."""
 
-    stages = frappe.get_all(
-        "Production Stage",
-        filters={
-            "door_cutting_order": order_name,
-            "status": ["in", ["Pending", "In Progress", "Paused", "Completed"]],
-            "stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
-        },
-        fields=["name", "piece_label"],
+    from almdina_erp.almdina_erp.services.order_revision_service import (
+        create_order_revision,
     )
-    for row in stages:
-        if row.piece_label:
-            continue
-        doc = frappe.get_doc("Production Stage", row.name)
-        doc.status = transition_stage(doc.status, "cancel")
-        doc.save(ignore_permissions=True)
-        legacy._log_event(doc, "Cancel", {"reason": "Returned to draft", "shop_floor": True})
 
-    frappe.db.set_value(
-        "Door Cutting Order",
+    return create_order_revision(
         order_name,
-        {
-            "status": "Draft",
-            "approved_plan": None,
-            "production_path": None,
-            "current_department": None,
-            "current_assignee": None,
-            "department_status": None,
-            "current_production_stage": None,
-            "drawing_dxf_status": "None",
-            "production_dxf": None,
-        },
-        update_modified=True,
+        reason=_("Legacy return-to-draft request converted to a controlled revision."),
     )
-    return {"name": order_name, "status": "Draft"}
