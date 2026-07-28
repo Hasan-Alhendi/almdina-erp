@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-edge-profile-controls-css";
+    const STYLE_ID = "dco-direct-edge-profile-controls-css";
+    const BULK_DEFAULT_VALUE = "__almdina_default__";
     const SIDE_CONFIG = [
         {
             side: "long_right",
@@ -43,6 +44,10 @@
         return lang === "ar" || lang.startsWith("ar-");
     }
 
+    function escapeHtml(value) {
+        return frappe.utils.escape_html(String(value ?? ""));
+    }
+
     function rootFor(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         return field && field.$wrapper ? field.$wrapper.get(0) : null;
@@ -73,126 +78,85 @@
         return window.AlmdinaMultiEdgeBanding || null;
     }
 
+    function profileMap(frm) {
+        const api = moduleApi();
+        if (!api || !api.profiles) return new Map();
+        return api.profiles(frm);
+    }
+
+    function profileEntries(frm, current = "") {
+        const values = new Map();
+        profileMap(frm).forEach(profile => {
+            const name = String((profile && profile.name) || "").trim();
+            if (!name) return;
+            values.set(name, String(profile.label || name));
+        });
+        if (current && !values.has(current)) values.set(current, current);
+        return [...values.entries()];
+    }
+
+    function sideOptionsHtml(frm, current) {
+        const defaultLabel = isArabic() ? "الافتراضي" : "Default";
+        return [
+            `<option value="">${defaultLabel}</option>`,
+            ...profileEntries(frm, current).map(([value, label]) => (
+                `<option value="${escapeHtml(value)}" ${value === current ? "selected" : ""}>${escapeHtml(label)}</option>`
+            )),
+        ].join("");
+    }
+
+    function bulkOptionsHtml(frm) {
+        const placeholder = isArabic() ? "تطبيق على الأربعة" : "Apply to all four";
+        const useDefault = isArabic() ? "الأربعة بالافتراضي" : "Default for all four";
+        return [
+            `<option value="">${placeholder}</option>`,
+            `<option value="${BULK_DEFAULT_VALUE}">${useDefault}</option>`,
+            ...profileEntries(frm).map(([value, label]) => (
+                `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
+            )),
+        ].join("");
+    }
+
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
             .dco-fast-table .dco-col-edges{vertical-align:middle!important;overflow:visible!important}
-            .dco-edge-bulk-toolbar{display:flex;align-items:center;justify-content:flex-end;min-height:24px;margin:0 0 3px;position:relative;z-index:7}
-            .dco-edge-bulk-profile{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:22px;padding:2px 8px;border:1px solid rgba(36,144,239,.32);border-radius:999px;background:rgba(36,144,239,.07);color:var(--text-color,#36414c);font-size:9.5px;font-weight:900;line-height:1;cursor:pointer;white-space:nowrap;transition:background .12s ease,border-color .12s ease,transform .12s ease}
-            .dco-edge-bulk-profile:hover{background:rgba(36,144,239,.13);border-color:var(--primary,#2490ef);transform:translateY(-1px)}
-            .dco-edge-bulk-profile.is-custom{background:#fff6db;border-color:#d7a514;color:#805c00}
-            .dco-edge-bulk-profile:disabled{opacity:.48;cursor:not-allowed;transform:none}
-            .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important}
-            .dco-col-edges .dco-check-toggle{position:relative!important;overflow:visible!important;min-height:45px!important;padding:15px 4px 4px!important;align-items:flex-end!important}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger{
-                display:flex!important;position:absolute!important;z-index:20!important;top:2px!important;inset-inline-end:3px!important;
-                align-items:center!important;justify-content:center!important;width:17px!important;height:17px!important;margin:0!important;
-                border:1px solid var(--border-color,#cbd2d9)!important;border-radius:999px!important;background:var(--card-bg,#fff)!important;
-                color:#4b5966!important;font-size:12px!important;font-weight:900!important;line-height:1!important;box-shadow:none!important;
-                cursor:pointer!important;opacity:1!important;pointer-events:auto!important;transform:none!important
+            .dco-edge-bulk-toolbar{display:none!important}
+            .dco-side-profile-trigger{display:none!important}
+            .dco-edge-direct-actions{display:flex;align-items:center;justify-content:flex-end;margin:0 0 4px;min-height:25px}
+            .dco-all-sides-profile-select{
+                width:132px;max-width:100%;height:25px;min-height:25px;border:1px solid rgba(36,144,239,.38);
+                border-radius:7px;background:rgba(36,144,239,.07);color:var(--text-color,#36414c);
+                padding:1px 6px;font-size:9.5px;font-weight:850;line-height:1;cursor:pointer;outline:none
             }
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger:hover{border-color:var(--primary,#2490ef)!important;background:#eef7ff!important;color:#146eb4!important}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{background:#fff0b8!important;border-color:#ca9800!important;color:#765400!important}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-missing{background:#fff0f0!important;border-color:#d94b4b!important;color:#b32626!important}
-            .dco-check-toggle.is-checked>.dco-side-profile-trigger{background:#fff!important;color:#26323d!important}
-            .dco-bulk-edge-summary{padding:9px 11px;border:1px solid var(--border-color,#dfe3e8);border-radius:9px;background:var(--subtle-fg,#f7f9fb);font-size:11px;line-height:1.7}
-            .dco-bulk-edge-summary b{display:block;font-size:13px;margin-bottom:2px}
-            @media(max-width:900px){.dco-edge-bulk-profile{padding-inline:6px;font-size:9px}.dco-col-edges .dco-check-toggle{min-height:43px!important}}
+            .dco-all-sides-profile-select:hover,.dco-all-sides-profile-select:focus{
+                border-color:var(--primary,#2490ef);background:#eef7ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
+            }
+            .dco-edge-profile-grid{
+                display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 0 4px;
+                direction:rtl;align-items:stretch
+            }
+            .dco-side-profile-select{
+                width:100%;min-width:0;height:25px;min-height:25px;border:1px solid var(--border-color,#cbd2d9);
+                border-radius:7px;background:var(--card-bg,#fff);color:#52606d;padding:1px 3px;
+                font-size:9px;font-weight:800;line-height:1;cursor:pointer;outline:none;text-overflow:ellipsis
+            }
+            .dco-side-profile-select:hover,.dco-side-profile-select:focus{
+                border-color:var(--primary,#2490ef);background:#f2f8ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
+            }
+            .dco-side-profile-select.is-active-default{border-color:rgba(36,144,239,.5);background:#edf7ff;color:#155f97}
+            .dco-side-profile-select.is-custom{border-color:#d3a20a;background:#fff5cc;color:#765500}
+            .dco-side-profile-select:disabled,.dco-all-sides-profile-select:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+            .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important}
+            .dco-col-edges .dco-check-toggle{min-height:39px!important;padding:4px!important;align-items:center!important;overflow:hidden!important}
+            @media(max-width:900px){
+                .dco-all-sides-profile-select{width:120px;font-size:9px}
+                .dco-side-profile-select{font-size:8.5px;padding-inline:2px}
+            }
         `;
         document.head.appendChild(style);
-    }
-
-    function configForToggle(toggle) {
-        const fieldname = toggle && toggle.dataset.checkField;
-        return SIDE_CONFIG.find(item => item.selectedField === fieldname) || null;
-    }
-
-    function ensureIndicator(toggle, config) {
-        let indicator = toggle.querySelector(":scope > .dco-side-profile-trigger");
-        if (!indicator) {
-            indicator = document.createElement("span");
-            indicator.className = "dco-side-profile-trigger";
-            indicator.setAttribute("role", "button");
-            indicator.setAttribute("tabindex", "0");
-            indicator.dataset.edgeSide = config.side;
-            toggle.appendChild(indicator);
-        }
-        indicator.dataset.edgeSide = config.side;
-        indicator.setAttribute(
-            "aria-label",
-            isArabic() ? `تخصيص قشاط ${config.labelAr}` : `Customize ${config.labelEn}`
-        );
-        return indicator;
-    }
-
-    function allOverrides(row) {
-        return SIDE_CONFIG.map(config => String((row && row[config.overrideField]) || "").trim());
-    }
-
-    function bulkLabel(row) {
-        const overrides = allOverrides(row);
-        const customCount = overrides.filter(Boolean).length;
-        if (customCount === 4) return isArabic() ? "✦ الأربعة مخصصة" : "✦ All four custom";
-        if (customCount) return isArabic() ? `✦ مخصص ${customCount}/4` : `✦ Custom ${customCount}/4`;
-        return isArabic() ? "✦ تخصيص الأربعة" : "✦ Customize all four";
-    }
-
-    function ensureBulkToolbar(frm, tr, row) {
-        const cell = tr.querySelector(":scope > td.dco-col-edges");
-        const edgeButtons = cell && cell.querySelector(":scope > .dco-edge-buttons");
-        if (!cell || !edgeButtons) return;
-
-        let toolbar = cell.querySelector(":scope > .dco-edge-bulk-toolbar");
-        if (!toolbar) {
-            toolbar = document.createElement("div");
-            toolbar.className = "dco-edge-bulk-toolbar";
-            edgeButtons.insertAdjacentElement("beforebegin", toolbar);
-        }
-
-        let button = toolbar.querySelector(".dco-edge-bulk-profile");
-        if (!button) {
-            button = document.createElement("button");
-            button.type = "button";
-            button.className = "dco-edge-bulk-profile";
-            toolbar.appendChild(button);
-        }
-
-        const overrides = allOverrides(row);
-        const customCount = overrides.filter(Boolean).length;
-        button.textContent = bulkLabel(row);
-        button.classList.toggle("is-custom", customCount > 0);
-        button.disabled = !isEditable(frm);
-        button.title = isArabic()
-            ? "تفعيل الأضلاع الأربعة وتطبيق نوع قشاط واحد عليها بسرعة"
-            : "Enable all four sides and apply one edge profile quickly";
-    }
-
-    function renderRow(frm, tr) {
-        const row = rowByName(frm, tr.dataset.rowName) || {};
-        tr.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
-            const config = configForToggle(toggle);
-            if (!config) return;
-            const indicator = ensureIndicator(toggle, config);
-            const override = String(row[config.overrideField] || "").trim();
-            indicator.textContent = override ? "✦" : "⌄";
-            indicator.classList.toggle("is-custom", Boolean(override));
-        });
-        ensureBulkToolbar(frm, tr, row);
-    }
-
-    function defaultSummary(frm) {
-        const value = String(frm.doc.default_edge_type || "").trim();
-        if (value) return value;
-        return isArabic() ? "لم يتم اختيار قشاط افتراضي للطلب" : "No default profile selected";
-    }
-
-    function commonOverride(row) {
-        const values = allOverrides(row).filter(Boolean);
-        if (!values.length) return "";
-        const unique = new Set(values);
-        return unique.size === 1 ? values[0] : "";
     }
 
     function syncToggleVisuals(tr, row) {
@@ -207,16 +171,18 @@
         });
     }
 
-    function notifyBulkChange(frm, tr, row) {
+    function notifyChanged(frm, tr, row, fieldname) {
         frm.dirty();
         syncToggleVisuals(tr, row);
+
         const root = rootFor(frm);
         if (root) {
             root.dispatchEvent(new CustomEvent("dco:side-edge-change", {
                 bubbles: true,
-                detail: { row: row.name, fieldname: "bulk_edge_profile" },
+                detail: { row: row.name, fieldname },
             }));
         }
+
         const api = moduleApi();
         if (api && api.schedule) api.schedule(frm);
         if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
@@ -228,87 +194,171 @@
         schedule(frm);
     }
 
-    function applyToAllSides(frm, tr, row, overrideType) {
+    function applySideSelection(frm, tr, config, overrideType) {
+        const row = materialize(frm, tr);
+        if (!row) return;
+        row[config.selectedField] = 1;
+        row[config.overrideField] = String(overrideType || "").trim();
+        notifyChanged(frm, tr, row, config.overrideField);
+    }
+
+    function applyAllSides(frm, tr, selectedValue) {
+        const row = materialize(frm, tr);
+        if (!row) return;
+        const overrideType = selectedValue === BULK_DEFAULT_VALUE
+            ? ""
+            : String(selectedValue || "").trim();
         SIDE_CONFIG.forEach(config => {
             row[config.selectedField] = 1;
             row[config.overrideField] = overrideType;
         });
-        notifyBulkChange(frm, tr, row);
+        notifyChanged(frm, tr, row, "all_side_edge_profiles");
     }
 
-    function openBulkDialog(frm, tr) {
-        const row = materialize(frm, tr);
-        if (!row) return;
-
-        const dialog = new frappe.ui.Dialog({
-            title: isArabic() ? "تخصيص الأضلاع الأربعة" : "Customize all four edges",
-            fields: [
-                {
-                    fieldname: "summary",
-                    fieldtype: "HTML",
-                    options: `<div class="dco-bulk-edge-summary"><b>${isArabic() ? "إجراء سريع" : "Quick action"}</b>${isArabic()
-                        ? `سيتم تفعيل الأضلاع الأربعة وتطبيق النوع نفسه عليها. القشاط الافتراضي الحالي: <strong>${frappe.utils.escape_html(defaultSummary(frm))}</strong>`
-                        : `All four sides will be enabled and receive the same profile. Current default: <strong>${frappe.utils.escape_html(defaultSummary(frm))}</strong>`}</div>`,
-                },
-                {
-                    fieldname: "edge_type",
-                    fieldtype: "Link",
-                    options: "Edge Banding Type",
-                    label: isArabic() ? "نوع القشاط للأضلاع الأربعة" : "Profile for all four edges",
-                    reqd: 1,
-                    default: commonOverride(row),
-                },
-            ],
-            primary_action_label: isArabic() ? "تطبيق على الأربعة" : "Apply to all four",
-            primary_action(values) {
-                const edgeType = String(values.edge_type || "").trim();
-                if (!edgeType) return;
-                applyToAllSides(frm, tr, row, edgeType);
-                dialog.hide();
-            },
-        });
-        dialog.show();
-
-        const footer = dialog.$wrapper && dialog.$wrapper.find(".modal-footer");
-        if (footer && footer.length) {
-            const useDefault = document.createElement("button");
-            useDefault.type = "button";
-            useDefault.className = "btn btn-default btn-sm";
-            useDefault.textContent = isArabic() ? "الأربعة بالافتراضي" : "Use default for all four";
-            useDefault.addEventListener("click", () => {
-                if (!String(frm.doc.default_edge_type || "").trim()) {
-                    frappe.show_alert({
-                        message: isArabic() ? "اختر القشاط الافتراضي للطلب أولًا." : "Select the order default profile first.",
-                        indicator: "orange",
-                    });
-                    return;
-                }
-                applyToAllSides(frm, tr, row, "");
-                dialog.hide();
-            });
-            footer.prepend(useDefault);
+    function ensureBulkSelect(frm, cell, edgeButtons) {
+        let actions = cell.querySelector(":scope > .dco-edge-direct-actions");
+        if (!actions) {
+            actions = document.createElement("div");
+            actions.className = "dco-edge-direct-actions";
+            edgeButtons.insertAdjacentElement("beforebegin", actions);
         }
+
+        let select = actions.querySelector(".dco-all-sides-profile-select");
+        if (!select) {
+            select = document.createElement("select");
+            select.className = "dco-all-sides-profile-select";
+            select.dataset.bulkEdgeProfile = "1";
+            actions.appendChild(select);
+        }
+
+        const options = bulkOptionsHtml(frm);
+        const signature = options;
+        if (select.dataset.optionsSignature !== signature) {
+            select.innerHTML = options;
+            select.dataset.optionsSignature = signature;
+        }
+        select.value = "";
+        select.disabled = !isEditable(frm);
+        select.title = isArabic()
+            ? "فعّل الأضلاع الأربعة وطبّق نوعًا واحدًا عليها مباشرة"
+            : "Enable all four sides and apply one profile immediately";
+    }
+
+    function ensureSideGrid(frm, cell, edgeButtons, row) {
+        let grid = cell.querySelector(":scope > .dco-edge-profile-grid");
+        if (!grid) {
+            grid = document.createElement("div");
+            grid.className = "dco-edge-profile-grid";
+            edgeButtons.insertAdjacentElement("beforebegin", grid);
+        }
+
+        SIDE_CONFIG.forEach(config => {
+            let select = grid.querySelector(`select[data-edge-side='${config.side}']`);
+            if (!select) {
+                select = document.createElement("select");
+                select.className = "dco-side-profile-select";
+                select.dataset.edgeSide = config.side;
+                select.setAttribute(
+                    "aria-label",
+                    isArabic() ? `نوع قشاط ${config.labelAr}` : `${config.labelEn} profile`
+                );
+                grid.appendChild(select);
+            }
+
+            const current = String((row && row[config.overrideField]) || "").trim();
+            const selected = Boolean(row && row[config.selectedField]);
+            const options = sideOptionsHtml(frm, current);
+            const signature = `${current}\n${options}`;
+            if (select.dataset.optionsSignature !== signature) {
+                select.innerHTML = options;
+                select.dataset.optionsSignature = signature;
+            }
+            select.value = current;
+            select.disabled = !isEditable(frm);
+            select.classList.toggle("is-custom", Boolean(current));
+            select.classList.toggle("is-active-default", selected && !current);
+
+            const label = isArabic() ? config.labelAr : config.labelEn;
+            const effective = current || String(frm.doc.default_edge_type || "").trim();
+            const mode = current
+                ? (isArabic() ? "مخصص" : "Custom")
+                : (isArabic() ? "افتراضي" : "Default");
+            select.title = `${label} — ${mode}: ${effective || "—"}`;
+        });
+    }
+
+    function removeObsoleteControls(cell) {
+        cell.querySelectorAll(":scope > .dco-edge-bulk-toolbar").forEach(element => element.remove());
+    }
+
+    function renderRow(frm, tr) {
+        const cell = tr.querySelector(":scope > td.dco-col-edges");
+        const edgeButtons = cell && cell.querySelector(":scope > .dco-edge-buttons");
+        if (!cell || !edgeButtons) return;
+
+        removeObsoleteControls(cell);
+        const row = rowByName(frm, tr.dataset.rowName) || {};
+        ensureBulkSelect(frm, cell, edgeButtons);
+        ensureSideGrid(frm, cell, edgeButtons, row);
+    }
+
+    function renderHelp(root) {
+        const help = root.querySelector(".dco-fast-help");
+        if (!help) return;
+        let hint = help.querySelector(".dco-side-edge-help");
+        if (!hint) {
+            hint = document.createElement("span");
+            hint.className = "dco-side-edge-help";
+            help.appendChild(hint);
+        }
+        hint.textContent = isArabic()
+            ? "اختر نوع القشاط من القائمة الصغيرة فوق الضلع؛ يُطبّق فورًا بلا نافذة"
+            : "Choose the profile from the small select above each side; it applies immediately";
+    }
+
+    function apply(frm) {
+        installStyles();
+        const root = rootFor(frm);
+        if (!root) return;
+        root.querySelectorAll(".dco-fast-table tbody tr[data-row-name]").forEach(tr => renderRow(frm, tr));
+        renderHelp(root);
+        bind(frm, root);
     }
 
     function bind(frm, root) {
-        if (root._dcoEdgeProfileControlsBound) return;
-        root._dcoEdgeProfileControlsBound = true;
+        if (root._dcoDirectEdgeProfileControlsBound) return;
+        root._dcoDirectEdgeProfileControlsBound = true;
 
         root.addEventListener("pointerdown", event => {
-            const button = event.target.closest(".dco-edge-bulk-profile");
-            if (!button || !root.contains(button)) return;
-            event.preventDefault();
+            const select = event.target.closest(".dco-side-profile-select,.dco-all-sides-profile-select");
+            if (!select || !root.contains(select)) return;
             event.stopPropagation();
         }, true);
 
         root.addEventListener("click", event => {
-            const button = event.target.closest(".dco-edge-bulk-profile");
-            if (!button || !root.contains(button)) return;
-            event.preventDefault();
+            const select = event.target.closest(".dco-side-profile-select,.dco-all-sides-profile-select");
+            if (!select || !root.contains(select)) return;
             event.stopPropagation();
-            const tr = button.closest("tr[data-row-name]");
-            if (tr) openBulkDialog(frm, tr);
-        });
+        }, true);
+
+        root.addEventListener("change", event => {
+            const sideSelect = event.target.closest(".dco-side-profile-select[data-edge-side]");
+            if (sideSelect && root.contains(sideSelect)) {
+                event.stopPropagation();
+                const config = SIDE_CONFIG.find(item => item.side === sideSelect.dataset.edgeSide);
+                const tr = sideSelect.closest("tr[data-row-name]");
+                if (config && tr) applySideSelection(frm, tr, config, sideSelect.value);
+                return;
+            }
+
+            const bulkSelect = event.target.closest(".dco-all-sides-profile-select[data-bulk-edge-profile]");
+            if (!bulkSelect || !root.contains(bulkSelect) || !bulkSelect.value) return;
+            event.stopPropagation();
+            const tr = bulkSelect.closest("tr[data-row-name]");
+            const value = bulkSelect.value;
+            bulkSelect.value = "";
+            if (tr) applyAllSides(frm, tr, value);
+        }, true);
 
         let queued = false;
         const observer = new MutationObserver(() => {
@@ -320,15 +370,7 @@
             });
         });
         observer.observe(root, { childList: true, subtree: true });
-        root._dcoEdgeProfileControlsObserver = observer;
-    }
-
-    function apply(frm) {
-        installStyles();
-        const root = rootFor(frm);
-        if (!root) return;
-        root.querySelectorAll(".dco-fast-table tbody tr[data-row-name]").forEach(tr => renderRow(frm, tr));
-        bind(frm, root);
+        root._dcoDirectEdgeProfileControlsObserver = observer;
     }
 
     function schedule(frm) {
@@ -337,9 +379,18 @@
         setTimeout(() => apply(frm), 140);
     }
 
+    function loadProfilesAndRender(frm) {
+        const api = moduleApi();
+        if (api && api.ensureProfiles) {
+            Promise.resolve(api.ensureProfiles(frm)).finally(() => schedule(frm));
+            return;
+        }
+        schedule(frm);
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { schedule(frm); },
-        refresh(frm) { schedule(frm); },
+        onload_post_render(frm) { loadProfilesAndRender(frm); },
+        refresh(frm) { loadProfilesAndRender(frm); },
         default_edge_type(frm) { schedule(frm); },
         pieces_add(frm) { schedule(frm); },
         pieces_remove(frm) { schedule(frm); },
@@ -359,6 +410,7 @@
     window.AlmdinaEdgeProfileControls = {
         apply,
         schedule,
-        applyToAllSides,
+        applySideSelection,
+        applyAllSides,
     };
 })();
