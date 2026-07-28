@@ -14,6 +14,13 @@ ADAPTER_PATH = (
     / "door_cutting_order"
     / "door_cutting_order_domain.py"
 )
+COSTING_ADAPTER_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "doctype"
+    / "door_cutting_order"
+    / "door_cutting_order_costing.py"
+)
 FAST_CONTROLLER_PATH = (
     ROOT
     / "almdina_erp"
@@ -44,12 +51,17 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertIn("def _validate_clipped_corner", source)
         self.assertNotIn("math.isclose", source)
 
-    def test_hooks_activate_domain_backed_controller(self) -> None:
+    def test_active_controller_composes_piece_policy_and_costing(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         self.assertEqual(
             hooks["override_doctype_class"]["Door Cutting Order"],
             "almdina_erp.almdina_erp.doctype.door_cutting_order."
-            "door_cutting_order_domain.DomainDoorCuttingOrder",
+            "door_cutting_order_costing.CostingDoorCuttingOrder",
+        )
+        costing_source = COSTING_ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            "class CostingDoorCuttingOrder(DomainDoorCuttingOrder)",
+            costing_source,
         )
 
     def test_legacy_fast_controller_remains_a_compatibility_base(self) -> None:
