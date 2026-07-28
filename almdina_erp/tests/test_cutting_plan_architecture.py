@@ -66,12 +66,14 @@ class TestCuttingPlanArchitecture(unittest.TestCase):
 
     def test_active_controller_contains_no_plan_algorithm(self) -> None:
         source = CONTROLLER_PATH.read_text(encoding="utf-8")
-        self.assertIn("class DoorCuttingOrderController(Document)", source)
+        self.assertIn("class DoorCuttingOrderController(DoorCuttingOrder)", source)
+        self.assertIn("from .door_cutting_order import DoorCuttingOrder", source)
+        self.assertNotIn("frappe.model.document import Document", source)
         self.assertNotIn("optimize_order_plan", source)
         self.assertNotIn("decide_plan_reuse", source)
         self.assertNotIn("refresh_plan_metadata", source)
 
-    def test_hooks_activate_application_backed_direct_controller(self) -> None:
+    def test_hooks_activate_application_backed_override_controller(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         self.assertEqual(
             hooks["override_doctype_class"]["Door Cutting Order"],

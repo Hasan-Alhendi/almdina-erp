@@ -78,8 +78,8 @@ doctype_list_js = {
     "Door Cutting Order": "public/js/door_cutting_order_list.js",
 }
 
-# The production controller is intentionally thin and inherits directly from
-# Frappe Document. Historical controller layers remain import-compatible only.
+# The active controller stays thin while subclassing the canonical DocType
+# controller, which is required by Frappe's override_doctype_class contract.
 override_doctype_class = {
     "Door Cutting Order":
         "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_controller.DoorCuttingOrderController",
