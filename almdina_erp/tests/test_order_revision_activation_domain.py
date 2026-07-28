@@ -63,16 +63,22 @@ class TestOrderRevisionActivationDomain(unittest.TestCase):
                 with self.assertRaises(RevisionActivationNotAllowed):
                     assert_revision_activation_allowed(**case)
 
-    def test_only_current_revision_is_dispatchable(self) -> None:
+    def test_only_one_current_revision_is_dispatchable(self) -> None:
         assert_revision_dispatchable(RevisionState.CURRENT)
         assert_revision_dispatchable(None)
-        for state in (
-            RevisionState.PENDING_ACTIVATION,
-            RevisionState.SUPERSEDED,
-        ):
-            with self.subTest(state=state):
+
+        blocked = (
+            {"state": RevisionState.PENDING_ACTIVATION},
+            {"state": RevisionState.SUPERSEDED},
+            {
+                "state": RevisionState.CURRENT,
+                "competing_current_revision": True,
+            },
+        )
+        for case in blocked:
+            with self.subTest(case=case):
                 with self.assertRaises(RevisionActivationNotAllowed):
-                    assert_revision_dispatchable(state)
+                    assert_revision_dispatchable(**case)
 
 
 if __name__ == "__main__":
