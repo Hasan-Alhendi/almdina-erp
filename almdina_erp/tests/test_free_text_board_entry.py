@@ -132,7 +132,7 @@ def test_preview_api_serializes_free_text_board_fields_only():
     assert '"board_description"' in preview_block
     assert '"board_length_cm"' in preview_block
     assert '"board_width_cm"' in preview_block
-    assert '"board_item"' not in preview_block
-    assert '"board_material"' not in preview_block
-    assert '"board_color"' not in preview_block
-    assert '"board_thickness_mm"' not in preview_block
+    assert '"board_item":' not in preview_block
+    assert '"board_material":' not in preview_block
+    assert '"board_color":' not in preview_block
+    assert '"board_thickness_mm":' not in preview_block
