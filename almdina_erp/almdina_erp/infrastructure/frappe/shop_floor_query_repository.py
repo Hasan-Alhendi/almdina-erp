@@ -6,7 +6,7 @@ from typing import Any
 import frappe
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_STAGE_TYPES
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
+from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
 
 
 ADMIN_ROLES = frozenset({"System Manager", "Production Manager", "Order Entry"})
@@ -213,7 +213,7 @@ class FrappeShopFloorQueryRepository:
         )
 
     def get_users_for_stage(self, stage_type: str) -> list[dict[str, str]]:
-        return shop_floor_gateway.get_users_for_stage(stage_type)
+        return shop_floor_authorization.get_users_for_stage(stage_type)
 
     @staticmethod
     def _parse_snapshot(raw: Any) -> dict[str, Any]:
