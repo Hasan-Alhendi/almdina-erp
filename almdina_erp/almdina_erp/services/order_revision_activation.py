@@ -83,6 +83,23 @@ def _competing_current_revision(
     return str(rows[0][0]) if rows else None
 
 
+def _other_current_revision(*, root_name: str, order_name: str) -> str | None:
+    rows = frappe.db.sql(
+        """
+        select name
+          from `tabDoor Cutting Order`
+         where name != %s
+           and (name = %s or revision_root = %s)
+           and coalesce(nullif(revision_state, ''), 'Current') = 'Current'
+         order by revision desc, creation desc
+         limit 1
+         for update
+        """,
+        (order_name, root_name, root_name),
+    )
+    return str(rows[0][0]) if rows else None
+
+
 def _release_reserved_remnants(order_name: str) -> list[str]:
     names = frappe.get_all(
         "Board Remnant",
@@ -118,8 +135,26 @@ def _release_reserved_remnants(order_name: str) -> list[str]:
 
 
 def assert_order_revision_dispatchable(order: Any) -> None:
+    competing = False
+    has_revision_chain = any(
+        str(getattr(order, fieldname, None) or "").strip()
+        for fieldname in ("revision_of", "revision_root", "superseded_by")
+    )
+    if has_revision_chain:
+        root_name = revision_root(
+            order_name=order.name,
+            current_root=getattr(order, "revision_root", None),
+        )
+        _lock_order_rows(root_name, order.name)
+        competing = bool(
+            _other_current_revision(root_name=root_name, order_name=order.name)
+        )
+
     try:
-        assert_revision_dispatchable(getattr(order, "revision_state", None))
+        assert_revision_dispatchable(
+            getattr(order, "revision_state", None),
+            competing_current_revision=competing,
+        )
     except RevisionActivationNotAllowed as exc:
         _throw_domain_error(exc)
 
