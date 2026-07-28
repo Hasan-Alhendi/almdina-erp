@@ -8,6 +8,7 @@ from almdina_erp.almdina_erp.domain.cutting import (
     auto_fast,
     expand_piece_groups,
     get_strategy,
+    optimize_plan,
     run_single_method,
     validate_plan,
 )
@@ -54,10 +55,7 @@ class TestCuttingDomainStrategies(unittest.TestCase):
                 self.assertFalse(plan["unplaced"])
                 self.assertTrue(plan["sheets"])
                 self.assertEqual(plan["method_key"], strategy.key)
-                self.assertEqual(
-                    validate_plan(plan, pieces, 122, 244),
-                    [],
-                )
+                self.assertEqual(validate_plan(plan, pieces, 122, 244), [])
 
     def test_unknown_manual_method_uses_stable_maxrects_fallback(self) -> None:
         strategy = get_strategy("Unknown Strategy")
@@ -76,10 +74,7 @@ class TestCuttingDomainStrategies(unittest.TestCase):
 
     def test_service_facades_export_the_same_domain_functions(self) -> None:
         self.assertIs(cutting_engine.run_single_method, run_single_method)
-        self.assertIs(
-            advanced_cutting_optimizer.optimize_plan,
-            advanced_cutting_optimizer.optimize_plan,
-        )
+        self.assertIs(advanced_cutting_optimizer.optimize_plan, optimize_plan)
         service_plan = cutting_engine.run_single_method(
             self._pieces(),
             122,
