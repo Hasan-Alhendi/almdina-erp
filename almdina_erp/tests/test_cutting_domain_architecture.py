@@ -11,6 +11,9 @@ OPTIMIZER_SERVICE = (
     ROOT / "almdina_erp" / "services" / "advanced_cutting_optimizer.py"
 )
 ENGINE_ADAPTER = (
+    ROOT / "almdina_erp" / "infrastructure" / "cutting" / "domain_engine.py"
+)
+LEGACY_ENGINE_ADAPTER = (
     ROOT / "almdina_erp" / "infrastructure" / "cutting" / "legacy_engine.py"
 )
 
@@ -61,6 +64,14 @@ class TestCuttingDomainArchitecture(unittest.TestCase):
         self.assertIn("domain.cutting", source)
         self.assertNotIn("services.cutting_engine", source)
         self.assertNotIn("services.advanced_cutting_optimizer", source)
+        self.assertIn("class DomainCuttingEngineAdapter", source)
+
+    def test_legacy_engine_adapter_is_only_an_alias(self) -> None:
+        source = LEGACY_ENGINE_ADAPTER.read_text(encoding="utf-8")
+        self.assertLess(len(source.splitlines()), 20)
+        self.assertIn("DomainCuttingEngineAdapter", source)
+        self.assertIn("domain_cutting_engine", source)
+        self.assertNotIn("def optimize", source)
 
 
 if __name__ == "__main__":
