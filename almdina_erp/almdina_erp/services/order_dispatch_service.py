@@ -8,15 +8,12 @@ from almdina_erp.almdina_erp.services import shop_floor_commands
 from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 from almdina_erp.almdina_erp.services.order_revision_activation import (
     assert_order_revision_dispatchable,
+    load_locked_revision_order,
 )
 
 
 def _lock_and_validate(order_name: str) -> Any:
-    frappe.db.sql(
-        "select name from `tabDoor Cutting Order` where name = %s for update",
-        (order_name,),
-    )
-    order = frappe.get_doc("Door Cutting Order", order_name)
+    order = load_locked_revision_order(order_name)
     assert_order_revision_dispatchable(order)
     return order
 
