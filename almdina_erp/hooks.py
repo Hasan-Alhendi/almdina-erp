@@ -79,10 +79,10 @@ doctype_list_js = {
 }
 
 # Compatibility controllers remain as bases. The active controller delegates
-# piece, pricing, and costing decisions to pure Domain policies.
+# piece, pricing, costing, plan reuse, metadata refresh, and optimization orchestration.
 override_doctype_class = {
     "Door Cutting Order":
-        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_costing.CostingDoorCuttingOrder",
+        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_plan.PlanDoorCuttingOrder",
 }
 
 doc_events = {
