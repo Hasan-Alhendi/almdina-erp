@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     SHOP_FLOOR_STAGE_TYPES,
@@ -12,12 +12,6 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_status_for_stage_status,
     is_cutting_like_stage,
     order_status_for_stage_type,
-)
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
-from almdina_erp.almdina_erp.services.production_service import (
-    _close_open_pause,
-    _log_event,
-    _required_piece_qty,
 )
 
 
@@ -34,7 +28,14 @@ STAGE_ADMIN_ROLES = frozenset({"Production Manager", "System Manager"})
 
 
 def require_roles(*roles: str) -> None:
-    require_any_role(*roles)
+    user_roles = set(frappe.get_roles())
+    if "System Manager" in user_roles:
+        return
+    if not user_roles.intersection(roles):
+        frappe.throw(
+            _("You do not have permission for this operation."),
+            frappe.PermissionError,
+        )
 
 
 def get_order(order_name: str) -> Any:
@@ -78,7 +79,7 @@ def require_stage_assignee_or_admin(stage: Any) -> None:
         return
     expected_role = STAGE_ROLE_BY_TYPE.get(stage.stage_type)
     if expected_role:
-        require_any_role(expected_role)
+        require_roles(expected_role)
     if stage.assigned_to and stage.assigned_to != frappe.session.user:
         frappe.throw(_("This stage is assigned to another worker."))
 
@@ -199,15 +200,46 @@ def log_event(
     event_type: str,
     details: dict[str, Any] | None = None,
 ) -> None:
-    _log_event(stage, event_type, details)
+    event = frappe.new_doc("Production Stage Event")
+    event.door_cutting_order = stage.door_cutting_order
+    event.production_stage = stage.name
+    event.stage_type = stage.stage_type
+    event.event_type = event_type
+    event.event_time = now_datetime()
+    event.actor = frappe.session.user
+    event.details_json = frappe.as_json(details or {})
+    event.insert(ignore_permissions=True)
 
 
 def required_piece_qty(order_name: str) -> int:
-    return _required_piece_qty(order_name)
+    rows = frappe.get_all(
+        "Door Cutting Order Detail",
+        filters={
+            "parent": order_name,
+            "parenttype": "Door Cutting Order",
+        },
+        fields=["qty"],
+    )
+    return sum(cint(row.qty) for row in rows)
 
 
 def close_open_pause(stage: Any, resumed_by: str) -> None:
-    _close_open_pause(stage, resumed_by)
+    open_pause = None
+    for row in reversed(stage.pauses or []):
+        if row.pause_start and not row.pause_end:
+            open_pause = row
+            break
+    if not open_pause:
+        return
+    open_pause.pause_end = now_datetime()
+    open_pause.resumed_by = resumed_by
+    open_pause.duration_seconds = max(
+        0,
+        cint(time_diff_in_seconds(open_pause.pause_end, open_pause.pause_start)),
+    )
+    stage.paused_seconds = sum(
+        cint(row.duration_seconds) for row in (stage.pauses or [])
+    )
 
 
 def maybe_consume_stock(order_name: str, stage_type: str, trigger: str) -> None:
