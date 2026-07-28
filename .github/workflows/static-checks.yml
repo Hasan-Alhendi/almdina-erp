@@ -104,6 +104,12 @@ jobs:
             almdina_erp.tests.test_cutting_domain_strategies \
             almdina_erp.tests.test_cutting_domain_architecture
 
+      - name: Run unified order controller tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_order_save_application \
+            almdina_erp.tests.test_unified_order_controller_architecture
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
