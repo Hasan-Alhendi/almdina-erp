@@ -12,7 +12,8 @@ class CutDimensionError(ValueError):
 class CutDimensionInput:
     final_width_cm: float
     final_length_cm: float
-    edge_thickness_mm: float
+    long_edge_thickness_mm: float = 0
+    width_edge_thickness_mm: float = 0
     edge_long_right: int = 0
     edge_long_left: int = 0
     edge_width_top: int = 0
@@ -25,7 +26,8 @@ class CutDimensionResult:
     final_length_cm: float
     cut_width_cm: float
     cut_length_cm: float
-    edge_thickness_mm: float
+    long_edge_thickness_mm: float
+    width_edge_thickness_mm: float
     width_deduction_mm: float
     length_deduction_mm: float
 
@@ -33,21 +35,29 @@ class CutDimensionResult:
 def calculate_cut_dimensions(piece: CutDimensionInput) -> CutDimensionResult:
     """Calculate the raw board size from the requested finished size.
 
-    Long-side banding grows the finished width, so its thickness is deducted from
-    the cutting width. Width-side banding grows the finished length, so its
-    thickness is deducted from the cutting length.
+    Selected long sides use the long-axis edge profile and reduce cutting width.
+    Selected width sides use the width-axis edge profile and reduce cutting length.
     """
 
     final_width = _finite(piece.final_width_cm, "final_width")
     final_length = _finite(piece.final_length_cm, "final_length")
-    thickness_mm = _finite(piece.edge_thickness_mm, "edge_thickness")
+    long_thickness = _finite(
+        piece.long_edge_thickness_mm,
+        "long_edge_thickness",
+    )
+    width_thickness = _finite(
+        piece.width_edge_thickness_mm,
+        "width_edge_thickness",
+    )
 
     if final_width <= 0:
         raise CutDimensionError("final_width_not_positive")
     if final_length <= 0:
         raise CutDimensionError("final_length_not_positive")
-    if thickness_mm < 0:
-        raise CutDimensionError("edge_thickness_negative")
+    if long_thickness < 0:
+        raise CutDimensionError("long_edge_thickness_negative")
+    if width_thickness < 0:
+        raise CutDimensionError("width_edge_thickness_negative")
 
     long_side_count = _selected_count(
         piece.edge_long_right,
@@ -57,8 +67,8 @@ def calculate_cut_dimensions(piece: CutDimensionInput) -> CutDimensionResult:
         piece.edge_width_top,
         piece.edge_width_bottom,
     )
-    width_deduction_mm = thickness_mm * long_side_count
-    length_deduction_mm = thickness_mm * width_side_count
+    width_deduction_mm = long_thickness * long_side_count
+    length_deduction_mm = width_thickness * width_side_count
     cut_width = final_width - (width_deduction_mm / 10)
     cut_length = final_length - (length_deduction_mm / 10)
 
@@ -72,7 +82,8 @@ def calculate_cut_dimensions(piece: CutDimensionInput) -> CutDimensionResult:
         final_length_cm=_round(final_length),
         cut_width_cm=_round(cut_width),
         cut_length_cm=_round(cut_length),
-        edge_thickness_mm=_round(thickness_mm),
+        long_edge_thickness_mm=_round(long_thickness),
+        width_edge_thickness_mm=_round(width_thickness),
         width_deduction_mm=_round(width_deduction_mm),
         length_deduction_mm=_round(length_deduction_mm),
     )

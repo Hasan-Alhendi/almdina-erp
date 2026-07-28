@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
 )
 
 from .document_access import FrappeOrderDocumentAccess
+from .edge_profile_repository import FrappeEdgeProfileRepository
 
 
 class FrappeOrderCostingAdapter:
@@ -27,11 +28,13 @@ class FrappeOrderCostingAdapter:
         self,
         document: Any,
         access: FrappeOrderDocumentAccess,
+        profiles: FrappeEdgeProfileRepository,
         *,
         engine_version: str,
     ) -> None:
         self.document = document
         self.access = access
+        self.profiles = profiles
         self.engine_version = engine_version
 
     def calculate_piece_rows(self) -> None:
@@ -45,23 +48,42 @@ class FrappeOrderCostingAdapter:
                     edge_long_left=cint(row.edge_long_left),
                     edge_width_top=cint(row.edge_width_top),
                     edge_width_bottom=cint(row.edge_width_bottom),
-                    edge_type=str(row.edge_type or ""),
+                    edge_long_type=str(row.edge_long_type or ""),
+                    edge_width_type=str(row.edge_width_type or ""),
                 )
                 for row in (self.document.pieces or [])
             ),
             default_edge_type=str(self.document.default_edge_type or ""),
-            edge_rates=self.access.edge_rate_map(),
+            edge_rates=self.profiles.rate_map(),
         )
 
         for row, result in zip(self.document.pieces or [], summary.pieces):
             row.area_m2 = result.area_m2
+            row.edge_long_meters = result.edge_long_meters
+            row.edge_width_meters = result.edge_width_meters
             row.edge_meters = result.edge_meters
-            row.edge_rate_usd = result.edge_rate_usd
+            row.edge_long_rate_usd = result.edge_long_rate_usd
+            row.edge_width_rate_usd = result.edge_width_rate_usd
+            row.edge_long_cost_usd = result.edge_long_cost_usd
+            row.edge_width_cost_usd = result.edge_width_cost_usd
             row.edge_cost_usd = result.edge_cost_usd
+            row.edge_rate_usd = self._legacy_rate(result)
 
         self.document.total_area_m2 = summary.total_area_m2
         self.document.total_edge_meters = summary.total_edge_meters
         self.document.edge_cost_usd = summary.total_edge_cost_usd
+
+    @staticmethod
+    def _legacy_rate(result: Any) -> float:
+        rates = {
+            rate
+            for rate, meters in (
+                (result.edge_long_rate_usd, result.edge_long_meters),
+                (result.edge_width_rate_usd, result.edge_width_meters),
+            )
+            if meters > 0
+        }
+        return rates.pop() if len(rates) == 1 else 0
 
     def apply_order_costs(self, required_boards: int) -> None:
         summary = calculate_order_costs(
