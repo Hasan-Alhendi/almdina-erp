@@ -43,7 +43,7 @@ jobs:
       - name: Validate Python syntax
         run: python -m compileall -q almdina_erp
 
-      - name: Run refactor and CI contract tests
+      - name: Run existing refactor and CI contract tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_editability_domain \
@@ -57,13 +57,19 @@ jobs:
             almdina_erp.tests.test_order_lifecycle_domain \
             almdina_erp.tests.test_shop_floor_command_adapter \
             almdina_erp.tests.test_shop_floor_infrastructure_gateway \
-            almdina_erp.tests.test_shop_floor_query_application \
-            almdina_erp.tests.test_shop_floor_presenters \
-            almdina_erp.tests.test_shop_floor_query_architecture \
             almdina_erp.tests.test_authorization_domain \
             almdina_erp.tests.test_read_only_boot_authorization \
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
+
+      - name: Run shop-floor query application tests
+        run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_application
+
+      - name: Run shop-floor presenter tests
+        run: python -m unittest -v almdina_erp.tests.test_shop_floor_presenters
+
+      - name: Run shop-floor query architecture tests
+        run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_architecture
 
       - name: Setup Node
         uses: actions/setup-node@v4
