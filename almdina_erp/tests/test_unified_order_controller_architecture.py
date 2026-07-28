@@ -68,8 +68,9 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         self.assertIn("FrappeOrderPiecePolicyAdapter", gateway)
         self.assertIn("FrappeOrderCostingAdapter", gateway)
         self.assertIn("FrappeOrderPlanAdapter", gateway)
-        self.assertNotIn("calculate_piece_costs(", gateway)
-        self.assertNotIn("optimize_order_plan(", gateway)
+        self.assertNotIn("domain.orders.costing", gateway)
+        self.assertNotIn("optimize_order_plan", gateway)
+        self.assertNotIn("frappe.db", gateway)
 
 
 if __name__ == "__main__":
