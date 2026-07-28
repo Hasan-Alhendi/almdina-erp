@@ -86,7 +86,7 @@ class FrappeOrderPlanAdapter:
         description = str(
             getattr(source, "board_description", "") or ""
         ).strip()
-        return build_plan_input_payload(
+        payload = build_plan_input_payload(
             version=1,
             board=PlanBoardInput(
                 item=description,
@@ -142,37 +142,9 @@ class FrappeOrderPlanAdapter:
                 )
                 for index, row in enumerate(source.pieces or [], start=1)
             ),
-        ) | {
-            "board": {
-                **build_plan_input_payload(
-                    version=1,
-                    board=PlanBoardInput(
-                        item=description,
-                        width_mm=self.access.normalized_number(
-                            source.full_board_width_mm
-                        ),
-                        length_mm=self.access.normalized_number(
-                            source.full_board_length_mm
-                        ),
-                    ),
-                    cut=PlanCutInput(
-                        kerf_mm=0,
-                        trim_margin_mm=0,
-                        packing_mode="",
-                        machine_type="",
-                        time_limit_sec=0,
-                    ),
-                    optimizer=PlanOptimizerSettings(
-                        exact_piece_limit=0,
-                        min_remnant_width_mm=0,
-                        min_remnant_length_mm=0,
-                        min_remnant_area_m2=0,
-                    ),
-                    pieces=(),
-                )["board"],
-                "description": description,
-            }
-        }
+        )
+        payload["board"]["description"] = description
+        return payload
 
     def plan_input_fingerprint(self) -> str:
         return fingerprint_payload(self._plan_input_payload())
