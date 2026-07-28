@@ -53,8 +53,12 @@ def create_stage(
     return stage
 
 
-def close_open_pause(stage_name: str, resumed_by: str) -> Any:
-    stage = get_stage(stage_name)
+def close_open_pause(stage_or_name: Any, resumed_by: str) -> Any:
+    stage = (
+        get_stage(stage_or_name)
+        if isinstance(stage_or_name, str)
+        else stage_or_name
+    )
     open_pause = None
     for row in reversed(stage.pauses or []):
         if row.pause_start and not row.pause_end:
