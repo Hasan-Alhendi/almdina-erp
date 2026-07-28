@@ -77,6 +77,12 @@ jobs:
       - name: Run shop-floor query architecture tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_architecture
 
+      - name: Run door-piece policy tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_order_piece_policy_domain \
+            almdina_erp.tests.test_order_piece_policy_adapter
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
