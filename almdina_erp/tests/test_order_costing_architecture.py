@@ -6,19 +6,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_PATH = ROOT / "almdina_erp" / "domain" / "orders" / "costing.py"
+ACTIVE_ADAPTER_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "costing_adapter.py"
+)
 CONTROLLER_PATH = (
     ROOT
     / "almdina_erp"
     / "doctype"
     / "door_cutting_order"
-    / "door_cutting_order_costing.py"
-)
-PLAN_CONTROLLER_PATH = (
-    ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_plan.py"
+    / "door_cutting_order_controller.py"
 )
 HOOKS_PATH = ROOT / "hooks.py"
 
@@ -32,8 +33,8 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertNotIn(".services", source)
         self.assertNotIn("DocType", source)
 
-    def test_costing_controller_delegates_all_costing_decisions(self) -> None:
-        source = CONTROLLER_PATH.read_text(encoding="utf-8")
+    def test_active_costing_adapter_delegates_all_decisions(self) -> None:
+        source = ACTIVE_ADAPTER_PATH.read_text(encoding="utf-8")
         for token in (
             "calculate_piece_costs",
             "calculate_order_costs",
@@ -45,23 +46,24 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertNotIn("edge_meters * edge_rate", source)
         self.assertNotIn("board_and_cutting_cost * area_share", source)
 
-    def test_active_controller_composes_plan_and_costing_layers(self) -> None:
+    def test_active_controller_contains_no_costing_formulas(self) -> None:
+        source = CONTROLLER_PATH.read_text(encoding="utf-8")
+        self.assertIn("class DoorCuttingOrderController(Document)", source)
+        self.assertNotIn("calculate_piece_costs", source)
+        self.assertNotIn("calculate_order_costs", source)
+        self.assertNotIn("calculate_special_pricing", source)
+        self.assertNotIn("mdf_cost_usd", source)
+
+    def test_hooks_activate_the_direct_controller(self) -> None:
         source = HOOKS_PATH.read_text(encoding="utf-8")
         self.assertIn(
-            "door_cutting_order_plan.PlanDoorCuttingOrder",
+            "door_cutting_order_controller.DoorCuttingOrderController",
             source,
         )
-        plan_source = PLAN_CONTROLLER_PATH.read_text(encoding="utf-8")
-        self.assertIn(
-            "class PlanDoorCuttingOrder(CostingDoorCuttingOrder)",
-            plan_source,
+        self.assertNotIn(
+            'door_cutting_order_plan.PlanDoorCuttingOrder",\n}',
+            source,
         )
-
-    def test_costing_controller_preserves_compatibility_inheritance(self) -> None:
-        source = CONTROLLER_PATH.read_text(encoding="utf-8")
-        self.assertIn("class CostingDoorCuttingOrder(DomainDoorCuttingOrder)", source)
-        self.assertIn("super()._calculate_cutting_plan", source)
-        self.assertIn("self._refresh_costs_from_plan", source)
 
 
 if __name__ == "__main__":
