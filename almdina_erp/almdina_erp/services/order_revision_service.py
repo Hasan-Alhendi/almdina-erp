@@ -7,6 +7,7 @@ from frappe import _
 
 from almdina_erp.almdina_erp.domain.orders.revisions import (
     RevisionNotAllowed,
+    RevisionState,
     assert_revision_allowed,
     next_revision,
     revision_root,
@@ -16,6 +17,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability, ha
 
 RESET_FIELDS: dict[str, Any] = {
     "status": "Draft",
+    "revision_state": RevisionState.PENDING_ACTIVATION,
+    "revision_activated_by": None,
+    "revision_activated_on": None,
     "approved_plan": None,
     "approved_plan_source": "System",
     "production_path": None,
@@ -60,6 +64,10 @@ def create_order_revision(order_name: str, reason: str | None = None) -> dict[st
     """Create one editable successor while preserving the source order and plan."""
 
     _require_revision_capability()
+    reason = str(reason or "").strip()
+    if not reason:
+        frappe.throw(_("A revision reason is required."))
+
     frappe.db.sql("select name from `tabDoor Cutting Order` where name = %s for update", (order_name,))
     source = frappe.get_doc("Door Cutting Order", order_name)
     source.check_permission("read")
@@ -74,6 +82,10 @@ def create_order_revision(order_name: str, reason: str | None = None) -> dict[st
             "name": source.superseded_by,
             "status": frappe.db.get_value("Door Cutting Order", source.superseded_by, "status") or "Draft",
             "revision": frappe.db.get_value("Door Cutting Order", source.superseded_by, "revision"),
+            "revision_state": frappe.db.get_value(
+                "Door Cutting Order", source.superseded_by, "revision_state"
+            )
+            or RevisionState.PENDING_ACTIVATION,
             "revision_of": source.name,
             "already_exists": True,
         }
@@ -84,19 +96,28 @@ def create_order_revision(order_name: str, reason: str | None = None) -> dict[st
     revised.revision_of = source.name
     revised.revision_root = revision_root(order_name=source.name, current_root=source.revision_root)
     revised.superseded_by = None
-    revised.revision_reason = str(reason or "").strip()
+    revised.revision_reason = reason
     for fieldname, value in RESET_FIELDS.items():
         revised.set(fieldname, value)
     _reset_special_price_approvals(revised)
     revised.insert(ignore_permissions=True)
 
+    if not getattr(source, "revision_state", None):
+        frappe.db.set_value(
+            "Door Cutting Order",
+            source.name,
+            "revision_state",
+            RevisionState.CURRENT,
+            update_modified=False,
+        )
     frappe.db.set_value("Door Cutting Order", source.name, "superseded_by", revised.name, update_modified=True)
-    source.add_comment("Comment", text=_("Controlled revision {0} created. Reason: {1}").format(revised.name, revised.revision_reason or "-"))
+    source.add_comment("Comment", text=_("Controlled revision {0} created. Reason: {1}").format(revised.name, revised.revision_reason))
 
     return {
         "name": revised.name,
         "status": revised.status,
         "revision": revised.revision,
+        "revision_state": revised.revision_state,
         "revision_of": source.name,
         "revision_root": revised.revision_root,
         "already_exists": False,

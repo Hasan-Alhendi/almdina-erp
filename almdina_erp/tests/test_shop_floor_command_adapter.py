@@ -82,21 +82,34 @@ class AdapterHarness:
 
 
 class TestShopFloorCommandAdapter(unittest.TestCase):
-    def test_hooks_route_mutating_shop_floor_apis_to_command_adapter(self) -> None:
+    def test_hooks_route_mutating_shop_floor_apis_to_command_boundaries(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
-        methods = (
+        direct_commands = (
             "get_handoff_workers",
-            "dispatch_order",
             "start_my_stage",
             "handoff_to_next",
             "mark_delivered",
             "revert_department",
         )
-        for method in methods:
+        for method in direct_commands:
             old = f"almdina_erp.almdina_erp.services.shop_floor_service.{method}"
             new = f"almdina_erp.almdina_erp.services.shop_floor_commands.{method}"
             self.assertEqual(overrides.get(old), new)
+
+        guarded_dispatch = "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order"
+        self.assertEqual(
+            overrides.get(
+                "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order"
+            ),
+            guarded_dispatch,
+        )
+        self.assertEqual(
+            overrides.get(
+                "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order"
+            ),
+            guarded_dispatch,
+        )
 
         revision_target = "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision"
         self.assertEqual(
