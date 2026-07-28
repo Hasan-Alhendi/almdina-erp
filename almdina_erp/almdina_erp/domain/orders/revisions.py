@@ -71,17 +71,24 @@ def assert_revision_allowed(status: str | None) -> None:
         raise RevisionNotAllowed("Delivered or cancelled orders cannot create a revision.")
 
 
-def assert_revision_dispatchable(state: str | None) -> None:
+def assert_revision_dispatchable(
+    state: str | None,
+    *,
+    competing_current_revision: bool = False,
+) -> None:
     normalized = normalize_revision_state(state)
-    if normalized == RevisionState.CURRENT:
-        return
     if normalized == RevisionState.PENDING_ACTIVATION:
         raise RevisionActivationNotAllowed(
             "This revision is still pending activation and cannot be sent to production."
         )
-    raise RevisionActivationNotAllowed(
-        "This revision was superseded and cannot be sent to production."
-    )
+    if normalized == RevisionState.SUPERSEDED:
+        raise RevisionActivationNotAllowed(
+            "This revision was superseded and cannot be sent to production."
+        )
+    if competing_current_revision:
+        raise RevisionActivationNotAllowed(
+            "More than one current revision exists in this order chain. Resolve the revision conflict before dispatch."
+        )
 
 
 def assert_revision_activation_allowed(
