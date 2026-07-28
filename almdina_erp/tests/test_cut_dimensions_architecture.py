@@ -63,6 +63,9 @@ DETAIL_DOCTYPE_PATH = (
 )
 CUT_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_cut_dimensions_ux.js"
 SIDE_EDGE_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_multi_edge_ux.js"
+EDGE_CONTROLS_UX_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
+)
 DOCUMENT_UX_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
 )
@@ -163,7 +166,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         ):
             self.assertEqual(detail_fields[fieldname]["read_only"], 1)
 
-    def test_live_ux_hides_profile_column_and_uses_side_indicators(self) -> None:
+    def test_live_ux_hides_profile_column_and_uses_visible_side_controls(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         performance_index = scripts.index(
@@ -171,6 +174,9 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         side_edge_index = scripts.index(
             "public/js/door_cutting_order_multi_edge_ux.js"
+        )
+        controls_index = scripts.index(
+            "public/js/door_cutting_order_edge_profile_controls_ux.js"
         )
         cut_index = scripts.index(
             "public/js/door_cutting_order_cut_dimensions_ux.js"
@@ -183,7 +189,8 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
 
         self.assertGreater(side_edge_index, performance_index)
-        self.assertGreater(cut_index, side_edge_index)
+        self.assertGreater(controls_index, side_edge_index)
+        self.assertGreater(cut_index, controls_index)
         self.assertGreater(documents_index, invoice_index)
         self.assertEqual(
             hooks["doctype_js"]["Edge Banding Type"],
@@ -191,6 +198,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
 
         side_source = SIDE_EDGE_UX_PATH.read_text(encoding="utf-8")
+        controls_source = EDGE_CONTROLS_UX_PATH.read_text(encoding="utf-8")
         cut_source = CUT_UX_PATH.read_text(encoding="utf-8")
         document_source = DOCUMENT_UX_PATH.read_text(encoding="utf-8")
         edge_source = EDGE_UX_PATH.read_text(encoding="utf-8")
@@ -208,6 +216,17 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
             "edge_width_bottom_type_override",
         ):
             self.assertIn(fieldname, side_source)
+            self.assertIn(fieldname, controls_source)
+
+        self.assertIn("top:2px!important", controls_source)
+        self.assertIn("opacity:1!important", controls_source)
+        self.assertIn("dco-edge-bulk-profile", controls_source)
+        self.assertIn("تخصيص الأضلاع الأربعة", controls_source)
+        self.assertIn("تطبيق على الأربعة", controls_source)
+        self.assertIn("الأربعة بالافتراضي", controls_source)
+        self.assertIn("applyToAllSides", controls_source)
+        self.assertNotIn("width_cm *", controls_source)
+        self.assertNotIn("rate_usd_per_meter *", controls_source)
 
         self.assertIn("مقاس القص", cut_source)
         self.assertIn("الخصم حسب سماكة كل ضلع", cut_source)
