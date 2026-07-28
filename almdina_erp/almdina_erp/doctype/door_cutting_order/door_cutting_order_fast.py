@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from typing import Any
@@ -9,6 +8,16 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_datetime, now_datetime
 
+from almdina_erp.almdina_erp.application.orders.plan_payloads import (
+    PlanBoardInput,
+    PlanCutInput,
+    PlanMetadataPiece,
+    PlanOptimizerSettings,
+    PlanPieceInput,
+    build_plan_input_payload,
+    build_plan_metadata_payload,
+)
+from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
 from almdina_erp.almdina_erp.services.cutting_engine import round_value
 from almdina_erp.almdina_erp.services.special_shape_service import (
     has_special_price_approval_role,
@@ -19,6 +28,7 @@ from .door_cutting_order import (
     CLIPPED_CORNER_POSITIONS,
     ENGINE_VERSION,
     PIECE_TYPES,
+    PLAN_INPUT_VERSION,
     DoorCuttingOrder as BaseDoorCuttingOrder,
 )
 
@@ -235,8 +245,6 @@ class FastDoorCuttingOrder(BaseDoorCuttingOrder):
             old_raw = self._drawing_token(old_row.special_shape_drawing_json) if old_row else ""
             drawing_changed = current_raw != old_raw
 
-            # Previously stored drawings were already validated. Parsing thousands
-            # of unchanged pen points on every Save was one of the largest costs.
             if current_raw and drawing_changed:
                 drawing = validate_special_shape_drawing(current_raw)
                 drawing_has_elements = bool(drawing and drawing.get("elements"))
@@ -299,53 +307,84 @@ class FastDoorCuttingOrder(BaseDoorCuttingOrder):
                 row.special_shape_price_approved_on = None
 
     def _plan_input_payload(self, settings: Any, source: Any | None = None) -> dict[str, Any]:
-        payload = super()._plan_input_payload(settings, source)
         source = source or self
-        for item, row in zip(payload.get("pieces") or [], source.pieces or []):
-            item.update(
-                {
-                    "piece_type": row.piece_type or "Regular",
-                    "clipped_corner_position": row.clipped_corner_position or "",
-                    "clipped_corner_width_cm": self._normalized_number(row.clipped_corner_width_cm),
-                    "clipped_corner_length_cm": self._normalized_number(row.clipped_corner_length_cm),
-                }
-            )
-        return payload
+        return build_plan_input_payload(
+            version=PLAN_INPUT_VERSION,
+            board=PlanBoardInput(
+                item=str(source.board_item or ""),
+                width_mm=self._normalized_number(source.full_board_width_mm),
+                length_mm=self._normalized_number(source.full_board_length_mm),
+            ),
+            cut=PlanCutInput(
+                kerf_mm=self._normalized_number(source.kerf_mm),
+                trim_margin_mm=self._normalized_number(source.trim_margin_mm),
+                packing_mode=str(source.packing_mode or "Auto Pro"),
+                machine_type=str(source.cutting_machine_type or "Auto"),
+                time_limit_sec=self._normalized_number(
+                    source.optimization_time_limit_sec or 10
+                ),
+            ),
+            optimizer=PlanOptimizerSettings(
+                exact_piece_limit=cint(settings.optimal_search_piece_limit) or 40,
+                min_remnant_width_mm=self._normalized_number(
+                    settings.min_remnant_width_mm
+                ),
+                min_remnant_length_mm=self._normalized_number(
+                    settings.min_remnant_length_mm
+                ),
+                min_remnant_area_m2=self._normalized_number(
+                    settings.min_remnant_area_m2
+                ),
+            ),
+            pieces=(
+                PlanPieceInput(
+                    index=index,
+                    width_cm=self._normalized_number(row.width_cm),
+                    length_cm=self._normalized_number(row.length_cm),
+                    qty=cint(row.qty),
+                    allow_rotation=cint(row.allow_rotation),
+                    piece_type=str(row.piece_type or "Regular"),
+                    clipped_corner_position=str(row.clipped_corner_position or ""),
+                    clipped_corner_width_cm=self._normalized_number(
+                        row.clipped_corner_width_cm
+                    ),
+                    clipped_corner_length_cm=self._normalized_number(
+                        row.clipped_corner_length_cm
+                    ),
+                )
+                for index, row in enumerate(source.pieces or [], start=1)
+            ),
+        )
+
+    def _plan_input_fingerprint(self, settings: Any, source: Any | None = None) -> str:
+        return fingerprint_payload(self._plan_input_payload(settings, source))
 
     def _plan_metadata_payload(self) -> dict[str, Any]:
-        return {
-            "default_edge_type": self.default_edge_type or "",
-            "edge_color": self.edge_color or "",
-            "pieces": [
-                {
-                    "index": index,
-                    "piece_type": row.piece_type or "Regular",
-                    "edge_long_right": cint(row.edge_long_right),
-                    "edge_long_left": cint(row.edge_long_left),
-                    "edge_width_top": cint(row.edge_width_top),
-                    "edge_width_bottom": cint(row.edge_width_bottom),
-                    "edge_type": row.edge_type or "",
-                    "edge_rate_usd": self._normalized_number(row.edge_rate_usd),
-                    "edge_cost_usd": self._normalized_number(row.edge_cost_usd),
-                    "area_m2": self._normalized_number(row.area_m2),
-                    "notes": row.notes or "",
-                    "drawing_hash": hashlib.sha256(
-                        self._drawing_token(row.special_shape_drawing_json).encode("utf-8")
-                    ).hexdigest(),
-                    "special_shape_status": row.special_shape_status or "",
-                }
+        return build_plan_metadata_payload(
+            default_edge_type=str(self.default_edge_type or ""),
+            edge_color=str(self.edge_color or ""),
+            pieces=(
+                PlanMetadataPiece(
+                    index=index,
+                    piece_type=str(row.piece_type or "Regular"),
+                    edge_long_right=cint(row.edge_long_right),
+                    edge_long_left=cint(row.edge_long_left),
+                    edge_width_top=cint(row.edge_width_top),
+                    edge_width_bottom=cint(row.edge_width_bottom),
+                    edge_type=str(row.edge_type or ""),
+                    edge_rate_usd=self._normalized_number(row.edge_rate_usd),
+                    edge_cost_usd=self._normalized_number(row.edge_cost_usd),
+                    area_m2=self._normalized_number(row.area_m2),
+                    notes=str(row.notes or ""),
+                    drawing_token=self._drawing_token(row.special_shape_drawing_json),
+                    special_shape_status=str(row.special_shape_status or ""),
+                )
                 for index, row in enumerate(self.pieces or [], start=1)
-            ],
-        }
+            ),
+        )
 
     def _plan_metadata_fingerprint(self) -> str:
-        serialized = json.dumps(
-            self._plan_metadata_payload(),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-        )
-        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        return fingerprint_payload(self._plan_metadata_payload())
 
     def _parse_plan_snapshot(self) -> dict[str, Any]:
         raw = self.cutting_plan_json or ""
@@ -357,8 +396,6 @@ class FastDoorCuttingOrder(BaseDoorCuttingOrder):
         return snapshot
 
     def _can_reuse_current_plan(self, input_fingerprint: str, settings: Any) -> bool:
-        # Modern plans carry their layout hash in a dedicated column. Do not parse
-        # a potentially large JSON document just to compare one short string.
         if self.cutting_plan_json and self.calculated_plan_input_hash:
             return str(self.calculated_plan_input_hash) == input_fingerprint
         return super()._can_reuse_current_plan(input_fingerprint, settings)
