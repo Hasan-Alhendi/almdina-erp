@@ -106,6 +106,10 @@ boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
 override_whitelisted_methods = {
+    "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order":
+        "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
+    "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production":
+        "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
     "almdina_erp.almdina_erp.services.replacement_service.approve_replacement":
         "almdina_erp.almdina_erp.services.replacement_approval.approve_replacement",
     "almdina_erp.almdina_erp.services.replacement_service.start_replacement":
@@ -115,7 +119,9 @@ override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers":
         "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
     "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order":
-        "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order",
+        "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order",
+    "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order":
+        "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order",
     "almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage":
         "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
     "almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next":
