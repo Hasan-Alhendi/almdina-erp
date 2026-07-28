@@ -1,0 +1,1 @@
+"""Shop-floor response presenters."""
