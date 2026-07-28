@@ -3,6 +3,8 @@ name: Debug regression failures
 on:
   push:
     branches: [fix/require-door-cutting-pieces]
+  pull_request:
+    branches: [main]
 
 jobs:
   debug:
