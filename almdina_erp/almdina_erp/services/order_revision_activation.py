@@ -37,6 +37,37 @@ def _lock_order_rows(*names: str) -> None:
         )
 
 
+def load_locked_revision_order(order_name: str) -> Any:
+    """Lock a complete revision chain in deterministic name order and reload it."""
+
+    identity = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        ["revision_of", "revision_root"],
+        as_dict=True,
+    )
+    if not identity:
+        frappe.throw(_("Door Cutting Order {0} does not exist.").format(order_name))
+
+    root_name = revision_root(
+        order_name=str(identity.revision_of or order_name),
+        current_root=identity.revision_root,
+    )
+    frappe.db.sql(
+        """
+        select name
+          from `tabDoor Cutting Order`
+         where name = %s
+            or name = %s
+            or revision_root = %s
+         order by name asc
+         for update
+        """,
+        (order_name, root_name, root_name),
+    )
+    return frappe.get_doc("Door Cutting Order", order_name)
+
+
 def _has_open_stages(order_name: str) -> bool:
     return bool(
         frappe.db.exists(
@@ -142,10 +173,9 @@ def assert_order_revision_dispatchable(order: Any) -> None:
     )
     if has_revision_chain:
         root_name = revision_root(
-            order_name=order.name,
+            order_name=str(getattr(order, "revision_of", None) or order.name),
             current_root=getattr(order, "revision_root", None),
         )
-        _lock_order_rows(root_name, order.name)
         competing = bool(
             _other_current_revision(root_name=root_name, order_name=order.name)
         )
@@ -160,11 +190,12 @@ def assert_order_revision_dispatchable(order: Any) -> None:
 
 
 def prepare_revision_activation(order: Any) -> RevisionActivationContext | None:
-    """Lock and retire reservations of a safe predecessor before plan approval.
+    """Retire reservations of a safe predecessor before plan approval.
 
     The surrounding Frappe request transaction guarantees that released
     reservations are restored automatically if plan creation, stock validation,
-    or final activation fails later in the same request.
+    or final activation fails later in the same request. The caller must load the
+    order through ``load_locked_revision_order`` first.
     """
 
     predecessor_name = str(getattr(order, "revision_of", None) or "").strip()
@@ -175,8 +206,6 @@ def prepare_revision_activation(order: Any) -> RevisionActivationContext | None:
         order_name=predecessor_name,
         current_root=getattr(order, "revision_root", None),
     )
-    _lock_order_rows(root_name, predecessor_name, order.name)
-
     predecessor = frappe.get_doc("Door Cutting Order", predecessor_name)
     if predecessor.superseded_by and predecessor.superseded_by != order.name:
         frappe.throw(
