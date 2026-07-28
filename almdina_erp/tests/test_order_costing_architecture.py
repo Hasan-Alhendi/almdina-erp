@@ -35,10 +35,15 @@ HOOKS_PATH = ROOT / "hooks.py"
 class TestOrderCostingArchitecture(unittest.TestCase):
     def test_costing_domain_is_framework_independent(self) -> None:
         source = DOMAIN_PATH.read_text(encoding="utf-8")
-        self.assertIn("edge_long_type", source)
-        self.assertIn("edge_width_type", source)
-        self.assertIn("edge_long_meters", source)
-        self.assertIn("edge_width_meters", source)
+        for token in (
+            "edge_long_right_type",
+            "edge_long_left_type",
+            "edge_width_top_type",
+            "edge_width_bottom_type",
+            "edge_long_right_meters",
+            "edge_width_bottom_cost_usd",
+        ):
+            self.assertIn(token, source)
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
         self.assertNotIn("import erpnext", source)
@@ -57,6 +62,13 @@ class TestOrderCostingArchitecture(unittest.TestCase):
             self.assertIn(token, source)
         self.assertIn("FrappeEdgeProfileRepository", source)
         self.assertIn("self.profiles.rate_map()", source)
+        for fieldname in (
+            "edge_long_right_type_override",
+            "edge_long_left_type_override",
+            "edge_width_top_type_override",
+            "edge_width_bottom_type_override",
+        ):
+            self.assertIn(fieldname, source)
         self.assertIn("row.edge_long_cost_usd", source)
         self.assertIn("row.edge_width_cost_usd", source)
         self.assertNotIn("width_cm * length_cm", source)
