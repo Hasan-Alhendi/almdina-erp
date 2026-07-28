@@ -11,16 +11,14 @@ DOCTYPE_PATH = (
     ROOT
     / "almdina_erp"
     / "almdina_erp"
-    / "almdina_erp"
     / "doctype"
     / "door_cutting_order"
     / "door_cutting_order.json"
 )
-HOOKS_PATH = ROOT / "almdina_erp" / "almdina_erp" / "hooks.py"
-PATCHES_PATH = ROOT / "almdina_erp" / "almdina_erp" / "patches.txt"
+HOOKS_PATH = ROOT / "almdina_erp" / "hooks.py"
+PATCHES_PATH = ROOT / "almdina_erp" / "patches.txt"
 REVISION_SERVICE_PATH = (
     ROOT
-    / "almdina_erp"
     / "almdina_erp"
     / "almdina_erp"
     / "services"
