@@ -11,6 +11,9 @@
     "clipped_corner_length_cm",
     "width_cm",
     "length_cm",
+    "cut_size_label",
+    "cut_width_cm",
+    "cut_length_cm",
     "qty",
     "allow_rotation",
     "edge_long_right",
@@ -18,6 +21,7 @@
     "edge_width_top",
     "edge_width_bottom",
     "edge_type",
+    "edge_thickness_mm",
     "edge_rate_usd",
     "edge_cost_usd",
     "area_m2",
@@ -76,20 +80,45 @@
       "non_negative": 1
     },
     {
+      "description": "Finished width requested after edge banding.",
       "fieldname": "width_cm",
       "fieldtype": "Float",
       "in_list_view": 1,
-      "label": "Width (CM)",
+      "label": "Finished Width (CM)",
       "non_negative": 1,
       "reqd": 1
     },
     {
+      "description": "Finished length requested after edge banding.",
       "fieldname": "length_cm",
       "fieldtype": "Float",
       "in_list_view": 1,
-      "label": "Length (CM)",
+      "label": "Finished Length (CM)",
       "non_negative": 1,
       "reqd": 1
+    },
+    {
+      "description": "Raw cutting size after deducting edge thickness from every selected side.",
+      "fieldname": "cut_size_label",
+      "fieldtype": "Data",
+      "label": "Cut Size (CM)",
+      "read_only": 1
+    },
+    {
+      "fieldname": "cut_width_cm",
+      "fieldtype": "Float",
+      "label": "Cut Width (CM)",
+      "non_negative": 1,
+      "precision": "3",
+      "read_only": 1
+    },
+    {
+      "fieldname": "cut_length_cm",
+      "fieldtype": "Float",
+      "label": "Cut Length (CM)",
+      "non_negative": 1,
+      "precision": "3",
+      "read_only": 1
     },
     {
       "default": "1",
@@ -141,6 +170,14 @@
       "in_list_view": 1,
       "label": "Edge Type",
       "options": "Edge Banding Type"
+    },
+    {
+      "fieldname": "edge_thickness_mm",
+      "fieldtype": "Float",
+      "label": "Applied Edge Thickness (MM)",
+      "non_negative": 1,
+      "precision": "3",
+      "read_only": 1
     },
     {
       "fieldname": "edge_rate_usd",
