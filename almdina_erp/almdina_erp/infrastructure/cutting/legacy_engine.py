@@ -1,69 +1,12 @@
+"""Backward-compatible names for the active Domain cutting engine adapter."""
+
 from __future__ import annotations
 
-from typing import Any
-
-from almdina_erp.almdina_erp.domain.cutting import (
-    expand_piece_groups,
-    optimize_plan,
-    validate_plan,
-)
+from .domain_engine import DomainCuttingEngineAdapter, domain_cutting_engine
 
 
-class LegacyCuttingEngineAdapter:
-    """Adapt the pure cutting domain to the Application cutting port.
-
-    The class name remains stable for compatibility; it no longer depends on
-    service-layer engine modules.
-    """
-
-    def expand_pieces(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return expand_piece_groups(rows)
-
-    def optimize(
-        self,
-        pieces: list[dict[str, Any]],
-        board_width_cm: float,
-        board_length_cm: float,
-        kerf_cm: float,
-        *,
-        selected_mode: str,
-        machine_type: str,
-        time_limit_sec: float,
-        exact_piece_limit: int,
-        min_remnant_width_cm: float,
-        min_remnant_length_cm: float,
-        min_remnant_area_m2: float,
-    ) -> dict[str, Any]:
-        return optimize_plan(
-            pieces,
-            board_width_cm,
-            board_length_cm,
-            kerf_cm,
-            selected_mode=selected_mode,
-            machine_type=machine_type,
-            time_limit_sec=time_limit_sec,
-            exact_piece_limit=exact_piece_limit,
-            min_remnant_width_cm=min_remnant_width_cm,
-            min_remnant_length_cm=min_remnant_length_cm,
-            min_remnant_area_m2=min_remnant_area_m2,
-        )
-
-    def validate(
-        self,
-        plan: dict[str, Any],
-        pieces: list[dict[str, Any]],
-        board_width_cm: float,
-        board_length_cm: float,
-    ) -> list[str]:
-        return validate_plan(
-            plan,
-            pieces,
-            board_width_cm,
-            board_length_cm,
-        )
-
-
-legacy_cutting_engine = LegacyCuttingEngineAdapter()
+LegacyCuttingEngineAdapter = DomainCuttingEngineAdapter
+legacy_cutting_engine = domain_cutting_engine
 
 
 __all__ = ["LegacyCuttingEngineAdapter", "legacy_cutting_engine"]
