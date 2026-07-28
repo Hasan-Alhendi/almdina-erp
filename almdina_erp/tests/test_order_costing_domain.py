@@ -20,7 +20,7 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertEqual(round_value(1.2345, 3), 1.235)
         self.assertEqual(round_value(-1.2345, 3), -1.235)
 
-    def test_piece_measurements_and_edge_costs(self) -> None:
+    def test_piece_measurements_and_mixed_axis_edge_costs(self) -> None:
         summary = calculate_piece_costs(
             [
                 PieceCostInput(
@@ -31,7 +31,8 @@ class TestOrderCostingDomain(unittest.TestCase):
                     edge_long_left=1,
                     edge_width_top=1,
                     edge_width_bottom=0,
-                    edge_type="",
+                    edge_long_type="2cm Glossy",
+                    edge_width_type="2cm Gold",
                 ),
                 PieceCostInput(
                     width_cm=40,
@@ -41,36 +42,75 @@ class TestOrderCostingDomain(unittest.TestCase):
                     edge_long_left=0,
                     edge_width_top=0,
                     edge_width_bottom=0,
-                    edge_type="4cm",
+                    edge_long_type="4cm Glossy",
                 ),
             ],
-            default_edge_type="2cm",
-            edge_rates={"2cm": 0.5, "4cm": 1.0},
+            default_edge_type="2cm Regular",
+            edge_rates={
+                "2cm Regular": 0.5,
+                "2cm Glossy": 1.0,
+                "2cm Gold": 1.25,
+                "4cm Glossy": 2.0,
+            },
         )
 
-        self.assertEqual(summary.pieces[0].area_m2, 0.96)
-        self.assertEqual(summary.pieces[0].edge_meters, 4.4)
-        self.assertEqual(summary.pieces[0].edge_rate_usd, 0.5)
-        self.assertEqual(summary.pieces[0].edge_cost_usd, 2.2)
-        self.assertEqual(summary.pieces[1].area_m2, 0.4)
-        self.assertEqual(summary.pieces[1].edge_meters, 1.0)
-        self.assertEqual(summary.pieces[1].edge_cost_usd, 1.0)
+        first = summary.pieces[0]
+        self.assertEqual(first.area_m2, 0.96)
+        self.assertEqual(first.edge_long_meters, 3.2)
+        self.assertEqual(first.edge_width_meters, 1.2)
+        self.assertEqual(first.edge_meters, 4.4)
+        self.assertEqual(first.edge_long_rate_usd, 1.0)
+        self.assertEqual(first.edge_width_rate_usd, 1.25)
+        self.assertEqual(first.edge_long_cost_usd, 3.2)
+        self.assertEqual(first.edge_width_cost_usd, 1.5)
+        self.assertEqual(first.edge_cost_usd, 4.7)
+
+        second = summary.pieces[1]
+        self.assertEqual(second.area_m2, 0.4)
+        self.assertEqual(second.edge_long_meters, 1.0)
+        self.assertEqual(second.edge_width_meters, 0)
+        self.assertEqual(second.edge_cost_usd, 2.0)
+
         self.assertEqual(summary.total_area_m2, 1.36)
         self.assertEqual(summary.total_edge_meters, 5.4)
-        self.assertEqual(summary.total_edge_cost_usd, 3.2)
+        self.assertEqual(summary.total_edge_cost_usd, 6.7)
+
+    def test_default_profile_is_applied_per_selected_axis(self) -> None:
+        summary = calculate_piece_costs(
+            [
+                PieceCostInput(
+                    width_cm=30,
+                    length_cm=50,
+                    qty=1,
+                    edge_long_right=1,
+                    edge_long_left=0,
+                    edge_width_top=1,
+                    edge_width_bottom=0,
+                )
+            ],
+            default_edge_type="2cm Regular",
+            edge_rates={"2cm Regular": 0.5},
+        )
+
+        result = summary.pieces[0]
+        self.assertEqual(result.edge_long_meters, 0.5)
+        self.assertEqual(result.edge_width_meters, 0.3)
+        self.assertEqual(result.edge_long_rate_usd, 0.5)
+        self.assertEqual(result.edge_width_rate_usd, 0.5)
+        self.assertEqual(result.edge_cost_usd, 0.4)
 
     def test_board_cutting_and_waste_summary(self) -> None:
         costs = calculate_order_costs(
             required_boards=3,
             board_rate_usd=20,
             cutting_cost_per_board_usd=4.5,
-            edge_cost_usd=3.2,
+            edge_cost_usd=6.7,
         )
         waste = calculate_waste(waste_area_m2=1.25, total_board_area_m2=8.9292)
 
         self.assertEqual(costs.mdf_cost_usd, 60)
         self.assertEqual(costs.cutting_cost_usd, 13.5)
-        self.assertEqual(costs.total_cost_usd, 76.7)
+        self.assertEqual(costs.total_cost_usd, 80.2)
         self.assertEqual(waste.waste_area_m2, 1.25)
         self.assertEqual(waste.waste_percent, 14.0)
 

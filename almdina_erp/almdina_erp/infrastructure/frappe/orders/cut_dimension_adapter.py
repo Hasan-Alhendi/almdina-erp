@@ -12,44 +12,39 @@ from almdina_erp.almdina_erp.domain.orders.cut_dimensions import (
     calculate_cut_dimensions,
 )
 
-
-_EDGE_SIDE_FIELDS = (
-    "edge_long_right",
-    "edge_long_left",
-    "edge_width_top",
-    "edge_width_bottom",
-)
+from .edge_profile_repository import FrappeEdgeProfileRepository
 
 
 class FrappeOrderCutDimensionAdapter:
-    """Apply the pure edge-allowance policy to Frappe child rows."""
+    """Apply per-axis edge allowance to Frappe child rows."""
 
-    def __init__(self, document: Any) -> None:
+    def __init__(
+        self,
+        document: Any,
+        profiles: FrappeEdgeProfileRepository,
+    ) -> None:
         self.document = document
+        self.profiles = profiles
 
     def calculate_rows(self) -> None:
-        thicknesses = self._edge_thickness_map()
         for index, row in enumerate(self.document.pieces or [], start=1):
-            selected_edge = any(
-                cint(getattr(row, fieldname, 0))
-                for fieldname in _EDGE_SIDE_FIELDS
-            )
-            effective_edge_type = str(
-                row.edge_type or self.document.default_edge_type or ""
-            )
-            thickness_mm = self._resolve_thickness(
-                index=index,
-                selected_edge=selected_edge,
-                edge_type=effective_edge_type,
-                thicknesses=thicknesses,
-            )
+            long_profile = self.profiles.profile_for(row, "long", index)
+            width_profile = self.profiles.profile_for(row, "width", index)
+
+            row.edge_long_type = long_profile.name if long_profile else ""
+            row.edge_width_type = width_profile.name if width_profile else ""
 
             try:
                 result = calculate_cut_dimensions(
                     CutDimensionInput(
                         final_width_cm=flt(row.width_cm),
                         final_length_cm=flt(row.length_cm),
-                        edge_thickness_mm=thickness_mm,
+                        long_edge_thickness_mm=(
+                            long_profile.thickness_mm if long_profile else 0
+                        ),
+                        width_edge_thickness_mm=(
+                            width_profile.thickness_mm if width_profile else 0
+                        ),
                         edge_long_right=cint(row.edge_long_right),
                         edge_long_left=cint(row.edge_long_left),
                         edge_width_top=cint(row.edge_width_top),
@@ -59,76 +54,25 @@ class FrappeOrderCutDimensionAdapter:
             except CutDimensionError as error:
                 self._raise_validation_error(index, str(error))
 
-            row.edge_thickness_mm = result.edge_thickness_mm
+            row.edge_long_thickness_mm = result.long_edge_thickness_mm
+            row.edge_width_thickness_mm = result.width_edge_thickness_mm
             row.cut_width_cm = result.cut_width_cm
             row.cut_length_cm = result.cut_length_cm
             row.cut_size_label = self._size_label(
                 result.cut_width_cm,
                 result.cut_length_cm,
             )
+            self._sync_legacy_summary(row, long_profile, width_profile)
 
     @staticmethod
-    def _resolve_thickness(
-        *,
-        index: int,
-        selected_edge: bool,
-        edge_type: str,
-        thicknesses: dict[str, float],
-    ) -> float:
-        if not selected_edge:
-            return 0.0
-        if not edge_type:
-            frappe.throw(
-                _("Row {0}: Select an Edge Type before choosing edge sides.").format(
-                    index
-                )
-            )
-        if edge_type not in thicknesses:
-            frappe.throw(
-                _("Row {0}: Edge Banding Type {1} does not exist.").format(
-                    index,
-                    edge_type,
-                )
-            )
-
-        thickness_mm = thicknesses[edge_type]
-        if thickness_mm <= 0:
-            frappe.throw(
-                _(
-                    "Row {0}: Edge Banding Type {1} must have a thickness greater than zero."
-                ).format(index, edge_type)
-            )
-        return thickness_mm
-
-    def _edge_thickness_map(self) -> dict[str, float]:
-        names = {
-            str(edge_type)
-            for edge_type in [
-                self.document.default_edge_type,
-                *(row.edge_type for row in (self.document.pieces or [])),
-            ]
-            if edge_type
-        }
-        if not names:
-            return {}
-
-        flags = self.document.flags
-        cache_key = tuple(sorted(names))
-        if flags.get("_edge_thickness_names") == cache_key:
-            return flags.get("_edge_thickness_map") or {}
-
-        rows = frappe.get_all(
-            "Edge Banding Type",
-            filters={"name": ["in", list(cache_key)]},
-            fields=["name", "thickness_mm"],
+    def _sync_legacy_summary(row: Any, long_profile: Any, width_profile: Any) -> None:
+        profiles = [profile for profile in (long_profile, width_profile) if profile]
+        names = {profile.name for profile in profiles}
+        thicknesses = {profile.thickness_mm for profile in profiles}
+        row.edge_type = names.pop() if len(names) == 1 else ""
+        row.edge_thickness_mm = (
+            thicknesses.pop() if len(thicknesses) == 1 else 0
         )
-        thicknesses = {
-            str(row.name): flt(row.thickness_mm)
-            for row in rows
-        }
-        flags._edge_thickness_names = cache_key
-        flags._edge_thickness_map = thicknesses
-        return thicknesses
 
     @staticmethod
     def _size_label(width_cm: float, length_cm: float) -> str:
@@ -137,8 +81,11 @@ class FrappeOrderCutDimensionAdapter:
     @staticmethod
     def _raise_validation_error(index: int, code: str) -> None:
         messages = {
-            "edge_thickness_negative": _(
-                "Row {0}: Edge thickness cannot be negative."
+            "long_edge_thickness_negative": _(
+                "Row {0}: Long edge thickness cannot be negative."
+            ),
+            "width_edge_thickness_negative": _(
+                "Row {0}: Width edge thickness cannot be negative."
             ),
             "cut_width_not_positive": _(
                 "Row {0}: Edge allowance leaves no valid cutting width."

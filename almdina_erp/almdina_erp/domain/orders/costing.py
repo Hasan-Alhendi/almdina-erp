@@ -18,14 +18,20 @@ class PieceCostInput:
     edge_long_left: int
     edge_width_top: int
     edge_width_bottom: int
-    edge_type: str = ""
+    edge_long_type: str = ""
+    edge_width_type: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class PieceCostResult:
     area_m2: float
+    edge_long_meters: float
+    edge_width_meters: float
     edge_meters: float
-    edge_rate_usd: float
+    edge_long_rate_usd: float
+    edge_width_rate_usd: float
+    edge_long_cost_usd: float
+    edge_width_cost_usd: float
     edge_cost_usd: float
 
 
@@ -115,20 +121,32 @@ def calculate_piece_costs(
         width_cm = _finite(piece.width_cm)
         length_cm = _finite(piece.length_cm)
         qty = int(piece.qty)
-        long_edges = int(piece.edge_long_right) + int(piece.edge_long_left)
-        width_edges = int(piece.edge_width_top) + int(piece.edge_width_bottom)
+        long_edges = int(bool(piece.edge_long_right)) + int(bool(piece.edge_long_left))
+        width_edges = int(bool(piece.edge_width_top)) + int(bool(piece.edge_width_bottom))
 
         area_m2 = (width_cm * length_cm * qty) / 10000
-        edge_meters = (((length_cm * long_edges) + (width_cm * width_edges)) * qty) / 100
-        effective_edge_type = piece.edge_type or default_edge_type
-        edge_rate = _finite(edge_rates.get(effective_edge_type, 0.0)) if effective_edge_type else 0.0
-        edge_cost = edge_meters * edge_rate
+        long_meters = (length_cm * long_edges * qty) / 100
+        width_meters = (width_cm * width_edges * qty) / 100
+        edge_meters = long_meters + width_meters
+
+        long_type = (piece.edge_long_type or default_edge_type) if long_edges else ""
+        width_type = (piece.edge_width_type or default_edge_type) if width_edges else ""
+        long_rate = _finite(edge_rates.get(long_type, 0.0)) if long_type else 0.0
+        width_rate = _finite(edge_rates.get(width_type, 0.0)) if width_type else 0.0
+        long_cost = long_meters * long_rate
+        width_cost = width_meters * width_rate
+        edge_cost = long_cost + width_cost
 
         results.append(
             PieceCostResult(
                 area_m2=round_value(area_m2, 3),
+                edge_long_meters=round_value(long_meters, 3),
+                edge_width_meters=round_value(width_meters, 3),
                 edge_meters=round_value(edge_meters, 3),
-                edge_rate_usd=edge_rate,
+                edge_long_rate_usd=long_rate,
+                edge_width_rate_usd=width_rate,
+                edge_long_cost_usd=round_value(long_cost, 3),
+                edge_width_cost_usd=round_value(width_cost, 3),
                 edge_cost_usd=round_value(edge_cost, 3),
             )
         )

@@ -42,6 +42,26 @@ def clone_pieces(pieces: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deepcopy(pieces)
 
 
+def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "edge_long_right": 1 if row.get("edge_long_right") else 0,
+        "edge_long_left": 1 if row.get("edge_long_left") else 0,
+        "edge_width_top": 1 if row.get("edge_width_top") else 0,
+        "edge_width_bottom": 1 if row.get("edge_width_bottom") else 0,
+        "edge_long_type": row.get("edge_long_type") or "",
+        "edge_width_type": row.get("edge_width_type") or "",
+        "edge_long_thickness_mm": num(row.get("edge_long_thickness_mm")),
+        "edge_width_thickness_mm": num(row.get("edge_width_thickness_mm")),
+        "edge_long_rate_usd": num(row.get("edge_long_rate_usd")),
+        "edge_width_rate_usd": num(row.get("edge_width_rate_usd")),
+        "edge_long_cost_usd": num(row.get("edge_long_cost_usd")),
+        "edge_width_cost_usd": num(row.get("edge_width_cost_usd")),
+        "edge_type": row.get("edge_type") or "",
+        "edge_rate_usd": num(row.get("edge_rate_usd")),
+        "edge_cost_usd": num(row.get("edge_cost_usd")),
+    }
+
+
 def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     pieces: list[dict[str, Any]] = []
     serial = 1
@@ -74,13 +94,7 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "allow_rotation": 1 if row.get("allow_rotation") else 0,
                     "area_m2": (width_cm * length_cm) / 10000,
                     "notes": row.get("notes") or "",
-                    "edge_long_right": 1 if row.get("edge_long_right") else 0,
-                    "edge_long_left": 1 if row.get("edge_long_left") else 0,
-                    "edge_width_top": 1 if row.get("edge_width_top") else 0,
-                    "edge_width_bottom": 1 if row.get("edge_width_bottom") else 0,
-                    "edge_type": row.get("edge_type") or "",
-                    "edge_rate_usd": num(row.get("edge_rate_usd")),
-                    "edge_cost_usd": num(row.get("edge_cost_usd")),
+                    **_edge_metadata(row),
                 }
             )
             serial += 1
@@ -136,13 +150,7 @@ def make_placed_piece(
         "rotated": bool(rotated),
         "area_m2": num(piece.get("area_m2")),
         "notes": piece.get("notes") or "",
-        "edge_long_right": 1 if piece.get("edge_long_right") else 0,
-        "edge_long_left": 1 if piece.get("edge_long_left") else 0,
-        "edge_width_top": 1 if piece.get("edge_width_top") else 0,
-        "edge_width_bottom": 1 if piece.get("edge_width_bottom") else 0,
-        "edge_type": piece.get("edge_type") or "",
-        "edge_rate_usd": num(piece.get("edge_rate_usd")),
-        "edge_cost_usd": num(piece.get("edge_cost_usd")),
+        **_edge_metadata(piece),
     }
 
 

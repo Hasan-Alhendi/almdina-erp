@@ -87,6 +87,7 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         expected = {
             "document_access.py",
             "piece_policy_adapter.py",
+            "edge_profile_repository.py",
             "cut_dimension_adapter.py",
             "costing_adapter.py",
             "plan_adapter.py",
@@ -101,6 +102,7 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         )
         self.assertIn("FrappeOrderDocumentAccess", gateway)
         self.assertIn("FrappeOrderPiecePolicyAdapter", gateway)
+        self.assertIn("FrappeEdgeProfileRepository", gateway)
         self.assertIn("FrappeOrderCutDimensionAdapter", gateway)
         self.assertIn("FrappeOrderCostingAdapter", gateway)
         self.assertIn("FrappeCutDimensionPlanAdapter", gateway)
