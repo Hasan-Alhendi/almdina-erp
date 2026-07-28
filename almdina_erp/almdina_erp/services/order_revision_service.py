@@ -59,14 +59,24 @@ def _reset_special_price_approvals(order: Any) -> None:
         row.special_shape_price_approved_on = None
 
 
+def _add_revision_comment(source: Any, revised_name: str, reason: str) -> None:
+    if reason:
+        text = _("Controlled revision {0} created. Reason: {1}").format(revised_name, reason)
+    else:
+        text = _("Controlled revision {0} created.").format(revised_name)
+    source.add_comment("Comment", text=text)
+
+
 @frappe.whitelist()
 def create_order_revision(order_name: str, reason: str | None = None) -> dict[str, Any]:
-    """Create one editable successor while preserving the source order and plan."""
+    """Create one editable successor while preserving the source order and plan.
+
+    The reason is optional by design. Older buttons and external callers that do
+    not send it must still be able to create a controlled draft revision.
+    """
 
     _require_revision_capability()
     reason = str(reason or "").strip()
-    if not reason:
-        frappe.throw(_("A revision reason is required."))
 
     frappe.db.sql("select name from `tabDoor Cutting Order` where name = %s for update", (order_name,))
     source = frappe.get_doc("Door Cutting Order", order_name)
@@ -111,7 +121,7 @@ def create_order_revision(order_name: str, reason: str | None = None) -> dict[st
             update_modified=False,
         )
     frappe.db.set_value("Door Cutting Order", source.name, "superseded_by", revised.name, update_modified=True)
-    source.add_comment("Comment", text=_("Controlled revision {0} created. Reason: {1}").format(revised.name, revised.revision_reason))
+    _add_revision_comment(source, revised.name, reason)
 
     return {
         "name": revised.name,

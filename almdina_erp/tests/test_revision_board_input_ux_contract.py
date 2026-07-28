@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION_UX = ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
+REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
 BOARD_TEXT_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
 FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
@@ -20,16 +21,24 @@ DOCTYPE_JSON = (
 
 
 class TestRevisionReasonUxContract(unittest.TestCase):
-    def test_revision_dialog_requires_and_forwards_reason(self) -> None:
+    def test_revision_dialog_forwards_an_optional_reason(self) -> None:
         source = REVISION_UX.read_text(encoding="utf-8")
         self.assertIn('fieldname: "reason"', source)
-        self.assertIn("reqd: 1", source)
-        self.assertIn('const reason = String(values.reason || "").trim()', source)
+        self.assertIn("reqd: 0", source)
+        self.assertIn('سبب إعادة الطلب للتعديل (اختياري)', source)
+        self.assertIn("function createRevision(frm, reason = \"\")", source)
         self.assertIn(
             "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
             source,
         )
-        self.assertIn("args: { order_name: frm.doc.name, reason }", source)
+        self.assertIn('reason: String(reason || "").trim()', source)
+        self.assertNotIn("اكتب سبب إعادة الطلب للتعديل", source)
+
+    def test_server_accepts_missing_reason_as_the_final_safety_boundary(self) -> None:
+        source = REVISION_SERVICE.read_text(encoding="utf-8")
+        self.assertIn('reason = str(reason or "").strip()', source)
+        self.assertNotIn("A revision reason is required.", source)
+        self.assertNotIn("if not reason:", source)
 
     def test_legacy_return_to_draft_button_is_intercepted_globally(self) -> None:
         source = REVISION_UX.read_text(encoding="utf-8")
