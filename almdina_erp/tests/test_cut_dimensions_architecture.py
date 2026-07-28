@@ -166,7 +166,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         ):
             self.assertEqual(detail_fields[fieldname]["read_only"], 1)
 
-    def test_live_ux_uses_direct_dropdowns_above_each_side(self) -> None:
+    def test_live_ux_aligns_edge_controls_and_replaces_cut_size_column(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         performance_index = scripts.index(
@@ -217,7 +217,12 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("dco-edge-profile-grid", controls_source)
         self.assertIn("dco-side-profile-select", controls_source)
         self.assertIn("dco-all-sides-profile-select", controls_source)
+        self.assertIn("dco-col-edge-bulk", controls_source)
+        self.assertIn("ensureBulkHeader", controls_source)
+        self.assertIn('edgeTypeHeader.insertAdjacentElement("afterend", header)', controls_source)
         self.assertIn("grid-template-columns:repeat(4", controls_source)
+        self.assertIn("tbody td{vertical-align:bottom!important}", controls_source)
+        self.assertIn('edgeButtons.insertAdjacentElement("beforebegin", grid)', controls_source)
         self.assertIn("الافتراضي", controls_source)
         self.assertIn("تطبيق على الأربعة", controls_source)
         self.assertIn("الأربعة بالافتراضي", controls_source)
@@ -229,8 +234,14 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertNotIn("width_cm *", controls_source)
         self.assertNotIn("rate_usd_per_meter *", controls_source)
 
-        self.assertIn("مقاس القص", cut_source)
+        self.assertIn("removeCutSizeColumn", cut_source)
+        self.assertIn('.forEach(element => element.remove())', cut_source)
+        self.assertIn("display:none!important", cut_source)
+        self.assertNotIn("dco-cut-size-card", cut_source)
+        self.assertNotIn("function renderCell", cut_source)
+        self.assertNotIn('header.textContent = isArabic() ? "مقاس القص"', cut_source)
         self.assertIn("الخصم حسب سماكة كل ضلع", cut_source)
+
         self.assertIn("قشاط الأطراف", document_source)
         self.assertIn("يتضمن أطرافًا مخصصة", document_source)
         self.assertIn("سطر مستقل لكل نوع قشاط", document_source)
