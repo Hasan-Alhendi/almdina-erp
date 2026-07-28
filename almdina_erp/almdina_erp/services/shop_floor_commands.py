@@ -30,12 +30,14 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 
     state = commands.OrderState(
         name=str(order.name),
-        status=str(order.status or ""),
-        production_path=order.production_path or None,
-        current_stage=order.current_production_stage or None,
-        has_cutting_plan=bool(order.cutting_plan_json),
-        plan_needs_recalculation=bool(order.plan_needs_recalculation),
-        drawing_dxf_status=order.drawing_dxf_status or None,
+        status=str(getattr(order, "status", None) or ""),
+        production_path=getattr(order, "production_path", None) or None,
+        current_stage=getattr(order, "current_production_stage", None) or None,
+        has_cutting_plan=bool(getattr(order, "cutting_plan_json", None)),
+        plan_needs_recalculation=bool(
+            int(getattr(order, "plan_needs_recalculation", None) or 0)
+        ),
+        drawing_dxf_status=getattr(order, "drawing_dxf_status", None) or None,
     )
     try:
         commands.assert_order_ready_for_dispatch(state)
