@@ -31,6 +31,9 @@ class FakeOrderSaveGateway:
     def load_board_snapshot(self) -> None:
         self.calls.append("load_board_snapshot")
 
+    def calculate_cut_dimensions(self) -> None:
+        self.calls.append("calculate_cut_dimensions")
+
     def calculate_piece_costs(self) -> None:
         self.calls.append("calculate_piece_costs")
 
@@ -86,12 +89,12 @@ class TestOrderSaveApplication(unittest.TestCase):
         self.assertNotIn("calculate_cutting_plan:fingerprint", gateway.calls)
         self.assertNotIn("refresh_current_plan:fingerprint", gateway.calls)
 
-    def test_validation_and_costing_order_is_stable(self) -> None:
+    def test_validation_and_piece_calculation_order_is_stable(self) -> None:
         gateway = FakeOrderSaveGateway()
         process_order_save(gateway)
 
         self.assertEqual(
-            gateway.calls[:8],
+            gateway.calls[:9],
             [
                 "enforce_immutability",
                 "set_piece_numbers",
@@ -99,6 +102,7 @@ class TestOrderSaveApplication(unittest.TestCase):
                 "validate_piece_inputs",
                 "validate_piece_policies",
                 "load_board_snapshot",
+                "calculate_cut_dimensions",
                 "calculate_piece_costs",
                 "plan_input_fingerprint",
             ],
