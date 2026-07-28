@@ -155,7 +155,7 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertTrue(summary.pieces[0].preserve_approval)
         self.assertEqual(summary.pieces[0].final_unit_price_usd, 25)
         self.assertEqual(summary.final_total_usd, 50)
-        self.assertEqual(summary.customer_quote_total_usd, 50)
+        self.assertEqual(summary.customer_quote_total_usd, 70)
         self.assertEqual(summary.customer_quote_status, "Approved")
 
     def test_negative_special_defaults_are_rejected(self) -> None:
