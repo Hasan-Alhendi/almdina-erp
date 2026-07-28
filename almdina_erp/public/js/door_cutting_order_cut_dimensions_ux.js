@@ -2,12 +2,6 @@
     "use strict";
 
     const STYLE_ID = "dco-cut-dimensions-css";
-    const EDGE_FIELDS = [
-        "edge_long_right",
-        "edge_long_left",
-        "edge_width_top",
-        "edge_width_bottom",
-    ];
 
     function isArabic() {
         const lang = String(
@@ -250,10 +244,21 @@
         const label = result.valid
             ? `${format(result.cutWidth)} × ${format(result.cutLength)}`
             : "—";
+        const meta = metadata(result);
+        const title = tooltip(result);
+        const signature = JSON.stringify([
+            label,
+            meta,
+            title,
+            warning,
+            unchanged,
+        ]);
+        if (cell.dataset.cutSignature === signature) return;
+        cell.dataset.cutSignature = signature;
         cell.innerHTML = `
-            <div class="dco-cut-size-card ${warning ? "is-warning" : ""} ${unchanged ? "is-unchanged" : ""}" title="${escapeHtml(tooltip(result))}">
+            <div class="dco-cut-size-card ${warning ? "is-warning" : ""} ${unchanged ? "is-unchanged" : ""}" title="${escapeHtml(title)}">
                 <span class="dco-cut-size-value">${escapeHtml(label)}</span>
-                <span class="dco-cut-size-meta">${escapeHtml(metadata(result))}</span>
+                <span class="dco-cut-size-meta">${escapeHtml(meta)}</span>
             </div>`;
     }
 
@@ -266,10 +271,12 @@
             header.className = "dco-col-cut-size";
             edgeHeader.insertAdjacentElement("afterend", header);
         }
-        header.textContent = isArabic() ? "مقاس القص" : "Cut size";
-        header.title = isArabic()
+        const label = isArabic() ? "مقاس القص" : "Cut size";
+        const title = isArabic()
             ? "يُحسب تلقائيًا من القياس النهائي بعد خصم سماكة القشاط"
             : "Calculated from the finished size after edge allowance";
+        if (header.textContent !== label) header.textContent = label;
+        if (header.title !== title) header.title = title;
     }
 
     function ensureRowCells(frm, root) {
