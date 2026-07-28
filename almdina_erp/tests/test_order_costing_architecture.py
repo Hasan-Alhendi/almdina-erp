@@ -48,13 +48,15 @@ class TestOrderCostingArchitecture(unittest.TestCase):
 
     def test_active_controller_contains_no_costing_formulas(self) -> None:
         source = CONTROLLER_PATH.read_text(encoding="utf-8")
-        self.assertIn("class DoorCuttingOrderController(Document)", source)
+        self.assertIn("class DoorCuttingOrderController(DoorCuttingOrder)", source)
+        self.assertIn("from .door_cutting_order import DoorCuttingOrder", source)
+        self.assertNotIn("frappe.model.document import Document", source)
         self.assertNotIn("calculate_piece_costs", source)
         self.assertNotIn("calculate_order_costs", source)
         self.assertNotIn("calculate_special_pricing", source)
         self.assertNotIn("mdf_cost_usd", source)
 
-    def test_hooks_activate_the_direct_controller(self) -> None:
+    def test_hooks_activate_the_thin_override_controller(self) -> None:
         source = HOOKS_PATH.read_text(encoding="utf-8")
         self.assertIn(
             "door_cutting_order_controller.DoorCuttingOrderController",
