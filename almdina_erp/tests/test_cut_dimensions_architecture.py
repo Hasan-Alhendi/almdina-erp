@@ -166,7 +166,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         ):
             self.assertEqual(detail_fields[fieldname]["read_only"], 1)
 
-    def test_live_ux_hides_profile_column_and_uses_visible_side_controls(self) -> None:
+    def test_live_ux_uses_direct_dropdowns_above_each_side(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         performance_index = scripts.index(
@@ -203,10 +203,6 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         document_source = DOCUMENT_UX_PATH.read_text(encoding="utf-8")
         edge_source = EDGE_UX_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("dco-side-profile-trigger", side_source)
-        self.assertIn("تخصيص نوع القشاط لهذا الضلع", side_source)
-        self.assertIn("كل ضلع يأخذ الافتراضي", side_source)
-        self.assertIn("استخدام الافتراضي", side_source)
         self.assertIn("th.dco-col-edge-type", side_source)
         self.assertIn("display:none!important", side_source)
         for fieldname in (
@@ -218,13 +214,18 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
             self.assertIn(fieldname, side_source)
             self.assertIn(fieldname, controls_source)
 
-        self.assertIn("top:2px!important", controls_source)
-        self.assertIn("opacity:1!important", controls_source)
-        self.assertIn("dco-edge-bulk-profile", controls_source)
-        self.assertIn("تخصيص الأضلاع الأربعة", controls_source)
+        self.assertIn("dco-edge-profile-grid", controls_source)
+        self.assertIn("dco-side-profile-select", controls_source)
+        self.assertIn("dco-all-sides-profile-select", controls_source)
+        self.assertIn("grid-template-columns:repeat(4", controls_source)
+        self.assertIn("الافتراضي", controls_source)
         self.assertIn("تطبيق على الأربعة", controls_source)
         self.assertIn("الأربعة بالافتراضي", controls_source)
-        self.assertIn("applyToAllSides", controls_source)
+        self.assertIn("applySideSelection", controls_source)
+        self.assertIn("applyAllSides", controls_source)
+        self.assertIn('row[config.selectedField] = 1', controls_source)
+        self.assertNotIn("new frappe.ui.Dialog", controls_source)
+        self.assertNotIn("frappe.prompt", controls_source)
         self.assertNotIn("width_cm *", controls_source)
         self.assertNotIn("rate_usd_per_meter *", controls_source)
 
