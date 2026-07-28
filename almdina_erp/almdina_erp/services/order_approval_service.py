@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.services.cutting_plan_service import (
 )
 from almdina_erp.almdina_erp.services.order_revision_activation import (
     finalize_revision_activation,
+    load_locked_revision_order,
     prepare_revision_activation,
 )
 
@@ -20,11 +21,7 @@ def approve_order(order_name: str) -> dict[str, Any]:
     """Approve an order and atomically activate a pending revision when needed."""
 
     require_any_role("Production Manager")
-    frappe.db.sql(
-        "select name from `tabDoor Cutting Order` where name = %s for update",
-        (order_name,),
-    )
-    order = frappe.get_doc("Door Cutting Order", order_name)
+    order = load_locked_revision_order(order_name)
     if order.status not in {"Draft", "Rejected", "Pending Review"}:
         frappe.throw(_("Only Draft, Rejected or Pending Review orders can be approved."))
 
