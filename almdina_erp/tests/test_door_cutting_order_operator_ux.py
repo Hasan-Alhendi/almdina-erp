@@ -27,10 +27,12 @@ def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_sur
 
     # The native Frappe editable grid is kept only as the authoritative child-table
     # storage surface. Operators use the dedicated HTML editor, avoiding active-row
-    # semantics, delayed control creation and checkbox double-click behaviour.
+    # semantics, delayed control creation and checkbox double-click behaviour. Since
+    # the storage field is hidden, it must not use Frappe's schema-level mandatory
+    # validation; the server controller enforces at least one valid piece row.
     assert fields["pieces"]["fieldtype"] == "Table"
     assert fields["pieces"].get("hidden") == 1
-    assert fields["pieces"].get("reqd") == 1
+    assert fields["pieces"].get("reqd") != 1
 
     for fieldname in (
         "status",
