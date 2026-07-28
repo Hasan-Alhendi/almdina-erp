@@ -112,7 +112,12 @@
             frappe.msgprint("لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج.");
             return;
         }
-        if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
+
+        const boardUX = window.AlmdinaBoardTextUX;
+        if (boardUX && typeof boardUX.syncInputs === "function") {
+            await boardUX.syncInputs(frm);
+        }
+        if (!boardUX || !boardUX.canCalculatePlan(frm)) {
             frappe.msgprint("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
             return;
         }

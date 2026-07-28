@@ -8,12 +8,24 @@
         ".dco-entry-window-print",
     ].join(",");
 
+    function controlValue(frm, fieldname) {
+        const field = frm.fields_dict && frm.fields_dict[fieldname];
+        if (!field) return frm.doc[fieldname];
+        if (field.$input && field.$input.length) return field.$input.val();
+        if (typeof field.get_value === "function") return field.get_value();
+        return frm.doc[fieldname];
+    }
+
+    function boardDescriptionValue(frm) {
+        return String(controlValue(frm, "board_description") || "").trim();
+    }
+
     function boardLabel(frm) {
-        return String(frm.doc.board_description || "").trim() || "—";
+        return boardDescriptionValue(frm) || "—";
     }
 
     function isBoardReady(frm) {
-        return !!String(frm.doc.board_description || "").trim();
+        return !!boardDescriptionValue(frm);
     }
 
     function hasMeasurablePieces(frm) {
@@ -26,9 +38,38 @@
 
     function canCalculatePlan(frm) {
         return isBoardReady(frm)
-            && Number(frm.doc.board_length_cm || 0) > 0
-            && Number(frm.doc.board_width_cm || 0) > 0
+            && Number(controlValue(frm, "board_length_cm") || 0) > 0
+            && Number(controlValue(frm, "board_width_cm") || 0) > 0
             && hasMeasurablePieces(frm);
+    }
+
+    async function syncInputs(frm) {
+        const description = boardDescriptionValue(frm);
+        const length = Number(controlValue(frm, "board_length_cm") || 0);
+        const width = Number(controlValue(frm, "board_width_cm") || 0);
+        const updates = {};
+
+        if (description !== String(frm.doc.board_description || "").trim()) {
+            updates.board_description = description;
+        }
+        if (Number.isFinite(length) && length !== Number(frm.doc.board_length_cm || 0)) {
+            updates.board_length_cm = length;
+        }
+        if (Number.isFinite(width) && width !== Number(frm.doc.board_width_cm || 0)) {
+            updates.board_width_cm = width;
+        }
+
+        if (Object.keys(updates).length) {
+            await frm.set_value(updates);
+        }
+
+        frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm || 0) * 10;
+        frm.doc.full_board_width_mm = Number(frm.doc.board_width_cm || 0) * 10;
+        return {
+            board_description: String(frm.doc.board_description || "").trim(),
+            board_length_cm: Number(frm.doc.board_length_cm || 0),
+            board_width_cm: Number(frm.doc.board_width_cm || 0),
+        };
     }
 
     function patchCostView(frm) {
@@ -111,6 +152,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refresh(frm); },
         refresh(frm) { refresh(frm); },
+        before_save(frm) { return syncInputs(frm); },
         board_description(frm) { refresh(frm); },
         board_length_cm(frm) { refresh(frm); },
         board_width_cm(frm) { refresh(frm); },
@@ -122,6 +164,7 @@
         isBoardReady,
         hasMeasurablePieces,
         canCalculatePlan,
+        syncInputs,
         withBoardDescriptionForPrint,
     };
 })();
