@@ -122,14 +122,19 @@
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            .dco-fast-table .dco-col-edges{vertical-align:middle!important;overflow:visible!important}
-            .dco-edge-bulk-toolbar{display:none!important}
+            .dco-fast-table tbody td{vertical-align:bottom!important}
+            .dco-fast-table .dco-col-edges{vertical-align:bottom!important;overflow:visible!important}
+            .dco-fast-table .dco-col-edge-bulk{
+                width:122px!important;min-width:122px!important;max-width:122px!important;
+                text-align:center;padding-inline:4px!important;vertical-align:bottom!important
+            }
+            .dco-edge-bulk-toolbar,.dco-edge-direct-actions{display:none!important}
             .dco-side-profile-trigger{display:none!important}
-            .dco-edge-direct-actions{display:flex;align-items:center;justify-content:flex-end;margin:0 0 4px;min-height:25px}
+            .dco-edge-bulk-cell-content{display:flex;align-items:flex-end;justify-content:center;min-height:39px;width:100%}
             .dco-all-sides-profile-select{
-                width:132px;max-width:100%;height:25px;min-height:25px;border:1px solid rgba(36,144,239,.38);
+                width:100%;max-width:100%;height:39px;min-height:39px;border:1px solid rgba(36,144,239,.38);
                 border-radius:7px;background:rgba(36,144,239,.07);color:var(--text-color,#36414c);
-                padding:1px 6px;font-size:9.5px;font-weight:850;line-height:1;cursor:pointer;outline:none
+                padding:2px 6px;font-size:9.5px;font-weight:850;line-height:1;cursor:pointer;outline:none
             }
             .dco-all-sides-profile-select:hover,.dco-all-sides-profile-select:focus{
                 border-color:var(--primary,#2490ef);background:#eef7ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
@@ -149,10 +154,11 @@
             .dco-side-profile-select.is-active-default{border-color:rgba(36,144,239,.5);background:#edf7ff;color:#155f97}
             .dco-side-profile-select.is-custom{border-color:#d3a20a;background:#fff5cc;color:#765500}
             .dco-side-profile-select:disabled,.dco-all-sides-profile-select:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
-            .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important}
-            .dco-col-edges .dco-check-toggle{min-height:39px!important;padding:4px!important;align-items:center!important;overflow:hidden!important}
+            .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important;margin:0!important}
+            .dco-col-edges .dco-check-toggle{min-height:39px!important;height:39px!important;padding:4px!important;align-items:center!important;overflow:hidden!important}
             @media(max-width:900px){
-                .dco-all-sides-profile-select{width:120px;font-size:9px}
+                .dco-fast-table .dco-col-edge-bulk{width:112px!important;min-width:112px!important;max-width:112px!important}
+                .dco-all-sides-profile-select{font-size:9px;padding-inline:4px}
                 .dco-side-profile-select{font-size:8.5px;padding-inline:2px}
             }
         `;
@@ -215,27 +221,51 @@
         notifyChanged(frm, tr, row, "all_side_edge_profiles");
     }
 
-    function ensureBulkSelect(frm, cell, edgeButtons) {
-        let actions = cell.querySelector(":scope > .dco-edge-direct-actions");
-        if (!actions) {
-            actions = document.createElement("div");
-            actions.className = "dco-edge-direct-actions";
-            edgeButtons.insertAdjacentElement("beforebegin", actions);
+    function ensureBulkHeader(root) {
+        const edgeTypeHeader = root.querySelector(".dco-fast-table thead th.dco-col-edge-type");
+        if (!edgeTypeHeader) return;
+        let header = root.querySelector(".dco-fast-table thead th.dco-col-edge-bulk");
+        if (!header) {
+            header = document.createElement("th");
+            header.className = "dco-col-edge-bulk";
+            edgeTypeHeader.insertAdjacentElement("afterend", header);
+        }
+        header.textContent = isArabic() ? "تطبيق على الأربعة" : "Apply to all four";
+        header.title = isArabic()
+            ? "تفعيل الأضلاع الأربعة وتطبيق نوع قشاط واحد عليها"
+            : "Enable all four sides and apply one profile";
+    }
+
+    function ensureBulkSelect(frm, tr) {
+        const edgeTypeCell = tr.querySelector(":scope > td.dco-col-edge-type");
+        if (!edgeTypeCell) return;
+
+        let cell = tr.querySelector(":scope > td.dco-col-edge-bulk");
+        if (!cell) {
+            cell = document.createElement("td");
+            cell.className = "dco-col-edge-bulk";
+            edgeTypeCell.insertAdjacentElement("afterend", cell);
         }
 
-        let select = actions.querySelector(".dco-all-sides-profile-select");
+        let content = cell.querySelector(":scope > .dco-edge-bulk-cell-content");
+        if (!content) {
+            content = document.createElement("div");
+            content.className = "dco-edge-bulk-cell-content";
+            cell.replaceChildren(content);
+        }
+
+        let select = content.querySelector(".dco-all-sides-profile-select");
         if (!select) {
             select = document.createElement("select");
             select.className = "dco-all-sides-profile-select";
             select.dataset.bulkEdgeProfile = "1";
-            actions.appendChild(select);
+            content.appendChild(select);
         }
 
         const options = bulkOptionsHtml(frm);
-        const signature = options;
-        if (select.dataset.optionsSignature !== signature) {
+        if (select.dataset.optionsSignature !== options) {
             select.innerHTML = options;
-            select.dataset.optionsSignature = signature;
+            select.dataset.optionsSignature = options;
         }
         select.value = "";
         select.disabled = !isEditable(frm);
@@ -288,7 +318,7 @@
     }
 
     function removeObsoleteControls(cell) {
-        cell.querySelectorAll(":scope > .dco-edge-bulk-toolbar").forEach(element => element.remove());
+        cell.querySelectorAll(":scope > .dco-edge-bulk-toolbar,:scope > .dco-edge-direct-actions").forEach(element => element.remove());
     }
 
     function renderRow(frm, tr) {
@@ -298,8 +328,8 @@
 
         removeObsoleteControls(cell);
         const row = rowByName(frm, tr.dataset.rowName) || {};
-        ensureBulkSelect(frm, cell, edgeButtons);
         ensureSideGrid(frm, cell, edgeButtons, row);
+        ensureBulkSelect(frm, tr);
     }
 
     function renderHelp(root) {
@@ -312,14 +342,15 @@
             help.appendChild(hint);
         }
         hint.textContent = isArabic()
-            ? "اختر نوع القشاط من القائمة الصغيرة فوق الضلع؛ يُطبّق فورًا بلا نافذة"
-            : "Choose the profile from the small select above each side; it applies immediately";
+            ? "القوائم فوق اتجاهات القشاط، واتجاهات القشاط بمحاذاة القياسات والتدوير"
+            : "Profile selects stay above the edge directions; directions align with dimensions and rotation";
     }
 
     function apply(frm) {
         installStyles();
         const root = rootFor(frm);
         if (!root) return;
+        ensureBulkHeader(root);
         root.querySelectorAll(".dco-fast-table tbody tr[data-row-name]").forEach(tr => renderRow(frm, tr));
         renderHelp(root);
         bind(frm, root);
