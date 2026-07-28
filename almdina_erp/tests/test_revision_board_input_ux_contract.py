@@ -31,12 +31,21 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         )
         self.assertIn("args: { order_name: frm.doc.name, reason }", source)
 
-    def test_legacy_return_to_draft_button_is_intercepted(self) -> None:
+    def test_legacy_return_to_draft_button_is_intercepted_globally(self) -> None:
         source = REVISION_UX.read_text(encoding="utf-8")
-        self.assertIn("function installLegacyReturnButtonGuard", source)
+        self.assertIn("function installLegacyReturnButtonGuard()", source)
+        self.assertIn("document.addEventListener(\"click\"", source)
+        self.assertIn("document._dcoRevisionReturnButtonGuard", source)
+        self.assertIn("frappe.almdina.currentOrderRevisionForm", source)
         self.assertIn('label.includes(__("إعادة للمسودة"))', source)
         self.assertIn("event.stopImmediatePropagation()", source)
         self.assertIn("openRevision(frm)", source)
+        self.assertNotIn("const pageRoot = frm.page", source)
+
+    def test_refresh_updates_the_active_form_used_by_global_guard(self) -> None:
+        source = REVISION_UX.read_text(encoding="utf-8")
+        self.assertIn("frappe.almdina.currentOrderRevisionForm = frm", source)
+        self.assertIn("if (!canCreateRevision(frm)) return", source)
 
 
 class TestBoardInputSyncContract(unittest.TestCase):
