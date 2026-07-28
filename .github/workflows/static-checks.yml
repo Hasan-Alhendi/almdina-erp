@@ -62,6 +62,12 @@ jobs:
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
 
+      - name: Run shop-floor command application tests
+        run: python -m unittest -v almdina_erp.tests.test_shop_floor_command_application
+
+      - name: Run shop-floor command architecture tests
+        run: python -m unittest -v almdina_erp.tests.test_shop_floor_command_architecture
+
       - name: Run shop-floor query application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_application
 

@@ -18,7 +18,15 @@ GATEWAY_PATH = (
     / "frappe"
     / "shop_floor_gateway.py"
 )
-COMMAND_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
+COMMAND_REPOSITORY_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "shop_floor_command_repository.py"
+)
+APPLICATION_PATH = ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
+COMMAND_ADAPTER_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
 
 
 class GatewayHarness:
@@ -148,18 +156,23 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         )
         self.assertEqual(gateway.required_piece_qty("DCO-1"), 7)
 
-    def test_commands_no_longer_depend_on_legacy_service(self) -> None:
-        source = COMMAND_PATH.read_text(encoding="utf-8")
-        self.assertNotIn("shop_floor_service as legacy", source)
-        self.assertNotIn("services import shop_floor_service", source)
-        self.assertIn("shop_floor_gateway as gateway", source)
-
+    def test_application_and_frappe_write_adapter_have_clear_boundaries(self) -> None:
+        application_source = APPLICATION_PATH.read_text(encoding="utf-8")
+        adapter_source = COMMAND_ADAPTER_PATH.read_text(encoding="utf-8")
+        repository_source = COMMAND_REPOSITORY_PATH.read_text(encoding="utf-8")
         gateway_source = GATEWAY_PATH.read_text(encoding="utf-8")
+
+        self.assertNotIn("import frappe", application_source)
+        self.assertNotIn("from frappe", application_source)
+        self.assertNotIn("shop_floor_gateway", application_source)
+        self.assertNotIn("shop_floor_gateway", adapter_source)
+        self.assertIn("shop_floor_gateway", repository_source)
+        self.assertIn("FrappeShopFloorCommandRepository", repository_source)
         self.assertNotIn("services.production_service", gateway_source)
         self.assertNotIn("services.cutting_plan_service", gateway_source)
 
     def test_legacy_return_to_draft_is_a_revision_adapter_only(self) -> None:
-        source = COMMAND_PATH.read_text(encoding="utf-8")
+        source = COMMAND_ADAPTER_PATH.read_text(encoding="utf-8")
         function_source = source.split("def return_order_to_draft", 1)[1]
         self.assertIn("create_order_revision", function_source)
         self.assertNotIn('"approved_plan": None', function_source)
