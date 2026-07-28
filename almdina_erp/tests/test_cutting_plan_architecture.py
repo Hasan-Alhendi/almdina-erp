@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import runpy
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+APPLICATION_DIR = ROOT / "almdina_erp" / "application" / "cutting"
+ENGINE_ADAPTER_PATH = (
+    ROOT / "almdina_erp" / "infrastructure" / "cutting" / "legacy_engine.py"
+)
+PLAN_CONTROLLER_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "doctype"
+    / "door_cutting_order"
+    / "door_cutting_order_plan.py"
+)
+HOOKS_PATH = ROOT / "hooks.py"
+
+
+class TestCuttingPlanArchitecture(unittest.TestCase):
+    def test_application_cutting_layer_is_framework_and_service_independent(self) -> None:
+        for path in sorted(APPLICATION_DIR.glob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.name):
+                self.assertNotIn("import frappe", source)
+                self.assertNotIn("from frappe", source)
+                self.assertNotIn("import erpnext", source)
+                self.assertNotIn(".services", source)
+                self.assertNotIn(".infrastructure", source)
+
+    def test_legacy_engine_is_the_only_adapter_to_existing_optimizers(self) -> None:
+        source = ENGINE_ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn("services.advanced_cutting_optimizer", source)
+        self.assertIn("services.cutting_engine", source)
+        self.assertIn("class LegacyCuttingEngineAdapter", source)
+        self.assertIn("def expand_pieces", source)
+        self.assertIn("def optimize", source)
+        self.assertIn("def validate", source)
+
+    def test_active_controller_delegates_plan_orchestration(self) -> None:
+        source = PLAN_CONTROLLER_PATH.read_text(encoding="utf-8")
+        self.assertIn("class PlanDoorCuttingOrder(CostingDoorCuttingOrder)", source)
+        self.assertIn("optimize_order_plan", source)
+        self.assertIn("decide_plan_reuse", source)
+        self.assertIn("refresh_plan_metadata", source)
+        self.assertIn("plan_invalidation_state", source)
+        self.assertNotIn("advanced_cutting_optimizer", source)
+        self.assertNotIn("from almdina_erp.almdina_erp.services.cutting_engine", source)
+        self.assertNotIn("validate_plan(", source)
+        self.assertNotIn("expand_piece_groups(", source)
+        self.assertNotIn('"industrial_metrics": metrics', source)
+        self.assertNotIn('"special_shape_raw_summary":', source)
+
+    def test_hooks_activate_application_backed_plan_controller(self) -> None:
+        hooks = runpy.run_path(str(HOOKS_PATH))
+        self.assertEqual(
+            hooks["override_doctype_class"]["Door Cutting Order"],
+            "almdina_erp.almdina_erp.doctype.door_cutting_order."
+            "door_cutting_order_plan.PlanDoorCuttingOrder",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
