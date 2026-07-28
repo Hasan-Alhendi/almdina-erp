@@ -56,6 +56,7 @@ jobs:
             almdina_erp.tests.test_order_revision_activation_contract \
             almdina_erp.tests.test_order_lifecycle_domain \
             almdina_erp.tests.test_shop_floor_command_adapter \
+            almdina_erp.tests.test_shop_floor_infrastructure_gateway \
             almdina_erp.tests.test_authorization_domain \
             almdina_erp.tests.test_read_only_boot_authorization \
             almdina_erp.tests.test_frappe_v16_ci_contract \
