@@ -1,0 +1,98 @@
+name: Debug regression failures
+
+on:
+  push:
+    branches: [fix/require-door-cutting-pieces]
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install optimizer test dependency
+        run: python -m pip install --disable-pip-version-check 'ortools>=9.15,<10'
+
+      - name: Run regression checks and capture failures
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import traceback
+          from pathlib import Path
+
+          from almdina_erp.tests import test_arabic_operator_localization as arabic_checks
+          from almdina_erp.tests import test_door_cutting_order_operator_ux as ux_checks
+          from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_ux_checks
+          from almdina_erp.tests import test_dxf_autocad_compatibility as dxf_checks
+          from almdina_erp.tests import test_order_cost_invoice_ux as cost_invoice_checks
+          from almdina_erp.tests import test_door_cutting_order_fast_save as fast_save_checks
+          from almdina_erp.tests import test_measurement_resilience_ux as measurement_resilience_checks
+          from almdina_erp.tests import test_table_performance_ux as table_performance_checks
+          from almdina_erp.tests import test_order_edge_color_ux as order_edge_color_checks
+          from almdina_erp.tests import test_packing_score_field as packing_score_checks
+          from almdina_erp.tests import test_special_shape_close_ux as special_shape_close_checks
+          from almdina_erp.tests import test_door_cutting_order_save_pipeline_performance as save_pipeline_checks
+          from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
+          from almdina_erp.tests import test_special_shape_geometry_ux as special_shape_geometry_checks
+          from almdina_erp.tests import test_shape_print_ux as shape_print_checks
+          from almdina_erp.tests import test_free_text_board_entry as free_text_board_checks
+
+          modules = [
+              arabic_checks,
+              ux_checks,
+              plan_ux_checks,
+              dxf_checks,
+              cost_invoice_checks,
+              fast_save_checks,
+              measurement_resilience_checks,
+              table_performance_checks,
+              order_edge_color_checks,
+              packing_score_checks,
+              special_shape_close_checks,
+              save_pipeline_checks,
+              order_surface_checks,
+              special_shape_geometry_checks,
+              shape_print_checks,
+              free_text_board_checks,
+          ]
+
+          failures: list[str] = []
+          total = 0
+          for module in modules:
+              tests = [
+                  getattr(module, name)
+                  for name in dir(module)
+                  if name.startswith('test_') and callable(getattr(module, name))
+              ]
+              for test in tests:
+                  total += 1
+                  try:
+                      test()
+                  except Exception:
+                      failures.append(
+                          f"FAIL: {module.__name__}.{test.__name__}\n{traceback.format_exc()}"
+                      )
+
+          report = [f"Executed: {total}", f"Failures: {len(failures)}", ""]
+          report.extend(failures or ["All regression checks passed."])
+          Path("regression-report.txt").write_text("\n".join(report), encoding="utf-8")
+          print("\n".join(report[:3]))
+          if failures:
+              raise SystemExit(1)
+          PY
+
+      - name: Upload regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-report
+          path: regression-report.txt
+          if-no-files-found: error
