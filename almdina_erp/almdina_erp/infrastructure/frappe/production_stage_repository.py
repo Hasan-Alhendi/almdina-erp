@@ -53,7 +53,12 @@ def create_stage(
     return stage
 
 
-def close_open_pause(stage_or_name: Any, resumed_by: str) -> Any:
+def close_open_pause(
+    stage_or_name: Any,
+    resumed_by: str,
+    *,
+    save: bool = True,
+) -> Any:
     stage = (
         get_stage(stage_or_name)
         if isinstance(stage_or_name, str)
@@ -74,7 +79,8 @@ def close_open_pause(stage_or_name: Any, resumed_by: str) -> Any:
         stage.paused_seconds = sum(
             cint(row.duration_seconds) for row in (stage.pauses or [])
         )
-        stage.save(ignore_permissions=True)
+        if save:
+            stage.save(ignore_permissions=True)
     return stage
 
 
