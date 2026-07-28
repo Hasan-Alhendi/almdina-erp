@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from frappe.model.document import Document
-
 from almdina_erp.almdina_erp.application.orders.process_order_save import (
     process_order_save,
 )
@@ -9,12 +7,15 @@ from almdina_erp.almdina_erp.infrastructure.frappe.orders import (
     FrappeDoorCuttingOrderSaveGateway,
 )
 
+from .door_cutting_order import DoorCuttingOrder
 
-class DoorCuttingOrderController(Document):
-    """Thin Frappe controller for Door Cutting Order.
 
-    The controller owns only framework lifecycle entry points. Save orchestration
-    belongs to Application, while Frappe reads/writes and Domain adaptation live
+class DoorCuttingOrderController(DoorCuttingOrder):
+    """Thin Frappe override controller for Door Cutting Order.
+
+    Frappe requires every ``override_doctype_class`` implementation to subclass
+    the canonical DocType controller. Framework lifecycle entry points stay here,
+    while save orchestration belongs to Application and Frappe adaptation stays
     in focused Infrastructure adapters.
     """
 
