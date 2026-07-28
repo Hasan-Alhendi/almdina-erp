@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
-from almdina_erp.almdina_erp.services.cutting_engine import (
+from almdina_erp.almdina_erp.domain.cutting import (
     expand_piece_groups,
+    optimize_plan,
     validate_plan,
 )
 
 
 class LegacyCuttingEngineAdapter:
-    """Adapt the existing pure optimizers to the Application cutting port."""
+    """Adapt the pure cutting domain to the Application cutting port.
+
+    The class name remains stable for compatibility; it no longer depends on
+    service-layer engine modules.
+    """
 
     def expand_pieces(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return expand_piece_groups(rows)
