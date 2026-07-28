@@ -12,9 +12,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Diagnose UX regression
+        id: diagnose
         shell: bash
         run: |
           python - <<'PY'
+          import traceback
+          from pathlib import Path
           from almdina_erp.tests import test_arabic_operator_localization as arabic_checks
           from almdina_erp.tests import test_door_cutting_order_operator_ux as ux_checks
           from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_ux_checks
@@ -32,29 +35,32 @@ jobs:
           from almdina_erp.tests import test_shape_print_ux as shape_print_checks
           from almdina_erp.tests import test_free_text_board_entry as free_text_board_checks
 
-          modules = [
-              arabic_checks,
-              ux_checks,
-              plan_ux_checks,
-              dxf_checks,
-              cost_invoice_checks,
-              fast_save_checks,
-              measurement_resilience_checks,
-              table_performance_checks,
-              order_edge_color_checks,
-              packing_score_checks,
-              special_shape_close_checks,
-              save_pipeline_checks,
-              order_surface_checks,
-              special_shape_geometry_checks,
-              shape_print_checks,
-              free_text_board_checks,
-          ]
+          modules = [arabic_checks, ux_checks, plan_ux_checks, dxf_checks, cost_invoice_checks,
+              fast_save_checks, measurement_resilience_checks, table_performance_checks,
+              order_edge_color_checks, packing_score_checks, special_shape_close_checks,
+              save_pipeline_checks, order_surface_checks, special_shape_geometry_checks,
+              shape_print_checks, free_text_board_checks]
+          report = Path('ux-diagnostic.txt')
           for module in modules:
               for name in sorted(dir(module)):
                   test = getattr(module, name)
                   if not name.startswith('test_') or not callable(test):
                       continue
-                  print(f'RUN {module.__name__}.{name}', flush=True)
-                  test()
+                  try:
+                      test()
+                  except Exception:
+                      report.write_text(
+                          f'FAILED {module.__name__}.{name}\n\n{traceback.format_exc()}',
+                          encoding='utf-8',
+                      )
+                      raise
+          report.write_text('ALL UX REGRESSION TESTS PASSED\n', encoding='utf-8')
           PY
+
+      - name: Upload UX diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-diagnostic
+          path: ux-diagnostic.txt
+          if-no-files-found: error
