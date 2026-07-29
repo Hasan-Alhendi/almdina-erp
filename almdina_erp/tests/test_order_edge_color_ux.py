@@ -6,6 +6,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
+EDGE_CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
+EDGE_DOUBLE_CLICK_GUARD = ROOT / "public" / "js" / "door_cutting_order_edge_profile_double_click_guard.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -60,6 +62,37 @@ def test_measurement_print_and_standalone_header_contain_edge_color():
     assert 'const edgeColor = orderEdgeColor(frm)' in source
     assert '<div><b>لون القشاط</b>${esc(edgeColor)}</div>' in source
     assert "grid-template-columns:repeat(5" in source
+
+
+def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
+    controls = _source(EDGE_CONTROLS_UX)
+    guard = _source(EDGE_DOUBLE_CLICK_GUARD)
+    hooks = _source(HOOKS)
+
+    assert "removeSideDropdownRows" in controls
+    assert 'root.addEventListener("dblclick"' in controls
+    assert "openSidePopover" in controls
+    assert "dco-edge-profile-popover" in controls
+    assert "is-edge-custom" in controls
+    assert "tbody td{vertical-align:middle!important}" in controls
+    assert "function ensureSideGrid" not in controls
+    assert 'select.className = "dco-side-profile-select"' not in controls
+    assert "new frappe.ui.Dialog" not in controls
+
+    assert "const CLICK_DELAY_MS = 260" in guard
+    assert 'document.addEventListener("click"' in guard
+    assert 'document.addEventListener("dblclick"' in guard
+    assert "replayingSingleClick" in guard
+    assert "toggle.click()" in guard
+    assert "controls.openSidePopover" in guard
+
+    controls_script = '"public/js/door_cutting_order_edge_profile_controls_ux.js"'
+    guard_script = '"public/js/door_cutting_order_edge_profile_double_click_guard.js"'
+    cut_script = '"public/js/door_cutting_order_cut_dimensions_ux.js"'
+    assert controls_script in hooks
+    assert guard_script in hooks
+    assert cut_script in hooks
+    assert hooks.index(controls_script) < hooks.index(guard_script) < hooks.index(cut_script)
 
 
 def test_edge_color_layer_loads_after_invoice_renderer():
