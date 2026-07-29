@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import frappe
@@ -19,10 +20,52 @@ def _use_locked_preview(status: str) -> bool:
 
 
 def _board_ready_for_plan(preview: Any) -> bool:
-    return bool(
-        str(getattr(preview, "board_description", "") or "").strip()
-        or str(getattr(preview, "board_item", "") or "").strip()
-    )
+    return bool(str(getattr(preview, "board_description", "") or "").strip())
+
+
+def _prepare_text_board_preview(preview: Any) -> bool:
+    """Prepare the free-text board snapshot without touching the Item master.
+
+    Live preview runs automatically while a form is opened or partially edited.
+    It must therefore never call the historical Item-based board loader, which
+    requires the hidden ``board_item`` Link field and interrupts the operator with
+    "Board Item is required.".  Invalid or incomplete preview values simply mean
+    that no layout is calculated yet; strict validation remains on Save.
+    """
+
+    description = str(getattr(preview, "board_description", "") or "").strip()
+    if not description:
+        return False
+
+    raw_length = getattr(preview, "board_length_cm", None)
+    raw_width = getattr(preview, "board_width_cm", None)
+    length_cm = flt(244 if raw_length in (None, "") else raw_length)
+    width_cm = flt(122 if raw_width in (None, "") else raw_width)
+    trim_mm = flt(getattr(preview, "trim_margin_mm", 0))
+
+    values = (length_cm, width_cm, trim_mm)
+    if not all(math.isfinite(value) for value in values):
+        return False
+    if length_cm <= 0 or width_cm <= 0 or trim_mm < 0:
+        return False
+
+    full_length_mm = length_cm * 10
+    full_width_mm = width_cm * 10
+    if full_length_mm - (trim_mm * 2) <= 0:
+        return False
+    if full_width_mm - (trim_mm * 2) <= 0:
+        return False
+
+    preview.board_description = description
+    preview.board_length_cm = length_cm
+    preview.board_width_cm = width_cm
+    preview.full_board_length_mm = full_length_mm
+    preview.full_board_width_mm = full_width_mm
+
+    # The legacy fingerprint builder still reads board_item.  Keep this alias only
+    # on the in-memory preview document; it is never returned or persisted.
+    preview.board_item = description
+    return True
 
 
 def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = None) -> dict[str, Any]:
@@ -153,9 +196,7 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         for row in (preview.pieces or [])
     )
 
-    if _board_ready_for_plan(preview) and has_complete_piece:
-        preview._load_board_snapshot()
-
+    if _board_ready_for_plan(preview) and has_complete_piece and _prepare_text_board_preview(preview):
         # The high-performance save refactor made plan calculation explicit and
         # requires the cached settings plus a deterministic input fingerprint.
         # Preview is an explicit calculation path, so provide both arguments
