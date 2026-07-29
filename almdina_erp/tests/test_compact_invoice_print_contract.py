@@ -44,7 +44,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
     def test_print_layout_is_compact_a4_portrait(self) -> None:
         source = PRESENTER_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("@page{size:A4 portrait;margin:6mm}", source)
+        self.assertIn("@page{size:A4 portrait;margin:8mm}", source)
         self.assertIn("grid-template-columns:repeat(6,minmax(0,1fr))", source)
         self.assertIn("table-layout:fixed", source)
         self.assertIn("break-inside:avoid", source)
