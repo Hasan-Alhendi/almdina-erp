@@ -45,6 +45,9 @@ doctype_js = {
         "public/js/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_print.js",
+        # Decorate the canonical renderer without moving drawing logic into the
+        # document presenter. Printed note text stays readable and text-only.
+        "public/js/door_cutting_order_shape_print_readability.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
@@ -66,9 +69,12 @@ doctype_js = {
         "public/js/door_cutting_order_edge_profile_double_click_guard.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
-        # One presenter owns both measurement and customer-invoice printing.
-        # It shares one table/layout and registers before the legacy interceptor.
+        # Typography is a separate presentation policy shared by measurements
+        # and customer invoices; the presenter remains focused on composition.
+        "public/js/door_cutting_order_document_print_theme.js",
         "public/js/door_cutting_order_document_print_presenter.js",
+        # Cost-screen presentation and edge invoice grouping load after the base
+        # costing presenter and do not own any print button.
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
