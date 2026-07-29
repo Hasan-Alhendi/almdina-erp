@@ -53,6 +53,9 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order_special_shape_note_ux.js",
+        # Loaded after the note UX so no later prompt reassignment can restore
+        # the Frappe dialog while the note tool is active.
+        "public/js/door_cutting_order_special_shape_note_guard.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
