@@ -60,15 +60,12 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_multi_edge_ux.js",
-        # Own measurement printing here. It reads the four effective side profiles
-        # and registers before later document interceptors and legacy button handlers.
-        "public/js/door_cutting_order_measurement_print_presenter.js",
         "public/js/door_cutting_order_edge_profile_controls_ux.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
-        # Register before the legacy document interceptor so compact invoice
-        # printing owns the customer-invoice button without duplicating handlers.
-        "public/js/door_cutting_order_compact_invoice_print_presenter.js",
+        # One presenter owns both measurement and customer-invoice printing.
+        # It shares one table/layout and registers before the legacy interceptor.
+        "public/js/door_cutting_order_document_print_presenter.js",
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
