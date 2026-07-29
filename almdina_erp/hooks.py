@@ -139,14 +139,6 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production":
         "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
-    "almdina_erp.almdina_erp.services.replacement_service.approve_replacement":
-        "almdina_erp.almdina_erp.services.replacement_approval.approve_replacement",
-    "almdina_erp.almdina_erp.services.replacement_service.start_replacement":
-        "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
-    "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
-        "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
-    "almdina_erp.almdina_erp.services.replacement_service.cancel_replacement":
-        "almdina_erp.almdina_erp.services.replacement_execution.cancel_replacement",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":

@@ -56,11 +56,13 @@ def complete_replacement(
     )
 
     from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
-    from almdina_erp.almdina_erp.services.replacement_service import (
-        _sync_replacement_order_status,
+    from almdina_erp.almdina_erp.services.replacement_status_service import (
+        sync_replacement_order_status,
     )
 
-    order_status = _sync_replacement_order_status(replacement.door_cutting_order)
+    order_status = sync_replacement_order_status(
+        replacement.door_cutting_order
+    )
     return {
         "replacement_piece": replacement.name,
         "status": "Completed",

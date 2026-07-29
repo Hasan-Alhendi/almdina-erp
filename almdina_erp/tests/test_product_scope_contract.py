@@ -94,9 +94,14 @@ class TestProductScopeContract(unittest.TestCase):
             self.assertNotIn("register_remnants", source)
 
         for relative in (
+            "infrastructure/frappe/replacements/snapshot_adapter.py",
+            "services/replacement_service.py",
+            "services/replacement_creation_service.py",
             "services/replacement_approval.py",
             "services/replacement_execution.py",
             "services/replacement_completion.py",
+            "services/replacement_plan_service.py",
+            "services/replacement_status_service.py",
             "services/order_lifecycle_service.py",
         ):
             source = (ROOT / "almdina_erp" / relative).read_text(encoding="utf-8")
@@ -109,6 +114,31 @@ class TestProductScopeContract(unittest.TestCase):
             ):
                 with self.subTest(module=relative, token=token):
                     self.assertNotIn(token, source)
+
+    def test_replacement_facade_and_domain_have_clean_boundaries(self) -> None:
+        facade = (
+            ROOT / "almdina_erp" / "services" / "replacement_service.py"
+        ).read_text(encoding="utf-8")
+        domain = (
+            ROOT
+            / "almdina_erp"
+            / "domain"
+            / "replacements"
+            / "planning.py"
+        ).read_text(encoding="utf-8")
+        hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
+
+        self.assertLess(len(facade.splitlines()), 100)
+        self.assertIn("Backward-compatible replacement API facade", facade)
+        self.assertNotIn("frappe.db.", facade)
+        self.assertNotIn("frappe.get_doc", facade)
+        self.assertNotIn("import frappe", domain)
+        self.assertNotIn("from frappe", domain)
+        self.assertNotIn(
+            '"almdina_erp.almdina_erp.services.replacement_service.'
+            'approve_replacement":',
+            hooks,
+        )
 
     def test_replacements_use_the_same_free_text_board_identity(self) -> None:
         payload = json.loads(
