@@ -7,10 +7,19 @@
         generation: 0,
         composing: false,
         lastInputAt: 0,
+        editingIdentity: "",
     };
 
     function now() {
         return Date.now();
+    }
+
+    function formIdentity(form) {
+        const doc = form && form.doc;
+        if (!doc) return "";
+        const doctype = String(doc.doctype || form.doctype || "").trim();
+        const name = String(doc.name || "__new__").trim();
+        return `${doctype}::${name}`;
     }
 
     function isEditableElement(element) {
@@ -21,16 +30,65 @@
             && !element.readOnly;
     }
 
+    function formWrapper(form) {
+        if (!form || !form.wrapper) return null;
+        return form.wrapper.jquery ? form.wrapper.get(0) : (form.wrapper[0] || form.wrapper);
+    }
+
+    function identityForElement(element) {
+        return String(
+            element
+            && element.dataset
+            && element.dataset.almdinaFormIdentity
+            || ""
+        );
+    }
+
+    function rememberEditingIdentity(element) {
+        if (!isEditableElement(element)) return "";
+        const form = window.cur_frm || null;
+        const wrapper = formWrapper(form);
+        if (!form || !wrapper || !wrapper.contains(element)) return "";
+        const identity = synchronizeFormIdentity(form);
+        if (!identity) return "";
+        if (element.dataset) element.dataset.almdinaFormIdentity = identity;
+        state.editingIdentity = identity;
+        return identity;
+    }
+
     function markInputActivity(event) {
         if (!isEditableElement(event.target)) return;
+        rememberEditingIdentity(event.target);
         state.generation += 1;
         state.lastInputAt = now();
+    }
+
+    function synchronizeFormIdentity(form) {
+        if (!form) return "";
+        const identity = formIdentity(form);
+        const previous = String(form._almdinaInputStabilityIdentity || "");
+
+        if (previous && identity && previous !== identity) {
+            state.generation += 1;
+            state.composing = false;
+            if (state.editingIdentity === previous) state.editingIdentity = "";
+            if (form._almdinaDeferredFieldRefreshes instanceof Set) {
+                form._almdinaDeferredFieldRefreshes.clear();
+            }
+            form._almdinaDeferredRefreshIdentity = identity;
+        }
+
+        if (identity) form._almdinaInputStabilityIdentity = identity;
+        return identity;
     }
 
     function installInputTracker() {
         if (namespace.inputTrackerInstalled) return;
         namespace.inputTrackerInstalled = true;
 
+        document.addEventListener("focusin", event => {
+            rememberEditingIdentity(event.target);
+        }, true);
         document.addEventListener("beforeinput", markInputActivity, true);
         document.addEventListener("input", markInputActivity, true);
         document.addEventListener("paste", markInputActivity, true);
@@ -38,6 +96,7 @@
         document.addEventListener("drop", markInputActivity, true);
         document.addEventListener("compositionstart", event => {
             if (!isEditableElement(event.target)) return;
+            rememberEditingIdentity(event.target);
             state.composing = true;
             markInputActivity(event);
         }, true);
@@ -48,15 +107,19 @@
         }, true);
     }
 
-    function formWrapper(form) {
-        if (!form || !form.wrapper) return null;
-        return form.wrapper.jquery ? form.wrapper.get(0) : (form.wrapper[0] || form.wrapper);
-    }
-
     function activeElementBelongsToForm(form) {
         const active = document.activeElement;
         const wrapper = formWrapper(form);
-        return Boolean(wrapper && isEditableElement(active) && wrapper.contains(active));
+        const currentIdentity = synchronizeFormIdentity(form);
+        if (!wrapper || !isEditableElement(active) || !wrapper.contains(active)) return false;
+
+        let activeIdentity = identityForElement(active) || state.editingIdentity;
+        if (!activeIdentity && currentIdentity) {
+            activeIdentity = currentIdentity;
+            if (active.dataset) active.dataset.almdinaFormIdentity = currentIdentity;
+            state.editingIdentity = currentIdentity;
+        }
+        return !activeIdentity || !currentIdentity || activeIdentity === currentIdentity;
     }
 
     function fieldContainsActiveElement(form, fieldname) {
@@ -90,12 +153,14 @@
         if (typeof originalRefreshField !== "function") return false;
 
         prototype.refresh_field = function inputSafeRefreshField(fieldname, ...args) {
+            const currentIdentity = synchronizeFormIdentity(this);
             const names = Array.isArray(fieldname) ? fieldname : [fieldname];
             const blocked = names.filter(name => typeof name === "string" && fieldContainsActiveElement(this, name));
             const safe = names.filter(name => !blocked.includes(name));
 
             if (blocked.length) {
                 this._almdinaDeferredFieldRefreshes = this._almdinaDeferredFieldRefreshes || new Set();
+                this._almdinaDeferredRefreshIdentity = currentIdentity;
                 blocked.forEach(name => this._almdinaDeferredFieldRefreshes.add(name));
                 installDeferredRefreshFlush(this, originalRefreshField);
             }
@@ -118,6 +183,17 @@
                 const pending = form._almdinaDeferredFieldRefreshes;
                 if (!pending || !pending.size) return;
 
+                const currentIdentity = synchronizeFormIdentity(form);
+                if (
+                    form._almdinaDeferredRefreshIdentity
+                    && currentIdentity
+                    && form._almdinaDeferredRefreshIdentity !== currentIdentity
+                ) {
+                    pending.clear();
+                    form._almdinaDeferredRefreshIdentity = currentIdentity;
+                    return;
+                }
+
                 [...pending].forEach(fieldname => {
                     if (fieldContainsActiveElement(form, fieldname)) return;
                     pending.delete(fieldname);
@@ -139,13 +215,21 @@
 
             const requestGeneration = state.generation;
             const requestForm = window.cur_frm || null;
+            const requestIdentity = formIdentity(requestForm);
             const originalCallback = options.callback;
             const guardedOptions = {
                 ...options,
                 callback(response) {
                     const inputChanged = state.generation !== requestGeneration;
                     const editing = requestForm && activeElementBelongsToForm(requestForm);
-                    if (inputChanged || state.composing || editing) {
+                    const documentChanged = Boolean(
+                        requestIdentity
+                        && (
+                            formIdentity(requestForm) !== requestIdentity
+                            || (window.cur_frm && formIdentity(window.cur_frm) !== requestIdentity)
+                        )
+                    );
+                    if (inputChanged || state.composing || editing || documentChanged) {
                         return;
                     }
                     if (typeof originalCallback === "function") {
@@ -227,6 +311,7 @@
         installInputTracker();
         installRefreshFieldGuard();
         installPreviewResponseGuard();
+        if (window.cur_frm) synchronizeFormIdentity(window.cur_frm);
     }
 
     function retryInstall() {
@@ -258,6 +343,8 @@
 
     namespace.markInputActivity = markInputActivity;
     namespace.isEditableElement = isEditableElement;
+    namespace.formIdentity = formIdentity;
+    namespace.synchronizeFormIdentity = synchronizeFormIdentity;
     namespace.fieldContainsActiveElement = fieldContainsActiveElement;
     namespace.removeDoorOrderLivePreviewHandlers = removeDoorOrderLivePreviewHandlers;
 })();

@@ -5,6 +5,10 @@
         return value && (value.nodeType ? value : value[0]);
     }
 
+    function documentName(frm) {
+        return String(frm && frm.doc && frm.doc.name || "").trim();
+    }
+
     function realRowNames(root) {
         return [...root.querySelectorAll(".dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)")]
             .map(row => row.dataset.rowName || "");
@@ -14,11 +18,61 @@
         return (frm.doc.pieces || []).map(row => row.name || "");
     }
 
+    function htmlRowNames(value) {
+        if (typeof value !== "string" || !value.includes("dco-fast-entry-shell")) return [];
+        const template = document.createElement("template");
+        template.innerHTML = value;
+        return [...template.content.querySelectorAll(".dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)")]
+            .map(row => row.dataset.rowName || "");
+    }
+
+    function rowsEqual(left, right) {
+        return left.length === right.length
+            && left.every((name, index) => name === right[index]);
+    }
+
     function sameRows(frm, root) {
-        const domNames = realRowNames(root);
-        const docNames = modelRowNames(frm);
-        return domNames.length === docNames.length
-            && domNames.every((name, index) => name === docNames[index]);
+        return rowsEqual(realRowNames(root), modelRowNames(frm));
+    }
+
+    function htmlBelongsToForm(frm, value) {
+        return rowsEqual(htmlRowNames(value), modelRowNames(frm));
+    }
+
+    function costHtmlOrderName(value) {
+        if (typeof value !== "string" || !value.includes("dco-cost-shell")) return "";
+        const template = document.createElement("template");
+        template.innerHTML = value;
+        const shell = template.content.querySelector(".dco-cost-shell");
+        const tagged = shell && shell.dataset ? String(shell.dataset.orderName || "").trim() : "";
+        if (tagged) return tagged;
+
+        const items = template.content.querySelectorAll(".dco-invoice-meta-item");
+        for (const item of items) {
+            const label = item.querySelector(".label");
+            if (String(label && label.textContent || "").trim() !== "رقم الطلب") continue;
+            return String(item.querySelector(".value")?.textContent || "").trim();
+        }
+        return "";
+    }
+
+    function existingCostOrderName(root) {
+        const shell = root && root.querySelector(".dco-cost-shell");
+        if (!shell) return "";
+        const tagged = String(shell.dataset.orderName || "").trim();
+        if (tagged) return tagged;
+        const items = shell.querySelectorAll(".dco-invoice-meta-item");
+        for (const item of items) {
+            const label = item.querySelector(".label");
+            if (String(label && label.textContent || "").trim() !== "رقم الطلب") continue;
+            return String(item.querySelector(".value")?.textContent || "").trim();
+        }
+        return "";
+    }
+
+    function tagCostShell(root, name) {
+        const shell = root && root.querySelector(".dco-cost-shell");
+        if (shell && name) shell.dataset.orderName = name;
     }
 
     function number(value) {
@@ -87,20 +141,28 @@
 
     function installMeasurementGuard(frm) {
         const field = frm.fields_dict.pieces_fast_entry;
-        if (!field || !field.$wrapper || field.$wrapper._dcoFastHtmlGuard) return;
+        if (!field || !field.$wrapper) return;
 
         const wrapper = field.$wrapper;
+        wrapper._dcoFastHtmlGuardForm = frm;
+        if (wrapper._dcoFastHtmlGuard) return;
+
         const originalHtml = wrapper.html;
         wrapper.html = function guardedHtml(value) {
+            const currentFrm = wrapper._dcoFastHtmlGuardForm || frm;
             if (
                 arguments.length === 1
                 && typeof value === "string"
                 && value.includes("dco-fast-entry-shell")
             ) {
+                // An asynchronous renderer from a previously opened order must
+                // never be allowed to write into the shared HTML field wrapper.
+                if (!htmlBelongsToForm(currentFrm, value)) return this;
+
                 const root = getNode(this);
                 const existing = root && root.querySelector(".dco-fast-entry-shell");
-                if (existing && sameRows(frm, root)) {
-                    syncExistingTable(frm, root);
+                if (existing && sameRows(currentFrm, root)) {
+                    syncExistingTable(currentFrm, root);
                     return this;
                 }
             }
@@ -119,37 +181,60 @@
 
     function installCostGuard(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
-        if (!field || !field.$wrapper || field.$wrapper._dcoCostHtmlGuard) return;
+        if (!field || !field.$wrapper) return;
 
         const wrapper = field.$wrapper;
+        wrapper._dcoCostHtmlGuardForm = frm;
+        if (wrapper._dcoCostHtmlGuard) return;
+
         const originalHtml = wrapper.html;
         wrapper.html = function guardedCostHtml(value) {
+            const currentFrm = wrapper._dcoCostHtmlGuardForm || frm;
+            const currentName = documentName(currentFrm);
             if (
                 arguments.length === 1
                 && typeof value === "string"
                 && value.includes("dco-cost-shell")
-                && getNode(this)?.querySelector(".dco-cost-shell")
-                && !costTabIsActive(frm)
             ) {
-                frm._dco_cost_render_deferred = true;
-                return this;
+                const incomingName = costHtmlOrderName(value);
+                if (incomingName && currentName && incomingName !== currentName) {
+                    return this;
+                }
+
+                const root = getNode(this);
+                const existingName = existingCostOrderName(root);
+                const sameDocument = !existingName || !currentName || existingName === currentName;
+                if (
+                    sameDocument
+                    && root?.querySelector(".dco-cost-shell")
+                    && !costTabIsActive(currentFrm)
+                ) {
+                    currentFrm._dco_cost_render_deferred = true;
+                    return this;
+                }
             }
-            frm._dco_cost_render_deferred = false;
-            return originalHtml.apply(this, arguments);
+
+            currentFrm._dco_cost_render_deferred = false;
+            const result = originalHtml.apply(this, arguments);
+            tagCostShell(getNode(this), currentName || costHtmlOrderName(value));
+            return result;
         };
         wrapper._dcoCostHtmlGuard = true;
     }
 
     function bindDeferredTabs(frm) {
         const root = getNode(frm.wrapper);
-        if (!root || root._dcoDeferredRenderTabsBound) return;
+        if (!root) return;
+        root._dcoDeferredRenderForm = frm;
+        if (root._dcoDeferredRenderTabsBound) return;
         root._dcoDeferredRenderTabsBound = true;
         root.addEventListener("click", event => {
+            const currentFrm = root._dcoDeferredRenderForm || frm;
             const tab = event.target.closest("[data-fieldname='cost_tab']");
-            if (!tab || !frm._dco_cost_render_deferred) return;
+            if (!tab || !currentFrm._dco_cost_render_deferred) return;
             requestAnimationFrame(() => {
                 if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
-                    window.AlmdinaOrderCostUX.render(frm);
+                    window.AlmdinaOrderCostUX.render(currentFrm);
                 }
             });
         });
