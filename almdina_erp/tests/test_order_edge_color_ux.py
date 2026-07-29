@@ -95,6 +95,21 @@ def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
     assert hooks.index(controls_script) < hooks.index(guard_script) < hooks.index(cut_script)
 
 
+def test_edge_profile_lists_are_custom_and_scrollable():
+    controls = _source(EDGE_CONTROLS_UX)
+
+    assert "dco-all-sides-profile-button" in controls
+    assert "ensureBulkButton" in controls
+    assert "openBulkPopover" in controls
+    assert "bulkPopoverOptionsHtml" in controls
+    assert "overflow-y:auto" in controls
+    assert "scrollbar-gutter:stable" in controls
+    assert "touch-action:pan-y" in controls
+    assert 'popover.addEventListener("wheel"' in controls
+    assert "activePopover.element.contains(event.target)" in controls
+    assert 'select = document.createElement("select")' not in controls
+
+
 def test_edge_color_layer_loads_after_invoice_renderer():
     hooks = HOOKS.read_text(encoding="utf-8")
     invoice = '"public/js/door_cutting_order_cost_invoice_ux.js"'

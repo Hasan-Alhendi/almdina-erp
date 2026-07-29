@@ -98,16 +98,18 @@
         return [...values.entries()];
     }
 
-    function bulkOptionsHtml(frm) {
-        const placeholder = isArabic() ? "تطبيق على الأربعة" : "Apply to all four";
-        const useDefault = isArabic() ? "الأربعة بالافتراضي" : "Default for all four";
-        return [
-            `<option value="">${placeholder}</option>`,
-            `<option value="${BULK_DEFAULT_VALUE}">${useDefault}</option>`,
-            ...profileEntries(frm).map(([value, label]) => (
-                `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`
-            )),
-        ].join("");
+    function profileDetails(frm, value) {
+        const profile = profileMap(frm).get(value);
+        if (!profile) {
+            return isArabic() ? "نوع محفوظ سابقًا" : "Previously saved profile";
+        }
+        const thickness = Number(profile.thickness_mm || 0).toLocaleString("en-US", {
+            maximumFractionDigits: 3,
+        });
+        const rate = Number(profile.rate_usd_per_meter || 0).toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+        });
+        return `${thickness} مم · $ ${rate}/م`;
     }
 
     function installStyles() {
@@ -122,17 +124,19 @@
                 text-align:center;padding-inline:4px!important;vertical-align:middle!important
             }
             .dco-edge-bulk-toolbar,.dco-edge-direct-actions,.dco-edge-profile-grid{display:none!important}
-            .dco-side-profile-trigger{display:none!important}
+            .dco-side-profile-trigger,.dco-all-sides-profile-select{display:none!important}
             .dco-edge-bulk-cell-content{display:flex;align-items:center;justify-content:center;min-height:38px;width:100%}
-            .dco-all-sides-profile-select{
-                width:100%;max-width:100%;height:38px;min-height:38px;border:1px solid rgba(36,144,239,.38);
-                border-radius:7px;background:rgba(36,144,239,.07);color:var(--text-color,#36414c);
-                padding:2px 6px;font-size:9.5px;font-weight:850;line-height:1;cursor:pointer;outline:none
+            .dco-all-sides-profile-button{
+                width:100%;max-width:100%;height:38px;min-height:38px;display:flex;align-items:center;
+                justify-content:center;gap:5px;border:1px solid rgba(36,144,239,.38);border-radius:7px;
+                background:rgba(36,144,239,.07);color:var(--text-color,#36414c);padding:2px 6px;
+                font-size:9.5px;font-weight:850;line-height:1.1;cursor:pointer;outline:none
             }
-            .dco-all-sides-profile-select:hover,.dco-all-sides-profile-select:focus{
+            .dco-all-sides-profile-button:hover,.dco-all-sides-profile-button:focus{
                 border-color:var(--primary,#2490ef);background:#eef7ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
             }
-            .dco-all-sides-profile-select:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+            .dco-all-sides-profile-button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+            .dco-all-sides-profile-button .dco-bulk-chevron{font-size:11px;line-height:1;opacity:.72}
             .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important;margin:0!important}
             .dco-col-edges .dco-check-toggle{
                 min-height:38px!important;height:38px!important;padding:4px!important;align-items:center!important;
@@ -150,13 +154,13 @@
                 background:#fff0f0!important;border-color:#d94a4a!important;color:#9d2525!important
             }
             #${POPOVER_ID}{
-                position:fixed;z-index:1065;width:min(278px,calc(100vw - 20px));max-height:min(360px,calc(100vh - 20px));
+                position:fixed;z-index:1065;width:min(292px,calc(100vw - 20px));max-height:min(390px,calc(100vh - 20px));
                 display:flex;flex-direction:column;border:1px solid var(--border-color,#cbd2d9);border-radius:12px;
                 background:var(--card-bg,#fff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
                 direction:rtl;color:var(--text-color,#172033)
             }
             #${POPOVER_ID} .dco-edge-popover-head{
-                display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
+                flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
                 border-bottom:1px solid var(--border-color,#e1e5e9);background:var(--subtle-fg,#f7f9fb)
             }
             #${POPOVER_ID} .dco-edge-popover-head strong{font-size:12px;line-height:1.25}
@@ -166,7 +170,15 @@
                 font-size:18px;line-height:1;cursor:pointer
             }
             #${POPOVER_ID} .dco-edge-popover-close:hover{background:rgba(0,0,0,.07)}
-            #${POPOVER_ID} .dco-edge-popover-options{display:grid;gap:3px;padding:7px;overflow:auto;overscroll-behavior:contain}
+            #${POPOVER_ID} .dco-edge-popover-options{
+                flex:1 1 auto;min-height:0;max-height:min(304px,calc(100vh - 92px));display:grid;gap:3px;
+                padding:7px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;
+                scrollbar-gutter:stable;scrollbar-width:thin
+            }
+            #${POPOVER_ID} .dco-edge-popover-options::-webkit-scrollbar{width:8px}
+            #${POPOVER_ID} .dco-edge-popover-options::-webkit-scrollbar-thumb{
+                background:rgba(100,116,139,.45);border-radius:999px;border:2px solid transparent;background-clip:padding-box
+            }
             #${POPOVER_ID} .dco-edge-profile-option{
                 width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;
                 min-height:38px;padding:6px 8px;border:1px solid transparent;border-radius:8px;background:transparent;
@@ -183,7 +195,7 @@
             #${POPOVER_ID} .dco-edge-profile-option.is-custom-current span{color:#8a6100}
             @media(max-width:900px){
                 .dco-fast-table .dco-col-edge-bulk{width:112px!important;min-width:112px!important;max-width:112px!important}
-                .dco-all-sides-profile-select{font-size:9px;padding-inline:4px}
+                .dco-all-sides-profile-button{font-size:9px;padding-inline:4px}
             }
         `;
         document.head.appendChild(style);
@@ -265,7 +277,7 @@
             : "Enable all four sides and apply one profile";
     }
 
-    function ensureBulkSelect(frm, tr) {
+    function ensureBulkButton(frm, tr) {
         const edgeTypeCell = tr.querySelector(":scope > td.dco-col-edge-type");
         if (!edgeTypeCell) return;
 
@@ -283,24 +295,24 @@
             cell.replaceChildren(content);
         }
 
-        let select = content.querySelector(".dco-all-sides-profile-select");
-        if (!select) {
-            select = document.createElement("select");
-            select.className = "dco-all-sides-profile-select";
-            select.dataset.bulkEdgeProfile = "1";
-            content.appendChild(select);
+        content.querySelectorAll(".dco-all-sides-profile-select").forEach(select => select.remove());
+
+        let button = content.querySelector(".dco-all-sides-profile-button");
+        if (!button) {
+            button = document.createElement("button");
+            button.type = "button";
+            button.className = "dco-all-sides-profile-button";
+            button.dataset.bulkEdgeProfileButton = "1";
+            content.appendChild(button);
         }
 
-        const options = bulkOptionsHtml(frm);
-        if (select.dataset.optionsSignature !== options) {
-            select.innerHTML = options;
-            select.dataset.optionsSignature = options;
-        }
-        select.value = "";
-        select.disabled = !isEditable(frm);
-        select.title = isArabic()
-            ? "فعّل الأضلاع الأربعة وطبّق نوعًا واحدًا عليها مباشرة"
-            : "Enable all four sides and apply one profile immediately";
+        button.innerHTML = `<span>${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}</span><span class="dco-bulk-chevron">⌄</span>`;
+        button.disabled = !isEditable(frm);
+        button.title = isArabic()
+            ? "افتح قائمة قابلة للتمرير وطبّق نوعًا واحدًا على الأضلاع الأربعة"
+            : "Open a scrollable list and apply one profile to all four sides";
+        button.setAttribute("aria-haspopup", "menu");
+        button.setAttribute("aria-expanded", activePopover && activePopover.anchor === button ? "true" : "false");
     }
 
     function removeSideDropdownRows(cell) {
@@ -353,7 +365,7 @@
         edgeButtons.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
             decorateEdgeToggle(frm, row, toggle);
         });
-        ensureBulkSelect(frm, tr);
+        ensureBulkButton(frm, tr);
     }
 
     function renderHelp(root) {
@@ -366,14 +378,18 @@
             help.appendChild(hint);
         }
         hint.textContent = isArabic()
-            ? "القشاط: نقرة للتفعيل والتعطيل، ونقرتان على الضلع لاختيار نوع مخالف للافتراضي"
-            : "Edge banding: click to toggle; double-click a side to choose a non-default profile";
+            ? "القشاط: نقرة للتفعيل والتعطيل، ونقرتان على الضلع لاختيار النوع؛ القوائم قابلة للتمرير"
+            : "Edge banding: click to toggle; double-click to choose a profile; lists are scrollable";
     }
 
     function closePopover() {
         if (!activePopover) return;
+        const anchor = activePopover.anchor;
         activePopover.element.remove();
         activePopover = null;
+        if (anchor && anchor.isConnected) {
+            anchor.setAttribute("aria-expanded", "false");
+        }
     }
 
     function bindPopoverDismiss() {
@@ -387,7 +403,11 @@
             if (event.key === "Escape") closePopover();
         }, true);
         window.addEventListener("resize", closePopover, { passive: true });
-        window.addEventListener("scroll", closePopover, { passive: true, capture: true });
+        window.addEventListener("scroll", event => {
+            if (!activePopover) return;
+            if (event.target && activePopover.element.contains(event.target)) return;
+            closePopover();
+        }, { passive: true, capture: true });
     }
 
     function profileOptionHtml(value, label, description, current) {
@@ -401,6 +421,14 @@
         </button>`;
     }
 
+    function bulkProfileOptionHtml(value, label, description) {
+        return `<button type="button" class="dco-edge-profile-option" data-bulk-profile-value="${escapeHtml(value)}" role="menuitem">
+            <b>${escapeHtml(label)}</b>
+            <small>${escapeHtml(description)}</small>
+            <span></span>
+        </button>`;
+    }
+
     function popoverOptionsHtml(frm, current) {
         const defaultType = String(frm.doc.default_edge_type || "").trim();
         const defaultLabel = isArabic() ? "استخدام القشاط الافتراضي" : "Use default profile";
@@ -409,14 +437,41 @@
             : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
         return [
             profileOptionHtml("", defaultLabel, defaultDescription, current),
-            ...profileEntries(frm, current).map(([value, label]) => {
-                const profile = profileMap(frm).get(value);
-                const details = profile
-                    ? `${Number(profile.thickness_mm || 0).toLocaleString("en-US", { maximumFractionDigits: 3 })} مم · $ ${Number(profile.rate_usd_per_meter || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}/م`
-                    : (isArabic() ? "نوع محفوظ سابقًا" : "Previously saved profile");
-                return profileOptionHtml(value, label, details, current);
-            }),
+            ...profileEntries(frm, current).map(([value, label]) => (
+                profileOptionHtml(value, label, profileDetails(frm, value), current)
+            )),
         ].join("");
+    }
+
+    function bulkPopoverOptionsHtml(frm) {
+        const defaultType = String(frm.doc.default_edge_type || "").trim();
+        const defaultDescription = defaultType
+            ? `${isArabic() ? "الافتراضي" : "Default"}: ${effectiveProfileLabel(frm, "")}`
+            : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
+        return [
+            bulkProfileOptionHtml(
+                BULK_DEFAULT_VALUE,
+                isArabic() ? "الأربعة بالافتراضي" : "Default for all four",
+                defaultDescription
+            ),
+            ...profileEntries(frm).map(([value, label]) => (
+                bulkProfileOptionHtml(value, label, profileDetails(frm, value))
+            )),
+        ].join("");
+    }
+
+    function createPopover(title, subtitle, optionsHtml, ariaLabel) {
+        const popover = document.createElement("div");
+        popover.id = POPOVER_ID;
+        popover.setAttribute("role", "menu");
+        popover.setAttribute("aria-label", ariaLabel);
+        popover.innerHTML = `
+            <div class="dco-edge-popover-head">
+                <div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(subtitle)}</small></div>
+                <button type="button" class="dco-edge-popover-close" aria-label="${isArabic() ? "إغلاق" : "Close"}">×</button>
+            </div>
+            <div class="dco-edge-popover-options">${optionsHtml}</div>`;
+        return popover;
     }
 
     function positionPopover(popover, anchor) {
@@ -434,6 +489,27 @@
         popover.style.top = `${Math.round(top)}px`;
     }
 
+    function mountPopover(popover, context) {
+        document.body.appendChild(popover);
+        activePopover = { element: popover, ...context };
+        bindPopoverDismiss();
+        context.anchor.setAttribute("aria-expanded", "true");
+        positionPopover(popover, context.anchor);
+
+        popover.addEventListener("pointerdown", event => event.stopPropagation(), true);
+        popover.addEventListener("wheel", event => event.stopPropagation(), { passive: true });
+        popover.addEventListener("touchmove", event => event.stopPropagation(), { passive: true });
+    }
+
+    function bindCloseButton(popover) {
+        popover.addEventListener("click", event => {
+            const close = event.target.closest(".dco-edge-popover-close");
+            if (!close) return;
+            event.preventDefault();
+            closePopover();
+        });
+    }
+
     function openSidePopover(frm, tr, config, anchor) {
         if (!tr || !config || !anchor || !isEditable(frm)) return;
         closePopover();
@@ -442,29 +518,16 @@
 
         const current = String(row[config.overrideField] || "").trim();
         const label = isArabic() ? config.labelAr : config.labelEn;
-        const popover = document.createElement("div");
-        popover.id = POPOVER_ID;
-        popover.setAttribute("role", "menu");
-        popover.setAttribute("aria-label", isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`);
-        popover.innerHTML = `
-            <div class="dco-edge-popover-head">
-                <div><strong>${escapeHtml(label)}</strong><small>${isArabic() ? "اختيار النوع يفعّل الضلع تلقائيًا" : "Choosing a profile enables the side"}</small></div>
-                <button type="button" class="dco-edge-popover-close" aria-label="${isArabic() ? "إغلاق" : "Close"}">×</button>
-            </div>
-            <div class="dco-edge-popover-options">${popoverOptionsHtml(frm, current)}</div>`;
-        document.body.appendChild(popover);
-        activePopover = { element: popover, frm, tr, config, anchor };
-        bindPopoverDismiss();
-        positionPopover(popover, anchor);
+        const popover = createPopover(
+            label,
+            isArabic() ? "اختيار النوع يفعّل الضلع تلقائيًا" : "Choosing a profile enables the side",
+            popoverOptionsHtml(frm, current),
+            isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`
+        );
+        mountPopover(popover, { frm, tr, config, anchor, kind: "side" });
+        bindCloseButton(popover);
 
-        popover.addEventListener("pointerdown", event => event.stopPropagation(), true);
         popover.addEventListener("click", event => {
-            const close = event.target.closest(".dco-edge-popover-close");
-            if (close) {
-                event.preventDefault();
-                closePopover();
-                return;
-            }
             const option = event.target.closest(".dco-edge-profile-option[data-profile-value]");
             if (!option) return;
             event.preventDefault();
@@ -476,6 +539,34 @@
         const selected = popover.querySelector(".dco-edge-profile-option.is-current")
             || popover.querySelector(".dco-edge-profile-option");
         if (selected) selected.focus({ preventScroll: true });
+    }
+
+    function openBulkPopover(frm, tr, anchor) {
+        if (!tr || !anchor || !isEditable(frm)) return;
+        closePopover();
+        if (!materialize(frm, tr)) return;
+
+        const title = isArabic() ? "تطبيق على الأضلاع الأربعة" : "Apply to all four sides";
+        const popover = createPopover(
+            title,
+            isArabic() ? "مرّر القائمة ثم اختر نوع القشاط" : "Scroll the list, then choose a profile",
+            bulkPopoverOptionsHtml(frm),
+            title
+        );
+        mountPopover(popover, { frm, tr, anchor, kind: "bulk" });
+        bindCloseButton(popover);
+
+        popover.addEventListener("click", event => {
+            const option = event.target.closest(".dco-edge-profile-option[data-bulk-profile-value]");
+            if (!option) return;
+            event.preventDefault();
+            const value = option.dataset.bulkProfileValue || "";
+            closePopover();
+            applyAllSides(frm, tr, value);
+        });
+
+        const first = popover.querySelector(".dco-edge-profile-option");
+        if (first) first.focus({ preventScroll: true });
     }
 
     function apply(frm) {
@@ -493,15 +584,19 @@
         root._dcoCompactEdgeProfileControlsBound = true;
 
         root.addEventListener("pointerdown", event => {
-            const select = event.target.closest(".dco-all-sides-profile-select");
-            if (!select || !root.contains(select)) return;
+            const button = event.target.closest(".dco-all-sides-profile-button");
+            if (!button || !root.contains(button)) return;
             event.stopPropagation();
         }, true);
 
         root.addEventListener("click", event => {
-            const select = event.target.closest(".dco-all-sides-profile-select");
-            if (!select || !root.contains(select)) return;
+            const button = event.target.closest(".dco-all-sides-profile-button[data-bulk-edge-profile-button]");
+            if (!button || !root.contains(button)) return;
+            event.preventDefault();
             event.stopPropagation();
+            event.stopImmediatePropagation();
+            const tr = button.closest("tr[data-row-name]");
+            if (tr) openBulkPopover(frm, tr, button);
         }, true);
 
         root.addEventListener("dblclick", event => {
@@ -514,16 +609,6 @@
             event.stopPropagation();
             event.stopImmediatePropagation();
             openSidePopover(frm, tr, config, toggle);
-        }, true);
-
-        root.addEventListener("change", event => {
-            const bulkSelect = event.target.closest(".dco-all-sides-profile-select[data-bulk-edge-profile]");
-            if (!bulkSelect || !root.contains(bulkSelect) || !bulkSelect.value) return;
-            event.stopPropagation();
-            const tr = bulkSelect.closest("tr[data-row-name]");
-            const value = bulkSelect.value;
-            bulkSelect.value = "";
-            if (tr) applyAllSides(frm, tr, value);
         }, true);
 
         let queued = false;
@@ -579,6 +664,7 @@
         applySideSelection,
         applyAllSides,
         openSidePopover,
+        openBulkPopover,
         closePopover,
     };
 })();
