@@ -19,7 +19,9 @@ def approve_replacement(replacement_name: str) -> dict[str, Any]:
 
     order = frappe.get_doc("Door Cutting Order", replacement.door_cutting_order)
 
-    from almdina_erp.almdina_erp.services.replacement_service import _build_replacement_snapshot
+    from almdina_erp.almdina_erp.infrastructure.frappe.replacements.snapshot_adapter import (
+        build_replacement_snapshot,
+    )
     from almdina_erp.almdina_erp.services.replacement_plan_service import create_mini_plan
 
     board_description = str(
@@ -36,7 +38,7 @@ def approve_replacement(replacement_name: str) -> dict[str, Any]:
         update_modified=False,
     )
 
-    snapshot = _build_replacement_snapshot(order, replacement, None)
+    snapshot = build_replacement_snapshot(order, replacement)
     plan = create_mini_plan(order, replacement, snapshot)
 
     frappe.db.set_value(

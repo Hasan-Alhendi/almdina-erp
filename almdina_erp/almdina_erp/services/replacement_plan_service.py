@@ -3,7 +3,23 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
-from frappe.utils import flt, now_datetime
+from frappe.utils import cint, flt, now_datetime
+
+from almdina_erp.almdina_erp.domain.replacements.planning import (
+    calculate_edge_meters,
+)
+
+
+def _edge_rate(edge_type: str | None) -> float:
+    if not edge_type:
+        return 0.0
+    return flt(
+        frappe.db.get_value(
+            "Edge Banding Type",
+            edge_type,
+            "rate_usd_per_meter",
+        )
+    )
 
 
 def create_mini_plan(
@@ -19,12 +35,14 @@ def create_mini_plan(
     if existing:
         return frappe.get_doc("Cutting Plan", existing)
 
-    from almdina_erp.almdina_erp.services.replacement_service import (
-        _edge_meters,
-        _edge_rate,
+    edge_meters = calculate_edge_meters(
+        width_cm=flt(replacement.width_cm),
+        length_cm=flt(replacement.length_cm),
+        edge_long_right=bool(cint(replacement.edge_long_right)),
+        edge_long_left=bool(cint(replacement.edge_long_left)),
+        edge_width_top=bool(cint(replacement.edge_width_top)),
+        edge_width_bottom=bool(cint(replacement.edge_width_bottom)),
     )
-
-    edge_meters = _edge_meters(replacement)
     edge_cost = edge_meters * _edge_rate(replacement.edge_type)
     material_cost = flt(order.board_rate_usd)
     # Zero is a valid explicit approved cost. Never coerce it back to baseline 1.
