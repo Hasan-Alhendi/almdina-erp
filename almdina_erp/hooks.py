@@ -63,6 +63,9 @@ doctype_js = {
         "public/js/door_cutting_order_edge_profile_controls_ux.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
+        # Register before the legacy document interceptor so compact invoice
+        # printing owns the customer-invoice button without duplicating handlers.
+        "public/js/door_cutting_order_compact_invoice_print_presenter.js",
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
