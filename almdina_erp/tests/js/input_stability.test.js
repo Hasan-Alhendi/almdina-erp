@@ -14,7 +14,6 @@ const documentListeners = new Map();
 const wrapperListeners = new Map();
 const originalRefreshCalls = [];
 const intervalHandlers = [];
-let capturedCallOptions = null;
 
 const wrapper = {
     dataset: {},
@@ -76,8 +75,7 @@ const fakeDocument = {
 
 const fakeFrappe = {
     call(options) {
-        capturedCallOptions = options;
-        return { then() { return this; } };
+        return options;
     },
     ui: {
         form: {
@@ -93,6 +91,7 @@ const fakeFrappe = {
         },
     },
 };
+const originalFrappeCall = fakeFrappe.call;
 
 const fakeWindow = {
     frappe: fakeFrappe,
@@ -119,15 +118,16 @@ const context = vm.createContext({
 vm.runInContext(source, context, { filename: "input_stability.js" });
 intervalHandlers.forEach(handler => handler());
 
-// Old automatic preview handlers are removed, while unrelated handlers remain.
+// Input stability no longer scans or mutates Frappe's private handler registry.
 assert.deepEqual(
     fakeFrappe.ui.form.handlers["Door Cutting Order"].board_description,
-    [safe_handler]
+    [schedule_recalculate, safe_handler]
 );
 assert.deepEqual(
     fakeFrappe.ui.form.handlers["Door Cutting Order Detail"].notes,
-    [safe_handler]
+    [schedule_recalculate, safe_handler]
 );
+assert.equal(fakeFrappe.call, originalFrappeCall);
 
 // Refreshing the field under the cursor must be deferred rather than rebuilding it.
 const form = new Form();
@@ -154,61 +154,5 @@ form.refresh_field("board_description");
 assert.deepEqual(originalRefreshCalls, ["board_description", "board_description"]);
 assert.equal(form._almdinaDeferredFieldRefreshes.size, 0);
 assert.equal(form._almdinaInputStabilityIdentity, "Door Cutting Order::DCO-2026-00002");
-
-// A server preview that started before newer typing must never call the legacy
-// callback that writes old input values back into the form.
-let callbackApplied = false;
-fakeDocument.activeElement = body;
-fakeFrappe.call({
-    method: "almdina_erp.almdina_erp.api.preview_door_cutting_order",
-    callback() {
-        callbackApplied = true;
-    },
-});
-assert.ok(capturedCallOptions);
-documentListeners.get("beforeinput")({ target: input });
-capturedCallOptions.callback({ message: { board_description: "old" } });
-assert.equal(callbackApplied, false);
-
-// Even without a newer generation, a response is not applied while the operator
-// is actively editing a control inside the same order.
-callbackApplied = false;
-fakeDocument.activeElement = input;
-documentListeners.get("focusin")({ target: input });
-fakeFrappe.call({
-    method: "almdina_erp.almdina_erp.api.preview_door_cutting_order",
-    callback() {
-        callbackApplied = true;
-    },
-});
-capturedCallOptions.callback({ message: { board_description: "old" } });
-assert.equal(callbackApplied, false);
-
-// A response captured for one order is discarded after navigating to another,
-// even when no new keystroke occurred.
-callbackApplied = false;
-fakeDocument.activeElement = body;
-fakeFrappe.call({
-    method: "almdina_erp.almdina_erp.api.preview_door_cutting_order",
-    callback() {
-        callbackApplied = true;
-    },
-});
-form.doc.name = "DCO-2026-00003";
-capturedCallOptions.callback({ message: { board_description: "wrong order" } });
-assert.equal(callbackApplied, false);
-
-// A current response is still allowed when no field is being edited.
-fakeWindow.AlmdinaInputStability.synchronizeFormIdentity(form);
-callbackApplied = false;
-fakeDocument.activeElement = body;
-fakeFrappe.call({
-    method: "almdina_erp.almdina_erp.api.preview_door_cutting_order",
-    callback() {
-        callbackApplied = true;
-    },
-});
-capturedCallOptions.callback({ message: {} });
-assert.equal(callbackApplied, true);
 
 console.log("Input stability browser simulation passed");

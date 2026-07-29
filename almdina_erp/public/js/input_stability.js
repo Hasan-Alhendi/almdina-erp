@@ -1,18 +1,10 @@
 (() => {
     "use strict";
 
-    const PREVIEW_METHOD = "almdina_erp.almdina_erp.api.preview_door_cutting_order";
     const namespace = window.AlmdinaInputStability = window.AlmdinaInputStability || {};
     const state = namespace.state = namespace.state || {
-        generation: 0,
-        composing: false,
-        lastInputAt: 0,
         editingIdentity: "",
     };
-
-    function now() {
-        return Date.now();
-    }
 
     function formIdentity(form) {
         const doc = form && form.doc;
@@ -56,21 +48,12 @@
         return identity;
     }
 
-    function markInputActivity(event) {
-        if (!isEditableElement(event.target)) return;
-        rememberEditingIdentity(event.target);
-        state.generation += 1;
-        state.lastInputAt = now();
-    }
-
     function synchronizeFormIdentity(form) {
         if (!form) return "";
         const identity = formIdentity(form);
         const previous = String(form._almdinaInputStabilityIdentity || "");
 
         if (previous && identity && previous !== identity) {
-            state.generation += 1;
-            state.composing = false;
             if (state.editingIdentity === previous) state.editingIdentity = "";
             if (form._almdinaDeferredFieldRefreshes instanceof Set) {
                 form._almdinaDeferredFieldRefreshes.clear();
@@ -88,22 +71,6 @@
 
         document.addEventListener("focusin", event => {
             rememberEditingIdentity(event.target);
-        }, true);
-        document.addEventListener("beforeinput", markInputActivity, true);
-        document.addEventListener("input", markInputActivity, true);
-        document.addEventListener("paste", markInputActivity, true);
-        document.addEventListener("cut", markInputActivity, true);
-        document.addEventListener("drop", markInputActivity, true);
-        document.addEventListener("compositionstart", event => {
-            if (!isEditableElement(event.target)) return;
-            rememberEditingIdentity(event.target);
-            state.composing = true;
-            markInputActivity(event);
-        }, true);
-        document.addEventListener("compositionend", event => {
-            if (!isEditableElement(event.target)) return;
-            state.composing = false;
-            markInputActivity(event);
         }, true);
     }
 
@@ -203,113 +170,9 @@
         }, true);
     }
 
-    function installPreviewResponseGuard() {
-        if (!window.frappe || typeof frappe.call !== "function") return false;
-        if (frappe.call._almdinaInputSafePatched) return true;
-
-        const originalCall = frappe.call;
-        const guardedCall = function inputSafeFrappeCall(options, ...args) {
-            if (!options || typeof options !== "object" || options.method !== PREVIEW_METHOD) {
-                return originalCall.call(this, options, ...args);
-            }
-
-            const requestGeneration = state.generation;
-            const requestForm = window.cur_frm || null;
-            const requestIdentity = formIdentity(requestForm);
-            const originalCallback = options.callback;
-            const guardedOptions = {
-                ...options,
-                callback(response) {
-                    const inputChanged = state.generation !== requestGeneration;
-                    const editing = requestForm && activeElementBelongsToForm(requestForm);
-                    const documentChanged = Boolean(
-                        requestIdentity
-                        && (
-                            formIdentity(requestForm) !== requestIdentity
-                            || (window.cur_frm && formIdentity(window.cur_frm) !== requestIdentity)
-                        )
-                    );
-                    if (inputChanged || state.composing || editing || documentChanged) {
-                        return;
-                    }
-                    if (typeof originalCallback === "function") {
-                        return originalCallback(response);
-                    }
-                },
-            };
-            return originalCall.call(this, guardedOptions, ...args);
-        };
-
-        guardedCall._almdinaInputSafePatched = true;
-        guardedCall._almdinaOriginalCall = originalCall;
-        frappe.call = guardedCall;
-        return true;
-    }
-
-    function isLegacyLivePreviewHandler(handler) {
-        if (typeof handler !== "function") return false;
-        const source = Function.prototype.toString.call(handler);
-        return source.includes("schedule_recalculate")
-            || source.includes("scheduleRecalculate");
-    }
-
-    function removeHandler(registry, eventName) {
-        if (!registry || !Object.prototype.hasOwnProperty.call(registry, eventName)) return;
-        const handlers = registry[eventName];
-        if (Array.isArray(handlers)) {
-            registry[eventName] = handlers.filter(handler => !isLegacyLivePreviewHandler(handler));
-            return;
-        }
-        if (isLegacyLivePreviewHandler(handlers)) {
-            delete registry[eventName];
-        }
-    }
-
-    function removeDoorOrderLivePreviewHandlers() {
-        if (!window.frappe || !frappe.ui || !frappe.ui.form || !frappe.ui.form.handlers) return false;
-
-        const orderHandlers = frappe.ui.form.handlers["Door Cutting Order"];
-        const detailHandlers = frappe.ui.form.handlers["Door Cutting Order Detail"];
-        const orderEvents = [
-            "customer",
-            "board_description",
-            "board_length_cm",
-            "board_width_cm",
-            "board_rate_usd",
-            "default_edge_type",
-            "cutting_cost_per_board_usd",
-            "kerf_mm",
-            "trim_margin_mm",
-            "packing_mode",
-            "pieces_add",
-            "pieces_remove",
-        ];
-        const detailEvents = [
-            "width_cm",
-            "length_cm",
-            "qty",
-            "allow_rotation",
-            "edge_long_right",
-            "edge_long_left",
-            "edge_width_top",
-            "edge_width_bottom",
-            "edge_type",
-            "piece_type",
-            "clipped_corner_position",
-            "clipped_corner_width_cm",
-            "clipped_corner_length_cm",
-            "notes",
-        ];
-
-        orderEvents.forEach(eventName => removeHandler(orderHandlers, eventName));
-        detailEvents.forEach(eventName => removeHandler(detailHandlers, eventName));
-        return true;
-    }
-
     function installCore() {
         installInputTracker();
         installRefreshFieldGuard();
-        installPreviewResponseGuard();
         if (window.cur_frm) synchronizeFormIdentity(window.cur_frm);
     }
 
@@ -318,32 +181,29 @@
         const timer = window.setInterval(() => {
             attempts += 1;
             installCore();
-            removeDoorOrderLivePreviewHandlers();
-            if (attempts >= 40 || (
-                namespace.inputTrackerInstalled
-                && window.frappe
-                && frappe.call
-                && frappe.call._almdinaInputSafePatched
+            const prototype = window.frappe
                 && frappe.ui
                 && frappe.ui.form
                 && frappe.ui.form.Form
-                && frappe.ui.form.Form.prototype._almdinaInputSafeRefreshPatched
-            )) {
+                && frappe.ui.form.Form.prototype;
+            if (
+                attempts >= 40
+                || (
+                    namespace.inputTrackerInstalled
+                    && prototype
+                    && prototype._almdinaInputSafeRefreshPatched
+                )
+            ) {
                 window.clearInterval(timer);
             }
         }, 100);
     }
 
     installCore();
-    removeDoorOrderLivePreviewHandlers();
-    window.setTimeout(removeDoorOrderLivePreviewHandlers, 0);
-    window.setTimeout(removeDoorOrderLivePreviewHandlers, 250);
     retryInstall();
 
-    namespace.markInputActivity = markInputActivity;
     namespace.isEditableElement = isEditableElement;
     namespace.formIdentity = formIdentity;
     namespace.synchronizeFormIdentity = synchronizeFormIdentity;
     namespace.fieldContainsActiveElement = fieldContainsActiveElement;
-    namespace.removeDoorOrderLivePreviewHandlers = removeDoorOrderLivePreviewHandlers;
 })();

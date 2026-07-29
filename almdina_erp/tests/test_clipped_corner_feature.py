@@ -20,7 +20,7 @@ PLAN_PIECE_JSON = (
     / "cutting_plan_piece.json"
 )
 ORDER_PY = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
-ORDER_JS = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.js"
+PLAN_RENDERER = APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 ENGINE = APP_ROOT / "almdina_erp" / "services" / "cutting_engine.py"
 PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 EXPORT_SERVICE = APP_ROOT / "almdina_erp" / "services" / "export_validation_service.py"
@@ -86,7 +86,7 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
 
 
 def test_cutting_plan_and_dxf_use_the_same_five_sided_geometry():
-    order_js = ORDER_JS.read_text(encoding="utf-8")
+    order_js = PLAN_RENDERER.read_text(encoding="utf-8")
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
     editor = CORNER_UX.read_text(encoding="utf-8")
 

@@ -23,7 +23,7 @@ PLACED = (
     / "cutting_plan_piece.json"
 )
 ORDER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
-ORDER_JS = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.js"
+PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 SERVICE = ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 PLAN = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
@@ -140,13 +140,14 @@ def test_exact_geometry_survives_every_packing_and_approved_export_path():
 
 
 def test_plan_print_and_all_dxf_paths_use_exact_special_polygon_when_available():
-    order_js = ORDER_JS.read_text(encoding="utf-8")
+    order_js = PLAN_RENDERER.read_text(encoding="utf-8")
     workflow = WORKFLOW.read_text(encoding="utf-8")
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
 
     for source in (order_js, workflow, secure_dxf):
         assert "AlmdinaSpecialShapeGeometry" in source
         assert "isExact(piece)" in source
+    for source in (workflow, secure_dxf):
         assert "dxfPoints(piece" in source
 
     assert "dco-special-exact-piece" in order_js
