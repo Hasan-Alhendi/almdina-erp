@@ -20,6 +20,7 @@
 
                     /* A custom edge is an exception note, not a card. Keep it textual so
                        regular and exceptional rows retain nearly the same height. */
+                    .custom-edge-empty{display:block;min-height:0!important}
                     .custom-edge-summary{display:grid;gap:.45mm}
                     .custom-edge-line{
                         display:flex;align-items:baseline;flex-wrap:wrap;gap:.35mm 1mm;
