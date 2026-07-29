@@ -198,10 +198,10 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
             "order_tracking_repository",
             "production_stage_repository",
             "production_event_repository",
-            "stock_execution_gateway",
-            "remnant_execution_gateway",
         ):
             self.assertIn(module_name, command_repository_source)
+        self.assertNotIn("stock_execution_gateway", command_repository_source)
+        self.assertNotIn("remnant_execution_gateway", command_repository_source)
 
         self.assertNotIn("import frappe", gateway_source)
         self.assertNotIn("frappe.db", gateway_source)

@@ -3,10 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
-from frappe.utils import cint, flt, now_datetime
+from frappe.utils import flt, now_datetime
 
 
-def create_mini_plan(order: Any, replacement: Any, snapshot: dict[str, Any], remnant: Any | None) -> Any:
+def create_mini_plan(
+    order: Any,
+    replacement: Any,
+    snapshot: dict[str, Any],
+) -> Any:
     existing = frappe.db.get_value(
         "Cutting Plan",
         {"replacement_piece": replacement.name, "status": "Approved"},
@@ -18,16 +22,11 @@ def create_mini_plan(order: Any, replacement: Any, snapshot: dict[str, Any], rem
     from almdina_erp.almdina_erp.services.replacement_service import (
         _edge_meters,
         _edge_rate,
-        _remnant_material_cost,
     )
 
     edge_meters = _edge_meters(replacement)
     edge_cost = edge_meters * _edge_rate(replacement.edge_type)
-    material_cost = (
-        _remnant_material_cost(order, flt(snapshot["used_area_m2"]))
-        if remnant
-        else flt(order.board_rate_usd)
-    )
+    material_cost = flt(order.board_rate_usd)
     # Zero is a valid explicit approved cost. Never coerce it back to baseline 1.
     cutting_cost = flt(order.cutting_cost_per_board_usd)
     planned_total = material_cost + cutting_cost + edge_cost
@@ -46,14 +45,16 @@ def create_mini_plan(order: Any, replacement: Any, snapshot: dict[str, Any], rem
     # The DocType validator independently derives Valid/Invalid on insert.
     plan.validation_status = "Pending"
     plan.validation_errors = ""
-    plan.board_item = replacement.board_item
+    plan.board_description = str(
+        replacement.board_description or order.board_description or ""
+    ).strip()
     plan.full_board_width_mm = flt(source["full_width_cm"]) * 10
     plan.full_board_length_mm = flt(source["full_length_cm"]) * 10
     plan.usable_board_width_mm = flt(source["usable_width_cm"]) * 10
     plan.usable_board_length_mm = flt(source["usable_length_cm"]) * 10
     plan.kerf_mm = flt(order.kerf_mm)
     plan.trim_margin_mm = flt(order.trim_margin_mm)
-    plan.required_boards = cint(snapshot["required_full_boards"])
+    plan.required_boards = 1
     plan.used_area_m2 = flt(snapshot["used_area_m2"])
     plan.total_source_area_m2 = flt(snapshot["total_board_area_m2"])
     plan.waste_area_m2 = flt(snapshot["waste_area_m2"])
@@ -74,12 +75,10 @@ def create_mini_plan(order: Any, replacement: Any, snapshot: dict[str, Any], rem
         "sources",
         {
             "sheet_no": 1,
-            "source_type": source["source_type"],
-            "board_item": replacement.board_item,
-            "remnant": source.get("remnant"),
-            "material": source.get("material") or order.board_material or "",
-            "color": source.get("color") or order.board_color or "",
-            "thickness_mm": flt(source.get("thickness_mm") or order.board_thickness_mm),
+            "source_type": "Full Board",
+            "board_description": str(
+                replacement.board_description or order.board_description or ""
+            ).strip(),
             "full_width_mm": flt(source["full_width_cm"]) * 10,
             "full_length_mm": flt(source["full_length_cm"]) * 10,
             "usable_width_mm": flt(source["usable_width_cm"]) * 10,

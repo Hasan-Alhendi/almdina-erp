@@ -9,7 +9,6 @@ TEST_USERS = {
     "Cutting Operator": "almdina.cutting@example.com",
     "Edge Operator": "almdina.edge@example.com",
     "Production Manager": "almdina.production.manager@example.com",
-    "Stock Manager": "almdina.stock.manager@example.com",
     "Accounts Management": "almdina.accounts@example.com",
 }
 
@@ -50,7 +49,6 @@ class TestAlmdinaPermissions(FrappeTestCase):
             "Cutting Operator": {"read": True, "create": False, "write": False},
             "Edge Operator": {"read": True, "create": False, "write": False},
             "Production Manager": {"read": True, "create": True, "write": True},
-            "Stock Manager": {"read": True, "create": False, "write": False},
             "Accounts Management": {"read": True, "create": False, "write": False},
         }
         for role, rights in expected.items():
@@ -100,28 +98,6 @@ class TestAlmdinaPermissions(FrappeTestCase):
         self.assertNotIn("Cutting Operator", level_one_roles)
         self.assertNotIn("Edge Operator", level_one_roles)
 
-    def test_stock_settings_service_rejects_order_entry(self):
-        from almdina_erp.almdina_erp.services.settings_access_service import get_stock_settings
-
-        frappe.set_user(TEST_USERS["Order Entry"])
-        with self.assertRaises(frappe.PermissionError):
-            get_stock_settings()
-
-    def test_stock_settings_service_allows_stock_manager(self):
-        from almdina_erp.almdina_erp.services.settings_access_service import get_stock_settings
-
-        frappe.set_user(TEST_USERS["Stock Manager"])
-        result = get_stock_settings()
-        self.assertIn("stock_consumption_point", result)
-        self.assertTrue(result["can_edit"])
-
-    def test_production_settings_service_rejects_stock_manager(self):
-        from almdina_erp.almdina_erp.services.production_settings_service import get_production_settings
-
-        frappe.set_user(TEST_USERS["Stock Manager"])
-        with self.assertRaises(frappe.PermissionError):
-            get_production_settings()
-
     def test_production_settings_service_allows_production_manager(self):
         from almdina_erp.almdina_erp.services.production_settings_service import get_production_settings
 
@@ -136,10 +112,3 @@ class TestAlmdinaPermissions(FrappeTestCase):
         frappe.set_user(TEST_USERS["Order Entry"])
         with self.assertRaises(frappe.PermissionError):
             approve_replacement("NON-EXISTENT")
-
-    def test_actual_consumption_reversal_rejects_order_entry_before_lookup(self):
-        from almdina_erp.almdina_erp.services.actual_consumption_reversal import reverse_actual_consumption
-
-        frappe.set_user(TEST_USERS["Order Entry"])
-        with self.assertRaises(frappe.PermissionError):
-            reverse_actual_consumption("NON-EXISTENT", "test")

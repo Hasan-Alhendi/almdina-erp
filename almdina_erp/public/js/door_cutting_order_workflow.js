@@ -60,7 +60,6 @@
             plan &&
             Array.isArray(plan.sheets) &&
             plan.sheets.some(sheet =>
-                sheet.source_type === "Remnant" ||
                 num(sheet.full_width_cm) !== num(plan.full_board_width_cm) ||
                 num(sheet.full_length_cm) !== num(plan.full_board_length_cm)
             )
@@ -135,44 +134,6 @@
         }
     }
 
-    function add_stock_action(frm) {
-        if (frm.is_new() || ["Draft", "Rejected", "Pending Review"].includes(frm.doc.status)) return;
-        if (!(has_role("Production Manager") || has_role("Stock Manager") || has_role("Cutting Operator"))) return;
-
-        frm.add_custom_button(__("فحص توفر المواد"), () => {
-            frappe.call({
-                method: "almdina_erp.almdina_erp.services.stock_service.check_order_stock",
-                args: { order_name: frm.doc.name },
-                freeze: true,
-            }).then(r => {
-                const data = r.message || {};
-                const rows = data.materials || [];
-                let html = "";
-                if (data.stock_control_disabled) {
-                    html += `<div style="color:#b45309;font-weight:700;margin-bottom:8px">${__(
-                        "فحص المخزون معطّل حالياً من إعدادات المعمل."
-                    )}</div>`;
-                }
-                html += `<div><b>${__("Warehouse")}:</b> ${escape_html(data.warehouse || "")}</div>`;
-                html += `<table class="table table-bordered" style="margin-top:10px"><thead><tr><th>${__("Item")}</th><th>${__("Required")}</th><th>${__("Available")}</th><th>${__("Shortage")}</th></tr></thead><tbody>`;
-                rows.forEach(row => {
-                    html += `<tr><td>${escape_html(row.item_code || "")}</td><td>${row.required_qty}</td><td>${row.actual_qty}</td><td>${row.shortage_qty}</td></tr>`;
-                });
-                html += "</tbody></table>";
-                if (!rows.length) html += `<p>${__("No stock-managed materials are required from full-stock Items for this order.")}</p>`;
-                frappe.msgprint({
-                    title: data.stock_control_disabled
-                        ? __("فحص المخزون معطّل")
-                        : data.is_available
-                        ? __("المخزون متوفر")
-                        : __("يوجد عجز في المخزون"),
-                    indicator: data.stock_control_disabled ? "orange" : data.is_available ? "green" : "red",
-                    message: html,
-                });
-            });
-        }, __("المخزون"));
-    }
-
     function add_related_views(frm) {
         if (frm.is_new()) return;
 
@@ -218,11 +179,12 @@
         return html;
     }
 
-    function source_label(sheet) {
-        if (sheet.source_type === "Remnant") {
-            return `بقايا لوح ${escape_html(sheet.remnant || "")}`;
-        }
-        return "لوح كامل";
+    function source_label(sheet, frm) {
+        return escape_html(
+            sheet.board_description
+            || frm.doc.board_description
+            || "لوح كامل",
+        );
     }
 
     function build_source_aware_plan_html(frm, plan) {
@@ -232,8 +194,7 @@
         const waste_percent = total_source_area ? round(waste_area / total_source_area * 100, 2) : 0;
         const full_board_count = plan.required_full_boards !== undefined
             ? Number(plan.required_full_boards)
-            : (plan.sheets || []).filter(s => (s.source_type || "Full Board") === "Full Board").length;
-        const remnant_count = (plan.sheets || []).filter(s => s.source_type === "Remnant").length;
+            : (plan.sheets || []).length;
 
         let html = `
             <div class="dco-cutting-plan dco-source-aware" style="font-family:Arial,Tahoma,sans-serif;direction:rtl;color:#111;background:#fff;">
@@ -241,14 +202,13 @@
                 <div style="line-height:1.7;margin-bottom:8px;font-size:12px;">
                     <b>الطلب:</b> ${escape_html(frm.doc.name || "")} &nbsp; | &nbsp;
                     <b>الزبون:</b> ${escape_html(frm.doc.customer || "")} &nbsp; | &nbsp;
-                    <b>الصنف:</b> <span dir="ltr">${escape_html(frm.doc.board_item || "")}</span><br>
+                    <b>اللوح:</b> ${escape_html(frm.doc.board_description || "")}<br>
                     <b>سماكة القص:</b> ${round(num(plan.kerf_cm) * 10, 1)} مم &nbsp; | &nbsp;
                     <b>هامش التشذيب:</b> ${round(num(plan.trim_cm) * 10, 1)} مم &nbsp; | &nbsp;
                     <b>الخوارزمية:</b> ${escape_html(plan.method_label || frm.doc.packing_method || "")}
                 </div>
-                <div class="dco-summary-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 12px 0;">
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>ألواح جديدة</b><span>${full_board_count}</span></div>
-                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>بقايا مستخدمة</b><span>${remnant_count}</span></div>
+                <div class="dco-summary-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 12px 0;">
+                    <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>عدد الألواح</b><span>${full_board_count}</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>مساحة القطع</b><span>${used_area} م²</span></div>
                     <div class="dco-summary-card" style="border:1px solid #ddd;border-radius:8px;padding:8px;background:#f8fafc;"><b>الهدر</b><span>${waste_area} م² (${waste_percent}%)</span></div>
                 </div>
@@ -269,7 +229,7 @@
             html += `
                 <div class="dco-sheet-card" style="border:1px solid #bbb;border-radius:10px;padding:10px;margin:14px 0;background:#fff;page-break-inside:avoid;break-inside:avoid;">
                     <div class="dco-sheet-title" style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px;font-weight:bold;">
-                        <div>المصدر ${sheet.sheet_no}: ${source_label(sheet)}</div>
+                        <div>المصدر ${sheet.sheet_no}: ${source_label(sheet, frm)}</div>
                         <div>المقاس الكامل: ${round(fullW, 1)}×${round(fullH, 1)} سم | المستخدم: ${round(usableW, 1)}×${round(usableH, 1)} سم | القطع: ${(sheet.pieces || []).length} | الهدر: ${round(waste, 3)} م² (${wastePct}%)</div>
                     </div>
                     <div class="dco-sheet-board" style="position:relative;direction:ltr;width:${boardWidthPx}px;height:${boardHeightPx}px;max-width:100%;border:2px solid #111;background:linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),#fff;background-size:32px 32px;overflow:hidden;margin:0 auto 8px auto;">
@@ -455,7 +415,6 @@
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
             add_production_actions(frm);
-            add_stock_action(frm);
             add_related_views(frm);
             setTimeout(() => install_source_aware_outputs(frm), 400);
             if (frappe.after_ajax) {

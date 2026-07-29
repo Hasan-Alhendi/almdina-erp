@@ -285,9 +285,9 @@
                     ${solver ? `<span class="dco-solver-badge">${esc(solver)}</span>` : ""}
                 </div>
                 <div class="dco-plan-card">
-                    <span class="label">جودة البقايا</span>
+                    <span class="label">أكبر مساحة فارغة</span>
                     <span class="value">${num(reusable,3)} م²</span>
-                    <span class="sub">أكبر مستطيل متبقٍ قابل لإعادة الاستخدام وفق حدود المعمل.</span>
+                    <span class="sub">أكبر مستطيل فارغ داخل اللوح بعد توزيع القطع.</span>
                 </div>
                 <div class="dco-plan-card">
                     <span class="label">سهولة التنفيذ</span>

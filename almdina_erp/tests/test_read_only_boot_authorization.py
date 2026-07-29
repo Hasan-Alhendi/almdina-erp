@@ -122,7 +122,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
     def test_order_entry_seed_uses_least_privilege_profile(self) -> None:
         source = INSTALL_PATH.read_text(encoding="utf-8")
         self.assertIn('"profile": "order_entry"', source)
-        order_entry_block = source.split("ORDER_ENTRY_USERS =", 1)[1].split("REQUIRED_UOMS =", 1)[0]
+        order_entry_block = source.split("ORDER_ENTRY_USERS =", 1)[1].split("DEFAULT_ROUTING_NAME =", 1)[0]
         for broad_role in (
             "Production Manager",
             "Stock Manager",

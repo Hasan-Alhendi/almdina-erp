@@ -19,7 +19,6 @@ class Capability:
     MARK_DELIVERED = "mark_delivered"
     VIEW_COSTS = "view_costs"
     EDIT_SPECIAL_PRICE = "edit_special_price"
-    MANAGE_STOCK = "manage_stock"
     MANAGE_USERS = "manage_users"
 
 
@@ -35,7 +34,6 @@ ADMIN_CONTEXT_ROLES = frozenset(
         "System Manager",
         "Production Manager",
         "Order Entry",
-        "Stock Manager",
         "Accounts Management",
     }
 )
@@ -85,7 +83,6 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     "Accounts Management": frozenset(
         {Capability.VIEW_COSTS, Capability.EDIT_SPECIAL_PRICE}
     ),
-    "Stock Manager": frozenset({Capability.MANAGE_STOCK}),
 }
 
 

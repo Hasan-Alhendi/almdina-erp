@@ -1,7 +1,7 @@
 app_name = "almdina_erp"
 app_title = "Almdina ERP"
 app_publisher = "Horizon Tech"
-app_description = "MDF cutting, optimization, production and inventory management"
+app_description = "MDF cutting, optimization, production and customer costing"
 app_email = ""
 app_license = "Proprietary"
 app_version = "1.0.0-dev"
@@ -101,7 +101,6 @@ doctype_js = {
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
-    "Material Consumption Log": "public/js/material_consumption_log.js",
 }
 
 doctype_list_js = {
@@ -146,8 +145,8 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
     "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
         "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
-    "almdina_erp.almdina_erp.services.stock_service.check_order_stock":
-        "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
+    "almdina_erp.almdina_erp.services.replacement_service.cancel_replacement":
+        "almdina_erp.almdina_erp.services.replacement_execution.cancel_replacement",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":

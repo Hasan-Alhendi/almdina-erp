@@ -11,9 +11,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
     order_tracking_repository,
     production_event_repository,
     production_stage_repository,
-    remnant_execution_gateway,
     shop_floor_authorization,
-    stock_execution_gateway,
 )
 
 
@@ -141,21 +139,6 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             event_type,
             details,
         )
-
-    def consume_stock_if_due(
-        self,
-        order_name: str,
-        stage_type: str,
-        trigger: str,
-    ) -> None:
-        stock_execution_gateway.consume_stock_if_due(order_name, stage_type, trigger)
-
-    def register_remnants_if_due(
-        self,
-        order_name: str,
-        stage_type: str,
-    ) -> dict[str, Any] | None:
-        return remnant_execution_gateway.register_remnants_if_due(order_name, stage_type)
 
     def close_open_pause(self, stage_name: str, resumed_by: str) -> None:
         production_stage_repository.close_open_pause(stage_name, resumed_by)

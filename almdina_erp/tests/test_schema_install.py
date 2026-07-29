@@ -29,14 +29,11 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
             "Cutting Plan",
             "Cutting Plan Source",
             "Cutting Plan Piece",
-            "Board Remnant",
             "Production Routing",
             "Production Stage",
             "Production Stage Event",
             "Production Incident",
             "Replacement Piece",
-            "Material Reservation",
-            "Material Consumption Log",
             "Almdina ERP Settings",
         }
         missing = sorted(name for name in required if not frappe.db.exists("DocType", name))
@@ -44,7 +41,6 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
 
     def test_required_pages_exist(self):
         required = {
-            "factory-stock-settings",
             "factory-production-settings",
             "factory-approval-queue",
             "factory-plan-archive",
@@ -69,9 +65,7 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
         required = {
             "Factory Order Analysis",
             "Production Stage Performance",
-            "Remnant Inventory",
             "Production Incidents and Replacements",
-            "Order Stock Availability",
             "Board Usage Analysis",
             "Piece Size Usage Analysis",
             "Factory Operations Summary",

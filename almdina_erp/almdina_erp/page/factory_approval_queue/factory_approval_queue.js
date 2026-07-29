@@ -28,7 +28,7 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
                 <table class="table table-bordered" style="margin:0;min-width:1050px">
                     <thead><tr>
                         <th>${__("Order")}</th><th>${__("Customer")}</th><th>${__("Date")}</th><th>${__("Revision")}</th>
-                        <th>${__("Board Item")}</th><th>${__("Material / Color / Thickness")}</th>
+                        <th>${__("Board Description")}</th><th>${__("Board Size")}</th>
                         <th>${__("Boards")}</th><th>${__("Waste %")}</th><th>${__("Method")}</th><th>${__("Actions")}</th>
                     </tr></thead><tbody>`;
         rows.forEach(row => {
@@ -38,8 +38,8 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
                     <td>${esc(row.customer || "")}</td>
                     <td>${esc(row.order_date || "")}</td>
                     <td>${esc(row.revision || 1)}</td>
-                    <td>${esc(row.board_item || "")}</td>
-                    <td>${esc(row.board_material || "")} / ${esc(row.board_color || "")} / ${esc(row.board_thickness_mm || "")} ${__("MM")}</td>
+                    <td>${esc(row.board_description || "")}</td>
+                    <td>${esc(row.board_length_cm || "")} × ${esc(row.board_width_cm || "")} ${__("CM")}</td>
                     <td>${esc(row.required_boards || 0)}</td>
                     <td>${esc(row.waste_percent || 0)}</td>
                     <td>${esc(__(row.packing_method || ""))}</td>

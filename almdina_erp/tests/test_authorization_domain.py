@@ -16,13 +16,12 @@ class TestAuthorizationDomain(unittest.TestCase):
     def test_system_manager_has_every_capability(self) -> None:
         self.assertEqual(capabilities_for_roles({"System Manager"}), ALL_CAPABILITIES)
 
-    def test_order_entry_does_not_inherit_accounts_stock_or_production_management(self) -> None:
+    def test_order_entry_does_not_inherit_accounts_or_production_management(self) -> None:
         roles = {"Order Entry"}
         self.assertTrue(has_capability(roles, Capability.CREATE_ORDER))
         self.assertTrue(has_capability(roles, Capability.EDIT_ORDER))
         self.assertTrue(has_capability(roles, Capability.CREATE_ORDER_REVISION))
         self.assertFalse(has_capability(roles, Capability.APPROVE_ORDER))
-        self.assertFalse(has_capability(roles, Capability.MANAGE_STOCK))
         self.assertFalse(has_capability(roles, Capability.EDIT_SPECIAL_PRICE))
 
     def test_production_manager_can_create_revision_but_shop_floor_operator_cannot(self) -> None:
@@ -40,8 +39,6 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertFalse(
             has_capability({"Accounts Management"}, Capability.START_ASSIGNED_STAGE)
         )
-        self.assertTrue(has_capability({"Stock Manager"}, Capability.MANAGE_STOCK))
-        self.assertFalse(has_capability({"Stock Manager"}, Capability.APPROVE_ORDER))
 
     def test_shop_floor_operator_capabilities_and_navigation_profile(self) -> None:
         roles = {"عامل رسم"}

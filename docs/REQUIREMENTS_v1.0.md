@@ -1,4 +1,10 @@
 وثيقة متطلبات المشروع
+
+> **Scope override — 2026-07-29:** `PRODUCT_SCOPE_v1.1.md` supersedes every
+> stock, warehouse, reservation, consumption, Stock Entry, valuation and board
+> remnant requirement in this historical document. Customer costing,
+> customer quote/invoice calculation and all required printing remain active.
+
 نظام إدارة معمل MDF والقص والإنتاج
 ERPNext / Frappe Custom Application
 الإصدار: 1.0

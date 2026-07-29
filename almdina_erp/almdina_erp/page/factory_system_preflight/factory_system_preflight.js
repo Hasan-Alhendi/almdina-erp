@@ -7,27 +7,20 @@ frappe.pages["factory-system-preflight"].on_page_load = function (wrapper) {
     const $body = $(wrapper).find(".layout-main-section");
 
     const checkLabels = {
-        default_warehouse: __("Default Warehouse Check"),
         production_routing: __("Production Routing Check"),
         routing_core_stages: __("Required Production Stages Check"),
         roles: __("Factory User Roles Check"),
-        mdf_items: __("MDF Board Items Check"),
         edge_master_structure: __("Edge Banding Master Data Check"),
-        edge_stock_mapping: __("Edge Stock Mapping Check"),
         print_formats: __("Production Print Formats Check"),
         reports: __("Operational Reports Check"),
     };
 
     const detailLabels = {
-        warehouse: __("Warehouse"),
-        company: __("Company"),
         routing: __("Production Routing"),
         stages: __("Stages"),
         missing: __("Missing"),
         count: __("Count"),
         invalid: __("Incomplete Records"),
-        unmapped: __("Unmapped Stock Items"),
-        item: __("Item"),
         problems: __("Problems"),
         edge_type: __("Edge Type"),
     };

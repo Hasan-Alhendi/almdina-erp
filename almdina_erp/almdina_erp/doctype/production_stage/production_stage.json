@@ -37,7 +37,6 @@
     {"read":1,"report":1,"role":"عامل CNC"},
     {"read":1,"report":1,"role":"عامل تقشيط"},
     {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
-    {"read":1,"report":1,"role":"Stock Manager"},
     {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
   ],
   "sort_field":"sequence",

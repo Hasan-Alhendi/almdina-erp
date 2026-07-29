@@ -655,7 +655,6 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
-        board_item(frm) { renderBoardSummary(frm); },
         default_edge_type(frm) { refreshEdgeSelects(frm); },
         before_save(frm) { pruneEmptyTrailingRows(frm); },
     });

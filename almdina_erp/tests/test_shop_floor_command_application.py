@@ -252,7 +252,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
         self.assertEqual(repository.orders["DCO-1"].current_stage, "PST-1")
 
-    def test_start_stage_consumes_stock_then_updates_tracking(self) -> None:
+    def test_start_stage_updates_tracking_without_inventory_side_effects(self) -> None:
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = replace(
             self._approved_order(),
@@ -272,13 +272,13 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         result = commands.start_my_stage(repository, "PST-1")
 
         self.assertEqual(result["status"], "In Progress")
-        consume_index = repository.calls.index(
-            ("consume_stock_if_due", "DCO-1", "Sharyoun", "Cutting Start")
+        self.assertIn(
+            ("start_stage", "PST-1", "worker@example.com", "In Progress"),
+            repository.calls,
         )
-        start_index = repository.calls.index(
-            ("start_stage", "PST-1", "worker@example.com", "In Progress")
+        self.assertFalse(
+            any(call[0] in {"consume_stock_if_due", "register_remnants_if_due"} for call in repository.calls)
         )
-        self.assertLess(consume_index, start_index)
 
     def test_drawing_handoff_requires_approved_dxf(self) -> None:
         repository = FakeShopFloorCommandRepository()

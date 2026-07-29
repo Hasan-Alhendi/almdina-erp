@@ -96,8 +96,6 @@ get_users_for_role = shop_floor_gateway.get_users_for_role
 _set_order_tracking = shop_floor_gateway.set_order_tracking
 _create_stage = shop_floor_gateway.create_stage
 _require_stage_assignee_or_admin = shop_floor_gateway.require_stage_assignee_or_admin
-_maybe_consume_stock = shop_floor_gateway.maybe_consume_stock
-_maybe_register_remnants = shop_floor_gateway.maybe_register_remnants
 _required_piece_qty = shop_floor_gateway.required_piece_qty
 _log_event = shop_floor_gateway.log_event
 

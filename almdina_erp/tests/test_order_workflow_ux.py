@@ -8,6 +8,10 @@ HOOKS = ROOT / "hooks.py"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
+COST_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
+PRINT_PRESENTER = (
+    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+)
 TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
 
 
@@ -17,7 +21,7 @@ def text(path: Path) -> str:
 
 def test_order_search_includes_customer_and_explains_id_or_customer_search():
     doctype = json.loads(text(DOCTYPE_JSON))
-    assert doctype["search_fields"] == "customer"
+    assert doctype["search_fields"] == "customer,board_description"
     source = text(LIST_UX)
     assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
     assert '"customer", "order_date", "status"' in source
@@ -26,8 +30,9 @@ def test_order_search_includes_customer_and_explains_id_or_customer_search():
 def test_measurement_table_has_print_and_full_window_actions():
     source = text(MEASUREMENT_UX)
     assert 'class="btn btn-default btn-sm dco-print-measurements"' in source
-    assert "فتح الجدول في نافذة مستقلة" in source
-    assert "window.open(" in source
+    assert "فتح جدول الإدخال في نافذة مستقلة" in source
+    assert "function openEditableMeasurements(frm)" in source
+    assert 'const EDITOR_CLASS = "dco-measurement-entry-window"' in source
     assert "dco-measurements-print-frame" in source
     assert "تفاصيل الأسعار والفاتورة" in source
     assert "dco-measurement-print-table" in source
@@ -42,19 +47,18 @@ def test_measurement_print_has_invoice_measurement_columns_without_invoice_total
 
 
 def test_edge_color_is_kept_in_print_headers_without_duplicate_table_columns():
-    invoice_source = text(EDGE_COLOR_UX)
-    print_section = invoice_source.split("function printHtml(frm)", 1)[1].split(
-        "function printCustomerInvoice(frm)", 1
-    )[0]
+    edge_source = text(EDGE_COLOR_UX)
+    invoice_source = text(COST_UX)
+    print_source = text(PRINT_PRESENTER)
     measurement_source = text(MEASUREMENT_UX)
 
-    assert "grid-template-columns:repeat(5" in print_section
-    assert "<b>نوع القشاط</b>" in print_section
-    assert "<b>لون القشاط</b>" in print_section
-    assert "patchMeasurementTable" not in invoice_source
-    assert "patchInvoiceLines" not in invoice_source
-    assert "patchInvoiceMeta" not in invoice_source
-    assert "removeLegacyColorDuplicates" in invoice_source
+    assert "grid-template-columns:repeat(5" in invoice_source
+    assert "<b>نوع القشاط</b>" in print_source
+    assert "<b>لون القشاط</b>" in print_source
+    assert "patchMeasurementTable" not in edge_source
+    assert "patchInvoiceLines" not in edge_source
+    assert "patchInvoiceMeta" not in edge_source
+    assert "removeLegacyColorDuplicates" in edge_source
 
     assert "grid-template-columns:repeat(5" in measurement_source
     assert "<b>لون القشاط</b>" in measurement_source

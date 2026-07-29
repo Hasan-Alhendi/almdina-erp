@@ -177,7 +177,12 @@ def _build_replacement_snapshot(order: Any, replacement: Any, remnant: Any | Non
         "pieces": [piece],
         "source_type": source_type,
         "remnant": remnant_name,
-        "board_item": replacement.board_item,
+        "board_description": str(
+            getattr(replacement, "board_description", "")
+            or getattr(order, "board_description", "")
+            or getattr(replacement, "board_item", "")
+            or ""
+        ).strip(),
         "full_width_cm": full_w_cm,
         "full_length_cm": full_h_cm,
         "usable_width_cm": usable_w,
@@ -627,7 +632,7 @@ def _create_replacement(incident: Any, order: Any) -> Any:
     replacement.incident = incident.name
     replacement.original_piece_label = incident.piece_label
     replacement.status = "Pending Approval"
-    replacement.board_item = order.board_item
+    replacement.board_description = str(order.board_description or "").strip()
     replacement.width_cm = flt(source_row.width_cm)
     replacement.length_cm = flt(source_row.length_cm)
     replacement.qty = 1
@@ -637,7 +642,7 @@ def _create_replacement(incident: Any, order: Any) -> Any:
     replacement.edge_width_top = cint(source_row.edge_width_top)
     replacement.edge_width_bottom = cint(source_row.edge_width_bottom)
     replacement.edge_type = source_row.edge_type or order.default_edge_type or ""
-    replacement.source_preference = "Remnant First"
+    replacement.source_preference = "Full Board"
     replacement.charge_customer = 0
     replacement.insert(ignore_permissions=True)
 

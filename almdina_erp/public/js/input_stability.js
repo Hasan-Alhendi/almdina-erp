@@ -275,7 +275,6 @@
             "board_description",
             "board_length_cm",
             "board_width_cm",
-            "board_item",
             "board_rate_usd",
             "default_edge_type",
             "cutting_cost_per_board_usd",

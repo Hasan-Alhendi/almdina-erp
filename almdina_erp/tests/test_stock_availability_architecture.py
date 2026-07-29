@@ -55,14 +55,12 @@ class TestStockAvailabilityArchitecture(unittest.TestCase):
         self.assertNotIn("frappe.db.", service)
         self.assertNotIn("actual_qty - reserved_qty", service)
 
-    def test_legacy_public_endpoint_routes_to_new_slice(self) -> None:
+    def test_legacy_public_endpoint_is_not_active(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
-        self.assertEqual(
-            overrides[
-                "almdina_erp.almdina_erp.services.stock_service.check_order_stock"
-            ],
-            "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
+        self.assertNotIn(
+            "almdina_erp.almdina_erp.services.stock_service.check_order_stock",
+            overrides,
         )
 
 

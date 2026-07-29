@@ -4,7 +4,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
-SHOP_FLOOR = ROOT / "almdina_erp" / "services" / "shop_floor_service.py"
+SHOP_FLOOR_COMMANDS = (
+    ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
+)
 SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
 
 
@@ -23,14 +25,16 @@ def test_order_creator_dispatches_without_locking_cutting_plan():
 
 
 def test_dispatch_accepts_draft_orders_with_calculated_plan_only():
-    shop_floor = _source(SHOP_FLOOR)
-    dispatch = shop_floor.split("def dispatch_order", 1)[1].split("@frappe.whitelist()", 1)[0]
+    shop_floor = _source(SHOP_FLOOR_COMMANDS)
     ready = shop_floor.split("def assert_order_ready_for_dispatch", 1)[1].split(
-        "@frappe.whitelist()\ndef dispatch_order", 1
+        "def get_handoff_workers", 1
+    )[0]
+    dispatch = shop_floor.split("def dispatch_order", 1)[1].split(
+        "def start_my_stage", 1
     )[0]
     assert "assert_order_ready_for_dispatch(order)" in dispatch
-    assert 'order.status != "Approved"' not in dispatch
-    assert "cutting_plan_json" in ready
+    assert "can_dispatch_from_status(order.status)" in ready
+    assert "order.has_cutting_plan" in ready
     assert "plan_needs_recalculation" in ready
 
 

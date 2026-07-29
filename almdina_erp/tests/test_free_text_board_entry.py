@@ -80,8 +80,11 @@ def test_native_stock_board_fields_are_not_required_by_order_save_pipeline():
     )
     assert 'getattr(self.document, "board_description", "")' in source
     assert "Board description is required" in source
-    assert 'getattr(self.document, "board_length_cm", None) or 244' in source
-    assert 'getattr(self.document, "board_width_cm", None) or 122' in source
+    assert 'getattr(self.document, "board_length_cm", None)' in source
+    assert 'getattr(self.document, "board_width_cm", None)' in source
+    assert "default_if_missing" in source
+    assert 'getattr(self.document, "board_length_cm", None) or 244' not in source
+    assert 'getattr(self.document, "board_width_cm", None) or 122' not in source
     assert "self.document.full_board_length_mm = length_cm * 10" in source
     assert "self.document.full_board_width_mm = width_cm * 10" in source
     assert "self.document.board_item.item_name" not in source
@@ -103,11 +106,16 @@ def test_plan_payload_uses_board_description_not_stock_item():
 
 
 def test_invoice_and_measurement_prints_use_only_board_description_as_visible_label():
-    source = _source(BOARD_UX)
-    assert 'String(frm.doc.board_description || "")' in source
-    assert "frm.doc.board_description || frm.doc.board_item" not in source
-    assert "ألواح MDF — ${label}" in source
-    assert "PRINT_TRIGGER_SELECTOR" in source
+    board_source = _source(BOARD_UX)
+    assert 'String(frm.doc.board_description || "")' in board_source
+    assert "ألواح MDF — ${label}" in board_source
+    assert "frm.doc.board_item" not in board_source
+    assert "PRINT_TRIGGER_SELECTOR" not in board_source
+
+    for path in (COST_UX, MEASUREMENT_UX):
+        source = _source(path)
+        assert "frm.doc.board_description" in source
+        assert "frm.doc.board_description || frm.doc.board_item" not in source
 
 
 def test_fast_save_and_plan_controls_use_free_text_board_validation():

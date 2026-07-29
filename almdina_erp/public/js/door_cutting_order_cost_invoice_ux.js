@@ -100,7 +100,7 @@
     }
 
     function boardLabel(frm) {
-        return String(frm.doc.board_description || frm.doc.board_item || "").trim();
+        return String(frm.doc.board_description || "").trim();
     }
 
     function orderEdgeColor(frm) {
@@ -463,7 +463,7 @@
                             <div class="dco-invoice-meta-item"><span class="label">رقم الطلب</span><span class="value">${esc(frm.doc.name || "مسودة")}</span></div>
                             <div class="dco-invoice-meta-item"><span class="label">الزبون</span><span class="value">${esc(frm.doc.customer || "—")}</span></div>
                             <div class="dco-invoice-meta-item"><span class="label">تاريخ الطلب</span><span class="value">${esc(frm.doc.order_date || "—")}</span></div>
-                            <div class="dco-invoice-meta-item"><span class="label">صنف اللوح</span><span class="value">${esc(boardName || "—")}</span></div>
+                            <div class="dco-invoice-meta-item"><span class="label">اللوح</span><span class="value">${esc(boardName || "—")}</span></div>
                             <div class="dco-invoice-meta-item"><span class="label">عدد الألواح</span><span class="value">${qty(frm.doc.required_boards)}</span></div>
                         </div>
                         <div class="dco-grand-total">
@@ -490,7 +490,7 @@
 ${shapePrintCss()}
 </style></head><body>
 <div class="header"><div class="title"><h1>عرض سعر الطلب</h1><div class="muted">فاتورة تكلفة الطلب — تفاصيل القياسات والخدمات وتسعير الدرف الخاصة</div></div><div style="text-align:left"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div><div class="muted">حالة السعر: ${esc(quoteStatusLabel(frm.doc.customer_quote_status))}</div></div></div>
-<div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(boardName || "—")}</div><div><b>عدد الألواح</b>${qty(frm.doc.required_boards)}</div><div><b>سعر اللوح</b>$ ${money(frm.doc.board_rate_usd)}</div><div><b>أجور القص / لوح</b>$ ${money(frm.doc.cutting_cost_per_board_usd)}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
+<div class="info"><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>اللوح</b>${esc(boardName || "—")}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
 <div class="section-title">جدول القياسات <span class="muted">— الخطوط أسفل العرض والطول تمثل عدد الحواف المطلوب تلبيسها</span></div>
 <table class="table measurements"><thead><tr><th>#</th><th>النوع</th><th>العرض سم</th><th>الطول سم</th><th>العدد</th><th>نوع القشاط</th><th class="notes-col">ملاحظات</th></tr></thead><tbody>
 ${rows.map(row => `<tr class="${rowHasDrawing(row) ? "dco-row-with-sketch" : ""}"><td>${row.index}</td><td>${pieceTypeLabel(row)}</td><td>${dimensionMark(row.width_cm,row.width_edge_count,true)}</td><td>${dimensionMark(row.length_cm,row.length_edge_count,true)}</td><td>${row.qty}</td><td>${esc(row.edge_type || "—")}</td><td class="notes-col ${rowHasDrawing(row) ? "dco-notes-has-sketch" : ""}">${printNotesCell(row)}</td></tr>`).join("")}
@@ -644,7 +644,6 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
         customer(frm) { scheduleRender(frm); },
         order_date(frm) { scheduleRender(frm); },
         board_description(frm) { scheduleRender(frm); },
-        board_item(frm) { scheduleRender(frm); },
         board_rate_usd(frm) { scheduleRender(frm); },
         cutting_cost_per_board_usd(frm) { scheduleRender(frm); },
         required_boards(frm) { scheduleRender(frm); },

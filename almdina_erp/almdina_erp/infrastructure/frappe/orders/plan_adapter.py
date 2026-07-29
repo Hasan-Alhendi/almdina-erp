@@ -29,6 +29,9 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
     build_plan_metadata_payload,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import drawing_token
+from almdina_erp.almdina_erp.domain.orders.numeric_input import (
+    default_if_missing,
+)
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import (
     fingerprint_payload,
 )
@@ -105,7 +108,10 @@ class FrappeOrderPlanAdapter:
                 packing_mode=str(source.packing_mode or "Auto Pro"),
                 machine_type=str(source.cutting_machine_type or "Auto"),
                 time_limit_sec=self.access.normalized_number(
-                    source.optimization_time_limit_sec or 10
+                    default_if_missing(
+                        source.optimization_time_limit_sec,
+                        10,
+                    )
                 ),
             ),
             optimizer=PlanOptimizerSettings(
@@ -311,7 +317,12 @@ class FrappeOrderPlanAdapter:
                         self.document.cutting_machine_type or "Auto"
                     ),
                     time_limit_sec=(
-                        flt(self.document.optimization_time_limit_sec) or 10
+                        flt(
+                            default_if_missing(
+                                self.document.optimization_time_limit_sec,
+                                10,
+                            )
+                        )
                     ),
                     exact_piece_limit=(
                         cint(settings.optimal_search_piece_limit) or 40

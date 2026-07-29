@@ -210,8 +210,10 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "self.total_cost_usd = round_value(total_cost, 3)" in order
 
     assert "استبعاد الحساب الآلي للدرف الخاصة" not in cost
-    assert "const materialAmount = boardCount * boardRate" in cost
-    assert "const cuttingAmount = boardCount * cuttingRate" in cost
+    assert "boardCount * boardRate" in cost
+    assert "boardCount * cuttingRate" in cost
+    assert "n(frm.doc.mdf_cost_usd)" in cost
+    assert "n(frm.doc.cutting_cost_usd)" in cost
     assert "regularAreaRatio" not in cost
     assert "حصة خام MDF" not in cost
     assert "حصة قص وتجهيز" not in cost
@@ -219,7 +221,7 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "سعر معتمد شامل" in cost
     assert "approve_special_piece_price" in cost
     assert "سعر شامل" in cost
-    assert "التكلفة الداخلية المخططة" in cost
+    assert "التكلفة الداخلية تبقى مستقلة" in cost
     assert "القشاط المبدئي" in cost
     assert "${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}" in cost
     assert "ملاحظة السعر:" in cost

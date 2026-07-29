@@ -29,16 +29,11 @@ def test_core_factory_operator_terms_have_meaningful_arabic_labels():
         "Factory Operations": "التشغيل اليومي للمعمل",
         "Door Cutting Orders": "طلبات قص الدرف",
         "Production Stages": "مراحل تنفيذ الطلبات",
-        "Board Remnants": "بقايا الألواح",
         "Replacement Pieces": "القطع التعويضية",
-        "Material Reservations": "المواد المحجوزة للطلبات",
         "Production Incidents": "أخطاء ومشاكل الإنتاج",
         "Factory Settings": "إعدادات المعمل",
-        "Stock & Control": "المواد والمخزون والمتابعة",
         "Factory Order Analysis": "تحليل طلبات القص",
         "Production Stage Performance": "أداء مراحل الإنتاج",
-        "Remnant Inventory": "مخزون بقايا الألواح",
-        "Order Stock Availability": "توفر مواد الطلبات",
         "Factory Approval Queue": "طلبات بانتظار الاعتماد",
         "Factory System Preflight": "فحص جاهزية إعدادات المعمل",
     }
@@ -59,9 +54,6 @@ def test_factory_workflow_values_are_translated_for_non_english_operators():
         "Completed",
         "Rejected",
         "Cancelled",
-        "Available",
-        "Reserved",
-        "Consumed",
         "Pending Approval",
         "In Progress",
         "Paused",
@@ -126,8 +118,6 @@ def test_legacy_frozen_method_labels_have_arabic_display_fallbacks():
         "Skyline - Bottom Left",
         "Skyline - Best Fit",
         "Auto اختار: ",
-        "Remnant First + ",
-        "No full board required",
     ]
     missing = [label for label in legacy_labels if label not in js]
     assert not missing, f"Missing legacy display fallbacks: {missing}"
