@@ -13,6 +13,7 @@ const source = fs.readFileSync(
 const documentListeners = new Map();
 const wrapperListeners = new Map();
 const originalRefreshCalls = [];
+const intervalHandlers = [];
 let capturedCallOptions = null;
 
 const wrapper = {
@@ -96,8 +97,8 @@ const fakeWindow = {
         return 1;
     },
     setInterval(handler) {
-        handler();
-        return 1;
+        intervalHandlers.push(handler);
+        return intervalHandlers.length;
     },
     clearInterval() {},
 };
@@ -111,6 +112,7 @@ const context = vm.createContext({
     console,
 });
 vm.runInContext(source, context, { filename: "input_stability.js" });
+intervalHandlers.forEach(handler => handler());
 
 // Old automatic preview handlers are removed, while unrelated handlers remain.
 assert.deepEqual(
