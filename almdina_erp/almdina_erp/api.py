@@ -11,10 +11,11 @@ EDITABLE_ORDER_STATES = {"Draft", "Pending Review", "Rejected"}
 
 
 def _use_locked_preview(status: str) -> bool:
-    from almdina_erp.almdina_erp.services.order_edit_policy import user_can_edit_order
-
     if status in EDITABLE_ORDER_STATES:
         return False
+
+    from almdina_erp.almdina_erp.services.order_edit_policy import user_can_edit_order
+
     # Order Entry keeps live preview/edit after dispatch; shop-floor stays on the snapshot.
     return not user_can_edit_order(status)
 
