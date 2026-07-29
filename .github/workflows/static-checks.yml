@@ -123,8 +123,11 @@ jobs:
             almdina_erp.tests.test_stock_availability_application \
             almdina_erp.tests.test_stock_availability_architecture
 
-      - name: Run revision and board input UX regression tests
-        run: python -m unittest -v almdina_erp.tests.test_revision_board_input_ux_contract
+      - name: Run revision, board input, and typing stability regression tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_revision_board_input_ux_contract \
+            almdina_erp.tests.test_input_stability_ux_contract
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -141,3 +144,6 @@ jobs:
             count=$((count + 1))
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
+
+      - name: Run input stability browser simulation
+        run: node almdina_erp/tests/js/input_stability.test.js
