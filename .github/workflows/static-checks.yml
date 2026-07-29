@@ -132,6 +132,7 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_revision_board_input_ux_contract \
             almdina_erp.tests.test_document_context_ux_contract \
+            almdina_erp.tests.test_frontend_consolidation_contract \
             almdina_erp.tests.test_input_stability_ux_contract
 
       - name: Run UI, DXF, invoice, and optimizer function contracts
@@ -161,6 +162,7 @@ jobs:
 
       - name: Run input stability browser simulation
         run: |
+          node almdina_erp/tests/js/cutting_plan_renderer.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
           node almdina_erp/tests/js/input_stability.test.js

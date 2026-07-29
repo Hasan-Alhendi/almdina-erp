@@ -42,6 +42,9 @@ doctype_js = {
         # Establish document identity before any renderer or asynchronous loader.
         # This prevents a shared Form wrapper from displaying the previous order.
         "public/js/door_cutting_order_document_context.js",
+        # The canonical DocType entry point is intentionally side-effect free;
+        # drawing composition lives in this focused, reusable renderer.
+        "public/js/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order_workflow.js",
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
@@ -97,8 +100,8 @@ doctype_js = {
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
-        # Load last so obsolete live-preview handlers registered by the canonical
-        # DocType script are removed after every feature module has registered.
+        # Load last so its app-wide active-input policy sees the final form DOM.
+        # It no longer mutates private handler registries or network calls.
         "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",

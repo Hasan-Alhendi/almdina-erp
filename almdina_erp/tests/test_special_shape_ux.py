@@ -33,12 +33,8 @@ ORDER_PY = (
     / "door_cutting_order"
     / "door_cutting_order.py"
 )
-ORDER_JS = (
-    APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order.js"
+PLAN_RENDERER = (
+    APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 )
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
@@ -253,7 +249,7 @@ def test_review_and_production_approval_gate_special_documentation_and_price():
 
 
 def test_cutting_plan_visually_audits_every_special_raw_piece():
-    order_js = ORDER_JS.read_text(encoding="utf-8")
+    order_js = PLAN_RENDERER.read_text(encoding="utf-8")
     order_py = ORDER_PY.read_text(encoding="utf-8")
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
 
