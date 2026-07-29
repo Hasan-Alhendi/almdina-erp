@@ -61,6 +61,9 @@ doctype_js = {
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_multi_edge_ux.js",
         "public/js/door_cutting_order_edge_profile_controls_ux.js",
+        # Capture clicks before the legacy toggle handler so a double-click opens
+        # the compact profile popover without toggling the side twice.
+        "public/js/door_cutting_order_edge_profile_double_click_guard.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
         # One presenter owns both measurement and customer-invoice printing.
