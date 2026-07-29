@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-direct-edge-profile-controls-css";
+    const STYLE_ID = "dco-compact-edge-profile-controls-css";
+    const POPOVER_ID = "dco-edge-profile-popover";
     const BULK_DEFAULT_VALUE = "__almdina_default__";
     const SIDE_CONFIG = [
         {
@@ -33,6 +34,8 @@
             labelEn: "Bottom width edge",
         },
     ];
+    let activePopover = null;
+    let dismissBound = false;
 
     function isArabic() {
         const lang = String(
@@ -95,16 +98,6 @@
         return [...values.entries()];
     }
 
-    function sideOptionsHtml(frm, current) {
-        const defaultLabel = isArabic() ? "الافتراضي" : "Default";
-        return [
-            `<option value="">${defaultLabel}</option>`,
-            ...profileEntries(frm, current).map(([value, label]) => (
-                `<option value="${escapeHtml(value)}" ${value === current ? "selected" : ""}>${escapeHtml(label)}</option>`
-            )),
-        ].join("");
-    }
-
     function bulkOptionsHtml(frm) {
         const placeholder = isArabic() ? "تطبيق على الأربعة" : "Apply to all four";
         const useDefault = isArabic() ? "الأربعة بالافتراضي" : "Default for all four";
@@ -122,47 +115,83 @@
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            .dco-fast-table tbody td{vertical-align:bottom!important}
-            .dco-fast-table .dco-col-edges{vertical-align:bottom!important;overflow:visible!important}
+            .dco-fast-table tbody td{vertical-align:middle!important;padding-top:5px!important;padding-bottom:5px!important}
+            .dco-fast-table .dco-col-edges{vertical-align:middle!important;overflow:visible!important}
             .dco-fast-table .dco-col-edge-bulk{
                 width:122px!important;min-width:122px!important;max-width:122px!important;
-                text-align:center;padding-inline:4px!important;vertical-align:bottom!important
+                text-align:center;padding-inline:4px!important;vertical-align:middle!important
             }
-            .dco-edge-bulk-toolbar,.dco-edge-direct-actions{display:none!important}
+            .dco-edge-bulk-toolbar,.dco-edge-direct-actions,.dco-edge-profile-grid{display:none!important}
             .dco-side-profile-trigger{display:none!important}
-            .dco-edge-bulk-cell-content{display:flex;align-items:flex-end;justify-content:center;min-height:39px;width:100%}
+            .dco-edge-bulk-cell-content{display:flex;align-items:center;justify-content:center;min-height:38px;width:100%}
             .dco-all-sides-profile-select{
-                width:100%;max-width:100%;height:39px;min-height:39px;border:1px solid rgba(36,144,239,.38);
+                width:100%;max-width:100%;height:38px;min-height:38px;border:1px solid rgba(36,144,239,.38);
                 border-radius:7px;background:rgba(36,144,239,.07);color:var(--text-color,#36414c);
                 padding:2px 6px;font-size:9.5px;font-weight:850;line-height:1;cursor:pointer;outline:none
             }
             .dco-all-sides-profile-select:hover,.dco-all-sides-profile-select:focus{
                 border-color:var(--primary,#2490ef);background:#eef7ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
             }
-            .dco-edge-profile-grid{
-                display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 0 4px;
-                direction:rtl;align-items:stretch
-            }
-            .dco-side-profile-select{
-                width:100%;min-width:0;height:25px;min-height:25px;border:1px solid var(--border-color,#cbd2d9);
-                border-radius:7px;background:var(--card-bg,#fff);color:#52606d;padding:1px 3px;
-                font-size:9px;font-weight:800;line-height:1;cursor:pointer;outline:none;text-overflow:ellipsis
-            }
-            .dco-side-profile-select:hover,.dco-side-profile-select:focus{
-                border-color:var(--primary,#2490ef);background:#f2f8ff;box-shadow:0 0 0 2px rgba(36,144,239,.1)
-            }
-            .dco-side-profile-select.is-active-default{border-color:rgba(36,144,239,.5);background:#edf7ff;color:#155f97}
-            .dco-side-profile-select.is-custom{border-color:#d3a20a;background:#fff5cc;color:#765500}
-            .dco-side-profile-select:disabled,.dco-all-sides-profile-select:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+            .dco-all-sides-profile-select:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
             .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important;margin:0!important}
-            .dco-col-edges .dco-check-toggle{min-height:39px!important;height:39px!important;padding:4px!important;align-items:center!important;overflow:hidden!important}
+            .dco-col-edges .dco-check-toggle{
+                min-height:38px!important;height:38px!important;padding:4px!important;align-items:center!important;
+                overflow:hidden!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,color .14s ease
+            }
+            .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom{
+                background:#fff0b8!important;border-color:#c88a00!important;color:#674900!important;
+                box-shadow:inset 0 0 0 1px rgba(200,138,0,.24),0 0 0 1px rgba(200,138,0,.08)!important
+            }
+            .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom:hover{
+                background:#ffe79a!important;border-color:#aa7400!important
+            }
+            .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom .dco-check-mark{color:#674900!important}
+            .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-missing{
+                background:#fff0f0!important;border-color:#d94a4a!important;color:#9d2525!important
+            }
+            #${POPOVER_ID}{
+                position:fixed;z-index:1065;width:min(278px,calc(100vw - 20px));max-height:min(360px,calc(100vh - 20px));
+                display:flex;flex-direction:column;border:1px solid var(--border-color,#cbd2d9);border-radius:12px;
+                background:var(--card-bg,#fff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
+                direction:rtl;color:var(--text-color,#172033)
+            }
+            #${POPOVER_ID} .dco-edge-popover-head{
+                display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
+                border-bottom:1px solid var(--border-color,#e1e5e9);background:var(--subtle-fg,#f7f9fb)
+            }
+            #${POPOVER_ID} .dco-edge-popover-head strong{font-size:12px;line-height:1.25}
+            #${POPOVER_ID} .dco-edge-popover-head small{display:block;margin-top:2px;color:var(--text-muted,#65717d);font-size:9px;font-weight:600}
+            #${POPOVER_ID} .dco-edge-popover-close{
+                flex:0 0 auto;width:26px;height:26px;border:0;border-radius:7px;background:transparent;color:inherit;
+                font-size:18px;line-height:1;cursor:pointer
+            }
+            #${POPOVER_ID} .dco-edge-popover-close:hover{background:rgba(0,0,0,.07)}
+            #${POPOVER_ID} .dco-edge-popover-options{display:grid;gap:3px;padding:7px;overflow:auto;overscroll-behavior:contain}
+            #${POPOVER_ID} .dco-edge-profile-option{
+                width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;
+                min-height:38px;padding:6px 8px;border:1px solid transparent;border-radius:8px;background:transparent;
+                color:inherit;text-align:right;cursor:pointer
+            }
+            #${POPOVER_ID} .dco-edge-profile-option:hover,#${POPOVER_ID} .dco-edge-profile-option:focus{
+                border-color:rgba(36,144,239,.42);background:#eef7ff;outline:0
+            }
+            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:#2490ef;background:#e9f5ff}
+            #${POPOVER_ID} .dco-edge-profile-option.is-custom-current{border-color:#c88a00;background:#fff4cc}
+            #${POPOVER_ID} .dco-edge-profile-option b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+            #${POPOVER_ID} .dco-edge-profile-option small{grid-column:1;color:var(--text-muted,#65717d);font-size:8.5px;line-height:1.2}
+            #${POPOVER_ID} .dco-edge-profile-option span{grid-column:2;grid-row:1/3;font-size:13px;font-weight:900;color:#1674c5}
+            #${POPOVER_ID} .dco-edge-profile-option.is-custom-current span{color:#8a6100}
             @media(max-width:900px){
                 .dco-fast-table .dco-col-edge-bulk{width:112px!important;min-width:112px!important;max-width:112px!important}
                 .dco-all-sides-profile-select{font-size:9px;padding-inline:4px}
-                .dco-side-profile-select{font-size:8.5px;padding-inline:2px}
             }
         `;
         document.head.appendChild(style);
+    }
+
+    function configForToggle(toggle) {
+        const selectedField = toggle && toggle.dataset.checkField;
+        return SIDE_CONFIG.find(config => config.selectedField === selectedField) || null;
     }
 
     function syncToggleVisuals(tr, row) {
@@ -274,51 +303,44 @@
             : "Enable all four sides and apply one profile immediately";
     }
 
-    function ensureSideGrid(frm, cell, edgeButtons, row) {
-        let grid = cell.querySelector(":scope > .dco-edge-profile-grid");
-        if (!grid) {
-            grid = document.createElement("div");
-            grid.className = "dco-edge-profile-grid";
-            edgeButtons.insertAdjacentElement("beforebegin", grid);
-        }
+    function removeSideDropdownRows(cell) {
+        cell.querySelectorAll(":scope > .dco-edge-profile-grid").forEach(grid => grid.remove());
+    }
 
-        SIDE_CONFIG.forEach(config => {
-            let select = grid.querySelector(`select[data-edge-side='${config.side}']`);
-            if (!select) {
-                select = document.createElement("select");
-                select.className = "dco-side-profile-select";
-                select.dataset.edgeSide = config.side;
-                select.setAttribute(
-                    "aria-label",
-                    isArabic() ? `نوع قشاط ${config.labelAr}` : `${config.labelEn} profile`
-                );
-                grid.appendChild(select);
-            }
+    function effectiveProfileLabel(frm, current) {
+        const effective = current || String(frm.doc.default_edge_type || "").trim();
+        if (!effective) return isArabic() ? "غير محدد" : "Not selected";
+        const profile = profileMap(frm).get(effective);
+        return String((profile && profile.label) || effective);
+    }
 
-            const current = String((row && row[config.overrideField]) || "").trim();
-            const selected = Boolean(row && row[config.selectedField]);
-            const options = sideOptionsHtml(frm, current);
-            const signature = `${current}\n${options}`;
-            if (select.dataset.optionsSignature !== signature) {
-                select.innerHTML = options;
-                select.dataset.optionsSignature = signature;
-            }
-            select.value = current;
-            select.disabled = !isEditable(frm);
-            select.classList.toggle("is-custom", Boolean(current));
-            select.classList.toggle("is-active-default", selected && !current);
+    function decorateEdgeToggle(frm, row, toggle) {
+        const config = configForToggle(toggle);
+        if (!config) return;
+        const current = String((row && row[config.overrideField]) || "").trim();
+        const selected = Boolean(row && row[config.selectedField]);
+        const effective = current || String(frm.doc.default_edge_type || "").trim();
+        const missing = selected && (!effective || (frm._dco_side_edge_profiles_loaded && !profileMap(frm).has(effective)));
+        const label = isArabic() ? config.labelAr : config.labelEn;
+        const mode = current
+            ? (isArabic() ? "مخصص" : "Custom")
+            : (isArabic() ? "افتراضي" : "Default");
+        const instruction = isArabic()
+            ? "نقرة للتفعيل أو الإلغاء · نقرتان لاختيار النوع"
+            : "Click to toggle · Double-click to choose profile";
 
-            const label = isArabic() ? config.labelAr : config.labelEn;
-            const effective = current || String(frm.doc.default_edge_type || "").trim();
-            const mode = current
-                ? (isArabic() ? "مخصص" : "Custom")
-                : (isArabic() ? "افتراضي" : "Default");
-            select.title = `${label} — ${mode}: ${effective || "—"}`;
-        });
+        toggle.dataset.edgeSide = config.side;
+        toggle.classList.add("dco-edge-profile-target");
+        toggle.classList.toggle("is-edge-custom", selected && Boolean(current));
+        toggle.classList.toggle("is-edge-default", selected && !current);
+        toggle.classList.toggle("is-edge-missing", missing);
+        toggle.title = `${label} — ${mode}: ${effectiveProfileLabel(frm, current)} — ${instruction}`;
+        toggle.setAttribute("aria-label", `${label}. ${instruction}`);
     }
 
     function removeObsoleteControls(cell) {
         cell.querySelectorAll(":scope > .dco-edge-bulk-toolbar,:scope > .dco-edge-direct-actions").forEach(element => element.remove());
+        removeSideDropdownRows(cell);
     }
 
     function renderRow(frm, tr) {
@@ -328,7 +350,9 @@
 
         removeObsoleteControls(cell);
         const row = rowByName(frm, tr.dataset.rowName) || {};
-        ensureSideGrid(frm, cell, edgeButtons, row);
+        edgeButtons.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => {
+            decorateEdgeToggle(frm, row, toggle);
+        });
         ensureBulkSelect(frm, tr);
     }
 
@@ -342,8 +366,116 @@
             help.appendChild(hint);
         }
         hint.textContent = isArabic()
-            ? "القوائم فوق اتجاهات القشاط، واتجاهات القشاط بمحاذاة القياسات والتدوير"
-            : "Profile selects stay above the edge directions; directions align with dimensions and rotation";
+            ? "القشاط: نقرة للتفعيل والتعطيل، ونقرتان على الضلع لاختيار نوع مخالف للافتراضي"
+            : "Edge banding: click to toggle; double-click a side to choose a non-default profile";
+    }
+
+    function closePopover() {
+        if (!activePopover) return;
+        activePopover.element.remove();
+        activePopover = null;
+    }
+
+    function bindPopoverDismiss() {
+        if (dismissBound) return;
+        dismissBound = true;
+        document.addEventListener("pointerdown", event => {
+            if (!activePopover || activePopover.element.contains(event.target)) return;
+            closePopover();
+        }, true);
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape") closePopover();
+        }, true);
+        window.addEventListener("resize", closePopover, { passive: true });
+        window.addEventListener("scroll", closePopover, { passive: true, capture: true });
+    }
+
+    function profileOptionHtml(value, label, description, current) {
+        const isDefault = value === "";
+        const selected = value === current;
+        const customCurrent = selected && !isDefault;
+        return `<button type="button" class="dco-edge-profile-option ${selected ? "is-current" : ""} ${customCurrent ? "is-custom-current" : ""}" data-profile-value="${escapeHtml(value)}" role="menuitemradio" aria-checked="${selected ? "true" : "false"}">
+            <b>${escapeHtml(label)}</b>
+            <small>${escapeHtml(description)}</small>
+            <span>${selected ? "✓" : ""}</span>
+        </button>`;
+    }
+
+    function popoverOptionsHtml(frm, current) {
+        const defaultType = String(frm.doc.default_edge_type || "").trim();
+        const defaultLabel = isArabic() ? "استخدام القشاط الافتراضي" : "Use default profile";
+        const defaultDescription = defaultType
+            ? `${isArabic() ? "الافتراضي" : "Default"}: ${effectiveProfileLabel(frm, "")}`
+            : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
+        return [
+            profileOptionHtml("", defaultLabel, defaultDescription, current),
+            ...profileEntries(frm, current).map(([value, label]) => {
+                const profile = profileMap(frm).get(value);
+                const details = profile
+                    ? `${Number(profile.thickness_mm || 0).toLocaleString("en-US", { maximumFractionDigits: 3 })} مم · $ ${Number(profile.rate_usd_per_meter || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}/م`
+                    : (isArabic() ? "نوع محفوظ سابقًا" : "Previously saved profile");
+                return profileOptionHtml(value, label, details, current);
+            }),
+        ].join("");
+    }
+
+    function positionPopover(popover, anchor) {
+        const margin = 8;
+        const anchorRect = anchor.getBoundingClientRect();
+        const rect = popover.getBoundingClientRect();
+        let left = isArabic() ? anchorRect.right - rect.width : anchorRect.left;
+        left = Math.max(margin, Math.min(window.innerWidth - rect.width - margin, left));
+        let top = anchorRect.bottom + 6;
+        if (top + rect.height > window.innerHeight - margin) {
+            top = anchorRect.top - rect.height - 6;
+        }
+        top = Math.max(margin, Math.min(window.innerHeight - rect.height - margin, top));
+        popover.style.left = `${Math.round(left)}px`;
+        popover.style.top = `${Math.round(top)}px`;
+    }
+
+    function openSidePopover(frm, tr, config, anchor) {
+        if (!tr || !config || !anchor || !isEditable(frm)) return;
+        closePopover();
+        const row = materialize(frm, tr);
+        if (!row) return;
+
+        const current = String(row[config.overrideField] || "").trim();
+        const label = isArabic() ? config.labelAr : config.labelEn;
+        const popover = document.createElement("div");
+        popover.id = POPOVER_ID;
+        popover.setAttribute("role", "menu");
+        popover.setAttribute("aria-label", isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`);
+        popover.innerHTML = `
+            <div class="dco-edge-popover-head">
+                <div><strong>${escapeHtml(label)}</strong><small>${isArabic() ? "اختيار النوع يفعّل الضلع تلقائيًا" : "Choosing a profile enables the side"}</small></div>
+                <button type="button" class="dco-edge-popover-close" aria-label="${isArabic() ? "إغلاق" : "Close"}">×</button>
+            </div>
+            <div class="dco-edge-popover-options">${popoverOptionsHtml(frm, current)}</div>`;
+        document.body.appendChild(popover);
+        activePopover = { element: popover, frm, tr, config, anchor };
+        bindPopoverDismiss();
+        positionPopover(popover, anchor);
+
+        popover.addEventListener("pointerdown", event => event.stopPropagation(), true);
+        popover.addEventListener("click", event => {
+            const close = event.target.closest(".dco-edge-popover-close");
+            if (close) {
+                event.preventDefault();
+                closePopover();
+                return;
+            }
+            const option = event.target.closest(".dco-edge-profile-option[data-profile-value]");
+            if (!option) return;
+            event.preventDefault();
+            const value = option.dataset.profileValue || "";
+            closePopover();
+            applySideSelection(frm, tr, config, value);
+        });
+
+        const selected = popover.querySelector(".dco-edge-profile-option.is-current")
+            || popover.querySelector(".dco-edge-profile-option");
+        if (selected) selected.focus({ preventScroll: true });
     }
 
     function apply(frm) {
@@ -357,31 +489,34 @@
     }
 
     function bind(frm, root) {
-        if (root._dcoDirectEdgeProfileControlsBound) return;
-        root._dcoDirectEdgeProfileControlsBound = true;
+        if (root._dcoCompactEdgeProfileControlsBound) return;
+        root._dcoCompactEdgeProfileControlsBound = true;
 
         root.addEventListener("pointerdown", event => {
-            const select = event.target.closest(".dco-side-profile-select,.dco-all-sides-profile-select");
+            const select = event.target.closest(".dco-all-sides-profile-select");
             if (!select || !root.contains(select)) return;
             event.stopPropagation();
         }, true);
 
         root.addEventListener("click", event => {
-            const select = event.target.closest(".dco-side-profile-select,.dco-all-sides-profile-select");
+            const select = event.target.closest(".dco-all-sides-profile-select");
             if (!select || !root.contains(select)) return;
             event.stopPropagation();
         }, true);
 
-        root.addEventListener("change", event => {
-            const sideSelect = event.target.closest(".dco-side-profile-select[data-edge-side]");
-            if (sideSelect && root.contains(sideSelect)) {
-                event.stopPropagation();
-                const config = SIDE_CONFIG.find(item => item.side === sideSelect.dataset.edgeSide);
-                const tr = sideSelect.closest("tr[data-row-name]");
-                if (config && tr) applySideSelection(frm, tr, config, sideSelect.value);
-                return;
-            }
+        root.addEventListener("dblclick", event => {
+            const toggle = event.target.closest(".dco-check-toggle.dco-edge-profile-target[data-edge-side]");
+            if (!toggle || !root.contains(toggle)) return;
+            const config = SIDE_CONFIG.find(item => item.side === toggle.dataset.edgeSide);
+            const tr = toggle.closest("tr[data-row-name]");
+            if (!config || !tr) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            openSidePopover(frm, tr, config, toggle);
+        }, true);
 
+        root.addEventListener("change", event => {
             const bulkSelect = event.target.closest(".dco-all-sides-profile-select[data-bulk-edge-profile]");
             if (!bulkSelect || !root.contains(bulkSelect) || !bulkSelect.value) return;
             event.stopPropagation();
@@ -401,7 +536,7 @@
             });
         });
         observer.observe(root, { childList: true, subtree: true });
-        root._dcoDirectEdgeProfileControlsObserver = observer;
+        root._dcoCompactEdgeProfileControlsObserver = observer;
     }
 
     function schedule(frm) {
@@ -443,5 +578,7 @@
         schedule,
         applySideSelection,
         applyAllSides,
+        openSidePopover,
+        closePopover,
     };
 })();
