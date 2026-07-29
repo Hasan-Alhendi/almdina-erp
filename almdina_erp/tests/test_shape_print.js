@@ -41,6 +41,8 @@ const classicPiece = {
                 x: 380,
                 y: 330,
                 text: "<script>قص مائل</script>",
+                font_size: 32,
+                text_anchor: "middle",
             },
         ],
     }),
@@ -52,6 +54,11 @@ assert.match(classicSvg, /<svg /);
 assert.match(classicSvg, /<path /);
 assert.match(classicSvg, /<line /);
 assert.match(classicSvg, /&lt;script&gt;قص مائل/);
+assert.match(classicSvg, /data-dco-readable-note="1"/);
+assert.match(classicSvg, /font-size="32"/);
+assert.match(classicSvg, /text-anchor="middle"/);
+assert.match(classicSvg, /paint-order="stroke"/);
+assert.doesNotMatch(classicSvg, /fill="#fff8c9"/);
 assert.doesNotMatch(classicSvg, /<script>/);
 assert.doesNotMatch(classicSvg, /url\(javascript:/);
 

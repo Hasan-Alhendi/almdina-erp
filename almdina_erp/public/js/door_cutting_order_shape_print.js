@@ -31,6 +31,12 @@
         return /^#[0-9a-f]{3,8}$/i.test(color) ? color : "#172033";
     }
 
+    function clampPrintedNoteFontSize(value) {
+        const parsed = Number(value || 0);
+        if (!Number.isFinite(parsed)) return 24;
+        return Math.max(24, Math.min(38, parsed));
+    }
+
     function parse(raw) {
         if (!raw) return null;
         try {
@@ -153,11 +159,20 @@
         }
         if (element.type === "note") {
             const text = String(element.text || "");
+            const fontSize = clampPrintedNoteFontSize(
+                element.font_size || element.fontSize || 24
+            );
+            const width = Math.min(
+                460,
+                Math.max(fontSize * 2, Math.min(34, text.length) * fontSize * 0.62)
+            );
+            const x = finite(element.x);
+            const anchor = element.text_anchor === "middle" ? "middle" : "end";
             return {
-                x: finite(element.x),
-                y: finite(element.y) - 34,
-                width: Math.min(330, Math.max(120, Math.min(34, text.length) * 9)),
-                height: 46,
+                x: anchor === "middle" ? x - width / 2 : x - width,
+                y: finite(element.y) - fontSize * 0.7,
+                width,
+                height: fontSize * 1.4,
             };
         }
         return null;
@@ -231,12 +246,14 @@
         if (element.type === "note") {
             const text = String(element.text || "");
             const displayText = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-            const width = Math.min(330, Math.max(120, displayText.length * 9));
             const x = finite(element.x);
             const y = finite(element.y);
+            const fontSize = clampPrintedNoteFontSize(
+                element.font_size || element.fontSize || 24
+            );
+            const anchor = element.text_anchor === "middle" ? "middle" : "end";
             return `<g>
-                <rect x="${x}" y="${y - 31}" width="${width}" height="42" rx="8" fill="#fff8c9" stroke="#b9a34f" stroke-width="1"/>
-                <text x="${x + width - 10}" y="${y - 5}" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-family="Tahoma,Arial,sans-serif" font-size="16" font-weight="700" fill="#4c421a">${esc(displayText)}</text>
+                <text data-dco-readable-note="1" x="${x}" y="${y}" direction="rtl" unicode-bidi="plaintext" text-anchor="${anchor}" dominant-baseline="middle" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="800" fill="${color}" paint-order="stroke" stroke="#fff" stroke-width="2.4" stroke-linejoin="round">${esc(displayText)}</text>
             </g>`;
         }
         return "";
@@ -299,6 +316,7 @@
 .dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
 .dco-piece-sketch{display:block;margin:0;padding:3px 4px 2px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}
 .dco-piece-sketch svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}
+.dco-piece-sketch svg text[data-dco-readable-note="1"]{font-family:Tahoma,"Segoe UI",Arial,sans-serif!important}
 .dco-piece-sketch figcaption{margin-top:1px;color:#59636d;font-size:7px;font-weight:700;line-height:1.2;text-align:center}
 tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}
 td.dco-notes-has-sketch{min-width:38mm}

@@ -14,6 +14,10 @@ global.frappe = {
 
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_inline_note_editor.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_special_shape_ux.js"
 ));
 

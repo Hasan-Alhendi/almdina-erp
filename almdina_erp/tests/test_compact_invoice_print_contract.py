@@ -13,9 +13,7 @@ PRESENTER_PATH = (
 THEME_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_theme.js"
 )
-SHAPE_READABILITY_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_shape_print_readability.js"
-)
+SHAPE_PRINT_PATH = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
 COST_DOCUMENTS_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
 )
@@ -27,9 +25,6 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         scripts = hooks["doctype_js"]["Door Cutting Order"]
 
         shape = scripts.index("public/js/door_cutting_order_shape_print.js")
-        readable_shape = scripts.index(
-            "public/js/door_cutting_order_shape_print_readability.js"
-        )
         costing = scripts.index("public/js/door_cutting_order_cost_invoice_ux.js")
         theme = scripts.index("public/js/door_cutting_order_document_print_theme.js")
         presenter = scripts.index(
@@ -39,7 +34,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             "public/js/door_cutting_order_multi_edge_documents_ux.js"
         )
 
-        self.assertLess(shape, readable_shape)
+        self.assertLess(shape, costing)
         self.assertLess(costing, theme)
         self.assertLess(theme, presenter)
         self.assertLess(presenter, documents)
@@ -102,13 +97,14 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertNotIn("body{font-size:7.4px", source)
 
     def test_printed_drawing_notes_respect_font_size_and_have_no_box(self) -> None:
-        source = SHAPE_READABILITY_PATH.read_text(encoding="utf-8")
+        source = SHAPE_PRINT_PATH.read_text(encoding="utf-8")
 
         self.assertIn("Math.max(24, Math.min(38, parsed))", source)
-        self.assertIn('note.font_size || note.fontSize || 24', source)
-        self.assertIn('querySelectorAll(\'rect[fill="#fff8c9"]', source)
-        self.assertIn('textNode.setAttribute("paint-order", "stroke")', source)
-        self.assertIn('textNode.setAttribute("stroke", "#fff")', source)
+        self.assertIn("element.font_size || element.fontSize || 24", source)
+        self.assertIn('data-dco-readable-note="1"', source)
+        self.assertIn('paint-order="stroke"', source)
+        self.assertIn('stroke="#fff"', source)
+        self.assertNotIn('fill="#fff8c9"', source)
         self.assertIn("window.AlmdinaShapePrint = Object.freeze", source)
 
     def test_cost_screen_table_is_compact_responsive_and_custom_only(self) -> None:
