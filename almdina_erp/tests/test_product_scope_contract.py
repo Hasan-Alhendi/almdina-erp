@@ -280,6 +280,18 @@ class TestProductScopeContract(unittest.TestCase):
                 with self.subTest(report=relative, stale=stale):
                     self.assertNotIn(stale, source)
 
+    def test_factory_operations_date_filter_uses_a_declared_order_alias(self) -> None:
+        source = (
+            ROOT
+            / "almdina_erp"
+            / "report"
+            / "factory_operations_summary"
+            / "factory_operations_summary.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("from `tabDoor Cutting Order` o", source)
+        self.assertIn("o.order_date >= %(from_date)s", source)
+        self.assertIn("o.order_date <= %(to_date)s", source)
+
 
 if __name__ == "__main__":
     unittest.main()

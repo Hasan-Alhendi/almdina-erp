@@ -32,7 +32,7 @@ def execute(filters: dict[str, Any] | None = None):
     status_rows = frappe.db.sql(
         f"""
         select status, count(*) as count
-        from `tabDoor Cutting Order`
+        from `tabDoor Cutting Order` o
         where status not in ('Draft', 'Rejected', 'Cancelled')
           {date_sql}
         group by status
