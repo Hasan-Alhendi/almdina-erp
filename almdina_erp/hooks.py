@@ -39,6 +39,9 @@ app_include_js = [
 
 doctype_js = {
     "Door Cutting Order": [
+        # Establish document identity before any renderer or asynchronous loader.
+        # This prevents a shared Form wrapper from displaying the previous order.
+        "public/js/door_cutting_order_document_context.js",
         "public/js/door_cutting_order_workflow.js",
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",

@@ -40,13 +40,20 @@
         }
     }
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext;
+    }
+
     function apply_factory_defaults(frm) {
         if (!frm.is_new() || frm._almdina_factory_defaults_loaded) return;
         frm._almdina_factory_defaults_loaded = true;
+        const context = documentContext();
+        const identity = context.capture(frm);
 
-        frappe.call({
+        return frappe.call({
             method: "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults",
         }).then(r => {
+            if (!context.isCurrent(frm, identity)) return;
             const values = r.message || {};
             const updates = {};
             if (values.kerf_mm !== undefined) updates.kerf_mm = values.kerf_mm;
@@ -56,7 +63,12 @@
             if (values.cutting_machine_type) updates.cutting_machine_type = values.cutting_machine_type;
             if (values.optimization_time_limit_sec !== undefined) updates.optimization_time_limit_sec = values.optimization_time_limit_sec;
             return frm.set_value(updates);
-        }).catch(error => console.error("Failed to load Almdina ERP order defaults", error));
+        }).catch(error => {
+            if (context.isCurrent(frm, identity)) {
+                delete frm._almdina_factory_defaults_loaded;
+            }
+            console.error("Failed to load Almdina ERP order defaults", error);
+        });
     }
 
     function applyBoardTextDefaults(frm) {
@@ -93,9 +105,12 @@
             return Promise.resolve();
         }
         if (!force && String(frm.doc.edge_color || "").trim()) return Promise.resolve();
+        const context = documentContext();
+        const identity = context.capture(frm);
 
         return frappe.db.get_value("Edge Banding Type", requestedType, "edge_color")
             .then(r => {
+                if (!context.isCurrent(frm, identity)) return;
                 if (frm.doc.default_edge_type !== requestedType) return;
                 const color = (r && r.message && r.message.edge_color) || "";
                 if (force || !String(frm.doc.edge_color || "").trim()) {

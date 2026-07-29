@@ -1,6 +1,10 @@
 (() => {
 	"use strict";
 
+	// This presenter is available app-wide for the shop-floor page and is also
+	// injected with Door Cutting Order metadata. Register its form handler once.
+	if (window.AlmdinaDrawingPlanUX) return;
+
 	const PACKING_MODES = [
 		"Auto Pro",
 		"Auto",
@@ -44,15 +48,33 @@
 		);
 	}
 
+	function documentContext() {
+		return window.AlmdinaDocumentContext;
+	}
+
 	function ensureStageType(frm) {
+		const context = documentContext();
+		const identity = context.capture(frm);
+		const requestedStage = frm.doc.current_production_stage;
 		if (!frm.doc.current_production_stage) {
 			frm.__almdina_stage_type = null;
-			return Promise.resolve();
+			return Promise.resolve(context.isCurrent(frm, identity));
 		}
 		return frappe.db
-			.get_value("Production Stage", frm.doc.current_production_stage, "stage_type")
+			.get_value("Production Stage", requestedStage, "stage_type")
 			.then((r) => {
+				if (
+					!context.isCurrent(frm, identity)
+					|| frm.doc.current_production_stage !== requestedStage
+				) {
+					return false;
+				}
 				frm.__almdina_stage_type = (r.message && r.message.stage_type) || null;
+				return true;
+			})
+			.catch((error) => {
+				console.error("Failed to load production stage type", error);
+				return false;
 			});
 	}
 
@@ -211,11 +233,14 @@
 	}
 
 	function recalc(frm, packingMode) {
+		const context = documentContext();
+		const identity = context.capture(frm);
+		const orderName = frm.doc.name;
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
 				args: {
-					order_name: frm.doc.name,
+					order_name: orderName,
 					packing_mode: packingMode || frm.doc.packing_mode || "Auto Pro",
 					cutting_machine_type: frm.doc.cutting_machine_type,
 					kerf_mm: frm.doc.kerf_mm,
@@ -225,6 +250,7 @@
 				freeze_message: __("جاري حساب خطة القص..."),
 			})
 			.then((r) => {
+				if (!context.isCurrent(frm, identity)) return r.message;
 				const data = r.message || {};
 				[
 					"cutting_plan_json",
@@ -246,6 +272,7 @@
 				});
 				frappe.show_alert({ message: __("تم تحديث خطة النظام."), indicator: "green" });
 				return frm.reload_doc().then(() => {
+					if (!context.isCurrent(frm, identity)) return;
 					frm.__almdina_active_plan_tab = "System";
 					refreshPlanView(frm);
 				});
@@ -272,7 +299,10 @@
 
 	frappe.ui.form.on("Door Cutting Order", {
 		refresh(frm) {
-			ensureStageType(frm).finally(() => {
+			const context = documentContext();
+			const identity = context.capture(frm);
+			ensureStageType(frm).then((stageTypeIsCurrent) => {
+				if (!stageTypeIsCurrent || !context.isCurrent(frm, identity)) return;
 				if (
 					!(window.AlmdinaPlanTabsUX && window.AlmdinaPlanTabsUX.shouldShowPlanTabs(frm)) &&
 					canUseDrawingOptimizer(frm)
