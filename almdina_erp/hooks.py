@@ -27,6 +27,9 @@ after_migrate = "almdina_erp.install.after_migrate"
 # sites/assets symlink being present in the frontend container.
 app_include_js = [
     "/assets/almdina_erp/js/arabic_operator_ui.js",
+    # Protect every Desk form from asynchronous refreshes overwriting the active
+    # input while an operator is typing or composing Arabic text.
+    "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/shop_floor_desk.js",
     "/assets/almdina_erp/js/order_entry_desk.js",
     # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
@@ -72,6 +75,9 @@ doctype_js = {
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
+        # Load last so obsolete live-preview handlers registered by the canonical
+        # DocType script are removed after every feature module has registered.
+        "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Stage": "public/js/production_stage.js",
