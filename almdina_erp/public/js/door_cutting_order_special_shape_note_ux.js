@@ -2,9 +2,12 @@
     "use strict";
 
     const STYLE_ID = "dco-special-shape-inline-note-css";
+    const SESSION_KEY = "_dcoInlineNoteSession";
+    const BASE_PROMPT_KEY = "_dcoSpecialShapeBasePrompt";
     const DEFAULT_FONT_SIZE = 18;
     const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32];
-    const NOTE_TITLES = new Set(["إضافة ملاحظة", "تعديل الملاحظة"]);
+    const NOTE_TITLES = new Set(["إضافة ملاحظة", "تعديل الملاحظة", "Add Note", "Edit Note"]);
+    const NOTE_WORDS = ["ملاحظة", "note"];
     let activeSession = null;
 
     function esc(value) {
@@ -44,6 +47,7 @@
                 x: Number(element.x) || 0,
                 y: Number(element.y) || 0,
                 fontSize: clampFontSize(element.font_size || element.fontSize || 16),
+                anchor: element.text_anchor === "end" ? "end" : "middle",
             });
         });
         return notes;
@@ -60,11 +64,10 @@
             .dco-special-shape-modal .dco-note-font-label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:10px;font-weight:900}
             .dco-special-shape-modal .dco-note-font-label b{color:var(--primary,#1674c5);font-variant-numeric:tabular-nums}
             .dco-special-shape-modal .dco-note-font-size{width:100%;min-height:34px;border:1px solid var(--border-color,#d4dbe1);border-radius:8px;background:var(--card-bg,#fff);padding:4px 8px;font-weight:800;cursor:pointer}
-            .dco-special-shape-modal .dco-inline-note-editor{position:absolute;z-index:40;min-width:190px;max-width:min(420px,75%);height:38px;padding:4px 2px;border:0;border-bottom:2px solid var(--primary,#2490ef);border-radius:0;background:transparent!important;box-shadow:none!important;color:var(--text-color,#172033);font-family:Tahoma,Arial,sans-serif;font-weight:700;line-height:1.35;direction:rtl;text-align:center;outline:0;transform:translate(-50%,-50%)}
-            .dco-special-shape-modal .dco-inline-note-editor::placeholder{color:#72808c;font-weight:500}
-            .dco-special-shape-modal .dco-inline-note-help{position:absolute;z-index:41;transform:translate(-50%,10px);padding:4px 7px;border-radius:7px;background:rgba(23,32,51,.82);color:#fff;font-size:9px;white-space:nowrap;pointer-events:none}
+            .dco-special-shape-modal .dco-canvas-text-editor{position:absolute;z-index:45;display:inline-block;min-width:1ch;max-width:min(460px,78%);min-height:1.35em;padding:0;margin:0;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;outline:0!important;color:var(--text-color,#172033);font-family:Tahoma,Arial,sans-serif;font-weight:700;line-height:1.35;direction:rtl;text-align:right;white-space:pre;overflow:visible;caret-color:var(--primary,#1674c5);transform:translate(-100%,-50%);transform-origin:right center;user-select:text}
+            .dco-special-shape-modal .dco-canvas-text-editor:focus{border:0!important;background:transparent!important;box-shadow:none!important;outline:0!important}
             .dco-special-shape-modal .dco-note-font-unsaved{color:#8a5a12!important;background:#fff3d6!important}
-            @media(max-width:700px){.dco-special-shape-modal .dco-note-font-controls{min-width:150px}.dco-special-shape-modal .dco-inline-note-editor{min-width:150px;max-width:68%}}
+            @media(max-width:700px){.dco-special-shape-modal .dco-note-font-controls{min-width:150px}.dco-special-shape-modal .dco-canvas-text-editor{max-width:70%}}
         `;
         document.head.appendChild(style);
     }
@@ -75,6 +78,18 @@
             const style = window.getComputedStyle(modal);
             return style.display !== "none" && style.visibility !== "hidden";
         }) || null;
+    }
+
+    function sessionFromVisibleModal() {
+        const modal = visibleSpecialModal();
+        return modal ? modal[SESSION_KEY] || null : null;
+    }
+
+    function resolveSession() {
+        if (activeSession && activeSession.modal && activeSession.modal.isConnected) return activeSession;
+        const session = sessionFromVisibleModal();
+        if (session) activeSession = session;
+        return session;
     }
 
     function selectedElementId(session) {
@@ -103,19 +118,31 @@
         if (value) value.textContent = `${clampFontSize(session.fontSize)} px`;
     }
 
+    function syncNoteFromCanonicalMarkup(group, note) {
+        const background = group.querySelector(".dco-sketch-note-bg");
+        if (!background) return;
+        const x = Number(background.getAttribute("x"));
+        const y = Number(background.getAttribute("y"));
+        if (Number.isFinite(x)) note.x = x;
+        if (Number.isFinite(y)) note.y = y + 31;
+        const text = group.querySelector("text");
+        if (text && text.textContent) note.text = text.textContent;
+    }
+
     function applyNotePresentation(session) {
         if (!session.svg) return;
         session.svg.querySelectorAll("[data-element-id]").forEach(group => {
-            const id = group.getAttribute("data-element-id") || "";
+            const id = String(group.getAttribute("data-element-id") || "");
             const note = session.notes.get(id);
             if (!note) return;
+            syncNoteFromCanonicalMarkup(group, note);
             group.querySelectorAll(".dco-sketch-note-bg,rect").forEach(rect => rect.remove());
             const text = group.querySelector("text");
             if (!text) return;
-            text.textContent = note.text;
+            if (text.textContent !== note.text) text.textContent = note.text;
             text.setAttribute("x", String(note.x));
             text.setAttribute("y", String(note.y));
-            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("text-anchor", note.anchor || "middle");
             text.setAttribute("dominant-baseline", "middle");
             text.setAttribute("direction", "rtl");
             text.setAttribute("unicode-bidi", "plaintext");
@@ -141,7 +168,7 @@
         const saveState = session.root.querySelector(".dco-sketch-save-state");
         if (saveState && !saveState.classList.contains("is-dirty")) {
             saveState.classList.add("dco-note-font-unsaved");
-            saveState.textContent = "● حجم خط الملاحظة غير محفوظ";
+            saveState.textContent = "● تنسيق الملاحظة غير محفوظ";
         }
     }
 
@@ -180,7 +207,7 @@
             const selected = session.svg.querySelector(".dco-sketch-element.is-selected text");
             if (selected) {
                 const rect = selected.getBoundingClientRect();
-                return { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+                return { clientX: rect.right, clientY: rect.top + rect.height / 2 };
             }
         }
         return session.lastPointer || {
@@ -197,32 +224,39 @@
         return { x: 0, y: 0 };
     }
 
-    function openInlineEditor(session, defaultValue, callback, editingExisting) {
+    function placeCaretAtEnd(element) {
+        const selection = window.getSelection && window.getSelection();
+        if (!selection || !document.createRange) return;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function openCanvasTextEditor(session, defaultValue, promptCallback, editingExisting) {
         const wrap = session.root.querySelector(".dco-sketch-paper-wrap");
         if (!wrap || !session.svg) return null;
-        wrap.querySelectorAll(".dco-inline-note-editor,.dco-inline-note-help").forEach(node => node.remove());
+        wrap.querySelectorAll(".dco-canvas-text-editor").forEach(node => node.remove());
 
         const location = noteEditorPoint(session, editingExisting);
         const wrapRect = wrap.getBoundingClientRect();
-        const left = Math.max(20, Math.min(wrapRect.width - 20, location.clientX - wrapRect.left));
-        const top = Math.max(20, Math.min(wrapRect.height - 20, location.clientY - wrapRect.top));
-        const input = document.createElement("input");
-        input.type = "text";
-        input.className = "dco-inline-note-editor";
-        input.value = String(defaultValue || "");
-        input.placeholder = "اكتب الملاحظة هنا";
-        input.maxLength = 500;
-        input.style.left = `${left}px`;
-        input.style.top = `${top}px`;
+        const left = Math.max(8, Math.min(wrapRect.width - 8, location.clientX - wrapRect.left));
+        const top = Math.max(8, Math.min(wrapRect.height - 8, location.clientY - wrapRect.top));
+        const editor = document.createElement("span");
+        editor.className = "dco-canvas-text-editor";
+        editor.contentEditable = "true";
+        editor.setAttribute("role", "textbox");
+        editor.setAttribute("aria-label", "اكتب الملاحظة مباشرة على الرسم");
+        editor.setAttribute("dir", "rtl");
+        editor.spellcheck = false;
+        editor.textContent = String(defaultValue || "");
+        editor.style.left = `${left}px`;
+        editor.style.top = `${top}px`;
         const scale = Math.max(0.55, session.svg.clientWidth / Math.max(1, session.svg.viewBox.baseVal.width || 1000));
-        input.style.fontSize = `${Math.max(12, Math.min(34, session.fontSize * scale))}px`;
-
-        const help = document.createElement("div");
-        help.className = "dco-inline-note-help";
-        help.textContent = "Enter للحفظ · Esc للإلغاء";
-        help.style.left = `${left}px`;
-        help.style.top = `${top + 20}px`;
-        wrap.append(input, help);
+        editor.style.fontSize = `${Math.max(12, Math.min(34, session.fontSize * scale))}px`;
+        editor.style.color = session.color || "#172033";
+        wrap.appendChild(editor);
 
         const existingId = editingExisting ? selectedNoteId(session) : "";
         const point = canvasPoint(session, location);
@@ -230,11 +264,11 @@
         const finish = commit => {
             if (finished) return;
             finished = true;
-            const text = String(input.value || "").trim();
-            input.remove();
-            help.remove();
+            const text = String(editor.textContent || "").replace(/\u00a0/g, " ").trim();
+            editor.remove();
             if (!commit || !text) return;
-            callback(text);
+
+            promptCallback({ text });
             window.requestAnimationFrame(() => {
                 const id = existingId || selectedElementId(session);
                 if (!id) return;
@@ -249,12 +283,14 @@
                     x: editingExisting ? Number(previous.x || point.x) : point.x,
                     y: editingExisting ? Number(previous.y || point.y) : point.y,
                     fontSize: editingExisting ? clampFontSize(previous.fontSize || session.fontSize) : session.fontSize,
+                    anchor: editingExisting ? (previous.anchor || "middle") : "end",
                 });
                 markFontDirty(session);
                 applyNotePresentation(session);
             });
         };
-        input.addEventListener("keydown", event => {
+
+        editor.addEventListener("keydown", event => {
             if (event.key === "Enter") {
                 event.preventDefault();
                 finish(true);
@@ -263,33 +299,48 @@
                 finish(false);
             }
         });
-        input.addEventListener("blur", () => window.setTimeout(() => finish(true), 0), { once: true });
-        window.requestAnimationFrame(() => {
-            input.focus({ preventScroll: true });
-            input.select();
+        editor.addEventListener("paste", event => {
+            const clipboard = event.clipboardData || window.clipboardData;
+            if (!clipboard) return;
+            event.preventDefault();
+            const text = String(clipboard.getData("text") || "").replace(/[\r\n]+/g, " ");
+            document.execCommand("insertText", false, text);
         });
-        return input;
+        editor.addEventListener("blur", () => finish(true), { once: true });
+        window.requestAnimationFrame(() => {
+            editor.focus({ preventScroll: true });
+            placeCaretAtEnd(editor);
+        });
+        return editor;
+    }
+
+    function isNotePrompt(fields, title, session) {
+        const field = Array.isArray(fields) ? fields[0] : null;
+        const normalizedTitle = String(title || "").trim();
+        if (NOTE_TITLES.has(normalizedTitle)) return true;
+        const descriptor = [normalizedTitle, field && field.label, field && field.fieldname]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+        if (NOTE_WORDS.some(word => descriptor.includes(word))) return true;
+        return Boolean(session && activeNoteTool(session) && field && field.fieldname === "text");
+    }
+
+    function promptBridge(fields, callback, title, actionLabel) {
+        const session = resolveSession();
+        if (session && !session.readOnly && isNotePrompt(fields, title, session)) {
+            const field = Array.isArray(fields) ? fields[0] : null;
+            const defaultValue = field && field.default ? String(field.default) : "";
+            const normalizedTitle = String(title || "").toLowerCase();
+            const editingExisting = normalizedTitle.includes("تعديل") || normalizedTitle.includes("edit");
+            return openCanvasTextEditor(session, defaultValue, callback, editingExisting);
+        }
+        return frappe[BASE_PROMPT_KEY](fields, callback, title, actionLabel);
     }
 
     function installPromptBridge() {
-        if (frappe._dcoSpecialShapeOriginalPrompt) return;
-        frappe._dcoSpecialShapeOriginalPrompt = frappe.prompt.bind(frappe);
-        frappe.prompt = function dcoSpecialShapePrompt(fields, callback, title, actionLabel) {
-            const session = activeSession;
-            const normalizedTitle = String(title || "").trim();
-            if (
-                session
-                && session.modal.isConnected
-                && !session.readOnly
-                && NOTE_TITLES.has(normalizedTitle)
-            ) {
-                const field = Array.isArray(fields) ? fields[0] : null;
-                const defaultValue = field && field.default ? String(field.default) : "";
-                const editingExisting = normalizedTitle === "تعديل الملاحظة";
-                return openInlineEditor(session, defaultValue, callback, editingExisting);
-            }
-            return frappe._dcoSpecialShapeOriginalPrompt(fields, callback, title, actionLabel);
-        };
+        if (!frappe[BASE_PROMPT_KEY]) frappe[BASE_PROMPT_KEY] = frappe.prompt.bind(frappe);
+        if (frappe.prompt !== promptBridge) frappe.prompt = promptBridge;
     }
 
     function patchRowPayload(session) {
@@ -300,8 +351,13 @@
             const note = session.notes.get(String(element.id));
             if (!note) return;
             const size = clampFontSize(note.fontSize);
+            const anchor = note.anchor === "end" ? "end" : "middle";
             if (Number(element.font_size) !== size) {
                 element.font_size = size;
+                changed = true;
+            }
+            if (String(element.text_anchor || "middle") !== anchor) {
+                element.text_anchor = anchor;
                 changed = true;
             }
         });
@@ -330,7 +386,7 @@
                 text.textContent = String(note.text || "");
                 text.setAttribute("x", String(Number(note.x) || 0));
                 text.setAttribute("y", String(Number(note.y) || 0));
-                text.setAttribute("text-anchor", "middle");
+                text.setAttribute("text-anchor", note.text_anchor === "end" ? "end" : "middle");
                 text.setAttribute("dominant-baseline", "middle");
                 text.setAttribute("direction", "rtl");
                 text.setAttribute("unicode-bidi", "plaintext");
@@ -372,8 +428,12 @@
         const modal = visibleSpecialModal();
         const root = modal && modal.querySelector(".dco-special-sketch-shell");
         const svg = root && root.querySelector(".dco-sketch-paper");
-        if (!modal || !root || !svg || modal.dataset.dcoInlineNoteEnhanced === "1") return;
-        modal.dataset.dcoInlineNoteEnhanced = "1";
+        if (!modal || !root || !svg) return null;
+        if (modal[SESSION_KEY]) {
+            activeSession = modal[SESSION_KEY];
+            return activeSession;
+        }
+
         const session = {
             frm,
             row,
@@ -391,11 +451,15 @@
             controls: null,
             observer: null,
         };
+        modal[SESSION_KEY] = session;
+        modal.dataset.dcoInlineNoteEnhanced = "1";
         activeSession = session;
         installFontControls(session);
         applyNotePresentation(session);
 
         svg.addEventListener("pointerdown", event => {
+            activeSession = session;
+            installPromptBridge();
             if (svg.dataset.tool !== "note") return;
             session.lastPointer = { clientX: event.clientX, clientY: event.clientY };
             session.color = root.querySelector(".dco-sketch-color.is-active")?.dataset.color || "#172033";
@@ -423,7 +487,7 @@
                 if (!session.fontDirty || internalDirty || session.allowFontClose) return;
                 event.preventDefault();
                 frappe.confirm(
-                    "غيّرت حجم خط الملاحظة ولم تحفظ الرسم. هل تريد الإغلاق وفقدان التعديل؟",
+                    "غيّرت تنسيق الملاحظة ولم تحفظ الرسم. هل تريد الإغلاق وفقدان التعديل؟",
                     () => {
                         session.allowFontClose = true;
                         window.jQuery(modal).modal("hide");
@@ -433,9 +497,11 @@
             window.jQuery(modal).one("hidden.bs.modal.dco-inline-note", () => {
                 if (session.observer) session.observer.disconnect();
                 if (session.presentationFrame) window.cancelAnimationFrame(session.presentationFrame);
+                delete modal[SESSION_KEY];
                 if (activeSession === session) activeSession = null;
             });
         }
+        return session;
     }
 
     function installEditorBridge() {
@@ -444,7 +510,8 @@
         const originalOpen = editor.open.bind(editor);
         editor.open = function openWithInlineNotes(frm, row, options = {}) {
             const result = originalOpen(frm, row, options);
-            window.setTimeout(() => enhanceSession(frm, row, options), 0);
+            enhanceSession(frm, row, options);
+            window.queueMicrotask(() => enhanceSession(frm, row, options));
             window.requestAnimationFrame(() => enhanceSession(frm, row, options));
             return result;
         };
