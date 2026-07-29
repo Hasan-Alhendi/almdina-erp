@@ -74,7 +74,7 @@ def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
     assert "openSidePopover" in controls
     assert "dco-edge-profile-popover" in controls
     assert "is-edge-custom" in controls
-    assert "tbody td{vertical-align:middle!important}" in controls
+    assert "tbody td{vertical-align:middle!important;" in controls
     assert "function ensureSideGrid" not in controls
     assert 'select.className = "dco-side-profile-select"' not in controls
     assert "new frappe.ui.Dialog" not in controls
