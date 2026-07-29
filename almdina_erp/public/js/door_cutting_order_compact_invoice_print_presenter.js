@@ -151,23 +151,23 @@
 
     function printCss() {
         return `
-            @page{size:A4 portrait;margin:6mm}
+            @page{size:A4 portrait;margin:8mm}
             *{box-sizing:border-box}
             html,body{margin:0;padding:0;font-family:Tahoma,Arial,sans-serif;color:#111;direction:rtl;background:#fff}
-            body{font-size:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-            .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.5px solid #111;padding-bottom:4px;margin-bottom:4px}
-            .header h1{font-size:17px;line-height:1.1;margin:0 0 2px}
-            .muted{color:#666;font-size:6.8px;line-height:1.2}
-            .info{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;margin:4px 0}
-            .info>div{border:1px solid #aaa;border-radius:3px;padding:3px 4px;min-width:0;line-height:1.2;word-break:break-word}
-            .info b{display:block;font-size:6.5px;color:#555;margin-bottom:1px}
-            .title{font-size:10px;font-weight:900;margin:5px 0 2px}
+            body{font-size:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+            .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.5px solid #111;padding-bottom:6px;margin-bottom:6px}
+            .header h1{font-size:19px;line-height:1.1;margin:0 0 2px}
+            .muted{color:#666;font-size:7.5px;line-height:1.25}
+            .info{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin:6px 0}
+            .info>div{border:1px solid #aaa;border-radius:3px;padding:4px 5px;min-width:0;line-height:1.2;word-break:break-word}
+            .info b{display:block;font-size:7px;color:#555;margin-bottom:1px}
+            .title{font-size:11.5px;font-weight:900;margin:7px 0 3px}
             .table{width:100%;border-collapse:collapse;table-layout:fixed}
-            .table th,.table td{border:1px solid #999;padding:2px 3px;text-align:center;vertical-align:middle;line-height:1.15}
+            .table th,.table td{border:1px solid #999;padding:3px 4px;text-align:center;vertical-align:middle;line-height:1.15}
             .table th{background:#eee;font-weight:900}
             .table tr{break-inside:avoid;page-break-inside:avoid}
             .right{text-align:right!important;white-space:normal}
-            .measurements{font-size:7.1px}
+            .measurements{font-size:8.1px}
             .measurements th:nth-child(1),.measurements td:nth-child(1){width:3.5%}
             .measurements th:nth-child(2),.measurements td:nth-child(2){width:7.5%}
             .measurements th:nth-child(3),.measurements td:nth-child(3){width:8.5%}
@@ -176,20 +176,20 @@
             .measurements th:nth-child(6),.measurements td:nth-child(6){width:34%}
             .measurements th:nth-child(7),.measurements td:nth-child(7){width:32.5%}
             .edge-summary{display:grid;gap:1px}
-            .edge-summary-line{display:flex;align-items:center;gap:3px;min-height:11px;padding:0 2px;white-space:normal}
+            .edge-summary-line{display:flex;align-items:center;gap:3px;min-height:14px;padding:0 2px;white-space:normal}
             .edge-summary-line.is-custom{border:1px solid #b88b00;border-radius:3px;background:#fff8df;padding:1px 3px}
-            .edge-sides{font-size:6.3px;font-weight:800;color:#333}
-            .edge-summary-line b{font-size:6.9px;word-break:break-word}
-            .edge-summary-line em{margin-inline-start:auto;font-style:normal;font-size:5.8px;font-weight:900;color:#805b00;border:1px solid currentColor;border-radius:999px;padding:0 3px;white-space:nowrap}
-            .edge-none{color:#666;font-size:6.6px}
-            .notes-cell{font-size:6.9px;line-height:1.25}
+            .edge-sides{font-size:7px;font-weight:800;color:#333}
+            .edge-summary-line b{font-size:7.8px;word-break:break-word}
+            .edge-summary-line em{margin-inline-start:auto;font-style:normal;font-size:6.5px;font-weight:900;color:#805b00;border:1px solid currentColor;border-radius:999px;padding:0 3px;white-space:nowrap}
+            .edge-none{color:#666;font-size:7.2px}
+            .notes-cell{font-size:7.8px;line-height:1.25}
             .dimension{display:inline-flex;min-width:30px;flex-direction:column;align-items:center;gap:1px;line-height:1}
-            .dimension b{font-size:7.3px}
+            .dimension b{font-size:8.2px}
             .dimension-lines{display:flex;flex-direction:column;gap:1px;min-height:3px}
             .dimension-edge-line{display:block;width:22px;height:1px;background:#111}
             .dimension-lines-0{visibility:hidden}
-            .invoice{font-size:7.4px;break-inside:avoid;page-break-inside:avoid}
-            .invoice th,.invoice td{padding:2px 3px}
+            .invoice{font-size:8.4px;break-inside:avoid;page-break-inside:avoid}
+            .invoice th,.invoice td{padding:3px 4px}
             .invoice th:nth-child(1),.invoice td:nth-child(1){width:4%}
             .invoice th:nth-child(2),.invoice td:nth-child(2){width:48%}
             .invoice th:nth-child(3),.invoice td:nth-child(3){width:11%}
@@ -197,10 +197,10 @@
             .invoice th:nth-child(5),.invoice td:nth-child(5){width:13.5%}
             .invoice th:nth-child(6),.invoice td:nth-child(6){width:13.5%}
             .invoice-description{line-height:1.2}
-            .line-note{display:block;color:#555;font-size:6.2px;margin-top:1px;line-height:1.15}
-            .total{margin-top:4px;margin-right:auto;width:38%;border:1.5px solid #111;padding:4px 6px;display:flex;justify-content:space-between;font-size:10.5px;font-weight:900}
-            .order-note{margin-top:4px;border:1px solid #aaa;padding:3px 4px;font-size:6.8px;line-height:1.2}
-            .footer{margin-top:4px;border-top:1px solid #aaa;padding-top:3px;display:flex;justify-content:space-between;color:#666;font-size:6.3px}
+            .line-note{display:block;color:#555;font-size:7px;margin-top:1px;line-height:1.15}
+            .total{margin-top:4px;margin-right:auto;width:38%;border:1.5px solid #111;padding:4px 6px;display:flex;justify-content:space-between;font-size:12px;font-weight:900}
+            .order-note{margin-top:4px;border:1px solid #aaa;padding:4px 5px;font-size:7.5px;line-height:1.2}
+            .footer{margin-top:4px;border-top:1px solid #aaa;padding-top:3px;display:flex;justify-content:space-between;color:#666;font-size:7px}
         `;
     }
 
