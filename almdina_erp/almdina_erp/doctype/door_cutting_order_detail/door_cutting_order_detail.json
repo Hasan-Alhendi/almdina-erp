@@ -20,13 +20,27 @@
     "edge_long_left",
     "edge_width_top",
     "edge_width_bottom",
-    "edge_type",
-    "edge_thickness_mm",
-    "edge_rate_usd",
+    "edge_long_right_type_override",
+    "edge_long_left_type_override",
+    "edge_width_top_type_override",
+    "edge_width_bottom_type_override",
+    "edge_long_type",
+    "edge_width_type",
+    "edge_long_thickness_mm",
+    "edge_width_thickness_mm",
+    "edge_long_meters",
+    "edge_width_meters",
+    "edge_long_rate_usd",
+    "edge_width_rate_usd",
+    "edge_long_cost_usd",
+    "edge_width_cost_usd",
     "edge_cost_usd",
     "area_m2",
     "edge_meters",
     "notes",
+    "edge_type",
+    "edge_thickness_mm",
+    "edge_rate_usd",
     "special_shape_drawing_json",
     "special_shape_geometry_json",
     "special_shape_status",
@@ -41,273 +55,55 @@
     "special_shape_price_approved_on"
   ],
   "fields": [
-    {
-      "fieldname": "piece_no",
-      "fieldtype": "Int",
-      "in_list_view": 1,
-      "label": "Piece No",
-      "read_only": 1
-    },
-    {
-      "default": "Regular",
-      "fieldname": "piece_type",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "label": "Piece Type",
-      "options": "Regular\nClipped Corner\nSpecial",
-      "reqd": 1
-    },
-    {
-      "default": "Top Right",
-      "fieldname": "clipped_corner_position",
-      "fieldtype": "Select",
-      "hidden": 1,
-      "label": "Clipped Corner Position",
-      "options": "Top Right\nTop Left\nBottom Right\nBottom Left"
-    },
-    {
-      "fieldname": "clipped_corner_width_cm",
-      "fieldtype": "Float",
-      "hidden": 1,
-      "label": "Clipped Corner Width (CM)",
-      "non_negative": 1
-    },
-    {
-      "fieldname": "clipped_corner_length_cm",
-      "fieldtype": "Float",
-      "hidden": 1,
-      "label": "Clipped Corner Length (CM)",
-      "non_negative": 1
-    },
-    {
-      "description": "Finished width requested after edge banding.",
-      "fieldname": "width_cm",
-      "fieldtype": "Float",
-      "in_list_view": 1,
-      "label": "Finished Width (CM)",
-      "non_negative": 1,
-      "reqd": 1
-    },
-    {
-      "description": "Finished length requested after edge banding.",
-      "fieldname": "length_cm",
-      "fieldtype": "Float",
-      "in_list_view": 1,
-      "label": "Finished Length (CM)",
-      "non_negative": 1,
-      "reqd": 1
-    },
-    {
-      "description": "Raw cutting size after deducting edge thickness from every selected side.",
-      "fieldname": "cut_size_label",
-      "fieldtype": "Data",
-      "label": "Cut Size (CM)",
-      "read_only": 1
-    },
-    {
-      "fieldname": "cut_width_cm",
-      "fieldtype": "Float",
-      "label": "Cut Width (CM)",
-      "non_negative": 1,
-      "precision": "3",
-      "read_only": 1
-    },
-    {
-      "fieldname": "cut_length_cm",
-      "fieldtype": "Float",
-      "label": "Cut Length (CM)",
-      "non_negative": 1,
-      "precision": "3",
-      "read_only": 1
-    },
-    {
-      "default": "1",
-      "fieldname": "qty",
-      "fieldtype": "Int",
-      "in_list_view": 1,
-      "label": "Quantity",
-      "non_negative": 1,
-      "reqd": 1
-    },
-    {
-      "default": "0",
-      "fieldname": "allow_rotation",
-      "fieldtype": "Check",
-      "in_list_view": 1,
-      "label": "Allow Rotation"
-    },
-    {
-      "default": "0",
-      "fieldname": "edge_long_right",
-      "fieldtype": "Check",
-      "in_list_view": 1,
-      "label": "Edge Long Right"
-    },
-    {
-      "default": "0",
-      "fieldname": "edge_long_left",
-      "fieldtype": "Check",
-      "in_list_view": 1,
-      "label": "Edge Long Left"
-    },
-    {
-      "default": "0",
-      "fieldname": "edge_width_top",
-      "fieldtype": "Check",
-      "in_list_view": 1,
-      "label": "Edge Width Top"
-    },
-    {
-      "default": "0",
-      "fieldname": "edge_width_bottom",
-      "fieldtype": "Check",
-      "in_list_view": 1,
-      "label": "Edge Width Bottom"
-    },
-    {
-      "fieldname": "edge_type",
-      "fieldtype": "Link",
-      "in_list_view": 1,
-      "label": "Edge Type",
-      "options": "Edge Banding Type"
-    },
-    {
-      "fieldname": "edge_thickness_mm",
-      "fieldtype": "Float",
-      "label": "Applied Edge Thickness (MM)",
-      "non_negative": 1,
-      "precision": "3",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_rate_usd",
-      "fieldtype": "Currency",
-      "label": "Edge Rate USD",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_cost_usd",
-      "fieldtype": "Currency",
-      "label": "Edge Cost USD",
-      "read_only": 1
-    },
-    {
-      "fieldname": "area_m2",
-      "fieldtype": "Float",
-      "label": "Area M2",
-      "precision": "3",
-      "read_only": 1
-    },
-    {
-      "fieldname": "edge_meters",
-      "fieldtype": "Float",
-      "label": "Edge Meters",
-      "precision": "3",
-      "read_only": 1
-    },
-    {
-      "fieldname": "notes",
-      "fieldtype": "Small Text",
-      "label": "Notes"
-    },
-    {
-      "fieldname": "special_shape_drawing_json",
-      "fieldtype": "Long Text",
-      "hidden": 1,
-      "label": "Special Shape Documentation"
-    },
-    {
-      "fieldname": "special_shape_geometry_json",
-      "fieldtype": "Long Text",
-      "hidden": 1,
-      "label": "Special Shape Exact Geometry"
-    },
-    {
-      "default": "Not Required",
-      "fieldname": "special_shape_status",
-      "fieldtype": "Select",
-      "hidden": 1,
-      "label": "Special Shape Documentation Status",
-      "options": "Not Required\nNeeds Documentation\nDocumented",
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_drawing_updated_by",
-      "fieldtype": "Link",
-      "hidden": 1,
-      "label": "Special Shape Drawing Updated By",
-      "options": "User",
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_drawing_updated_on",
-      "fieldtype": "Datetime",
-      "hidden": 1,
-      "label": "Special Shape Drawing Updated On",
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_estimated_unit_price_usd",
-      "fieldtype": "Currency",
-      "hidden": 1,
-      "label": "Estimated Special Unit Price USD",
-      "non_negative": 1,
-      "permlevel": 1,
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_custom_unit_price_usd",
-      "fieldtype": "Currency",
-      "hidden": 1,
-      "label": "Approved Special Unit Price USD",
-      "non_negative": 1,
-      "permlevel": 1,
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_final_unit_price_usd",
-      "fieldtype": "Currency",
-      "hidden": 1,
-      "label": "Final Special Unit Price USD",
-      "non_negative": 1,
-      "permlevel": 1,
-      "read_only": 1
-    },
-    {
-      "default": "Not Applicable",
-      "fieldname": "special_shape_price_status",
-      "fieldtype": "Select",
-      "hidden": 1,
-      "label": "Special Shape Price Status",
-      "options": "Not Applicable\nEstimated\nApproved",
-      "permlevel": 1,
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_price_note",
-      "fieldtype": "Small Text",
-      "hidden": 1,
-      "label": "Special Shape Price Note",
-      "permlevel": 1,
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_price_approved_by",
-      "fieldtype": "Link",
-      "hidden": 1,
-      "label": "Special Shape Price Approved By",
-      "options": "User",
-      "permlevel": 1,
-      "read_only": 1
-    },
-    {
-      "fieldname": "special_shape_price_approved_on",
-      "fieldtype": "Datetime",
-      "hidden": 1,
-      "label": "Special Shape Price Approved On",
-      "permlevel": 1,
-      "read_only": 1
-    }
+    {"fieldname":"piece_no","fieldtype":"Int","in_list_view":1,"label":"Piece No","read_only":1},
+    {"default":"Regular","fieldname":"piece_type","fieldtype":"Select","in_list_view":1,"label":"Piece Type","options":"Regular\nClipped Corner\nSpecial","reqd":1},
+    {"default":"Top Right","fieldname":"clipped_corner_position","fieldtype":"Select","hidden":1,"label":"Clipped Corner Position","options":"Top Right\nTop Left\nBottom Right\nBottom Left"},
+    {"fieldname":"clipped_corner_width_cm","fieldtype":"Float","hidden":1,"label":"Clipped Corner Width (CM)","non_negative":1},
+    {"fieldname":"clipped_corner_length_cm","fieldtype":"Float","hidden":1,"label":"Clipped Corner Length (CM)","non_negative":1},
+    {"description":"Finished width requested after edge banding.","fieldname":"width_cm","fieldtype":"Float","in_list_view":1,"label":"Finished Width (CM)","non_negative":1,"reqd":1},
+    {"description":"Finished length requested after edge banding.","fieldname":"length_cm","fieldtype":"Float","in_list_view":1,"label":"Finished Length (CM)","non_negative":1,"reqd":1},
+    {"description":"Raw cutting size after deducting the effective profile of every selected side.","fieldname":"cut_size_label","fieldtype":"Data","label":"Cut Size (CM)","read_only":1},
+    {"fieldname":"cut_width_cm","fieldtype":"Float","label":"Cut Width (CM)","non_negative":1,"precision":"3","read_only":1},
+    {"fieldname":"cut_length_cm","fieldtype":"Float","label":"Cut Length (CM)","non_negative":1,"precision":"3","read_only":1},
+    {"default":"1","fieldname":"qty","fieldtype":"Int","in_list_view":1,"label":"Quantity","non_negative":1,"reqd":1},
+    {"default":"0","fieldname":"allow_rotation","fieldtype":"Check","in_list_view":1,"label":"Allow Rotation"},
+    {"default":"0","fieldname":"edge_long_right","fieldtype":"Check","in_list_view":1,"label":"Edge Long Right"},
+    {"default":"0","fieldname":"edge_long_left","fieldtype":"Check","in_list_view":1,"label":"Edge Long Left"},
+    {"default":"0","fieldname":"edge_width_top","fieldtype":"Check","in_list_view":1,"label":"Edge Width Top"},
+    {"default":"0","fieldname":"edge_width_bottom","fieldtype":"Check","in_list_view":1,"label":"Edge Width Bottom"},
+    {"description":"Optional override for this side. Empty means use the order default.","fieldname":"edge_long_right_type_override","fieldtype":"Link","hidden":1,"label":"Right Long Edge Override","options":"Edge Banding Type"},
+    {"description":"Optional override for this side. Empty means use the order default.","fieldname":"edge_long_left_type_override","fieldtype":"Link","hidden":1,"label":"Left Long Edge Override","options":"Edge Banding Type"},
+    {"description":"Optional override for this side. Empty means use the order default.","fieldname":"edge_width_top_type_override","fieldtype":"Link","hidden":1,"label":"Top Width Edge Override","options":"Edge Banding Type"},
+    {"description":"Optional override for this side. Empty means use the order default.","fieldname":"edge_width_bottom_type_override","fieldtype":"Link","hidden":1,"label":"Bottom Width Edge Override","options":"Edge Banding Type"},
+    {"description":"Compatibility summary when selected long sides use the same effective profile.","fieldname":"edge_long_type","fieldtype":"Link","hidden":1,"label":"Long Edge Type","options":"Edge Banding Type","read_only":1},
+    {"description":"Compatibility summary when selected width sides use the same effective profile.","fieldname":"edge_width_type","fieldtype":"Link","hidden":1,"label":"Width Edge Type","options":"Edge Banding Type","read_only":1},
+    {"fieldname":"edge_long_thickness_mm","fieldtype":"Float","hidden":1,"label":"Long Edge Thickness (MM)","non_negative":1,"precision":"3","read_only":1},
+    {"fieldname":"edge_width_thickness_mm","fieldtype":"Float","hidden":1,"label":"Width Edge Thickness (MM)","non_negative":1,"precision":"3","read_only":1},
+    {"fieldname":"edge_long_meters","fieldtype":"Float","hidden":1,"label":"Long Edge Meters","precision":"3","read_only":1},
+    {"fieldname":"edge_width_meters","fieldtype":"Float","hidden":1,"label":"Width Edge Meters","precision":"3","read_only":1},
+    {"fieldname":"edge_long_rate_usd","fieldtype":"Currency","hidden":1,"label":"Long Edge Rate USD","read_only":1},
+    {"fieldname":"edge_width_rate_usd","fieldtype":"Currency","hidden":1,"label":"Width Edge Rate USD","read_only":1},
+    {"fieldname":"edge_long_cost_usd","fieldtype":"Currency","hidden":1,"label":"Long Edge Cost USD","read_only":1},
+    {"fieldname":"edge_width_cost_usd","fieldtype":"Currency","hidden":1,"label":"Width Edge Cost USD","read_only":1},
+    {"fieldname":"edge_cost_usd","fieldtype":"Currency","label":"Edge Cost USD","read_only":1},
+    {"fieldname":"area_m2","fieldtype":"Float","label":"Area M2","precision":"3","read_only":1},
+    {"fieldname":"edge_meters","fieldtype":"Float","label":"Edge Meters","precision":"3","read_only":1},
+    {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"},
+    {"description":"Compatibility summary when every selected side uses one effective profile.","fieldname":"edge_type","fieldtype":"Link","hidden":1,"label":"Edge Type","options":"Edge Banding Type","read_only":1},
+    {"fieldname":"edge_thickness_mm","fieldtype":"Float","hidden":1,"label":"Applied Edge Thickness (MM)","non_negative":1,"precision":"3","read_only":1},
+    {"fieldname":"edge_rate_usd","fieldtype":"Currency","hidden":1,"label":"Edge Rate USD","read_only":1},
+    {"fieldname":"special_shape_drawing_json","fieldtype":"Long Text","hidden":1,"label":"Special Shape Documentation"},
+    {"fieldname":"special_shape_geometry_json","fieldtype":"Long Text","hidden":1,"label":"Special Shape Exact Geometry"},
+    {"default":"Not Required","fieldname":"special_shape_status","fieldtype":"Select","hidden":1,"label":"Special Shape Documentation Status","options":"Not Required\nNeeds Documentation\nDocumented","read_only":1},
+    {"fieldname":"special_shape_drawing_updated_by","fieldtype":"Link","hidden":1,"label":"Special Shape Drawing Updated By","options":"User","read_only":1},
+    {"fieldname":"special_shape_drawing_updated_on","fieldtype":"Datetime","hidden":1,"label":"Special Shape Drawing Updated On","read_only":1},
+    {"fieldname":"special_shape_estimated_unit_price_usd","fieldtype":"Currency","hidden":1,"label":"Estimated Special Unit Price USD","non_negative":1,"permlevel":1,"read_only":1},
+    {"fieldname":"special_shape_custom_unit_price_usd","fieldtype":"Currency","hidden":1,"label":"Approved Special Unit Price USD","non_negative":1,"permlevel":1,"read_only":1},
+    {"fieldname":"special_shape_final_unit_price_usd","fieldtype":"Currency","hidden":1,"label":"Final Special Unit Price USD","non_negative":1,"permlevel":1,"read_only":1},
+    {"default":"Not Applicable","fieldname":"special_shape_price_status","fieldtype":"Select","hidden":1,"label":"Special Shape Price Status","options":"Not Applicable\nEstimated\nApproved","permlevel":1,"read_only":1},
+    {"fieldname":"special_shape_price_note","fieldtype":"Small Text","hidden":1,"label":"Special Shape Price Note","permlevel":1,"read_only":1},
+    {"fieldname":"special_shape_price_approved_by","fieldtype":"Link","hidden":1,"label":"Special Shape Price Approved By","options":"User","permlevel":1,"read_only":1},
+    {"fieldname":"special_shape_price_approved_on","fieldtype":"Datetime","hidden":1,"label":"Special Shape Price Approved On","permlevel":1,"read_only":1}
   ],
   "istable": 1,
   "links": [],

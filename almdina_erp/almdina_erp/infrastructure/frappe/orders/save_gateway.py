@@ -8,6 +8,7 @@ from .costing_adapter import FrappeOrderCostingAdapter
 from .cut_dimension_adapter import FrappeOrderCutDimensionAdapter
 from .cut_dimension_plan_adapter import FrappeCutDimensionPlanAdapter
 from .document_access import FrappeOrderDocumentAccess
+from .edge_profile_repository import FrappeEdgeProfileRepository
 from .piece_policy_adapter import FrappeOrderPiecePolicyAdapter
 
 
@@ -17,14 +18,19 @@ class FrappeDoorCuttingOrderSaveGateway:
     def __init__(self, document: Any) -> None:
         self.document = document
         self.access = FrappeOrderDocumentAccess(document)
+        self.edge_profiles = FrappeEdgeProfileRepository(document)
         self.piece_policy = FrappeOrderPiecePolicyAdapter(
             document,
             self.access,
         )
-        self.cut_dimensions = FrappeOrderCutDimensionAdapter(document)
+        self.cut_dimensions = FrappeOrderCutDimensionAdapter(
+            document,
+            self.edge_profiles,
+        )
         self.costing = FrappeOrderCostingAdapter(
             document,
             self.access,
+            self.edge_profiles,
             engine_version=ENGINE_VERSION,
         )
         self.plan = FrappeCutDimensionPlanAdapter(

@@ -18,14 +18,37 @@ class PieceCostInput:
     edge_long_left: int
     edge_width_top: int
     edge_width_bottom: int
-    edge_type: str = ""
+    edge_long_right_type: str = ""
+    edge_long_left_type: str = ""
+    edge_width_top_type: str = ""
+    edge_width_bottom_type: str = ""
+    # Transitional axis values support callers that have not adopted side overrides.
+    edge_long_type: str = ""
+    edge_width_type: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class PieceCostResult:
     area_m2: float
+    edge_long_right_meters: float
+    edge_long_left_meters: float
+    edge_width_top_meters: float
+    edge_width_bottom_meters: float
+    edge_long_meters: float
+    edge_width_meters: float
     edge_meters: float
-    edge_rate_usd: float
+    edge_long_right_rate_usd: float
+    edge_long_left_rate_usd: float
+    edge_width_top_rate_usd: float
+    edge_width_bottom_rate_usd: float
+    edge_long_rate_usd: float
+    edge_width_rate_usd: float
+    edge_long_right_cost_usd: float
+    edge_long_left_cost_usd: float
+    edge_width_top_cost_usd: float
+    edge_width_bottom_cost_usd: float
+    edge_long_cost_usd: float
+    edge_width_cost_usd: float
     edge_cost_usd: float
 
 
@@ -115,20 +138,79 @@ def calculate_piece_costs(
         width_cm = _finite(piece.width_cm)
         length_cm = _finite(piece.length_cm)
         qty = int(piece.qty)
-        long_edges = int(piece.edge_long_right) + int(piece.edge_long_left)
-        width_edges = int(piece.edge_width_top) + int(piece.edge_width_bottom)
-
         area_m2 = (width_cm * length_cm * qty) / 10000
-        edge_meters = (((length_cm * long_edges) + (width_cm * width_edges)) * qty) / 100
-        effective_edge_type = piece.edge_type or default_edge_type
-        edge_rate = _finite(edge_rates.get(effective_edge_type, 0.0)) if effective_edge_type else 0.0
-        edge_cost = edge_meters * edge_rate
+
+        side_specs = {
+            "long_right": (
+                bool(piece.edge_long_right),
+                length_cm,
+                piece.edge_long_right_type or piece.edge_long_type,
+            ),
+            "long_left": (
+                bool(piece.edge_long_left),
+                length_cm,
+                piece.edge_long_left_type or piece.edge_long_type,
+            ),
+            "width_top": (
+                bool(piece.edge_width_top),
+                width_cm,
+                piece.edge_width_top_type or piece.edge_width_type,
+            ),
+            "width_bottom": (
+                bool(piece.edge_width_bottom),
+                width_cm,
+                piece.edge_width_bottom_type or piece.edge_width_type,
+            ),
+        }
+        side_values: dict[str, tuple[float, float, float]] = {}
+        for side, (selected, dimension_cm, requested_type) in side_specs.items():
+            if not selected:
+                side_values[side] = (0.0, 0.0, 0.0)
+                continue
+            edge_type = str(requested_type or default_edge_type or "").strip()
+            meters = dimension_cm * qty / 100
+            rate = _finite(edge_rates.get(edge_type, 0.0)) if edge_type else 0.0
+            side_values[side] = (meters, rate, meters * rate)
+
+        right_meters, right_rate, right_cost = side_values["long_right"]
+        left_meters, left_rate, left_cost = side_values["long_left"]
+        top_meters, top_rate, top_cost = side_values["width_top"]
+        bottom_meters, bottom_rate, bottom_cost = side_values["width_bottom"]
+        long_meters = right_meters + left_meters
+        width_meters = top_meters + bottom_meters
+        edge_meters = long_meters + width_meters
+        long_cost = right_cost + left_cost
+        width_cost = top_cost + bottom_cost
+        edge_cost = long_cost + width_cost
 
         results.append(
             PieceCostResult(
                 area_m2=round_value(area_m2, 3),
+                edge_long_right_meters=round_value(right_meters, 3),
+                edge_long_left_meters=round_value(left_meters, 3),
+                edge_width_top_meters=round_value(top_meters, 3),
+                edge_width_bottom_meters=round_value(bottom_meters, 3),
+                edge_long_meters=round_value(long_meters, 3),
+                edge_width_meters=round_value(width_meters, 3),
                 edge_meters=round_value(edge_meters, 3),
-                edge_rate_usd=edge_rate,
+                edge_long_right_rate_usd=right_rate,
+                edge_long_left_rate_usd=left_rate,
+                edge_width_top_rate_usd=top_rate,
+                edge_width_bottom_rate_usd=bottom_rate,
+                edge_long_rate_usd=_common_active_rate(
+                    (right_meters, right_rate),
+                    (left_meters, left_rate),
+                ),
+                edge_width_rate_usd=_common_active_rate(
+                    (top_meters, top_rate),
+                    (bottom_meters, bottom_rate),
+                ),
+                edge_long_right_cost_usd=round_value(right_cost, 3),
+                edge_long_left_cost_usd=round_value(left_cost, 3),
+                edge_width_top_cost_usd=round_value(top_cost, 3),
+                edge_width_bottom_cost_usd=round_value(bottom_cost, 3),
+                edge_long_cost_usd=round_value(long_cost, 3),
+                edge_width_cost_usd=round_value(width_cost, 3),
                 edge_cost_usd=round_value(edge_cost, 3),
             )
         )
@@ -142,6 +224,11 @@ def calculate_piece_costs(
         total_edge_meters=round_value(total_edge_meters, 3),
         total_edge_cost_usd=round_value(total_edge_cost, 3),
     )
+
+
+def _common_active_rate(*values: tuple[float, float]) -> float:
+    rates = {rate for meters, rate in values if meters > 0}
+    return rates.pop() if len(rates) == 1 else 0.0
 
 
 def calculate_order_costs(

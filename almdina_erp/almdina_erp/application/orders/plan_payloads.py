@@ -58,6 +58,16 @@ class PlanMetadataPiece:
     notes: str
     drawing_token: str
     special_shape_status: str
+    edge_long_type: str = ""
+    edge_width_type: str = ""
+    edge_long_rate_usd: float = 0
+    edge_width_rate_usd: float = 0
+    edge_long_cost_usd: float = 0
+    edge_width_cost_usd: float = 0
+    edge_long_right_type: str = ""
+    edge_long_left_type: str = ""
+    edge_width_top_type: str = ""
+    edge_width_bottom_type: str = ""
 
 
 def build_plan_input_payload(
@@ -122,8 +132,40 @@ def build_plan_metadata_payload(
                 "edge_long_left": piece.edge_long_left,
                 "edge_width_top": piece.edge_width_top,
                 "edge_width_bottom": piece.edge_width_bottom,
-                "edge_type": piece.edge_type,
-                "edge_rate_usd": piece.edge_rate_usd,
+                "edge_long_right_type": (
+                    piece.edge_long_right_type
+                    or piece.edge_long_type
+                    or piece.edge_type
+                ),
+                "edge_long_left_type": (
+                    piece.edge_long_left_type
+                    or piece.edge_long_type
+                    or piece.edge_type
+                ),
+                "edge_width_top_type": (
+                    piece.edge_width_top_type
+                    or piece.edge_width_type
+                    or piece.edge_type
+                ),
+                "edge_width_bottom_type": (
+                    piece.edge_width_bottom_type
+                    or piece.edge_width_type
+                    or piece.edge_type
+                ),
+                "edge_long_type": piece.edge_long_type or piece.edge_type,
+                "edge_width_type": piece.edge_width_type or piece.edge_type,
+                "edge_long_rate_usd": (
+                    piece.edge_long_rate_usd
+                    if piece.edge_long_type
+                    else piece.edge_rate_usd
+                ),
+                "edge_width_rate_usd": (
+                    piece.edge_width_rate_usd
+                    if piece.edge_width_type
+                    else piece.edge_rate_usd
+                ),
+                "edge_long_cost_usd": piece.edge_long_cost_usd,
+                "edge_width_cost_usd": piece.edge_width_cost_usd,
                 "edge_cost_usd": piece.edge_cost_usd,
                 "area_m2": piece.area_m2,
                 "notes": piece.notes,

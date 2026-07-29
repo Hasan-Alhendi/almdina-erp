@@ -45,6 +45,11 @@
             frappe.msgprint("لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج. يجب الحفاظ على الخطة المعتمدة كنسخة تاريخية ثابتة.");
             return;
         }
+
+        const boardUX = window.AlmdinaBoardTextUX;
+        if (boardUX && typeof boardUX.syncInputs === "function") {
+            await boardUX.syncInputs(frm);
+        }
         if (!validatePlanInputs(frm) || frm._dcoTextBoardPlanBusy) return;
 
         frm._dcoTextBoardPlanBusy = true;

@@ -27,6 +27,9 @@ after_migrate = "almdina_erp.install.after_migrate"
 # sites/assets symlink being present in the frontend container.
 app_include_js = [
     "/assets/almdina_erp/js/arabic_operator_ui.js",
+    # Protect every Desk form from asynchronous refreshes overwriting the active
+    # input while an operator is typing or composing Arabic text.
+    "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/shop_floor_desk.js",
     "/assets/almdina_erp/js/order_entry_desk.js",
     # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
@@ -42,6 +45,9 @@ doctype_js = {
         "public/js/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_print.js",
+        # Decorate the canonical renderer without moving drawing logic into the
+        # document presenter. Printed note text stays readable and text-only.
+        "public/js/door_cutting_order_shape_print_readability.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
@@ -49,11 +55,30 @@ doctype_js = {
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
+        "public/js/door_cutting_order_special_shape_note_ux.js",
+        # Loaded after the note UX so no later prompt reassignment can restore
+        # the Frappe dialog while the note tool is active.
+        "public/js/door_cutting_order_special_shape_note_guard.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
+        "public/js/door_cutting_order_multi_edge_ux.js",
+        "public/js/door_cutting_order_edge_profile_controls_ux.js",
+        # Capture clicks before the legacy toggle handler so a double-click opens
+        # the compact profile popover without toggling the side twice.
+        "public/js/door_cutting_order_edge_profile_double_click_guard.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
+        # Typography is a separate presentation policy shared by measurements
+        # and customer invoices; the presenter remains focused on composition.
+        "public/js/door_cutting_order_document_print_theme.js",
+        "public/js/door_cutting_order_document_print_presenter.js",
+        # Cost-screen presentation and edge invoice grouping load after the base
+        # costing presenter and do not own any print button.
+        "public/js/door_cutting_order_multi_edge_documents_ux.js",
+        # Final presentation-density policy removes duplicated invoice-header
+        # figures and renders edge exceptions as compact text in screen and print.
+        "public/js/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order_save_render_performance_ux.js",
@@ -69,6 +94,9 @@ doctype_js = {
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
+        # Load last so obsolete live-preview handlers registered by the canonical
+        # DocType script are removed after every feature module has registered.
+        "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Stage": "public/js/production_stage.js",
