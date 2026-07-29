@@ -41,22 +41,31 @@
         return row.edge_type || frm.doc.default_edge_type || "";
     }
 
-    function loadEdgeColors(frm) {
+    function documentContext() {
+        return window.AlmdinaDocumentContext;
+    }
+
+    function loadEdgeColors(frm, identity) {
+        const context = documentContext();
         const types = [...new Set((frm.doc.pieces || []).map(row => effectiveEdgeType(frm, row)).filter(Boolean))];
         if (frm.doc.default_edge_type) types.push(frm.doc.default_edge_type);
         const uniqueTypes = [...new Set(types)];
         frm._dco_edge_color_map = frm._dco_edge_color_map || {};
-        const missing = uniqueTypes.filter(type => !(type in frm._dco_edge_color_map));
+        const colorMap = frm._dco_edge_color_map;
+        const missing = uniqueTypes.filter(type => !(type in colorMap));
         if (!missing.length) return Promise.resolve();
 
         return Promise.all(missing.map(type =>
             frappe.db.get_value("Edge Banding Type", type, "edge_color")
                 .then(r => {
-                    frm._dco_edge_color_map[type] = (r && r.message && r.message.edge_color) || "";
+                    if (!context.isCurrent(frm, identity) || frm._dco_edge_color_map !== colorMap) return;
+                    colorMap[type] = (r && r.message && r.message.edge_color) || "";
                 })
                 .catch(error => {
                     console.warn(`Could not load edge color for ${type}`, error);
-                    frm._dco_edge_color_map[type] = "";
+                    if (context.isCurrent(frm, identity) && frm._dco_edge_color_map === colorMap) {
+                        colorMap[type] = "";
+                    }
                 })
         ));
     }
@@ -635,7 +644,14 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
     }
 
     function scheduleRender(frm) {
-        loadEdgeColors(frm).finally(() => requestAnimationFrame(() => render(frm)));
+        const context = documentContext();
+        const identity = context.capture(frm);
+        loadEdgeColors(frm, identity).finally(() => {
+            if (!context.isCurrent(frm, identity)) return;
+            requestAnimationFrame(() => {
+                if (context.isCurrent(frm, identity)) render(frm);
+            });
+        });
     }
 
     frappe.ui.form.on("Door Cutting Order", {
