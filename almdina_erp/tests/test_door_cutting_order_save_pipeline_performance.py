@@ -78,7 +78,7 @@ def test_unchanged_drawings_are_not_revalidated_point_by_point():
     assert "if current_raw and drawing_changed" in block
     assert "validate_special_shape_drawing(current_raw)" in block
     assert "elif current_raw" in block
-    assert "old_row.special_shape_status == \"Documented\"" in block
+    assert 'old_row.special_shape_status == "Documented"' in block
 
 
 def test_old_order_data_is_loaded_with_targeted_queries_not_whole_doc():
@@ -136,7 +136,9 @@ def test_post_save_dom_layer_reuses_unchanged_measurement_table():
     assert "syncExistingTable(frm, root)" in source
     assert "return originalHtml.apply(this, arguments)" in source
     assert "dco-fast-entry-shell" in source
-    assert 'window.AlmdinaOrderCostUX.render(frm)' in source
+    assert "wrapper._dcoFastHtmlGuardForm = frm" in source
+    assert "root._dcoDeferredRenderForm = frm" in source
+    assert 'window.AlmdinaOrderCostUX.render(currentFrm)' in source
 
 
 def test_post_save_dom_layer_loads_after_table_and_invoice_renderers():

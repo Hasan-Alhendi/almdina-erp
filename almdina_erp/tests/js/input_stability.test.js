@@ -41,11 +41,16 @@ const input = {
     disabled: false,
     readOnly: false,
     isContentEditable: false,
+    dataset: {},
     parentElement: boardControl,
 };
 const body = { tagName: "BODY", parentElement: null };
 
-function Form() {
+function Form(name = "DCO-2026-00001") {
+    this.doc = {
+        doctype: "Door Cutting Order",
+        name,
+    };
     this.wrapper = wrapper;
     this.fields_dict = {
         board_description: {
@@ -128,15 +133,27 @@ assert.deepEqual(
 const form = new Form();
 fakeWindow.cur_frm = form;
 fakeDocument.activeElement = input;
+documentListeners.get("focusin")({ target: input });
 form.refresh_field("board_description");
 assert.deepEqual(originalRefreshCalls, []);
 assert.equal(form._almdinaDeferredFieldRefreshes.has("board_description"), true);
+assert.equal(input.dataset.almdinaFormIdentity, "Door Cutting Order::DCO-2026-00001");
 
 // Once focus leaves the field, the queued refresh is safe to execute.
 fakeDocument.activeElement = body;
 wrapperListeners.get("focusout")({ target: input });
 assert.deepEqual(originalRefreshCalls, ["board_description"]);
 assert.equal(form._almdinaDeferredFieldRefreshes.size, 0);
+
+// The same focused DOM node belongs to the old order after route navigation.
+// It must not block the new order's refresh or leave its old values visible.
+fakeDocument.activeElement = input;
+documentListeners.get("focusin")({ target: input });
+form.doc.name = "DCO-2026-00002";
+form.refresh_field("board_description");
+assert.deepEqual(originalRefreshCalls, ["board_description", "board_description"]);
+assert.equal(form._almdinaDeferredFieldRefreshes.size, 0);
+assert.equal(form._almdinaInputStabilityIdentity, "Door Cutting Order::DCO-2026-00002");
 
 // A server preview that started before newer typing must never call the legacy
 // callback that writes old input values back into the form.
@@ -154,9 +171,10 @@ capturedCallOptions.callback({ message: { board_description: "old" } });
 assert.equal(callbackApplied, false);
 
 // Even without a newer generation, a response is not applied while the operator
-// is actively editing a control inside the form.
+// is actively editing a control inside the same order.
 callbackApplied = false;
 fakeDocument.activeElement = input;
+documentListeners.get("focusin")({ target: input });
 fakeFrappe.call({
     method: "almdina_erp.almdina_erp.api.preview_door_cutting_order",
     callback() {
@@ -166,7 +184,22 @@ fakeFrappe.call({
 capturedCallOptions.callback({ message: { board_description: "old" } });
 assert.equal(callbackApplied, false);
 
+// A response captured for one order is discarded after navigating to another,
+// even when no new keystroke occurred.
+callbackApplied = false;
+fakeDocument.activeElement = body;
+fakeFrappe.call({
+    method: "almdina_erp.almdina_erp.api.preview_door_cutting_order",
+    callback() {
+        callbackApplied = true;
+    },
+});
+form.doc.name = "DCO-2026-00003";
+capturedCallOptions.callback({ message: { board_description: "wrong order" } });
+assert.equal(callbackApplied, false);
+
 // A current response is still allowed when no field is being edited.
+fakeWindow.AlmdinaInputStability.synchronizeFormIdentity(form);
 callbackApplied = false;
 fakeDocument.activeElement = body;
 fakeFrappe.call({
