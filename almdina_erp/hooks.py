@@ -76,6 +76,9 @@ doctype_js = {
         # Cost-screen presentation and edge invoice grouping load after the base
         # costing presenter and do not own any print button.
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
+        # Final presentation-density policy removes duplicated invoice-header
+        # figures and renders edge exceptions as compact text in screen and print.
+        "public/js/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order_save_render_performance_ux.js",
