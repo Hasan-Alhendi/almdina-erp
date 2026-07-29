@@ -221,6 +221,21 @@ class TestProductScopeContract(unittest.TestCase):
             source,
         )
 
+    def test_edge_banding_seed_has_no_inventory_defaults(self) -> None:
+        payload = json.loads(
+            (
+                ROOT
+                / "almdina_erp"
+                / "doctype"
+                / "edge_banding_type"
+                / "edge_banding_type.json"
+            ).read_text(encoding="utf-8")
+        )
+        fields = {row["fieldname"]: row for row in payload["fields"]}
+        for fieldname in ("consumption_uom", "item_code", "stock_uom"):
+            self.assertEqual(fields[fieldname].get("hidden"), 1)
+            self.assertNotIn("default", fields[fieldname])
+
     def test_stock_settings_are_hidden_and_forced_off(self) -> None:
         payload = json.loads(
             (
