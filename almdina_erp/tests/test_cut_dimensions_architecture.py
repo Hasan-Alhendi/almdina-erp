@@ -238,7 +238,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("dco-col-edge-bulk", controls_source)
         self.assertIn("ensureBulkHeader", controls_source)
         self.assertIn('edgeTypeHeader.insertAdjacentElement("afterend", header)', controls_source)
-        self.assertIn("tbody td{vertical-align:middle!important}", controls_source)
+        self.assertIn("tbody td{vertical-align:middle!important;", controls_source)
         self.assertIn('root.addEventListener("dblclick"', controls_source)
         self.assertIn("openSidePopover", controls_source)
         self.assertIn("dco-edge-profile-popover", controls_source)
