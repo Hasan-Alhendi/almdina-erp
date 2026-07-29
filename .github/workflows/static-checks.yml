@@ -144,3 +144,6 @@ jobs:
             count=$((count + 1))
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
+
+      - name: Run input stability browser simulation
+        run: node almdina_erp/tests/js/input_stability.test.js
