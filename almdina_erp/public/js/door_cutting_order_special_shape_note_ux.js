@@ -77,9 +77,13 @@
         }) || null;
     }
 
-    function selectedNoteId(session) {
+    function selectedElementId(session) {
         const selected = session.svg && session.svg.querySelector(".dco-sketch-element.is-selected[data-element-id]");
-        const id = selected && selected.getAttribute("data-element-id");
+        return selected ? String(selected.getAttribute("data-element-id") || "") : "";
+    }
+
+    function selectedNoteId(session) {
+        const id = selectedElementId(session);
         return id && session.notes.has(id) ? id : "";
     }
 
@@ -232,10 +236,12 @@
             if (!commit || !text) return;
             callback(text);
             window.requestAnimationFrame(() => {
-                const id = existingId || selectedNoteId(session);
+                const id = existingId || selectedElementId(session);
                 if (!id) return;
                 const previous = session.notes.get(id) || {};
-                const selectedText = session.svg.querySelector(`[data-element-id="${CSS.escape(id)}"] text`);
+                const group = [...session.svg.querySelectorAll("[data-element-id]")]
+                    .find(node => String(node.getAttribute("data-element-id") || "") === id);
+                const selectedText = group && group.querySelector("text");
                 const color = selectedText ? selectedText.getAttribute("fill") : previous.color;
                 session.notes.set(id, {
                     text,
