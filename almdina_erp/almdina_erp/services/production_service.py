@@ -6,6 +6,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime, time_diff_in_seconds
 
+from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    SHOP_FLOOR_ORDER_STATUSES,
+    StageState,
+    can_transition_stage,
+    derive_order_status,
+    transition_stage,
+)
 from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 
 
@@ -106,10 +113,17 @@ def ensure_default_stages(order_name: str, approved_by: str | None = None) -> li
 
 
 def _require_stage_role(stage: Any) -> None:
-    if stage.stage_type == "Cutting":
-        require_any_role("Cutting Operator", "Production Manager")
-    elif stage.stage_type == "Edge Banding":
-        require_any_role("Edge Operator", "Production Manager")
+    shop_floor_roles = {
+        "Sharyoun": ("عامل شريون", "Production Manager"),
+        "Drawing": ("عامل رسم", "Production Manager"),
+        "CNC": ("عامل CNC", "Production Manager"),
+        "Sanding": ("عامل تقشيط", "Production Manager"),
+        "Cutting": ("Cutting Operator", "Production Manager"),
+        "Edge Banding": ("Edge Operator", "Production Manager"),
+    }
+    roles = shop_floor_roles.get(stage.stage_type)
+    if roles:
+        require_any_role(*roles)
     else:
         require_any_role("Production Manager")
 
@@ -169,33 +183,53 @@ def sync_order_status(order_name: str) -> str:
         filters={"door_cutting_order": order_name, "status": ["not in", ["Completed", "Cancelled"]]},
     ) if frappe.db.exists("DocType", "Replacement Piece") else 0
     if open_replacements:
-        status = "Replacement Required"
+        status = derive_order_status(
+            current_status=None,
+            production_path=None,
+            current_stage=None,
+            stages=(),
+            has_open_replacements=True,
+        )
         frappe.db.set_value("Door Cutting Order", order_name, "status", status, update_modified=True)
         return status
 
+    current = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        ["status", "production_path", "current_production_stage"],
+        as_dict=True,
+    )
+    if current and current.status in {"Ready for Delivery", "Delivered"}:
+        return current.status
+
+    # Shop-floor path owns status once dispatched.
+    if current and current.production_path:
+        if current.current_production_stage:
+            stage = frappe.db.get_value(
+                "Production Stage",
+                current.current_production_stage,
+                ["stage_type", "status"],
+                as_dict=True,
+            )
+            if stage and stage.status != "Cancelled":
+                mapped = SHOP_FLOOR_ORDER_STATUSES.get(stage.stage_type)
+                if mapped:
+                    frappe.db.set_value("Door Cutting Order", order_name, "status", mapped, update_modified=True)
+                    return mapped
+        if current.status and current.status.startswith("At "):
+            return current.status
+
     stages = _base_stages(order_name)
     if not stages:
-        return frappe.db.get_value("Door Cutting Order", order_name, "status") or "Draft"
-    if all(row.status in {"Completed", "Cancelled"} for row in stages):
-        status = "Completed"
-    else:
-        active = next((row for row in stages if row.status in {"In Progress", "Paused"}), None)
-        if active:
-            if active.stage_type == "Cutting":
-                status = "Cutting In Progress"
-            elif active.stage_type == "Edge Banding":
-                status = "Edge Banding In Progress"
-            elif active.stage_type == "Quality Check":
-                status = "Quality Check"
-            else:
-                status = "Production In Progress"
-        else:
-            cutting = next((row for row in stages if row.stage_type == "Cutting"), None)
-            edge = next((row for row in stages if row.stage_type == "Edge Banding"), None)
-            if cutting and cutting.status == "Completed" and edge and edge.status == "Pending":
-                status = "Cut Completed"
-            else:
-                status = "Approved"
+        return (current.status if current else None) or "Draft"
+
+    status = derive_order_status(
+        current_status=current.status if current else None,
+        production_path=current.production_path if current else None,
+        current_stage=None,
+        stages=(StageState(row.stage_type, row.status) for row in stages),
+        has_open_replacements=False,
+    )
     frappe.db.set_value("Door Cutting Order", order_name, "status", status, update_modified=True)
     return status
 
@@ -204,7 +238,7 @@ def sync_order_status(order_name: str) -> str:
 def start_stage(stage_name: str, assigned_to: str | None = None) -> dict[str, Any]:
     stage = frappe.get_doc("Production Stage", stage_name)
     _require_stage_role(stage)
-    if stage.status != "Pending":
+    if not can_transition_stage(stage.status, "start"):
         frappe.throw(_("Only a Pending stage can be started."))
     _assert_previous_stages_completed(stage)
 
@@ -215,7 +249,7 @@ def start_stage(stage_name: str, assigned_to: str | None = None) -> dict[str, An
     stage.assigned_to = assigned_to or stage.assigned_to or frappe.session.user
     stage.started_by = frappe.session.user
     stage.start_time = now_datetime()
-    stage.status = "In Progress"
+    stage.status = transition_stage(stage.status, "start")
     stage.save(ignore_permissions=True)
     _log_event(stage, "Start", {"assigned_to": stage.assigned_to})
     return {"stage": stage.name, "status": stage.status, "order_status": sync_order_status(stage.door_cutting_order)}
@@ -225,11 +259,11 @@ def start_stage(stage_name: str, assigned_to: str | None = None) -> dict[str, An
 def pause_stage(stage_name: str, reason: str | None = None) -> dict[str, Any]:
     stage = frappe.get_doc("Production Stage", stage_name)
     _require_stage_role(stage)
-    if stage.status != "In Progress":
+    if not can_transition_stage(stage.status, "pause"):
         frappe.throw(_("Only an In Progress stage can be paused."))
     pause_start = now_datetime()
     stage.append("pauses", {"pause_start": pause_start, "reason": reason or "", "paused_by": frappe.session.user})
-    stage.status = "Paused"
+    stage.status = transition_stage(stage.status, "pause")
     stage.save(ignore_permissions=True)
     _log_event(stage, "Pause", {"reason": reason or "", "pause_start": str(pause_start)})
     return {"stage": stage.name, "status": stage.status, "order_status": sync_order_status(stage.door_cutting_order)}
@@ -239,10 +273,10 @@ def pause_stage(stage_name: str, reason: str | None = None) -> dict[str, Any]:
 def resume_stage(stage_name: str) -> dict[str, Any]:
     stage = frappe.get_doc("Production Stage", stage_name)
     _require_stage_role(stage)
-    if stage.status != "Paused":
+    if not can_transition_stage(stage.status, "resume"):
         frappe.throw(_("Only a Paused stage can be resumed."))
     _close_open_pause(stage, frappe.session.user)
-    stage.status = "In Progress"
+    stage.status = transition_stage(stage.status, "resume")
     stage.save(ignore_permissions=True)
     _log_event(stage, "Resume", {"paused_seconds_total": stage.paused_seconds})
     return {"stage": stage.name, "status": stage.status, "order_status": sync_order_status(stage.door_cutting_order)}
@@ -252,7 +286,7 @@ def resume_stage(stage_name: str) -> dict[str, Any]:
 def finish_stage(stage_name: str, completed_qty: int | None = None, notes: str | None = None) -> dict[str, Any]:
     stage = frappe.get_doc("Production Stage", stage_name)
     _require_stage_role(stage)
-    if stage.status not in {"In Progress", "Paused"}:
+    if not can_transition_stage(stage.status, "finish"):
         frappe.throw(_("Only an active stage can be finished."))
     if stage.status == "Paused":
         _close_open_pause(stage, frappe.session.user)
@@ -264,7 +298,7 @@ def finish_stage(stage_name: str, completed_qty: int | None = None, notes: str |
     finish_time = now_datetime()
     stage.finish_time = finish_time
     stage.finished_by = frappe.session.user
-    stage.status = "Completed"
+    stage.status = transition_stage(stage.status, "finish")
     stage.completed_qty = cint(completed_qty) if completed_qty is not None else _required_piece_qty(stage.door_cutting_order)
     if notes:
         stage.notes = notes

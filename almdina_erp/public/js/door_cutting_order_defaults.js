@@ -13,13 +13,31 @@
 
     function translateOrderMaterialLabels(frm) {
         if (!isArabic()) return;
-        frm.set_df_property("cutting_settings_section", "label", "إعدادات مواد وتكلفة الطلب");
-        frm.set_df_property("edge_color", "label", "لون القشاط");
-        frm.set_df_property(
-            "edge_color",
-            "description",
-            "يُجلب تلقائيًا من نوع القشاط، ويمكن تعديله لهذا الطلب."
-        );
+        const labels = {
+            board_section: "اللوح",
+            board_description: "صنف اللوح",
+            board_length_cm: "طول اللوح (سم)",
+            board_width_cm: "عرض اللوح (سم)",
+            cutting_settings_section: "إعدادات مواد وتكلفة الطلب",
+            edge_color: "لون القشاط",
+        };
+        Object.entries(labels).forEach(([fieldname, label]) => {
+            if (frm.fields_dict[fieldname]) frm.set_df_property(fieldname, "label", label);
+        });
+        if (frm.fields_dict.board_description) {
+            frm.set_df_property(
+                "board_description",
+                "description",
+                "اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم."
+            );
+        }
+        if (frm.fields_dict.edge_color) {
+            frm.set_df_property(
+                "edge_color",
+                "description",
+                "يُجلب تلقائيًا من نوع القشاط، ويمكن تعديله لهذا الطلب."
+            );
+        }
     }
 
     function apply_factory_defaults(frm) {
@@ -41,24 +59,31 @@
         }).catch(error => console.error("Failed to load Almdina ERP order defaults", error));
     }
 
-    function apply_board_defaults(frm) {
-        if (!frm.doc.board_item || !["Draft", "Rejected", undefined, null, ""].includes(frm.doc.status)) return;
-        const requestedItem = frm.doc.board_item;
-        frappe.call({
-            method: "almdina_erp.almdina_erp.services.order_defaults_service.get_board_defaults",
-            args: { board_item: requestedItem },
-        }).then(r => {
-            if (frm.doc.board_item !== requestedItem) return;
-            const values = r.message || {};
-            return frm.set_value({
-                board_material: values.board_material || "",
-                board_color: values.board_color || "",
-                board_thickness_mm: values.board_thickness_mm || 0,
-                full_board_length_mm: values.board_length_mm || 0,
-                full_board_width_mm: values.board_width_mm || 0,
-                board_rate_usd: values.board_rate_usd || 0,
+    function applyBoardTextDefaults(frm) {
+        let changed = false;
+        if (!Number(frm.doc.board_length_cm)) {
+            frm.doc.board_length_cm = 244;
+            changed = true;
+        }
+        if (!Number(frm.doc.board_width_cm)) {
+            frm.doc.board_width_cm = 122;
+            changed = true;
+        }
+        frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm) * 10;
+        frm.doc.full_board_width_mm = Number(frm.doc.board_width_cm) * 10;
+        if (changed) {
+            ["board_length_cm", "board_width_cm"].forEach(fieldname => {
+                if (frm.fields_dict[fieldname]) frm.refresh_field(fieldname);
             });
-        }).catch(error => console.error("Failed to load MDF board defaults", error));
+        }
+    }
+
+    function syncBoardDimensions(frm) {
+        const length = Number(frm.doc.board_length_cm || 0);
+        const width = Number(frm.doc.board_width_cm || 0);
+        frm.doc.full_board_length_mm = length * 10;
+        frm.doc.full_board_width_mm = width * 10;
+        frm.dirty();
     }
 
     function apply_edge_color_default(frm, force = false) {
@@ -84,14 +109,21 @@
         onload(frm) {
             translateOrderMaterialLabels(frm);
             apply_factory_defaults(frm);
-            if (frm.is_new() && frm.doc.board_item) apply_board_defaults(frm);
+            applyBoardTextDefaults(frm);
             if (frm.doc.default_edge_type && !frm.doc.edge_color) apply_edge_color_default(frm, false);
         },
         refresh(frm) {
             translateOrderMaterialLabels(frm);
+            applyBoardTextDefaults(frm);
         },
-        board_item(frm) {
-            apply_board_defaults(frm);
+        board_description(frm) {
+            if (window.AlmdinaBoardTextUX) window.AlmdinaBoardTextUX.refresh(frm);
+        },
+        board_length_cm(frm) {
+            syncBoardDimensions(frm);
+        },
+        board_width_cm(frm) {
+            syncBoardDimensions(frm);
         },
         default_edge_type(frm) {
             apply_edge_color_default(frm, true);

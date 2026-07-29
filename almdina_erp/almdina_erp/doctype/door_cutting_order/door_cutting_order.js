@@ -66,9 +66,9 @@
         if (!data) return;
 
         [
-            "board_material",
-            "board_color",
-            "board_thickness_mm",
+            "board_description",
+            "board_length_cm",
+            "board_width_cm",
             "full_board_length_mm",
             "full_board_width_mm",
             "total_area_m2",
@@ -412,10 +412,15 @@
     }
 
     function render_cutting_plan(frm) {
-        const plan = parse_plan(frm);
         const wrapper = frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper;
         if (!wrapper) return;
 
+        if (window.AlmdinaPlanTabsUX && window.AlmdinaPlanTabsUX.shouldShowPlanTabs(frm)) {
+            window.AlmdinaPlanTabsUX.renderDualTabs(frm);
+            return;
+        }
+
+        const plan = parse_plan(frm);
         if (!plan || !plan.sheets || !plan.sheets.length) {
             wrapper.empty();
             return;
@@ -791,6 +796,21 @@
     }
 
     function add_buttons(frm) {
+        // Always strip export for non-drawing operators, even if buttons were
+        // installed on an earlier refresh in this form session.
+        const roles = frappe.user_roles || [];
+        const can_export_dxf =
+            roles.includes("عامل رسم") ||
+            roles.includes("Production Manager") ||
+            roles.includes("System Manager");
+        if (!can_export_dxf) {
+            try {
+                frm.remove_custom_button("تصدير DXF");
+            } catch (e) {
+                /* ignore */
+            }
+        }
+
         if (frm._dco_added_buttons) return;
 
         frm.add_custom_button("إعادة حساب خطة القص", () => {
@@ -811,9 +831,13 @@
 
         frm.add_custom_button("طباعة خطة القص", () => print_cutting_plan(frm));
         frm.add_custom_button("طباعة جدول القياسات", () => print_measurements_table(frm));
-        frm.add_custom_button("تصدير DXF", () => {
-            recalculate_order(frm, { immediate: true }).then(() => export_cutting_plan_dxf(frm)).catch(() => {});
-        });
+        // DXF export is role-gated: Drawing operator + managers only.
+        // secure_dxf_export.js installs the validated AutoCAD exporter for them.
+        if (can_export_dxf) {
+            frm.add_custom_button("تصدير DXF", () => {
+                recalculate_order(frm, { immediate: true }).then(() => export_cutting_plan_dxf(frm)).catch(() => {});
+            });
+        }
 
         frm._dco_added_buttons = true;
     }
@@ -844,6 +868,9 @@
         },
 
         customer: schedule_recalculate,
+        board_description: schedule_recalculate,
+        board_length_cm: schedule_recalculate,
+        board_width_cm: schedule_recalculate,
         board_item: schedule_recalculate,
         board_rate_usd: schedule_recalculate,
         default_edge_type: schedule_recalculate,
@@ -875,4 +902,9 @@
         clipped_corner_length_cm: schedule_recalculate,
         notes: schedule_recalculate
     });
+    window.AlmdinaCuttingPlanRender = {
+        build: build_cutting_plan_html,
+        parse: parse_plan,
+        print: print_cutting_plan,
+    };
 })();

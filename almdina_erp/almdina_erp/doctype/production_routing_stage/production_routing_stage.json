@@ -6,7 +6,7 @@
   "field_order": ["sequence", "stage_type", "required", "auto_complete_if_not_applicable"],
   "fields": [
     {"fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence","reqd":1},
-    {"fieldname":"stage_type","fieldtype":"Select","in_list_view":1,"label":"Stage Type","options":"Review / Preparation\nCutting\nEdge Banding\nDrilling\nAssembly\nQuality Check\nPacking","reqd":1},
+    {"fieldname":"stage_type","fieldtype":"Select","in_list_view":1,"label":"Stage Type","options":"Review / Preparation\nCutting\nEdge Banding\nDrilling\nAssembly\nQuality Check\nPacking\nSharyoun\nDrawing\nCNC\nSanding","reqd":1},
     {"default":"1","fieldname":"required","fieldtype":"Check","in_list_view":1,"label":"Required"},
     {"default":"1","fieldname":"auto_complete_if_not_applicable","fieldtype":"Check","label":"Auto Complete If Not Applicable"}
   ],

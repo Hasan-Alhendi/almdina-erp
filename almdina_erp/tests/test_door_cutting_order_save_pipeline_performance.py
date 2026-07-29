@@ -1,10 +1,20 @@
 from pathlib import Path
 import json
 
+from almdina_erp.almdina_erp.application.orders.plan_payloads import (
+    PlanBoardInput,
+    PlanCutInput,
+    PlanOptimizerSettings,
+    PlanPieceInput,
+    build_plan_input_payload,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 FAST_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_fast.py"
+ACTIVE_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_controller.py"
+DOCUMENT_ACCESS = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "document_access.py"
 SAVE_RENDER_UX = ROOT / "public" / "js" / "door_cutting_order_save_render_performance_ux.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -22,11 +32,20 @@ def test_plan_metadata_fingerprint_is_persisted_outside_large_json():
     assert field["read_only"] == 1
 
 
-def test_fast_controller_is_the_configured_doctype_override():
+def test_active_controller_preserves_fast_save_and_free_text_board_contracts():
     hooks = HOOKS.read_text(encoding="utf-8")
+    controller = ACTIVE_CONTROLLER.read_text(encoding="utf-8")
+    access = DOCUMENT_ACCESS.read_text(encoding="utf-8")
+
     assert "override_doctype_class" in hooks
     assert '"Door Cutting Order"' in hooks
-    assert "door_cutting_order_fast.FastDoorCuttingOrder" in hooks
+    assert "door_cutting_order_controller.DoorCuttingOrderController" in hooks
+    assert "class DoorCuttingOrderController(DoorCuttingOrder)" in controller
+    assert "process_order_save(self._gateway())" in controller
+    assert "class FrappeOrderDocumentAccess" in access
+    assert 'getattr(self.document, "board_description", "")' in access
+    assert "self.document.full_board_length_mm = length_cm * 10" in access
+    assert "self.document.full_board_width_mm = width_cm * 10" in access
 
 
 def test_modern_plan_reuse_does_not_parse_the_plan_json():
@@ -74,14 +93,41 @@ def test_old_order_data_is_loaded_with_targeted_queries_not_whole_doc():
 
 
 def test_clipped_corner_geometry_is_part_of_layout_fingerprint():
-    source = _fast_source()
-    block = source.split("def _plan_input_payload", 1)[1].split(
-        "def _plan_metadata_payload", 1
-    )[0]
-    assert '"piece_type"' in block
-    assert '"clipped_corner_position"' in block
-    assert '"clipped_corner_width_cm"' in block
-    assert '"clipped_corner_length_cm"' in block
+    payload = build_plan_input_payload(
+        version=1,
+        board=PlanBoardInput(item="MDF أبيض 18 مم", width_mm=1220, length_mm=2440),
+        cut=PlanCutInput(
+            kerf_mm=3,
+            trim_margin_mm=5,
+            packing_mode="Auto Pro",
+            machine_type="Auto",
+            time_limit_sec=10,
+        ),
+        optimizer=PlanOptimizerSettings(
+            exact_piece_limit=40,
+            min_remnant_width_mm=0,
+            min_remnant_length_mm=0,
+            min_remnant_area_m2=0,
+        ),
+        pieces=[
+            PlanPieceInput(
+                index=1,
+                width_cm=60,
+                length_cm=80,
+                qty=1,
+                allow_rotation=1,
+                piece_type="Clipped Corner",
+                clipped_corner_position="Top Right",
+                clipped_corner_width_cm=12,
+                clipped_corner_length_cm=18,
+            )
+        ],
+    )
+    piece = payload["pieces"][0]
+    assert piece["piece_type"] == "Clipped Corner"
+    assert piece["clipped_corner_position"] == "Top Right"
+    assert piece["clipped_corner_width_cm"] == 12
+    assert piece["clipped_corner_length_cm"] == 18
 
 
 def test_post_save_dom_layer_reuses_unchanged_measurement_table():

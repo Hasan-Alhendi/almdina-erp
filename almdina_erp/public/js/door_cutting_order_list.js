@@ -87,9 +87,15 @@
         });
     }
 
+    function patchDepartmentColumn(listview) {
+        if (!listview || listview.__almdina_dept_patch) return;
+        listview.__almdina_dept_patch = true;
+    }
+
     function schedule(listview) {
         installCombinedSearch(listview);
         applySearchHint(listview);
+        patchDepartmentColumn(listview);
         requestAnimationFrame(() => applySearchHint(listview));
         setTimeout(() => applySearchHint(listview), 180);
         setTimeout(() => applySearchHint(listview), 600);
@@ -97,6 +103,18 @@
 
     frappe.listview_settings["Door Cutting Order"] = Object.assign({}, existing, {
         add_fields: [...new Set([...(existing.add_fields || []), "customer", "order_date", "status"])],
+        formatters: Object.assign({}, existing.formatters || {}, {
+            current_department(value, df, doc) {
+                if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
+                if (doc.status === "Delivered") return __("تم التسليم");
+                if (value === "تسليم") {
+                    // Legacy rows that still store the vague label.
+                    if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
+                    if (doc.status === "Delivered") return __("تم التسليم");
+                }
+                return value || "";
+            },
+        }),
         onload(listview) {
             if (typeof originalOnload === "function") originalOnload(listview);
             schedule(listview);

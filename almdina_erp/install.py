@@ -19,7 +19,35 @@ EDGE_BANDING_TYPES = (
     {"name":"قشاط 4سم لميع يدوي","english":"4cm Glossy Manual Edge","width":4,"finish":"Glossy","method":"Manual","rate":4.0},
 )
 
-ROLES = ("Order Entry", "Cutting Operator", "Edge Operator", "Production Manager", "Stock Manager", "Accounts Management")
+ROLES = (
+    "Order Entry",
+    "Cutting Operator",
+    "Edge Operator",
+    "Production Manager",
+    "Stock Manager",
+    "Accounts Management",
+    "عامل رسم",
+    "عامل شريون",
+    "عامل CNC",
+    "عامل تقشيط",
+)
+
+# Convenience records used only by explicit administrative seed commands.
+OPERATOR_USERS = (
+    {"email": "drawing@almdina.local", "first_name": "عامل", "last_name": "رسم", "profile": "drawing_operator"},
+    {"email": "sharyoun@almdina.local", "first_name": "عامل", "last_name": "شريون", "profile": "sharyoun_operator"},
+    {"email": "cnc@almdina.local", "first_name": "عامل", "last_name": "CNC", "profile": "cnc_operator"},
+    {"email": "taqsheet@almdina.local", "first_name": "عامل", "last_name": "تقشيط", "profile": "sanding_operator"},
+)
+
+ORDER_ENTRY_USERS = (
+    {
+        "email": "orders@almdina.local",
+        "first_name": "موظف",
+        "last_name": "الطلبات",
+        "profile": "order_entry",
+    },
+)
 
 REQUIRED_UOMS = (
     {"name": "Meter", "must_be_whole_number": 0},
@@ -39,6 +67,7 @@ ITEM_CUSTOM_FIELDS = {
 }
 
 DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
+EDGE_ITEM_GROUP = "Raw Material"
 
 
 def sync_setup() -> None:
@@ -49,6 +78,7 @@ def sync_setup() -> None:
     seed_default_routing()
     seed_settings_defaults()
     sync_plan_recalculation_state()
+    sync_dual_plan_json_backfill()
 
 
 def after_install() -> None:
@@ -63,6 +93,47 @@ def seed_roles() -> None:
     for role_name in ROLES:
         if not frappe.db.exists("Role", role_name):
             frappe.get_doc({"doctype":"Role","role_name":role_name}).insert(ignore_permissions=True)
+
+
+def _require_explicit_password(password: str | None) -> str:
+    password = str(password or "")
+    if not password:
+        frappe.throw(
+            "Pass password explicitly. Almdina ERP does not store a default user password in source code."
+        )
+    return password
+
+
+def _seed_users(rows: tuple[dict, ...], password: str | None) -> list[str]:
+    from almdina_erp.almdina_erp.application.security.provision_user import provision_user
+
+    seed_roles()
+    password = _require_explicit_password(password)
+    results: list[str] = []
+    for row in rows:
+        result = provision_user(
+            email=row["email"],
+            profile=row["profile"],
+            first_name=row["first_name"],
+            last_name=row.get("last_name", ""),
+            temporary_password=password,
+        )
+        action = "created" if result["created"] else "updated"
+        results.append(f"{action}:{row['email']}")
+    frappe.db.commit()
+    return results
+
+
+def seed_operator_users(password: str | None = None) -> list[str]:
+    """Explicitly create the four shop-floor users with a runtime password."""
+
+    return _seed_users(OPERATOR_USERS, password)
+
+
+def seed_order_entry_users(password: str | None = None) -> list[str]:
+    """Explicitly create the order-entry user with a runtime password."""
+
+    return _seed_users(ORDER_ENTRY_USERS, password)
 
 
 def seed_required_uoms() -> None:
@@ -93,6 +164,39 @@ def seed_edge_banding_types() -> None:
         doc.rate_usd_per_meter = row["rate"]
         doc.disabled = 0
         doc.save(ignore_permissions=True)
+
+
+def seed_edge_banding_items(item_group: str = EDGE_ITEM_GROUP) -> list[str]:
+    """Create and link a stock Item for every enabled Edge Banding Type.
+
+    Call explicitly, e.g.:
+      bench --site site1.local execute almdina_erp.install.seed_edge_banding_items
+    """
+    results: list[str] = []
+
+    for name in frappe.get_all("Edge Banding Type", filters={"disabled": 0}, pluck="name"):
+        edge = frappe.get_doc("Edge Banding Type", name)
+        if edge.item_code and frappe.db.exists("Item", edge.item_code):
+            continue
+
+        item_code = edge.edge_type_name
+        if not frappe.db.exists("Item", item_code):
+            item = frappe.new_doc("Item")
+            item.item_code = item_code
+            item.item_name = edge.edge_type_name
+            item.item_group = item_group
+            item.stock_uom = edge.consumption_uom or "Meter"
+            item.is_stock_item = 1
+            item.description = edge.english_name or edge.edge_type_name
+            item.insert(ignore_permissions=True)
+            results.append(f"created:{item_code}")
+
+        edge.item_code = item_code
+        edge.save(ignore_permissions=True)
+        results.append(f"linked:{name}")
+
+    frappe.db.commit()
+    return results
 
 
 def seed_default_routing() -> None:
@@ -151,6 +255,23 @@ def sync_plan_recalculation_state() -> None:
             """
         )
     except Exception:
-        # Fresh installs/migrations may invoke setup before every metadata cache is
-        # available. The normal document save path still sets the correct value.
         frappe.log_error(frappe.get_traceback(), "Almdina plan freshness backfill")
+
+
+def sync_dual_plan_json_backfill() -> None:
+    """Copy existing cutting plans into system_plan_json after the dual-plan fields land."""
+    try:
+        if not frappe.db.table_exists("Door Cutting Order"):
+            return
+        if not frappe.db.has_column("Door Cutting Order", "system_plan_json"):
+            return
+        frappe.db.sql(
+            """
+            update `tabDoor Cutting Order`
+               set system_plan_json = cutting_plan_json
+             where coalesce(system_plan_json, '') = ''
+               and coalesce(cutting_plan_json, '') <> ''
+            """
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Almdina dual-plan JSON backfill")

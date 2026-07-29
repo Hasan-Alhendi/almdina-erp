@@ -7,6 +7,7 @@ DOCTYPE_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_c
 HOOKS = ROOT / "hooks.py"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+COST_INVOICE_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
 TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
 
@@ -17,7 +18,8 @@ def text(path: Path) -> str:
 
 def test_order_search_includes_customer_and_explains_id_or_customer_search():
     doctype = json.loads(text(DOCTYPE_JSON))
-    assert doctype["search_fields"] == "customer"
+    search_fields = {value.strip() for value in doctype["search_fields"].split(",") if value.strip()}
+    assert {"customer", "board_description"}.issubset(search_fields)
     source = text(LIST_UX)
     assert "ابحث باسم العميل أو رقم الطلب (ID)" in source
     assert "اسم العميل أو رقم الطلب" in source
@@ -70,17 +72,20 @@ def test_measurement_print_has_invoice_measurement_columns_without_invoice_total
 
 
 def test_customer_invoice_prints_edge_color_once_in_header_without_table_columns():
-    source = text(EDGE_COLOR_UX)
-    print_section = source.split("function printHtml(frm)", 1)[1].split(
-        "function printCustomerInvoice(frm)", 1
+    invoice = text(COST_INVOICE_UX)
+    print_section = invoice.split("function buildPrintHtml(frm)", 1)[1].split(
+        "function printInvoice(frm)", 1
     )[0]
-    assert "grid-template-columns:repeat(5" in print_section
-    assert "<b>نوع القشاط</b>" in print_section
+    edge_color_patch = text(EDGE_COLOR_UX)
+
+    assert "grid-template-columns:repeat(3" in print_section
+    assert "<th>نوع القشاط</th>" in print_section
     assert print_section.count("<b>لون القشاط</b>") == 1
-    assert "patchMeasurementTable" not in source
-    assert "patchInvoiceLines" not in source
-    assert "patchInvoiceMeta" not in source
-    assert "removeLegacyColorDuplicates" in source
+    assert "<th>لون القشاط</th>" not in print_section
+    assert "patchMeasurementTable" not in edge_color_patch
+    assert "patchInvoiceLines" not in edge_color_patch
+    assert "patchInvoiceMeta" not in edge_color_patch
+    assert "removeLegacyColorDuplicates" in edge_color_patch
 
 
 def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_actions():

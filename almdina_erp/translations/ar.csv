@@ -697,6 +697,37 @@ Skyline Bottom Left,خط الأفق - من أسفل اليسار
 Skyline Best Fit,خط الأفق - أفضل ترتيب
 Yes,نعم
 No,لا
+Shop Floor,صالة الإنتاج
+Shop Floor Inbox,صالة الإنتاج
+Shop Floor Tracking,متابعة صالة الإنتاج
+Production Path,مسار الإنتاج
+Current Department,القسم الحالي
+Current Assignee,العامل الحالي
+Department Status,حالة القسم
+Current Production Stage,مرحلة الإنتاج الحالية
+Production DXF,ملف DXF للإنتاج
+Drawing DXF Status,حالة رسم DXF
+Sharyoun,شريون
+Drawing,رسم
+CNC,CNC
+Sanding,تقشيط
+At Sharyoun,عند الشريون
+At Drawing,عند الرسم
+At CNC,عند CNC
+At Sanding,عند التقشيط
+Ready for Delivery,جاهزة للتسليم
+Delivered,تم التسليم
+Approved by Drawing,معتمد من الرسم
+Exported,تم التصدير
+Uploaded,تم الرفع
+None,لا يوجد
+بحاجة للعمل,بحاجة للعمل
+قيد العمل,قيد العمل
+مكتمل,مكتمل
+شريون,شريون
+رسم,رسم
+تقشيط,تقشيط
+تسليم,تسليم
 Piece Type,نوع الدرفة
 Regular,عادية
 Clipped Corner,زاوية مقصوصة
@@ -720,7 +751,6 @@ Final Special Unit Price USD,السعر النهائي للدرفة الخاصة
 Special Shape Price Status,حالة سعر الدرفة الخاصة
 Not Applicable,لا ينطبق
 Estimated,تقديري
-Approved,معتمد
 Customer Quote Total USD,إجمالي عرض الزبون
 Customer Quote Status,حالة عرض الزبون
 Automatic,تلقائي
