@@ -32,6 +32,10 @@
         return window.AlmdinaShapePrint || null;
     }
 
+    function printThemeApi() {
+        return window.AlmdinaOrderDocumentPrintTheme || null;
+    }
+
     async function ensureProfiles(frm) {
         const module = edgeBandingApi();
         if (module && typeof module.ensureProfiles === "function") {
@@ -53,7 +57,10 @@
     function notesCellHtml(row) {
         const renderer = shapePrintApi();
         return renderer
-            ? renderer.notesCell(row, row.notes, { label: `رسمة الدرفة رقم ${row.index}` })
+            ? renderer.notesCell(row, row.notes, {
+                label: `رسمة الدرفة رقم ${row.index}`,
+                caption: `رسمة الدرفة ${row.index}`,
+            })
             : esc(row.notes || "—");
     }
 
@@ -123,14 +130,15 @@
                 + Number(Boolean(row.source.edge_long_left));
             const widthCount = Number(Boolean(row.source.edge_width_top))
                 + Number(Boolean(row.source.edge_width_bottom));
-            return `<tr class="${rowHasDrawing(row) ? "row-with-drawing" : ""}">
-                <td>${row.index}</td>
+            const drawing = rowHasDrawing(row);
+            return `<tr class="${drawing ? "row-with-drawing" : ""}">
+                <td><b>${row.index}</b></td>
                 <td>${esc(pieceTypeLabel(row.pieceType))}</td>
                 <td>${dimensionMark(row.width, widthCount)}</td>
                 <td>${dimensionMark(row.length, longCount)}</td>
                 <td>${row.qty}</td>
                 <td class="right custom-edge-cell">${customEdgeDetailsHtml(row.details)}</td>
-                <td class="right notes-cell ${rowHasDrawing(row) ? "notes-with-drawing" : ""}">${notesCellHtml(row)}</td>
+                <td class="right notes-cell ${drawing ? "notes-with-drawing" : ""}">${notesCellHtml(row)}</td>
             </tr>`;
         }).join("");
     }
@@ -219,43 +227,10 @@
     }
 
     function printCss(mode) {
-        const measurementOnly = mode === "measurements";
-        return `
-            @page{size:A4 portrait;margin:${measurementOnly ? "5mm" : "6mm"}}
-            *{box-sizing:border-box}
-            html,body{margin:0;padding:0;font-family:Tahoma,Arial,sans-serif;color:#111;direction:rtl;background:#fff}
-            body{font-size:${measurementOnly ? "7.4px" : "8px"};-webkit-print-color-adjust:exact;print-color-adjust:exact}
-            .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.5px solid #111;padding-bottom:3px;margin-bottom:3px}
-            .header h1{font-size:${measurementOnly ? "15px" : "17px"};line-height:1.05;margin:0 0 1px}.header-order{text-align:left}
-            .muted{color:#666;font-size:${measurementOnly ? "6.2px" : "6.8px"};line-height:1.15}
-            .info{display:grid;gap:2px;margin:3px 0}.shared-info{grid-template-columns:repeat(6,minmax(0,1fr))}.financial-info{grid-template-columns:repeat(4,minmax(0,1fr))}
-            .info>div{border:1px solid #aaa;border-radius:3px;padding:${measurementOnly ? "2px 3px" : "3px 4px"};min-width:0;line-height:1.15;word-break:break-word;min-height:${measurementOnly ? "22px" : "26px"}}
-            .info b{display:block;font-size:${measurementOnly ? "5.8px" : "6.5px"};color:#555;margin-bottom:1px}
-            .title{font-size:${measurementOnly ? "9px" : "10px"};font-weight:900;margin:${measurementOnly ? "3px" : "5px"} 0 2px}
-            .table{width:100%;border-collapse:collapse;table-layout:fixed}.table thead{display:table-header-group}
-            .table th,.table td{border:1px solid #999;padding:${measurementOnly ? "1px 2px" : "2px 3px"};text-align:center;vertical-align:middle;line-height:${measurementOnly ? "1.05" : "1.15"}}
-            .table th{background:#eee;font-weight:900}.table tr{break-inside:avoid;page-break-inside:avoid}.right{text-align:right!important;white-space:normal}
-            .measurements{font-size:${measurementOnly ? "6.5px" : "7.1px"}}
-            .measurements th:nth-child(1),.measurements td:nth-child(1){width:3.5%}.measurements th:nth-child(2),.measurements td:nth-child(2){width:7.5%}
-            .measurements th:nth-child(3),.measurements td:nth-child(3){width:8.5%}.measurements th:nth-child(4),.measurements td:nth-child(4){width:8.5%}
-            .measurements th:nth-child(5),.measurements td:nth-child(5){width:5.5%}.measurements th:nth-child(6),.measurements td:nth-child(6){width:31%}
-            .measurements th:nth-child(7),.measurements td:nth-child(7){width:35.5%}
-            .custom-edge-cell:empty{padding:0}.custom-edge-empty{display:block;min-height:${measurementOnly ? "4px" : "6px"}}
-            .custom-edge-summary{display:grid;gap:1px}.custom-edge-line{display:flex;align-items:center;gap:3px;border:1px solid #b88b00;border-radius:3px;background:#fff8df;padding:${measurementOnly ? "0 2px" : "1px 3px"};white-space:normal}
-            .custom-edge-line span{font-size:${measurementOnly ? "5.6px" : "6.3px"};font-weight:800;color:#333}.custom-edge-line b{font-size:${measurementOnly ? "6px" : "6.9px"};word-break:break-word}
-            .custom-edge-line em{margin-inline-start:auto;font-style:normal;font-size:${measurementOnly ? "5px" : "5.8px"};font-weight:900;color:#805b00;border:1px solid currentColor;border-radius:999px;padding:0 3px;white-space:nowrap}
-            .notes-cell{font-size:${measurementOnly ? "6.1px" : "6.9px"};line-height:1.15}.dimension{display:inline-flex;min-width:28px;flex-direction:column;align-items:center;gap:0;line-height:1}
-            .dimension b{font-size:${measurementOnly ? "6.6px" : "7.3px"}}.dimension-lines{display:flex;flex-direction:column;gap:1px;min-height:3px}
-            .dimension-edge-line{display:block;width:20px;height:1px;background:#111}.dimension-lines-0{visibility:hidden}.row-with-drawing td{padding-top:2px;padding-bottom:2px}.notes-with-drawing{min-width:0}
-            .invoice{font-size:7.4px;break-inside:avoid;page-break-inside:avoid}.invoice th,.invoice td{padding:2px 3px}
-            .invoice th:nth-child(1),.invoice td:nth-child(1){width:4%}.invoice th:nth-child(2),.invoice td:nth-child(2){width:48%}.invoice th:nth-child(3),.invoice td:nth-child(3){width:11%}
-            .invoice th:nth-child(4),.invoice td:nth-child(4){width:10%}.invoice th:nth-child(5),.invoice td:nth-child(5){width:13.5%}.invoice th:nth-child(6),.invoice td:nth-child(6){width:13.5%}
-            .invoice-description{line-height:1.2}.line-note{display:block;color:#555;font-size:6.2px;margin-top:1px;line-height:1.15}
-            .total{margin-top:4px;margin-right:auto;width:38%;border:1.5px solid #111;padding:4px 6px;display:flex;justify-content:space-between;font-size:10.5px;font-weight:900}
-            .order-note{margin-top:4px;border:1px solid #aaa;padding:3px 4px;font-size:6.8px;line-height:1.2}
-            .footer{margin-top:3px;border-top:1px solid #aaa;padding-top:2px;display:flex;justify-content:space-between;color:#666;font-size:${measurementOnly ? "5.8px" : "6.3px"}}
-            ${shapePrintCss()}
-        `;
+        const theme = printThemeApi();
+        return theme && typeof theme.css === "function"
+            ? theme.css(mode, shapePrintCss())
+            : shapePrintCss();
     }
 
     function documentHtml(frm, mode) {
@@ -263,9 +238,15 @@
         const total = mode === "invoice" ? invoiceTotal(frm, lines) : 0;
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${mode === "invoice" ? "فاتورة" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss(mode)}</style></head><body>
-            ${sharedHeader(frm, mode)}${sharedInfo(frm)}${mode === "invoice" ? invoiceSummary(frm) : ""}
-            <div class="title">جدول القياسات</div>${measurementTable(frm)}
-            ${mode === "invoice" ? `<div class="title">تفاصيل الفاتورة</div><table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>${invoiceRowsHtml(lines)}</tbody></table><div class="total"><span>الإجمالي النهائي</span><span>$ ${money(total)}</span></div>` : ""}
+            ${sharedHeader(frm, mode)}
+            ${sharedInfo(frm)}
+            ${mode === "invoice" ? invoiceSummary(frm) : ""}
+            <div class="title">جدول القياسات</div>
+            ${measurementTable(frm)}
+            ${mode === "invoice" ? `
+                <div class="title">تفاصيل الفاتورة</div>
+                <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>${invoiceRowsHtml(lines)}</tbody></table>
+                <div class="total"><span>الإجمالي النهائي</span><span>$ ${money(total)}</span></div>` : ""}
             ${frm.doc.order_notes ? `<div class="order-note"><b>ملاحظات الطلب:</b> ${esc(frm.doc.order_notes)}</div>` : ""}
             <div class="footer"><span>رقم الطلب: ${esc(frm.doc.name || "مسودة")}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
         </body></html>`;
@@ -332,9 +313,9 @@
         refresh(frm) { schedule(frm); },
     });
 
-    window.AlmdinaOrderDocumentPrint = {
+    window.AlmdinaOrderDocumentPrint = Object.freeze({
         printInvoice(frm) { return printDocument(frm, "invoice"); },
         printMeasurements(frm) { return printDocument(frm, "measurements"); },
         html: documentHtml,
-    };
+    });
 })();

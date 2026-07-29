@@ -10,24 +10,39 @@ HOOKS_PATH = ROOT / "hooks.py"
 PRESENTER_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 )
+THEME_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_document_print_theme.js"
+)
+SHAPE_READABILITY_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_shape_print_readability.js"
+)
+COST_DOCUMENTS_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
+)
 
 
 class TestCompactInvoicePrintContract(unittest.TestCase):
-    def test_one_presenter_owns_both_print_buttons_before_legacy_documents(self) -> None:
+    def test_one_presenter_owns_both_print_buttons_with_separate_theme(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
 
-        presenter = "public/js/door_cutting_order_document_print_presenter.js"
-        presenter_index = scripts.index(presenter)
-        legacy_index = scripts.index(
+        shape = scripts.index("public/js/door_cutting_order_shape_print.js")
+        readable_shape = scripts.index(
+            "public/js/door_cutting_order_shape_print_readability.js"
+        )
+        costing = scripts.index("public/js/door_cutting_order_cost_invoice_ux.js")
+        theme = scripts.index("public/js/door_cutting_order_document_print_theme.js")
+        presenter = scripts.index(
+            "public/js/door_cutting_order_document_print_presenter.js"
+        )
+        documents = scripts.index(
             "public/js/door_cutting_order_multi_edge_documents_ux.js"
         )
-        costing_index = scripts.index(
-            "public/js/door_cutting_order_cost_invoice_ux.js"
-        )
 
-        self.assertGreater(presenter_index, costing_index)
-        self.assertLess(presenter_index, legacy_index)
+        self.assertLess(shape, readable_shape)
+        self.assertLess(costing, theme)
+        self.assertLess(theme, presenter)
+        self.assertLess(presenter, documents)
         self.assertNotIn(
             "public/js/door_cutting_order_measurement_print_presenter.js",
             scripts,
@@ -44,7 +59,10 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn(".filter(detail => Boolean(detail.custom))", source)
         self.assertIn("function customEdgeDetailsHtml", source)
         self.assertIn('return "على الداير"', source)
-        self.assertIn('if (!groups.length) return \'<span class="custom-edge-empty"', source)
+        self.assertIn(
+            'if (!groups.length) return \'<span class="custom-edge-empty"',
+            source,
+        )
         self.assertIn("القشاط المخصص", source)
         self.assertIn('if (note.includes("من القشاط الافتراضي")) return ""', source)
         self.assertNotIn("rate_usd_per_meter *", source)
@@ -67,17 +85,46 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("event.stopImmediatePropagation()", source)
         self.assertIn("notesCellHtml", source)
         self.assertIn("shapePrintCss", source)
+        self.assertIn("AlmdinaOrderDocumentPrintTheme", source)
 
-    def test_measurement_layout_targets_about_26_regular_rows_per_a4_page(self) -> None:
-        source = PRESENTER_PATH.read_text(encoding="utf-8")
+    def test_print_theme_uses_readable_pt_scale_without_wasting_a4_space(self) -> None:
+        source = THEME_PATH.read_text(encoding="utf-8")
 
-        self.assertIn('@page{size:A4 portrait;margin:${measurementOnly ? "5mm" : "6mm"}}', source)
+        self.assertIn('@page{size:A4 portrait;margin:${pageMargin}}', source)
+        self.assertIn('const bodySize = measurements ? "8.1pt" : "8.5pt"', source)
+        self.assertIn('const tableSize = measurements ? "7.65pt" : "8.05pt"', source)
+        self.assertIn('const rowPadding = measurements ? "1.05mm 1.1mm"', source)
         self.assertIn("grid-template-columns:repeat(6,minmax(0,1fr))", source)
         self.assertIn("table-layout:fixed", source)
         self.assertIn("display:table-header-group", source)
         self.assertIn("break-inside:avoid", source)
-        self.assertIn('${measurementOnly ? "1px 2px" : "2px 3px"}', source)
-        self.assertIn('${measurementOnly ? "6.5px" : "7.1px"}', source)
+        self.assertIn('const sketchHeight = measurements ? "27mm" : "31mm"', source)
+        self.assertNotIn("body{font-size:7.4px", source)
+
+    def test_printed_drawing_notes_respect_font_size_and_have_no_box(self) -> None:
+        source = SHAPE_READABILITY_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("Math.max(24, Math.min(38, parsed))", source)
+        self.assertIn('note.font_size || note.fontSize || 24', source)
+        self.assertIn('querySelectorAll(\'rect[fill="#fff8c9"]', source)
+        self.assertIn('textNode.setAttribute("paint-order", "stroke")', source)
+        self.assertIn('textNode.setAttribute("stroke", "#fff")', source)
+        self.assertIn("window.AlmdinaShapePrint = Object.freeze", source)
+
+    def test_cost_screen_table_is_compact_responsive_and_custom_only(self) -> None:
+        source = COST_DOCUMENTS_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("function customEdgeGroups", source)
+        self.assertIn(".filter(detail => Boolean(detail.custom))", source)
+        self.assertIn("القشاط المخصص", source)
+        self.assertIn("dco-custom-edge-chip", source)
+        self.assertIn("dco-cost-table--enhanced", source)
+        self.assertIn("@media(max-width:760px)", source)
+        self.assertIn("data-label", source)
+        self.assertIn("سطر مستقل لكل نوع قشاط وسعره", source)
+        self.assertNotIn("bindPrintInterception", source)
+        self.assertNotIn("printMeasurementsHtml", source)
+        self.assertNotIn("printInvoiceHtml", source)
 
 
 if __name__ == "__main__":
