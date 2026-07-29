@@ -52,6 +52,7 @@ doctype_js = {
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
+        "public/js/door_cutting_order_special_shape_note_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
