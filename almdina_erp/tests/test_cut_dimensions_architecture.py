@@ -66,6 +66,9 @@ SIDE_EDGE_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_multi_edge_ux.j
 EDGE_CONTROLS_UX_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
 )
+MEASUREMENT_PRINT_PRESENTER_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_measurement_print_presenter.js"
+)
 DOCUMENT_UX_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
 )
@@ -175,6 +178,9 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         side_edge_index = scripts.index(
             "public/js/door_cutting_order_multi_edge_ux.js"
         )
+        measurement_print_index = scripts.index(
+            "public/js/door_cutting_order_measurement_print_presenter.js"
+        )
         controls_index = scripts.index(
             "public/js/door_cutting_order_edge_profile_controls_ux.js"
         )
@@ -189,9 +195,11 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
 
         self.assertGreater(side_edge_index, performance_index)
-        self.assertGreater(controls_index, side_edge_index)
+        self.assertGreater(measurement_print_index, side_edge_index)
+        self.assertGreater(controls_index, measurement_print_index)
         self.assertGreater(cut_index, controls_index)
         self.assertGreater(documents_index, invoice_index)
+        self.assertLess(measurement_print_index, documents_index)
         self.assertEqual(
             hooks["doctype_js"]["Edge Banding Type"],
             "public/js/edge_banding_type_ux.js",
@@ -199,6 +207,9 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
 
         side_source = SIDE_EDGE_UX_PATH.read_text(encoding="utf-8")
         controls_source = EDGE_CONTROLS_UX_PATH.read_text(encoding="utf-8")
+        measurement_print_source = MEASUREMENT_PRINT_PRESENTER_PATH.read_text(
+            encoding="utf-8"
+        )
         cut_source = CUT_UX_PATH.read_text(encoding="utf-8")
         document_source = DOCUMENT_UX_PATH.read_text(encoding="utf-8")
         edge_source = EDGE_UX_PATH.read_text(encoding="utf-8")
@@ -213,6 +224,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         ):
             self.assertIn(fieldname, side_source)
             self.assertIn(fieldname, controls_source)
+            self.assertIn(fieldname, measurement_print_source)
 
         self.assertIn("dco-edge-profile-grid", controls_source)
         self.assertIn("dco-side-profile-select", controls_source)
@@ -241,6 +253,19 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertNotIn("function renderCell", cut_source)
         self.assertNotIn('header.textContent = isArabic() ? "مقاس القص"', cut_source)
         self.assertIn("الخصم حسب سماكة كل ضلع", cut_source)
+
+        self.assertIn("module.details(frm, row)", measurement_print_source)
+        self.assertIn("await Promise.resolve(module.ensureProfiles(frm))", measurement_print_source)
+        self.assertIn(".dco-print-measurements,.dco-entry-window-print", measurement_print_source)
+        self.assertIn("event.stopImmediatePropagation()", measurement_print_source)
+        self.assertIn("قشاط الأطراف", measurement_print_source)
+        self.assertIn("الأضلاع الأربعة", measurement_print_source)
+        self.assertIn("مخصص", measurement_print_source)
+        self.assertIn("افتراضي", measurement_print_source)
+        self.assertIn("notesCellHtml", measurement_print_source)
+        self.assertIn("shapePrintCss", measurement_print_source)
+        self.assertNotIn("row.edge_type || frm.doc.default_edge_type", measurement_print_source)
+        self.assertNotIn("rate_usd_per_meter *", measurement_print_source)
 
         self.assertIn("قشاط الأطراف", document_source)
         self.assertIn("يتضمن أطرافًا مخصصة", document_source)
