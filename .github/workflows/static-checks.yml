@@ -83,11 +83,12 @@ jobs:
             almdina_erp.tests.test_order_piece_policy_domain \
             almdina_erp.tests.test_order_piece_policy_adapter
 
-      - name: Run edge allowance tests
+      - name: Run edge allowance and compact print tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_cut_dimensions_domain \
-            almdina_erp.tests.test_cut_dimensions_architecture
+            almdina_erp.tests.test_cut_dimensions_architecture \
+            almdina_erp.tests.test_compact_invoice_print_contract
 
       - name: Run plan payload and fingerprint tests
         run: python -m unittest -v almdina_erp.tests.test_order_plan_payloads
