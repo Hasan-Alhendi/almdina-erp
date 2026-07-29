@@ -56,6 +56,9 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_multi_edge_ux.js",
+        # Own measurement printing here. It reads the four effective side profiles
+        # and registers before later document interceptors and legacy button handlers.
+        "public/js/door_cutting_order_measurement_print_presenter.js",
         "public/js/door_cutting_order_edge_profile_controls_ux.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
