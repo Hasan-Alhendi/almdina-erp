@@ -18,6 +18,10 @@ require(path.resolve(
 ));
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_sketch_viewport.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_sketch_interaction.js"
 ));
 require(path.resolve(
@@ -164,6 +168,26 @@ const svgWithTransform = {
 const mapped = clientPointToCanvas(svgWithTransform, 500, 310);
 assert.ok(almostEqual(mapped.x, 500), "Pointer X must follow the real SVG transform");
 assert.ok(almostEqual(mapped.y, 325), "Pointer Y must follow the real SVG transform");
+
+const svgWithoutTransform = {
+    getScreenCTM() {
+        return null;
+    },
+    getBoundingClientRect() {
+        return { left: 0, top: 0, width: 1000, height: 650 };
+    },
+};
+const fallbackMapped = clientPointToCanvas(
+    svgWithoutTransform,
+    500,
+    325,
+    { x: 250, y: 162.5, width: 500, height: 325 }
+);
+assert.deepEqual(
+    fallbackMapped,
+    { x: 500, y: 325 },
+    "Fallback pointer mapping must respect the zoomed viewBox"
+);
 
 const almostHorizontal = snapLineEnd(
     { x: 100, y: 100 },
