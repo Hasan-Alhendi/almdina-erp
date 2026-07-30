@@ -57,6 +57,7 @@ jobs:
           from almdina_erp.tests import test_order_search_measurement_toolbar_ux as order_surface_checks
           from almdina_erp.tests import test_special_shape_geometry_ux as special_shape_geometry_checks
           from almdina_erp.tests import test_shape_print_ux as shape_print_checks
+          from almdina_erp.tests import test_shape_output_contract_ux as shape_output_contract_checks
           from almdina_erp.tests import test_free_text_board_entry as free_text_board_checks
           from almdina_erp.tests import test_special_shape_inline_note_ux as inline_note_checks
 
@@ -76,6 +77,7 @@ jobs:
               order_surface_checks,
               special_shape_geometry_checks,
               shape_print_checks,
+              shape_output_contract_checks,
               free_text_board_checks,
               inline_note_checks,
           ]
@@ -124,6 +126,7 @@ jobs:
         shell: bash
         run: |
           node almdina_erp/tests/test_special_shape_geometry.js
+          node almdina_erp/tests/js/shape_output_contract.test.js
 
       - name: Validate printable door drawings
         shell: bash

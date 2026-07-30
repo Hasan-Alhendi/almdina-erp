@@ -88,9 +88,10 @@
             piece.edge_width_top,
             piece.edge_width_bottom
         ].filter(Boolean).length;
+        const shape_output = window.AlmdinaShapeOutputContract;
         const exact_special = piece.piece_type === "Special"
-            && window.AlmdinaSpecialShapeGeometry
-            && window.AlmdinaSpecialShapeGeometry.isExact(piece);
+            && shape_output
+            && shape_output.hasExactCutPath(piece);
         const special = piece.piece_type === "Special"
             ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
             : "";
@@ -236,15 +237,16 @@
                     ? "border:2px solid #7a4c13;background:linear-gradient(135deg,#fff2cf,#ffe2a3);box-shadow:inset 0 0 0 2px rgba(255,255,255,.45);"
                     : "border:1px solid #111;background:#e4f5ff;";
                 const clipped = piece.piece_type === "Clipped Corner";
+                const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+                const shapeOutput = window.AlmdinaShapeOutputContract;
                 const exactSpecial = piece.piece_type === "Special"
-                    && window.AlmdinaSpecialShapeGeometry
-                    && window.AlmdinaSpecialShapeGeometry.isExact(piece);
-                const shapeGeometry = clipped
-                    ? window.AlmdinaClippedCornerGeometry
-                    : (exactSpecial ? window.AlmdinaSpecialShapeGeometry : null);
-                const shapePoints = shapeGeometry
-                    ? shapeGeometry.pointsAttribute(piece, 100, 100)
-                    : "0,0 100,0 100,100 0,100";
+                    && shapeOutput
+                    && shapeOutput.hasExactCutPath(piece);
+                const shapePoints = clipped && clippedGeometry
+                    ? clippedGeometry.pointsAttribute(piece, 100, 100)
+                    : (exactSpecial
+                        ? shapeOutput.pointsAttribute(piece, 100, 100)
+                        : "0,0 100,0 100,100 0,100");
                 const shaped = clipped || exactSpecial;
                 const shapeOutline = shaped
                     ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><polygon points="${shapePoints}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`

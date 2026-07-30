@@ -3,8 +3,11 @@
 
     const DEFAULT_CANVAS = { width: 1000, height: 650 };
     const MAX_PRINT_POINTS = 1800;
-    const PARSE_CACHE_LIMIT = 300;
-    const parseCache = new Map();
+    const shapeOutput = window.AlmdinaShapeOutputContract;
+    if (!shapeOutput) {
+        console.error("Shape output contract must load before the printable shape renderer");
+        return;
+    }
     let previewSequence = 0;
 
     function esc(value) {
@@ -38,47 +41,11 @@
     }
 
     function parse(raw) {
-        if (!raw) return null;
-        try {
-            if (typeof raw !== "string") return raw;
-            if (parseCache.has(raw)) return parseCache.get(raw);
-            const payload = JSON.parse(raw);
-            parseCache.set(raw, payload);
-            if (parseCache.size > PARSE_CACHE_LIMIT) {
-                parseCache.delete(parseCache.keys().next().value);
-            }
-            return payload;
-        } catch (error) {
-            return null;
-        }
+        return shapeOutput.parseDrawing(raw) || shapeOutput.parseGeometry(raw);
     }
 
-    function drawingPayload(piece) {
-        const payload = parse(piece && (
-            piece.special_shape_drawing_json
-            || piece.drawing_json
-        ));
-        return (
-            payload
-            && Number(payload.version) === 1
-            && Array.isArray(payload.elements)
-            && payload.elements.length
-        ) ? payload : null;
-    }
-
-    function geometryPayload(piece) {
-        const payload = parse(piece && (
-            piece.special_shape_geometry_json
-            || piece.geometry_json
-        ));
-        return (
-            payload
-            && Number(payload.version) === 1
-            && payload.kind === "polygon"
-            && Array.isArray(payload.points)
-            && payload.points.length >= 3
-        ) ? payload : null;
-    }
+    const drawingPayload = shapeOutput.drawingFromPiece;
+    const geometryPayload = shapeOutput.geometryFromPiece;
 
     function pointPair(point) {
         if (!Array.isArray(point) || point.length < 2) return null;
@@ -288,14 +255,15 @@
 
     function svg(piece, options = {}) {
         const label = options.label || "رسمة الدرفة";
-        const drawing = drawingPayload(piece);
-        if (drawing) return drawingSvg(drawing, label);
-        const geometry = geometryPayload(piece);
-        return geometry ? geometrySvg(geometry, label) : "";
+        const selected = shapeOutput.visual(piece);
+        if (!selected) return "";
+        return selected.kind === "drawing"
+            ? drawingSvg(selected.payload, label)
+            : geometrySvg(selected.payload, label);
     }
 
     function hasVisual(piece) {
-        return Boolean(drawingPayload(piece) || geometryPayload(piece));
+        return shapeOutput.hasVisual(piece);
     }
 
     function notesCell(piece, notes, options = {}) {

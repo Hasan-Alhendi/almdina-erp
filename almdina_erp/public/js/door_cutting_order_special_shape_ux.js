@@ -6,15 +6,17 @@
     const sketchHistory = window.AlmdinaSketchHistory;
     const sketchRenderer = window.AlmdinaSketchRenderer;
     const inlineNoteEditor = window.AlmdinaInlineNoteEditor;
+    const shapeOutput = window.AlmdinaShapeOutputContract;
     if (
         !sketchEngine
         || !sketchInteraction
         || !sketchHistory
         || !sketchRenderer
         || !inlineNoteEditor
+        || !shapeOutput
     ) {
         console.error(
-            "Sketch engine, interaction, history, renderer, and inline note editor must load before the special-shape editor"
+            "Sketch modules and the shape output contract must load before the special-shape editor"
         );
         return;
     }
@@ -76,16 +78,8 @@
     );
 
     function parseDrawing(raw) {
-        if (!raw) return [];
-        try {
-            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-            return parsed && parsed.version === 1 && Array.isArray(parsed.elements)
-                ? clone(parsed.elements)
-                : [];
-        } catch (error) {
-            console.warn("Invalid special shape drawing JSON", error);
-            return [];
-        }
+        const parsed = shapeOutput.parseDrawing(raw);
+        return parsed ? clone(parsed.elements) : [];
     }
 
     function id(prefix) {

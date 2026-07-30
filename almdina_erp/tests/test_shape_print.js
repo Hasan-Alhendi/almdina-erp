@@ -7,6 +7,14 @@ global.window = {};
 
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_special_shape_geometry.js"
+));
+require(path.resolve(
+    __dirname,
+    "../public/js/door_cutting_order_shape_output_contract.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_shape_print.js"
 ));
 
@@ -84,6 +92,17 @@ const geometryPiece = {
 };
 assert.equal(renderer.hasVisual(geometryPiece), true);
 assert.match(renderer.svg(geometryPiece), /<polygon /);
+
+const documentedGeometryPiece = {
+    ...geometryPiece,
+    special_shape_drawing_json: classicPiece.special_shape_drawing_json,
+};
+assert.match(renderer.svg(documentedGeometryPiece), /<path /);
+assert.doesNotMatch(
+    renderer.svg(documentedGeometryPiece),
+    /<polygon /,
+    "Customer documents must prefer the operator drawing over the CNC fallback"
+);
 
 const regularPiece = { piece_type: "Regular" };
 assert.equal(renderer.hasVisual(regularPiece), false);

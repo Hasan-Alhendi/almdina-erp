@@ -9,6 +9,14 @@ const source = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order_cutting_plan_renderer.js"),
     "utf8"
 );
+const geometrySource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_geometry.js"),
+    "utf8"
+);
+const contractSource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order_shape_output_contract.js"),
+    "utf8"
+);
 
 const fakeWindow = {};
 const context = vm.createContext({
@@ -18,6 +26,12 @@ const context = vm.createContext({
     Number,
     String,
     Math,
+});
+vm.runInContext(geometrySource, context, {
+    filename: "door_cutting_order_special_shape_geometry.js",
+});
+vm.runInContext(contractSource, context, {
+    filename: "door_cutting_order_shape_output_contract.js",
 });
 vm.runInContext(source, context, {
     filename: "door_cutting_order_cutting_plan_renderer.js",
@@ -56,6 +70,26 @@ const plan = {
                     piece_type: "Regular",
                     rotated: false,
                 },
+                {
+                    x: 60,
+                    y: 0,
+                    w: 62,
+                    h: 80,
+                    original_w: 62,
+                    original_h: 80,
+                    area_m2: 0.496,
+                    label: "2",
+                    piece_type: "Special",
+                    rotated: false,
+                    special_shape_geometry_json:
+                        fakeWindow.AlmdinaSpecialShapeGeometry.serialize(
+                            fakeWindow.AlmdinaSpecialShapeGeometry.create(
+                                "single-slope",
+                                62,
+                                80
+                            )
+                        ),
+                },
             ],
         },
     ],
@@ -78,6 +112,9 @@ assert.match(html, /زبون الاختبار/);
 assert.match(html, /MDF أبيض 18 مم/);
 assert.match(html, /dco-cutting-plan/);
 assert.match(html, /dco-sheet-board/);
+assert.match(html, /dco-special-exact-piece/);
+assert.match(html, /◆ درفة خاصة · مسار هندسي/);
+assert.match(html, /<polygon points="/);
 assert.doesNotMatch(html, /undefined/);
 
 console.log("Cutting-plan renderer simulation passed");
