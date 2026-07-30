@@ -14,6 +14,10 @@ global.frappe = {
 
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_sketch_engine.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_inline_note_editor.js"
 ));
 require(path.resolve(
@@ -21,15 +25,18 @@ require(path.resolve(
     "../public/js/door_cutting_order_special_shape_ux.js"
 ));
 
-const normalize = global.window.AlmdinaSpecialShapeEditor.normalizePenStroke;
-const erasePenStroke = global.window.AlmdinaSpecialShapeEditor.erasePenStroke;
+const sketchEngine = global.window.AlmdinaSketchEngine;
+const normalize = sketchEngine.normalizePenStroke;
+const erasePenStroke = sketchEngine.erasePenStroke;
 const clientPointToCanvas = global.window.AlmdinaSpecialShapeEditor.clientPointToCanvas;
-const snapLineEnd = global.window.AlmdinaSpecialShapeEditor.snapLineEnd;
-const snapPenEndpoints = global.window.AlmdinaSpecialShapeEditor.snapPenEndpoints;
-const translateElement = global.window.AlmdinaSpecialShapeEditor.translateElement;
-const elementBounds = global.window.AlmdinaSpecialShapeEditor.elementBounds;
-const templatePoints = global.window.AlmdinaSpecialShapeEditor.templatePoints;
-const clampViewBox = global.window.AlmdinaSpecialShapeEditor.clampViewBox;
+const snapLineEnd = sketchEngine.snapLineEnd;
+const snapPenEndpoints = sketchEngine.snapPenEndpoints;
+const translateElement = sketchEngine.translateElement;
+const elementBounds = sketchEngine.elementBounds;
+const templatePoints = sketchEngine.templatePoints;
+const clampViewBox = sketchEngine.clampViewBox;
+
+assert.equal(Object.isFrozen(sketchEngine), true, "The pure sketch API should be immutable");
 
 function almostEqual(first, second, tolerance = 0.001) {
     return Math.abs(first - second) <= tolerance;
@@ -86,6 +93,11 @@ const straightPen = {
 const erasedMiddle = erasePenStroke(straightPen, [200, 200], [200, 200], 14);
 assert.equal(erasedMiddle.changed, true, "The eraser should detect a pen stroke");
 assert.equal(erasedMiddle.fragments.length, 2, "Erasing the middle should split the stroke");
+assert.equal(
+    erasedMiddle.fragments[1].id,
+    "pen-1-fragment-1",
+    "Standalone erasing should produce a deterministic fragment identity"
+);
 assert.ok(
     erasedMiddle.fragments[0].points.at(-1)[0] < 190,
     "The first fragment must stop before the erased circle"
