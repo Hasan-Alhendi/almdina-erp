@@ -50,21 +50,18 @@ doctype_js = {
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
+        # Canonical shape printing owns readable text-only notes directly.
         "public/js/door_cutting_order_shape_print.js",
-        # Decorate the canonical renderer without moving drawing logic into the
-        # document presenter. Printed note text stays readable and text-only.
-        "public/js/door_cutting_order_shape_print_readability.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
+        # The editor owns point-based inline notes and their font controls;
+        # no global Frappe prompt interception or post-render bridge is needed.
+        "public/js/door_cutting_order_inline_note_editor.js",
         "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_special_shape_note_ux.js",
-        # Loaded after the note UX so no later prompt reassignment can restore
-        # the Frappe dialog while the note tool is active.
-        "public/js/door_cutting_order_special_shape_note_guard.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",

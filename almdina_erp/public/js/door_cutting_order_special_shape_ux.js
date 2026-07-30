@@ -1,6 +1,11 @@
 (() => {
     "use strict";
 
+    const inlineNoteEditor = window.AlmdinaInlineNoteEditor;
+    if (!inlineNoteEditor) {
+        console.error("AlmdinaInlineNoteEditor must load before the special-shape editor");
+        return;
+    }
     const CANVAS_WIDTH = 1000;
     const CANVAS_HEIGHT = 650;
     const DEFAULT_ERASER_RADIUS = 14;
@@ -10,6 +15,7 @@
     const MAX_ZOOM = 4;
     const ZOOM_STEP = 1.25;
     const ENDPOINT_SNAP_RADIUS = 18;
+    const DEFAULT_NOTE_FONT_SIZE = inlineNoteEditor.DEFAULT_FONT_SIZE;
     const COLORS = ["#172033", "#c2352a", "#1769aa"];
     const TOOLS = [
         { key: "pen", group: "draw", icon: "✎", label: "قلم ذكي", hint: "ينعّم ويغلق الزوايا" },
@@ -40,6 +46,8 @@
         return JSON.parse(JSON.stringify(value));
     }
 
+    const clampNoteFontSize = inlineNoteEditor.clampFontSize;
+
     function parseDrawing(raw) {
         if (!raw) return [];
         try {
@@ -59,6 +67,7 @@
     }
 
     function installStyles() {
+        inlineNoteEditor.installStyles();
         if (document.getElementById("dco-special-shape-ux-css")) return;
         const style = document.createElement("style");
         style.id = "dco-special-shape-ux-css";
@@ -128,7 +137,6 @@
             .dco-sketch-zoom button:disabled{opacity:.35;cursor:not-allowed}
             .dco-sketch-zoom-value{min-width:48px;text-align:center;font-size:10px;font-weight:900;font-variant-numeric:tabular-nums}
             .dco-sketch-key-hint{position:absolute;direction:rtl;right:24px;bottom:24px;padding:6px 9px;border-radius:9px;background:rgba(23,32,51,.76);color:#fff;font-size:9px;pointer-events:none}
-            .dco-sketch-note-bg{fill:#fff8c9;stroke:#e5cd62;stroke-width:1.5}
             .dco-sketch-sidebar{padding:14px 13px;background:var(--card-bg,#fff);border-right:1px solid var(--border-color,#e1e6eb);display:flex;flex-direction:column;gap:11px}
             .dco-sketch-side-card{border:1px solid var(--border-color,#e0e5e9);border-radius:12px;overflow:hidden}
             .dco-sketch-side-title{padding:9px 11px;background:var(--subtle-fg,#f7f9fa);font-size:11px;font-weight:900;border-bottom:1px solid var(--border-color,#e5e8eb)}
@@ -179,6 +187,7 @@
                     <div class="dco-sketch-colors">
                         ${COLORS.map((color, index) => `<button type="button" class="dco-sketch-color ${index === 0 ? "is-active" : ""}" data-color="${color}" style="background:${color}" title="اختيار اللون"></button>`).join("")}
                     </div>
+                    ${inlineNoteEditor.controlsHtml()}
                     <div class="dco-sketch-eraser-controls" aria-hidden="true">
                         <div class="dco-sketch-eraser-label">
                             <span>حجم الممحاة</span>
@@ -284,10 +293,10 @@
         if (element.type === "note") {
             const text = String(element.text || "");
             const displayText = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-            const width = Math.min(330, Math.max(120, displayText.length * 9));
+            const fontSize = clampNoteFontSize(element.font_size || element.fontSize);
+            const textAnchor = element.text_anchor === "middle" ? "middle" : "end";
             return `<g ${common}>
-                <rect class="dco-sketch-note-bg" x="${element.x}" y="${element.y - 31}" width="${width}" height="42" rx="8"/>
-                <text x="${Number(element.x) + 10}" y="${Number(element.y) - 5}" font-family="Tahoma,Arial" font-size="16" font-weight="700" fill="#4c421a">${esc(displayText)}</text>
+                <text x="${Number(element.x)}" y="${Number(element.y)}" text-anchor="${textAnchor}" dominant-baseline="middle" direction="rtl" unicode-bidi="plaintext" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="${color}">${esc(displayText)}</text>
             </g>`;
         }
         return "";
@@ -333,11 +342,15 @@
         }
         if (element.type === "note") {
             const text = String(element.text || "");
+            const fontSize = clampNoteFontSize(element.font_size || element.fontSize);
+            const width = Math.min(460, Math.max(fontSize * 2, Math.min(34, text.length) * fontSize * 0.62));
+            const x = Number(element.x);
+            const anchor = element.text_anchor === "middle" ? "middle" : "end";
             return {
-                x: Number(element.x),
-                y: Number(element.y) - 31,
-                width: Math.min(330, Math.max(120, Math.min(34, text.length) * 9)),
-                height: 42,
+                x: anchor === "middle" ? x - width / 2 : x - width,
+                y: Number(element.y) - fontSize * 0.7,
+                width,
+                height: fontSize * 1.4,
             };
         }
         return null;
@@ -422,6 +435,7 @@
             saveState.textContent = state.hasChanges ? "● تعديلات غير محفوظة" : "✓ لا تغييرات غير محفوظة";
         }
         updateSelectionControls(state);
+        updateNoteFontControls(state);
         updateZoomControls(state);
         updateCursorPreview(state);
     }
@@ -517,6 +531,24 @@
         edit.title = edit.disabled
             ? "تعديل النص متاح للقياس والملاحظة"
             : "تعديل نص العنصر المحدد";
+    }
+
+    function updateNoteFontControls(state) {
+        const controls = state.root.querySelector(".dco-note-font-controls");
+        if (!controls) return;
+        const selected = state.elements.find(element =>
+            element.id === state.selectedId && element.type === "note"
+        );
+        if (selected) {
+            state.noteFontSize = clampNoteFontSize(selected.font_size || selected.fontSize);
+        }
+        const visible = !state.readOnly && (state.tool === "note" || Boolean(selected));
+        controls.classList.toggle("is-visible", visible);
+        controls.setAttribute("aria-hidden", visible ? "false" : "true");
+        const select = controls.querySelector(".dco-note-font-size");
+        const value = controls.querySelector(".dco-note-font-value");
+        if (select) select.value = String(clampNoteFontSize(state.noteFontSize));
+        if (value) value.textContent = `${clampNoteFontSize(state.noteFontSize)} px`;
     }
 
     function updateZoomControls(state) {
@@ -1118,6 +1150,51 @@
         );
     }
 
+    function openInlineNoteEditor(state, point, existing = null) {
+        if (state.inlineNoteEditor) state.inlineNoteEditor.remove();
+        const fontSize = clampNoteFontSize(
+            existing ? (existing.font_size || existing.fontSize) : state.noteFontSize
+        );
+        const editor = inlineNoteEditor.open({
+            root: state.root,
+            svg: state.svg,
+            point,
+            text: existing && existing.text,
+            fontSize,
+            color: existing && existing.color || state.color,
+            canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+            onCommit(text) {
+                if (existing) {
+                    if (
+                        text === String(existing.text || "")
+                        && fontSize === clampNoteFontSize(existing.font_size || existing.fontSize)
+                    ) return;
+                    snapshot(state);
+                    existing.text = text.slice(0, 500);
+                    existing.font_size = fontSize;
+                    existing.text_anchor = existing.text_anchor === "middle" ? "middle" : "end";
+                    renderCanvas(state);
+                    return;
+                }
+                addElement(state, {
+                    id: id("note"),
+                    type: "note",
+                    x: Number(point.x),
+                    y: Number(point.y),
+                    text: text.slice(0, 500),
+                    color: state.color,
+                    font_size: fontSize,
+                    text_anchor: "end",
+                });
+            },
+            onClose() {
+                if (state.inlineNoteEditor === editor) state.inlineNoteEditor = null;
+            },
+        });
+        state.inlineNoteEditor = editor;
+        return editor;
+    }
+
     function targetElementId(event) {
         const target = event.target && event.target.closest
             ? event.target.closest("[data-element-id]")
@@ -1128,10 +1205,16 @@
     function editSelected(state) {
         const element = state.elements.find(item => item.id === state.selectedId);
         if (!element || !["dimension", "note"].includes(element.type)) return false;
-        const isDimension = element.type === "dimension";
+        if (element.type === "note") {
+            openInlineNoteEditor(state, {
+                x: Number(element.x),
+                y: Number(element.y),
+            }, element);
+            return true;
+        }
         promptText(
-            isDimension ? "تعديل القياس" : "تعديل الملاحظة",
-            isDimension ? "القيمة الحقيقية مع الوحدة" : "النص الذي يراه المصمم",
+            "تعديل القياس",
+            "القيمة الحقيقية مع الوحدة",
             element.text || "",
             text => {
                 if (!text || text === String(element.text || "")) return;
@@ -1193,17 +1276,8 @@
             return;
         }
         if (state.tool === "note") {
-            promptText("إضافة ملاحظة", "اكتب الملاحظة التي يراها المصمم", "", text => {
-                if (!text) return;
-                addElement(state, {
-                    id: id("note"),
-                    type: "note",
-                    x: point.x,
-                    y: point.y,
-                    text: text.slice(0, 500),
-                    color: state.color,
-                });
-            });
+            openInlineNoteEditor(state, point);
+            event.preventDefault();
             return;
         }
 
@@ -1432,6 +1506,7 @@
         if (shouldRender) renderCanvas(state);
         else {
             updateSelectionControls(state);
+            updateNoteFontControls(state);
             updateCursorPreview(state);
         }
     }
@@ -1492,6 +1567,21 @@
                 state.root.querySelectorAll(".dco-sketch-color").forEach(item => item.classList.toggle("is-active", item === button));
                 updateCursorPreview(state);
             });
+        });
+        const noteFontSize = state.root.querySelector(".dco-note-font-size");
+        noteFontSize.addEventListener("change", () => {
+            const nextSize = clampNoteFontSize(noteFontSize.value);
+            state.noteFontSize = nextSize;
+            const selected = state.elements.find(element =>
+                element.id === state.selectedId && element.type === "note"
+            );
+            if (!selected || clampNoteFontSize(selected.font_size || selected.fontSize) === nextSize) {
+                updateNoteFontControls(state);
+                return;
+            }
+            snapshot(state);
+            selected.font_size = nextSize;
+            renderCanvas(state);
         });
         const eraserSize = state.root.querySelector(".dco-sketch-eraser-size");
         eraserSize.addEventListener("input", () => {
@@ -1558,7 +1648,10 @@
         state.keyHandler = event => {
             if (!state.dialog.$wrapper.is(":visible")) return;
             const target = event.target;
-            if (target && /INPUT|TEXTAREA|SELECT/.test(target.tagName)) return;
+            if (
+                target
+                && (/INPUT|TEXTAREA|SELECT/.test(target.tagName) || target.isContentEditable)
+            ) return;
             if (event.code === "Space") {
                 event.preventDefault();
                 state.spaceHeld = true;
@@ -1623,6 +1716,7 @@
         });
         state.dialog.$wrapper.on("hidden.bs.modal.dco-special-shape", () => {
             cancelScheduledRender(state);
+            if (state.inlineNoteEditor) state.inlineNoteEditor.remove();
             document.removeEventListener("keydown", state.keyHandler);
             document.removeEventListener("keyup", state.keyUpHandler);
         });
@@ -1719,6 +1813,8 @@
             eraseChanged: false,
             eraserLast: null,
             eraserRadius: DEFAULT_ERASER_RADIUS,
+            noteFontSize: DEFAULT_NOTE_FONT_SIZE,
+            inlineNoteEditor: null,
             renderFrame: null,
             zoom: MIN_ZOOM,
             viewBox: {
