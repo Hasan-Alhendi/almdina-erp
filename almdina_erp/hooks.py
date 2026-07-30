@@ -60,6 +60,8 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_actions_ux.js",
         # Pure geometry loads before the DOM editor that composes it.
         "public/js/door_cutting_order_sketch_engine.js",
+        # Draft drawing transitions stay independent from pointer and DOM APIs.
+        "public/js/door_cutting_order_sketch_interaction.js",
         # Document changes and undo/redo history are framework-independent.
         "public/js/door_cutting_order_sketch_history.js",
         # Pure SVG presentation turns sketch state into safe, testable markup.
