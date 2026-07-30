@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INLINE_EDITOR = ROOT / "public" / "js" / "door_cutting_order_inline_note_editor.js"
+RENDERER = ROOT / "public" / "js" / "door_cutting_order_sketch_renderer.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 PRINT = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
 HOOKS = ROOT / "hooks.py"
@@ -56,12 +57,14 @@ def test_note_font_size_and_text_anchor_are_canonical_element_fields():
 def test_note_rendering_is_text_only_in_editor_and_print():
     editor = source(EDITOR)
     inline = source(INLINE_EDITOR)
+    renderer = source(RENDERER)
     printing = source(PRINT)
 
-    assert 'dominant-baseline="middle"' in editor
-    assert 'unicode-bidi="plaintext"' in editor
+    assert 'dominant-baseline="middle"' in renderer
+    assert 'unicode-bidi="plaintext"' in renderer
     assert "dco-sketch-note-bg" not in editor
     assert "dco-sketch-note-bg" not in inline
+    assert "dco-sketch-note-bg" not in renderer
     assert 'data-dco-readable-note="1"' in printing
     assert 'paint-order="stroke"' in printing
     assert 'stroke="#fff"' in printing
@@ -95,9 +98,12 @@ def test_only_canonical_editor_and_print_renderer_are_loaded():
     hooks = source(HOOKS)
 
     assert '"public/js/door_cutting_order_shape_print.js"' in hooks
+    renderer = '"public/js/door_cutting_order_sketch_renderer.js"'
     inline = '"public/js/door_cutting_order_inline_note_editor.js"'
     editor = '"public/js/door_cutting_order_special_shape_ux.js"'
+    assert renderer in hooks
     assert inline in hooks
+    assert hooks.index(renderer) < hooks.index(editor)
     assert hooks.index(inline) < hooks.index(editor)
     assert '"public/js/door_cutting_order_special_shape_ux.js"' in hooks
     assert "door_cutting_order_shape_print_readability.js" not in hooks

@@ -18,6 +18,10 @@ require(path.resolve(
 ));
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_sketch_renderer.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_inline_note_editor.js"
 ));
 require(path.resolve(

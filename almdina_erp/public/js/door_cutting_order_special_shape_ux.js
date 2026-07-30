@@ -2,10 +2,11 @@
     "use strict";
 
     const sketchEngine = window.AlmdinaSketchEngine;
+    const sketchRenderer = window.AlmdinaSketchRenderer;
     const inlineNoteEditor = window.AlmdinaInlineNoteEditor;
-    if (!sketchEngine || !inlineNoteEditor) {
+    if (!sketchEngine || !sketchRenderer || !inlineNoteEditor) {
         console.error(
-            "AlmdinaSketchEngine and AlmdinaInlineNoteEditor must load before the special-shape editor"
+            "Sketch engine, renderer, and inline note editor must load before the special-shape editor"
         );
         return;
     }
@@ -39,10 +40,6 @@
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
-    }
-
-    function escAttr(value) {
-        return esc(value).replace(/`/g, "&#96;");
     }
 
     function clone(value) {
@@ -279,125 +276,14 @@
             </div>`;
     }
 
-    function pathData(points) {
-        return (points || []).map((point, index) =>
-            `${index ? "L" : "M"} ${Number(point[0]).toFixed(1)} ${Number(point[1]).toFixed(1)}`
-        ).join(" ");
-    }
-
-    function textPosition(element) {
-        const x = (Number(element.x1) + Number(element.x2)) / 2;
-        const y = (Number(element.y1) + Number(element.y2)) / 2;
-        return { x, y: y - 12 };
-    }
-
-    function elementMarkup(element, draft = false, selected = false) {
-        const color = escAttr(element.color || "#172033");
-        const selectedClass = selected ? " is-selected" : "";
-        const common = `data-element-id="${escAttr(element.id)}" class="dco-sketch-element${selectedClass}" opacity="${draft ? ".62" : "1"}"`;
-        if (element.type === "pen") {
-            const points = draft ? normalizePenStroke(element.points) : element.points;
-            return `<path ${common} d="${pathData(points)}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`;
-        }
-        if (element.type === "line") {
-            return `<line ${common} x1="${element.x1}" y1="${element.y1}" x2="${element.x2}" y2="${element.y2}" stroke="${color}" stroke-width="4" stroke-linecap="round"/>`;
-        }
-        if (element.type === "rectangle") {
-            return `<rect ${common} x="${element.x}" y="${element.y}" width="${element.width}" height="${element.height}" rx="2" fill="none" stroke="${color}" stroke-width="4"/>`;
-        }
-        if (element.type === "ellipse") {
-            return `<ellipse ${common} cx="${element.cx}" cy="${element.cy}" rx="${element.rx}" ry="${element.ry}" fill="none" stroke="${color}" stroke-width="4"/>`;
-        }
-        if (element.type === "dimension") {
-            const position = textPosition(element);
-            return `<g ${common}>
-                <line x1="${element.x1}" y1="${element.y1}" x2="${element.x2}" y2="${element.y2}" stroke="${color}" stroke-width="2.5" marker-start="url(#dco-arrow-start)" marker-end="url(#dco-arrow-end)"/>
-                <rect x="${position.x - Math.max(34, String(element.text || "").length * 7)}" y="${position.y - 18}" width="${Math.max(68, String(element.text || "").length * 14)}" height="27" rx="6" fill="#fff" stroke="${color}" stroke-width="1.2"/>
-                <text x="${position.x}" y="${position.y + 1}" text-anchor="middle" font-family="Tahoma,Arial" font-size="17" font-weight="700" fill="${color}">${esc(element.text)}</text>
-            </g>`;
-        }
-        if (element.type === "note") {
-            const text = String(element.text || "");
-            const displayText = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-            const fontSize = clampNoteFontSize(element.font_size || element.fontSize);
-            const textAnchor = element.text_anchor === "middle" ? "middle" : "end";
-            return `<g ${common}>
-                <text x="${Number(element.x)}" y="${Number(element.y)}" text-anchor="${textAnchor}" dominant-baseline="middle" direction="rtl" unicode-bidi="plaintext" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="${color}">${esc(displayText)}</text>
-            </g>`;
-        }
-        return "";
-    }
-
-    function selectionMarkup(state) {
-        if (state.tool !== "select") return "";
-        const element = state.elements.find(item => item.id === state.selectedId);
-        const bounds = elementBounds(element);
-        if (!bounds) return "";
-        const padding = 9;
-        const x = Math.max(0, bounds.x - padding);
-        const y = Math.max(0, bounds.y - padding);
-        const width = Math.max(18, Math.min(CANVAS_WIDTH - x, bounds.width + padding * 2));
-        const height = Math.max(18, Math.min(CANVAS_HEIGHT - y, bounds.height + padding * 2));
-        const handles = [
-            [x, y],
-            [x + width, y],
-            [x, y + height],
-            [x + width, y + height],
-        ].map(point => `<circle class="dco-sketch-selection-handle" cx="${point[0]}" cy="${point[1]}" r="5"/>`).join("");
-        return `<g class="dco-sketch-selection-overlay">
-            <rect class="dco-sketch-selection-box" x="${x}" y="${y}" width="${width}" height="${height}" rx="5"/>
-            ${handles}
-        </g>`;
-    }
-
-    function snapIndicatorMarkup(state) {
-        if (!state.snapPoint) return "";
-        return `<g class="dco-sketch-snap-indicator">
-            <circle class="dco-sketch-snap-point" cx="${state.snapPoint.x}" cy="${state.snapPoint.y}" r="9"/>
-            <path d="M${state.snapPoint.x - 5} ${state.snapPoint.y}H${state.snapPoint.x + 5}M${state.snapPoint.x} ${state.snapPoint.y - 5}V${state.snapPoint.y + 5}" stroke="#158e5b" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
-        </g>`;
-    }
-
     function renderCanvas(state) {
-        const items = state.elements.map(element =>
-            elementMarkup(element, false, element.id === state.selectedId)
-        ).join("");
-        const draft = state.draft ? elementMarkup(state.draft, true) : "";
-        const selection = selectionMarkup(state);
-        const snapIndicator = snapIndicatorMarkup(state);
-        const viewBox = state.viewBox || {
-            x: 0,
-            y: 0,
+        const view = sketchRenderer.canvasView(state, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
-        };
-        state.svg.setAttribute(
-            "viewBox",
-            `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`
-        );
-        state.svg.innerHTML = `
-            <defs>
-                <pattern id="dco-small-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#edf0f2" stroke-width="1"/>
-                </pattern>
-                <pattern id="dco-grid" width="100" height="100" patternUnits="userSpaceOnUse">
-                    <rect width="100" height="100" fill="url(#dco-small-grid)"/>
-                    <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#d7dde2" stroke-width="1.5"/>
-                </pattern>
-                <marker id="dco-arrow-start" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto-start-reverse">
-                    <path d="M9,0 L0,4.5 L9,9" fill="none" stroke="#172033" stroke-width="1.5"/>
-                </marker>
-                <marker id="dco-arrow-end" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto">
-                    <path d="M0,0 L9,4.5 L0,9" fill="none" stroke="#172033" stroke-width="1.5"/>
-                </marker>
-            </defs>
-            <rect x="0" y="0" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" fill="#fff"/>
-            <rect x="0" y="0" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" fill="${state.gridVisible === false ? "#fff" : "url(#dco-grid)"}"/>
-            ${items}${draft}${selection}${snapIndicator}
-            <g class="dco-sketch-cursor-preview" display="none">
-                <circle class="dco-sketch-cursor-ring" cx="0" cy="0" r="4" fill="none" stroke="#1674c5" stroke-width="2" vector-effect="non-scaling-stroke"/>
-                <path class="dco-sketch-cursor-cross" d="M-7 0H7M0-7V7" fill="none" stroke="#1674c5" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
-            </g>`;
+            noteFontSize: clampNoteFontSize,
+        });
+        state.svg.setAttribute("viewBox", view.viewBox);
+        state.svg.innerHTML = view.markup;
         renderSidebar(state);
         state.root.querySelector(".dco-sketch-undo").disabled = state.undo.length === 0;
         state.root.querySelector(".dco-sketch-redo").disabled = state.redo.length === 0;
@@ -413,28 +299,10 @@
     }
 
     function renderSidebar(state) {
-        const dimensions = state.elements.filter(element => element.type === "dimension");
-        const notes = state.elements.filter(element => element.type === "note");
-        const drawingElements = state.elements.filter(element =>
-            ["pen", "line", "rectangle", "ellipse"].includes(element.type)
-        );
-        const empty = text => `<div class="dco-sketch-empty">${text}</div>`;
-        state.root.querySelector(".dco-sketch-dimensions").innerHTML = dimensions.length
-            ? dimensions.map((element, index) => `<button type="button" class="dco-sketch-list-item" data-select-id="${escAttr(element.id)}"><span class="dco-sketch-list-badge">↔</span><span><b>قياس ${index + 1}</b><br>${esc(element.text)}</span></button>`).join("")
-            : empty("لم تضع قياسات بعد.<br>اختر أداة «قياس» وارسم سهمًا.");
-        state.root.querySelector(".dco-sketch-notes").innerHTML = notes.length
-            ? notes.map((element, index) => `<button type="button" class="dco-sketch-list-item" data-select-id="${escAttr(element.id)}"><span class="dco-sketch-list-badge">T</span><span><b>ملاحظة ${index + 1}</b><br>${esc(element.text)}</span></button>`).join("")
-            : empty("لا توجد ملاحظات مكتوبة على الرسم.");
-        const progress = [
-            { done: drawingElements.length > 0, text: "رسم حدود الدرفة" },
-            { done: dimensions.length > 0, text: `إضافة القياسات (${dimensions.length})` },
-            { done: notes.length > 0, text: `ملاحظات المصمم (${notes.length})` },
-        ];
-        state.root.querySelector(".dco-sketch-progress").innerHTML = progress.map(item => `
-            <div class="dco-sketch-progress-item ${item.done ? "is-done" : ""}">
-                <span class="dco-sketch-progress-dot">${item.done ? "✓" : "•"}</span>
-                <span>${item.text}</span>
-            </div>`).join("");
+        const view = sketchRenderer.sidebarView(state.elements);
+        state.root.querySelector(".dco-sketch-dimensions").innerHTML = view.dimensions;
+        state.root.querySelector(".dco-sketch-notes").innerHTML = view.notes;
+        state.root.querySelector(".dco-sketch-progress").innerHTML = view.progress;
     }
 
     function clientPointToCanvas(svg, clientX, clientY) {
