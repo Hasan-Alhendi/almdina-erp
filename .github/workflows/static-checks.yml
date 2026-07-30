@@ -167,6 +167,7 @@ jobs:
           node almdina_erp/tests/js/document_context_async.test.js
           node almdina_erp/tests/js/input_stability.test.js
           node almdina_erp/tests/js/inline_note_editor.test.js
+          node almdina_erp/tests/js/sketch_history.test.js
           node almdina_erp/tests/js/sketch_renderer.test.js
           node almdina_erp/tests/test_special_shape_smoothing.js
           node almdina_erp/tests/test_shape_print.js

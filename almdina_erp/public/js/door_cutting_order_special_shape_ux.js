@@ -2,11 +2,12 @@
     "use strict";
 
     const sketchEngine = window.AlmdinaSketchEngine;
+    const sketchHistory = window.AlmdinaSketchHistory;
     const sketchRenderer = window.AlmdinaSketchRenderer;
     const inlineNoteEditor = window.AlmdinaInlineNoteEditor;
-    if (!sketchEngine || !sketchRenderer || !inlineNoteEditor) {
+    if (!sketchEngine || !sketchHistory || !sketchRenderer || !inlineNoteEditor) {
         console.error(
-            "Sketch engine, renderer, and inline note editor must load before the special-shape editor"
+            "Sketch engine, history, renderer, and inline note editor must load before the special-shape editor"
         );
         return;
     }
@@ -438,36 +439,37 @@
         });
     }
 
+    function applyHistoryTransition(state, transition) {
+        if (!transition || !transition.changed) return false;
+        Object.assign(state, transition.patch);
+        return true;
+    }
+
     function snapshot(state, elements = state.elements) {
-        state.undo.push(clone(elements));
-        if (state.undo.length > 80) state.undo.shift();
-        state.redo = [];
-        state.hasChanges = true;
+        applyHistoryTransition(state, sketchHistory.snapshot(state, elements));
     }
 
     function addElement(state, element) {
-        snapshot(state);
-        state.elements.push(element);
-        state.selectedId = element.id;
-        state.draft = null;
+        if (!applyHistoryTransition(state, sketchHistory.addElement(state, element))) {
+            return false;
+        }
         renderCanvas(state);
+        return true;
     }
 
     function selectElement(state, elementId, switchTool = true) {
-        const selected = state.elements.find(element => element.id === elementId);
-        state.selectedId = selected ? selected.id : "";
+        const transition = sketchHistory.selectElement(state, elementId);
+        applyHistoryTransition(state, transition);
+        const selected = transition.selected;
         if (selected && switchTool) selectTool(state, "select");
         else renderCanvas(state);
         return selected || null;
     }
 
     function deleteSelected(state) {
-        if (!state.selectedId) return false;
-        const index = state.elements.findIndex(element => element.id === state.selectedId);
-        if (index < 0) return false;
-        snapshot(state);
-        state.elements.splice(index, 1);
-        state.selectedId = "";
+        if (!applyHistoryTransition(state, sketchHistory.deleteSelected(state))) {
+            return false;
+        }
         renderCanvas(state);
         return true;
     }
@@ -920,20 +922,12 @@
     }
 
     function undo(state) {
-        if (!state.undo.length) return;
-        state.redo.push(clone(state.elements));
-        state.elements = state.undo.pop();
-        if (!state.elements.some(element => element.id === state.selectedId)) state.selectedId = "";
-        state.hasChanges = true;
+        if (!applyHistoryTransition(state, sketchHistory.undo(state))) return;
         renderCanvas(state);
     }
 
     function redo(state) {
-        if (!state.redo.length) return;
-        state.undo.push(clone(state.elements));
-        state.elements = state.redo.pop();
-        if (!state.elements.some(element => element.id === state.selectedId)) state.selectedId = "";
-        state.hasChanges = true;
+        if (!applyHistoryTransition(state, sketchHistory.redo(state))) return;
         renderCanvas(state);
     }
 
@@ -1016,10 +1010,9 @@
         state.root.querySelector(".dco-sketch-clear").addEventListener("click", () => {
             if (!state.elements.length) return;
             frappe.confirm("هل تريد مسح جميع عناصر الورقة؟", () => {
-                snapshot(state);
-                state.elements = [];
-                state.selectedId = "";
-                renderCanvas(state);
+                if (applyHistoryTransition(state, sketchHistory.clear(state))) {
+                    renderCanvas(state);
+                }
             });
         });
         state.root.querySelector(".dco-sketch-fullscreen-button").addEventListener("click", event => {
@@ -1204,15 +1197,12 @@
             dialog,
             root,
             svg: root.querySelector(".dco-sketch-paper"),
-            elements: parseDrawing(row.special_shape_drawing_json),
-            undo: [],
-            redo: [],
+            ...sketchHistory.createState(parseDrawing(row.special_shape_drawing_json)),
             draft: null,
             start: null,
             pointerId: null,
             pointerInside: false,
             hoverPoint: null,
-            selectedId: "",
             moving: null,
             panning: null,
             spaceHeld: false,
@@ -1232,7 +1222,6 @@
                 height: CANVAS_HEIGHT,
             },
             gridVisible: true,
-            hasChanges: false,
             allowClose: false,
             tool: "pen",
             color: COLORS[0],
