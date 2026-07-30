@@ -111,12 +111,16 @@
                 const x = offsetX + trimMm + num(piece.x) * 10;
                 const y = offsetY + fullHeight - trimMm - num(piece.y) * 10 - pieceHeight;
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
-                const specialGeometry = window.AlmdinaSpecialShapeGeometry;
-                const pathGeometry = clippedGeometry && clippedGeometry.isClipped(piece)
-                    ? clippedGeometry
-                    : (specialGeometry && specialGeometry.isExact(piece) ? specialGeometry : null);
-                entities += pathGeometry
-                    ? closedPath("CUT_PATH", pathGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight))
+                const shapeOutput = window.AlmdinaShapeOutputContract;
+                const clipped = clippedGeometry && clippedGeometry.isClipped(piece);
+                const exactSpecial = shapeOutput && shapeOutput.hasExactCutPath(piece);
+                const cutPath = clipped
+                    ? clippedGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
+                    : (exactSpecial
+                        ? shapeOutput.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
+                        : null);
+                entities += cutPath
+                    ? closedPath("CUT_PATH", cutPath)
                     : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
             });
         });

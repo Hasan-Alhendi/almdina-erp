@@ -241,15 +241,16 @@
                 const width = usableW ? num(piece.w) / usableW * 100 : 0;
                 const height = usableH ? num(piece.h) / usableH * 100 : 0;
                 const clipped = piece.piece_type === "Clipped Corner";
+                const clippedGeometry = window.AlmdinaClippedCornerGeometry;
+                const shapeOutput = window.AlmdinaShapeOutputContract;
                 const exactSpecial = piece.piece_type === "Special"
-                    && window.AlmdinaSpecialShapeGeometry
-                    && window.AlmdinaSpecialShapeGeometry.isExact(piece);
-                const shapeGeometry = clipped
-                    ? window.AlmdinaClippedCornerGeometry
-                    : (exactSpecial ? window.AlmdinaSpecialShapeGeometry : null);
-                const shapePoints = shapeGeometry
-                    ? shapeGeometry.pointsAttribute(piece, 100, 100)
-                    : "0,0 100,0 100,100 0,100";
+                    && shapeOutput
+                    && shapeOutput.hasExactCutPath(piece);
+                const shapePoints = clipped && clippedGeometry
+                    ? clippedGeometry.pointsAttribute(piece, 100, 100)
+                    : (exactSpecial
+                        ? shapeOutput.pointsAttribute(piece, 100, 100)
+                        : "0,0 100,0 100,100 0,100");
                 const shaped = clipped || exactSpecial;
                 const outline = shaped
                     ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1"><polygon points="${shapePoints}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
@@ -368,12 +369,16 @@
                 const x = offsetX + trim + num(piece.x) * 10;
                 const y = offsetY + fullH - trim - num(piece.y) * 10 - pieceH;
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
-                const specialGeometry = window.AlmdinaSpecialShapeGeometry;
-                const pathGeometry = clippedGeometry && clippedGeometry.isClipped(piece)
-                    ? clippedGeometry
-                    : (specialGeometry && specialGeometry.isExact(piece) ? specialGeometry : null);
-                entities += pathGeometry
-                    ? dxf_path("CUT_PATH", pathGeometry.dxfPoints(piece, x, y, pieceW, pieceH))
+                const shapeOutput = window.AlmdinaShapeOutputContract;
+                const clipped = clippedGeometry && clippedGeometry.isClipped(piece);
+                const exactSpecial = shapeOutput && shapeOutput.hasExactCutPath(piece);
+                const cutPath = clipped
+                    ? clippedGeometry.dxfPoints(piece, x, y, pieceW, pieceH)
+                    : (exactSpecial
+                        ? shapeOutput.dxfPoints(piece, x, y, pieceW, pieceH)
+                        : null);
+                entities += cutPath
+                    ? dxf_path("CUT_PATH", cutPath)
                     : dxf_rect("CUT_PATH", x, y, pieceW, pieceH);
             });
         });

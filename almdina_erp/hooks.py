@@ -32,6 +32,10 @@ app_include_js = [
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/shop_floor_desk.js",
     "/assets/almdina_erp/js/order_entry_desk.js",
+    # Shape output policy is framework-independent and shared by order forms,
+    # shop-floor cutting plans, customer printouts, and secure DXF exports.
+    "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
+    "/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js",
     # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
     "/assets/almdina_erp/js/secure_dxf_export.js",
     "/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js",
@@ -49,7 +53,6 @@ doctype_js = {
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
-        "public/js/door_cutting_order_special_shape_geometry.js",
         # Canonical shape printing owns readable text-only notes directly.
         "public/js/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order_operator_ux.js",

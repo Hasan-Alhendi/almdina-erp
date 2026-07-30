@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
+CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
 MEASUREMENTS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 EDGE_COLOR = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
@@ -25,12 +26,15 @@ def test_shared_shape_print_renderer_loads_before_every_print_surface():
     assert hooks.index(renderer) < hooks.index(invoice) < hooks.index(edge_color)
 
 
-def test_renderer_prefers_classic_drawing_and_falls_back_to_exact_geometry():
+def test_renderer_delegates_selection_to_the_shared_shape_output_contract():
     source = text(RENDERER)
-    assert "special_shape_drawing_json" in source
-    assert "special_shape_geometry_json" in source
-    assert "if (drawing) return drawingSvg(drawing, label)" in source
-    assert "return geometry ? geometrySvg(geometry, label) : \"\"" in source
+    contract = text(CONTRACT)
+    assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in source
+    assert "const selected = shapeOutput.visual(piece);" in source
+    assert 'selected.kind === "drawing"' in source
+    assert "const drawing = drawingFromPiece(piece);" in contract
+    assert 'return Object.freeze({ kind: "drawing", payload: drawing });' in contract
+    assert 'Object.freeze({ kind: "geometry", payload: polygon })' in contract
     for element_type in ("pen", "line", "rectangle", "ellipse", "dimension", "note"):
         assert f'element.type === "{element_type}"' in source
     assert "MAX_PRINT_POINTS" in source

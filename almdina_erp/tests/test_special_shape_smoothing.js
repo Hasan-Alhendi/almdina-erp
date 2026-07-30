@@ -34,6 +34,14 @@ require(path.resolve(
 ));
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_special_shape_geometry.js"
+));
+require(path.resolve(
+    __dirname,
+    "../public/js/door_cutting_order_shape_output_contract.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_special_shape_ux.js"
 ));
 
