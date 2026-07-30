@@ -39,6 +39,9 @@ PLAN_RENDERER = (
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 SKETCH_UX = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+SKETCH_ENGINE = (
+    APP_ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
+)
 COST_UX = APP_ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
@@ -99,6 +102,7 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
 def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     sketch = SKETCH_UX.read_text(encoding="utf-8")
+    engine = SKETCH_ENGINE.read_text(encoding="utf-8")
     hooks = HOOKS.read_text(encoding="utf-8")
 
     assert 'data-field="piece_type"' in operator
@@ -115,8 +119,8 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "dco-sketch-redo" in sketch
     assert "purpose: \"operator_documentation_only\"" in sketch
     assert "normalizePenStroke" in sketch
-    assert "fitNearlyStraightLine" in sketch
-    assert "smoothCorners" in sketch
+    assert "fitNearlyStraightLine" in engine
+    assert "smoothCorners" in engine
     assert "getCoalescedEvents" in sketch
     assert "clientPointToCanvas" in sketch
     assert "getScreenCTM" in sketch
