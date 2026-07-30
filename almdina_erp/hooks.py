@@ -46,6 +46,11 @@ doctype_js = {
         # Establish document identity before any renderer or asynchronous loader.
         # This prevents a shared Form wrapper from displaying the previous order.
         "public/js/door_cutting_order_document_context.js",
+        # The order form must be self-contained: FormMeta scripts can arrive while
+        # a cached Desk bundle is still active, so load the pure shape dependencies
+        # locally before every renderer, status surface, and editor that consumes them.
+        "public/js/door_cutting_order_special_shape_geometry.js",
+        "public/js/door_cutting_order_shape_output_contract.js",
         # The canonical DocType entry point is intentionally side-effect free;
         # drawing composition lives in this focused, reusable renderer.
         "public/js/door_cutting_order_cutting_plan_renderer.js",
