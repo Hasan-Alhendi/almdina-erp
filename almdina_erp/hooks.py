@@ -60,6 +60,8 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_actions_ux.js",
         # Pure geometry loads before the DOM editor that composes it.
         "public/js/door_cutting_order_sketch_engine.js",
+        # Document changes and undo/redo history are framework-independent.
+        "public/js/door_cutting_order_sketch_history.js",
         # Pure SVG presentation turns sketch state into safe, testable markup.
         "public/js/door_cutting_order_sketch_renderer.js",
         # The editor owns point-based inline notes and their font controls;

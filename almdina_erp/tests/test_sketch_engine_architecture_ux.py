@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 ENGINE = ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
+HISTORY = ROOT / "public" / "js" / "door_cutting_order_sketch_history.js"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order_sketch_renderer.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 
@@ -18,6 +19,9 @@ def test_pure_sketch_layers_load_before_the_dom_editor():
     engine_position = hooks.index(
         '"public/js/door_cutting_order_sketch_engine.js"'
     )
+    history_position = hooks.index(
+        '"public/js/door_cutting_order_sketch_history.js"'
+    )
     renderer_position = hooks.index(
         '"public/js/door_cutting_order_sketch_renderer.js"'
     )
@@ -25,7 +29,7 @@ def test_pure_sketch_layers_load_before_the_dom_editor():
         '"public/js/door_cutting_order_special_shape_ux.js"'
     )
 
-    assert engine_position < renderer_position < editor_position
+    assert engine_position < history_position < renderer_position < editor_position
 
 
 def test_sketch_engine_has_no_framework_or_dom_dependencies():
@@ -43,6 +47,24 @@ def test_sketch_engine_has_no_framework_or_dom_dependencies():
         assert dependency not in engine
 
     assert "window.AlmdinaSketchEngine = Object.freeze({" in engine
+
+
+def test_sketch_history_has_no_framework_or_dom_dependencies():
+    history = _source(HISTORY)
+
+    forbidden_dependencies = (
+        "frappe",
+        "document",
+        "querySelector",
+        "addEventListener",
+        "Dialog",
+    )
+
+    for dependency in forbidden_dependencies:
+        assert dependency not in history
+
+    assert "window.AlmdinaSketchHistory = Object.freeze({" in history
+    assert "const DEFAULT_HISTORY_LIMIT = 80;" in history
 
 
 def test_sketch_renderer_has_no_framework_or_dom_dependencies():
@@ -88,6 +110,35 @@ def test_editor_delegates_geometry_instead_of_reimplementing_it():
 
     for function_name in pure_functions:
         assert f"function {function_name}(" not in editor
+
+
+def test_editor_delegates_document_changes_and_history():
+    editor = _source(EDITOR)
+
+    assert "const sketchHistory = window.AlmdinaSketchHistory;" in editor
+    assert "sketchHistory.createState(" in editor
+    for operation in (
+        "snapshot",
+        "addElement",
+        "selectElement",
+        "deleteSelected",
+        "clear",
+        "undo",
+        "redo",
+    ):
+        assert f"sketchHistory.{operation}(" in editor
+
+    forbidden_ownership = (
+        "state.undo.push(",
+        "state.redo.push(",
+        "state.undo.pop(",
+        "state.redo.pop(",
+        "state.elements.push(",
+        "state.elements.splice(",
+    )
+
+    for mutation in forbidden_ownership:
+        assert mutation not in editor
 
 
 def test_editor_delegates_svg_and_sidebar_presentation():
