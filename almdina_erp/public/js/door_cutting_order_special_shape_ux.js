@@ -2,19 +2,21 @@
     "use strict";
 
     const sketchEngine = window.AlmdinaSketchEngine;
+    const sketchViewport = window.AlmdinaSketchViewport;
     const sketchInteraction = window.AlmdinaSketchInteraction;
     const sketchHistory = window.AlmdinaSketchHistory;
     const sketchRenderer = window.AlmdinaSketchRenderer;
     const inlineNoteEditor = window.AlmdinaInlineNoteEditor;
     if (
         !sketchEngine
+        || !sketchViewport
         || !sketchInteraction
         || !sketchHistory
         || !sketchRenderer
         || !inlineNoteEditor
     ) {
         console.error(
-            "Sketch engine, interaction, history, renderer, and inline note editor must load before the special-shape editor"
+            "Sketch engine, viewport, interaction, history, renderer, and inline note editor must load before the special-shape editor"
         );
         return;
     }
@@ -23,9 +25,9 @@
     const DEFAULT_ERASER_RADIUS = sketchEngine.DEFAULT_ERASER_RADIUS;
     const MIN_ERASER_RADIUS = sketchEngine.MIN_ERASER_RADIUS;
     const MAX_ERASER_RADIUS = sketchEngine.MAX_ERASER_RADIUS;
-    const MIN_ZOOM = 1;
-    const MAX_ZOOM = 4;
-    const ZOOM_STEP = 1.25;
+    const MIN_ZOOM = sketchViewport.MIN_ZOOM;
+    const MAX_ZOOM = sketchViewport.MAX_ZOOM;
+    const ZOOM_STEP = sketchViewport.ZOOM_STEP;
     const ENDPOINT_SNAP_RADIUS = sketchEngine.DEFAULT_SNAP_RADIUS;
     const DEFAULT_NOTE_FONT_SIZE = inlineNoteEditor.DEFAULT_FONT_SIZE;
     const COLORS = ["#172033", "#c2352a", "#1769aa"];
@@ -70,11 +72,6 @@
         element,
         { noteFontSize: clampNoteFontSize }
     );
-    const clampViewBox = viewBox => sketchEngine.clampViewBox(
-        viewBox,
-        { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, maxZoom: MAX_ZOOM }
-    );
-
     function parseDrawing(raw) {
         if (!raw) return [];
         try {
@@ -309,7 +306,7 @@
         state.root.querySelector(".dco-sketch-progress").innerHTML = view.progress;
     }
 
-    function clientPointToCanvas(svg, clientX, clientY) {
+    function clientPointToCanvas(svg, clientX, clientY, viewBox = null) {
         try {
             const matrix = svg.getScreenCTM && svg.getScreenCTM();
             if (matrix && svg.createSVGPoint) {
@@ -317,23 +314,29 @@
                 point.x = Number(clientX);
                 point.y = Number(clientY);
                 const transformed = point.matrixTransform(matrix.inverse());
-                return {
-                    x: Math.max(0, Math.min(CANVAS_WIDTH, transformed.x)),
-                    y: Math.max(0, Math.min(CANVAS_HEIGHT, transformed.y)),
-                };
+                return sketchViewport.clampPoint(transformed, {
+                    canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+                });
             }
         } catch (error) {
             // Some older browsers can briefly expose a non-invertible matrix while resizing.
         }
         const rect = svg.getBoundingClientRect();
-        return {
-            x: Math.max(0, Math.min(CANVAS_WIDTH, (Number(clientX) - rect.left) * CANVAS_WIDTH / rect.width)),
-            y: Math.max(0, Math.min(CANVAS_HEIGHT, (Number(clientY) - rect.top) * CANVAS_HEIGHT / rect.height)),
-        };
+        return sketchViewport.mapClientPoint(
+            { x: clientX, y: clientY },
+            rect,
+            viewBox,
+            { canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT } }
+        );
     }
 
-    function pointFromEvent(svg, event) {
-        return clientPointToCanvas(svg, event.clientX, event.clientY);
+    function pointFromEvent(svg, event, viewBox = null) {
+        return clientPointToCanvas(
+            svg,
+            event.clientX,
+            event.clientY,
+            viewBox
+        );
     }
 
     function updateCursorPreview(state, point = state.hoverPoint, visible = state.pointerInside) {
@@ -400,30 +403,52 @@
         const zoomIn = state.root.querySelector(".dco-sketch-zoom-in");
         const zoomOut = state.root.querySelector(".dco-sketch-zoom-out");
         if (!value || !zoomIn || !zoomOut) return;
-        value.textContent = `${Math.round(state.zoom * 100)}%`;
-        zoomIn.disabled = state.zoom >= MAX_ZOOM - 0.001;
-        zoomOut.disabled = state.zoom <= MIN_ZOOM + 0.001;
+        const controls = sketchViewport.zoomControls(state.zoom, {
+            minZoom: MIN_ZOOM,
+            maxZoom: MAX_ZOOM,
+        });
+        value.textContent = `${controls.percentage}%`;
+        zoomIn.disabled = !controls.canZoomIn;
+        zoomOut.disabled = !controls.canZoomOut;
     }
 
     function setZoom(state, zoom, anchor = state.hoverPoint) {
-        const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(zoom) || MIN_ZOOM));
-        const current = state.viewBox;
-        const focus = anchor || {
-            x: current.x + current.width / 2,
-            y: current.y + current.height / 2,
-        };
-        const ratioX = current.width ? (focus.x - current.x) / current.width : 0.5;
-        const ratioY = current.height ? (focus.y - current.y) / current.height : 0.5;
-        const width = CANVAS_WIDTH / nextZoom;
-        const height = CANVAS_HEIGHT / nextZoom;
-        state.zoom = nextZoom;
-        state.viewBox = clampViewBox({
-            x: focus.x - width * ratioX,
-            y: focus.y - height * ratioY,
-            width,
-            height,
-        });
+        Object.assign(state, sketchViewport.zoomState(state, zoom, anchor, {
+            canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+            minZoom: MIN_ZOOM,
+            maxZoom: MAX_ZOOM,
+        }));
         renderCanvas(state);
+    }
+
+    function resetZoom(state) {
+        Object.assign(state, sketchViewport.resetState({
+            canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+            minZoom: MIN_ZOOM,
+            maxZoom: MAX_ZOOM,
+        }));
+        renderCanvas(state);
+    }
+
+    function beginPan(state, event) {
+        state.panning = sketchViewport.beginPan({
+            x: event.clientX,
+            y: event.clientY,
+        }, state.viewBox);
+    }
+
+    function continuePan(state, event) {
+        const rect = state.svg.getBoundingClientRect();
+        state.viewBox = sketchViewport.panState(
+            state.panning,
+            { x: event.clientX, y: event.clientY },
+            rect,
+            {
+                canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+                maxZoom: MAX_ZOOM,
+            }
+        );
+        return state.viewBox;
     }
 
     function cancelScheduledRender(state) {
@@ -525,18 +550,23 @@
         notice.textContent = "تمت إضافة الشكل؛ اسحبه لتحريكه ثم أضف القياسات الحقيقية";
     }
 
-    function pointerSamples(svg, event, forceLast = false) {
+    function pointerSamples(svg, event, viewBox, forceLast = false) {
         const samples = typeof event.getCoalescedEvents === "function"
             ? event.getCoalescedEvents()
             : [event];
         const source = samples.length ? samples : [event];
         const points = source.map(sample => {
-            const mapped = clientPointToCanvas(svg, sample.clientX, sample.clientY);
+            const mapped = clientPointToCanvas(
+                svg,
+                sample.clientX,
+                sample.clientY,
+                viewBox
+            );
             return [mapped.x, mapped.y];
         });
         let finalPoint = null;
         if (forceLast && source[source.length - 1] !== event) {
-            const point = pointFromEvent(svg, event);
+            const point = pointFromEvent(svg, event, viewBox);
             finalPoint = [point.x, point.y];
         }
         return { points, finalPoint };
@@ -637,18 +667,14 @@
     function beginDrawing(state, event) {
         const wantsPan = Boolean(state.spaceHeld || event.button === 1);
         if (event.button !== undefined && event.button !== 0 && !wantsPan) return;
-        let point = pointFromEvent(state.svg, event);
+        let point = pointFromEvent(state.svg, event, state.viewBox);
         state.pointerInside = true;
         state.hoverPoint = point;
         state.snapPoint = null;
 
         if (wantsPan) {
             state.pointerId = event.pointerId;
-            state.panning = {
-                clientX: Number(event.clientX),
-                clientY: Number(event.clientY),
-                viewBox: { ...state.viewBox },
-            };
+            beginPan(state, event);
             state.svg.classList.add("is-panning");
             state.svg.setPointerCapture(event.pointerId);
             updateCursorPreview(state);
@@ -711,22 +737,13 @@
     }
 
     function continueDrawing(state, event) {
-        const point = pointFromEvent(state.svg, event);
+        const point = pointFromEvent(state.svg, event, state.viewBox);
         state.pointerInside = true;
         state.hoverPoint = point;
         updateCursorPreview(state, point, true);
 
         if (state.panning && event.pointerId === state.pointerId) {
-            const rect = state.svg.getBoundingClientRect();
-            const dx = (Number(event.clientX) - state.panning.clientX)
-                * state.panning.viewBox.width / Math.max(1, rect.width);
-            const dy = (Number(event.clientY) - state.panning.clientY)
-                * state.panning.viewBox.height / Math.max(1, rect.height);
-            state.viewBox = clampViewBox({
-                ...state.panning.viewBox,
-                x: state.panning.viewBox.x - dx,
-                y: state.panning.viewBox.y - dy,
-            });
+            continuePan(state, event);
             scheduleCanvasRender(state);
             event.preventDefault();
             return;
@@ -750,7 +767,7 @@
         }
         if (!state.draft || event.pointerId !== state.pointerId) return;
         const samples = state.draft.type === "pen"
-            ? pointerSamples(state.svg, event)
+            ? pointerSamples(state.svg, event, state.viewBox)
             : { points: [], finalPoint: null };
         const transition = sketchInteraction.updateDraft({
             draft: state.draft,
@@ -795,7 +812,7 @@
         }
         if (state.erasing && event.pointerId === state.pointerId) {
             if (event.type !== "pointercancel") {
-                const point = pointFromEvent(state.svg, event);
+                const point = pointFromEvent(state.svg, event, state.viewBox);
                 state.hoverPoint = point;
                 applyEraser(state, state.eraserLast || point, point);
             }
@@ -813,7 +830,7 @@
         cancelScheduledRender(state);
         if (event.type !== "pointercancel") {
             const samples = state.draft.type === "pen"
-                ? pointerSamples(state.svg, event, true)
+                ? pointerSamples(state.svg, event, state.viewBox, true)
                 : { points: [], finalPoint: null };
             if (
                 state.draft.type === "pen"
@@ -823,7 +840,7 @@
                 const transition = sketchInteraction.updateDraft({
                     draft: state.draft,
                     start: state.start,
-                    point: pointFromEvent(state.svg, event),
+                    point: pointFromEvent(state.svg, event, state.viewBox),
                     elements: state.elements,
                     forceAngle: Boolean(event.shiftKey),
                     penPoints: samples.points,
@@ -912,15 +929,12 @@
             setZoom(state, state.zoom / ZOOM_STEP);
         });
         state.root.querySelector(".dco-sketch-zoom-reset").addEventListener("click", () => {
-            setZoom(state, MIN_ZOOM, {
-                x: CANVAS_WIDTH / 2,
-                y: CANVAS_HEIGHT / 2,
-            });
+            resetZoom(state);
         });
         state.svg.addEventListener("wheel", event => {
             if (!event.ctrlKey && !event.metaKey) return;
             event.preventDefault();
-            state.hoverPoint = pointFromEvent(state.svg, event);
+            state.hoverPoint = pointFromEvent(state.svg, event, state.viewBox);
             setZoom(
                 state,
                 event.deltaY < 0 ? state.zoom * ZOOM_STEP : state.zoom / ZOOM_STEP,
@@ -1006,7 +1020,7 @@
         state.svg.addEventListener("pointercancel", event => finishDrawing(state, event));
         state.svg.addEventListener("pointerenter", event => {
             state.pointerInside = true;
-            state.hoverPoint = pointFromEvent(state.svg, event);
+            state.hoverPoint = pointFromEvent(state.svg, event, state.viewBox);
             updateCursorPreview(state);
         });
         state.svg.addEventListener("pointerleave", () => {
@@ -1063,10 +1077,7 @@
                 setZoom(state, state.zoom / ZOOM_STEP);
             } else if (event.key === "0") {
                 event.preventDefault();
-                setZoom(state, MIN_ZOOM, {
-                    x: CANVAS_WIDTH / 2,
-                    y: CANVAS_HEIGHT / 2,
-                });
+                resetZoom(state);
             }
         };
         state.keyUpHandler = event => {
@@ -1187,13 +1198,11 @@
             noteFontSize: DEFAULT_NOTE_FONT_SIZE,
             inlineNoteEditor: null,
             renderFrame: null,
-            zoom: MIN_ZOOM,
-            viewBox: {
-                x: 0,
-                y: 0,
-                width: CANVAS_WIDTH,
-                height: CANVAS_HEIGHT,
-            },
+            ...sketchViewport.createState({
+                canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
+                minZoom: MIN_ZOOM,
+                maxZoom: MAX_ZOOM,
+            }),
             gridVisible: true,
             allowClose: false,
             tool: "pen",
@@ -1229,6 +1238,6 @@
         translateElement,
         elementBounds,
         templatePoints,
-        clampViewBox,
+        clampViewBox: sketchEngine.clampViewBox,
     };
 })();

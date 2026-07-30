@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 ENGINE = ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
+VIEWPORT = ROOT / "public" / "js" / "door_cutting_order_sketch_viewport.js"
 INTERACTION = ROOT / "public" / "js" / "door_cutting_order_sketch_interaction.js"
 HISTORY = ROOT / "public" / "js" / "door_cutting_order_sketch_history.js"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order_sketch_renderer.js"
@@ -20,6 +21,9 @@ def test_pure_sketch_layers_load_before_the_dom_editor():
     engine_position = hooks.index(
         '"public/js/door_cutting_order_sketch_engine.js"'
     )
+    viewport_position = hooks.index(
+        '"public/js/door_cutting_order_sketch_viewport.js"'
+    )
     interaction_position = hooks.index(
         '"public/js/door_cutting_order_sketch_interaction.js"'
     )
@@ -35,6 +39,7 @@ def test_pure_sketch_layers_load_before_the_dom_editor():
 
     assert (
         engine_position
+        < viewport_position
         < interaction_position
         < history_position
         < renderer_position
@@ -57,6 +62,28 @@ def test_sketch_engine_has_no_framework_or_dom_dependencies():
         assert dependency not in engine
 
     assert "window.AlmdinaSketchEngine = Object.freeze({" in engine
+
+
+def test_sketch_viewport_has_no_framework_or_dom_dependencies():
+    viewport = _source(VIEWPORT)
+
+    forbidden_dependencies = (
+        "frappe",
+        "document",
+        "querySelector",
+        "addEventListener",
+        "PointerEvent",
+        "getBoundingClientRect",
+        "getScreenCTM",
+        "Dialog",
+    )
+
+    for dependency in forbidden_dependencies:
+        assert dependency not in viewport
+
+    assert "const sketchEngine = window.AlmdinaSketchEngine;" in viewport
+    assert "window.AlmdinaSketchViewport = Object.freeze({" in viewport
+    assert "sketchEngine.clampViewBox(" in viewport
 
 
 def test_sketch_interaction_has_no_framework_or_dom_dependencies():
@@ -189,6 +216,34 @@ def test_editor_delegates_draft_interaction_transitions():
 
     for mutation in forbidden_ownership:
         assert mutation not in editor
+
+
+def test_editor_delegates_viewport_zoom_and_pan_calculations():
+    editor = _source(EDITOR)
+
+    assert "const sketchViewport = window.AlmdinaSketchViewport;" in editor
+    for operation in (
+        "clampPoint",
+        "createState",
+        "mapClientPoint",
+        "zoomState",
+        "resetState",
+        "zoomControls",
+        "beginPan",
+        "panState",
+    ):
+        assert f"sketchViewport.{operation}(" in editor
+
+    forbidden_ownership = (
+        "const nextZoom =",
+        "state.viewBox = clampViewBox(",
+        "state.panning = {",
+        "* state.panning.viewBox.width /",
+        "width: CANVAS_WIDTH / nextZoom",
+    )
+
+    for calculation in forbidden_ownership:
+        assert calculation not in editor
 
 
 def test_editor_delegates_svg_and_sidebar_presentation():
