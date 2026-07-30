@@ -21,21 +21,6 @@ def _internal_loss(order_name: str) -> float:
     )
 
 
-def _material_variance(order_name: str) -> float:
-    return flt(
-        frappe.db.sql(
-            """
-            select coalesce(sum(material_variance_cost_usd), 0)
-            from `tabMaterial Consumption Log`
-            where door_cutting_order = %s
-              and status = 'Submitted'
-              and coalesce(actual_recorded, 0) = 1
-            """,
-            (order_name,),
-        )[0][0]
-    )
-
-
 def get_order_cost_summary(order_name: str) -> dict[str, Any]:
     order = frappe.get_doc("Door Cutting Order", order_name)
     planned_cost = flt(order.total_cost_usd)
@@ -46,12 +31,13 @@ def get_order_cost_summary(order_name: str) -> dict[str, Any]:
         ) or planned_cost
 
     internal_loss = _internal_loss(order_name)
-    material_variance = _material_variance(order_name)
-    actual_cost = planned_cost + material_variance + internal_loss
+    actual_cost = planned_cost + internal_loss
 
     return {
         "planned_cost_usd": planned_cost,
-        "material_variance_cost_usd": material_variance,
+        # Retained as a zero-valued compatibility key for existing callers.
+        # Inventory consumption and variance accounting are outside the product.
+        "material_variance_cost_usd": 0.0,
         "internal_loss_cost_usd": internal_loss,
         "actual_cost_usd": actual_cost,
         "variance_usd": actual_cost - planned_cost,
@@ -83,16 +69,15 @@ def on_order_plan_update(doc: Any, method: str | None = None) -> None:
         return
 
     # This hook runs while the new approved plan may not yet be linked into the
-    # order. Use this plan directly, but still include already-recorded actual
-    # consumption variances and completed internal replacement losses.
+    # order. Use this plan directly and include completed internal replacement
+    # losses; stock-consumption variance is outside the product boundary.
     internal_loss = _internal_loss(doc.door_cutting_order)
-    material_variance = _material_variance(doc.door_cutting_order)
     frappe.db.set_value(
         "Door Cutting Order",
         doc.door_cutting_order,
         {
-            "actual_cost_usd": flt(doc.total_cost_usd) + material_variance + internal_loss,
-            "material_variance_cost_usd": material_variance,
+            "actual_cost_usd": flt(doc.total_cost_usd) + internal_loss,
+            "material_variance_cost_usd": 0,
             "internal_loss_cost_usd": internal_loss,
         },
         update_modified=True,

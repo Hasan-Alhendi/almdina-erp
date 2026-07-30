@@ -10,7 +10,7 @@ SAVE_RENDER_GUARD = (
     ROOT / "public" / "js" / "door_cutting_order_save_render_performance_ux.js"
 )
 HOOKS = ROOT / "hooks.py"
-LEGACY_ORDER_FORM = (
+CANONICAL_ORDER_FORM = (
     ROOT
     / "almdina_erp"
     / "doctype"
@@ -53,28 +53,23 @@ class TestInputStabilityUxContract(unittest.TestCase):
         self.assertIn("activeIdentity === currentIdentity", source)
         self.assertIn("form._almdinaDeferredRefreshIdentity !== currentIdentity", source)
 
-    def test_arabic_composition_and_normal_typing_invalidate_old_responses(self) -> None:
+    def test_focus_identity_is_tracked_without_global_keystroke_hooks(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")
 
         self.assertIn('document.addEventListener("focusin"', source)
-        self.assertIn('document.addEventListener("beforeinput"', source)
-        self.assertIn('document.addEventListener("compositionstart"', source)
-        self.assertIn('document.addEventListener("compositionend"', source)
-        self.assertIn("state.generation += 1", source)
-        self.assertIn("state.composing = true", source)
-        self.assertIn("state.composing = false", source)
+        self.assertIn("rememberEditingIdentity(event.target)", source)
+        self.assertNotIn('document.addEventListener("beforeinput"', source)
+        self.assertNotIn('document.addEventListener("compositionstart"', source)
+        self.assertNotIn("state.generation", source)
+        self.assertNotIn("state.composing", source)
 
-    def test_stale_live_preview_cannot_write_back_over_user_input_or_another_order(self) -> None:
+    def test_input_guard_does_not_monkey_patch_network_calls(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")
 
-        self.assertIn("options.method !== PREVIEW_METHOD", source)
-        self.assertIn("const requestGeneration = state.generation", source)
-        self.assertIn("const requestIdentity = formIdentity(requestForm)", source)
-        self.assertIn("state.generation !== requestGeneration", source)
-        self.assertIn("activeElementBelongsToForm(requestForm)", source)
-        self.assertIn("const documentChanged", source)
-        self.assertIn("formIdentity(window.cur_frm) !== requestIdentity", source)
-        self.assertIn("if (inputChanged || state.composing || editing || documentChanged)", source)
+        self.assertNotIn("PREVIEW_METHOD", source)
+        self.assertNotIn("installPreviewResponseGuard", source)
+        self.assertNotIn("frappe.call =", source)
+        self.assertNotIn("_almdinaInputSafePatched", source)
 
     def test_render_optimizations_are_scoped_to_the_current_order(self) -> None:
         source = SAVE_RENDER_GUARD.read_text(encoding="utf-8")
@@ -89,38 +84,22 @@ class TestInputStabilityUxContract(unittest.TestCase):
         self.assertIn("existingName === currentName", source)
         self.assertIn("tagCostShell", source)
 
-    def test_obsolete_live_preview_handlers_are_removed_for_all_order_inputs(self) -> None:
+    def test_guard_does_not_inspect_frappe_private_handler_registry(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")
 
-        for fieldname in (
-            "board_description",
-            "customer",
-            "width_cm",
-            "length_cm",
-            "qty",
-            "notes",
-            "edge_type",
-        ):
-            self.assertIn(f'"{fieldname}"', source)
+        self.assertNotIn("frappe.ui.form.handlers", source)
+        self.assertNotIn("removeDoorOrderLivePreviewHandlers", source)
+        self.assertNotIn("Function.prototype.toString", source)
 
-        self.assertIn("removeDoorOrderLivePreviewHandlers", source)
-        self.assertIn('source.includes("schedule_recalculate")', source)
-
-    def test_contract_covers_the_recorded_failure_mechanism(self) -> None:
-        legacy = LEGACY_ORDER_FORM.read_text(encoding="utf-8")
+    def test_recorded_preview_failure_mechanism_has_been_removed(self) -> None:
+        canonical = CANONICAL_ORDER_FORM.read_text(encoding="utf-8")
         guard = INPUT_STABILITY.read_text(encoding="utf-8")
 
-        # The historical form still shows why the bug occurred: preview writes
-        # source fields back and refreshes the whole child grid asynchronously.
-        self.assertIn('"board_description"', legacy)
-        self.assertIn('frm.refresh_field("pieces")', legacy)
-        self.assertIn("schedule_recalculate(frm)", legacy)
-
-        # The central policy must guard both mechanisms until that legacy file is
-        # removed during the planned frontend consolidation.
-        self.assertIn("installPreviewResponseGuard", guard)
+        self.assertNotIn("preview_door_cutting_order", canonical)
+        self.assertNotIn('frm.refresh_field("pieces")', canonical)
+        self.assertNotIn("schedule_recalculate", canonical)
+        self.assertNotIn("frappe.ui.form.on", canonical)
         self.assertIn("installRefreshFieldGuard", guard)
-        self.assertIn("removeDoorOrderLivePreviewHandlers", guard)
 
 
 if __name__ == "__main__":

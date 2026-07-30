@@ -7,7 +7,6 @@ ADMIN_ROLES = (
 	"System Manager",
 	"Production Manager",
 	"Order Entry",
-	"Stock Manager",
 	"Accounts Management",
 )
 SHOP_FLOOR_WORKSPACE = "Shop Floor"
@@ -20,11 +19,7 @@ ORDER_ENTRY_WORKSPACE = "Almdina ERP"
 FACTORY_MANAGER_ROLES = (
 	"Order Entry",
 	"Production Manager",
-	"Stock Manager",
-	"Stock User",
-	"Item Manager",
 	"Accounts Management",
-	"Sales User",
 	"Cutting Operator",
 	"Edge Operator",
 )
@@ -32,15 +27,13 @@ FACTORY_MANAGER_ROLES = (
 # Keep only Almdina ERP module visible; block everything else for operators.
 ALLOWED_MODULES_FOR_SHOP_FLOOR = ("Almdina ERP",)
 
-# The Almdina workspace links to Item / Warehouse / Customer / Company, so those
-# ERPNext modules stay unblocked even though only the factory app icon is shown.
+# Customer selection still depends on ERPNext Selling; factory screens stay
+# inside the Almdina application.
 ALLOWED_MODULES_FOR_ORDER_ENTRY = (
 	"Almdina ERP",
-	"Stock",
 	"Selling",
 	"Setup",
 	"Accounts",
-	"Manufacturing",
 )
 
 # Only the Almdina desktop icons are surfaced to the factory manager.
@@ -201,8 +194,8 @@ def _boot_order_entry(bootinfo) -> None:
 			k: v for k, v in module_map.items() if k in ORDER_ENTRY_ICON_MODULES
 		}
 
-	# ERPNext modules stay unblocked so the factory links (Item/Warehouse/Customer)
-	# keep working, but only the Almdina workspaces are listed in the sidebar.
+	# Required framework modules stay available while only Almdina workspaces are
+	# listed in the sidebar.
 	allowed_workspaces = set()
 	workspaces = bootinfo.get("workspaces")
 	if isinstance(workspaces, dict):

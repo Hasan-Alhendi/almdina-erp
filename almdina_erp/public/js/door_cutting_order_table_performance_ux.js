@@ -223,11 +223,15 @@
     function updatePieceTypeVisual(frm, tr, row) {
         const special = row.piece_type === "Special";
         const clipped = row.piece_type === "Clipped Corner";
-        const drawing = Boolean(String(row.special_shape_drawing_json || "").trim());
+        const shapeOutput = window.AlmdinaShapeOutputContract;
+        const drawing = Boolean(
+            shapeOutput
+            && shapeOutput.drawingFromPiece(row)
+        );
         const exact = Boolean(
             special
-            && window.AlmdinaSpecialShapeGeometry
-            && window.AlmdinaSpecialShapeGeometry.isExact(row)
+            && shapeOutput
+            && shapeOutput.hasExactCutPath(row)
         );
         tr.classList.toggle("dco-special-row", special);
         tr.classList.toggle("dco-clipped-corner-row", clipped);

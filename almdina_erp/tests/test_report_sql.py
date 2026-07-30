@@ -15,11 +15,9 @@ def test_factory_operations_summary_uses_order_alias_for_date_filters(monkeypatc
             source_area=0,
             used_area=0,
             waste_area=0,
-            reusable_area=0,
             scrap_area=0,
             planned_cost=0,
             actual_cost=0,
-            material_variance=0,
             internal_loss=0,
         )]
 

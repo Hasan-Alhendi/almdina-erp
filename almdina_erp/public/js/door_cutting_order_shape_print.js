@@ -3,8 +3,11 @@
 
     const DEFAULT_CANVAS = { width: 1000, height: 650 };
     const MAX_PRINT_POINTS = 1800;
-    const PARSE_CACHE_LIMIT = 300;
-    const parseCache = new Map();
+    const shapeOutput = window.AlmdinaShapeOutputContract;
+    if (!shapeOutput) {
+        console.error("Shape output contract must load before the printable shape renderer");
+        return;
+    }
     let previewSequence = 0;
 
     function esc(value) {
@@ -31,48 +34,18 @@
         return /^#[0-9a-f]{3,8}$/i.test(color) ? color : "#172033";
     }
 
+    function clampPrintedNoteFontSize(value) {
+        const parsed = Number(value || 0);
+        if (!Number.isFinite(parsed)) return 24;
+        return Math.max(24, Math.min(38, parsed));
+    }
+
     function parse(raw) {
-        if (!raw) return null;
-        try {
-            if (typeof raw !== "string") return raw;
-            if (parseCache.has(raw)) return parseCache.get(raw);
-            const payload = JSON.parse(raw);
-            parseCache.set(raw, payload);
-            if (parseCache.size > PARSE_CACHE_LIMIT) {
-                parseCache.delete(parseCache.keys().next().value);
-            }
-            return payload;
-        } catch (error) {
-            return null;
-        }
+        return shapeOutput.parseDrawing(raw) || shapeOutput.parseGeometry(raw);
     }
 
-    function drawingPayload(piece) {
-        const payload = parse(piece && (
-            piece.special_shape_drawing_json
-            || piece.drawing_json
-        ));
-        return (
-            payload
-            && Number(payload.version) === 1
-            && Array.isArray(payload.elements)
-            && payload.elements.length
-        ) ? payload : null;
-    }
-
-    function geometryPayload(piece) {
-        const payload = parse(piece && (
-            piece.special_shape_geometry_json
-            || piece.geometry_json
-        ));
-        return (
-            payload
-            && Number(payload.version) === 1
-            && payload.kind === "polygon"
-            && Array.isArray(payload.points)
-            && payload.points.length >= 3
-        ) ? payload : null;
-    }
+    const drawingPayload = shapeOutput.drawingFromPiece;
+    const geometryPayload = shapeOutput.geometryFromPiece;
 
     function pointPair(point) {
         if (!Array.isArray(point) || point.length < 2) return null;
@@ -153,11 +126,20 @@
         }
         if (element.type === "note") {
             const text = String(element.text || "");
+            const fontSize = clampPrintedNoteFontSize(
+                element.font_size || element.fontSize || 24
+            );
+            const width = Math.min(
+                460,
+                Math.max(fontSize * 2, Math.min(34, text.length) * fontSize * 0.62)
+            );
+            const x = finite(element.x);
+            const anchor = element.text_anchor === "middle" ? "middle" : "end";
             return {
-                x: finite(element.x),
-                y: finite(element.y) - 34,
-                width: Math.min(330, Math.max(120, Math.min(34, text.length) * 9)),
-                height: 46,
+                x: anchor === "middle" ? x - width / 2 : x - width,
+                y: finite(element.y) - fontSize * 0.7,
+                width,
+                height: fontSize * 1.4,
             };
         }
         return null;
@@ -231,12 +213,14 @@
         if (element.type === "note") {
             const text = String(element.text || "");
             const displayText = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-            const width = Math.min(330, Math.max(120, displayText.length * 9));
             const x = finite(element.x);
             const y = finite(element.y);
+            const fontSize = clampPrintedNoteFontSize(
+                element.font_size || element.fontSize || 24
+            );
+            const anchor = element.text_anchor === "middle" ? "middle" : "end";
             return `<g>
-                <rect x="${x}" y="${y - 31}" width="${width}" height="42" rx="8" fill="#fff8c9" stroke="#b9a34f" stroke-width="1"/>
-                <text x="${x + width - 10}" y="${y - 5}" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-family="Tahoma,Arial,sans-serif" font-size="16" font-weight="700" fill="#4c421a">${esc(displayText)}</text>
+                <text data-dco-readable-note="1" x="${x}" y="${y}" direction="rtl" unicode-bidi="plaintext" text-anchor="${anchor}" dominant-baseline="middle" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="800" fill="${color}" paint-order="stroke" stroke="#fff" stroke-width="2.4" stroke-linejoin="round">${esc(displayText)}</text>
             </g>`;
         }
         return "";
@@ -271,14 +255,15 @@
 
     function svg(piece, options = {}) {
         const label = options.label || "رسمة الدرفة";
-        const drawing = drawingPayload(piece);
-        if (drawing) return drawingSvg(drawing, label);
-        const geometry = geometryPayload(piece);
-        return geometry ? geometrySvg(geometry, label) : "";
+        const selected = shapeOutput.visual(piece);
+        if (!selected) return "";
+        return selected.kind === "drawing"
+            ? drawingSvg(selected.payload, label)
+            : geometrySvg(selected.payload, label);
     }
 
     function hasVisual(piece) {
-        return Boolean(drawingPayload(piece) || geometryPayload(piece));
+        return shapeOutput.hasVisual(piece);
     }
 
     function notesCell(piece, notes, options = {}) {
@@ -299,6 +284,7 @@
 .dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
 .dco-piece-sketch{display:block;margin:0;padding:3px 4px 2px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}
 .dco-piece-sketch svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}
+.dco-piece-sketch svg text[data-dco-readable-note="1"]{font-family:Tahoma,"Segoe UI",Arial,sans-serif!important}
 .dco-piece-sketch figcaption{margin-top:1px;color:#59636d;font-size:7px;font-weight:700;line-height:1.2;text-align:center}
 tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}
 td.dco-notes-has-sketch{min-width:38mm}

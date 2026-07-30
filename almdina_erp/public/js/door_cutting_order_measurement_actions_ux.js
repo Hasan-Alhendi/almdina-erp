@@ -110,7 +110,7 @@ ${shapePrintCss()}
 </style></head><body>
 <div class="sheet">
 <div class="header"><div><h1>جدول قياسات الطلب</h1><div class="muted">نفس تنسيق قياسات فاتورة الطلب دون تفاصيل الأسعار والفاتورة</div></div><div style="text-align:left"><b>${esc(orderName)}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div></div>
-<div class="info"><div><b>رقم الطلب</b>${esc(orderName)}</div><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>صنف اللوح</b>${esc(frm.doc.board_item || "—")}</div><div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
+<div class="info"><div><b>رقم الطلب</b>${esc(orderName)}</div><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div><div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
 <div class="section-title">جدول القياسات</div>${measurementsTable(frm)}
 ${frm.doc.order_notes ? `<div style="margin-top:10px;padding:7px;border:1px solid #aaa;min-height:32px"><b>ملاحظات الطلب:</b> ${esc(frm.doc.order_notes)}</div>` : ""}
 <div class="footer"><span>رقم الطلب: ${esc(orderName)}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>

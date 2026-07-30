@@ -7,6 +7,14 @@ global.window = {};
 
 require(path.resolve(
     __dirname,
+    "../public/js/door_cutting_order_special_shape_geometry.js"
+));
+require(path.resolve(
+    __dirname,
+    "../public/js/door_cutting_order_shape_output_contract.js"
+));
+require(path.resolve(
+    __dirname,
     "../public/js/door_cutting_order_shape_print.js"
 ));
 
@@ -41,6 +49,8 @@ const classicPiece = {
                 x: 380,
                 y: 330,
                 text: "<script>قص مائل</script>",
+                font_size: 32,
+                text_anchor: "middle",
             },
         ],
     }),
@@ -52,6 +62,11 @@ assert.match(classicSvg, /<svg /);
 assert.match(classicSvg, /<path /);
 assert.match(classicSvg, /<line /);
 assert.match(classicSvg, /&lt;script&gt;قص مائل/);
+assert.match(classicSvg, /data-dco-readable-note="1"/);
+assert.match(classicSvg, /font-size="32"/);
+assert.match(classicSvg, /text-anchor="middle"/);
+assert.match(classicSvg, /paint-order="stroke"/);
+assert.doesNotMatch(classicSvg, /fill="#fff8c9"/);
 assert.doesNotMatch(classicSvg, /<script>/);
 assert.doesNotMatch(classicSvg, /url\(javascript:/);
 
@@ -77,6 +92,17 @@ const geometryPiece = {
 };
 assert.equal(renderer.hasVisual(geometryPiece), true);
 assert.match(renderer.svg(geometryPiece), /<polygon /);
+
+const documentedGeometryPiece = {
+    ...geometryPiece,
+    special_shape_drawing_json: classicPiece.special_shape_drawing_json,
+};
+assert.match(renderer.svg(documentedGeometryPiece), /<path /);
+assert.doesNotMatch(
+    renderer.svg(documentedGeometryPiece),
+    /<polygon /,
+    "Customer documents must prefer the operator drawing over the CNC fallback"
+);
 
 const regularPiece = { piece_type: "Regular" };
 assert.equal(renderer.hasVisual(regularPiece), false);

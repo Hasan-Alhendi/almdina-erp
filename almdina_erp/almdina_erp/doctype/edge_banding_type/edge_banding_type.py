@@ -11,7 +11,6 @@ from frappe.utils import flt
 class EdgeBandingType(Document):
     def validate(self) -> None:
         self._validate_thickness()
-        self._refresh_stock_uom()
 
     def _validate_thickness(self) -> None:
         try:
@@ -27,10 +26,3 @@ class EdgeBandingType(Document):
                 frappe.ValidationError,
             )
         self.thickness_mm = flt(thickness_mm, 3)
-
-    def _refresh_stock_uom(self) -> None:
-        self.stock_uom = ""
-        if self.item_code:
-            self.stock_uom = (
-                frappe.db.get_value("Item", self.item_code, "stock_uom") or ""
-            )

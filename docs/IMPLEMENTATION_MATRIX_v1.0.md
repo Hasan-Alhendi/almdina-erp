@@ -1,5 +1,10 @@
 # Almdina ERP v1.0 — Implementation Traceability Matrix
 
+> **Scope override — 2026-07-29:** inventory, warehouse, reservation,
+> consumption and board-remnant rows below are retained only as historical
+> migration evidence. They are not active product features. Customer costing,
+> invoice calculation and printing remain required.
+
 الحالات المستخدمة:
 
 - **Implemented — UAT Pending**: المنطق موجود في الكود، لكن لا يجوز اعتباره مقبولًا نهائيًا قبل الاختبار على Frappe/ERPNext/CNC الحقيقي.

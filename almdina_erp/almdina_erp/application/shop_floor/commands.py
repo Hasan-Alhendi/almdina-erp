@@ -103,19 +103,6 @@ class ShopFloorCommandPort(Protocol):
         details: dict[str, Any] | None = None,
     ) -> None: ...
 
-    def consume_stock_if_due(
-        self,
-        order_name: str,
-        stage_type: str,
-        trigger: str,
-    ) -> None: ...
-
-    def register_remnants_if_due(
-        self,
-        order_name: str,
-        stage_type: str,
-    ) -> dict[str, Any] | None: ...
-
     def close_open_pause(self, stage_name: str, resumed_by: str) -> None: ...
 
     def start_stage(
@@ -263,11 +250,6 @@ def start_my_stage(
         "start",
         "Only a stage that needs work can be started.",
     )
-    repository.consume_stock_if_due(
-        stage.order_name,
-        stage.stage_type,
-        "Cutting Start",
-    )
     actor = repository.current_user()
     updated = repository.start_stage(
         stage_name,
@@ -323,15 +305,6 @@ def handoff_to_next(
         target_status=target_status,
         completed_qty=repository.required_piece_qty(stage.order_name),
     )
-    remnants = repository.register_remnants_if_due(
-        stage.order_name,
-        stage.stage_type,
-    )
-    repository.consume_stock_if_due(
-        stage.order_name,
-        stage.stage_type,
-        "Cutting Finish",
-    )
     repository.log_stage_event(
         stage_name,
         "Finish",
@@ -339,7 +312,6 @@ def handoff_to_next(
             "shop_floor": True,
             "handoff": True,
             "next_stage_type": target_stage,
-            "remnants": remnants or {},
         },
     )
 

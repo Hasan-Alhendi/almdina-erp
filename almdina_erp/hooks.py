@@ -1,7 +1,7 @@
 app_name = "almdina_erp"
 app_title = "Almdina ERP"
 app_publisher = "Horizon Tech"
-app_description = "MDF cutting, optimization, production and inventory management"
+app_description = "MDF cutting, optimization, production and customer costing"
 app_email = ""
 app_license = "Proprietary"
 app_version = "1.0.0-dev"
@@ -32,6 +32,10 @@ app_include_js = [
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/shop_floor_desk.js",
     "/assets/almdina_erp/js/order_entry_desk.js",
+    # Shape output policy is framework-independent and shared by order forms,
+    # shop-floor cutting plans, customer printouts, and secure DXF exports.
+    "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
+    "/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js",
     # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
     "/assets/almdina_erp/js/secure_dxf_export.js",
     "/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js",
@@ -39,26 +43,36 @@ app_include_js = [
 
 doctype_js = {
     "Door Cutting Order": [
+        # Establish document identity before any renderer or asynchronous loader.
+        # This prevents a shared Form wrapper from displaying the previous order.
+        "public/js/door_cutting_order_document_context.js",
+        # The canonical DocType entry point is intentionally side-effect free;
+        # drawing composition lives in this focused, reusable renderer.
+        "public/js/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order_workflow.js",
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
-        "public/js/door_cutting_order_special_shape_geometry.js",
+        # Canonical shape printing owns readable text-only notes directly.
         "public/js/door_cutting_order_shape_print.js",
-        # Decorate the canonical renderer without moving drawing logic into the
-        # document presenter. Printed note text stays readable and text-only.
-        "public/js/door_cutting_order_shape_print_readability.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
         "public/js/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
+        # Pure geometry loads before the DOM editor that composes it.
+        "public/js/door_cutting_order_sketch_engine.js",
+        # Draft drawing transitions stay independent from pointer and DOM APIs.
+        "public/js/door_cutting_order_sketch_interaction.js",
+        # Document changes and undo/redo history are framework-independent.
+        "public/js/door_cutting_order_sketch_history.js",
+        # Pure SVG presentation turns sketch state into safe, testable markup.
+        "public/js/door_cutting_order_sketch_renderer.js",
+        # The editor owns point-based inline notes and their font controls;
+        # no global Frappe prompt interception or post-render bridge is needed.
+        "public/js/door_cutting_order_inline_note_editor.js",
         "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_special_shape_note_ux.js",
-        # Loaded after the note UX so no later prompt reassignment can restore
-        # the Frappe dialog while the note tool is active.
-        "public/js/door_cutting_order_special_shape_note_guard.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
@@ -94,14 +108,13 @@ doctype_js = {
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
-        # Load last so obsolete live-preview handlers registered by the canonical
-        # DocType script are removed after every feature module has registered.
+        # Load last so its app-wide active-input policy sees the final form DOM.
+        # It no longer mutates private handler registries or network calls.
         "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
-    "Material Consumption Log": "public/js/material_consumption_log.js",
 }
 
 doctype_list_js = {
@@ -140,14 +153,6 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production":
         "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
-    "almdina_erp.almdina_erp.services.replacement_service.approve_replacement":
-        "almdina_erp.almdina_erp.services.replacement_approval.approve_replacement",
-    "almdina_erp.almdina_erp.services.replacement_service.start_replacement":
-        "almdina_erp.almdina_erp.services.replacement_execution.start_replacement",
-    "almdina_erp.almdina_erp.services.replacement_service.complete_replacement":
-        "almdina_erp.almdina_erp.services.replacement_completion.complete_replacement",
-    "almdina_erp.almdina_erp.services.stock_service.check_order_stock":
-        "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":

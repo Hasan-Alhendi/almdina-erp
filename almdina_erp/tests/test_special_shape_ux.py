@@ -33,16 +33,15 @@ ORDER_PY = (
     / "door_cutting_order"
     / "door_cutting_order.py"
 )
-ORDER_JS = (
-    APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order.js"
+PLAN_RENDERER = (
+    APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 )
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 SKETCH_UX = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+SKETCH_ENGINE = (
+    APP_ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
+)
 COST_UX = APP_ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
@@ -103,6 +102,7 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
 def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     sketch = SKETCH_UX.read_text(encoding="utf-8")
+    engine = SKETCH_ENGINE.read_text(encoding="utf-8")
     hooks = HOOKS.read_text(encoding="utf-8")
 
     assert 'data-field="piece_type"' in operator
@@ -119,8 +119,8 @@ def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
     assert "dco-sketch-redo" in sketch
     assert "purpose: \"operator_documentation_only\"" in sketch
     assert "normalizePenStroke" in sketch
-    assert "fitNearlyStraightLine" in sketch
-    assert "smoothCorners" in sketch
+    assert "fitNearlyStraightLine" in engine
+    assert "smoothCorners" in engine
     assert "getCoalescedEvents" in sketch
     assert "clientPointToCanvas" in sketch
     assert "getScreenCTM" in sketch
@@ -210,8 +210,10 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "self.total_cost_usd = round_value(total_cost, 3)" in order
 
     assert "استبعاد الحساب الآلي للدرف الخاصة" not in cost
-    assert "const materialAmount = boardCount * boardRate" in cost
-    assert "const cuttingAmount = boardCount * cuttingRate" in cost
+    assert "boardCount * boardRate" in cost
+    assert "boardCount * cuttingRate" in cost
+    assert "n(frm.doc.mdf_cost_usd)" in cost
+    assert "n(frm.doc.cutting_cost_usd)" in cost
     assert "regularAreaRatio" not in cost
     assert "حصة خام MDF" not in cost
     assert "حصة قص وتجهيز" not in cost
@@ -219,7 +221,7 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "سعر معتمد شامل" in cost
     assert "approve_special_piece_price" in cost
     assert "سعر شامل" in cost
-    assert "التكلفة الداخلية المخططة" in cost
+    assert "التكلفة الداخلية تبقى مستقلة" in cost
     assert "القشاط المبدئي" in cost
     assert "${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}" in cost
     assert "ملاحظة السعر:" in cost
@@ -251,7 +253,7 @@ def test_review_and_production_approval_gate_special_documentation_and_price():
 
 
 def test_cutting_plan_visually_audits_every_special_raw_piece():
-    order_js = ORDER_JS.read_text(encoding="utf-8")
+    order_js = PLAN_RENDERER.read_text(encoding="utf-8")
     order_py = ORDER_PY.read_text(encoding="utf-8")
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
 

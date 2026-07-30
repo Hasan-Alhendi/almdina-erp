@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import frappe
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
 
 EDGE_BANDING_TYPES = (
@@ -24,7 +23,6 @@ ROLES = (
     "Cutting Operator",
     "Edge Operator",
     "Production Manager",
-    "Stock Manager",
     "Accounts Management",
     "عامل رسم",
     "عامل شريون",
@@ -49,36 +47,19 @@ ORDER_ENTRY_USERS = (
     },
 )
 
-REQUIRED_UOMS = (
-    {"name": "Meter", "must_be_whole_number": 0},
-)
-
-ITEM_CUSTOM_FIELDS = {
-    "Item": [
-        {"fieldname":"custom_mdf_board_settings_section","label":"MDF / Cutting Board Settings","fieldtype":"Section Break","insert_after":"stock_uom"},
-        {"fieldname":"custom_is_mdf","label":"Is MDF Board","fieldtype":"Check","insert_after":"custom_mdf_board_settings_section","default":"0"},
-        {"fieldname":"custom_board_length_mm","label":"Board Length (MM)","fieldtype":"Float","insert_after":"custom_is_mdf","non_negative":1},
-        {"fieldname":"custom_board_width_mm","label":"Board Width (MM)","fieldtype":"Float","insert_after":"custom_board_length_mm","non_negative":1},
-        {"fieldname":"custom_board_thickness_mm","label":"Board Thickness (MM)","fieldtype":"Float","insert_after":"custom_board_width_mm","non_negative":1},
-        {"fieldname":"custom_board_color","label":"Board Color","fieldtype":"Data","insert_after":"custom_board_thickness_mm"},
-        {"fieldname":"custom_board_material","label":"Board Material","fieldtype":"Data","insert_after":"custom_board_color"},
-        {"fieldname":"custom_board_rate_usd","label":"Board Rate USD","fieldtype":"Currency","insert_after":"custom_board_material","non_negative":1},
-    ]
-}
-
 DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
-EDGE_ITEM_GROUP = "Raw Material"
 
 
 def sync_setup() -> None:
-    create_custom_fields(ITEM_CUSTOM_FIELDS, update=True)
     seed_roles()
-    seed_required_uoms()
     seed_edge_banding_types()
     seed_default_routing()
     seed_settings_defaults()
     sync_plan_recalculation_state()
     sync_dual_plan_json_backfill()
+    sync_order_board_descriptions()
+    sync_plan_board_descriptions()
+    sync_replacement_board_descriptions()
 
 
 def after_install() -> None:
@@ -93,6 +74,82 @@ def seed_roles() -> None:
     for role_name in ROLES:
         if not frappe.db.exists("Role", role_name):
             frappe.get_doc({"doctype":"Role","role_name":role_name}).insert(ignore_permissions=True)
+
+
+def sync_replacement_board_descriptions() -> None:
+    """Backfill only missing free-text identity on historical replacements."""
+
+    if not frappe.db.exists("DocType", "Replacement Piece"):
+        return
+    frappe.db.sql(
+        """
+        update `tabReplacement Piece` replacement
+        inner join `tabDoor Cutting Order` order_doc
+            on order_doc.name = replacement.door_cutting_order
+        set replacement.board_description = order_doc.board_description
+        where coalesce(replacement.board_description, '') = ''
+          and coalesce(order_doc.board_description, '') != ''
+        """
+    )
+
+
+def sync_order_board_descriptions() -> None:
+    """Backfill free-text identity and dimensions on historical orders."""
+
+    if not frappe.db.exists("DocType", "Door Cutting Order"):
+        return
+    frappe.db.sql(
+        """
+        update `tabDoor Cutting Order`
+        set board_description = board_item
+        where coalesce(board_description, '') = ''
+          and coalesce(board_item, '') != ''
+        """
+    )
+    frappe.db.sql(
+        """
+        update `tabDoor Cutting Order`
+        set
+            board_length_cm = case
+                when coalesce(board_length_cm, 0) <= 0
+                    then coalesce(nullif(full_board_length_mm, 0), 2440) / 10
+                else board_length_cm
+            end,
+            board_width_cm = case
+                when coalesce(board_width_cm, 0) <= 0
+                    then coalesce(nullif(full_board_width_mm, 0), 1220) / 10
+                else board_width_cm
+            end
+        """
+    )
+
+
+def sync_plan_board_descriptions() -> None:
+    """Backfill free-text board identity on historical plan snapshots."""
+
+    if not frappe.db.exists("DocType", "Cutting Plan"):
+        return
+    frappe.db.sql(
+        """
+        update `tabCutting Plan` plan
+        inner join `tabDoor Cutting Order` order_doc
+            on order_doc.name = plan.door_cutting_order
+        set plan.board_description = order_doc.board_description
+        where coalesce(plan.board_description, '') = ''
+          and coalesce(order_doc.board_description, '') != ''
+        """
+    )
+    frappe.db.sql(
+        """
+        update `tabCutting Plan Source` source
+        inner join `tabCutting Plan` plan
+            on plan.name = source.parent
+           and source.parenttype = 'Cutting Plan'
+        set source.board_description = plan.board_description
+        where coalesce(source.board_description, '') = ''
+          and coalesce(plan.board_description, '') != ''
+        """
+    )
 
 
 def _require_explicit_password(password: str | None) -> str:
@@ -136,19 +193,6 @@ def seed_order_entry_users(password: str | None = None) -> list[str]:
     return _seed_users(ORDER_ENTRY_USERS, password)
 
 
-def seed_required_uoms() -> None:
-    """Create UOM records that Almdina ERP references during fresh installation."""
-    for row in REQUIRED_UOMS:
-        uom_name = row["name"]
-        if frappe.db.exists("UOM", uom_name):
-            continue
-
-        uom = frappe.new_doc("UOM")
-        uom.uom_name = uom_name
-        uom.must_be_whole_number = row["must_be_whole_number"]
-        uom.insert(ignore_permissions=True)
-
-
 def seed_edge_banding_types() -> None:
     for row in EDGE_BANDING_TYPES:
         if frappe.db.exists("Edge Banding Type", row["name"]):
@@ -160,43 +204,9 @@ def seed_edge_banding_types() -> None:
         doc.width_cm = row["width"]
         doc.finish_type = row["finish"]
         doc.application_method = row["method"]
-        doc.consumption_uom = "Meter"
         doc.rate_usd_per_meter = row["rate"]
         doc.disabled = 0
         doc.save(ignore_permissions=True)
-
-
-def seed_edge_banding_items(item_group: str = EDGE_ITEM_GROUP) -> list[str]:
-    """Create and link a stock Item for every enabled Edge Banding Type.
-
-    Call explicitly, e.g.:
-      bench --site site1.local execute almdina_erp.install.seed_edge_banding_items
-    """
-    results: list[str] = []
-
-    for name in frappe.get_all("Edge Banding Type", filters={"disabled": 0}, pluck="name"):
-        edge = frappe.get_doc("Edge Banding Type", name)
-        if edge.item_code and frappe.db.exists("Item", edge.item_code):
-            continue
-
-        item_code = edge.edge_type_name
-        if not frappe.db.exists("Item", item_code):
-            item = frappe.new_doc("Item")
-            item.item_code = item_code
-            item.item_name = edge.edge_type_name
-            item.item_group = item_group
-            item.stock_uom = edge.consumption_uom or "Meter"
-            item.is_stock_item = 1
-            item.description = edge.english_name or edge.edge_type_name
-            item.insert(ignore_permissions=True)
-            results.append(f"created:{item_code}")
-
-        edge.item_code = item_code
-        edge.save(ignore_permissions=True)
-        results.append(f"linked:{name}")
-
-    frappe.db.commit()
-    return results
 
 
 def seed_default_routing() -> None:
@@ -223,15 +233,24 @@ def seed_settings_defaults() -> None:
         "default_optimization_time_limit_sec": 10,
         "optimal_search_piece_limit": 40,
         "default_production_routing": DEFAULT_ROUTING_NAME,
-        "stock_consumption_point": "Cutting Start",
-        "prefer_remnants_before_full_boards": 1,
         "min_remnant_width_mm": 300,
         "min_remnant_length_mm": 300,
         "min_remnant_area_m2": 0.09,
-        "remnant_cost_policy": "Zero",
     }
     for fieldname, value in defaults.items():
         if settings.get(fieldname) in (None, ""):
+            settings.set(fieldname, value)
+            changed = True
+    # Inventory, reservations, consumption and remnant reuse are intentionally
+    # outside the current product. Force old sites onto the same safe boundary
+    # while leaving their historical database rows untouched.
+    for fieldname, value in {
+        "enforce_stock_control": 0,
+        "default_warehouse": None,
+        "reserve_stock_on_approval": 0,
+        "prefer_remnants_before_full_boards": 0,
+    }.items():
+        if settings.meta.has_field(fieldname) and settings.get(fieldname) != value:
             settings.set(fieldname, value)
             changed = True
     if changed:

@@ -15,28 +15,6 @@ def require_any_role(*roles: str) -> None:
         frappe.throw(_("You do not have permission for this operation."), frappe.PermissionError)
 
 
-def _remnant_material_cost(order: Any, snapshot: dict[str, Any]) -> float:
-    settings = frappe.get_single("Almdina ERP Settings")
-    remnant_sheets = [s for s in (snapshot.get("sheets") or []) if s.get("source_type") == "Remnant"]
-    if not remnant_sheets or settings.remnant_cost_policy == "Zero":
-        return 0.0
-
-    area_m2 = sum(flt(s.get("source_area_m2")) for s in remnant_sheets)
-    if settings.remnant_cost_policy == "Configured Rate":
-        return area_m2 * flt(settings.remnant_rate_usd_per_m2)
-
-    warehouse = settings.default_warehouse
-    valuation_rate = flt(
-        frappe.db.get_value(
-            "Bin",
-            {"item_code": order.board_item, "warehouse": warehouse},
-            "valuation_rate",
-        )
-    ) if warehouse else 0.0
-    full_area_m2 = flt(order.full_board_width_mm) * flt(order.full_board_length_mm) / 1_000_000
-    return (area_m2 / full_area_m2 * valuation_rate) if full_area_m2 else 0.0
-
-
 def create_plan_from_order(
     order: Any,
     snapshot_override: dict[str, Any] | None = None,
@@ -66,23 +44,23 @@ def create_plan_from_order(
     total_source_area = flt(snapshot.get("total_board_area_m2"))
     waste_area = flt(snapshot.get("waste_area_m2"))
     waste_percent = (waste_area / total_source_area * 100) if total_source_area else 0
-    full_board_count = cint(
-        snapshot.get("required_full_boards")
-        if snapshot.get("required_full_boards") is not None
-        else sum(1 for s in (snapshot.get("sheets") or []) if s.get("source_type", "Full Board") == "Full Board")
-    )
+    # Inventory and remnant reuse are outside the product. Every physical sheet
+    # in an approved snapshot is therefore costed as one board.
+    full_board_count = len(snapshot.get("sheets") or [])
 
-    remnant_cost = _remnant_material_cost(order, snapshot)
-    mdf_cost = full_board_count * flt(order.board_rate_usd) + remnant_cost
-    cutting_cost = len(snapshot.get("sheets") or []) * flt(order.cutting_cost_per_board_usd or 1)
+    mdf_cost = full_board_count * flt(order.board_rate_usd)
+    cutting_cost = (
+        len(snapshot.get("sheets") or [])
+        * flt(order.cutting_cost_per_board_usd)
+    )
     edge_cost = flt(order.edge_cost_usd)
     total_cost = mdf_cost + cutting_cost + edge_cost
 
     snapshot["approved_cost"] = {
         "board_rate_usd": flt(order.board_rate_usd),
-        "cutting_cost_per_board_usd": flt(order.cutting_cost_per_board_usd or 1),
-        "remnant_cost_policy": frappe.db.get_single_value("Almdina ERP Settings", "remnant_cost_policy") or "Zero",
-        "remnant_material_cost_usd": remnant_cost,
+        "cutting_cost_per_board_usd": flt(
+            order.cutting_cost_per_board_usd
+        ),
         "mdf_cost_usd": mdf_cost,
         "cutting_cost_usd": cutting_cost,
         "edge_cost_usd": edge_cost,
@@ -111,7 +89,7 @@ def create_plan_from_order(
     plan.rotation_count = cint(metrics.get("rotation_count"))
     plan.validation_status = "Valid" if validation.get("is_valid") else "Invalid"
     plan.validation_errors = "\n".join(validation.get("errors") or [])
-    plan.board_item = order.board_item
+    plan.board_description = str(order.board_description or "").strip()
     plan.full_board_width_mm = full_width_mm
     plan.full_board_length_mm = full_length_mm
     plan.usable_board_width_mm = usable_width_mm
@@ -124,7 +102,7 @@ def create_plan_from_order(
     plan.waste_area_m2 = waste_area
     plan.waste_percent = waste_percent
     plan.board_rate_usd = flt(order.board_rate_usd)
-    plan.cutting_cost_per_board_usd = flt(order.cutting_cost_per_board_usd or 1)
+    plan.cutting_cost_per_board_usd = flt(order.cutting_cost_per_board_usd)
     plan.mdf_cost_usd = mdf_cost
     plan.cutting_cost_usd = cutting_cost
     plan.edge_cost_usd = edge_cost
@@ -136,7 +114,6 @@ def create_plan_from_order(
     for sheet in snapshot.get("sheets") or []:
         sheet_pieces = sheet.get("pieces") or []
         used_area = sum(flt(piece.get("area_m2")) for piece in sheet_pieces)
-        source_type = sheet.get("source_type") or "Full Board"
         source_full_width_mm = flt(sheet.get("full_width_cm") or snapshot.get("full_board_width_cm")) * 10
         source_full_length_mm = flt(sheet.get("full_length_cm") or snapshot.get("full_board_length_cm")) * 10
         source_usable_width_mm = flt(sheet.get("usable_width_cm") or sheet.get("w") or snapshot.get("usable_board_width_cm")) * 10
@@ -147,9 +124,12 @@ def create_plan_from_order(
             "sources",
             {
                 "sheet_no": sheet.get("sheet_no"),
-                "source_type": source_type,
-                "board_item": order.board_item,
-                "remnant": sheet.get("remnant") if source_type == "Remnant" else None,
+                "source_type": "Full Board",
+                "board_description": str(
+                    sheet.get("board_description")
+                    or order.board_description
+                    or ""
+                ).strip(),
                 "full_width_mm": source_full_width_mm,
                 "full_length_mm": source_full_length_mm,
                 "usable_width_mm": source_usable_width_mm,
@@ -329,13 +309,12 @@ def _lock_order_for_production(
             order.flags.force_cutting_plan_recalculation = True
         order.save(ignore_permissions=True)
 
-        from almdina_erp.almdina_erp.services.remnant_planning import build_approval_plan, reserve_plan_remnants
-
-        approval_snapshot = build_approval_plan(order)
+        approval_snapshot = (
+            frappe.parse_json(order.cutting_plan_json or "{}") or {}
+        )
         validation = approval_snapshot.get("validation") or {}
         if not validation.get("is_valid"):
             frappe.throw(_("Approval plan is invalid:\n{0}").format("\n".join(validation.get("errors") or [])))
-        reserve_plan_remnants(order.name, approval_snapshot)
 
     from almdina_erp.almdina_erp.services.dual_plan_fields import get_system_plan_json, has_dual_plan_field
 
@@ -351,10 +330,6 @@ def _lock_order_for_production(
 
     plan = create_plan_from_order(order, approval_snapshot, plan_kind=plan_kind)
     approve_plan(plan)
-
-    from almdina_erp.almdina_erp.services.stock_service import validate_stock_for_order
-
-    validate_stock_for_order(order.name, throw_on_shortage=True)
 
     approved_snapshot_json = plan.snapshot_json
     update_values: dict[str, Any] = {

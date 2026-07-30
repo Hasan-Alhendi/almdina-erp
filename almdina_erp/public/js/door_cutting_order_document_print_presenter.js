@@ -203,7 +203,7 @@
         return `<div class="info shared-info">
             <div><b>رقم الطلب</b>${esc(frm.doc.name || "مسودة")}</div>
             <div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div>
-            <div><b>صنف اللوح</b>${esc(frm.doc.board_description || frm.doc.board_item || "—")}</div>
+            <div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div>
             <div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div>
             <div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>
             <div><b>عدد الدرف</b>${quantity(doorCount)}</div>

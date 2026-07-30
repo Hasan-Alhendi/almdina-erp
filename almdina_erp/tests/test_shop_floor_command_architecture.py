@@ -14,8 +14,6 @@ STAGE_REPOSITORY_PATH = INFRA_ROOT / "production_stage_repository.py"
 ORDER_REPOSITORY_PATH = INFRA_ROOT / "order_tracking_repository.py"
 EVENT_REPOSITORY_PATH = INFRA_ROOT / "production_event_repository.py"
 AUTHORIZATION_PATH = INFRA_ROOT / "shop_floor_authorization.py"
-STOCK_GATEWAY_PATH = INFRA_ROOT / "stock_execution_gateway.py"
-REMNANT_GATEWAY_PATH = INFRA_ROOT / "remnant_execution_gateway.py"
 HOOKS_PATH = ROOT / "hooks.py"
 
 
@@ -40,26 +38,21 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
             "production_stage_repository",
             "order_tracking_repository",
             "production_event_repository",
-            "stock_execution_gateway",
-            "remnant_execution_gateway",
         ):
             self.assertIn(module_name, source)
+        self.assertNotIn("stock_execution_gateway", source)
+        self.assertNotIn("remnant_execution_gateway", source)
 
     def test_frappe_writes_live_in_focused_infrastructure_modules(self) -> None:
         stage_source = STAGE_REPOSITORY_PATH.read_text(encoding="utf-8")
         order_source = ORDER_REPOSITORY_PATH.read_text(encoding="utf-8")
         event_source = EVENT_REPOSITORY_PATH.read_text(encoding="utf-8")
         authorization_source = AUTHORIZATION_PATH.read_text(encoding="utf-8")
-        stock_source = STOCK_GATEWAY_PATH.read_text(encoding="utf-8")
-        remnant_source = REMNANT_GATEWAY_PATH.read_text(encoding="utf-8")
-
         self.assertIn("import frappe", stage_source)
         self.assertIn("stage.save(ignore_permissions=True)", stage_source)
         self.assertIn("frappe.db.set_value", order_source)
         self.assertIn('frappe.new_doc("Production Stage Event")', event_source)
         self.assertIn("frappe.get_roles", authorization_source)
-        self.assertIn("consume_planned_material_if_due", stock_source)
-        self.assertIn("register_plan_remnants", remnant_source)
 
     def test_api_adapter_is_thin_and_delegates_to_application(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")

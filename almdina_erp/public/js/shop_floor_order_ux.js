@@ -16,7 +16,7 @@
 		const roles = frappe.user_roles || [];
 		if (
 			roles.some((r) =>
-				["System Manager", "Production Manager", "Order Entry", "Stock Manager", "Accounts Management"].includes(r)
+				["System Manager", "Production Manager", "Order Entry", "Accounts Management"].includes(r)
 			)
 		) {
 			return false;

@@ -27,12 +27,12 @@
             if (frm.doc.status === "Pending Approval" && has_role("Production Manager")) {
                 frm.add_custom_button(__("Approve Replacement"), () => {
                     frappe.confirm(
-                        __("A valid source will be selected, reserved when needed, and an approved Mini Cutting Plan will be created with material validation. Continue?"),
+                        __("An approved Mini Cutting Plan will be created and its internal loss cost will be frozen. Continue?"),
                         () => call_action(frm, "approve_replacement").then(data => {
                             frappe.msgprint({
                                 title: __("Replacement Approved"),
                                 indicator: "green",
-                                message: `${__("Cutting Plan")}: <b>${data.cutting_plan || ""}</b><br>${__("Remnant")}: ${data.selected_remnant || __("Full Board")}`,
+                                message: `${__("Cutting Plan")}: <b>${data.cutting_plan || ""}</b>`,
                             });
                         })
                     );
@@ -42,7 +42,7 @@
             if (frm.doc.status === "Approved" && (has_role("Cutting Operator") || has_role("Production Manager"))) {
                 frm.add_custom_button(__("Start Replacement Cutting"), () => {
                     frappe.confirm(
-                        __("Reserved materials will be consumed and the selected source will be marked as physically used. Continue?"),
+                        __("Start work on this approved replacement piece?"),
                         () => call_action(frm, "start_replacement")
                     );
                 }, __("Replacement"));
@@ -62,12 +62,16 @@
                     frappe.prompt(
                         fields,
                         values => call_action(frm, "complete_replacement", {
-                            internal_loss_cost_usd: values.internal_loss_cost_usd || null,
+                            internal_loss_cost_usd:
+                                values.internal_loss_cost_usd === undefined
+                                || values.internal_loss_cost_usd === null
+                                || values.internal_loss_cost_usd === ""
+                                    ? null
+                                    : values.internal_loss_cost_usd,
                         }).then(data => {
-                            frappe.msgprint({
-                                title: __("Replacement Completed"),
+                            frappe.show_alert({
+                                message: __("Replacement completed and order cost updated."),
                                 indicator: "green",
-                                message: `${__("Generated Remnants")}: ${(data.generated_remnants || []).join(", ") || "-"}`,
                             });
                         }),
                         __("Complete Replacement Piece"),

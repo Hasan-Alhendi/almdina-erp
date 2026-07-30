@@ -13,10 +13,10 @@
     {"fieldname":"edge_color","fieldtype":"Data","in_list_view":1,"label":"Edge Color"},
     {"fieldname":"finish_type","fieldtype":"Select","label":"Finish Type","options":"Regular\nGlossy\nGolden"},
     {"fieldname":"application_method","fieldtype":"Select","label":"Application Method","options":"Machine\nManual"},
-    {"default":"Meter","fieldname":"consumption_uom","fieldtype":"Link","label":"Consumption UOM","options":"UOM"},
+    {"fieldname":"consumption_uom","fieldtype":"Link","hidden":1,"label":"Legacy Consumption UOM","options":"UOM"},
     {"fieldname":"rate_usd_per_meter","fieldtype":"Currency","in_list_view":1,"label":"Rate USD / Meter","non_negative":1,"reqd":1},
-    {"fieldname":"item_code","fieldtype":"Link","label":"Stock Item","options":"Item"},
-    {"fieldname":"stock_uom","fieldtype":"Link","label":"Stock UOM","options":"UOM","read_only":1},
+    {"fieldname":"item_code","fieldtype":"Link","hidden":1,"label":"Legacy Stock Item","options":"Item"},
+    {"fieldname":"stock_uom","fieldtype":"Link","hidden":1,"label":"Legacy Stock UOM","options":"UOM","read_only":1},
     {"default":"0","fieldname":"disabled","fieldtype":"Check","label":"Disabled"}
   ],
   "links": [],

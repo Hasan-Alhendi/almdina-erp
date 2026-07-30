@@ -61,7 +61,7 @@ class FrappeEdgeProfileRepository:
         self.document = document
 
     def side_is_selected(self, row: Any, side: EdgeSide) -> bool:
-        selected_field, _, _ = SIDE_CONFIG[side]
+        selected_field, _override_field, _side_label = SIDE_CONFIG[side]
         return bool(cint(getattr(row, selected_field, 0)))
 
     def axis_is_selected(self, row: Any, axis: EdgeAxis) -> bool:
@@ -71,7 +71,7 @@ class FrappeEdgeProfileRepository:
         if not self.side_is_selected(row, side):
             return ""
 
-        _, override_field, side_label = SIDE_CONFIG[side]
+        _selected_field, override_field, side_label = SIDE_CONFIG[side]
         edge_type = str(
             getattr(row, override_field, "")
             or self.document.default_edge_type

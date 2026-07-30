@@ -25,40 +25,16 @@ class CuttingPlan(Document):
         self._enforce_approved_immutability()
 
     def _populate_source_identity_snapshots(self) -> None:
-        from almdina_erp.almdina_erp.services.order_board_identity import (
-            order_board_color,
-            order_board_material,
-            order_board_thickness_mm,
-        )
-
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)
         for source in self.sources or []:
-            if source.source_type == "Remnant" and source.remnant:
-                remnant = frappe.db.get_value(
-                    "Board Remnant",
-                    source.remnant,
-                    ["board_item", "material", "color", "thickness_mm"],
-                    as_dict=True,
-                )
-                if remnant:
-                    source.board_item = source.board_item or remnant.board_item
-                    source.material = remnant.material or ""
-                    source.color = remnant.color or ""
-                    source.thickness_mm = flt(remnant.thickness_mm)
-                    continue
-
-            source.board_item = source.board_item or order.board_item
-            source.material = order_board_material(order)
-            source.color = order_board_color(order)
-            source.thickness_mm = order_board_thickness_mm(order)
+            source.board_description = str(
+                source.board_description
+                or self.board_description
+                or order.board_description
+                or ""
+            ).strip()
 
     def _validate_replacement_plan(self) -> None:
-        from almdina_erp.almdina_erp.services.order_board_identity import (
-            order_board_color,
-            order_board_material,
-            order_board_thickness_mm,
-        )
-
         errors: list[str] = []
         if len(self.sources or []) != 1:
             errors.append(_("Replacement Mini Cutting Plan must contain exactly one physical source."))
@@ -69,22 +45,19 @@ class CuttingPlan(Document):
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)
         if replacement.door_cutting_order != self.door_cutting_order:
             errors.append(_("Replacement Piece belongs to a different Door Cutting Order."))
-        if replacement.board_item != self.board_item:
-            errors.append(_("Replacement Piece board item does not match the Cutting Plan board item."))
+        expected_board = str(order.board_description or "").strip()
+        if str(replacement.board_description or "").strip() != expected_board:
+            errors.append(_("Replacement board description does not match the order."))
+        if str(self.board_description or "").strip() != expected_board:
+            errors.append(_("Replacement Cutting Plan board description does not match the order."))
 
         if self.sources and self.placed_pieces:
             source = self.sources[0]
             piece = self.placed_pieces[0]
             tolerance = 0.001
 
-            if source.board_item and source.board_item != replacement.board_item:
-                errors.append(_("Replacement source board item does not match the required board item."))
-            if (source.material or "") != order_board_material(order):
-                errors.append(_("Replacement source material does not match the order material snapshot."))
-            if (source.color or "") != order_board_color(order):
-                errors.append(_("Replacement source color does not match the order color snapshot."))
-            if abs(flt(source.thickness_mm) - order_board_thickness_mm(order)) > tolerance:
-                errors.append(_("Replacement source thickness does not match the order thickness snapshot."))
+            if str(source.board_description or "").strip() != expected_board:
+                errors.append(_("Replacement source board description does not match the order."))
 
             usable_w = flt(source.usable_width_mm)
             usable_h = flt(source.usable_length_mm)
@@ -108,32 +81,6 @@ class CuttingPlan(Document):
             if cint(piece.rotated) and not cint(replacement.allow_rotation):
                 errors.append(_("Replacement piece is rotated although rotation is not allowed."))
 
-            if source.source_type == "Remnant":
-                if not source.remnant:
-                    errors.append(_("A Remnant source must reference a Board Remnant."))
-                else:
-                    remnant = frappe.db.get_value(
-                        "Board Remnant",
-                        source.remnant,
-                        ["board_item", "width_mm", "length_mm", "status", "reserved_for_order", "material", "color", "thickness_mm"],
-                        as_dict=True,
-                    )
-                    if not remnant:
-                        errors.append(_("Referenced Board Remnant does not exist."))
-                    else:
-                        if remnant.board_item != replacement.board_item:
-                            errors.append(_("Referenced Board Remnant does not match the replacement board item."))
-                        if (remnant.material or "") != order_board_material(order):
-                            errors.append(_("Referenced Board Remnant material does not match the order snapshot."))
-                        if (remnant.color or "") != order_board_color(order):
-                            errors.append(_("Referenced Board Remnant color does not match the order snapshot."))
-                        if abs(flt(remnant.thickness_mm) - order_board_thickness_mm(order)) > tolerance:
-                            errors.append(_("Referenced Board Remnant thickness does not match the order snapshot."))
-                        if abs(flt(remnant.width_mm) - flt(source.full_width_mm)) > tolerance or abs(flt(remnant.length_mm) - flt(source.full_length_mm)) > tolerance:
-                            errors.append(_("Replacement plan source dimensions do not match the referenced Board Remnant."))
-                        if remnant.status not in {"Available", "Reserved"}:
-                            errors.append(_("Referenced Board Remnant is not available/reserved for use."))
-
         snapshot = frappe.parse_json(self.snapshot_json or "{}") or {}
         if snapshot.get("unplaced"):
             errors.append(_("Replacement plan contains unplaced pieces."))
@@ -142,21 +89,6 @@ class CuttingPlan(Document):
         self.validation_errors = "\n".join(errors)
         if errors:
             frappe.throw(_("Invalid Replacement Mini Cutting Plan:\n{0}").format("\n".join(errors)))
-
-    def on_update(self) -> None:
-        if self.status != "Approved" or (self.plan_kind or "Order") != "Order":
-            return
-
-        old = self.get_doc_before_save()
-        became_approved = self.is_new() or not old or old.status != "Approved"
-        if not became_approved:
-            return
-
-        settings = frappe.get_single("Almdina ERP Settings")
-        if cint(settings.reserve_stock_on_approval):
-            from almdina_erp.almdina_erp.services.stock_service import create_order_reservation
-
-            create_order_reservation(self.door_cutting_order)
 
     def _enforce_approved_immutability(self) -> None:
         if self.is_new() or self.flags.get("allow_status_transition"):

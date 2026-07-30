@@ -322,11 +322,15 @@
             <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
-        const hasDrawing = Boolean(String(data.special_shape_drawing_json || "").trim());
+        const shapeOutput = window.AlmdinaShapeOutputContract;
+        const hasDrawing = Boolean(
+            shapeOutput
+            && shapeOutput.drawingFromPiece(data)
+        );
         const hasExactGeometry = Boolean(
             isSpecial
-            && window.AlmdinaSpecialShapeGeometry
-            && window.AlmdinaSpecialShapeGeometry.isExact(data)
+            && shapeOutput
+            && shapeOutput.hasExactCutPath(data)
         );
         const cornerSummary = isClipped && window.AlmdinaClippedCornerGeometry
             ? window.AlmdinaClippedCornerGeometry.summary(data)
@@ -655,7 +659,6 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
-        board_item(frm) { renderBoardSummary(frm); },
         default_edge_type(frm) { refreshEdgeSelects(frm); },
         before_save(frm) { pruneEmptyTrailingRows(frm); },
     });

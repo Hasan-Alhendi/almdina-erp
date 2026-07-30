@@ -12,9 +12,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
     order_tracking_repository,
     production_event_repository,
     production_stage_repository,
-    remnant_execution_gateway,
     shop_floor_authorization,
-    stock_execution_gateway,
 )
 
 
@@ -51,8 +49,6 @@ get_revert_stage_candidates = (
 get_later_stages = production_stage_repository.list_later_stages
 
 log_event = production_event_repository.log_event
-maybe_consume_stock = stock_execution_gateway.consume_stock_if_due
-maybe_register_remnants = remnant_execution_gateway.register_remnants_if_due
 
 
 def create_stage(
@@ -102,8 +98,6 @@ __all__ = [
     "get_users_for_role",
     "get_users_for_stage",
     "log_event",
-    "maybe_consume_stock",
-    "maybe_register_remnants",
     "require_roles",
     "require_stage_assignee_or_admin",
     "required_piece_qty",

@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install static test runner
+        run: python -m pip install pytest
+
       - name: Validate JSON files
         run: |
           python - <<'PY'
@@ -117,18 +120,29 @@ jobs:
             almdina_erp.tests.test_order_save_application \
             almdina_erp.tests.test_unified_order_controller_architecture
 
-      - name: Run inventory availability tests
+      - name: Enforce the no-stock product boundary
         run: |
           python -m unittest -v \
-            almdina_erp.tests.test_inventory_domain \
-            almdina_erp.tests.test_stock_availability_application \
-            almdina_erp.tests.test_stock_availability_architecture
+            almdina_erp.tests.test_numeric_input_domain \
+            almdina_erp.tests.test_product_scope_contract \
+            almdina_erp.tests.test_replacement_planning
 
       - name: Run revision, board input, and typing stability regression tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_revision_board_input_ux_contract \
+            almdina_erp.tests.test_document_context_ux_contract \
+            almdina_erp.tests.test_frontend_consolidation_contract \
             almdina_erp.tests.test_input_stability_ux_contract
+
+      - name: Run UI, DXF, invoice, and optimizer function contracts
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_*ux.py \
+            almdina_erp/tests/test_dxf_autocad_compatibility.py \
+            almdina_erp/tests/test_arabic_operator_localization.py \
+            almdina_erp/tests/test_compact_invoice_print_contract.py \
+            almdina_erp/tests/test_advanced_cutting_optimizer.py
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -146,5 +160,16 @@ jobs:
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
 
-      - name: Run input stability browser simulation
-        run: node almdina_erp/tests/js/input_stability.test.js
+      - name: Run frontend browser simulations
+        run: |
+          node almdina_erp/tests/js/cutting_plan_renderer.test.js
+          node almdina_erp/tests/js/document_context.test.js
+          node almdina_erp/tests/js/document_context_async.test.js
+          node almdina_erp/tests/js/input_stability.test.js
+          node almdina_erp/tests/js/inline_note_editor.test.js
+          node almdina_erp/tests/js/sketch_interaction.test.js
+          node almdina_erp/tests/js/sketch_history.test.js
+          node almdina_erp/tests/js/sketch_renderer.test.js
+          node almdina_erp/tests/js/shape_output_contract.test.js
+          node almdina_erp/tests/test_special_shape_smoothing.js
+          node almdina_erp/tests/test_shape_print.js

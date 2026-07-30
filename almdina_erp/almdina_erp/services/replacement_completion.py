@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import flt, now_datetime
+
+from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 
 
 @frappe.whitelist()
@@ -11,47 +14,60 @@ def complete_replacement(
     replacement_name: str,
     internal_loss_cost_usd: float | None = None,
 ) -> dict[str, Any]:
-    # Direct Python call intentionally bypasses whitelisted-method override
-    # dispatch, avoiding recursion while preserving the authoritative original
-    # replacement lifecycle implementation.
-    from almdina_erp.almdina_erp.services.replacement_service import complete_replacement as complete_core
-    from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
+    """Complete replacement work and update operational cost only."""
 
-    result = complete_core(
-        replacement_name=replacement_name,
-        internal_loss_cost_usd=internal_loss_cost_usd,
+    require_any_role("Cutting Operator", "Production Manager")
+    frappe.db.sql(
+        "select name from `tabReplacement Piece` where name = %s for update",
+        (replacement_name,),
     )
+    replacement = frappe.get_doc("Replacement Piece", replacement_name)
+    if replacement.status != "In Progress":
+        frappe.throw(_("Only an In Progress replacement can be completed."))
 
-    replacement = frappe.db.get_value(
+    actual_loss = (
+        flt(internal_loss_cost_usd)
+        if internal_loss_cost_usd is not None
+        else flt(replacement.planned_internal_loss_usd)
+    )
+    if actual_loss < 0:
+        frappe.throw(_("Actual internal loss cannot be negative."))
+
+    frappe.db.set_value(
         "Replacement Piece",
-        replacement_name,
-        ["door_cutting_order", "cutting_plan"],
-        as_dict=True,
+        replacement.name,
+        {
+            "status": "Completed",
+            "internal_loss_cost_usd": actual_loss,
+            "charge_customer": 0,
+            "completed_by": frappe.session.user,
+            "completed_on": now_datetime(),
+            "generated_remnant": None,
+            "generated_remnants_json": "[]",
+        },
+        update_modified=True,
     )
-    if replacement and replacement.cutting_plan:
-        plan = frappe.get_doc("Cutting Plan", replacement.cutting_plan)
-        generated = result.get("generated_remnants") or []
-        reusable = sum(
-            flt(frappe.db.get_value("Board Remnant", name, "area_m2"))
-            for name in generated
-        )
-        reusable = min(max(0.0, reusable), max(0.0, flt(plan.waste_area_m2)))
-        scrap = max(0.0, flt(plan.waste_area_m2) - reusable)
-        frappe.db.set_value(
-            "Cutting Plan",
-            plan.name,
-            {
-                "reusable_remnant_area_m2": reusable,
-                "scrap_area_m2": scrap,
-                "waste_reconciled_on": now_datetime(),
-            },
-            update_modified=True,
-        )
-        result["waste_reconciliation"] = {
-            "reusable_remnant_area_m2": reusable,
-            "scrap_area_m2": scrap,
-        }
+    frappe.db.set_value(
+        "Production Incident",
+        replacement.incident,
+        "status",
+        "Resolved",
+        update_modified=True,
+    )
 
-    order_name = replacement.door_cutting_order if replacement else None
-    result["cost_summary"] = sync_order_costs(order_name) if order_name else {}
-    return result
+    from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
+    from almdina_erp.almdina_erp.services.replacement_status_service import (
+        sync_replacement_order_status,
+    )
+
+    order_status = sync_replacement_order_status(
+        replacement.door_cutting_order
+    )
+    return {
+        "replacement_piece": replacement.name,
+        "status": "Completed",
+        "order_status": order_status,
+        "internal_loss_cost_usd": actual_loss,
+        "charge_customer": 0,
+        "cost_summary": sync_order_costs(replacement.door_cutting_order),
+    }
