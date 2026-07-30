@@ -2,12 +2,19 @@
     "use strict";
 
     const sketchEngine = window.AlmdinaSketchEngine;
+    const sketchInteraction = window.AlmdinaSketchInteraction;
     const sketchHistory = window.AlmdinaSketchHistory;
     const sketchRenderer = window.AlmdinaSketchRenderer;
     const inlineNoteEditor = window.AlmdinaInlineNoteEditor;
-    if (!sketchEngine || !sketchHistory || !sketchRenderer || !inlineNoteEditor) {
+    if (
+        !sketchEngine
+        || !sketchInteraction
+        || !sketchHistory
+        || !sketchRenderer
+        || !inlineNoteEditor
+    ) {
         console.error(
-            "Sketch engine, history, renderer, and inline note editor must load before the special-shape editor"
+            "Sketch engine, interaction, history, renderer, and inline note editor must load before the special-shape editor"
         );
         return;
     }
@@ -48,13 +55,9 @@
     }
 
     const clampNoteFontSize = inlineNoteEditor.clampFontSize;
-    const pointDistance = sketchEngine.pointDistance;
-    const sanitizePoints = sketchEngine.sanitizePoints;
     const normalizePenStroke = sketchEngine.normalizePenStroke;
     const erasePenStroke = sketchEngine.erasePenStroke;
-    const nearestAnchor = sketchEngine.nearestAnchor;
     const snapLineEnd = sketchEngine.snapLineEnd;
-    const polylineLength = sketchEngine.polylineLength;
     const snapPenEndpoints = sketchEngine.snapPenEndpoints;
     const templatePoints = sketchEngine.templatePoints;
     const translateElement = (element, dx, dy) => sketchEngine.translateElement(
@@ -522,27 +525,21 @@
         notice.textContent = "تمت إضافة الشكل؛ اسحبه لتحريكه ثم أضف القياسات الحقيقية";
     }
 
-    function appendPointerSamples(svg, event, points, forceLast = false) {
+    function pointerSamples(svg, event, forceLast = false) {
         const samples = typeof event.getCoalescedEvents === "function"
             ? event.getCoalescedEvents()
             : [event];
         const source = samples.length ? samples : [event];
-        source.forEach(sample => {
+        const points = source.map(sample => {
             const mapped = clientPointToCanvas(svg, sample.clientX, sample.clientY);
-            const point = [
-                mapped.x,
-                mapped.y,
-            ];
-            const previous = points[points.length - 1];
-            if (!previous || pointDistance(previous, point) >= 1.25) points.push(point);
+            return [mapped.x, mapped.y];
         });
+        let finalPoint = null;
         if (forceLast && source[source.length - 1] !== event) {
             const point = pointFromEvent(svg, event);
-            const previous = points[points.length - 1];
-            if (!previous || pointDistance(previous, [point.x, point.y]) >= 0.35) {
-                points.push([point.x, point.y]);
-            }
+            finalPoint = [point.x, point.y];
         }
+        return { points, finalPoint };
     }
 
     function promptText(title, label, defaultValue, callback, actionLabel = "إضافة") {
@@ -691,26 +688,24 @@
             return;
         }
 
-        if (["pen", "line", "dimension"].includes(state.tool)) {
-            const anchor = nearestAnchor([point.x, point.y], state.elements);
-            if (anchor) {
-                point = { x: anchor[0], y: anchor[1] };
-                state.hoverPoint = point;
-                state.snapPoint = point;
-            }
+        const transition = sketchInteraction.beginDraft({
+            tool: state.tool,
+            point,
+            elements: state.elements,
+            color: state.color,
+            id: id(state.tool),
+            snapRadius: ENDPOINT_SNAP_RADIUS,
+        });
+        if (!transition.draft) {
+            event.preventDefault();
+            return;
         }
-        state.start = point;
+        state.start = transition.start;
+        state.hoverPoint = transition.start;
+        state.snapPoint = transition.snapPoint;
+        state.draft = transition.draft;
         state.pointerId = event.pointerId;
         state.svg.setPointerCapture(event.pointerId);
-        if (state.tool === "pen") {
-            state.draft = { id: id("pen"), type: "pen", points: [[point.x, point.y]], color: state.color };
-        } else if (state.tool === "line" || state.tool === "dimension") {
-            state.draft = { id: id(state.tool), type: state.tool, x1: point.x, y1: point.y, x2: point.x, y2: point.y, color: state.color };
-        } else if (state.tool === "rectangle") {
-            state.draft = { id: id("rectangle"), type: "rectangle", x: point.x, y: point.y, width: 0, height: 0, color: state.color };
-        } else if (state.tool === "ellipse") {
-            state.draft = { id: id("ellipse"), type: "ellipse", cx: point.x, cy: point.y, rx: 0, ry: 0, color: state.color };
-        }
         renderCanvas(state);
         event.preventDefault();
     }
@@ -754,38 +749,21 @@
             return;
         }
         if (!state.draft || event.pointerId !== state.pointerId) return;
-        if (state.draft.type === "pen") {
-            appendPointerSamples(state.svg, event, state.draft.points);
-            const last = state.draft.points[state.draft.points.length - 1];
-            const closeStart = state.draft.points.length > 8
-                && polylineLength(state.draft.points) >= 70
-                && pointDistance(last, state.draft.points[0]) <= ENDPOINT_SNAP_RADIUS * 1.35
-                ? state.draft.points[0]
-                : null;
-            const anchor = closeStart || nearestAnchor(last, state.elements);
-            state.snapPoint = anchor ? { x: anchor[0], y: anchor[1] } : null;
-        } else {
-            if (state.draft.type === "line" || state.draft.type === "dimension") {
-                const aligned = snapLineEnd(state.start, point, Boolean(event.shiftKey));
-                const anchor = nearestAnchor([aligned.x, aligned.y], state.elements);
-                const endpoint = anchor ? { x: anchor[0], y: anchor[1] } : aligned;
-                state.draft.x2 = endpoint.x;
-                state.draft.y2 = endpoint.y;
-                state.snapPoint = anchor ? endpoint : null;
-            } else if (state.draft.type === "rectangle") {
-                state.snapPoint = null;
-                state.draft.x = Math.min(state.start.x, point.x);
-                state.draft.y = Math.min(state.start.y, point.y);
-                state.draft.width = Math.abs(point.x - state.start.x);
-                state.draft.height = Math.abs(point.y - state.start.y);
-            } else if (state.draft.type === "ellipse") {
-                state.snapPoint = null;
-                state.draft.cx = (state.start.x + point.x) / 2;
-                state.draft.cy = (state.start.y + point.y) / 2;
-                state.draft.rx = Math.abs(point.x - state.start.x) / 2;
-                state.draft.ry = Math.abs(point.y - state.start.y) / 2;
-            }
-        }
+        const samples = state.draft.type === "pen"
+            ? pointerSamples(state.svg, event)
+            : { points: [], finalPoint: null };
+        const transition = sketchInteraction.updateDraft({
+            draft: state.draft,
+            start: state.start,
+            point,
+            elements: state.elements,
+            forceAngle: Boolean(event.shiftKey),
+            penPoints: samples.points,
+            finalPenPoint: samples.finalPoint,
+            snapRadius: ENDPOINT_SNAP_RADIUS,
+        });
+        state.draft = transition.draft;
+        state.snapPoint = transition.snapPoint;
         scheduleCanvasRender(state);
         event.preventDefault();
     }
@@ -833,50 +811,46 @@
         }
         if (!state.draft || event.pointerId !== state.pointerId) return;
         cancelScheduledRender(state);
-        if (state.draft.type === "pen" && event.type !== "pointercancel") {
-            appendPointerSamples(state.svg, event, state.draft.points, true);
-        } else if (
-            event.type !== "pointercancel"
-            && (state.draft.type === "line" || state.draft.type === "dimension")
-        ) {
-            const point = pointFromEvent(state.svg, event);
-            const aligned = snapLineEnd(state.start, point, Boolean(event.shiftKey));
-            const anchor = nearestAnchor([aligned.x, aligned.y], state.elements);
-            state.draft.x2 = anchor ? anchor[0] : aligned.x;
-            state.draft.y2 = anchor ? anchor[1] : aligned.y;
+        if (event.type !== "pointercancel") {
+            const samples = state.draft.type === "pen"
+                ? pointerSamples(state.svg, event, true)
+                : { points: [], finalPoint: null };
+            if (
+                state.draft.type === "pen"
+                || state.draft.type === "line"
+                || state.draft.type === "dimension"
+            ) {
+                const transition = sketchInteraction.updateDraft({
+                    draft: state.draft,
+                    start: state.start,
+                    point: pointFromEvent(state.svg, event),
+                    elements: state.elements,
+                    forceAngle: Boolean(event.shiftKey),
+                    penPoints: samples.points,
+                    finalPenPoint: samples.finalPoint,
+                    snapRadius: ENDPOINT_SNAP_RADIUS,
+                });
+                state.draft = transition.draft;
+                state.snapPoint = transition.snapPoint;
+            }
         }
-        const element = clone(state.draft);
+        const result = sketchInteraction.finalizeDraft({
+            draft: state.draft,
+            elements: state.elements,
+            cancelled: event.type === "pointercancel",
+            snapRadius: ENDPOINT_SNAP_RADIUS,
+        });
         state.draft = null;
         state.pointerId = null;
+        state.snapPoint = null;
         try { state.svg.releasePointerCapture(event.pointerId); } catch (error) { /* pointer already released */ }
 
-        if (event.type === "pointercancel") {
-            state.snapPoint = null;
+        if (!result.accepted) {
             renderCanvas(state);
             return;
         }
-        if (element.type === "pen") {
-            element.points = snapPenEndpoints(
-                normalizePenStroke(element.points),
-                state.elements
-            );
-            state.snapPoint = null;
-            if (element.points.length >= 2) addElement(state, element);
-            else renderCanvas(state);
-            return;
-        }
-        const tooSmall = element.type === "rectangle"
-            ? element.width < 4 || element.height < 4
-            : element.type === "ellipse"
-                ? element.rx < 2 || element.ry < 2
-                : Math.hypot(element.x2 - element.x1, element.y2 - element.y1) < 4;
-        if (tooSmall) {
-            state.snapPoint = null;
-            renderCanvas(state);
-            return;
-        }
-        if (element.type === "dimension") {
-            state.snapPoint = null;
+        const element = result.element;
+        if (result.needsText) {
             renderCanvas(state);
             promptText("إضافة قياس حقيقي", "القيمة مع الوحدة، مثال: 85 سم", " سم", text => {
                 if (!text) return;
@@ -885,7 +859,6 @@
             });
             return;
         }
-        state.snapPoint = null;
         addElement(state, element);
     }
 

@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 ENGINE = ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
+INTERACTION = ROOT / "public" / "js" / "door_cutting_order_sketch_interaction.js"
 HISTORY = ROOT / "public" / "js" / "door_cutting_order_sketch_history.js"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order_sketch_renderer.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
@@ -19,6 +20,9 @@ def test_pure_sketch_layers_load_before_the_dom_editor():
     engine_position = hooks.index(
         '"public/js/door_cutting_order_sketch_engine.js"'
     )
+    interaction_position = hooks.index(
+        '"public/js/door_cutting_order_sketch_interaction.js"'
+    )
     history_position = hooks.index(
         '"public/js/door_cutting_order_sketch_history.js"'
     )
@@ -29,7 +33,13 @@ def test_pure_sketch_layers_load_before_the_dom_editor():
         '"public/js/door_cutting_order_special_shape_ux.js"'
     )
 
-    assert engine_position < history_position < renderer_position < editor_position
+    assert (
+        engine_position
+        < interaction_position
+        < history_position
+        < renderer_position
+        < editor_position
+    )
 
 
 def test_sketch_engine_has_no_framework_or_dom_dependencies():
@@ -47,6 +57,27 @@ def test_sketch_engine_has_no_framework_or_dom_dependencies():
         assert dependency not in engine
 
     assert "window.AlmdinaSketchEngine = Object.freeze({" in engine
+
+
+def test_sketch_interaction_has_no_framework_or_dom_dependencies():
+    interaction = _source(INTERACTION)
+
+    forbidden_dependencies = (
+        "frappe",
+        "document",
+        "querySelector",
+        "addEventListener",
+        "PointerEvent",
+        "setPointerCapture",
+        "Dialog",
+    )
+
+    for dependency in forbidden_dependencies:
+        assert dependency not in interaction
+
+    assert "const sketchEngine = window.AlmdinaSketchEngine;" in interaction
+    assert "window.AlmdinaSketchInteraction = Object.freeze({" in interaction
+    assert "const DRAWING_TOOLS = Object.freeze([" in interaction
 
 
 def test_sketch_history_has_no_framework_or_dom_dependencies():
@@ -135,6 +166,25 @@ def test_editor_delegates_document_changes_and_history():
         "state.redo.pop(",
         "state.elements.push(",
         "state.elements.splice(",
+    )
+
+    for mutation in forbidden_ownership:
+        assert mutation not in editor
+
+
+def test_editor_delegates_draft_interaction_transitions():
+    editor = _source(EDITOR)
+
+    assert "const sketchInteraction = window.AlmdinaSketchInteraction;" in editor
+    for operation in ("beginDraft", "updateDraft", "finalizeDraft"):
+        assert f"sketchInteraction.{operation}(" in editor
+
+    forbidden_ownership = (
+        'state.draft = { id: id("pen")',
+        "state.draft.width =",
+        "state.draft.rx =",
+        "const tooSmall =",
+        "element.points = snapPenEndpoints(",
     )
 
     for mutation in forbidden_ownership:
