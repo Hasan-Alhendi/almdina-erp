@@ -60,6 +60,8 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_actions_ux.js",
         # Pure geometry loads before the DOM editor that composes it.
         "public/js/door_cutting_order_sketch_engine.js",
+        # Pure SVG presentation turns sketch state into safe, testable markup.
+        "public/js/door_cutting_order_sketch_renderer.js",
         # The editor owns point-based inline notes and their font controls;
         # no global Frappe prompt interception or post-render bridge is needed.
         "public/js/door_cutting_order_inline_note_editor.js",

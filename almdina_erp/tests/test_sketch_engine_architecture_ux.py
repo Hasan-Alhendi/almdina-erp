@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 ENGINE = ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
+RENDERER = ROOT / "public" / "js" / "door_cutting_order_sketch_renderer.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 
 
@@ -11,17 +12,20 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_pure_sketch_engine_loads_before_the_dom_editor():
+def test_pure_sketch_layers_load_before_the_dom_editor():
     hooks = _source(HOOKS)
 
     engine_position = hooks.index(
         '"public/js/door_cutting_order_sketch_engine.js"'
     )
+    renderer_position = hooks.index(
+        '"public/js/door_cutting_order_sketch_renderer.js"'
+    )
     editor_position = hooks.index(
         '"public/js/door_cutting_order_special_shape_ux.js"'
     )
 
-    assert engine_position < editor_position
+    assert engine_position < renderer_position < editor_position
 
 
 def test_sketch_engine_has_no_framework_or_dom_dependencies():
@@ -39,6 +43,25 @@ def test_sketch_engine_has_no_framework_or_dom_dependencies():
         assert dependency not in engine
 
     assert "window.AlmdinaSketchEngine = Object.freeze({" in engine
+
+
+def test_sketch_renderer_has_no_framework_or_dom_dependencies():
+    renderer = _source(RENDERER)
+
+    forbidden_dependencies = (
+        "frappe",
+        "document",
+        "querySelector",
+        "addEventListener",
+        "Dialog",
+    )
+
+    for dependency in forbidden_dependencies:
+        assert dependency not in renderer
+
+    assert "window.AlmdinaSketchRenderer = Object.freeze({" in renderer
+    assert "sketchEngine.elementBounds(" in renderer
+    assert "sketchEngine.normalizePenStroke(" in renderer
 
 
 def test_editor_delegates_geometry_instead_of_reimplementing_it():
@@ -67,9 +90,28 @@ def test_editor_delegates_geometry_instead_of_reimplementing_it():
         assert f"function {function_name}(" not in editor
 
 
+def test_editor_delegates_svg_and_sidebar_presentation():
+    editor = _source(EDITOR)
+
+    assert "const sketchRenderer = window.AlmdinaSketchRenderer;" in editor
+    assert "sketchRenderer.canvasView(state" in editor
+    assert "sketchRenderer.sidebarView(state.elements)" in editor
+
+    renderer_functions = (
+        "pathData",
+        "textPosition",
+        "elementMarkup",
+        "selectionMarkup",
+        "snapIndicatorMarkup",
+    )
+
+    for function_name in renderer_functions:
+        assert f"function {function_name}(" not in editor
+
+
 def test_editor_stays_focused_on_interaction_and_orchestration():
     editor_lines = _source(EDITOR).splitlines()
 
-    assert len(editor_lines) <= 1450
+    assert len(editor_lines) <= 1300
     assert "function open(" in "\n".join(editor_lines)
     assert "function bind(" in "\n".join(editor_lines)
