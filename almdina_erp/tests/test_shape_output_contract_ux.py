@@ -1,3 +1,4 @@
+import runpy
 from pathlib import Path
 
 
@@ -56,6 +57,39 @@ def test_contract_loads_before_all_shape_output_consumers():
         '"public/js/door_cutting_order_cost_invoice_ux.js"',
     ):
         assert hooks.index(contract) < hooks.index(consumer)
+
+
+def test_order_form_boots_shape_dependencies_from_formmeta_before_consumers():
+    hooks = runpy.run_path(str(HOOKS))
+    scripts = hooks["doctype_js"]["Door Cutting Order"]
+    geometry = "public/js/door_cutting_order_special_shape_geometry.js"
+    contract = "public/js/door_cutting_order_shape_output_contract.js"
+    consumers = (
+        "public/js/door_cutting_order_cutting_plan_renderer.js",
+        "public/js/door_cutting_order_workflow.js",
+        "public/js/door_cutting_order_shape_print.js",
+        "public/js/door_cutting_order_operator_ux.js",
+        "public/js/door_cutting_order_special_shape_ux.js",
+        "public/js/door_cutting_order_table_performance_ux.js",
+        "public/js/door_cutting_order_measurement_actions_ux.js",
+        "public/js/door_cutting_order_cost_invoice_ux.js",
+    )
+
+    assert geometry in scripts
+    assert contract in scripts
+    assert scripts.index(geometry) < scripts.index(contract)
+    assert scripts.index(contract) < min(scripts.index(item) for item in consumers)
+
+
+def test_special_shape_button_resolves_the_editor_at_click_time():
+    operator = _source(OPERATOR)
+    editor = _source(EDITOR)
+
+    assert 'event.target.closest(".dco-special-sketch-button")' in operator
+    assert "row && window.AlmdinaSpecialShapeEditor" in operator
+    assert "window.AlmdinaSpecialShapeEditor.open(frm, row)" in operator
+    assert "window.AlmdinaSpecialShapeEditor = {" in editor
+    assert "open," in editor
 
 
 def test_customer_documents_keep_drawing_first_and_share_one_renderer():
