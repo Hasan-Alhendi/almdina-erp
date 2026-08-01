@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import frappe
@@ -18,9 +18,19 @@ from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CAT
 PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})
 _IDENTITY_FIELDS = frozenset(
     {
-        "name", "doctype", "parent", "parenttype", "parentfield", "idx",
-        "owner", "creation", "modified", "modified_by", "docstatus",
-        "role", "permlevel",
+        "name",
+        "doctype",
+        "parent",
+        "parenttype",
+        "parentfield",
+        "idx",
+        "owner",
+        "creation",
+        "modified",
+        "modified_by",
+        "docstatus",
+        "role",
+        "permlevel",
     }
 )
 
@@ -66,21 +76,64 @@ class FrappePermissionMatrixRepository:
             rows, source = self._effective_rows(doctype, resolved, definitions)
             source_by_doctype[doctype] = source
             for capability, definition in definitions:
-                state[capability] = any(bool(row.get(definition.permission_type)) for row in rows)
+                state[capability] = any(
+                    bool(row.get(definition.permission_type)) for row in rows
+                )
         return {
             "role": resolved,
             "capabilities": normalize_capability_state(state),
             "source_by_doctype": source_by_doctype,
         }
 
-    def save_role_state(self, role: str, capabilities: Mapping[str, Any]) -> dict[str, Any]:
+    def role_states(
+        self,
+        roles: Sequence[str] | None = None,
+    ) -> dict[str, dict[str, bool]]:
+        selected = (
+            [self.validate_role(role) for role in roles]
+            if roles is not None
+            else [str(row["name"]) for row in self.list_roles()]
+        )
+        return {
+            role: self.role_state(role)["capabilities"]
+            for role in sorted(dict.fromkeys(selected))
+        }
+
+    def save_role_state(
+        self,
+        role: str,
+        capabilities: Mapping[str, Any],
+    ) -> dict[str, Any]:
         resolved = self.validate_role(role)
-        desired = normalize_capability_state(capabilities)
-        frappe.db.sql("select name from `tabRole` where name = %s for update", (resolved,))
-        for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
-            self._save_doctype_state(doctype, resolved, definitions, desired)
-        self.clear_role_cache(resolved)
-        return self.role_state(resolved)
+        return self.save_role_states({resolved: capabilities})[resolved]
+
+    def save_role_states(
+        self,
+        role_states: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """Persist multiple roles atomically after validating the complete bundle."""
+
+        prepared: dict[str, dict[str, bool]] = {}
+        for role, state in role_states.items():
+            resolved = self.validate_role(role)
+            if resolved in prepared:
+                raise ValueError(f"Duplicate role state: {resolved}")
+            prepared[resolved] = normalize_capability_state(state)
+        if not prepared:
+            raise ValueError("At least one role state is required.")
+
+        for role in sorted(prepared):
+            frappe.db.sql(
+                "select name from `tabRole` where name = %s for update",
+                (role,),
+            )
+        for role in sorted(prepared):
+            desired = prepared[role]
+            for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
+                self._save_doctype_state(doctype, role, definitions, desired)
+        for role in sorted(prepared):
+            self.clear_role_cache(role)
+        return {role: self.role_state(role) for role in sorted(prepared)}
 
     def record_audit(
         self,
@@ -89,6 +142,7 @@ class FrappePermissionMatrixRepository:
         before: Mapping[str, Any],
         after: Mapping[str, Any],
         changed_by: str,
+        source: str = "Almdina Permission Console",
     ) -> str | None:
         changes = changed_capabilities(before, after)
         if not changes:
@@ -99,23 +153,45 @@ class FrappePermissionMatrixRepository:
                 "role": role,
                 "changed_by": changed_by,
                 "changed_on": frappe.utils.now(),
-                "source": "Almdina Permission Console",
+                "source": str(source or "Almdina Permission Console"),
                 "change_count": len(changes),
-                "changed_capabilities": ", ".join(change["key"] for change in changes),
-                "before_json": json.dumps(normalize_capability_state(before), ensure_ascii=False, sort_keys=True),
-                "after_json": json.dumps(normalize_capability_state(after), ensure_ascii=False, sort_keys=True),
+                "changed_capabilities": ", ".join(
+                    change["key"] for change in changes
+                ),
+                "before_json": json.dumps(
+                    normalize_capability_state(before),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+                "after_json": json.dumps(
+                    normalize_capability_state(after),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
             }
         ).insert(ignore_permissions=True)
         return str(document.name)
 
-    def list_audit(self, role: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    def list_audit(
+        self,
+        role: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
         filters = {"role": self.validate_role(role)} if role else None
         rows = frappe.get_all(
             "Almdina Permission Audit",
             filters=filters,
-            fields=["name", "role", "changed_by", "changed_on", "change_count", "changed_capabilities"],
+            fields=[
+                "name",
+                "role",
+                "changed_by",
+                "changed_on",
+                "source",
+                "change_count",
+                "changed_capabilities",
+            ],
             order_by="changed_on desc",
-            limit_page_length=max(1, min(int(limit or 20), 100)),
+            limit=max(1, min(int(limit or 20), 100)),
         )
         return [dict(row) for row in rows]
 
@@ -124,7 +200,13 @@ class FrappePermissionMatrixRepository:
             return frozenset()
         return frozenset(frappe.get_roles(user))
 
-    def user_has_capability_outside_role(self, *, user: str, excluded_role: str, capability: str) -> bool:
+    def user_has_capability_outside_role(
+        self,
+        *,
+        user: str,
+        excluded_role: str,
+        capability: str,
+    ) -> bool:
         for role in self.user_roles(user):
             if role == excluded_role or role in PROTECTED_ROLES:
                 continue
@@ -139,7 +221,11 @@ class FrappePermissionMatrixRepository:
     def clear_role_cache(self, role: str) -> None:
         for doctype in _DEFINITIONS_BY_DOCTYPE:
             frappe.clear_cache(doctype=doctype)
-        users = frappe.get_all("Has Role", filters={"role": role, "parenttype": "User"}, pluck="parent")
+        users = frappe.get_all(
+            "Has Role",
+            filters={"role": role, "parenttype": "User"},
+            pluck="parent",
+        )
         for user in users:
             frappe.clear_cache(user=user)
 
@@ -167,12 +253,20 @@ class FrappePermissionMatrixRepository:
         )
         return [dict(row) for row in standard], "standard" if standard else "none"
 
-    def _available_fields(self, permission_doctype: str, definitions: list[tuple[str, Any]]) -> list[str]:
+    def _available_fields(
+        self,
+        permission_doctype: str,
+        definitions: list[tuple[str, Any]],
+    ) -> list[str]:
         meta = frappe.get_meta(permission_doctype)
         requested = ["name", "read", "create", "write", "delete"] + [
             definition.permission_type for _, definition in definitions
         ]
-        return [field for field in dict.fromkeys(requested) if meta.has_field(field)]
+        return [
+            field
+            for field in dict.fromkeys(requested)
+            if meta.has_field(field)
+        ]
 
     def _new_override_documents(self, doctype: str, role: str) -> list[Any]:
         standard_names = frappe.get_all(
@@ -230,16 +324,28 @@ class FrappePermissionMatrixRepository:
             pluck="name",
             order_by="creation asc",
         )
-        has_standard = bool(frappe.db.exists("DocPerm", {"parent": doctype, "role": role, "permlevel": 0}))
-        any_enabled = any(desired[capability] for capability, _ in definitions)
+        has_standard = bool(
+            frappe.db.exists(
+                "DocPerm",
+                {"parent": doctype, "role": role, "permlevel": 0},
+            )
+        )
+        any_enabled = any(
+            desired[capability] for capability, _ in definitions
+        )
         if not row_names and not any_enabled and not has_standard:
             return
-        documents = [frappe.get_doc("Custom DocPerm", name) for name in row_names] or self._new_override_documents(doctype, role)
+        documents = [
+            frappe.get_doc("Custom DocPerm", name) for name in row_names
+        ] or self._new_override_documents(doctype, role)
         standard_rights = standard_permission_projection(doctype, desired)
         for document in documents:
             for capability, definition in definitions:
                 if document.meta.has_field(definition.permission_type):
-                    document.set(definition.permission_type, int(bool(desired[capability])))
+                    document.set(
+                        definition.permission_type,
+                        int(bool(desired[capability])),
+                    )
             for permission_type, enabled in standard_rights.items():
                 if document.meta.has_field(permission_type):
                     document.set(permission_type, int(bool(enabled)))
