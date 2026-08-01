@@ -134,6 +134,8 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price":
         "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
+    "almdina_erp.almdina_erp.services.export_validation_service.get_validated_dxf_plan":
+        "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_shop_floor_context":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_shop_floor_context",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
