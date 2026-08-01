@@ -7,155 +7,121 @@ import frappe
 from almdina_erp.almdina_erp.application.security.permission_context import (
     build_permission_context,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import (
-    is_order_entry_profile,
-    is_shop_floor_only,
-)
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
 )
 
-SHOP_FLOOR_WORKSPACE = "Shop Floor"
-SHOP_FLOOR_PAGE = "shop-floor-inbox"
-ORDER_ENTRY_ICON_MODULES = frozenset({"Almdina ERP"})
-ALLOWED_MODULES_FOR_SHOP_FLOOR = ("Almdina ERP",)
+
+ALMDINA_APP = "almdina_erp"
+ALMDINA_MODULE = "Almdina ERP"
 
 
-def _roles() -> frozenset[str]:
-    return frozenset(frappe.get_roles())
-
-
-def _attach_permission_context(
-    bootinfo: dict[str, Any], roles: frozenset[str]
-) -> None:
-    """Expose administrator-managed capabilities to every Desk presenter."""
-
-    bootinfo["almdina_permissions"] = build_permission_context(
-        roles,
+def _context() -> dict[str, Any]:
+    return build_permission_context(
+        (),
         granted_capabilities(user=frappe.session.user),
     )
 
 
-def _filter_order_entry(bootinfo: dict[str, Any]) -> None:
-    bootinfo["almdina_order_entry_only"] = 1
-    bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
+def _workspace_name(page: Any) -> str:
+    if isinstance(page, str):
+        return page
+    if not isinstance(page, dict):
+        return ""
+    return str(page.get("name") or page.get("title") or page.get("label") or "")
 
-    module_map = bootinfo.get("module_wise_workspaces")
-    if isinstance(module_map, dict):
-        bootinfo["module_wise_workspaces"] = {
-            key: value
-            for key, value in module_map.items()
-            if key in ORDER_ENTRY_ICON_MODULES
-        }
 
-    allowed_workspaces: set[str] = set()
+def _filter_workspaces(bootinfo: dict[str, Any], allowed: set[str]) -> None:
+    if not allowed:
+        return
+
     workspaces = bootinfo.get("workspaces")
     if isinstance(workspaces, dict):
         pages = workspaces.get("pages")
         if isinstance(pages, list):
-            kept = [
-                page
-                for page in pages
-                if not isinstance(page, dict)
-                or page.get("module") in ORDER_ENTRY_ICON_MODULES
-                or page.get("app") == "almdina_erp"
-                or page.get("for_user") == frappe.session.user
-            ]
-            if kept:
-                workspaces["pages"] = kept
-                pages = kept
-        for page in pages or []:
-            if isinstance(page, dict):
-                if page.get("name"):
-                    allowed_workspaces.add(page["name"])
-                if page.get("title"):
-                    allowed_workspaces.add(page["title"])
+            pages = [page for page in pages if _workspace_name(page) in allowed]
+            workspaces["pages"] = pages
+            bootinfo["workspaces"] = workspaces
+            bootinfo["allowed_workspaces"] = pages
+
+    module_map = bootinfo.get("module_wise_workspaces")
+    if isinstance(module_map, dict):
+        filtered: dict[str, Any] = {}
+        for module, values in module_map.items():
+            if module != ALMDINA_MODULE:
+                continue
+            if isinstance(values, list):
+                kept = [value for value in values if _workspace_name(value) in allowed]
+                if kept:
+                    filtered[module] = kept
+            elif _workspace_name(values) in allowed:
+                filtered[module] = values
+        bootinfo["module_wise_workspaces"] = filtered
 
     icons = bootinfo.get("desktop_icons")
-    if isinstance(icons, list) and allowed_workspaces:
+    if isinstance(icons, list):
         bootinfo["desktop_icons"] = [
             icon
             for icon in icons
             if isinstance(icon, dict)
-            and (
-                icon.get("module_name") in allowed_workspaces
-                or icon.get("label") in allowed_workspaces
-            )
+            and str(icon.get("module_name") or icon.get("label") or "") in allowed
         ]
 
 
-def _filter_shop_floor(bootinfo: dict[str, Any]) -> None:
-    """Keep operators inside the shared Almdina app shell.
-
-    Operators may start on the shop-floor inbox, but the app identity, navigation
-    language, and visual system stay identical to the rest of Almdina ERP.
-    """
-
-    bootinfo["almdina_shop_floor_only"] = 1
-    bootinfo["almdina_shop_floor_home"] = SHOP_FLOOR_PAGE
-    bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
-    bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
-    bootinfo["home_page"] = SHOP_FLOOR_PAGE
-
-    workspaces = bootinfo.get("workspaces")
-    if isinstance(workspaces, dict) and workspaces.get("pages"):
-        pages = [
-            page
-            for page in workspaces["pages"]
-            if isinstance(page, dict)
-            and (
-                page.get("app") == "almdina_erp"
-                or page.get("module") == "Almdina ERP"
-                or str(page.get("title") or page.get("label") or "")
-                in {"Almdina ERP", "إدارة المعمل", SHOP_FLOOR_WORKSPACE, "صالة الإنتاج"}
-            )
-        ]
-        workspaces["pages"] = pages
-        bootinfo["workspaces"] = workspaces
-        bootinfo["allowed_workspaces"] = pages
-
+def _filter_apps(bootinfo: dict[str, Any]) -> None:
     app_data = bootinfo.get("app_data")
     if isinstance(app_data, list):
         bootinfo["app_data"] = [
             dict(app)
             for app in app_data
             if isinstance(app, dict)
-            and (app.get("app_name") or app.get("name")) == "almdina_erp"
+            and (app.get("app_name") or app.get("name")) == ALMDINA_APP
         ]
 
-    module_map = bootinfo.get("module_wise_workspaces")
-    if isinstance(module_map, dict):
-        bootinfo["module_wise_workspaces"] = {
-            key: value
-            for key, value in module_map.items()
-            if key in ALLOWED_MODULES_FOR_SHOP_FLOOR
-        }
+    apps_data = bootinfo.get("apps_data")
+    if isinstance(apps_data, dict):
+        apps = apps_data.get("apps")
+        if isinstance(apps, list):
+            apps_data["apps"] = [
+                app
+                for app in apps
+                if (
+                    app.get("name") if isinstance(app, dict) else app
+                )
+                == ALMDINA_APP
+            ]
+        bootinfo["apps_data"] = apps_data
+
+
+def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
+    context = _context()
+    navigation = context["navigation"]
+    allowed = set(navigation.get("workspaces") or ())
+
+    bootinfo["almdina_permissions"] = context
+    bootinfo["almdina_navigation"] = navigation
+    bootinfo["almdina_shared_shell"] = 1
+    bootinfo["almdina_allowed_apps"] = [ALMDINA_APP]
+    bootinfo["home_page"] = navigation["home_page"]
+    bootinfo["default_route"] = navigation["default_route"]
+
+    _filter_workspaces(bootinfo, allowed)
+    if navigation.get("app_only"):
+        _filter_apps(bootinfo)
+
+    apps_data = bootinfo.get("apps_data")
+    if isinstance(apps_data, dict) and navigation.get("app_only"):
+        apps_data["default_path"] = navigation["default_route"]
 
 
 def boot_session(bootinfo: dict[str, Any]) -> None:
-    """Apply read-only navigation and presentation authorization policy."""
+    """Attach the read-only shared-shell authorization context."""
 
-    roles = _roles()
-    _attach_permission_context(bootinfo, roles)
-    if is_order_entry_profile(roles):
-        _filter_order_entry(bootinfo)
-        return
-    if is_shop_floor_only(roles):
-        _filter_shop_floor(bootinfo)
+    _apply_shared_shell(bootinfo)
 
 
 def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
-    """Second read-only pass after Frappe assembles application metadata."""
+    """Repeat the idempotent filter after Frappe assembles application metadata."""
 
-    if not bootinfo:
-        return
-
-    roles = _roles()
-    _attach_permission_context(bootinfo, roles)
-    if bootinfo.get("almdina_order_entry_only") or is_order_entry_profile(roles):
-        bootinfo["almdina_order_entry_only"] = 1
-        bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
-        return
-
-    if bootinfo.get("almdina_shop_floor_only") or is_shop_floor_only(roles):
-        _filter_shop_floor(bootinfo)
+    if bootinfo:
+        _apply_shared_shell(bootinfo)
