@@ -5,6 +5,10 @@
     const CAPABILITY_ROUTE_RULES = Object.freeze([
         { any: ["manage_permissions"], routes: ["factory-permissions"] },
         {
+            any: ["view_users", "manage_users"],
+            routes: ["factory-workforce"],
+        },
+        {
             any: ["manage_factory_settings"],
             routes: [
                 "factory-production-settings",
