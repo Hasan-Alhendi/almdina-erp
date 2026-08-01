@@ -6,10 +6,7 @@
   "module": "Almdina ERP",
   "name": "factory-approval-queue",
   "page_name": "factory-approval-queue",
-  "roles": [
-    {"role":"Production Manager"},
-    {"role":"System Manager"}
-  ],
+  "roles": [],
   "script": null,
   "standard": "Yes",
   "style": null,
