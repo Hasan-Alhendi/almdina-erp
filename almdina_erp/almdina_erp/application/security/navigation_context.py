@@ -29,8 +29,18 @@ WORKSPACE_REPORTS = "Almdina Reports"
 WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
 
-_FINANCIAL_CAPABILITIES = frozenset(COSTING_CAPABILITIES.difference({Capability.PRINT_MEASUREMENTS}))
-_ORDER_MANAGEMENT_CAPABILITIES = frozenset(ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS}))
+_CUSTOMER_DOCUMENT_CAPABILITIES = frozenset(
+    {
+        Capability.PRINT_MEASUREMENTS,
+        Capability.PRINT_CUSTOMER_INVOICE,
+    }
+)
+_FINANCIAL_CAPABILITIES = frozenset(
+    COSTING_CAPABILITIES.difference(_CUSTOMER_DOCUMENT_CAPABILITIES)
+)
+_ORDER_MANAGEMENT_CAPABILITIES = frozenset(
+    ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS})
+)
 _CONTROL_CENTER_OPERATOR_CAPABILITIES = frozenset(
     {
         Capability.RECORD_INCIDENT,
@@ -39,8 +49,12 @@ _CONTROL_CENTER_OPERATOR_CAPABILITIES = frozenset(
         Capability.COMPLETE_REPLACEMENT,
     }
 )
-_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(CONTROL_CENTER_CAPABILITIES.difference(_CONTROL_CENTER_OPERATOR_CAPABILITIES))
-_CONFIGURATION_CAPABILITIES = frozenset(FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES)
+_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
+    CONTROL_CENTER_CAPABILITIES.difference(_CONTROL_CENTER_OPERATOR_CAPABILITIES)
+)
+_CONFIGURATION_CAPABILITIES = frozenset(
+    FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
+)
 
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
@@ -60,7 +74,9 @@ def _profile(granted: frozenset[str]) -> str:
         | _CONFIGURATION_CAPABILITIES
         | frozenset({Capability.MANAGE_PERMISSIONS})
     )
-    if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(granted, broad):
+    if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
+        granted, broad
+    ):
         return "shop_floor"
     order_entry_actions = frozenset(
         {
@@ -69,6 +85,7 @@ def _profile(granted: frozenset[str]) -> str:
             Capability.EDIT_ORDER,
             Capability.SUBMIT_ORDER,
             Capability.PRINT_MEASUREMENTS,
+            Capability.PRINT_CUSTOMER_INVOICE,
         }
     )
     if _intersects(granted, order_entry_actions) and not _intersects(
@@ -87,7 +104,9 @@ def _profile(granted: frozenset[str]) -> str:
     return "full"
 
 
-def build_navigation_context(granted_capabilities: Iterable[str] | None) -> dict[str, Any]:
+def build_navigation_context(
+    granted_capabilities: Iterable[str] | None,
+) -> dict[str, Any]:
     granted = normalize_capabilities(granted_capabilities)
     active = bool(granted)
     has_orders = _intersects(granted, ORDER_CAPABILITIES)
@@ -103,18 +122,27 @@ def build_navigation_context(granted_capabilities: Iterable[str] | None) -> dict
     has_permissions_admin = Capability.MANAGE_PERMISSIONS in granted
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
-    has_control_center = has_quality or has_supervision or Capability.APPROVE_DXF in granted or has_permissions_admin
+    has_control_center = (
+        has_quality
+        or has_supervision
+        or Capability.APPROVE_DXF in granted
+        or has_permissions_admin
+    )
 
-    operator_only = active and _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
-        granted,
-        _ORDER_MANAGEMENT_CAPABILITIES
-        | _FINANCIAL_CAPABILITIES
-        | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
-        | REPORTING_CAPABILITIES
-        | PRODUCTION_SUPERVISOR_CAPABILITIES
-        | WORKFORCE_CAPABILITIES
-        | _CONFIGURATION_CAPABILITIES
-        | frozenset({Capability.MANAGE_PERMISSIONS}),
+    operator_only = (
+        active
+        and _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES)
+        and not _intersects(
+            granted,
+            _ORDER_MANAGEMENT_CAPABILITIES
+            | _FINANCIAL_CAPABILITIES
+            | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
+            | REPORTING_CAPABILITIES
+            | PRODUCTION_SUPERVISOR_CAPABILITIES
+            | WORKFORCE_CAPABILITIES
+            | _CONFIGURATION_CAPABILITIES
+            | frozenset({Capability.MANAGE_PERMISSIONS}),
+        )
     )
 
     workspaces: list[str] = []
