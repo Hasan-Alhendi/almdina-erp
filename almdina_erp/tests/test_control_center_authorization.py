@@ -69,7 +69,7 @@ class TestControlCenterAuthorization(unittest.TestCase):
         incomplete = build_report_access(
             {Capability.VIEW_FINANCIAL_REPORTS}
         )
-        self.assertTrue(incomplete.operational)
+        self.assertFalse(incomplete.operational)
         self.assertFalse(incomplete.financial)
 
         financial = build_report_access(
