@@ -74,6 +74,18 @@ class TestWorkforceAuthorization(unittest.TestCase):
         self.assertFalse(active.allowed)
         self.assertEqual(active.code, "active_assignments")
 
+        profile_change = decide_workforce_action(
+            {Capability.ASSIGN_WORKFORCE_PROFILE},
+            action=WorkforceAction.ASSIGN_PROFILE,
+            facts=WorkforceFacts(
+                actor="manager@example.com",
+                target_user="worker@example.com",
+                active_assignments=1,
+            ),
+        )
+        self.assertFalse(profile_change.allowed)
+        self.assertEqual(profile_change.code, "active_assignments")
+
     def test_protected_and_external_users_are_blocked(self) -> None:
         protected = decide_workforce_action(
             {Capability.EDIT_USERS},
