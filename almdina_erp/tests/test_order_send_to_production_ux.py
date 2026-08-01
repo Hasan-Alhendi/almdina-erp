@@ -4,14 +4,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
-DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
-DRAWING_POLICY = (
-    ROOT / "almdina_erp" / "application" / "security" / "drawing_action_policy.py"
+DRAWING_APPROVAL_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
+)
+DRAWING_APPROVAL_POLICY = (
+    ROOT / "almdina_erp" / "application" / "security" / "drawing_approval_policy.py"
 )
 SHOP_FLOOR_COMMANDS = (
     ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
 )
-SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+DRAWING_APPROVAL_UX = (
+    ROOT / "public" / "js" / "door_cutting_order_drawing_approval_ux.js"
+)
 
 
 def _source(path: Path) -> str:
@@ -42,28 +46,35 @@ def test_dispatch_accepts_draft_orders_with_calculated_plan_only():
     assert "plan_needs_recalculation" in ready
 
 
-def test_designer_approval_preserves_shop_floor_status_after_authorization():
+def test_role_managed_drawing_approval_preserves_shop_floor_status():
     plan_service = _source(PLAN_SERVICE)
-    dxf_service = _source(DXF_SERVICE)
-    policy = _source(DRAWING_POLICY)
+    approval_service = _source(DRAWING_APPROVAL_SERVICE)
+    policy = _source(DRAWING_APPROVAL_POLICY)
     lock_impl = plan_service.split("def _lock_order_for_production", 1)[1].split(
         "@frappe.whitelist()\ndef reject_order", 1
     )[0]
 
-    assert "Capability.APPROVE_DXF" in dxf_service
-    assert "validate_assigned_drawing_action" in dxf_service
-    assert "current_assignee != state.session_user" in policy
-    assert "preserve_status=True" in dxf_service
+    assert "Capability.APPROVE_DXF" in approval_service
+    assert "require_document_capability" in approval_service
+    assert "validate_drawing_approval" in approval_service
+    assert "current_assignee" not in policy
+    assert "session_user" not in policy
+    assert "approval_warning" in policy
+    assert "preserve_status=True" in approval_service
+    assert "was_previously_approved" in approval_service
     assert "if preserve_status:" in lock_impl
     assert '"status": "Approved"' in lock_impl
-    assert "require_any_role" not in dxf_service
+    assert "require_any_role" not in approval_service
 
 
-def test_drawing_form_exposes_one_secure_approval_action():
-    ux = _source(SHOP_FLOOR_UX)
+def test_drawing_form_exposes_reapproval_with_warning():
+    ux = _source(DRAWING_APPROVAL_UX)
     assert 'can("approve_dxf")' in ux
-    assert 'frm.add_custom_button(__("اعتماد الرسم")' in ux
+    assert 'const APPROVE_LABEL = __("اعتماد الرسم")' in ux
+    assert 'const REAPPROVE_LABEL = __("إعادة اعتماد الرسم")' in ux
     assert "approve_production_dxf" in ux
     assert "plan_source: source" in ux
-    assert "current_assignee === frappe.session.user" in ux
+    assert "تم اعتماد خطة لهذا الطلب سابقًا" in ux
+    assert "current_assignee" not in ux
+    assert "isAssignedToCurrentUser" not in ux
     assert "lock_cutting_plan" not in ux
