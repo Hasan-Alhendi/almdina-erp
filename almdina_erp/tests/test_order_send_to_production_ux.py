@@ -13,6 +13,9 @@ DRAWING_APPROVAL_POLICY = (
 SHOP_FLOOR_COMMANDS = (
     ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
 )
+PRODUCTION_POLICY = (
+    ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
+)
 DRAWING_APPROVAL_UX = (
     ROOT / "public" / "js" / "door_cutting_order_drawing_approval_ux.js"
 )
@@ -32,18 +35,19 @@ def test_order_creator_dispatches_without_locking_cutting_plan():
     assert "frappe.almdina.orderCanEdit" in workflow
 
 
-def test_dispatch_accepts_draft_orders_with_calculated_plan_only():
+def test_dispatch_uses_capability_and_calculated_plan_policy():
     shop_floor = _source(SHOP_FLOOR_COMMANDS)
-    ready = shop_floor.split("def assert_order_ready_for_dispatch", 1)[1].split(
-        "def get_handoff_workers", 1
-    )[0]
+    policy = _source(PRODUCTION_POLICY)
     dispatch = shop_floor.split("def dispatch_order", 1)[1].split(
         "def start_my_stage", 1
     )[0]
-    assert "assert_order_ready_for_dispatch(order)" in dispatch
-    assert "can_dispatch_from_status(order.status)" in ready
-    assert "order.has_cutting_plan" in ready
-    assert "plan_needs_recalculation" in ready
+
+    assert "Capability.DISPATCH_ORDER" in dispatch
+    assert "_assert_action_allowed" in dispatch
+    assert "can_dispatch_from_status(facts.order_status)" in policy
+    assert "facts.has_cutting_plan" in policy
+    assert "facts.plan_needs_recalculation" in policy
+    assert '"already_dispatched"' in policy
 
 
 def test_role_managed_drawing_approval_preserves_shop_floor_status():
