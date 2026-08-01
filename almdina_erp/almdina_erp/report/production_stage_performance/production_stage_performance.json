@@ -8,11 +8,8 @@
   "module": "Almdina ERP",
   "name": "Production Stage Performance",
   "prepared_report": 0,
-  "ref_doctype": "Production Stage",
+  "ref_doctype": "Door Cutting Order",
   "report_name": "Production Stage Performance",
   "report_type": "Script Report",
-  "roles": [
-    {"role":"Production Manager"},
-    {"role":"System Manager"}
-  ]
+  "roles": []
 }
