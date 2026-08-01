@@ -110,11 +110,31 @@ class TestControlCenterArchitecture(unittest.TestCase):
         self.assertIn("can_reject", page)
         self.assertNotIn("frappe.user_roles", page)
 
-    def test_legacy_review_routes_and_replacement_scope_are_registered(self) -> None:
+    def test_legacy_review_routes_and_document_scopes_are_registered(self) -> None:
         hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
         self.assertIn("order_review_service.reject_order", hooks)
         self.assertIn("order_lifecycle_permission_service.submit_order_for_review", hooks)
         self.assertIn('"Replacement Piece": "almdina_erp.permissions.replacement_piece_query"', hooks)
+        self.assertIn("replacement_piece_has_permission", hooks)
+        self.assertIn("door_cutting_order_has_permission", hooks)
+        self.assertIn("cutting_plan_has_permission", hooks)
+        self.assertIn("production_stage_has_permission", hooks)
+
+    def test_direct_document_access_is_assignment_scoped(self) -> None:
+        source = (ROOT / "permissions.py").read_text(encoding="utf-8")
+        self.assertIn("_assigned_read_decision", source)
+        self.assertIn("_assigned_order_exists", source)
+        self.assertIn("replacement_piece_has_permission", source)
+        self.assertIn("door_cutting_order_has_permission", source)
+        self.assertIn("production_stage_has_permission", source)
+        self.assertIn("cutting_plan_has_permission", source)
+
+    def test_replacement_context_minimizes_plan_identity(self) -> None:
+        source = (
+            APP / "services" / "replacement_permission_service.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("doctype_has_capability(Capability.VIEW_CUTTING_PLAN)", source)
+        self.assertIn("else None", source)
 
     def test_internal_order_cancel_does_not_require_second_business_grant(self) -> None:
         lifecycle = (APP / "services" / "order_lifecycle_service.py").read_text(
