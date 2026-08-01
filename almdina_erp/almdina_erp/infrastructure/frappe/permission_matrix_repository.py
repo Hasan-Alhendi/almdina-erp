@@ -10,11 +10,9 @@ import frappe
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
     normalize_capability_state,
+    standard_permission_projection,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import (
-    CAPABILITY_CATALOG,
-    Capability,
-)
+from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
 
 
 PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})
@@ -319,6 +317,7 @@ class FrappePermissionMatrixRepository:
         documents = [
             frappe.get_doc("Custom DocPerm", name) for name in row_names
         ] or self._new_override_documents(doctype, role)
+        standard_rights = standard_permission_projection(doctype, desired)
 
         for document in documents:
             for capability, definition in definitions:
@@ -328,29 +327,9 @@ class FrappePermissionMatrixRepository:
                         int(bool(desired[capability])),
                     )
 
-            enabled_for_doctype = any(
-                desired[capability] for capability, _ in definitions
-            )
-            if document.meta.has_field("read"):
-                document.read = int(
-                    bool(desired[Capability.VIEW_ORDERS])
-                    if doctype == "Door Cutting Order"
-                    else enabled_for_doctype
-                )
-            if document.meta.has_field("create"):
-                document.create = int(
-                    bool(desired.get(Capability.CREATE_ORDER, False))
-                    if doctype == "Door Cutting Order"
-                    else False
-                )
-            if document.meta.has_field("write"):
-                document.write = int(
-                    bool(desired.get(Capability.EDIT_ORDER, False))
-                    if doctype == "Door Cutting Order"
-                    else bool(
-                        desired.get(Capability.MANAGE_FACTORY_SETTINGS, False)
-                    )
-                )
+            for permission_type, enabled in standard_rights.items():
+                if document.meta.has_field(permission_type):
+                    document.set(permission_type, int(bool(enabled)))
 
             if document.is_new():
                 document.insert(ignore_permissions=True)
