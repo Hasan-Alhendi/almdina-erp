@@ -136,6 +136,34 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
     "almdina_erp.almdina_erp.services.export_validation_service.get_validated_dxf_plan":
         "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan",
+    "almdina_erp.almdina_erp.services.actual_consumption_reversal.reverse_actual_consumption":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.actual_consumption_service.record_actual_consumption":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.performance_service.benchmark_order_cutting_engine":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.preflight_service.run_factory_preflight":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.remnant_service.generate_order_remnants":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.settings_access_service.get_stock_settings":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.settings_access_service.update_stock_settings":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.stock_service.check_order_stock":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.stock_service.consume_order_materials":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.production_service.start_stage":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.start_legacy_stage",
+    "almdina_erp.almdina_erp.services.production_service.finish_stage":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.finish_legacy_stage",
+    "almdina_erp.almdina_erp.services.production_service.pause_stage":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.production_service.resume_stage":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_shop_floor_context":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_shop_floor_context",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
