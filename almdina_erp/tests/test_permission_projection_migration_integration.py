@@ -62,17 +62,28 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
                 Capability.VIEW_USERS,
                 Capability.CREATE_USERS,
                 Capability.MANAGE_PERMISSIONS,
-                Capability.VIEW_FACTORY_SETTINGS,
+                Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+                Capability.EDIT_FACTORY_COST_DEFAULTS,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
             ],
             as_dict=True,
         )
-        self.assertEqual(int(row.read), 0)
+        self.assertEqual(
+            int(row.read),
+            0,
+            "view_factory_settings reuses the standard read column and must be removed.",
+        )
         self.assertEqual(int(row.write), 0)
         self.assertEqual(int(row.get(Capability.MANAGE_USERS)), 1)
         self.assertEqual(int(row.get(Capability.VIEW_USERS)), 1)
         self.assertEqual(int(row.get(Capability.CREATE_USERS)), 1)
         self.assertEqual(int(row.get(Capability.MANAGE_PERMISSIONS)), 0)
-        self.assertEqual(int(row.get(Capability.VIEW_FACTORY_SETTINGS)), 0)
+        for capability in (
+            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+            Capability.EDIT_FACTORY_COST_DEFAULTS,
+            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        ):
+            self.assertEqual(int(row.get(capability)), 0)
 
 
 __all__ = ["TestPermissionProjectionMigrationIntegration"]
