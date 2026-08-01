@@ -5,56 +5,130 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
+    DrawingActionDenied,
+    DrawingActionState,
+    required_upload_capability,
+    validate_assigned_drawing_action,
+    validate_plan_source,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_document_capability,
+)
+
+MAX_DXF_FILE_SIZE = 10 * 1024 * 1024
+
+_POLICY_MESSAGES = {
+    "not_at_drawing": "DXF actions are only available while the order is at Drawing.",
+    "designer_not_assigned": "Assign a designer to this order before using drawing actions.",
+    "not_assigned_designer": "Only the designer assigned to this order can perform this drawing action.",
+    "plan_already_approved": "This order already has a locked cutting plan.",
+    "unsupported_plan_source": "Unsupported drawing plan source.",
+    "system_plan_missing": "The system cutting plan is not available for approval.",
+    "custom_plan_missing": "Upload and validate a DXF plan before approving it.",
+}
 
 
-DXF_ROLES = ("عامل رسم", "Production Manager", "System Manager")
-
-
-def _assert_order_at_drawing(order_name: str) -> None:
-    from almdina_erp.almdina_erp.services.order_edit_policy import (
-        is_order_at_drawing_stage,
+def _drawing_state(order: Any) -> DrawingActionState:
+    return DrawingActionState(
+        status=str(order.status or ""),
+        production_path=str(order.production_path or ""),
+        current_department=str(order.current_department or ""),
+        current_assignee=str(order.current_assignee or ""),
+        session_user=str(frappe.session.user or ""),
+        approved_plan=str(order.approved_plan or ""),
+        production_dxf=str(order.production_dxf or ""),
     )
 
-    row = frappe.db.get_value(
-        "Door Cutting Order",
-        order_name,
-        ["name", "status", "production_path", "current_production_stage"],
+
+def _throw_policy_error(error: DrawingActionDenied) -> None:
+    frappe.throw(
+        _(_POLICY_MESSAGES.get(error.code, "Drawing action is not allowed.")),
+        frappe.PermissionError,
+    )
+
+
+def _get_authorized_order(
+    order_name: str,
+    capability: str,
+    *,
+    require_unlocked_plan: bool = True,
+) -> Any:
+    order = shop_floor_gateway.get_order(order_name)
+    order.check_permission("read")
+    require_document_capability(order, capability)
+    try:
+        validate_assigned_drawing_action(
+            _drawing_state(order),
+            require_unlocked_plan=require_unlocked_plan,
+        )
+    except DrawingActionDenied as error:
+        _throw_policy_error(error)
+    return order
+
+
+def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
+    normalized_url = str(file_url or "").strip()
+    if not normalized_url:
+        frappe.throw(_("Attach a DXF file."))
+    if not normalized_url.lower().split("?", 1)[0].endswith(".dxf"):
+        frappe.throw(_("Production file must be a .dxf attachment."))
+
+    file_row = frappe.db.get_value(
+        "File",
+        {"file_url": normalized_url},
+        [
+            "name",
+            "file_size",
+            "is_private",
+            "attached_to_doctype",
+            "attached_to_name",
+        ],
         as_dict=True,
     )
-    if not row:
-        frappe.throw(_("Order not found."))
-    if not is_order_at_drawing_stage(row):
-        frappe.throw(
-            _("DXF actions are only available while the order is at Drawing.")
-        )
+    if not file_row:
+        frappe.throw(_("The uploaded DXF file could not be found."))
+    if int(file_row.file_size or 0) > MAX_DXF_FILE_SIZE:
+        frappe.throw(_("DXF file size cannot exceed 10 MB."))
+    if file_row.attached_to_doctype and (
+        file_row.attached_to_doctype != order.doctype
+        or file_row.attached_to_name != order.name
+    ):
+        frappe.throw(_("The uploaded DXF file belongs to another document."))
+
+    frappe.db.set_value(
+        "File",
+        file_row.name,
+        {
+            "is_private": 1,
+            "attached_to_doctype": order.doctype,
+            "attached_to_name": order.name,
+            "attached_to_field": "production_dxf",
+        },
+        update_modified=False,
+    )
+    return file_row
 
 
 @frappe.whitelist()
 def mark_dxf_exported(order_name: str) -> dict[str, Any]:
-    shop_floor_gateway.require_roles(*DXF_ROLES)
-    _assert_order_at_drawing(order_name)
-    current = (
-        frappe.db.get_value(
-            "Door Cutting Order",
-            order_name,
-            "drawing_dxf_status",
-        )
-        or "None"
-    )
+    order = _get_authorized_order(order_name, Capability.EXPORT_DXF)
+    current = order.drawing_dxf_status or "None"
     if current in {"None", "Exported"}:
         frappe.db.set_value(
             "Door Cutting Order",
-            order_name,
+            order.name,
             "drawing_dxf_status",
             "Exported",
             update_modified=True,
         )
     return {
-        "name": order_name,
+        "name": order.name,
         "drawing_dxf_status": frappe.db.get_value(
             "Door Cutting Order",
-            order_name,
+            order.name,
             "drawing_dxf_status",
         ),
     }
@@ -62,14 +136,12 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
-    shop_floor_gateway.require_roles(*DXF_ROLES)
-    _assert_order_at_drawing(order_name)
-    if not file_url:
-        frappe.throw(_("Attach a DXF file."))
-    if not str(file_url).lower().endswith(".dxf"):
-        frappe.throw(_("Production file must be a .dxf attachment."))
-
     order = shop_floor_gateway.get_order(order_name)
+    upload_capability = required_upload_capability(_drawing_state(order))
+    order = _get_authorized_order(order_name, upload_capability)
+    replacing_existing_file = bool(order.production_dxf)
+    _validate_and_attach_dxf_file(order, file_url)
+
     from almdina_erp.almdina_erp.services.dxf_import_service import (
         parse_production_dxf,
         validate_imported_plan,
@@ -96,15 +168,23 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
         update_values["custom_plan_json"] = frappe.as_json(custom_snapshot)
     frappe.db.set_value(
         "Door Cutting Order",
-        order_name,
+        order.name,
         update_values,
         update_modified=True,
     )
+    order.add_comment(
+        "Info",
+        text=_("DXF file {0} by assigned designer {1}.").format(
+            _("replaced") if replacing_existing_file else _("uploaded"),
+            frappe.session.user,
+        ),
+    )
     return {
-        "name": order_name,
+        "name": order.name,
         "production_dxf": file_url,
         "drawing_dxf_status": "Uploaded",
         "custom_plan_json": frappe.as_json(custom_snapshot),
+        "required_capability": upload_capability,
     }
 
 
@@ -118,13 +198,7 @@ def recalculate_drawing_plan(
 ) -> dict[str, Any]:
     """Recalculate the system plan without granting full order-edit access."""
 
-    shop_floor_gateway.require_roles(*DXF_ROLES)
-    _assert_order_at_drawing(order_name)
-    order = shop_floor_gateway.get_order(order_name)
-    order.check_permission("read")
-    if order.approved_plan:
-        frappe.throw(_("This order already has a locked cutting plan."))
-
+    order = _get_authorized_order(order_name, Capability.RECALCULATE_PLAN)
     if packing_mode:
         order.packing_mode = packing_mode
     if cutting_machine_type:
@@ -143,14 +217,38 @@ def recalculate_drawing_plan(
 
 
 @frappe.whitelist()
-def approve_production_dxf(order_name: str) -> dict[str, Any]:
-    shop_floor_gateway.require_roles(*DXF_ROLES)
-    _assert_order_at_drawing(order_name)
+def approve_production_dxf(
+    order_name: str,
+    plan_source: str = "Custom",
+) -> dict[str, Any]:
+    """Approve the selected drawing plan as the assigned designer."""
+
+    order = _get_authorized_order(order_name, Capability.APPROVE_DXF)
+    from almdina_erp.almdina_erp.services.dual_plan_fields import (
+        get_custom_plan_json,
+        get_system_plan_json,
+    )
+
+    try:
+        validated_source = validate_plan_source(
+            plan_source,
+            has_system_plan=bool(
+                get_system_plan_json(order) or order.cutting_plan_json
+            ),
+            has_custom_plan=bool(get_custom_plan_json(order)),
+            has_production_dxf=bool(order.production_dxf),
+        )
+    except DrawingActionDenied as error:
+        _throw_policy_error(error)
+
     from almdina_erp.almdina_erp.services.cutting_plan_service import (
         lock_cutting_plan,
     )
 
-    return lock_cutting_plan(order_name, plan_source="Custom")
+    result = lock_cutting_plan(order.name, plan_source=validated_source)
+    result["approved_by"] = frappe.session.user
+    result["approved_plan_source"] = validated_source
+    return result
 
 
 __all__ = [
