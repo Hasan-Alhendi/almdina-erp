@@ -75,10 +75,13 @@
                 description: __("اترك الحقل فارغًا لاعتماد التكلفة المتوقعة المجمدة."),
             }],
             values => {
-                const loss = (values || {}).internal_loss_cost_usd;
+                values = values || {};
+                const loss = values.internal_loss_cost_usd;
                 return callAction(frm, "complete_replacement", {
                     internal_loss_cost_usd:
-                        loss === undefined || loss === null || loss === ""
+                        values.internal_loss_cost_usd === "" ||
+                        loss === undefined ||
+                        loss === null
                             ? null
                             : loss,
                 }).then(notifyCompleted);
