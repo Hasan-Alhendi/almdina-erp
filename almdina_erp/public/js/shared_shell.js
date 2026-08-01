@@ -2,6 +2,18 @@
     "use strict";
 
     const APP_NAME = "almdina_erp";
+    const CAPABILITY_ROUTE_RULES = Object.freeze([
+        { capability: "manage_permissions", routes: ["factory-permissions"] },
+        {
+            capability: "manage_factory_settings",
+            routes: [
+                "factory-production-settings",
+                "almdina-erp-settings",
+                "production-routing",
+                "edge-banding-type",
+            ],
+        },
+    ]);
 
     function permissions() {
         return window.AlmdinaPermissions || null;
@@ -10,6 +22,11 @@
     function navigation() {
         const api = permissions();
         return api && typeof api.navigation === "function" ? api.navigation() : null;
+    }
+
+    function can(capability) {
+        const api = permissions();
+        return Boolean(api && typeof api.can === "function" && api.can(capability));
     }
 
     function workspaceName(page) {
@@ -51,6 +68,49 @@
                 if (name && !isAlmdina) {
                     element.style.setProperty("display", "none", "important");
                 }
+            });
+    }
+
+    function normalizedRoute(element) {
+        const values = [
+            element.getAttribute && element.getAttribute("data-link-to"),
+            element.getAttribute && element.getAttribute("data-route"),
+            element.getAttribute && element.getAttribute("href"),
+            element.dataset && element.dataset.linkTo,
+            element.dataset && element.dataset.route,
+        ];
+        return values
+            .filter(Boolean)
+            .map(value => String(value).toLowerCase().replace(/^#\/?/, "").replace(/^\/?app\//, ""))
+            .join(" ");
+    }
+
+    function shortcutContainer(element) {
+        return (
+            element.closest &&
+            element.closest(
+                ".shortcut-widget-box, .widget.shortcut-widget-box, .link-item, .workspace-link, .card"
+            )
+        ) || element;
+    }
+
+    function hideUnauthorizedShortcuts() {
+        const nav = navigation();
+        if (!nav || !nav.shared_shell) return;
+        document
+            .querySelectorAll("[data-link-to], [data-route], a[href*='/app/']")
+            .forEach(element => {
+                const route = normalizedRoute(element);
+                const rule = CAPABILITY_ROUTE_RULES.find(item =>
+                    item.routes.some(candidate => route.includes(candidate))
+                );
+                if (!rule) return;
+                const container = shortcutContainer(element);
+                container.style.setProperty(
+                    "display",
+                    can(rule.capability) ? "" : "none",
+                    can(rule.capability) ? "" : "important"
+                );
             });
     }
 
@@ -200,6 +260,7 @@
         document.body.dataset.almdinaProfile = String(nav.profile || "shared");
         trimBootMetadata();
         hideOtherAppCards();
+        hideUnauthorizedShortcuts();
         injectStyles();
     }
 
@@ -210,7 +271,10 @@
         openConfiguredHome();
         if (frappe.router && !frappe.router.__almdinaSharedShell) {
             frappe.router.__almdinaSharedShell = true;
-            frappe.router.on("change", applyShell);
+            frappe.router.on("change", () => {
+                applyShell();
+                [150, 500].forEach(delay => setTimeout(hideUnauthorizedShortcuts, delay));
+            });
         }
         [300, 900, 1800].forEach(delay => setTimeout(applyShell, delay));
     }
