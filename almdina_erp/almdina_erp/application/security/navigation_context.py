@@ -25,6 +25,10 @@ WORKSPACE_REPORTS = "Almdina Reports"
 WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
 
+_FINANCIAL_CAPABILITIES = frozenset(
+    COSTING_CAPABILITIES.difference({Capability.PRINT_MEASUREMENTS})
+)
+
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
     return bool(granted.intersection(requested))
@@ -38,7 +42,7 @@ def _profile(granted: frozenset[str]) -> str:
 
     broad = frozenset(
         ORDER_CAPABILITIES
-        | COSTING_CAPABILITIES
+        | _FINANCIAL_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES
     )
@@ -59,7 +63,7 @@ def _profile(granted: frozenset[str]) -> str:
     )
     if _intersects(granted, order_entry_actions) and not _intersects(
         granted,
-        COSTING_CAPABILITIES
+        _FINANCIAL_CAPABILITIES
         | PLANNING_CAPABILITIES
         | DRAWING_CAPABILITIES
         | PRODUCTION_CAPABILITIES
@@ -82,7 +86,7 @@ def build_navigation_context(
 
     granted = normalize_capabilities(granted_capabilities)
     has_orders = _intersects(granted, ORDER_CAPABILITIES)
-    has_costing = _intersects(granted, COSTING_CAPABILITIES)
+    has_costing = _intersects(granted, _FINANCIAL_CAPABILITIES)
     has_planning = _intersects(granted, PLANNING_CAPABILITIES)
     has_drawing = _intersects(granted, DRAWING_CAPABILITIES)
     has_production = _intersects(granted, PRODUCTION_CAPABILITIES)
@@ -96,7 +100,7 @@ def build_navigation_context(
     ) and not _intersects(
         granted,
         ORDER_CAPABILITIES
-        | COSTING_CAPABILITIES
+        | _FINANCIAL_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES,
     )
