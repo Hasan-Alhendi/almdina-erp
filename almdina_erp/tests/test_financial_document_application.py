@@ -94,6 +94,13 @@ class TestFinancialDocumentApplication(unittest.TestCase):
             ["material", "cutting", "edge", "special"],
         )
 
+    def test_customer_summary_uses_door_count_not_board_count(self) -> None:
+        payload = build_customer_invoice_document(self.order, self.pieces)
+        summary = {item["label"]: item["value"] for item in payload["summary"]}
+        self.assertEqual(summary["عدد الدرف"], 3)
+        self.assertNotIn("عدد الألواح", summary)
+        self.assertTrue(all("edge_meters" not in row for row in payload["measurements"]))
+
     def test_internal_report_calculates_margin_and_special_price_variance(self) -> None:
         payload = build_internal_cost_report_document(self.order, self.pieces)
         self.assertEqual(payload["kind"], "internal_cost_report")
@@ -104,6 +111,9 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(summary["هامش الربح ($)"], 26.0)
         self.assertEqual(summary["هامش الربح (%)"], 32.5)
         self.assertEqual(payload["special_prices"][0]["variance_total_usd"], 5.0)
+        operations = {item["label"]: item["value"] for item in payload["operations"]}
+        self.assertEqual(operations["عدد الألواح"], 2)
+        self.assertEqual(operations["إجمالي القشاط (م)"], 12.0)
 
     def test_non_finite_or_invalid_values_fail_closed_to_zero(self) -> None:
         order = {**self.order, "actual_cost_usd": float("nan")}
