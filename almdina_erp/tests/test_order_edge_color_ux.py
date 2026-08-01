@@ -50,7 +50,8 @@ def test_financial_documents_use_the_server_document_and_edge_color_does_not_for
     edge = _source(EDGE_COLOR_UX)
     assert "get_customer_invoice_document" in financial
     assert "get_internal_cost_report_document" in financial
-    assert "AlmdinaDocumentPrintPresenter" in financial
+    assert "window.AlmdinaFinancialDocuments = Object.freeze" in financial
+    assert "printHtml(documentHtml(payload))" in financial
     assert "renderCustomerInvoice" in presenter
     assert "renderInternalCostReport" in presenter
     assert "function printHtml(frm)" not in edge
