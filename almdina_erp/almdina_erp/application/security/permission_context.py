@@ -4,25 +4,29 @@ from collections.abc import Iterable
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
-    capability_flags_for_roles,
+    capability_flags,
     is_order_entry_profile,
     is_shop_floor_only,
+    normalize_capabilities,
     normalize_roles,
 )
 
-PERMISSION_CONTEXT_VERSION = 1
+PERMISSION_CONTEXT_VERSION = 2
 
 
-def build_permission_context(roles: Iterable[str] | None) -> dict[str, Any]:
-    """Build the stable user-level permission context consumed by presenters.
+def build_permission_context(
+    roles: Iterable[str] | None,
+    granted_capabilities: Iterable[str] | None,
+) -> dict[str, Any]:
+    """Build the stable permission context consumed by all Desk presenters.
 
-    The application layer exposes capabilities and a navigation profile without
-    depending on Frappe, HTTP, Desk, or any concrete UI implementation. Runtime
-    document rules such as order state and assignment are intentionally evaluated
-    later by the relevant server-side action policy.
+    Role assignments are resolved by the Frappe infrastructure adapter before
+    entering this framework-independent use case. The application layer only
+    formats the resulting capability set and navigation profile.
     """
 
     normalized_roles = normalize_roles(roles)
+    normalized_capabilities = normalize_capabilities(granted_capabilities)
     if is_order_entry_profile(normalized_roles):
         profile = "order_entry"
     elif is_shop_floor_only(normalized_roles):
@@ -33,7 +37,7 @@ def build_permission_context(roles: Iterable[str] | None) -> dict[str, Any]:
     return {
         "version": PERMISSION_CONTEXT_VERSION,
         "profile": profile,
-        "capabilities": capability_flags_for_roles(normalized_roles),
+        "capabilities": capability_flags(normalized_capabilities),
     }
 
 
