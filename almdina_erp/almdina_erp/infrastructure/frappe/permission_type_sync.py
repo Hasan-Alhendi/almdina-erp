@@ -5,6 +5,9 @@ import frappe
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
+    FACTORY_SETTINGS_CAPABILITIES,
+    WORKFORCE_CAPABILITIES,
+    Capability,
 )
 
 
@@ -12,6 +15,31 @@ def _managed_doctypes() -> tuple[str, ...]:
     return tuple(
         sorted({definition.applies_to for definition in CAPABILITY_CATALOG.values()})
     )
+
+
+def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, bool]:
+    """Remove the old administration-derived Settings read projection.
+
+    Before granular settings capabilities existed, workforce and permission
+    administration grants projected ``read=1`` onto the Settings singleton.
+    Preserve an explicit read-only Settings role, and preserve roles that own an
+    actual Settings edit capability, but fail closed for old unrelated admin
+    roles. Administrators can explicitly re-grant view access when it is wanted.
+    """
+
+    normalized = dict(capabilities)
+    if not normalized.get(Capability.VIEW_FACTORY_SETTINGS):
+        return normalized
+    actual_settings_grants = FACTORY_SETTINGS_CAPABILITIES.difference(
+        {Capability.VIEW_FACTORY_SETTINGS}
+    )
+    has_settings_grant = any(normalized.get(capability) for capability in actual_settings_grants)
+    legacy_admin_grant = normalized.get(Capability.MANAGE_PERMISSIONS) or any(
+        normalized.get(capability) for capability in WORKFORCE_CAPABILITIES
+    )
+    if legacy_admin_grant and not has_settings_grant:
+        normalized[Capability.VIEW_FACTORY_SETTINGS] = False
+    return normalized
 
 
 def reconcile_custom_permission_projections() -> None:
@@ -32,12 +60,17 @@ def reconcile_custom_permission_projections() -> None:
     if not doctypes:
         return
 
-    roles = frappe.get_all(
-        "Custom DocPerm",
-        filters={"parent": ["in", doctypes], "permlevel": 0},
-        pluck="role",
-        distinct=True,
-        order_by="role asc",
+    roles = sorted(
+        {
+            str(role)
+            for role in frappe.get_all(
+                "Custom DocPerm",
+                filters={"parent": ["in", doctypes], "permlevel": 0},
+                pluck="role",
+                order_by="role asc",
+            )
+            if role
+        }
     )
     if not roles:
         return
@@ -48,12 +81,14 @@ def reconcile_custom_permission_projections() -> None:
     )
 
     repository = FrappePermissionMatrixRepository()
-    for role in roles:
-        resolved = str(role or "").strip()
-        if not resolved or resolved in PROTECTED_ROLES or not frappe.db.exists("Role", resolved):
+    for resolved in roles:
+        if resolved in PROTECTED_ROLES or not frappe.db.exists("Role", resolved):
             continue
         effective = repository.role_state(resolved)["capabilities"]
-        repository.save_role_state(resolved, effective)
+        repository.save_role_state(
+            resolved,
+            _remove_legacy_settings_read(effective),
+        )
 
 
 def sync_permission_types() -> None:
