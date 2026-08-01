@@ -303,33 +303,55 @@
         });
     }
 
-    function button(label, className, primary = false) {
+    function createButton(label, className, primary = false) {
         return $(`<button type="button" class="btn ${primary ? "btn-primary" : "btn-default"} btn-sm ${className}">${esc(label)}</button>`);
+    }
+
+    function ensureActionButton(actions, options) {
+        const selector = `.${options.className}`;
+        const matches = actions.find(selector);
+        let action = matches.first();
+        matches.slice(1).remove();
+
+        if (!options.visible) {
+            action.remove();
+            return;
+        }
+        if (!action.length) {
+            action = createButton(options.label, options.className, options.primary);
+            actions.append(action);
+        }
+        action
+            .off("click.almdinaFinancialDocuments")
+            .on("click.almdinaFinancialDocuments", options.handler);
     }
 
     function installButtons(frm) {
         const root = formRoot(frm);
         root.find(`.${LEGACY_CUSTOMER_CLASS}`).remove();
-        root.find(`.${CUSTOMER_CLASS},.${INTERNAL_CLASS}`).remove();
 
-        if (!can("view_costs") || frm.is_new()) return;
         const actions = costActions(frm);
         if (!actions.length) return;
+        const baseVisible = can("view_costs") && !frm.is_new();
 
-        if (can("print_customer_invoice")) {
-            const customerButton = button(__("طباعة فاتورة الزبون"), CUSTOMER_CLASS, true);
-            actions.append(customerButton);
-            customerButton.on("click", () => {
+        ensureActionButton(actions, {
+            className: CUSTOMER_CLASS,
+            label: __("طباعة فاتورة الزبون"),
+            primary: true,
+            visible: baseVisible && can("print_customer_invoice"),
+            handler: () => {
                 printFinancialDocument(frm, "customer_invoice").catch(() => undefined);
-            });
-        }
-        if (can("print_internal_cost_report")) {
-            const internalButton = button(__("طباعة تقرير التكلفة الداخلي"), INTERNAL_CLASS);
-            actions.append(internalButton);
-            internalButton.on("click", () => {
+            },
+        });
+        ensureActionButton(actions, {
+            className: INTERNAL_CLASS,
+            label: __("طباعة تقرير التكلفة الداخلي"),
+            primary: false,
+            visible: baseVisible && can("print_internal_cost_report"),
+            handler: () => {
                 printFinancialDocument(frm, "internal_cost_report").catch(() => undefined);
-            });
-        }
+            },
+        });
     }
 
     function observeFinancialActions(frm) {
@@ -361,9 +383,10 @@
         }
 
         const previous = window.AlmdinaOrderDocumentPrint;
-        if (previous && typeof previous === "object") {
+        if (previous && typeof previous === "object" && !previous.__secureFinancialDocuments) {
             window.AlmdinaOrderDocumentPrint = Object.freeze({
                 ...previous,
+                __secureFinancialDocuments: true,
                 printInvoice(targetFrm) {
                     return printFinancialDocument(targetFrm || frm, "customer_invoice");
                 },
