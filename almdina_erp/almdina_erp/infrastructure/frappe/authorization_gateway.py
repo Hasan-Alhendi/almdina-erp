@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import frappe
@@ -36,12 +37,7 @@ def _permission_type_is_available(capability: str) -> bool:
 
 
 def granted_capabilities(user: str | None = None) -> frozenset[str]:
-    """Resolve role assignments through Frappe's Role Permission Manager.
-
-    The domain owns capability names only. The site administrator owns the
-    role-to-permission mapping, including custom permission types introduced in
-    Frappe v16.
-    """
+    """Resolve role assignments through Frappe's Role Permission Manager."""
 
     resolved_user = user or frappe.session.user
     if resolved_user == "Administrator":
@@ -81,6 +77,17 @@ def doctype_has_capability(
     )
 
 
+def doctype_has_any_capability(
+    capabilities: Iterable[str],
+    *,
+    user: str | None = None,
+) -> bool:
+    return any(
+        doctype_has_capability(capability, user=user)
+        for capability in tuple(capabilities)
+    )
+
+
 def require_doctype_capability(
     capability: str,
     *,
@@ -90,6 +97,21 @@ def require_doctype_capability(
     """Require one configurable capability without leaking role policy."""
 
     if doctype_has_capability(capability, user=user):
+        return
+    frappe.throw(
+        message or _("You do not have permission for this operation."),
+        frappe.PermissionError,
+    )
+
+
+def require_any_doctype_capability(
+    capabilities: Iterable[str],
+    *,
+    user: str | None = None,
+    message: str | None = None,
+) -> None:
+    requested = tuple(capabilities)
+    if requested and doctype_has_any_capability(requested, user=user):
         return
     frappe.throw(
         message or _("You do not have permission for this operation."),
@@ -117,6 +139,18 @@ def document_has_capability(
     )
 
 
+def document_has_any_capability(
+    document: Any,
+    capabilities: Iterable[str],
+    *,
+    user: str | None = None,
+) -> bool:
+    return any(
+        document_has_capability(document, capability, user=user)
+        for capability in tuple(capabilities)
+    )
+
+
 def require_document_capability(
     document: Any,
     capability: str,
@@ -132,10 +166,30 @@ def require_document_capability(
     )
 
 
+def require_any_document_capability(
+    document: Any,
+    capabilities: Iterable[str],
+    *,
+    user: str | None = None,
+    message: str | None = None,
+) -> None:
+    requested = tuple(capabilities)
+    if requested and document_has_any_capability(document, requested, user=user):
+        return
+    frappe.throw(
+        message or _("You do not have permission for this operation."),
+        frappe.PermissionError,
+    )
+
+
 __all__ = [
+    "doctype_has_any_capability",
     "doctype_has_capability",
+    "document_has_any_capability",
     "document_has_capability",
     "granted_capabilities",
+    "require_any_doctype_capability",
+    "require_any_document_capability",
     "require_doctype_capability",
     "require_document_capability",
 ]
