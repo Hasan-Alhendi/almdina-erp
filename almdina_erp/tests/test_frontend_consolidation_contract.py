@@ -37,18 +37,26 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("preview_door_cutting_order", source)
         self.assertNotIn("board_item", source)
 
-    def test_focused_renderer_loads_before_every_plan_consumer(self) -> None:
+    def test_focused_renderer_loads_before_every_active_plan_consumer(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
         renderer = '"public/js/door_cutting_order_cutting_plan_renderer.js"'
 
         self.assertIn(renderer, hooks)
         for consumer in (
-            '"public/js/door_cutting_order_workflow.js"',
             '"public/js/door_cutting_order_plan_tabs_ux.js"',
             '"public/js/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/shop_floor_order_ux.js"',
         ):
             self.assertLess(hooks.index(renderer), hooks.index(consumer))
+
+    def test_duplicate_legacy_form_controllers_are_not_loaded(self) -> None:
+        hooks = HOOKS.read_text(encoding="utf-8")
+        for legacy in (
+            '"public/js/door_cutting_order_workflow.js"',
+            '"public/js/door_cutting_order_cost_invoice_ux.js"',
+            '"public/js/production_stage.js"',
+        ):
+            self.assertNotIn(legacy, hooks)
 
     def test_renderer_owns_drawing_only(self) -> None:
         source = PLAN_RENDERER.read_text(encoding="utf-8")
@@ -77,7 +85,9 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("printInvoice(frm)", document_print)
         self.assertIn('event.target.closest(".dco-print-customer-invoice")', document_print)
         self.assertIn("validatedExport(frm)", secure_dxf)
-        self.assertIn("DXF_EXPORT_ROLES", secure_dxf)
+        self.assertIn('permissions.can("export_dxf")', secure_dxf)
+        self.assertNotIn("DXF_EXPORT_ROLES", secure_dxf)
+        self.assertNotIn("frappe.user_roles", secure_dxf)
 
     def test_input_policy_uses_public_form_surface_only(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")
