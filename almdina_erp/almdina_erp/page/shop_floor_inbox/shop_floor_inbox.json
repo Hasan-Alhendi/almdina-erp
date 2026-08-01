@@ -6,15 +6,7 @@
   "module": "Almdina ERP",
   "name": "shop-floor-inbox",
   "page_name": "shop-floor-inbox",
-  "roles": [
-    {"role": "عامل رسم"},
-    {"role": "عامل شريون"},
-    {"role": "عامل CNC"},
-    {"role": "عامل تقشيط"},
-    {"role": "Production Manager"},
-    {"role": "Order Entry"},
-    {"role": "System Manager"}
-  ],
+  "roles": [],
   "script": null,
   "standard": "Yes",
   "style": null,
