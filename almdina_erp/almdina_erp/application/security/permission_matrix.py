@@ -3,12 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from almdina_erp.almdina_erp.application.security.navigation_context import (
-    build_navigation_context,
-)
+from almdina_erp.almdina_erp.application.security.navigation_context import build_navigation_context
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
+    FACTORY_SETTINGS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
     Capability,
     normalize_capabilities,
@@ -25,60 +24,24 @@ CATEGORY_ORDER = (
     "control_center",
     "reports",
     "workforce",
+    "factory_settings",
+    "master_data",
     "administration",
 )
 
 CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
-    "order": {
-        "label": "الطلبات",
-        "description": "إنشاء الطلب ومراجعته واعتماده وإدارة دورة حياته.",
-        "icon": "file-text",
-    },
-    "costing": {
-        "label": "التكلفة والتسعير",
-        "description": "عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.",
-        "icon": "accounting",
-    },
-    "documents": {
-        "label": "المستندات والطباعة",
-        "description": "طباعة القياسات وفاتورة الزبون والتقرير الداخلي السري.",
-        "icon": "printer",
-    },
-    "cutting_plan": {
-        "label": "خطة القص",
-        "description": "عرض الخطة وحسابها وتعديل إعدادات المحسّن وطباعتها.",
-        "icon": "organization",
-    },
-    "drawing": {
-        "label": "الرسم وDXF",
-        "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها واعتمادها.",
-        "icon": "image-view",
-    },
-    "production": {
-        "label": "الإنتاج والإسناد",
-        "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.",
-        "icon": "tool",
-    },
-    "control_center": {
-        "label": "مركز التحكم والجودة",
-        "description": "أرشفة الخطط وتسجيل الحوادث وإدارة قطع التعويض.",
-        "icon": "dashboard",
-    },
-    "reports": {
-        "label": "التقارير",
-        "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.",
-        "icon": "chart",
-    },
-    "workforce": {
-        "label": "المستخدمون والقوى العاملة",
-        "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة ملفاتها التشغيلية.",
-        "icon": "users",
-    },
-    "administration": {
-        "label": "الإدارة",
-        "description": "إعدادات المعمل ومصفوفة الصلاحيات.",
-        "icon": "setting-gear",
-    },
+    "order": {"label": "الطلبات", "description": "إنشاء الطلب ومراجعته واعتماده وإدارة دورة حياته.", "icon": "file-text"},
+    "costing": {"label": "التكلفة والتسعير", "description": "عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.", "icon": "accounting"},
+    "documents": {"label": "المستندات والطباعة", "description": "طباعة القياسات وفاتورة الزبون والتقرير الداخلي السري.", "icon": "printer"},
+    "cutting_plan": {"label": "خطة القص", "description": "عرض الخطة وحسابها وتعديل إعدادات المحسّن وطباعتها.", "icon": "organization"},
+    "drawing": {"label": "الرسم وDXF", "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها واعتمادها.", "icon": "image-view"},
+    "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
+    "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وتسجيل الحوادث وإدارة قطع التعويض.", "icon": "dashboard"},
+    "reports": {"label": "التقارير", "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.", "icon": "chart"},
+    "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة ملفاتها التشغيلية.", "icon": "users"},
+    "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة وضوابط الإنتاج كل قسم بصورة مستقلة.", "icon": "setting-gear"},
+    "master_data": {"label": "البيانات الأساسية", "description": "إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.", "icon": "database"},
+    "administration": {"label": "إدارة الصلاحيات", "description": "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "icon": "lock"},
 }
 
 
@@ -138,25 +101,34 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.DISABLE_USERS: _presentation("تعطيل المستخدم", "تعطيل حساب بعد التأكد من عدم وجود مراحل إنتاج نشطة.", "critical"),
     Capability.RESET_USER_PASSWORD: _presentation("إعادة كلمة المرور", "تعيين كلمة مرور مؤقتة جديدة دون إظهارها أو تخزينها في السجل.", "critical"),
     Capability.MANAGE_USERS: _presentation("إدارة المستخدمين كاملة", "صلاحية شاملة متوافقة مع الإعداد السابق وتمنح جميع إجراءات القوى العاملة.", "critical"),
-    Capability.MANAGE_FACTORY_SETTINGS: _presentation("إدارة إعدادات المعمل", "تعديل إعدادات الإنتاج والمحسّن والتسعير الافتراضية.", "critical"),
+    Capability.VIEW_FACTORY_SETTINGS: _presentation("عرض إعدادات المعمل", "عرض إعدادات القص والتكلفة وضوابط الإنتاج دون تعديل."),
+    Capability.EDIT_FACTORY_CUTTING_DEFAULTS: _presentation("تعديل افتراضيات القص", "تعديل Kerf والهامش والخوارزمية ونوع الآلة وحدود البحث.", "sensitive"),
+    Capability.EDIT_FACTORY_COST_DEFAULTS: _presentation("تعديل افتراضيات التكلفة", "تعديل أجرة القص ورسوم الدرف الخاصة وهوامشها.", "critical"),
+    Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: _presentation("تعديل ضوابط الإنتاج", "تعديل المسار الافتراضي والاستثناءات التشغيلية الحساسة.", "critical"),
+    Capability.MANAGE_FACTORY_SETTINGS: _presentation("إدارة إعدادات المعمل كاملة", "صلاحية شاملة متوافقة تمنح تعديل أقسام الإعدادات الثلاثة.", "critical"),
+    Capability.VIEW_PRODUCTION_ROUTINGS: _presentation("عرض مسارات الإنتاج", "عرض مسارات الإنتاج وتسلسل مراحلها."),
+    Capability.CREATE_PRODUCTION_ROUTINGS: _presentation("إنشاء مسار إنتاج", "إنشاء مسار إنتاج جديد.", "sensitive"),
+    Capability.EDIT_PRODUCTION_ROUTINGS: _presentation("تعديل مسارات الإنتاج", "تعديل ترتيب المراحل أو تعطيل المسار.", "critical"),
+    Capability.DELETE_PRODUCTION_ROUTINGS: _presentation("حذف مسار إنتاج", "حذف مسار غير مستخدم وغير معيّن كافتراضي.", "critical"),
+    Capability.VIEW_EDGE_BANDING_TYPES: _presentation("عرض أنواع القشاط", "عرض أنواع القشاط والسماكة والسعر والحالة."),
+    Capability.CREATE_EDGE_BANDING_TYPES: _presentation("إنشاء نوع قشاط", "إضافة نوع قشاط جديد.", "sensitive"),
+    Capability.EDIT_EDGE_BANDING_TYPES: _presentation("تعديل أنواع القشاط", "تعديل السماكة والسعر والخصائص أو تعطيل النوع.", "critical"),
+    Capability.DELETE_EDGE_BANDING_TYPES: _presentation("حذف نوع قشاط", "حذف نوع غير مستخدم في أي طلب أو قطعة.", "critical"),
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
 
-_REPLACEMENT_ACTIONS = frozenset(
-    {
-        Capability.APPROVE_REPLACEMENT,
-        Capability.START_REPLACEMENT,
-        Capability.COMPLETE_REPLACEMENT,
-        Capability.CANCEL_REPLACEMENT,
-        Capability.EDIT_REPLACEMENT_COST,
-    }
-)
-_WORKFORCE_ACTIONS = frozenset(
-    WORKFORCE_CAPABILITIES.difference(
-        {Capability.VIEW_USERS, Capability.MANAGE_USERS}
-    )
-)
+_REPLACEMENT_ACTIONS = frozenset({
+    Capability.APPROVE_REPLACEMENT,
+    Capability.START_REPLACEMENT,
+    Capability.COMPLETE_REPLACEMENT,
+    Capability.CANCEL_REPLACEMENT,
+    Capability.EDIT_REPLACEMENT_COST,
+})
+_WORKFORCE_ACTIONS = frozenset(WORKFORCE_CAPABILITIES.difference({Capability.VIEW_USERS, Capability.MANAGE_USERS}))
+_FACTORY_SECTION_EDITS = frozenset(FACTORY_SETTINGS_CAPABILITIES.difference({Capability.VIEW_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS}))
+_ROUTING_ACTIONS = frozenset({Capability.CREATE_PRODUCTION_ROUTINGS, Capability.EDIT_PRODUCTION_ROUTINGS, Capability.DELETE_PRODUCTION_ROUTINGS})
+_EDGE_ACTIONS = frozenset({Capability.CREATE_EDGE_BANDING_TYPES, Capability.EDIT_EDGE_BANDING_TYPES, Capability.DELETE_EDGE_BANDING_TYPES})
 
 
 def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]:
@@ -167,145 +139,131 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if unknown:
         raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}")
 
-    state = {
-        capability: supplied.get(capability) is True
-        for capability in sorted(ALL_CAPABILITIES)
-    }
+    state = {capability: supplied.get(capability) is True for capability in sorted(ALL_CAPABILITIES)}
     order_actions = {
         capability
         for capability, enabled in state.items()
-        if enabled
-        and CAPABILITY_CATALOG[capability].applies_to == "Door Cutting Order"
-        and capability != Capability.VIEW_ORDERS
+        if enabled and CAPABILITY_CATALOG[capability].applies_to == "Door Cutting Order" and capability != Capability.VIEW_ORDERS
     }
     if order_actions:
         state[Capability.VIEW_ORDERS] = True
-
     if any(state[capability] for capability in _REPLACEMENT_ACTIONS):
         state[Capability.VIEW_REPLACEMENTS] = True
-
     if state[Capability.ARCHIVE_APPROVED_PLAN]:
         state[Capability.VIEW_CUTTING_PLAN] = True
         state[Capability.PRINT_CUTTING_PLAN] = True
-
     if state[Capability.VIEW_FINANCIAL_REPORTS]:
         state[Capability.VIEW_OPERATIONAL_REPORTS] = True
         state[Capability.VIEW_COSTS] = True
-
     if state[Capability.MANAGE_USERS]:
         for capability in WORKFORCE_CAPABILITIES:
             state[capability] = True
     elif any(state[capability] for capability in _WORKFORCE_ACTIONS):
         state[Capability.VIEW_USERS] = True
-
+    if state[Capability.MANAGE_FACTORY_SETTINGS]:
+        for capability in FACTORY_SETTINGS_CAPABILITIES:
+            state[capability] = True
+    elif any(state[capability] for capability in _FACTORY_SECTION_EDITS):
+        state[Capability.VIEW_FACTORY_SETTINGS] = True
+    if state[Capability.EDIT_FACTORY_PRODUCTION_CONTROLS]:
+        state[Capability.VIEW_PRODUCTION_ROUTINGS] = True
+    if any(state[capability] for capability in _ROUTING_ACTIONS):
+        state[Capability.VIEW_PRODUCTION_ROUTINGS] = True
+    if any(state[capability] for capability in _EDGE_ACTIONS):
+        state[Capability.VIEW_EDGE_BANDING_TYPES] = True
     return state
 
 
-def standard_permission_projection(
-    doctype: str,
-    state: Mapping[str, Any] | None,
-) -> dict[str, bool]:
-    """Project business grants onto the standard Frappe permission columns."""
+def standard_permission_projection(doctype: str, state: Mapping[str, Any] | None) -> dict[str, bool]:
+    """Project business grants onto standard Frappe permission columns."""
 
     normalized = normalize_capability_state(state)
-    enabled_for_doctype = any(
-        normalized[capability]
-        for capability, definition in CAPABILITY_CATALOG.items()
-        if definition.applies_to == doctype
-    )
     if doctype == "Door Cutting Order":
-        return {
-            "read": normalized[Capability.VIEW_ORDERS],
-            "create": normalized[Capability.CREATE_ORDER],
-            "write": normalized[Capability.EDIT_ORDER],
-        }
+        return {"read": normalized[Capability.VIEW_ORDERS], "create": normalized[Capability.CREATE_ORDER], "write": normalized[Capability.EDIT_ORDER], "delete": False}
     if doctype == "Almdina ERP Settings":
-        return {
-            "read": enabled_for_doctype,
-            "create": False,
-            "write": normalized[Capability.MANAGE_FACTORY_SETTINGS],
-        }
+        can_read_settings = normalized[Capability.VIEW_FACTORY_SETTINGS] or any(normalized[value] for value in _FACTORY_SECTION_EDITS) or normalized[Capability.MANAGE_FACTORY_SETTINGS]
+        return {"read": can_read_settings, "create": False, "write": False, "delete": False}
     if doctype == "Replacement Piece":
-        return {"read": enabled_for_doctype, "create": False, "write": False}
-    return {"read": enabled_for_doctype, "create": False, "write": False}
+        enabled = any(normalized[capability] for capability, definition in CAPABILITY_CATALOG.items() if definition.applies_to == doctype)
+        return {"read": enabled, "create": False, "write": False, "delete": False}
+    if doctype == "Production Routing":
+        return {
+            "read": normalized[Capability.VIEW_PRODUCTION_ROUTINGS],
+            "create": normalized[Capability.CREATE_PRODUCTION_ROUTINGS],
+            "write": normalized[Capability.EDIT_PRODUCTION_ROUTINGS],
+            "delete": normalized[Capability.DELETE_PRODUCTION_ROUTINGS],
+        }
+    if doctype == "Edge Banding Type":
+        return {
+            "read": normalized[Capability.VIEW_EDGE_BANDING_TYPES],
+            "create": normalized[Capability.CREATE_EDGE_BANDING_TYPES],
+            "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES],
+            "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES],
+        }
+    enabled = any(normalized[capability] for capability, definition in CAPABILITY_CATALOG.items() if definition.applies_to == doctype)
+    return {"read": enabled, "create": False, "write": False, "delete": False}
 
 
 def enabled_capabilities(state: Mapping[str, Any] | None) -> frozenset[str]:
     normalized = normalize_capability_state(state)
-    return normalize_capabilities(
-        capability for capability, enabled in normalized.items() if enabled
-    )
+    return normalize_capabilities(capability for capability, enabled in normalized.items() if enabled)
 
 
 def capability_catalog_payload() -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
     for category in CATEGORY_ORDER:
         category_meta = CATEGORY_PRESENTATION[category]
-        capabilities: list[dict[str, Any]] = []
+        capabilities = []
         for capability, definition in CAPABILITY_CATALOG.items():
             if definition.category != category:
                 continue
             presentation = CAPABILITY_PRESENTATION[capability]
-            capabilities.append(
-                {
-                    "key": capability,
-                    "label": presentation["label"],
-                    "description": presentation["description"],
-                    "risk": presentation["risk"],
-                    "permission_type": definition.permission_type,
-                    "doctype": definition.applies_to,
-                    "standard": not definition.custom,
-                }
-            )
-        groups.append(
-            {
-                "key": category,
-                "label": category_meta["label"],
-                "description": category_meta["description"],
-                "icon": category_meta["icon"],
-                "capabilities": capabilities,
-            }
-        )
+            capabilities.append({
+                "key": capability,
+                "label": presentation["label"],
+                "description": presentation["description"],
+                "risk": presentation["risk"],
+                "permission_type": definition.permission_type,
+                "doctype": definition.applies_to,
+                "standard": not definition.custom,
+            })
+        groups.append({
+            "key": category,
+            "label": category_meta["label"],
+            "description": category_meta["description"],
+            "icon": category_meta["icon"],
+            "capabilities": capabilities,
+        })
     return groups
 
 
 def permission_impact(state: Mapping[str, Any] | None) -> dict[str, Any]:
     normalized = normalize_capability_state(state)
     granted = enabled_capabilities(normalized)
-    navigation = build_navigation_context(granted)
-    critical = sorted(
-        capability
-        for capability in granted
-        if CAPABILITY_PRESENTATION[capability]["risk"] == "critical"
-    )
+    critical = sorted(capability for capability in granted if CAPABILITY_PRESENTATION[capability]["risk"] == "critical")
     return {
         "enabled_count": len(granted),
         "critical_count": len(critical),
         "critical_capabilities": critical,
-        "navigation": navigation,
+        "navigation": build_navigation_context(granted),
     }
 
 
-def changed_capabilities(
-    before: Mapping[str, Any] | None,
-    after: Mapping[str, Any] | None,
-) -> list[dict[str, Any]]:
+def changed_capabilities(before: Mapping[str, Any] | None, after: Mapping[str, Any] | None) -> list[dict[str, Any]]:
     old = normalize_capability_state(before)
     new = normalize_capability_state(after)
-    changes: list[dict[str, Any]] = []
+    changes = []
     for capability in sorted(ALL_CAPABILITIES):
         if old[capability] == new[capability]:
             continue
         presentation = CAPABILITY_PRESENTATION[capability]
-        changes.append(
-            {
-                "key": capability,
-                "label": presentation["label"],
-                "risk": presentation["risk"],
-                "before": old[capability],
-                "after": new[capability],
-            }
-        )
+        changes.append({
+            "key": capability,
+            "label": presentation["label"],
+            "risk": presentation["risk"],
+            "before": old[capability],
+            "after": new[capability],
+        })
     return changes
 
 
