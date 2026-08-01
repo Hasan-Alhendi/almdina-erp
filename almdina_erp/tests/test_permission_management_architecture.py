@@ -7,40 +7,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
-REPOSITORY = (
-    ROOT
-    / "almdina_erp"
-    / "infrastructure"
-    / "frappe"
-    / "permission_matrix_repository.py"
-)
+REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_matrix_repository.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "permission_management_service.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 WORKFORCE_SERVICE = ROOT / "almdina_erp" / "services" / "workforce_service.py"
 PROVISION = ROOT / "almdina_erp" / "application" / "security" / "provision_user.py"
 PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
 PAGE_JSON = PAGE.with_suffix(".json")
-SETTINGS_PAGE_JSON = (
-    ROOT
-    / "almdina_erp"
-    / "page"
-    / "factory_production_settings"
-    / "factory_production_settings.json"
-)
-SETTINGS_DOCTYPE = (
-    ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "almdina_erp_settings"
-    / "almdina_erp_settings.json"
-)
-AUDIT_DOCTYPE = (
-    ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "almdina_permission_audit"
-    / "almdina_permission_audit.json"
-)
+SETTINGS_PAGE_JSON = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.json"
+SETTINGS_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
+AUDIT_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "almdina_permission_audit" / "almdina_permission_audit.json"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 
 
@@ -66,7 +42,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
             for path in (SERVICE, SETTINGS_SERVICE, WORKFORCE_SERVICE, PROVISION)
         )
         self.assertIn("MANAGE_PERMISSIONS", combined)
-        self.assertIn("MANAGE_FACTORY_SETTINGS", combined)
+        self.assertIn("decide_settings_update", combined)
         self.assertIn("WorkforceAction", combined)
         self.assertNotIn('require_any_role("Production Manager")', combined)
         self.assertNotIn('"System Manager" not in', combined)
@@ -105,7 +81,10 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("CAPABILITY_ROUTE_RULES", source)
         self.assertIn('any: ["manage_permissions"]', source)
         self.assertIn('any: ["view_users", "manage_users"]', source)
-        self.assertIn('any: ["manage_factory_settings"]', source)
+        self.assertIn("view_factory_settings", source)
+        self.assertIn("edit_factory_production_controls", source)
+        self.assertIn("view_production_routings", source)
+        self.assertIn("view_edge_banding_types", source)
         self.assertIn('any: ["approve_order", "reject_order"]', source)
         self.assertIn('any: ["view_operational_reports", "view_financial_reports"]', source)
         self.assertIn("ruleAllowed", source)
