@@ -70,6 +70,11 @@ def handoff_to_next(
 
 
 @frappe.whitelist()
+def reassign_worker(stage_name: str, assignee: str) -> dict[str, Any]:
+    return _execute(commands.reassign_worker, stage_name, assignee)
+
+
+@frappe.whitelist()
 def mark_delivered(order_name: str) -> dict[str, Any]:
     return _execute(commands.mark_delivered, order_name)
 
@@ -111,6 +116,7 @@ __all__ = [
     "get_handoff_workers",
     "handoff_to_next",
     "mark_delivered",
+    "reassign_worker",
     "return_order_to_draft",
     "revert_department",
     "start_my_stage",
