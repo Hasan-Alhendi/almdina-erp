@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
+    WORKFORCE_CAPABILITIES,
     Capability,
     normalize_capabilities,
 )
@@ -23,6 +24,7 @@ CATEGORY_ORDER = (
     "production",
     "control_center",
     "reports",
+    "workforce",
     "administration",
 )
 
@@ -67,9 +69,14 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
         "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.",
         "icon": "chart",
     },
+    "workforce": {
+        "label": "المستخدمون والقوى العاملة",
+        "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة ملفاتها التشغيلية.",
+        "icon": "users",
+    },
     "administration": {
         "label": "الإدارة",
-        "description": "إعدادات المعمل وإدارة المستخدمين ومصفوفة الصلاحيات.",
+        "description": "إعدادات المعمل ومصفوفة الصلاحيات.",
         "icon": "setting-gear",
     },
 }
@@ -123,8 +130,15 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.CANCEL_REPLACEMENT: _presentation("إلغاء قطعة التعويض", "إلغاء قطعة تعويض لم يبدأ تنفيذها بعد.", "critical"),
     Capability.VIEW_OPERATIONAL_REPORTS: _presentation("عرض التقارير التشغيلية", "عرض الأداء والمراحل والحوادث دون التكلفة والخسائر المالية.", "sensitive"),
     Capability.VIEW_FINANCIAL_REPORTS: _presentation("عرض التقارير المالية الداخلية", "عرض التكلفة الفعلية والهدر والخسائر الداخلية داخل التقارير.", "critical"),
+    Capability.VIEW_USERS: _presentation("عرض مستخدمي المعمل", "عرض حسابات Almdina فقط وحالتها وملفها التشغيلي."),
+    Capability.CREATE_USERS: _presentation("إنشاء مستخدم", "إنشاء حساب نظام جديد للمعمل مع كلمة مرور مؤقتة.", "critical"),
+    Capability.EDIT_USERS: _presentation("تعديل بيانات المستخدم", "تعديل الاسم واللغة وبيانات الحساب غير المالية.", "sensitive"),
+    Capability.ASSIGN_WORKFORCE_PROFILE: _presentation("تعيين الملف التشغيلي", "تغيير أهلية القسم ومساحة العمل دون منح صلاحيات أعمال.", "critical"),
+    Capability.ENABLE_USERS: _presentation("تفعيل المستخدم", "إعادة تفعيل حساب معمل معطّل.", "critical"),
+    Capability.DISABLE_USERS: _presentation("تعطيل المستخدم", "تعطيل حساب بعد التأكد من عدم وجود مراحل إنتاج نشطة.", "critical"),
+    Capability.RESET_USER_PASSWORD: _presentation("إعادة كلمة المرور", "تعيين كلمة مرور مؤقتة جديدة دون إظهارها أو تخزينها في السجل.", "critical"),
+    Capability.MANAGE_USERS: _presentation("إدارة المستخدمين كاملة", "صلاحية شاملة متوافقة مع الإعداد السابق وتمنح جميع إجراءات القوى العاملة.", "critical"),
     Capability.MANAGE_FACTORY_SETTINGS: _presentation("إدارة إعدادات المعمل", "تعديل إعدادات الإنتاج والمحسّن والتسعير الافتراضية.", "critical"),
-    Capability.MANAGE_USERS: _presentation("إدارة المستخدمين", "إنشاء مستخدمي المعمل وتعديل حساباتهم وإسناد أدوارهم.", "critical"),
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
@@ -137,6 +151,11 @@ _REPLACEMENT_ACTIONS = frozenset(
         Capability.CANCEL_REPLACEMENT,
         Capability.EDIT_REPLACEMENT_COST,
     }
+)
+_WORKFORCE_ACTIONS = frozenset(
+    WORKFORCE_CAPABILITIES.difference(
+        {Capability.VIEW_USERS, Capability.MANAGE_USERS}
+    )
 )
 
 
@@ -172,6 +191,12 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if state[Capability.VIEW_FINANCIAL_REPORTS]:
         state[Capability.VIEW_OPERATIONAL_REPORTS] = True
         state[Capability.VIEW_COSTS] = True
+
+    if state[Capability.MANAGE_USERS]:
+        for capability in WORKFORCE_CAPABILITIES:
+            state[capability] = True
+    elif any(state[capability] for capability in _WORKFORCE_ACTIONS):
+        state[Capability.VIEW_USERS] = True
 
     return state
 
