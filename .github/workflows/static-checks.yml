@@ -59,6 +59,7 @@ jobs:
             almdina_erp.tests.test_order_revision_activation_contract \
             almdina_erp.tests.test_order_lifecycle_domain \
             almdina_erp.tests.test_order_lifecycle_permissions \
+            almdina_erp.tests.test_production_authorization_domain \
             almdina_erp.tests.test_shop_floor_command_adapter \
             almdina_erp.tests.test_shop_floor_infrastructure_gateway \
             almdina_erp.tests.test_authorization_domain \
@@ -66,8 +67,11 @@ jobs:
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
 
-      - name: Run configurable lifecycle architecture tests
-        run: python -m pytest -q almdina_erp/tests/test_configurable_order_lifecycle_permissions.py
+      - name: Run configurable lifecycle and production architecture tests
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_configurable_order_lifecycle_permissions.py \
+            almdina_erp/tests/test_configurable_production_permissions.py
 
       - name: Run shop-floor command application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_command_application
