@@ -3,10 +3,6 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from almdina_erp.almdina_erp.application.shop_floor.commands import (
-    ShopFloorCommandError,
-    ShopFloorPermissionDenied,
-)
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
     decide_production_action,
@@ -42,9 +38,8 @@ def get_reassignment_workers(stage_name: str) -> list[dict[str, str]]:
         ),
     )
     if not decision.allowed:
-        if decision.code == "missing_capability":
-            raise ShopFloorPermissionDenied(_(decision.reason))
-        raise ShopFloorCommandError(_(decision.reason))
+        exception = frappe.PermissionError if decision.code == "missing_capability" else None
+        frappe.throw(_(decision.reason), exception)
     return _repository.get_users_for_stage(stage.stage_type)
 
 
