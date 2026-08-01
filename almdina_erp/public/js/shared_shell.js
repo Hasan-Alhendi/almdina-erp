@@ -68,8 +68,8 @@
 
     function openConfiguredHome() {
         const nav = navigation();
-        if (!nav || !routeIsRoot()) return;
-        const home = String(nav.home_page || "almdina-erp");
+        if (!nav || !nav.shared_shell || !nav.home_page || !routeIsRoot()) return;
+        const home = String(nav.home_page);
         if (frappe.set_route) {
             frappe.set_route(home);
             return;
@@ -204,6 +204,8 @@
     }
 
     function init() {
+        const nav = navigation();
+        if (!nav || !nav.shared_shell) return;
         applyShell();
         openConfiguredHome();
         if (frappe.router && !frappe.router.__almdinaSharedShell) {
