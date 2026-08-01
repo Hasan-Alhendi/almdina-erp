@@ -35,7 +35,6 @@ doctype_js = {
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_output_contract.js",
         "public/js/door_cutting_order_cutting_plan_renderer.js",
-        "public/js/door_cutting_order_workflow.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order_shape_print.js",
@@ -58,7 +57,6 @@ doctype_js = {
         "public/js/door_cutting_order_edge_profile_controls_ux.js",
         "public/js/door_cutting_order_edge_profile_double_click_guard.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
-        "public/js/door_cutting_order_cost_invoice_ux.js",
         "public/js/door_cutting_order_document_print_theme.js",
         "public/js/door_cutting_order_document_print_presenter.js",
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
@@ -85,7 +83,6 @@ doctype_js = {
         "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
-    "Production Stage": "public/js/production_stage.js",
     "Replacement Piece": "public/js/replacement_piece.js",
 }
 
