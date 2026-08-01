@@ -3,14 +3,37 @@
 
     const APP_NAME = "almdina_erp";
     const CAPABILITY_ROUTE_RULES = Object.freeze([
-        { capability: "manage_permissions", routes: ["factory-permissions"] },
+        { any: ["manage_permissions"], routes: ["factory-permissions"] },
         {
-            capability: "manage_factory_settings",
+            any: ["manage_factory_settings"],
             routes: [
                 "factory-production-settings",
                 "almdina-erp-settings",
                 "production-routing",
                 "edge-banding-type",
+            ],
+        },
+        {
+            any: ["approve_order", "reject_order"],
+            routes: ["factory-approval-queue"],
+        },
+        {
+            any: ["archive_approved_plan"],
+            routes: ["factory-plan-archive"],
+        },
+        {
+            any: ["view_replacements"],
+            routes: ["replacement-piece"],
+        },
+        {
+            any: ["view_operational_reports", "view_financial_reports"],
+            routes: [
+                "factory-operations-summary",
+                "factory%20operations%20summary",
+                "production-incidents-and-replacements",
+                "production%20incidents%20and%20replacements",
+                "production-stage-performance",
+                "production%20stage%20performance",
             ],
         },
     ]);
@@ -27,6 +50,12 @@
     function can(capability) {
         const api = permissions();
         return Boolean(api && typeof api.can === "function" && api.can(capability));
+    }
+
+    function ruleAllowed(rule) {
+        const any = Array.isArray(rule.any) ? rule.any : [];
+        const all = Array.isArray(rule.all) ? rule.all : [];
+        return (any.length === 0 || any.some(can)) && all.every(can);
     }
 
     function workspaceName(page) {
@@ -105,11 +134,12 @@
                     item.routes.some(candidate => route.includes(candidate))
                 );
                 if (!rule) return;
+                const allowed = ruleAllowed(rule);
                 const container = shortcutContainer(element);
                 container.style.setProperty(
                     "display",
-                    can(rule.capability) ? "" : "none",
-                    can(rule.capability) ? "" : "important"
+                    allowed ? "" : "none",
+                    allowed ? "" : "important"
                 );
             });
     }
@@ -142,113 +172,19 @@
         const style = document.createElement("style");
         style.id = "almdina-shared-shell-style";
         style.textContent = `
-            body.almdina-shared-shell .navbar {
-                border-bottom: 1px solid var(--border-color, #e5e7eb);
-            }
-            body.almdina-shared-shell .page-head {
-                backdrop-filter: blur(8px);
-            }
-            .almdina-sf-tabs {
-                position: sticky;
-                top: 0;
-                z-index: 20;
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 8px;
-                padding: 10px;
-                background: var(--fg-color, #fff);
-                border: 1px solid var(--border-color, #e5e7eb);
-                border-radius: 14px;
-                margin-bottom: 12px;
-            }
-            .almdina-sf-tab {
-                appearance: none;
-                border: 1px solid var(--border-color, #dfe3e8);
-                background: var(--control-bg, #fff);
-                color: var(--text-color, #1f272e);
-                min-height: 42px;
-                padding: 8px 16px;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: 700;
-                cursor: pointer;
-            }
-            .almdina-sf-tab.is-active {
-                background: var(--primary, #2490ef);
-                border-color: var(--primary, #2490ef);
-                color: #fff;
-            }
-            .almdina-sf-refresh {
-                margin-inline-start: auto;
-                min-height: 42px !important;
-                font-weight: 700;
-            }
-            .almdina-sf-shell { padding: 2px 0 24px; }
-            .almdina-sf-list-title { font-size: 1.05rem; font-weight: 800; margin: 0 0 10px; }
-            .almdina-sf-list { display: grid; gap: 10px; }
-            .almdina-sf-order-card {
-                padding: 14px !important;
-                border-radius: 14px !important;
-                border: 1px solid var(--border-color, #e5e7eb) !important;
-                box-shadow: 0 1px 3px rgba(0,0,0,.05);
-                cursor: pointer;
-            }
-            .almdina-sf-order-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); }
-            .almdina-sf-order-card .sf-open-btn,
-            .almdina-sf-actions .btn {
-                min-height: 42px;
-                padding: 9px 14px;
-                font-size: 14px;
-                font-weight: 700;
-                border-radius: 10px;
-            }
-            .almdina-sf-actions {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-bottom: 12px;
-            }
-            .almdina-sf-detail-title { font-size: 1.15rem; margin: 0 0 4px; }
-            .almdina-sf-pieces-wrap,
-            .almdina-sf-plan-wrap {
-                overflow: auto;
-                -webkit-overflow-scrolling: touch;
-                border: 1px solid var(--border-color, #e5e7eb);
-                border-radius: 12px;
-                background: var(--fg-color, #fff);
-                padding: 8px;
-            }
-            .almdina-sf-account-card {
-                border: 1px solid var(--border-color, #e5e7eb);
-                border-radius: 14px;
-                padding: 16px;
-                background: var(--fg-color, #fff);
-                max-width: 560px;
-            }
-            .almdina-sf-account-row {
-                display: flex;
-                justify-content: space-between;
-                gap: 12px;
-                padding: 10px 0;
-                border-bottom: 1px solid var(--border-color, #edf0f2);
-                font-size: 14px;
-            }
-            .almdina-sf-account-row:last-of-type { border-bottom: 0; }
-            .almdina-sf-empty {
-                padding: 28px 18px;
-                text-align: center;
-                border: 1px dashed var(--border-color, #d7dde3);
-                border-radius: 14px;
-                color: var(--text-muted, #6b7280);
-                background: var(--subtle-fg, #fafafa);
-            }
-            @media (max-width: 600px) {
-                .almdina-sf-tabs { border-radius: 10px; }
-                .almdina-sf-tab { flex: 1 1 calc(33% - 8px); padding: 8px 6px; }
-                .almdina-sf-refresh { flex: 1 1 100%; margin-inline-start: 0; }
-                .almdina-sf-actions .btn { flex: 1 1 calc(50% - 8px); }
-            }
+            body.almdina-shared-shell .navbar {border-bottom:1px solid var(--border-color,#e5e7eb)}
+            body.almdina-shared-shell .page-head {backdrop-filter:blur(8px)}
+            .almdina-sf-tabs{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;margin-bottom:12px}
+            .almdina-sf-tab{appearance:none;border:1px solid var(--border-color,#dfe3e8);background:var(--control-bg,#fff);color:var(--text-color,#1f272e);min-height:42px;padding:8px 16px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
+            .almdina-sf-tab.is-active{background:var(--primary,#2490ef);border-color:var(--primary,#2490ef);color:#fff}
+            .almdina-sf-refresh{margin-inline-start:auto;min-height:42px!important;font-weight:700}
+            .almdina-sf-shell{padding:2px 0 24px}.almdina-sf-list-title{font-size:1.05rem;font-weight:800;margin:0 0 10px}.almdina-sf-list{display:grid;gap:10px}
+            .almdina-sf-order-card{padding:14px!important;border-radius:14px!important;border:1px solid var(--border-color,#e5e7eb)!important;box-shadow:0 1px 3px rgba(0,0,0,.05);cursor:pointer}.almdina-sf-order-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+            .almdina-sf-order-card .sf-open-btn,.almdina-sf-actions .btn{min-height:42px;padding:9px 14px;font-size:14px;font-weight:700;border-radius:10px}.almdina-sf-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.almdina-sf-detail-title{font-size:1.15rem;margin:0 0 4px}
+            .almdina-sf-pieces-wrap,.almdina-sf-plan-wrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;background:var(--fg-color,#fff);padding:8px}
+            .almdina-sf-account-card{border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:16px;background:var(--fg-color,#fff);max-width:560px}.almdina-sf-account-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-color,#edf0f2);font-size:14px}.almdina-sf-account-row:last-of-type{border-bottom:0}
+            .almdina-sf-empty{padding:28px 18px;text-align:center;border:1px dashed var(--border-color,#d7dde3);border-radius:14px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}
+            @media(max-width:600px){.almdina-sf-tabs{border-radius:10px}.almdina-sf-tab{flex:1 1 calc(33% - 8px);padding:8px 6px}.almdina-sf-refresh{flex:1 1 100%;margin-inline-start:0}.almdina-sf-actions .btn{flex:1 1 calc(50% - 8px)}}
         `;
         document.head.appendChild(style);
     }
