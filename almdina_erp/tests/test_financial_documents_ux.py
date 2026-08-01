@@ -52,6 +52,19 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "invoiceLines(frm)" not in source
 
 
+def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
+    source = UX_PATH.read_text(encoding="utf-8")
+    assert "let activeFrm = null" in source
+    assert "activeFrm = frm" in source
+    assert "function resolvedForm" in source
+    assert "function ensureActionButton" in source
+    assert "matches.slice(1).remove()" in source
+    assert ".off(\"click.almdinaFinancialDocuments\")" in source
+    assert "MutationObserver" in source
+    assert "__almdina_financial_observer.disconnect()" in source
+    assert "root.find(`.${CUSTOMER_CLASS},.${INTERNAL_CLASS}`).remove()" not in source
+
+
 def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:
     hooks = runpy.run_path(str(HOOKS_PATH))
     scripts = hooks["doctype_js"]["Door Cutting Order"]
