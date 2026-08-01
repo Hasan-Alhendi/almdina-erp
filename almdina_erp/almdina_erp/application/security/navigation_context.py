@@ -28,6 +28,9 @@ WORKSPACE_GO_LIVE = "Almdina Go-Live"
 _FINANCIAL_CAPABILITIES = frozenset(
     COSTING_CAPABILITIES.difference({Capability.PRINT_MEASUREMENTS})
 )
+_ORDER_MANAGEMENT_CAPABILITIES = frozenset(
+    ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS})
+)
 
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
@@ -41,7 +44,7 @@ def _profile(granted: frozenset[str]) -> str:
         return "shared"
 
     broad = frozenset(
-        ORDER_CAPABILITIES
+        _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES
@@ -101,7 +104,7 @@ def build_navigation_context(
         PRODUCTION_OPERATOR_CAPABILITIES,
     ) and not _intersects(
         granted,
-        ORDER_CAPABILITIES
+        _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES,
