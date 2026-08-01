@@ -75,7 +75,8 @@
     }
 
     function summaryHtml(payload) {
-        return `<div class="financial-summary">${(payload.summary || []).map(item => `
+        const modeClass = payload.kind === "internal_cost_report" ? "internal" : "customer";
+        return `<div class="financial-summary ${modeClass}">${(payload.summary || []).map(item => `
             <div class="financial-summary-card">
                 <span>${esc(item.label)}</span>
                 <b>${formatSummaryValue(item)}</b>
@@ -89,7 +90,7 @@
                 <h2>جدول القياسات</h2>
                 <table><thead><tr>
                     <th>#</th><th>النوع</th><th>العرض سم</th><th>الطول سم</th>
-                    <th>العدد</th><th>نوع القشاط</th><th>متر القشاط</th><th class="right">ملاحظات</th>
+                    <th>العدد</th><th>نوع القشاط</th><th class="right">ملاحظات</th>
                 </tr></thead><tbody>
                     ${rows.map(row => `<tr>
                         <td>${esc(row.piece_no || row.index)}</td>
@@ -98,7 +99,6 @@
                         <td>${qty(row.length_cm)}</td>
                         <td>${qty(row.quantity)}</td>
                         <td>${esc(row.edge_type || "—")}</td>
-                        <td>${qty(row.edge_meters)}</td>
                         <td class="right">${esc(row.notes || "—")}</td>
                     </tr>`).join("")}
                 </tbody></table>
@@ -183,9 +183,9 @@
         `).join("")}</div>`;
     }
 
-    function printCss() {
+    function printCss(internal) {
         return `
-            @page{size:A4 portrait;margin:11mm}
+            @page{size:A4 ${internal ? "landscape" : "portrait"};margin:11mm}
             *{box-sizing:border-box}
             body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:rtl;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
             header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:10px;border-bottom:2px solid #172033}
@@ -194,7 +194,8 @@
             .classification{padding:7px 10px;border:1px solid #9f2d2d;background:#fff0f0;color:#8c1d1d;border-radius:7px;font-weight:900;white-space:nowrap}
             .financial-meta,.financial-summary{display:grid;gap:7px;margin-top:10px}
             .financial-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
-            .financial-summary{grid-template-columns:repeat(5,minmax(0,1fr))}
+            .financial-summary.internal{grid-template-columns:repeat(5,minmax(0,1fr))}
+            .financial-summary.customer{grid-template-columns:repeat(3,minmax(0,1fr))}
             .financial-meta-item,.financial-summary-card,.operations-grid>div{border:1px solid #cfd6de;border-radius:7px;padding:7px 8px;background:#fff}
             .financial-meta-item span,.financial-summary-card span,.operations-grid span{display:block;color:#697582;font-size:8px;margin-bottom:3px}
             .financial-meta-item b,.financial-summary-card b,.operations-grid b{font-size:11px;word-break:break-word}
@@ -221,7 +222,7 @@
 
     function documentHtml(payload) {
         const internal = payload.kind === "internal_cost_report";
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss()}</style></head><body>
+        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss(internal)}</style></head><body>
             <header>
                 <div><h1>${esc(payload.title)}</h1><p>${esc(payload.subtitle || "")}</p></div>
                 ${internal ? `<div class="classification">${esc(payload.classification || "داخلي")}</div>` : ""}
