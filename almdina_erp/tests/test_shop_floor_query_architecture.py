@@ -7,6 +7,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APPLICATION_PATH = ROOT / "almdina_erp" / "application" / "shop_floor" / "queries.py"
+DRAWING_POLICY_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "application"
+    / "security"
+    / "drawing_action_policy.py"
+)
 PRESENTER_PATH = (
     ROOT
     / "almdina_erp"
@@ -29,7 +36,7 @@ HOOKS_PATH = ROOT / "hooks.py"
 
 class TestShopFloorQueryArchitecture(unittest.TestCase):
     def test_application_and_presenters_do_not_import_frappe(self) -> None:
-        for path in (APPLICATION_PATH, PRESENTER_PATH):
+        for path in (APPLICATION_PATH, DRAWING_POLICY_PATH, PRESENTER_PATH):
             source = path.read_text(encoding="utf-8")
             with self.subTest(path=path):
                 self.assertNotIn("import frappe", source)
@@ -59,7 +66,10 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("services.shop_floor_query_service", source)
         self.assertIn("services.shop_floor_dxf_service", source)
         self.assertIn("services.shop_floor_commands", source)
-        self.assertNotIn("from almdina_erp.almdina_erp.services.shop_floor_commands import", source)
+        self.assertNotIn(
+            "from almdina_erp.almdina_erp.services.shop_floor_commands import",
+            source,
+        )
 
     def test_hooks_route_legacy_reads_and_dxf_actions_to_focused_services(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
@@ -87,12 +97,16 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
             new = f"almdina_erp.almdina_erp.services.shop_floor_dxf_service.{method}"
             self.assertEqual(overrides.get(old), new)
 
-    def test_dxf_service_has_no_query_or_html_responsibilities(self) -> None:
+    def test_dxf_service_delegates_policy_and_has_no_query_or_html_responsibilities(self) -> None:
         source = DXF_SERVICE_PATH.read_text(encoding="utf-8")
+        policy_source = DRAWING_POLICY_PATH.read_text(encoding="utf-8")
         self.assertNotIn("get_my_inbox", source)
         self.assertNotIn("get_order_shop_floor_detail", source)
         self.assertNotIn("dco-cutting-plan", source)
-        self.assertIn("_assert_order_at_drawing", source)
+        self.assertIn("validate_assigned_drawing_action", source)
+        self.assertIn("require_document_capability", source)
+        self.assertIn("def validate_assigned_drawing_action", policy_source)
+        self.assertIn("not_assigned_designer", policy_source)
 
 
 if __name__ == "__main__":
