@@ -99,11 +99,14 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         for role in ("Production Manager", "System Manager", "Order Entry"):
             self.assertNotIn(role, source)
 
-    def test_shared_shell_hides_only_capability_owned_admin_shortcuts(self) -> None:
+    def test_shared_shell_hides_only_capability_owned_shortcuts(self) -> None:
         source = SHARED_SHELL.read_text(encoding="utf-8")
         self.assertIn("CAPABILITY_ROUTE_RULES", source)
-        self.assertIn('capability: "manage_permissions"', source)
-        self.assertIn('capability: "manage_factory_settings"', source)
+        self.assertIn('any: ["manage_permissions"]', source)
+        self.assertIn('any: ["manage_factory_settings"]', source)
+        self.assertIn('any: ["approve_order", "reject_order"]', source)
+        self.assertIn('any: ["view_operational_reports", "view_financial_reports"]', source)
+        self.assertIn("ruleAllowed", source)
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertNotIn("frappe.user_roles", source)
 
