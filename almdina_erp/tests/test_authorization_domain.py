@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+from almdina_erp.almdina_erp.application.security.permission_context import (
+    PERMISSION_CONTEXT_VERSION,
+    build_permission_context,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     ROLE_CAPABILITIES,
@@ -93,6 +97,28 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertTrue(has_capability(roles, Capability.UPLOAD_DXF))
         self.assertTrue(has_capability(roles, Capability.VIEW_COSTS))
         self.assertFalse(has_capability(roles, Capability.APPROVE_DXF))
+
+    def test_permission_context_is_stable_and_contains_no_role_names(self) -> None:
+        context = build_permission_context({"عامل رسم"})
+        self.assertEqual(context["version"], PERMISSION_CONTEXT_VERSION)
+        self.assertEqual(context["profile"], "shop_floor")
+        self.assertEqual(set(context), {"version", "profile", "capabilities"})
+        self.assertTrue(context["capabilities"][Capability.UPLOAD_DXF])
+        self.assertFalse(context["capabilities"][Capability.APPROVE_DXF])
+        self.assertNotIn("roles", context)
+
+    def test_permission_context_profiles_share_the_same_capability_contract(self) -> None:
+        contexts = [
+            build_permission_context({"Order Entry"}),
+            build_permission_context({"عامل CNC"}),
+            build_permission_context({"Production Manager"}),
+        ]
+        self.assertEqual(
+            [context["profile"] for context in contexts],
+            ["order_entry", "shop_floor", "full"],
+        )
+        for context in contexts:
+            self.assertEqual(set(context["capabilities"]), ALL_CAPABILITIES)
 
     def test_unknown_capability_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown capability"):
