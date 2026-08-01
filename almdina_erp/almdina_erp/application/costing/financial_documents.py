@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -14,7 +15,7 @@ def _number(value: Any) -> float:
         number = float(value or 0)
     except (TypeError, ValueError):
         return 0.0
-    return number if number == number and abs(number) != float("inf") else 0.0
+    return number if math.isfinite(number) else 0.0
 
 
 def _quantity(value: Any) -> int:
@@ -71,7 +72,6 @@ def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
                 "length_cm": _metric(_value(piece, "length_cm")),
                 "quantity": _quantity(_value(piece, "qty")),
                 "edge_type": _text(_value(piece, "edge_type"), "—"),
-                "edge_meters": _metric(_value(piece, "edge_meters")),
                 "notes": _text(_value(piece, "notes"), "—"),
             }
         )
@@ -229,6 +229,7 @@ def build_customer_invoice_document(
             _value(order, "customer_quote_total_usd")
             or _value(order, "total_cost_usd")
         )
+    door_count = sum(_quantity(_value(piece, "qty")) for piece in pieces)
 
     return {
         "kind": "customer_invoice",
@@ -240,7 +241,7 @@ def build_customer_invoice_document(
                 "label": "حالة عرض السعر",
                 "value": _quote_status_label(_value(order, "customer_quote_status")),
             },
-            {"label": "عدد الألواح", "value": max(0, int(_number(_value(order, "required_boards"))))},
+            {"label": "عدد الدرف", "value": door_count},
             {"label": "إجمالي العرض ($)", "value": total, "format": "money"},
         ],
         "measurements": _measurement_rows(pieces),
