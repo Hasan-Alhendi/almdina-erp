@@ -48,6 +48,46 @@
         });
     }
 
+    function notifyCompleted(data) {
+        if (!data) return;
+        frappe.show_alert({
+            message: __("تم إكمال قطعة التعويض وتحديث حالة الطلب."),
+            indicator: "green",
+        });
+    }
+
+    function completeReplacement(frm, context) {
+        if (!actionAllowed(context, "edit_actual_cost")) {
+            frappe.confirm(
+                __("سيتم اعتماد التكلفة المتوقعة المجمدة وإكمال قطعة التعويض. هل تريد المتابعة؟"),
+                () => callAction(frm, "complete_replacement", {
+                    internal_loss_cost_usd: null,
+                }).then(notifyCompleted)
+            );
+            return;
+        }
+
+        frappe.prompt(
+            [{
+                fieldname: "internal_loss_cost_usd",
+                fieldtype: "Currency",
+                label: __("الخسارة الداخلية الفعلية بالدولار"),
+                description: __("اترك الحقل فارغًا لاعتماد التكلفة المتوقعة المجمدة."),
+            }],
+            values => {
+                const loss = (values || {}).internal_loss_cost_usd;
+                return callAction(frm, "complete_replacement", {
+                    internal_loss_cost_usd:
+                        loss === undefined || loss === null || loss === ""
+                            ? null
+                            : loss,
+                }).then(notifyCompleted);
+            },
+            __("إكمال قطعة التعويض"),
+            __("إنهاء")
+        );
+    }
+
     function installButtons(frm, context) {
         removeButtons(frm);
         if (!context || context.replacement_name !== frm.doc.name) return;
@@ -84,35 +124,11 @@
         }
 
         if (actionAllowed(context, "complete")) {
-            frm.add_custom_button(__("إكمال قطعة التعويض"), () => {
-                const fields = actionAllowed(context, "edit_actual_cost")
-                    ? [{
-                        fieldname: "internal_loss_cost_usd",
-                        fieldtype: "Currency",
-                        label: __("الخسارة الداخلية الفعلية بالدولار"),
-                        description: __("اترك الحقل فارغًا لاعتماد التكلفة المتوقعة المجمدة."),
-                    }]
-                    : [];
-                frappe.prompt(
-                    fields,
-                    values => callAction(frm, "complete_replacement", {
-                        internal_loss_cost_usd:
-                            values.internal_loss_cost_usd === undefined ||
-                            values.internal_loss_cost_usd === null ||
-                            values.internal_loss_cost_usd === ""
-                                ? null
-                                : values.internal_loss_cost_usd,
-                    }).then(data => {
-                        if (!data) return;
-                        frappe.show_alert({
-                            message: __("تم إكمال قطعة التعويض وتحديث حالة الطلب."),
-                            indicator: "green",
-                        });
-                    }),
-                    __("إكمال قطعة التعويض"),
-                    __("إنهاء")
-                );
-            }, GROUP);
+            frm.add_custom_button(
+                __("إكمال قطعة التعويض"),
+                () => completeReplacement(frm, context),
+                GROUP
+            );
         }
 
         if (actionAllowed(context, "cancel")) {
@@ -125,7 +141,7 @@
                         reqd: 1,
                     }],
                     values => callAction(frm, "cancel_replacement", {
-                        reason: String(values.reason || "").trim(),
+                        reason: String((values || {}).reason || "").trim(),
                     }),
                     __("إلغاء قطعة التعويض"),
                     __("تأكيد الإلغاء")
