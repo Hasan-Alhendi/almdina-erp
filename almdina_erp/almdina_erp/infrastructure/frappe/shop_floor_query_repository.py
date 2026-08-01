@@ -5,15 +5,19 @@ from typing import Any
 
 import frappe
 
-from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_STAGE_TYPES
-from almdina_erp.almdina_erp.domain.orders.production_authorization import (
-    PRODUCTION_ACTIONS,
+from almdina_erp.almdina_erp.application.shop_floor.queries import (
+    SHOP_FLOOR_DETAIL_CAPABILITIES,
+)
+from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    SHOP_FLOOR_STAGE_TYPES,
+    department_for_stage_type,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
     document_has_capability,
+    granted_capabilities,
 )
 
 
@@ -30,6 +34,24 @@ class FrappeShopFloorQueryRepository:
     def current_user(self) -> str:
         return frappe.session.user
 
+    def session_identity(self) -> dict[str, Any]:
+        user = self.current_user()
+        full_name = frappe.get_cached_value("User", user, "full_name") or user
+        roles = set(frappe.get_roles(user))
+        departments = [
+            department_for_stage_type(stage_type) or stage_type
+            for stage_type, role in shop_floor_authorization.STAGE_ROLE_BY_TYPE.items()
+            if role in roles or user == "Administrator"
+        ]
+        return {
+            "user": user,
+            "full_name": full_name,
+            "departments": departments,
+        }
+
+    def global_capabilities(self) -> frozenset[str]:
+        return granted_capabilities(user=self.current_user())
+
     def is_admin(self) -> bool:
         return any(
             doctype_has_capability(capability)
@@ -39,7 +61,7 @@ class FrappeShopFloorQueryRepository:
     def capabilities_for_order(self, order: Any) -> frozenset[str]:
         return frozenset(
             capability
-            for capability in PRODUCTION_ACTIONS
+            for capability in SHOP_FLOOR_DETAIL_CAPABILITIES
             if document_has_capability(order, capability)
         )
 
