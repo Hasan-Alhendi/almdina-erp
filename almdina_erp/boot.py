@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     is_order_entry_profile,
     is_shop_floor_only,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    granted_capabilities,
+)
 
 SHOP_FLOOR_WORKSPACE = "Shop Floor"
 SHOP_FLOOR_PAGE = "shop-floor-inbox"
@@ -25,9 +28,12 @@ def _roles() -> frozenset[str]:
 def _attach_permission_context(
     bootinfo: dict[str, Any], roles: frozenset[str]
 ) -> None:
-    """Expose one immutable permission vocabulary to every Desk presenter."""
+    """Expose administrator-managed capabilities to every Desk presenter."""
 
-    bootinfo["almdina_permissions"] = build_permission_context(roles)
+    bootinfo["almdina_permissions"] = build_permission_context(
+        roles,
+        granted_capabilities(user=frappe.session.user),
+    )
 
 
 def _filter_order_entry(bootinfo: dict[str, Any]) -> None:
@@ -79,9 +85,15 @@ def _filter_order_entry(bootinfo: dict[str, Any]) -> None:
 
 
 def _filter_shop_floor(bootinfo: dict[str, Any]) -> None:
+    """Keep operators inside the shared Almdina app shell.
+
+    Operators may start on the shop-floor inbox, but the app identity, navigation
+    language, and visual system stay identical to the rest of Almdina ERP.
+    """
+
     bootinfo["almdina_shop_floor_only"] = 1
     bootinfo["almdina_shop_floor_home"] = SHOP_FLOOR_PAGE
-    bootinfo["almdina_allowed_pages"] = [SHOP_FLOOR_PAGE]
+    bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
     bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
     bootinfo["home_page"] = SHOP_FLOOR_PAGE
 
@@ -90,47 +102,31 @@ def _filter_shop_floor(bootinfo: dict[str, Any]) -> None:
         pages = [
             page
             for page in workspaces["pages"]
-            if (page.get("name") if isinstance(page, dict) else page)
-            == SHOP_FLOOR_WORKSPACE
+            if isinstance(page, dict)
+            and (
+                page.get("app") == "almdina_erp"
+                or page.get("module") == "Almdina ERP"
+                or str(page.get("title") or page.get("label") or "")
+                in {"Almdina ERP", "إدارة المعمل", SHOP_FLOOR_WORKSPACE, "صالة الإنتاج"}
+            )
         ]
-        if not pages:
-            pages = [
-                page
-                for page in workspaces["pages"]
-                if isinstance(page, dict)
-                and str(page.get("title") or page.get("label") or "")
-                in {SHOP_FLOOR_WORKSPACE, "صالة الإنتاج"}
-            ]
         workspaces["pages"] = pages
         bootinfo["workspaces"] = workspaces
         bootinfo["allowed_workspaces"] = pages
 
-    bootinfo["workspace_sidebar_item"] = {}
-    bootinfo["sidebar_pages"] = []
-    bootinfo["allowed_pages"] = [SHOP_FLOOR_PAGE]
-
     app_data = bootinfo.get("app_data")
     if isinstance(app_data, list):
-        trimmed = []
-        for app in app_data:
-            if not isinstance(app, dict):
-                continue
-            name = app.get("app_name") or app.get("name")
-            if name != "almdina_erp":
-                continue
-            app = dict(app)
-            app["workspaces"] = [SHOP_FLOOR_WORKSPACE]
-            app["app_route"] = f"/app/{SHOP_FLOOR_PAGE}"
-            app["modules"] = list(ALLOWED_MODULES_FOR_SHOP_FLOOR)
-            trimmed.append(app)
-        bootinfo["app_data"] = trimmed
-
-    bootinfo["desktop_icons"] = []
+        bootinfo["app_data"] = [
+            dict(app)
+            for app in app_data
+            if isinstance(app, dict)
+            and (app.get("app_name") or app.get("name")) == "almdina_erp"
+        ]
 
     module_map = bootinfo.get("module_wise_workspaces")
     if isinstance(module_map, dict):
         bootinfo["module_wise_workspaces"] = {
-            key: [workspace for workspace in (value or []) if workspace == SHOP_FLOOR_WORKSPACE]
+            key: value
             for key, value in module_map.items()
             if key in ALLOWED_MODULES_FOR_SHOP_FLOOR
         }
@@ -161,23 +157,5 @@ def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
         bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
         return
 
-    if not bootinfo.get("almdina_shop_floor_only"):
-        if not is_shop_floor_only(roles):
-            return
-        bootinfo["almdina_shop_floor_only"] = 1
-
-    apps_data = bootinfo.get("apps_data")
-    if isinstance(apps_data, dict):
-        apps = apps_data.get("apps") or []
-        apps_data["apps"] = [
-            app
-            for app in apps
-            if (app.get("name") if isinstance(app, dict) else app) == "almdina_erp"
-        ]
-        apps_data["default_path"] = f"/app/{SHOP_FLOOR_PAGE}"
-        bootinfo["apps_data"] = apps_data
-
-    bootinfo["workspace_sidebar_item"] = {}
-    bootinfo["desktop_icons"] = []
-    bootinfo["home_page"] = SHOP_FLOOR_PAGE
-    bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
+    if bootinfo.get("almdina_shop_floor_only") or is_shop_floor_only(roles):
+        _filter_shop_floor(bootinfo)
