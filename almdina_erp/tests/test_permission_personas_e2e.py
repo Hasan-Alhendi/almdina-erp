@@ -26,7 +26,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
 
     def test_order_entry_sees_only_order_work(self) -> None:
         state, navigation = self._navigation("order_entry")
-        self.assertEqual(navigation["profile"], "full")
+        self.assertEqual(navigation["profile"], "order_entry")
         self.assertEqual(navigation["home_page"], "almdina-erp")
         self.assertTrue(navigation["sections"]["orders"])
         for section in (
@@ -42,8 +42,11 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             "reports",
         ):
             self.assertFalse(navigation["sections"][section], section)
+        self.assertTrue(state[Capability.PRINT_CUSTOMER_INVOICE])
+        self.assertTrue(state[Capability.PRINT_MEASUREMENTS])
         self.assertFalse(state[Capability.APPROVE_ORDER])
         self.assertFalse(state[Capability.VIEW_COSTS])
+        self.assertFalse(state[Capability.PRINT_INTERNAL_COST_REPORT])
 
     def test_planner_designer_has_plan_drawing_and_assigned_stage_only(self) -> None:
         state, navigation = self._navigation("planner_designer")
