@@ -4,31 +4,51 @@
     const APP_NAME = "almdina_erp";
     const CAPABILITY_ROUTE_RULES = Object.freeze([
         { any: ["manage_permissions"], routes: ["factory-permissions"] },
+        { any: ["view_users", "manage_users"], routes: ["factory-workforce"] },
         {
-            any: ["view_users", "manage_users"],
-            routes: ["factory-workforce"],
-        },
-        {
-            any: ["manage_factory_settings"],
-            routes: [
-                "factory-production-settings",
-                "almdina-erp-settings",
-                "production-routing",
-                "edge-banding-type",
+            any: [
+                "view_factory_settings",
+                "edit_factory_cutting_defaults",
+                "edit_factory_cost_defaults",
+                "edit_factory_production_controls",
+                "manage_factory_settings",
             ],
+            routes: ["factory-production-settings", "almdina-erp-settings"],
         },
         {
-            any: ["approve_order", "reject_order"],
-            routes: ["factory-approval-queue"],
+            any: [
+                "view_production_routings",
+                "create_production_routings",
+                "edit_production_routings",
+                "delete_production_routings",
+                "view_edge_banding_types",
+                "create_edge_banding_types",
+                "edit_edge_banding_types",
+                "delete_edge_banding_types",
+            ],
+            routes: ["factory-master-data"],
         },
         {
-            any: ["archive_approved_plan"],
-            routes: ["factory-plan-archive"],
+            any: [
+                "view_production_routings",
+                "create_production_routings",
+                "edit_production_routings",
+                "delete_production_routings",
+            ],
+            routes: ["production-routing"],
         },
         {
-            any: ["view_replacements"],
-            routes: ["replacement-piece"],
+            any: [
+                "view_edge_banding_types",
+                "create_edge_banding_types",
+                "edit_edge_banding_types",
+                "delete_edge_banding_types",
+            ],
+            routes: ["edge-banding-type"],
         },
+        { any: ["approve_order", "reject_order"], routes: ["factory-approval-queue"] },
+        { any: ["archive_approved_plan"], routes: ["factory-plan-archive"] },
+        { any: ["view_replacements"], routes: ["replacement-piece"] },
         {
             any: ["view_operational_reports", "view_financial_reports"],
             routes: [
