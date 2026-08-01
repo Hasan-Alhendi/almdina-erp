@@ -6,11 +6,7 @@ from typing import Any, Protocol, Sequence
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     SHOP_FLOOR_STAGE_TYPES,
-    can_dispatch_from_status,
-    can_mark_delivered,
-    can_revert_department,
     first_stage_type,
-    is_order_dispatched,
     next_stage_type,
     order_status_for_stage_type,
     production_path_sequence,
@@ -18,6 +14,11 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     stage_sequence,
     transition_stage,
 )
+from almdina_erp.almdina_erp.domain.orders.production_authorization import (
+    ProductionActionFacts,
+    decide_production_action,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 class ShopFloorCommandError(ValueError):
@@ -55,13 +56,7 @@ class StageState:
 class ShopFloorCommandPort(Protocol):
     def current_user(self) -> str: ...
 
-    def require_dispatch_permission(self) -> None: ...
-
-    def require_delivery_permission(self) -> None: ...
-
-    def require_revert_permission(self) -> None: ...
-
-    def require_stage_access(self, stage_name: str) -> None: ...
+    def capabilities_for_order(self, order_name: str) -> frozenset[str]: ...
 
     def get_order_state(self, order_name: str) -> OrderState: ...
 
@@ -83,6 +78,8 @@ class ShopFloorCommandPort(Protocol):
         assignee: str,
         sequence: int,
     ) -> StageState: ...
+
+    def reassign_stage(self, stage_name: str, *, assignee: str) -> StageState: ...
 
     def track_order_to_stage(
         self,
@@ -168,33 +165,72 @@ def _validate_path(path: str) -> None:
         raise ShopFloorCommandError(f"Invalid production path: {path}") from error
 
 
-def assert_order_ready_for_dispatch(order: OrderState) -> None:
-    if is_order_dispatched(
+def _facts(
+    order: OrderState,
+    *,
+    stage: StageState | None = None,
+    actor: str | None = None,
+) -> ProductionActionFacts:
+    return ProductionActionFacts(
+        order_status=order.status,
         production_path=order.production_path,
-        current_stage=order.current_stage,
-    ):
-        raise ShopFloorCommandError(f"Order {order.name} is already dispatched.")
-    if not can_dispatch_from_status(order.status):
-        raise ShopFloorCommandError(
-            "Only draft or rejected orders can be sent to production."
-        )
-    if not order.has_cutting_plan:
-        raise ShopFloorCommandError(
-            "Calculate a cutting plan before sending the order to production."
-        )
-    if order.plan_needs_recalculation:
-        raise ShopFloorCommandError(
-            "Recalculate the cutting plan before sending the order to production."
-        )
+        current_stage_name=order.current_stage,
+        has_cutting_plan=order.has_cutting_plan,
+        plan_needs_recalculation=order.plan_needs_recalculation,
+        stage_name=stage.name if stage else None,
+        stage_type=stage.stage_type if stage else None,
+        stage_status=stage.status if stage else None,
+        assigned_to=stage.assigned_to if stage else None,
+        actor=actor,
+        drawing_dxf_status=order.drawing_dxf_status,
+    )
+
+
+def _assert_action_allowed(
+    repository: ShopFloorCommandPort,
+    action: str,
+    order: OrderState,
+    *,
+    stage: StageState | None = None,
+    actor: str | None = None,
+) -> None:
+    decision = decide_production_action(
+        action,
+        capabilities=repository.capabilities_for_order(order.name),
+        facts=_facts(order, stage=stage, actor=actor),
+    )
+    if decision.allowed:
+        return
+    if decision.code == "missing_capability":
+        raise ShopFloorPermissionDenied(decision.reason)
+    raise ShopFloorCommandError(decision.reason)
+
+
+def assert_order_ready_for_dispatch(order: OrderState) -> None:
+    """Compatibility validator that evaluates state without an authorization port."""
+
+    decision = decide_production_action(
+        Capability.DISPATCH_ORDER,
+        capabilities={Capability.DISPATCH_ORDER},
+        facts=_facts(order),
+    )
+    if not decision.allowed:
+        raise ShopFloorCommandError(decision.reason)
 
 
 def get_handoff_workers(
     repository: ShopFloorCommandPort,
     stage_name: str,
 ) -> list[dict[str, str]]:
-    repository.require_stage_access(stage_name)
     stage = repository.get_stage_state(stage_name)
     order = repository.get_order_state(stage.order_name)
+    _assert_action_allowed(
+        repository,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+        order,
+        stage=stage,
+        actor=repository.current_user(),
+    )
     if not order.production_path:
         raise ShopFloorCommandError("Order has no production path.")
     target_stage = _next_stage(order.production_path, stage.stage_type)
@@ -207,9 +243,8 @@ def dispatch_order(
     path: str,
     assignee: str,
 ) -> dict[str, Any]:
-    repository.require_dispatch_permission()
     order = repository.get_order_state(order_name)
-    assert_order_ready_for_dispatch(order)
+    _assert_action_allowed(repository, Capability.DISPATCH_ORDER, order)
     repository.validate_special_shapes(order_name)
 
     _validate_path(path)
@@ -243,14 +278,21 @@ def start_my_stage(
     repository: ShopFloorCommandPort,
     stage_name: str,
 ) -> dict[str, Any]:
-    repository.require_stage_access(stage_name)
     stage = repository.get_stage_state(stage_name)
+    order = repository.get_order_state(stage.order_name)
+    actor = repository.current_user()
+    _assert_action_allowed(
+        repository,
+        Capability.START_ASSIGNED_STAGE,
+        order,
+        stage=stage,
+        actor=actor,
+    )
     target_status = _transition(
         stage.status,
         "start",
         "Only a stage that needs work can be started.",
     )
-    actor = repository.current_user()
     updated = repository.start_stage(
         stage_name,
         actor=actor,
@@ -275,27 +317,26 @@ def handoff_to_next(
     stage_name: str,
     next_assignee: str | None = None,
 ) -> dict[str, Any]:
-    repository.require_stage_access(stage_name)
     stage = repository.get_stage_state(stage_name)
+    order = repository.get_order_state(stage.order_name)
+    actor = repository.current_user()
+    _assert_action_allowed(
+        repository,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+        order,
+        stage=stage,
+        actor=actor,
+    )
     target_status = _transition(
         stage.status,
         "finish",
         "Start the stage before sending it to the next department.",
     )
-    order = repository.get_order_state(stage.order_name)
     path = order.production_path
     if not path:
         raise ShopFloorCommandError("Order has no production path.")
-    if (
-        stage.stage_type == "Drawing"
-        and (order.drawing_dxf_status or "None") != "Approved by Drawing"
-    ):
-        raise ShopFloorCommandError(
-            "Approve the production DXF before sending the order to CNC."
-        )
 
     target_stage = _next_stage(path, stage.stage_type)
-    actor = repository.current_user()
     if stage.status == "Paused":
         repository.close_open_pause(stage_name, actor)
 
@@ -353,16 +394,56 @@ def handoff_to_next(
     }
 
 
+def reassign_worker(
+    repository: ShopFloorCommandPort,
+    stage_name: str,
+    assignee: str,
+) -> dict[str, Any]:
+    stage = repository.get_stage_state(stage_name)
+    order = repository.get_order_state(stage.order_name)
+    _assert_action_allowed(
+        repository,
+        Capability.REASSIGN_WORKER,
+        order,
+        stage=stage,
+        actor=repository.current_user(),
+    )
+    repository.assert_worker_for_stage(assignee, stage.stage_type)
+    if assignee == stage.assigned_to:
+        return {
+            "stage": stage.name,
+            "order_name": stage.order_name,
+            "assigned_to": assignee,
+            "changed": False,
+        }
+
+    previous_assignee = stage.assigned_to
+    updated = repository.reassign_stage(stage.name, assignee=assignee)
+    repository.track_order_to_stage(stage.order_name, stage_name=stage.name)
+    repository.log_stage_event(
+        stage.name,
+        "Override",
+        {
+            "shop_floor_reassignment": True,
+            "previous_assignee": previous_assignee,
+            "assignee": assignee,
+            "reassigned_by": repository.current_user(),
+        },
+    )
+    return {
+        "stage": updated.name,
+        "order_name": updated.order_name,
+        "assigned_to": updated.assigned_to,
+        "changed": True,
+    }
+
+
 def mark_delivered(
     repository: ShopFloorCommandPort,
     order_name: str,
 ) -> dict[str, Any]:
-    repository.require_delivery_permission()
-    status = repository.get_order_status(order_name)
-    if not can_mark_delivered(status):
-        raise ShopFloorCommandError(
-            "Only orders ready for delivery can be marked as delivered."
-        )
+    order = repository.get_order_state(order_name)
+    _assert_action_allowed(repository, Capability.MARK_DELIVERED, order)
     repository.track_order_delivered(order_name)
     return {"name": order_name, "status": "Delivered"}
 
@@ -373,15 +454,8 @@ def revert_department(
     target_stage: str | None = None,
     target_stage_type: str | None = None,
 ) -> dict[str, Any]:
-    repository.require_revert_permission()
     order = repository.get_order_state(order_name)
-    if order.status == "Delivered":
-        raise ShopFloorCommandError("Delivered orders cannot be reverted.")
-    if not can_revert_department(
-        order.status,
-        production_path=order.production_path,
-    ):
-        raise ShopFloorCommandError("Order is not on the shop-floor path.")
+    _assert_action_allowed(repository, Capability.REVERT_DEPARTMENT, order)
 
     raw_target = target_stage_type or target_stage
     try:
@@ -454,6 +528,7 @@ __all__ = [
     "get_handoff_workers",
     "handoff_to_next",
     "mark_delivered",
+    "reassign_worker",
     "revert_department",
     "start_my_stage",
 ]
