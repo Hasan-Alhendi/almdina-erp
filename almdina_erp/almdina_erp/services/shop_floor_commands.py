@@ -90,16 +90,13 @@ def revert_department(
 
 @frappe.whitelist()
 def return_order_to_draft(order_name: str) -> dict[str, Any]:
-    """Compatibility endpoint: immutable orders create controlled revisions."""
+    """Compatibility endpoint backed by the dedicated lifecycle capability."""
 
     from almdina_erp.almdina_erp.services.order_revision_service import (
-        create_order_revision,
+        return_order_to_draft as create_controlled_return,
     )
 
-    return create_order_revision(
-        order_name,
-        reason=_("Legacy return-to-draft request converted to a controlled revision."),
-    )
+    return create_controlled_return(order_name)
 
 
 # Private compatibility aliases retained for older Python callers and tests.
