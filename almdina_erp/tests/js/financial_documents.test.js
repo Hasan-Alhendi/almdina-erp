@@ -160,6 +160,10 @@ function load() {
     return { fakeWindow, calls, prints, capabilities, handlers };
 }
 
+function nextImmediate() {
+    return new Promise(resolve => setImmediate(resolve));
+}
+
 async function main() {
     const runtime = load();
     const frm = {
@@ -179,7 +183,9 @@ async function main() {
     assert.match(runtime.calls[1].method, /get_internal_cost_report_document$/);
     assert.equal(runtime.calls[1].args.order_name, frm.doc.name);
 
-    await new Promise(resolve => setImmediate(resolve));
+    await nextImmediate();
+    await nextImmediate();
+    await nextImmediate();
     assert.equal(runtime.prints.length, 2);
 
     const customerHtml = runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
