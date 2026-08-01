@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
@@ -41,6 +43,7 @@ _BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
     | COSTING_CAPABILITIES
     | ADMINISTRATION_CAPABILITIES
 )
+_READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
 
 
 def _has_any(user: str, capabilities: frozenset[str]) -> bool:
@@ -66,6 +69,36 @@ def _assigned_order_subquery(user: str) -> str:
         f" where assigned_to = {frappe.db.escape(user)}"
         " and stage_type in ('Sharyoun','Drawing','CNC','Sanding')"
     )
+
+
+def _assigned_order_exists(user: str, order_name: str | None) -> bool:
+    if not order_name:
+        return False
+    return bool(
+        frappe.db.exists(
+            "Production Stage",
+            {
+                "door_cutting_order": order_name,
+                "assigned_to": user,
+                "stage_type": ["in", ["Sharyoun", "Drawing", "CNC", "Sanding"]],
+            },
+        )
+    )
+
+
+def _assigned_read_decision(
+    *,
+    user: str,
+    permission_type: str | None,
+    order_name: str | None,
+) -> bool | None:
+    if permission_type not in _READ_PERMISSION_TYPES:
+        return None
+    if user == "Guest":
+        return False
+    if not _requires_assigned_scope(user):
+        return None
+    return _assigned_order_exists(user, order_name)
 
 
 def door_cutting_order_query(user: str | None = None) -> str:
@@ -108,9 +141,67 @@ def replacement_piece_query(user: str | None = None) -> str:
     )
 
 
+def door_cutting_order_has_permission(
+    doc: Any,
+    user: str | None = None,
+    permission_type: str | None = None,
+) -> bool | None:
+    resolved_user = user or frappe.session.user
+    return _assigned_read_decision(
+        user=resolved_user,
+        permission_type=permission_type,
+        order_name=getattr(doc, "name", None),
+    )
+
+
+def production_stage_has_permission(
+    doc: Any,
+    user: str | None = None,
+    permission_type: str | None = None,
+) -> bool | None:
+    resolved_user = user or frappe.session.user
+    if permission_type not in _READ_PERMISSION_TYPES:
+        return None
+    if resolved_user == "Guest":
+        return False
+    if not _requires_assigned_scope(resolved_user):
+        return None
+    return bool(getattr(doc, "assigned_to", None) == resolved_user)
+
+
+def cutting_plan_has_permission(
+    doc: Any,
+    user: str | None = None,
+    permission_type: str | None = None,
+) -> bool | None:
+    resolved_user = user or frappe.session.user
+    return _assigned_read_decision(
+        user=resolved_user,
+        permission_type=permission_type,
+        order_name=getattr(doc, "door_cutting_order", None),
+    )
+
+
+def replacement_piece_has_permission(
+    doc: Any,
+    user: str | None = None,
+    permission_type: str | None = None,
+) -> bool | None:
+    resolved_user = user or frappe.session.user
+    return _assigned_read_decision(
+        user=resolved_user,
+        permission_type=permission_type,
+        order_name=getattr(doc, "door_cutting_order", None),
+    )
+
+
 __all__ = [
+    "cutting_plan_has_permission",
     "cutting_plan_query",
+    "door_cutting_order_has_permission",
     "door_cutting_order_query",
+    "production_stage_has_permission",
     "production_stage_query",
+    "replacement_piece_has_permission",
     "replacement_piece_query",
 ]
