@@ -44,9 +44,6 @@
   "links":[],
   "module":"Almdina ERP",
   "name":"Almdina ERP Settings",
-  "permissions":[
-    {"create":1,"read":1,"role":"Production Manager","write":1},
-    {"create":1,"read":1,"role":"System Manager","write":1}
-  ],
+  "permissions":[],
   "track_changes":1
 }
