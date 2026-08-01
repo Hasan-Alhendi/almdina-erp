@@ -5,6 +5,11 @@ import unittest
 from html import escape
 from types import SimpleNamespace
 
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.presentation.shop_floor.data_policy import (
+    PLAN_AND_DXF_PAYLOAD_FIELDS,
+    sanitize_shop_floor_detail,
+)
 from almdina_erp.almdina_erp.presentation.shop_floor.presenters import (
     present_order_detail,
     render_pieces_html,
@@ -148,6 +153,38 @@ class TestShopFloorPresenters(unittest.TestCase):
         self.assertEqual(result["current_stage_type"], "Drawing")
         self.assertEqual(result["can_handoff_to"], "CNC")
         self.assertIn('"sheets"', result["system_plan_json"])
+
+    def test_plan_and_dxf_data_are_removed_without_view_capability(self) -> None:
+        payload = {
+            "name": "DCO-3",
+            "pieces_html": "pieces",
+            "production_actions": {"start_assigned_stage": {"allowed": True}},
+            **{fieldname: f"secret:{fieldname}" for fieldname in PLAN_AND_DXF_PAYLOAD_FIELDS},
+        }
+
+        sanitized = sanitize_shop_floor_detail(
+            payload,
+            {Capability.VIEW_CUTTING_PLAN: False},
+        )
+
+        self.assertEqual(sanitized["name"], "DCO-3")
+        self.assertEqual(sanitized["pieces_html"], "pieces")
+        self.assertIn("production_actions", sanitized)
+        for fieldname in PLAN_AND_DXF_PAYLOAD_FIELDS:
+            self.assertNotIn(fieldname, sanitized)
+
+    def test_plan_and_dxf_data_remain_for_authorized_document(self) -> None:
+        payload = {
+            "name": "DCO-4",
+            "production_dxf": "/private/files/order.dxf",
+            "system_plan_json": '{"sheets":[]}',
+        }
+        sanitized = sanitize_shop_floor_detail(
+            payload,
+            {Capability.VIEW_CUTTING_PLAN: True},
+        )
+        self.assertEqual(sanitized, payload)
+        self.assertIsNot(sanitized, payload)
 
 
 if __name__ == "__main__":
