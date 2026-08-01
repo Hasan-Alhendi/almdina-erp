@@ -20,10 +20,9 @@ after_migrate = "almdina_erp.lifecycle.after_migrate"
 
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
+    "/assets/almdina_erp/js/shared_shell.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
-    "/assets/almdina_erp/js/shop_floor_desk.js",
-    "/assets/almdina_erp/js/order_entry_desk.js",
     "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
     "/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js",
     "/assets/almdina_erp/js/secure_dxf_export.js",
@@ -127,6 +126,8 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price":
         "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_shop_floor_context":
+        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_shop_floor_context",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":
