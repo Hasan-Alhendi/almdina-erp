@@ -3,41 +3,37 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from almdina_erp.almdina_erp.application.security.navigation_context import (
+    build_navigation_context,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     capability_flags,
-    is_order_entry_profile,
-    is_shop_floor_only,
     normalize_capabilities,
-    normalize_roles,
 )
 
-PERMISSION_CONTEXT_VERSION = 2
+PERMISSION_CONTEXT_VERSION = 3
 
 
 def build_permission_context(
     roles: Iterable[str] | None,
     granted_capabilities: Iterable[str] | None,
 ) -> dict[str, Any]:
-    """Build the stable permission context consumed by all Desk presenters.
+    """Build the stable permission and shared-shell navigation context.
 
-    Role assignments are resolved by the Frappe infrastructure adapter before
-    entering this framework-independent use case. The application layer only
-    formats the resulting capability set and navigation profile.
+    ``roles`` remains in the signature for backward compatibility with older
+    adapters, but it is intentionally ignored. Navigation, page presentation
+    and actions are derived exclusively from administrator-managed capability
+    grants.
     """
 
-    normalized_roles = normalize_roles(roles)
+    del roles
     normalized_capabilities = normalize_capabilities(granted_capabilities)
-    if is_order_entry_profile(normalized_roles):
-        profile = "order_entry"
-    elif is_shop_floor_only(normalized_roles):
-        profile = "shop_floor"
-    else:
-        profile = "full"
-
+    navigation = build_navigation_context(normalized_capabilities)
     return {
         "version": PERMISSION_CONTEXT_VERSION,
-        "profile": profile,
+        "profile": navigation["profile"],
         "capabilities": capability_flags(normalized_capabilities),
+        "navigation": navigation,
     }
 
 
