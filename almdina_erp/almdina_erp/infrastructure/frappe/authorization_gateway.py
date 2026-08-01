@@ -147,7 +147,29 @@ def document_has_capability(
     definition = capability_definition(capability)
     if getattr(document, "doctype", None) != definition.applies_to:
         return False
-    return doctype_has_capability(capability, user=user)
+    resolved_user = user or frappe.session.user
+    if resolved_user == "Administrator":
+        return True
+    if _permission_type_is_available(capability) and frappe.has_permission(
+        document,
+        definition.permission_type,
+        user=resolved_user,
+    ):
+        return True
+    if (
+        capability in WORKFORCE_CAPABILITIES
+        and capability != Capability.MANAGE_USERS
+    ):
+        legacy = capability_definition(Capability.MANAGE_USERS)
+        return bool(
+            _permission_type_is_available(Capability.MANAGE_USERS)
+            and frappe.has_permission(
+                document,
+                legacy.permission_type,
+                user=resolved_user,
+            )
+        )
+    return False
 
 
 def document_has_any_capability(
