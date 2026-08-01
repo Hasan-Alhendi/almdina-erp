@@ -2,22 +2,30 @@
 
 from .authorization import (
     ALL_CAPABILITIES,
-    ROLE_CAPABILITIES,
+    CAPABILITY_CATALOG,
+    CUSTOM_PERMISSION_DEFINITIONS,
     Capability,
-    capabilities_for_roles,
-    capability_flags_for_roles,
+    CapabilityDefinition,
+    capability_definition,
+    capability_flags,
     has_capability,
     is_order_entry_profile,
     is_shop_floor_only,
+    normalize_capabilities,
+    normalize_roles,
 )
 
 __all__ = [
     "ALL_CAPABILITIES",
-    "ROLE_CAPABILITIES",
+    "CAPABILITY_CATALOG",
+    "CUSTOM_PERMISSION_DEFINITIONS",
     "Capability",
-    "capabilities_for_roles",
-    "capability_flags_for_roles",
+    "CapabilityDefinition",
+    "capability_definition",
+    "capability_flags",
     "has_capability",
     "is_order_entry_profile",
     "is_shop_floor_only",
+    "normalize_capabilities",
+    "normalize_roles",
 ]
