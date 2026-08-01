@@ -13,7 +13,6 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
     WORKFORCE_CAPABILITIES,
-    Capability,
 )
 from almdina_erp.almdina_erp.domain.security.workforce import (
     PROFILES,
@@ -39,6 +38,17 @@ def _payload(value: Any) -> dict[str, Any]:
     if isinstance(value, str):
         value = frappe.parse_json(value)
     return dict(value or {})
+
+
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off", ""}:
+            return False
+        raise ValueError("Invalid boolean value.")
+    return bool(value)
 
 
 def _granted() -> frozenset[str]:
@@ -81,8 +91,14 @@ def _facts(snapshot: dict[str, Any]) -> WorkforceFacts:
 
 def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
     row = dict(snapshot)
-    profile = PROFILES.get(str(row.get("profile") or ""))
-    row["profile_label"] = profile.label if profile else _("ملف مخصص")
+    profile_key = str(row.get("profile") or "")
+    profile = PROFILES.get(profile_key)
+    if profile:
+        row["profile_label"] = profile.label
+    elif profile_key == "custom":
+        row["profile_label"] = _("ملف مخصص")
+    else:
+        row["profile_label"] = _("غير محدد")
     row["actions"] = action_context(_granted(), facts=_facts(row))
     row.pop("is_almdina", None)
     return row
@@ -95,11 +111,13 @@ def get_workforce_console(
     limit: int = 100,
 ) -> dict[str, Any]:
     _require_action(WorkforceAction.VIEW)
-    enabled_filter: bool | None
-    if enabled in (None, "", "all"):
-        enabled_filter = None
-    else:
-        enabled_filter = bool(int(enabled))
+    try:
+        enabled_filter = (
+            None if enabled in (None, "", "all") else _bool_value(enabled)
+        )
+    except ValueError as error:
+        _raise_value_error(error)
+        raise AssertionError("frappe.throw must interrupt execution")
     users = _repository.list_users(
         search=str(search or ""),
         enabled=enabled_filter,
@@ -175,7 +193,12 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             last_name=values.get("last_name", before["last_name"]),
             language=values.get("language", before["language"]),
         )
-        profile_key = validate_profile(values.get("profile", before["profile"]))
+        profile_supplied = "profile" in values and values.get("profile") not in (None, "")
+        profile_key = (
+            validate_profile(values.get("profile"))
+            if profile_supplied
+            else str(before.get("profile") or "")
+        )
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -187,7 +210,7 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             identity.language != before["language"],
         )
     )
-    profile_changed = profile_key != before["profile"]
+    profile_changed = profile_supplied and profile_key != before["profile"]
     facts = _facts(before)
     if identity_changed:
         _require_action(WorkforceAction.EDIT, facts=facts)
@@ -237,9 +260,13 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def set_workforce_user_enabled(user: str, enabled: int | bool) -> dict[str, Any]:
+def set_workforce_user_enabled(user: str, enabled: int | bool | str) -> dict[str, Any]:
     user_name = str(user or "").strip().lower()
-    target_enabled = bool(int(enabled))
+    try:
+        target_enabled = _bool_value(enabled)
+    except ValueError as error:
+        _raise_value_error(error)
+        raise AssertionError("frappe.throw must interrupt execution")
     _repository.lock_user(user_name)
     try:
         before = _repository.get_user(user_name)
