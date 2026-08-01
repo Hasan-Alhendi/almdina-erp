@@ -13,6 +13,9 @@ from almdina_erp.almdina_erp.domain.orders.revisions import (
     revision_root,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
+)
 
 
 RESET_FIELDS: dict[str, Any] = {
@@ -45,10 +48,6 @@ RESET_FIELDS: dict[str, Any] = {
 
 
 def _require_revision_capability() -> None:
-    from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-        doctype_has_capability,
-    )
-
     if doctype_has_capability(Capability.CREATE_ORDER_REVISION):
         return
     frappe.throw(
@@ -150,13 +149,7 @@ def create_order_revision(
             RevisionState.CURRENT,
             update_modified=False,
         )
-    frappe.db.set_value(
-        "Door Cutting Order",
-        source.name,
-        "superseded_by",
-        revised.name,
-        update_modified=True,
-    )
+    frappe.db.set_value("Door Cutting Order", source.name, "superseded_by", revised.name, update_modified=True)
     _add_revision_comment(source, revised.name, reason)
 
     return {
