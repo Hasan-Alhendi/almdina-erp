@@ -113,6 +113,8 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             "Door Cutting Order",
             "Replacement Piece",
             "Almdina ERP Settings",
+            "Production Routing",
+            "Edge Banding Type",
         ):
             frappe.clear_cache(doctype=doctype)
         super().tearDown()
@@ -139,6 +141,16 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         self.assertTrue(result["capabilities"][Capability.VIEW_ORDERS])
         self.assertTrue(result["capabilities"][Capability.APPROVE_DXF])
         self.assertTrue(result["capabilities"][Capability.MANAGE_FACTORY_SETTINGS])
+        self.assertTrue(result["capabilities"][Capability.VIEW_FACTORY_SETTINGS])
+        self.assertTrue(
+            result["capabilities"][Capability.EDIT_FACTORY_CUTTING_DEFAULTS]
+        )
+        self.assertTrue(
+            result["capabilities"][Capability.EDIT_FACTORY_COST_DEFAULTS]
+        )
+        self.assertTrue(
+            result["capabilities"][Capability.EDIT_FACTORY_PRODUCTION_CONTROLS]
+        )
 
         order_permission = frappe.db.get_value(
             "Custom DocPerm",
@@ -157,17 +169,31 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 "role": TARGET_ROLE,
                 "permlevel": 0,
             },
-            ["read", "write", Capability.MANAGE_FACTORY_SETTINGS],
+            [
+                "read",
+                "write",
+                Capability.MANAGE_FACTORY_SETTINGS,
+                Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+                Capability.EDIT_FACTORY_COST_DEFAULTS,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+            ],
             as_dict=True,
         )
         self.assertEqual(int(order_permission.read), 1)
         self.assertEqual(int(order_permission.get(Capability.APPROVE_DXF)), 1)
         self.assertEqual(int(settings_permission.read), 1)
-        self.assertEqual(int(settings_permission.write), 1)
         self.assertEqual(
-            int(settings_permission.get(Capability.MANAGE_FACTORY_SETTINGS)),
-            1,
+            int(settings_permission.write),
+            0,
+            "Factory settings must be written only through the field-aware service.",
         )
+        for capability in (
+            Capability.MANAGE_FACTORY_SETTINGS,
+            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+            Capability.EDIT_FACTORY_COST_DEFAULTS,
+            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        ):
+            self.assertEqual(int(settings_permission.get(capability)), 1)
 
         frappe.clear_cache(user=TARGET_USER)
         frappe.clear_cache(doctype="Door Cutting Order")
@@ -183,6 +209,13 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             frappe.has_permission(
                 "Almdina ERP Settings",
                 ptype=Capability.MANAGE_FACTORY_SETTINGS,
+                user=TARGET_USER,
+            )
+        )
+        self.assertFalse(
+            frappe.has_permission(
+                "Almdina ERP Settings",
+                ptype="write",
                 user=TARGET_USER,
             )
         )
