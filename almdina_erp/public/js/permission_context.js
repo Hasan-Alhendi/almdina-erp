@@ -2,11 +2,11 @@
     "use strict";
 
     const EMPTY_NAVIGATION = Object.freeze({
-        shared_shell: true,
+        shared_shell: false,
         app_only: false,
         profile: "shared",
-        home_page: "almdina-erp",
-        default_route: "/app/almdina-erp",
+        home_page: "",
+        default_route: "",
         workspaces: Object.freeze([]),
         sections: Object.freeze({}),
     });
@@ -31,11 +31,11 @@
             ? raw.workspaces.map(value => String(value || "")).filter(Boolean)
             : [];
         return Object.freeze({
-            shared_shell: raw.shared_shell !== false,
+            shared_shell: raw.shared_shell === true,
             app_only: raw.app_only === true,
             profile: String(raw.profile || "shared"),
-            home_page: String(raw.home_page || "almdina-erp"),
-            default_route: String(raw.default_route || "/app/almdina-erp"),
+            home_page: String(raw.home_page || ""),
+            default_route: String(raw.default_route || ""),
             workspaces: Object.freeze(workspaces),
             sections: Object.freeze(sections),
         });
