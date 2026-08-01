@@ -79,12 +79,14 @@ def build_navigation_context(
 ) -> dict[str, Any]:
     """Build the shared Almdina shell navigation from business capabilities.
 
-    The same Desk shell is retained for every user. Capabilities only select the
-    useful workspaces, home destination and visible sections; they never replace
-    the application with a separate role-specific UI.
+    The same Desk shell is retained for every authorized Almdina user.
+    Capabilities select the useful workspaces, home destination and visible
+    sections. Users without Almdina grants are left on their existing Desk and
+    application navigation.
     """
 
     granted = normalize_capabilities(granted_capabilities)
+    active = bool(granted)
     has_orders = _intersects(granted, ORDER_CAPABILITIES)
     has_costing = _intersects(granted, _FINANCIAL_CAPABILITIES)
     has_planning = _intersects(granted, PLANNING_CAPABILITIES)
@@ -94,7 +96,7 @@ def build_navigation_context(
     has_administration = _intersects(granted, ADMINISTRATION_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
 
-    operator_only = bool(granted) and _intersects(
+    operator_only = active and _intersects(
         granted,
         PRODUCTION_OPERATOR_CAPABILITIES,
     ) and not _intersects(
@@ -108,9 +110,8 @@ def build_navigation_context(
     workspaces: list[str] = []
     if operator_only:
         workspaces.append(WORKSPACE_SHOP_FLOOR)
-    else:
-        if granted:
-            workspaces.append(WORKSPACE_MAIN)
+    elif active:
+        workspaces.append(WORKSPACE_MAIN)
         if has_shop_floor:
             workspaces.append(WORKSPACE_SHOP_FLOOR)
         if (
@@ -135,11 +136,11 @@ def build_navigation_context(
     home_page = "shop-floor-inbox" if operator_only else "almdina-erp"
 
     return {
-        "shared_shell": True,
-        "app_only": bool(granted),
+        "shared_shell": active,
+        "app_only": active,
         "profile": _profile(granted),
-        "home_page": home_page,
-        "default_route": f"/app/{home_page}",
+        "home_page": home_page if active else "",
+        "default_route": f"/app/{home_page}" if active else "",
         "workspaces": workspaces,
         "sections": {
             "orders": has_orders,
