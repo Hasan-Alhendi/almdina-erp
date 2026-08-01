@@ -6,9 +6,16 @@ import frappe
 from frappe import _
 from frappe.utils.password import update_password
 
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_doctype_capability,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class UserProfile:
+    """Operational eligibility and initial navigation, never business grants."""
+
     roles: tuple[str, ...]
     default_workspace: str
     default_app: str = "almdina_erp"
@@ -33,12 +40,11 @@ PROFILES: dict[str, UserProfile] = {
 }
 
 
-def _require_system_manager() -> None:
-    if "System Manager" not in set(frappe.get_roles()):
-        frappe.throw(
-            _("Only System Manager can provision Almdina ERP users."),
-            frappe.PermissionError,
-        )
+def _require_manage_users() -> None:
+    require_doctype_capability(
+        Capability.MANAGE_USERS,
+        message=_("You do not have permission to manage Almdina users."),
+    )
 
 
 def _validate_profile(profile: str) -> UserProfile:
@@ -72,11 +78,12 @@ def provision_user(
     """Create or update one user from an explicit administrative command.
 
     Passwords are runtime inputs and are never stored in the repository. Existing
-    users keep unrelated roles; this use case only adds roles required by the
-    selected Almdina profile.
+    users keep unrelated roles; this use case only adds operational roles required
+    by the selected Almdina profile. Business grants remain owned by the permission
+    matrix and are never seeded by this function.
     """
 
-    _require_system_manager()
+    _require_manage_users()
     selected = _validate_profile(profile)
     _ensure_roles_exist(selected.roles)
 
@@ -138,3 +145,6 @@ def provision_user(
         "default_workspace": selected.default_workspace,
         "default_app": selected.default_app,
     }
+
+
+__all__ = ["PROFILES", "UserProfile", "provision_user"]
