@@ -4,19 +4,21 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, now_datetime, time_diff_in_seconds
+from frappe.utils import cint, flt, now_datetime
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     SHOP_FLOOR_ORDER_STATUSES,
     StageState,
-    can_transition_stage,
     derive_order_status,
-    transition_stage,
 )
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 
 
-def _log_event(stage: Any, event_type: str, details: dict[str, Any] | None = None, actor: str | None = None) -> None:
+def _log_event(
+    stage: Any,
+    event_type: str,
+    details: dict[str, Any] | None = None,
+    actor: str | None = None,
+) -> None:
     event = frappe.new_doc("Production Stage Event")
     event.door_cutting_order = stage.door_cutting_order
     event.production_stage = stage.name
@@ -48,15 +50,34 @@ def _stage_is_applicable(stage_type: str, order: Any) -> bool:
 def _required_piece_qty(order_name: str) -> int:
     rows = frappe.get_all(
         "Door Cutting Order Detail",
-        filters={"parent": order_name, "parenttype": "Door Cutting Order"},
+        filters={
+            "parent": order_name,
+            "parenttype": "Door Cutting Order",
+        },
         fields=["qty"],
     )
     return sum(cint(row.qty) for row in rows)
 
 
-def ensure_default_stages(order_name: str, approved_by: str | None = None) -> list[str]:
-    existing = frappe.get_all("Production Stage", filters={"door_cutting_order": order_name}, order_by="sequence asc", pluck="name")
-    base_existing = [name for name in existing if not (frappe.db.get_value("Production Stage", name, "piece_label") or "")]
+def ensure_default_stages(
+    order_name: str,
+    approved_by: str | None = None,
+) -> list[str]:
+    """Compatibility stage creation used only by approved internal flows."""
+
+    existing = frappe.get_all(
+        "Production Stage",
+        filters={"door_cutting_order": order_name},
+        order_by="sequence asc",
+        pluck="name",
+    )
+    base_existing = [
+        name
+        for name in existing
+        if not (
+            frappe.db.get_value("Production Stage", name, "piece_label") or ""
+        )
+    ]
     if base_existing:
         return base_existing
 
@@ -66,7 +87,10 @@ def ensure_default_stages(order_name: str, approved_by: str | None = None) -> li
     now = now_datetime()
     actor = approved_by or frappe.session.user
 
-    for route_row in sorted(routing.stages or [], key=lambda row: cint(row.sequence)):
+    for route_row in sorted(
+        routing.stages or [],
+        key=lambda row: cint(row.sequence),
+    ):
         if not cint(route_row.required):
             continue
 
@@ -87,9 +111,14 @@ def ensure_default_stages(order_name: str, approved_by: str | None = None) -> li
             stage.finished_by = actor
             stage.finish_time = now
             stage.actual_working_seconds = 0
-            stage.completed_qty = _required_piece_qty(order_name) if applicable else 0
+            stage.completed_qty = (
+                _required_piece_qty(order_name) if applicable else 0
+            )
             if not applicable:
-                stage.notes = _("Automatically completed because this stage is not applicable to the order.")
+                stage.notes = _(
+                    "Automatically completed because this stage is not "
+                    "applicable to the order."
+                )
         else:
             stage.status = "Pending"
 
@@ -106,26 +135,15 @@ def ensure_default_stages(order_name: str, approved_by: str | None = None) -> li
             actor=actor,
         )
         if auto_completed:
-            _log_event(stage, "Finish", {"automatic": True, "applicable": applicable}, actor=actor)
+            _log_event(
+                stage,
+                "Finish",
+                {"automatic": True, "applicable": applicable},
+                actor=actor,
+            )
         created.append(stage.name)
 
     return created
-
-
-def _require_stage_role(stage: Any) -> None:
-    shop_floor_roles = {
-        "Sharyoun": ("عامل شريون", "Production Manager"),
-        "Drawing": ("عامل رسم", "Production Manager"),
-        "CNC": ("عامل CNC", "Production Manager"),
-        "Sanding": ("عامل تقشيط", "Production Manager"),
-        "Cutting": ("Cutting Operator", "Production Manager"),
-        "Edge Banding": ("Edge Operator", "Production Manager"),
-    }
-    roles = shop_floor_roles.get(stage.stage_type)
-    if roles:
-        require_any_role(*roles)
-    else:
-        require_any_role("Production Manager")
 
 
 def _base_stages(order_name: str) -> list[Any]:
@@ -138,50 +156,20 @@ def _base_stages(order_name: str) -> list[Any]:
     return [row for row in stages if not (row.piece_label or "")]
 
 
-def _assert_previous_stages_completed(stage: Any) -> None:
-    incomplete = [
-        row for row in _base_stages(stage.door_cutting_order)
-        if row.sequence < stage.sequence and row.status not in {"Completed", "Cancelled"}
-    ]
-    if not incomplete:
-        return
+def sync_order_status(order_name: str) -> str:
+    """Derive order status from the canonical current stage and replacements."""
 
-    settings = frappe.get_single("Almdina ERP Settings")
-    user_roles = set(frappe.get_roles())
-    if cint(settings.allow_stage_override) and ("Production Manager" in user_roles or "System Manager" in user_roles):
-        _log_event(
-            stage,
-            "Override",
-            {
-                "reason": "Started before previous required stages completed",
-                "incomplete_stages": [row.name for row in incomplete],
+    open_replacements = (
+        frappe.db.count(
+            "Replacement Piece",
+            filters={
+                "door_cutting_order": order_name,
+                "status": ["not in", ["Completed", "Cancelled"]],
             },
         )
-        return
-
-    row = incomplete[0]
-    frappe.throw(_("Previous stage {0} ({1}) must be completed before starting this stage.").format(row.stage_type, row.status))
-
-
-def _close_open_pause(stage: Any, resumed_by: str) -> None:
-    open_pause = None
-    for row in reversed(stage.pauses or []):
-        if row.pause_start and not row.pause_end:
-            open_pause = row
-            break
-    if not open_pause:
-        return
-    open_pause.pause_end = now_datetime()
-    open_pause.resumed_by = resumed_by
-    open_pause.duration_seconds = max(0, cint(time_diff_in_seconds(open_pause.pause_end, open_pause.pause_start)))
-    stage.paused_seconds = sum(cint(row.duration_seconds) for row in (stage.pauses or []))
-
-
-def sync_order_status(order_name: str) -> str:
-    open_replacements = frappe.db.count(
-        "Replacement Piece",
-        filters={"door_cutting_order": order_name, "status": ["not in", ["Completed", "Cancelled"]]},
-    ) if frappe.db.exists("DocType", "Replacement Piece") else 0
+        if frappe.db.exists("DocType", "Replacement Piece")
+        else 0
+    )
     if open_replacements:
         status = derive_order_status(
             current_status=None,
@@ -190,7 +178,13 @@ def sync_order_status(order_name: str) -> str:
             stages=(),
             has_open_replacements=True,
         )
-        frappe.db.set_value("Door Cutting Order", order_name, "status", status, update_modified=True)
+        frappe.db.set_value(
+            "Door Cutting Order",
+            order_name,
+            "status",
+            status,
+            update_modified=True,
+        )
         return status
 
     current = frappe.db.get_value(
@@ -202,7 +196,6 @@ def sync_order_status(order_name: str) -> str:
     if current and current.status in {"Ready for Delivery", "Delivered"}:
         return current.status
 
-    # Shop-floor path owns status once dispatched.
     if current and current.production_path:
         if current.current_production_stage:
             stage = frappe.db.get_value(
@@ -214,7 +207,13 @@ def sync_order_status(order_name: str) -> str:
             if stage and stage.status != "Cancelled":
                 mapped = SHOP_FLOOR_ORDER_STATUSES.get(stage.stage_type)
                 if mapped:
-                    frappe.db.set_value("Door Cutting Order", order_name, "status", mapped, update_modified=True)
+                    frappe.db.set_value(
+                        "Door Cutting Order",
+                        order_name,
+                        "status",
+                        mapped,
+                        update_modified=True,
+                    )
                     return mapped
         if current.status and current.status.startswith("At "):
             return current.status
@@ -230,104 +229,66 @@ def sync_order_status(order_name: str) -> str:
         stages=(StageState(row.stage_type, row.status) for row in stages),
         has_open_replacements=False,
     )
-    frappe.db.set_value("Door Cutting Order", order_name, "status", status, update_modified=True)
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order_name,
+        "status",
+        status,
+        update_modified=True,
+    )
     return status
 
 
 @frappe.whitelist()
-def start_stage(stage_name: str, assigned_to: str | None = None) -> dict[str, Any]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    _require_stage_role(stage)
-    if not can_transition_stage(stage.status, "start"):
-        frappe.throw(_("Only a Pending stage can be started."))
-    _assert_previous_stages_completed(stage)
+def start_stage(
+    stage_name: str,
+    assigned_to: str | None = None,
+) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
+        start_legacy_stage,
+    )
 
-    if stage.stage_type == "Cutting":
-        from almdina_erp.almdina_erp.services.stock_service import consume_planned_material_if_due
-        consume_planned_material_if_due(stage.door_cutting_order, trigger="Cutting Start")
+    return start_legacy_stage(stage_name, assigned_to)
 
-    stage.assigned_to = assigned_to or stage.assigned_to or frappe.session.user
-    stage.started_by = frappe.session.user
-    stage.start_time = now_datetime()
-    stage.status = transition_stage(stage.status, "start")
-    stage.save(ignore_permissions=True)
-    _log_event(stage, "Start", {"assigned_to": stage.assigned_to})
-    return {"stage": stage.name, "status": stage.status, "order_status": sync_order_status(stage.door_cutting_order)}
+
+@frappe.whitelist()
+def finish_stage(
+    stage_name: str,
+    completed_qty: int | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
+        finish_legacy_stage,
+    )
+
+    return finish_legacy_stage(stage_name, completed_qty, notes)
 
 
 @frappe.whitelist()
 def pause_stage(stage_name: str, reason: str | None = None) -> dict[str, Any]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    _require_stage_role(stage)
-    if not can_transition_stage(stage.status, "pause"):
-        frappe.throw(_("Only an In Progress stage can be paused."))
-    pause_start = now_datetime()
-    stage.append("pauses", {"pause_start": pause_start, "reason": reason or "", "paused_by": frappe.session.user})
-    stage.status = transition_stage(stage.status, "pause")
-    stage.save(ignore_permissions=True)
-    _log_event(stage, "Pause", {"reason": reason or "", "pause_start": str(pause_start)})
-    return {"stage": stage.name, "status": stage.status, "order_status": sync_order_status(stage.door_cutting_order)}
+    del stage_name, reason
+    from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
+        retired_product_endpoint,
+    )
+
+    return retired_product_endpoint()
 
 
 @frappe.whitelist()
 def resume_stage(stage_name: str) -> dict[str, Any]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    _require_stage_role(stage)
-    if not can_transition_stage(stage.status, "resume"):
-        frappe.throw(_("Only a Paused stage can be resumed."))
-    _close_open_pause(stage, frappe.session.user)
-    stage.status = transition_stage(stage.status, "resume")
-    stage.save(ignore_permissions=True)
-    _log_event(stage, "Resume", {"paused_seconds_total": stage.paused_seconds})
-    return {"stage": stage.name, "status": stage.status, "order_status": sync_order_status(stage.door_cutting_order)}
-
-
-@frappe.whitelist()
-def finish_stage(stage_name: str, completed_qty: int | None = None, notes: str | None = None) -> dict[str, Any]:
-    stage = frappe.get_doc("Production Stage", stage_name)
-    _require_stage_role(stage)
-    if not can_transition_stage(stage.status, "finish"):
-        frappe.throw(_("Only an active stage can be finished."))
-    if stage.status == "Paused":
-        _close_open_pause(stage, frappe.session.user)
-
-    if stage.stage_type == "Cutting":
-        from almdina_erp.almdina_erp.services.stock_service import consume_planned_material_if_due
-        consume_planned_material_if_due(stage.door_cutting_order, trigger="Cutting Finish")
-
-    finish_time = now_datetime()
-    stage.finish_time = finish_time
-    stage.finished_by = frappe.session.user
-    stage.status = transition_stage(stage.status, "finish")
-    stage.completed_qty = cint(completed_qty) if completed_qty is not None else _required_piece_qty(stage.door_cutting_order)
-    if notes:
-        stage.notes = notes
-    total_seconds = max(0, cint(time_diff_in_seconds(finish_time, stage.start_time)))
-    stage.actual_working_seconds = max(0, total_seconds - cint(stage.paused_seconds))
-    stage.save(ignore_permissions=True)
-
-    remnant_result = None
-    if stage.stage_type == "Cutting":
-        from almdina_erp.almdina_erp.services.remnant_service import register_plan_remnants
-        remnant_result = register_plan_remnants(stage.door_cutting_order)
-
-    _log_event(
-        stage,
-        "Finish",
-        {
-            "completed_qty": stage.completed_qty,
-            "actual_working_seconds": stage.actual_working_seconds,
-            "paused_seconds": stage.paused_seconds,
-            "notes": notes or "",
-            "remnants": remnant_result or {},
-        },
+    del stage_name
+    from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
+        retired_product_endpoint,
     )
-    order_status = sync_order_status(stage.door_cutting_order)
-    return {
-        "stage": stage.name,
-        "status": stage.status,
-        "order_status": order_status,
-        "paused_seconds": stage.paused_seconds,
-        "actual_working_seconds": stage.actual_working_seconds,
-        "remnants": remnant_result,
-    }
+
+    return retired_product_endpoint()
+
+
+__all__ = [
+    "ensure_default_stages",
+    "finish_stage",
+    "pause_stage",
+    "resume_stage",
+    "start_stage",
+    "sync_order_status",
+]
