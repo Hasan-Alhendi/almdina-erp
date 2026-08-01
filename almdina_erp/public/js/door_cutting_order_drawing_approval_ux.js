@@ -2,6 +2,8 @@
 	"use strict";
 
 	const ACTION_GROUP = __("الرسم / DXF");
+	const APPROVE_LABEL = __("اعتماد الرسم");
+	const REAPPROVE_LABEL = __("إعادة اعتماد الرسم");
 
 	function canApprove() {
 		return Boolean(
@@ -88,7 +90,7 @@
 				description: __("اختر النسخة النهائية التي تريد اعتمادها للإنتاج."),
 			}],
 			(values) => submitApproval(frm, labels.get(values.source)),
-			__("اعتماد الرسم"),
+			APPROVE_LABEL,
 			__("اعتماد للإنتاج")
 		);
 	}
@@ -107,7 +109,8 @@
 	}
 
 	function installButton(frm) {
-		frm.remove_custom_button(__("اعتماد الرسم"), ACTION_GROUP);
+		frm.remove_custom_button(APPROVE_LABEL, ACTION_GROUP);
+		frm.remove_custom_button(REAPPROVE_LABEL, ACTION_GROUP);
 		if (
 			frm.is_new() ||
 			!canApprove() ||
@@ -117,7 +120,7 @@
 			return;
 		}
 		frm.add_custom_button(
-			frm.doc.approved_plan ? __("إعادة اعتماد الرسم") : __("اعتماد الرسم"),
+			frm.doc.approved_plan ? REAPPROVE_LABEL : APPROVE_LABEL,
 			() => approve(frm),
 			ACTION_GROUP
 		);
