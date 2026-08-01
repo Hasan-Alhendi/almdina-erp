@@ -15,6 +15,7 @@ class Capability:
     CREATE_ORDER_REVISION = "create_order_revision"
     SUBMIT_ORDER = "submit_order"
     APPROVE_ORDER = "approve_order"
+    REJECT_ORDER = "reject_order"
     CANCEL_ORDER = "cancel_order"
 
     # Costing and customer documents
@@ -22,6 +23,7 @@ class Capability:
     EDIT_COST_SETTINGS = "edit_cost_settings"
     EDIT_SPECIAL_PRICE = "edit_special_price"
     APPROVE_SPECIAL_PRICE = "approve_special_price"
+    EDIT_REPLACEMENT_COST = "edit_replacement_cost"
     PRINT_MEASUREMENTS = "print_measurements"
     PRINT_CUSTOMER_INVOICE = "print_customer_invoice"
     PRINT_INTERNAL_COST_REPORT = "print_internal_cost_report"
@@ -47,6 +49,20 @@ class Capability:
     MARK_DELIVERED = "mark_delivered"
     REASSIGN_WORKER = "reassign_worker"
 
+    # Control center and quality
+    ARCHIVE_APPROVED_PLAN = "archive_approved_plan"
+    RECORD_INCIDENT = "record_incident"
+    CREATE_REPLACEMENT = "create_replacement"
+    VIEW_REPLACEMENTS = "view_replacements"
+    APPROVE_REPLACEMENT = "approve_replacement"
+    START_REPLACEMENT = "start_replacement"
+    COMPLETE_REPLACEMENT = "complete_replacement"
+    CANCEL_REPLACEMENT = "cancel_replacement"
+
+    # Reports
+    VIEW_OPERATIONAL_REPORTS = "view_operational_reports"
+    VIEW_FINANCIAL_REPORTS = "view_financial_reports"
+
     # Administration
     MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
     MANAGE_USERS = "manage_users"
@@ -71,6 +87,7 @@ class CapabilityDefinition:
 
 
 _ORDER_DOCTYPE = "Door Cutting Order"
+_REPLACEMENT_DOCTYPE = "Replacement Piece"
 _SETTINGS_DOCTYPE = "Almdina ERP Settings"
 
 _CAPABILITY_DEFINITIONS = (
@@ -80,11 +97,13 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.CREATE_ORDER_REVISION, Capability.CREATE_ORDER_REVISION, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.SUBMIT_ORDER, Capability.SUBMIT_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.APPROVE_ORDER, Capability.APPROVE_ORDER, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.REJECT_ORDER, Capability.REJECT_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.CANCEL_ORDER, Capability.CANCEL_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.VIEW_COSTS, Capability.VIEW_COSTS, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.APPROVE_SPECIAL_PRICE, Capability.APPROVE_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.EDIT_REPLACEMENT_COST, Capability.EDIT_REPLACEMENT_COST, _REPLACEMENT_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.PRINT_MEASUREMENTS, Capability.PRINT_MEASUREMENTS, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_CUSTOMER_INVOICE, Capability.PRINT_CUSTOMER_INVOICE, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_INTERNAL_COST_REPORT, Capability.PRINT_INTERNAL_COST_REPORT, _ORDER_DOCTYPE, "documents"),
@@ -105,6 +124,16 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.RETURN_ORDER_TO_DRAFT, Capability.RETURN_ORDER_TO_DRAFT, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.MARK_DELIVERED, Capability.MARK_DELIVERED, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.REASSIGN_WORKER, Capability.REASSIGN_WORKER, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.ARCHIVE_APPROVED_PLAN, Capability.ARCHIVE_APPROVED_PLAN, _ORDER_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.RECORD_INCIDENT, Capability.RECORD_INCIDENT, _ORDER_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.CREATE_REPLACEMENT, Capability.CREATE_REPLACEMENT, _ORDER_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.VIEW_REPLACEMENTS, Capability.VIEW_REPLACEMENTS, _REPLACEMENT_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.APPROVE_REPLACEMENT, Capability.APPROVE_REPLACEMENT, _REPLACEMENT_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.START_REPLACEMENT, Capability.START_REPLACEMENT, _REPLACEMENT_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.COMPLETE_REPLACEMENT, Capability.COMPLETE_REPLACEMENT, _REPLACEMENT_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.CANCEL_REPLACEMENT, Capability.CANCEL_REPLACEMENT, _REPLACEMENT_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.VIEW_OPERATIONAL_REPORTS, Capability.VIEW_OPERATIONAL_REPORTS, _ORDER_DOCTYPE, "reports"),
+    CapabilityDefinition(Capability.VIEW_FINANCIAL_REPORTS, Capability.VIEW_FINANCIAL_REPORTS, _ORDER_DOCTYPE, "reports"),
     CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "administration"),
     CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "administration"),
     CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
@@ -143,6 +172,16 @@ PRODUCTION_CAPABILITIES = frozenset(
     for capability, definition in CAPABILITY_CATALOG.items()
     if definition.category == "production"
 )
+CONTROL_CENTER_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "control_center"
+) | frozenset({Capability.APPROVE_ORDER, Capability.REJECT_ORDER})
+REPORTING_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "reports"
+)
 ADMINISTRATION_CAPABILITIES = frozenset(
     capability
     for capability, definition in CAPABILITY_CATALOG.items()
@@ -162,6 +201,9 @@ PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
         Capability.REPLACE_DXF,
         Capability.APPROVE_DXF,
         Capability.RECALCULATE_PLAN,
+        Capability.RECORD_INCIDENT,
+        Capability.START_REPLACEMENT,
+        Capability.COMPLETE_REPLACEMENT,
     }
 )
 PRODUCTION_SUPERVISOR_CAPABILITIES = frozenset(
@@ -171,6 +213,9 @@ PRODUCTION_SUPERVISOR_CAPABILITIES = frozenset(
         Capability.MARK_DELIVERED,
         Capability.REASSIGN_WORKER,
         Capability.RETURN_ORDER_TO_DRAFT,
+        Capability.CREATE_REPLACEMENT,
+        Capability.APPROVE_REPLACEMENT,
+        Capability.CANCEL_REPLACEMENT,
     }
 )
 SHOP_FLOOR_ACCESS_CAPABILITIES = frozenset(
@@ -215,6 +260,7 @@ __all__ = [
     "ADMINISTRATION_CAPABILITIES",
     "ALL_CAPABILITIES",
     "CAPABILITY_CATALOG",
+    "CONTROL_CENTER_CAPABILITIES",
     "COSTING_CAPABILITIES",
     "CUSTOM_PERMISSION_DEFINITIONS",
     "DRAWING_CAPABILITIES",
@@ -223,6 +269,7 @@ __all__ = [
     "PRODUCTION_CAPABILITIES",
     "PRODUCTION_OPERATOR_CAPABILITIES",
     "PRODUCTION_SUPERVISOR_CAPABILITIES",
+    "REPORTING_CAPABILITIES",
     "SHOP_FLOOR_ACCESS_CAPABILITIES",
     "Capability",
     "CapabilityDefinition",
