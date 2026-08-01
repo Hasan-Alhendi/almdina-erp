@@ -80,6 +80,8 @@ assert.equal(missing.version(), 0);
 assert.equal(missing.profile(), "shared");
 assert.equal(missing.can("view_cutting_plan"), false);
 assert.equal(missing.section("production"), false);
-assert.equal(missing.home(), "almdina-erp");
+assert.equal(missing.home(), "");
+assert.equal(missing.navigation().shared_shell, false);
+assert.equal(missing.navigation().app_only, false);
 
 console.log("Permission and navigation context simulation passed");
