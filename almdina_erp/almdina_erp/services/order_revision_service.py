@@ -47,11 +47,11 @@ RESET_FIELDS: dict[str, Any] = {
 }
 
 
-def _require_revision_capability() -> None:
-    if doctype_has_capability(Capability.CREATE_ORDER_REVISION):
+def _require_revision_capability(capability: str) -> None:
+    if doctype_has_capability(capability):
         return
     frappe.throw(
-        _("You do not have permission to create an order revision."),
+        _("You do not have permission to create an editable order revision."),
         frappe.PermissionError,
     )
 
@@ -80,14 +80,13 @@ def _add_revision_comment(source: Any, revised_name: str, reason: str) -> None:
     source.add_comment("Comment", text=text)
 
 
-@frappe.whitelist()
-def create_order_revision(
+def _create_revision(
     order_name: str,
-    reason: str | None = None,
+    *,
+    reason: str | None,
+    capability: str,
 ) -> dict[str, Any]:
-    """Create one editable successor while preserving the source order and plan."""
-
-    _require_revision_capability()
+    _require_revision_capability(capability)
     reason = str(reason or "").strip()
 
     frappe.db.sql(
@@ -149,7 +148,13 @@ def create_order_revision(
             RevisionState.CURRENT,
             update_modified=False,
         )
-    frappe.db.set_value("Door Cutting Order", source.name, "superseded_by", revised.name, update_modified=True)
+    frappe.db.set_value(
+        "Door Cutting Order",
+        source.name,
+        "superseded_by",
+        revised.name,
+        update_modified=True,
+    )
     _add_revision_comment(source, revised.name, reason)
 
     return {
@@ -161,3 +166,39 @@ def create_order_revision(
         "revision_root": revised.revision_root,
         "already_exists": False,
     }
+
+
+@frappe.whitelist()
+def create_order_revision(
+    order_name: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Create a revision for actors granted ``create_order_revision``."""
+
+    return _create_revision(
+        order_name,
+        reason=reason,
+        capability=Capability.CREATE_ORDER_REVISION,
+    )
+
+
+@frappe.whitelist()
+def return_order_to_draft(
+    order_name: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Create an editable successor for actors granted ``return_order_to_draft``."""
+
+    return _create_revision(
+        order_name,
+        reason=reason
+        or _("Order returned for controlled editing through the lifecycle action."),
+        capability=Capability.RETURN_ORDER_TO_DRAFT,
+    )
+
+
+__all__ = [
+    "RESET_FIELDS",
+    "create_order_revision",
+    "return_order_to_draft",
+]
