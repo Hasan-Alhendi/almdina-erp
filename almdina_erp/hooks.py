@@ -117,11 +117,14 @@ boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
 override_whitelisted_methods = {
+    "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review":
+        "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.submit_order_for_review",
     "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order":
         "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
+    "almdina_erp.almdina_erp.services.cutting_plan_service.reject_order":
+        "almdina_erp.almdina_erp.services.order_review_service.reject_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production":
         "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
-    # Keep the legacy route while applying role-managed drawing approval.
     "almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan":
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price":
