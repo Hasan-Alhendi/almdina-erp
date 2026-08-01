@@ -4,8 +4,11 @@ from typing import Any
 
 import frappe
 
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_document_capability,
+)
 from almdina_erp.almdina_erp.services import shop_floor_commands
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 from almdina_erp.almdina_erp.services.order_revision_activation import (
     assert_order_revision_dispatchable,
     load_locked_revision_order,
@@ -28,11 +31,14 @@ def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def validate_order_for_dispatch(order_name: str) -> dict[str, Any]:
-    """Backward-compatible pre-dispatch validation used by the legacy API."""
+    """Backward-compatible pre-dispatch validation using the same capability."""
 
-    require_any_role("Order Entry", "Production Manager")
     order = _lock_and_validate(order_name)
-    order.check_permission("write")
+    require_document_capability(
+        order,
+        Capability.DISPATCH_ORDER,
+        message="You do not have permission to send this order to production.",
+    )
     shop_floor_commands.assert_order_ready_for_dispatch(order)
     return {
         "name": order.name,
