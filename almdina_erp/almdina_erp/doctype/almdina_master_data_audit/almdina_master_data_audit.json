@@ -1,0 +1,39 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:MASTER-AUDIT-{#####}",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "target_doctype",
+    "target_name",
+    "action",
+    "changed_by",
+    "changed_on",
+    "source",
+    "changed_fields",
+    "before_json",
+    "after_json"
+  ],
+  "fields": [
+    {"fieldname":"target_doctype","fieldtype":"Data","in_list_view":1,"label":"Target DocType","read_only":1,"reqd":1},
+    {"fieldname":"target_name","fieldtype":"Data","in_list_view":1,"label":"Target Name","read_only":1,"reqd":1},
+    {"fieldname":"action","fieldtype":"Select","in_list_view":1,"label":"Action","options":"Created\nUpdated\nDeleted\nSettings Updated","read_only":1,"reqd":1},
+    {"fieldname":"changed_by","fieldtype":"Link","in_list_view":1,"label":"Changed By","options":"User","read_only":1,"reqd":1},
+    {"default":"Now","fieldname":"changed_on","fieldtype":"Datetime","in_list_view":1,"label":"Changed On","read_only":1,"reqd":1},
+    {"fieldname":"source","fieldtype":"Data","label":"Source","read_only":1},
+    {"fieldname":"changed_fields","fieldtype":"Small Text","label":"Changed Fields","read_only":1},
+    {"fieldname":"before_json","fieldtype":"Code","label":"Before JSON","options":"JSON","read_only":1},
+    {"fieldname":"after_json","fieldtype":"Code","label":"After JSON","options":"JSON","read_only":1}
+  ],
+  "index_web_pages_for_search": 0,
+  "is_submittable": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Almdina Master Data Audit",
+  "permissions": [],
+  "quick_entry": 0,
+  "sort_field": "changed_on",
+  "sort_order": "DESC",
+  "track_changes": 0
+}
