@@ -6,9 +6,6 @@ app_email = ""
 app_license = "Proprietary"
 app_version = "1.0.0-dev"
 
-# Frappe v16 desktop/apps screen entry point. The title is translated through
-# translations/ar.csv so Arabic users see "إدارة المعمل" while English users
-# keep the English label. The route opens the root Almdina ERP workspace.
 add_to_apps_screen = [
     {
         "name": "almdina_erp",
@@ -21,46 +18,28 @@ add_to_apps_screen = [
 after_install = "almdina_erp.lifecycle.after_install"
 after_migrate = "almdina_erp.lifecycle.after_migrate"
 
-# Keep only genuinely global Desk behaviour here. Door Cutting Order scripts are
-# loaded through doctype_js below, which Frappe reads from the app source and
-# injects into FormMeta server-side. This avoids production UX depending on a
-# sites/assets symlink being present in the frontend container.
 app_include_js = [
-    # One boot-backed capability API is shared by every page and form presenter.
     "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
-    # Protect every Desk form from asynchronous refreshes overwriting the active
-    # input while an operator is typing or composing Arabic text.
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/shop_floor_desk.js",
     "/assets/almdina_erp/js/order_entry_desk.js",
-    # Shape output policy is framework-independent and shared by order forms,
-    # shop-floor cutting plans, customer printouts, and secure DXF exports.
     "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
     "/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js",
-    # Loaded app-wide so the shop-floor page can reuse the validated DXF exporter.
     "/assets/almdina_erp/js/secure_dxf_export.js",
     "/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js",
 ]
 
 doctype_js = {
     "Door Cutting Order": [
-        # Establish document identity before any renderer or asynchronous loader.
-        # This prevents a shared Form wrapper from displaying the previous order.
         "public/js/door_cutting_order_document_context.js",
-        # The order form must be self-contained: FormMeta scripts can arrive while
-        # a cached Desk bundle is still active, so load the pure shape dependencies
-        # locally before every renderer, status surface, and editor that consumes them.
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_output_contract.js",
-        # The canonical DocType entry point is intentionally side-effect free;
-        # drawing composition lives in this focused, reusable renderer.
         "public/js/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order_workflow.js",
         "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
-        # Canonical shape printing owns readable text-only notes directly.
         "public/js/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_operator_ux_patch.js",
@@ -68,16 +47,10 @@ doctype_js = {
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
-        # Pure geometry loads before the DOM editor that composes it.
         "public/js/door_cutting_order_sketch_engine.js",
-        # Draft drawing transitions stay independent from pointer and DOM APIs.
         "public/js/door_cutting_order_sketch_interaction.js",
-        # Document changes and undo/redo history are framework-independent.
         "public/js/door_cutting_order_sketch_history.js",
-        # Pure SVG presentation turns sketch state into safe, testable markup.
         "public/js/door_cutting_order_sketch_renderer.js",
-        # The editor owns point-based inline notes and their font controls;
-        # no global Frappe prompt interception or post-render bridge is needed.
         "public/js/door_cutting_order_inline_note_editor.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
@@ -85,20 +58,12 @@ doctype_js = {
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_multi_edge_ux.js",
         "public/js/door_cutting_order_edge_profile_controls_ux.js",
-        # Capture clicks before the legacy toggle handler so a double-click opens
-        # the compact profile popover without toggling the side twice.
         "public/js/door_cutting_order_edge_profile_double_click_guard.js",
         "public/js/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order_cost_invoice_ux.js",
-        # Typography is a separate presentation policy shared by measurements
-        # and customer invoices; the presenter remains focused on composition.
         "public/js/door_cutting_order_document_print_theme.js",
         "public/js/door_cutting_order_document_print_presenter.js",
-        # Cost-screen presentation and edge invoice grouping load after the base
-        # costing presenter and do not own any print button.
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
-        # Final presentation-density policy removes duplicated invoice-header
-        # figures and renders edge exceptions as compact text in screen and print.
         "public/js/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
@@ -115,8 +80,6 @@ doctype_js = {
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
-        # Load last so its app-wide active-input policy sees the final form DOM.
-        # It no longer mutates private handler registries or network calls.
         "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
@@ -128,8 +91,6 @@ doctype_list_js = {
     "Door Cutting Order": "public/js/door_cutting_order_list.js",
 }
 
-# The active controller stays thin while subclassing the canonical DocType
-# controller, which is required by Frappe's override_doctype_class contract.
 override_doctype_class = {
     "Door Cutting Order":
         "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order_controller.DoorCuttingOrderController",
@@ -150,8 +111,6 @@ permission_query_conditions = {
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
 }
 
-# Boot hooks are deliberately read-only. User provisioning and role assignment
-# happen only through explicit administrative commands.
 boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
@@ -160,6 +119,9 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production":
         "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
+    # Preserve the legacy endpoint while applying the assigned-designer policy.
+    "almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan":
+        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":
@@ -197,6 +159,3 @@ override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft":
         "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
 }
-
-# Keep v1.0 business logic inside the app package. Client-side scripts are used
-# for interaction and preview only; authoritative calculations are server-side.
