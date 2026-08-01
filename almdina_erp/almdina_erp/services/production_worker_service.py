@@ -37,9 +37,10 @@ def get_reassignment_workers(stage_name: str) -> list[dict[str, str]]:
             drawing_dxf_status=order.drawing_dxf_status,
         ),
     )
+    if decision.code == "missing_capability":
+        frappe.throw(_(decision.reason), frappe.PermissionError)
     if not decision.allowed:
-        exception = frappe.PermissionError if decision.code == "missing_capability" else None
-        frappe.throw(_(decision.reason), exception)
+        frappe.throw(_(decision.reason))
     return _repository.get_users_for_stage(stage.stage_type)
 
 
