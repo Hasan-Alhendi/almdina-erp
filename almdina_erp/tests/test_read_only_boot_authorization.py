@@ -90,6 +90,13 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertEqual(bootinfo["almdina_order_entry_only"], 1)
         self.assertEqual(list(bootinfo["module_wise_workspaces"]), ["Almdina ERP"])
         self.assertEqual(bootinfo["workspaces"]["pages"][0]["name"], "Almdina ERP")
+        self.assertEqual(bootinfo["almdina_permissions"]["profile"], "order_entry")
+        self.assertTrue(
+            bootinfo["almdina_permissions"]["capabilities"]["create_order"]
+        )
+        self.assertFalse(
+            bootinfo["almdina_permissions"]["capabilities"]["view_costs"]
+        )
 
     def test_shop_floor_boot_keeps_only_shop_floor_navigation(self) -> None:
         boot = BootHarness({"عامل CNC"}).load()
@@ -111,6 +118,22 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertEqual(bootinfo["default_route"], "/app/shop-floor-inbox")
         self.assertEqual(bootinfo["desktop_icons"], [])
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
+        self.assertEqual(bootinfo["almdina_permissions"]["profile"], "shop_floor")
+        self.assertTrue(
+            bootinfo["almdina_permissions"]["capabilities"]["export_dxf"]
+        )
+        self.assertFalse(
+            bootinfo["almdina_permissions"]["capabilities"]["upload_dxf"]
+        )
+
+    def test_full_profile_receives_the_same_permission_contract(self) -> None:
+        boot = BootHarness({"Accounts Management"}).load()
+        bootinfo: dict[str, object] = {}
+        boot.boot_session(bootinfo)
+        context = bootinfo["almdina_permissions"]
+        self.assertEqual(context["profile"], "full")
+        self.assertTrue(context["capabilities"]["view_costs"])
+        self.assertFalse(context["capabilities"]["upload_dxf"])
 
     def test_no_default_password_is_stored_in_install_or_provisioning_code(self) -> None:
         combined = INSTALL_PATH.read_text(encoding="utf-8") + PROVISION_PATH.read_text(encoding="utf-8")
