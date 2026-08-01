@@ -9,6 +9,7 @@ class Capability:
     """Stable business capability keys used by UI and server authorization."""
 
     # Order lifecycle
+    VIEW_ORDERS = "view_orders"
     CREATE_ORDER = "create_order"
     EDIT_ORDER = "edit_order"
     CREATE_ORDER_REVISION = "create_order_revision"
@@ -57,8 +58,9 @@ class CapabilityDefinition:
     """Framework-independent metadata for one assignable business capability.
 
     ``permission_type`` is the Frappe permission checked by the infrastructure
-    adapter. Standard rights such as ``create`` and ``write`` are reused instead
-    of adding confusing duplicate columns to Role Permission Manager.
+    adapter. Standard rights such as ``read``, ``create`` and ``write`` are
+    reused instead of adding confusing duplicate columns to Role Permission
+    Manager.
     """
 
     key: str
@@ -72,6 +74,7 @@ _ORDER_DOCTYPE = "Door Cutting Order"
 _SETTINGS_DOCTYPE = "Almdina ERP Settings"
 
 _CAPABILITY_DEFINITIONS = (
+    CapabilityDefinition(Capability.VIEW_ORDERS, "read", _ORDER_DOCTYPE, "order", False),
     CapabilityDefinition(Capability.CREATE_ORDER, "create", _ORDER_DOCTYPE, "order", False),
     CapabilityDefinition(Capability.EDIT_ORDER, "write", _ORDER_DOCTYPE, "order", False),
     CapabilityDefinition(Capability.CREATE_ORDER_REVISION, Capability.CREATE_ORDER_REVISION, _ORDER_DOCTYPE, "order"),
@@ -115,14 +118,63 @@ CUSTOM_PERMISSION_DEFINITIONS = tuple(
     definition for definition in _CAPABILITY_DEFINITIONS if definition.custom
 )
 
-SHOP_FLOOR_ROLES = frozenset({"عامل رسم", "عامل شريون", "عامل CNC", "عامل تقشيط"})
-ADMIN_CONTEXT_ROLES = frozenset(
+ORDER_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "order"
+)
+COSTING_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category in {"costing", "documents"}
+)
+PLANNING_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "cutting_plan"
+)
+DRAWING_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "drawing"
+)
+PRODUCTION_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "production"
+)
+ADMINISTRATION_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "administration"
+)
+
+PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
     {
-        "System Manager",
-        "Production Manager",
-        "Order Entry",
-        "Accounts Management",
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+        Capability.VIEW_CUTTING_PLAN,
+        Capability.PRINT_CUTTING_PLAN,
+        Capability.VIEW_DRAWING_WORKSPACE,
+        Capability.EDIT_SPECIAL_DRAWING,
+        Capability.EXPORT_DXF,
+        Capability.UPLOAD_DXF,
+        Capability.REPLACE_DXF,
+        Capability.APPROVE_DXF,
+        Capability.RECALCULATE_PLAN,
     }
+)
+PRODUCTION_SUPERVISOR_CAPABILITIES = frozenset(
+    {
+        Capability.DISPATCH_ORDER,
+        Capability.REVERT_DEPARTMENT,
+        Capability.MARK_DELIVERED,
+        Capability.REASSIGN_WORKER,
+        Capability.RETURN_ORDER_TO_DRAFT,
+    }
+)
+SHOP_FLOOR_ACCESS_CAPABILITIES = frozenset(
+    PRODUCTION_OPERATOR_CAPABILITIES | PRODUCTION_SUPERVISOR_CAPABILITIES
 )
 
 
@@ -154,22 +206,29 @@ def has_capability(capabilities: Iterable[str] | None, capability: str) -> bool:
 
 
 def normalize_roles(roles: Iterable[str] | None) -> frozenset[str]:
+    """Compatibility helper for operational adapters; never drives navigation."""
+
     return frozenset(str(role) for role in (roles or ()) if role)
 
 
-def is_order_entry_profile(roles: Iterable[str] | None) -> bool:
-    """Return whether Desk should use the order-entry navigation profile."""
-
-    normalized = normalize_roles(roles)
-    if normalized.intersection({"System Manager", "Administrator"}):
-        return False
-    return "Order Entry" in normalized
-
-
-def is_shop_floor_only(roles: Iterable[str] | None) -> bool:
-    """Return whether the user is an operator without an administrative context."""
-
-    normalized = normalize_roles(roles)
-    if normalized.intersection(ADMIN_CONTEXT_ROLES):
-        return False
-    return bool(normalized.intersection(SHOP_FLOOR_ROLES))
+__all__ = [
+    "ADMINISTRATION_CAPABILITIES",
+    "ALL_CAPABILITIES",
+    "CAPABILITY_CATALOG",
+    "COSTING_CAPABILITIES",
+    "CUSTOM_PERMISSION_DEFINITIONS",
+    "DRAWING_CAPABILITIES",
+    "ORDER_CAPABILITIES",
+    "PLANNING_CAPABILITIES",
+    "PRODUCTION_CAPABILITIES",
+    "PRODUCTION_OPERATOR_CAPABILITIES",
+    "PRODUCTION_SUPERVISOR_CAPABILITIES",
+    "SHOP_FLOOR_ACCESS_CAPABILITIES",
+    "Capability",
+    "CapabilityDefinition",
+    "capability_definition",
+    "capability_flags",
+    "has_capability",
+    "normalize_capabilities",
+    "normalize_roles",
+]
