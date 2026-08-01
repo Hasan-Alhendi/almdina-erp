@@ -1,7 +1,9 @@
 (() => {
 	"use strict";
 
-	const ACTION_GROUP = __("الرسم / DXF");
+	const DRAWING_ACTION_GROUP = __("الرسم / DXF");
+	const PRODUCTION_ACTION_GROUP = __("صالة الإنتاج");
+	const ACTIVE_STAGE_STATUSES = new Set(["Pending", "In Progress", "Paused"]);
 
 	function permissionContext() {
 		return window.AlmdinaPermissions || null;
@@ -33,18 +35,19 @@
 	}
 
 	function callAction(method, args, successMessage, frm) {
+		const documentName = frm && frm.doc ? frm.doc.name : null;
 		return frappe
 			.call({
 				method,
 				args,
 				freeze: true,
-				freeze_message: __("Processing..."),
+				freeze_message: __("جاري تنفيذ العملية..."),
 			})
 			.then((response) => {
 				if (successMessage) {
 					frappe.show_alert({ message: successMessage, indicator: "green" });
 				}
-				if (frm) {
+				if (frm && frm.doc && frm.doc.name === documentName) {
 					return frm.reload_doc().then(() => response.message);
 				}
 				return response.message;
@@ -182,7 +185,10 @@
 
 	function openDispatchDialog(frm) {
 		return frappe
-			.call({ method: "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options" })
+			.call({
+				method: "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options",
+				args: { order_name: frm.doc.name },
+			})
 			.then((response) => {
 				const workers = (response.message && response.message.workers) || {};
 				const dialog = new frappe.ui.Dialog({
@@ -230,7 +236,7 @@
 	function addDispatchButton(frm) {
 		if (isShopFloorProfile() || frm.is_new() || !can("dispatch_order")) return;
 		if (frm.doc.status !== "Approved" || frm.doc.production_path || frm.doc.current_production_stage) return;
-		frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm), __("صالة الإنتاج"));
+		frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm), PRODUCTION_ACTION_GROUP);
 	}
 
 	function addDeliveryButtons(frm) {
@@ -245,10 +251,10 @@
 						frm
 					)
 				);
-			}, __("صالة الإنتاج"));
+			}, PRODUCTION_ACTION_GROUP);
 		}
 		if (frm.doc.production_path && frm.doc.status !== "Delivered" && can("revert_department")) {
-			frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm), __("صالة الإنتاج"));
+			frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm), PRODUCTION_ACTION_GROUP);
 		}
 	}
 
@@ -349,7 +355,7 @@
 		if (frm.is_new()) return;
 
 		if (frm.doc.production_dxf && can("export_dxf")) {
-			frm.add_custom_button(__("تنزيل DXF للإنتاج"), () => window.open(frm.doc.production_dxf, "_blank"), ACTION_GROUP);
+			frm.add_custom_button(__("تنزيل DXF للإنتاج"), () => window.open(frm.doc.production_dxf, "_blank"), DRAWING_ACTION_GROUP);
 		}
 		if (!isAtDrawing(frm) || !isAssignedToCurrentUser(frm) || frm.doc.approved_plan) return;
 
@@ -363,7 +369,7 @@
 				if (exporter) return exporter(frm.doc.name).then(markExported);
 				frappe.msgprint(__("تعذر تشغيل مصدر DXF الآمن."));
 				return null;
-			}, ACTION_GROUP);
+			}, DRAWING_ACTION_GROUP);
 		}
 
 		const uploadCapability = frm.doc.production_dxf ? "replace_dxf" : "upload_dxf";
@@ -371,31 +377,105 @@
 			frm.add_custom_button(
 				frm.doc.production_dxf ? __("استبدال ملف DXF") : __("رفع ملف DXF"),
 				() => uploadDrawingDxf(frm),
-				ACTION_GROUP
+				DRAWING_ACTION_GROUP
 			);
 		}
 
 		if (can("approve_dxf") && availableApprovalSources(frm).length) {
-			frm.add_custom_button(__("اعتماد الرسم"), () => approveDrawing(frm), ACTION_GROUP);
+			frm.add_custom_button(__("اعتماد الرسم"), () => approveDrawing(frm), DRAWING_ACTION_GROUP);
 		}
 		if (can("print_cutting_plan")) {
 			frm.add_custom_button(__("طباعة خطة القص"), () => {
 				if (window.AlmdinaDrawingPlanUX && window.AlmdinaDrawingPlanUX.printActivePlan) {
 					window.AlmdinaDrawingPlanUX.printActivePlan(frm);
 				}
-			}, ACTION_GROUP);
+			}, DRAWING_ACTION_GROUP);
 		}
+	}
+
+	function openHandoffDialog(frm, stageName) {
+		frappe.call({
+			method: "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers",
+			args: { stage_name: stageName },
+		}).then((response) => {
+			const workers = response.message || [];
+			if (!workers.length) {
+				frappe.msgprint(__("لا يوجد عمال متاحون للقسم التالي."));
+				return;
+			}
+			frappe.prompt(
+				[{ fieldname: "next_assignee", fieldtype: "Select", label: __("العامل التالي"), options: workers.map((worker) => worker.name).join("\n"), reqd: 1 }],
+				(values) => callAction(
+					"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
+					{ stage_name: stageName, next_assignee: values.next_assignee },
+					__("تم إرسال الطلب."),
+					frm
+				),
+				__("إرسال للقسم التالي"),
+				__("إرسال")
+			);
+		});
+	}
+
+	function openReassignDialog(frm, stageName, currentAssignee) {
+		return frappe
+			.call({
+				method: "almdina_erp.almdina_erp.services.production_worker_service.get_reassignment_workers",
+				args: { stage_name: stageName },
+			})
+			.then((response) => {
+				const workers = (response.message || []).filter((worker) => worker.name !== currentAssignee);
+				if (!workers.length) {
+					frappe.msgprint(__("لا يوجد عامل آخر متاح لهذا القسم."));
+					return;
+				}
+				const labels = new Map(
+					workers.map((worker) => [
+						`${worker.full_name || worker.name} — ${worker.name}`,
+						worker.name,
+					])
+				);
+				frappe.prompt(
+					[{
+						fieldname: "worker",
+						fieldtype: "Select",
+						label: __("العامل الجديد"),
+						options: [...labels.keys()].join("\n"),
+						reqd: 1,
+						description: __("سيصبح العامل الجديد مسؤولًا عن بدء المرحلة وتسليمها."),
+					}],
+					(values) => callAction(
+						"almdina_erp.almdina_erp.services.shop_floor_commands.reassign_worker",
+						{ stage_name: stageName, assignee: labels.get(values.worker) },
+						__("تم تغيير العامل المسؤول عن المرحلة."),
+						frm
+					),
+					__("تغيير العامل"),
+					__("إسناد")
+				);
+			});
 	}
 
 	function addWorkerStageButtons(frm) {
 		if (frm.is_new() || !frm.doc.current_production_stage) return;
-		const assignedToMe = isAssignedToCurrentUser(frm);
-		const canOverrideAssignment = can("reassign_worker");
-		if (!assignedToMe && !canOverrideAssignment) return;
+		const documentName = frm.doc.name;
 		const stageName = frm.doc.current_production_stage;
-		frappe.db.get_value("Production Stage", stageName, ["status", "stage_type"]).then((response) => {
-			const stageStatus = (response.message && response.message.status) || "";
-			const stageType = (response.message && response.message.stage_type) || frm.doc.current_department;
+		frappe.db.get_value("Production Stage", stageName, ["status", "stage_type", "assigned_to"]).then((response) => {
+			if (!frm.doc || frm.doc.name !== documentName || frm.doc.current_production_stage !== stageName) return;
+			const stage = response.message || {};
+			const stageStatus = stage.status || "";
+			const stageType = stage.stage_type || frm.doc.current_department;
+			const assignedToMe = Boolean(stage.assigned_to && stage.assigned_to === frappe.session.user);
+
+			if (ACTIVE_STAGE_STATUSES.has(stageStatus) && can("reassign_worker")) {
+				frm.add_custom_button(
+					__("تغيير العامل"),
+					() => openReassignDialog(frm, stageName, stage.assigned_to),
+					PRODUCTION_ACTION_GROUP
+				);
+			}
+
+			if (!assignedToMe) return;
 			if (stageStatus === "Pending" && can("start_assigned_stage")) {
 				frm.add_custom_button(__("بدء العمل"), () =>
 					callAction(
@@ -403,8 +483,7 @@
 						{ stage_name: stageName },
 						__("تم بدء العمل."),
 						frm
-					), __("صالة الإنتاج"));
-				return;
+					), PRODUCTION_ACTION_GROUP);
 			}
 			if (!["In Progress", "Paused"].includes(stageStatus) || !can("handoff_assigned_stage")) return;
 			const isSanding = stageType === "Sanding" || frm.doc.current_department === "تقشيط";
@@ -421,34 +500,27 @@
 					return;
 				}
 				openHandoffDialog(frm, stageName);
-			}, __("صالة الإنتاج"));
+			}, PRODUCTION_ACTION_GROUP);
 		});
 	}
 
-	function openHandoffDialog(frm, stageName) {
-		frappe.call({
-			method: "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers",
-			args: { stage_name: stageName },
-		}).then((response) => {
-			const workers = response.message || [];
-			frappe.prompt(
-				[{ fieldname: "next_assignee", fieldtype: "Select", label: __("العامل التالي"), options: workers.map((worker) => worker.name).join("\n"), reqd: 1 }],
-				(values) => callAction(
-					"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
-					{ stage_name: stageName, next_assignee: values.next_assignee },
-					__("تم إرسال الطلب."),
-					frm
-				),
-				__("إرسال للقسم التالي"),
-				__("إرسال")
-			);
-		});
+	function removeProductionButtons(frm) {
+		[
+			"إرسال للإنتاج",
+			"تم التسليم",
+			"إرجاع لمرحلة سابقة",
+			"بدء العمل",
+			"إرسال للقسم التالي",
+			"جاهزة للتسليم",
+			"تغيير العامل",
+		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
 	}
 
 	frappe.ui.form.on("Door Cutting Order", {
 		refresh(frm) {
 			applyShopFloorPresentation(frm);
 			renderTrackingStrip(frm);
+			removeProductionButtons(frm);
 			addDispatchButton(frm);
 			addDeliveryButtons(frm);
 			addDrawingDxfButtons(frm);
