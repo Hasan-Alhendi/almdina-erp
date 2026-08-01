@@ -4,6 +4,9 @@ from typing import Any
 
 import frappe
 
+from almdina_erp.almdina_erp.application.security.permission_context import (
+    build_permission_context,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     is_order_entry_profile,
     is_shop_floor_only,
@@ -17,6 +20,14 @@ ALLOWED_MODULES_FOR_SHOP_FLOOR = ("Almdina ERP",)
 
 def _roles() -> frozenset[str]:
     return frozenset(frappe.get_roles())
+
+
+def _attach_permission_context(
+    bootinfo: dict[str, Any], roles: frozenset[str]
+) -> None:
+    """Expose one immutable permission vocabulary to every Desk presenter."""
+
+    bootinfo["almdina_permissions"] = build_permission_context(roles)
 
 
 def _filter_order_entry(bootinfo: dict[str, Any]) -> None:
@@ -126,9 +137,10 @@ def _filter_shop_floor(bootinfo: dict[str, Any]) -> None:
 
 
 def boot_session(bootinfo: dict[str, Any]) -> None:
-    """Apply navigation policy without mutating User, Role, or database state."""
+    """Apply read-only navigation and presentation authorization policy."""
 
     roles = _roles()
+    _attach_permission_context(bootinfo, roles)
     if is_order_entry_profile(roles):
         _filter_order_entry(bootinfo)
         return
@@ -143,6 +155,7 @@ def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
         return
 
     roles = _roles()
+    _attach_permission_context(bootinfo, roles)
     if bootinfo.get("almdina_order_entry_only") or is_order_entry_profile(roles):
         bootinfo["almdina_order_entry_only"] = 1
         bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
