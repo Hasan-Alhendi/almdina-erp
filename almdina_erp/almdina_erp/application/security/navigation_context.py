@@ -5,6 +5,7 @@ from typing import Any
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ADMINISTRATION_CAPABILITIES,
+    CONTROL_CENTER_CAPABILITIES,
     COSTING_CAPABILITIES,
     DRAWING_CAPABILITIES,
     ORDER_CAPABILITIES,
@@ -12,6 +13,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     PRODUCTION_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
+    REPORTING_CAPABILITIES,
     SHOP_FLOOR_ACCESS_CAPABILITIES,
     Capability,
     normalize_capabilities,
@@ -31,6 +33,17 @@ _FINANCIAL_CAPABILITIES = frozenset(
 _ORDER_MANAGEMENT_CAPABILITIES = frozenset(
     ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS})
 )
+_CONTROL_CENTER_OPERATOR_CAPABILITIES = frozenset(
+    {
+        Capability.RECORD_INCIDENT,
+        Capability.VIEW_REPLACEMENTS,
+        Capability.START_REPLACEMENT,
+        Capability.COMPLETE_REPLACEMENT,
+    }
+)
+_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
+    CONTROL_CENTER_CAPABILITIES.difference(_CONTROL_CENTER_OPERATOR_CAPABILITIES)
+)
 
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
@@ -46,6 +59,8 @@ def _profile(granted: frozenset[str]) -> str:
     broad = frozenset(
         _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
+        | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
+        | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES
     )
@@ -70,6 +85,8 @@ def _profile(granted: frozenset[str]) -> str:
         | PLANNING_CAPABILITIES
         | DRAWING_CAPABILITIES
         | PRODUCTION_CAPABILITIES
+        | CONTROL_CENTER_CAPABILITIES
+        | REPORTING_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES,
     ):
         return "order_entry"
@@ -95,9 +112,17 @@ def build_navigation_context(
     has_planning = _intersects(granted, PLANNING_CAPABILITIES)
     has_drawing = _intersects(granted, DRAWING_CAPABILITIES)
     has_production = _intersects(granted, PRODUCTION_CAPABILITIES)
+    has_quality = _intersects(granted, CONTROL_CENTER_CAPABILITIES)
+    has_reports = _intersects(granted, REPORTING_CAPABILITIES)
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
     has_administration = _intersects(granted, ADMINISTRATION_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
+    has_control_center = (
+        has_quality
+        or has_supervision
+        or Capability.APPROVE_DXF in granted
+        or has_administration
+    )
 
     operator_only = active and _intersects(
         granted,
@@ -106,6 +131,8 @@ def build_navigation_context(
         granted,
         _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
+        | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
+        | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES,
     )
@@ -117,14 +144,9 @@ def build_navigation_context(
         workspaces.append(WORKSPACE_MAIN)
         if has_shop_floor:
             workspaces.append(WORKSPACE_SHOP_FLOOR)
-        if (
-            has_supervision
-            or Capability.APPROVE_ORDER in granted
-            or Capability.APPROVE_DXF in granted
-            or has_administration
-        ):
+        if has_control_center:
             workspaces.append(WORKSPACE_CONTROL_CENTER)
-        if has_costing or has_supervision or has_administration:
+        if has_reports or has_administration:
             workspaces.append(WORKSPACE_REPORTS)
         if (
             Capability.EDIT_COST_SETTINGS in granted
@@ -151,8 +173,9 @@ def build_navigation_context(
             "planning": has_planning,
             "drawing": has_drawing,
             "production": has_production,
+            "quality": has_quality,
             "administration": has_administration,
-            "reports": has_costing or has_supervision or has_administration,
+            "reports": has_reports,
         },
     }
 
