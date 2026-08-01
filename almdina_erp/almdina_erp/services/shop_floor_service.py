@@ -51,6 +51,7 @@ def _public_delegate(module_path: str, function_name: str) -> Callable[..., Any]
 
 # Public compatibility endpoints. Imports occur only when an endpoint is called,
 # preventing legacy imports from coupling test discovery and application startup.
+get_shop_floor_context = _public_delegate(_QUERIES, "get_shop_floor_context")
 get_dispatch_options = _public_delegate(_QUERIES, "get_dispatch_options")
 get_revert_targets = _public_delegate(_QUERIES, "get_revert_targets")
 get_my_inbox = _public_delegate(_QUERIES, "get_my_inbox")
@@ -119,8 +120,8 @@ def _resolve_revert_stage_type(value: str | None) -> str:
 __all__ = [
     "approve_production_dxf", "assert_order_ready_for_dispatch", "dispatch_order",
     "get_dispatch_options", "get_handoff_workers", "get_my_archive", "get_my_inbox",
-    "get_order_shop_floor_detail", "get_revert_targets", "handoff_to_next",
-    "mark_delivered", "mark_dxf_exported", "recalculate_drawing_plan",
-    "return_order_to_draft", "revert_department", "start_my_stage",
-    "sync_order_status", "upload_production_dxf",
+    "get_order_shop_floor_detail", "get_revert_targets", "get_shop_floor_context",
+    "handoff_to_next", "mark_delivered", "mark_dxf_exported",
+    "recalculate_drawing_plan", "return_order_to_draft", "revert_department",
+    "start_my_stage", "sync_order_status", "upload_production_dxf",
 ]
