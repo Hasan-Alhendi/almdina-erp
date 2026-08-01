@@ -26,22 +26,35 @@ function load(rawContext) {
         String,
         Number,
         Boolean,
+        Array,
     });
     vm.runInContext(source, context, { filename: "permission_context.js" });
     return { permissions: fakeWindow.AlmdinaPermissions, frappe: fakeFrappe };
 }
 
 const loaded = load({
-    version: 1,
+    version: 3,
     profile: "shop_floor",
     capabilities: {
         view_cutting_plan: true,
         upload_dxf: false,
         print_cutting_plan: 1,
     },
+    navigation: {
+        shared_shell: true,
+        app_only: true,
+        profile: "shop_floor",
+        home_page: "shop-floor-inbox",
+        default_route: "/app/shop-floor-inbox",
+        workspaces: ["Shop Floor"],
+        sections: {
+            production: true,
+            costing: false,
+        },
+    },
 });
 
-assert.equal(loaded.permissions.version(), 1);
+assert.equal(loaded.permissions.version(), 3);
 assert.equal(loaded.permissions.profile(), "shop_floor");
 assert.equal(loaded.permissions.can("view_cutting_plan"), true);
 assert.equal(loaded.permissions.can("upload_dxf"), false);
@@ -50,14 +63,23 @@ assert.equal(loaded.permissions.can("unknown"), false);
 assert.equal(loaded.permissions.any("upload_dxf", "view_cutting_plan"), true);
 assert.equal(loaded.permissions.all("view_cutting_plan", "upload_dxf"), false);
 assert.equal(loaded.permissions.all([]), false);
+assert.equal(loaded.permissions.section("production"), true);
+assert.equal(loaded.permissions.section("costing"), false);
+assert.equal(loaded.permissions.home(), "shop-floor-inbox");
+assert.deepEqual(loaded.permissions.workspaces(), ["Shop Floor"]);
+assert.equal(loaded.permissions.navigation().shared_shell, true);
 assert.equal(loaded.frappe.almdina.permissions, loaded.permissions);
 assert.equal(Object.isFrozen(loaded.permissions), true);
 assert.equal(Object.isFrozen(loaded.permissions.snapshot()), true);
 assert.equal(Object.isFrozen(loaded.permissions.snapshot().capabilities), true);
+assert.equal(Object.isFrozen(loaded.permissions.snapshot().navigation), true);
+assert.equal(Object.isFrozen(loaded.permissions.snapshot().navigation.sections), true);
 
 const missing = load(undefined).permissions;
 assert.equal(missing.version(), 0);
-assert.equal(missing.profile(), "full");
+assert.equal(missing.profile(), "shared");
 assert.equal(missing.can("view_cutting_plan"), false);
+assert.equal(missing.section("production"), false);
+assert.equal(missing.home(), "almdina-erp");
 
-console.log("Permission context simulation passed");
+console.log("Permission and navigation context simulation passed");
