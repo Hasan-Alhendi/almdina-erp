@@ -184,7 +184,7 @@
 
     function installActionPermissions(frm) {
         const wrapper = costWrapper(frm);
-        if (!wrapper) return;
+        if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
 
         if (!(can("view_costs") && can("print_customer_invoice"))) {
             wrapper.find(".dco-print-customer-invoice").remove();
@@ -217,11 +217,38 @@
         });
     }
 
+    function installActionsAfterRender(frm) {
+        const wrapper = costWrapper(frm);
+        if (!wrapper || !wrapper[0]) return;
+        if (wrapper.find(".dco-cost-shell").length) {
+            installActionPermissions(frm);
+            return;
+        }
+
+        const identity = documentContext().capture(frm);
+        const observer = new MutationObserver(() => {
+            if (!documentContext().isCurrent(frm, identity)) {
+                observer.disconnect();
+                return;
+            }
+            if (!wrapper.find(".dco-cost-shell").length) return;
+            observer.disconnect();
+            installActionPermissions(frm);
+        });
+        observer.observe(wrapper[0], { childList: true, subtree: true });
+        setTimeout(() => {
+            observer.disconnect();
+            if (documentContext().isCurrent(frm, identity)) {
+                installActionPermissions(frm);
+            }
+        }, 1500);
+    }
+
     function renderAuthorizedCost(frm) {
         if (window.AlmdinaOrderCostUX && window.AlmdinaOrderCostUX.render) {
             window.AlmdinaOrderCostUX.render(frm);
         }
-        setTimeout(() => installActionPermissions(frm), 0);
+        installActionsAfterRender(frm);
     }
 
     function loadCostSnapshot(frm) {
