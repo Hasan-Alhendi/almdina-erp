@@ -66,6 +66,7 @@ doctype_js = {
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order_cost_permissions_ux.js",
+        "public/js/door_cutting_order_financial_documents_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order_save_render_performance_ux.js",
