@@ -9,7 +9,12 @@ from frappe import _
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
+    WORKFORCE_CAPABILITIES,
+    Capability,
     capability_definition,
+)
+from almdina_erp.almdina_erp.domain.security.workforce import (
+    expand_workforce_capabilities,
 )
 
 
@@ -36,6 +41,19 @@ def _permission_type_is_available(capability: str) -> bool:
     )
 
 
+def _raw_doctype_capability(capability: str, user: str) -> bool:
+    definition = capability_definition(capability)
+    if not _permission_type_is_available(capability):
+        return False
+    return bool(
+        frappe.has_permission(
+            definition.applies_to,
+            definition.permission_type,
+            user=user,
+        )
+    )
+
+
 def granted_capabilities(user: str | None = None) -> frozenset[str]:
     """Resolve role assignments through Frappe's Role Permission Manager."""
 
@@ -57,7 +75,7 @@ def granted_capabilities(user: str | None = None) -> frozenset[str]:
             user=resolved_user,
         ):
             granted.add(capability)
-    return frozenset(granted)
+    return expand_workforce_capabilities(granted)
 
 
 def doctype_has_capability(
@@ -65,16 +83,17 @@ def doctype_has_capability(
     *,
     user: str | None = None,
 ) -> bool:
-    definition = capability_definition(capability)
-    if not _permission_type_is_available(capability):
-        return False
-    return bool(
-        frappe.has_permission(
-            definition.applies_to,
-            definition.permission_type,
-            user=user or frappe.session.user,
-        )
-    )
+    resolved_user = user or frappe.session.user
+    if resolved_user == "Administrator":
+        return True
+    if _raw_doctype_capability(capability, resolved_user):
+        return True
+    if (
+        capability in WORKFORCE_CAPABILITIES
+        and capability != Capability.MANAGE_USERS
+    ):
+        return _raw_doctype_capability(Capability.MANAGE_USERS, resolved_user)
+    return False
 
 
 def doctype_has_any_capability(
@@ -128,15 +147,7 @@ def document_has_capability(
     definition = capability_definition(capability)
     if getattr(document, "doctype", None) != definition.applies_to:
         return False
-    if not _permission_type_is_available(capability):
-        return False
-    return bool(
-        frappe.has_permission(
-            document,
-            definition.permission_type,
-            user=user or frappe.session.user,
-        )
-    )
+    return doctype_has_capability(capability, user=user)
 
 
 def document_has_any_capability(
