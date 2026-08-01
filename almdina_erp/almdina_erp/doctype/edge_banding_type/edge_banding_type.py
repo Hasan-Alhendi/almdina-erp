@@ -19,16 +19,24 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_references import
 
 class EdgeBandingType(Document):
     def validate(self) -> None:
-        self._validate_positive_number("thickness_mm", _("Edge thickness"), strictly_positive=True, precision=3)
-        self._validate_positive_number("width_cm", _("Edge width"), strictly_positive=False, precision=3)
-        self._validate_positive_number("rate_usd_per_meter", _("Edge rate"), strictly_positive=False, precision=6)
+        self._validate_thickness()
+        self._validate_non_negative_number("width_cm", _("Edge width"), precision=3)
+        self._validate_non_negative_number("rate_usd_per_meter", _("Edge rate"), precision=6)
 
-    def _validate_positive_number(
+    def _validate_thickness(self) -> None:
+        try:
+            thickness_mm = float(self.thickness_mm or 0)
+        except (TypeError, ValueError) as error:
+            raise frappe.ValidationError(_("Edge thickness must be a valid number.")) from error
+        if not math.isfinite(thickness_mm) or thickness_mm <= 0:
+            frappe.throw(_("Edge thickness must be greater than zero."), frappe.ValidationError)
+        self.thickness_mm = flt(thickness_mm, 3)
+
+    def _validate_non_negative_number(
         self,
         fieldname: str,
         label: str,
         *,
-        strictly_positive: bool,
         precision: int,
     ) -> None:
         raw = self.get(fieldname)
@@ -36,10 +44,8 @@ class EdgeBandingType(Document):
             value = float(raw or 0)
         except (TypeError, ValueError) as error:
             raise frappe.ValidationError(_("{0} must be a valid number.").format(label)) from error
-        invalid = not math.isfinite(value) or value < 0 or (strictly_positive and value <= 0)
-        if invalid:
-            comparison = _("greater than zero") if strictly_positive else _("zero or greater")
-            frappe.throw(_("{0} must be {1}.").format(label, comparison), frappe.ValidationError)
+        if not math.isfinite(value) or value < 0:
+            frappe.throw(_("{0} must be zero or greater.").format(label), frappe.ValidationError)
         self.set(fieldname, flt(value, precision))
 
     def before_trash(self) -> None:
