@@ -9,23 +9,33 @@ HOOKS = ROOT / "hooks.py"
 DOCUMENT_CONTEXT = ROOT / "public" / "js" / "door_cutting_order_document_context.js"
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
-COST_INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
+DOCUMENT_PRINT = (
+    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+)
 
 
 class TestDocumentContextUxContract(unittest.TestCase):
-    def test_document_context_loads_before_every_order_feature(self) -> None:
+    def test_document_context_loads_before_every_active_order_feature(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
         context = '"public/js/door_cutting_order_document_context.js"'
 
         self.assertIn(context, hooks)
         for feature in (
-            '"public/js/door_cutting_order_workflow.js"',
             '"public/js/door_cutting_order_defaults.js"',
-            '"public/js/door_cutting_order_cost_invoice_ux.js"',
+            '"public/js/door_cutting_order_document_print_presenter.js"',
             '"public/js/door_cutting_order_drawing_plan_ux.js"',
+            '"public/js/shop_floor_order_ux.js"',
+            '"public/js/order_lifecycle.js"',
             '"public/js/input_stability.js"',
         ):
             self.assertLess(hooks.index(context), hooks.index(feature))
+
+        for retired in (
+            '"public/js/door_cutting_order_workflow.js"',
+            '"public/js/door_cutting_order_cost_invoice_ux.js"',
+            '"public/js/production_stage.js"',
+        ):
+            self.assertNotIn(retired, hooks)
 
     def test_identity_transition_clears_every_document_owned_html_region(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
@@ -83,13 +93,22 @@ class TestDocumentContextUxContract(unittest.TestCase):
         )
         self.assertIn("if (!stageTypeIsCurrent || !context.isCurrent(frm, identity)) return", source)
 
-    def test_customer_invoice_render_waits_for_the_current_order_only(self) -> None:
-        source = COST_INVOICE.read_text(encoding="utf-8")
+    def test_customer_documents_wait_for_the_current_order_only(self) -> None:
+        source = DOCUMENT_PRINT.read_text(encoding="utf-8")
 
-        self.assertIn("const identity = context.capture(frm)", source)
-        self.assertIn("frm._dco_edge_color_map !== colorMap", source)
-        self.assertIn("if (!context.isCurrent(frm, identity)) return", source)
-        self.assertIn("if (context.isCurrent(frm, identity)) render(frm)", source)
+        self.assertIn("function documentContext()", source)
+        self.assertIn("function captureIdentity(frm)", source)
+        self.assertIn("function isCurrent(frm, identity)", source)
+        self.assertIn("const identity = captureIdentity(frm)", source)
+        self.assertGreaterEqual(
+            source.count("if (!isCurrent(frm, identity)) return false"),
+            2,
+        )
+        self.assertIn("await ensureProfiles(frm)", source)
+        self.assertIn("activeIdentity = captureIdentity(frm)", source)
+        self.assertIn("const frm = activeFrm", source)
+        self.assertIn("const identity = activeIdentity", source)
+        self.assertIn("if (!frm || !isCurrent(frm, identity)) return", source)
 
 
 if __name__ == "__main__":
