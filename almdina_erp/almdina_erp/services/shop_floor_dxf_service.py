@@ -10,7 +10,6 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     DrawingActionState,
     required_upload_capability,
     validate_assigned_drawing_action,
-    validate_plan_source,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
@@ -25,9 +24,6 @@ _POLICY_MESSAGES = {
     "designer_not_assigned": "Assign a designer to this order before using drawing actions.",
     "not_assigned_designer": "Only the designer assigned to this order can perform this drawing action.",
     "plan_already_approved": "This order already has a locked cutting plan.",
-    "unsupported_plan_source": "Unsupported drawing plan source.",
-    "system_plan_missing": "The system cutting plan is not available for approval.",
-    "custom_plan_missing": "Upload and validate a DXF plan before approving it.",
 }
 
 
@@ -219,42 +215,15 @@ def recalculate_drawing_plan(
 @frappe.whitelist()
 def approve_production_dxf(
     order_name: str,
-    plan_source: str = "Custom",
+    plan_source: str = "System",
 ) -> dict[str, Any]:
-    """Approve the selected drawing plan as the assigned designer."""
+    """Compatibility facade for the focused role-managed approval service."""
 
-    order = _get_authorized_order(order_name, Capability.APPROVE_DXF)
-    from almdina_erp.almdina_erp.services.dual_plan_fields import (
-        get_custom_plan_json,
-        get_system_plan_json,
+    from almdina_erp.almdina_erp.services.drawing_approval_service import (
+        approve_production_dxf as approve_drawing_plan,
     )
 
-    try:
-        validated_source = validate_plan_source(
-            plan_source,
-            has_system_plan=bool(
-                get_system_plan_json(order) or order.cutting_plan_json
-            ),
-            has_custom_plan=bool(get_custom_plan_json(order)),
-            has_production_dxf=bool(order.production_dxf),
-        )
-    except DrawingActionDenied as error:
-        _throw_policy_error(error)
-
-    # Transitional adapter: the legacy module still owns immutable plan creation,
-    # while every public drawing approval path is authorized here first.
-    from almdina_erp.almdina_erp.services.cutting_plan_service import (
-        _lock_order_for_production,
-    )
-
-    result = _lock_order_for_production(
-        order,
-        preserve_status=True,
-        plan_source=validated_source,
-    )
-    result["approved_by"] = frappe.session.user
-    result["approved_plan_source"] = validated_source
-    return result
+    return approve_drawing_plan(order_name=order_name, plan_source=plan_source)
 
 
 __all__ = [
