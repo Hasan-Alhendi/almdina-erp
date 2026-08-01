@@ -44,14 +44,15 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
     assert "patchInvoiceMeta" not in source
 
 
-def test_customer_print_uses_single_invoice_renderer_from_cost_tab():
-    cost = _source(ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js")
+def test_financial_documents_use_the_server_document_and_edge_color_does_not_fork_it():
+    financial = _source(ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js")
+    presenter = _source(ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js")
     edge = _source(EDGE_COLOR_UX)
-    assert "function invoiceTotal(frm)" in cost
-    assert "invoiceLines(frm).reduce" in cost
-    assert "board_rate_usd(frm) { scheduleRender(frm); }" in cost
-    assert "cutting_cost_per_board_usd(frm) { scheduleRender(frm); }" in cost
-    assert "printInvoice," in cost
+    assert "get_customer_invoice_document" in financial
+    assert "get_internal_cost_report_document" in financial
+    assert "AlmdinaDocumentPrintPresenter" in financial
+    assert "renderCustomerInvoice" in presenter
+    assert "renderInternalCostReport" in presenter
     assert "function printHtml(frm)" not in edge
     assert "event.stopImmediatePropagation()" not in edge
 
@@ -110,10 +111,13 @@ def test_edge_profile_lists_are_custom_and_scrollable():
     assert 'select = document.createElement("select")' not in controls
 
 
-def test_edge_color_layer_loads_after_invoice_renderer():
+def test_edge_color_layer_loads_after_secure_financial_presenters():
     hooks = HOOKS.read_text(encoding="utf-8")
-    invoice = '"public/js/door_cutting_order_cost_invoice_ux.js"'
+    legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
+    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
     edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
-    assert invoice in hooks
-    assert edge_color in hooks
-    assert hooks.index(invoice) < hooks.index(edge_color)
+    assert legacy not in hooks
+    for script in (presenter, financial, edge_color):
+        assert script in hooks
+    assert hooks.index(presenter) < hooks.index(financial) < hooks.index(edge_color)
