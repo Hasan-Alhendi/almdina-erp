@@ -96,6 +96,7 @@ class TestPermissionTypeIntegration(unittest.TestCase):
                 Capability.APPROVE_DXF: 1,
             }
         ).insert(ignore_permissions=True)
+        frappe.clear_cache(user=user_email)
         frappe.clear_cache(doctype="Door Cutting Order")
 
         try:
@@ -111,6 +112,7 @@ class TestPermissionTypeIntegration(unittest.TestCase):
                 "Custom DocPerm",
                 {"parent": "Door Cutting Order", "role": role_name},
             )
+            frappe.clear_cache(user=user_email)
             frappe.clear_cache(doctype="Door Cutting Order")
 
     def test_permission_type_sync_is_idempotent(self) -> None:
