@@ -62,7 +62,34 @@ def finish_legacy_stage(
     return handoff_to_next(stage_name)
 
 
+@frappe.whitelist()
+def cancel_legacy_replacement(
+    replacement_name: str,
+    reason: str | None = None,
+    reverse_stock: int | bool = 0,
+    cancel_with_order: int | bool = 0,
+) -> dict[str, Any]:
+    """Keep cancellation while refusing obsolete inventory reversal behavior."""
+
+    if int(reverse_stock or 0):
+        frappe.throw(
+            _(
+                "Stock reversal is unavailable because inventory is outside "
+                "the active Almdina product scope."
+            )
+        )
+
+    from almdina_erp.almdina_erp.services.replacement_service import (
+        cancel_replacement,
+    )
+
+    result = cancel_replacement(replacement_name, reason=reason)
+    result["cancel_with_order"] = bool(int(cancel_with_order or 0))
+    return result
+
+
 __all__ = [
+    "cancel_legacy_replacement",
     "finish_legacy_stage",
     "reject_legacy_role_gate",
     "retired_product_endpoint",
