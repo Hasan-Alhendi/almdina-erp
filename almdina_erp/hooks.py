@@ -140,12 +140,18 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
     "almdina_erp.almdina_erp.services.actual_consumption_service.record_actual_consumption":
         "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.order_creation_service.create_door_cutting_order":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.order_creation_service.get_new_order_defaults":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
     "almdina_erp.almdina_erp.services.performance_service.benchmark_order_cutting_engine":
         "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
     "almdina_erp.almdina_erp.services.preflight_service.run_factory_preflight":
         "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
     "almdina_erp.almdina_erp.services.remnant_service.generate_order_remnants":
         "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "almdina_erp.almdina_erp.services.replacement_cancellation_service.cancel_replacement":
+        "almdina_erp.almdina_erp.services.legacy_endpoint_service.cancel_legacy_replacement",
     "almdina_erp.almdina_erp.services.settings_access_service.get_stock_settings":
         "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
     "almdina_erp.almdina_erp.services.settings_access_service.update_stock_settings":
