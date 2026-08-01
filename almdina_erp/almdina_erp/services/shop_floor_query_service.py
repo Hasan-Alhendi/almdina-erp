@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 
 from almdina_erp.almdina_erp.application.shop_floor import queries
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
+from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_query_repository import (
     FrappeShopFloorQueryRepository,
 )
@@ -30,14 +30,19 @@ def _execute(function: Callable[..., _Result], *args: Any) -> _Result:
 
 
 @frappe.whitelist()
+def get_shop_floor_context() -> dict[str, Any]:
+    return _execute(queries.get_shop_floor_context)
+
+
+@frappe.whitelist()
 def get_dispatch_options(order_name: str) -> dict[str, Any]:
     result = _execute(queries.get_dispatch_options, order_name)
     for path in result["paths"]:
         first_stage_type = path.pop("first_stage_type")
         path["label"] = _(path["label"])
-        path["department"] = shop_floor_authorization.STAGE_ROLE_BY_TYPE[
-            first_stage_type
-        ]
+        path["department"] = _(
+            department_for_stage_type(first_stage_type) or first_stage_type
+        )
     return result
 
 
@@ -73,6 +78,7 @@ def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
             ),
             "can_reassign_worker": stage_snapshot.get("can_reassign_worker"),
             "production_actions": stage_snapshot.get("production_actions") or {},
+            "document_capabilities": result.get("document_capabilities") or {},
         }
     )
     return payload
@@ -84,4 +90,5 @@ __all__ = [
     "get_my_inbox",
     "get_order_shop_floor_detail",
     "get_revert_targets",
+    "get_shop_floor_context",
 ]
