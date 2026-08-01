@@ -96,10 +96,15 @@ def _filter_apps(bootinfo: dict[str, Any]) -> None:
 def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
     context = _context()
     navigation = context["navigation"]
-    allowed = set(navigation.get("workspaces") or ())
 
+    # Permission flags are safe to expose to every session. Navigation changes
+    # are applied only when the user owns at least one Almdina capability.
     bootinfo["almdina_permissions"] = context
     bootinfo["almdina_navigation"] = navigation
+    if not navigation.get("shared_shell"):
+        return
+
+    allowed = set(navigation.get("workspaces") or ())
     bootinfo["almdina_shared_shell"] = 1
     bootinfo["almdina_allowed_apps"] = [ALMDINA_APP]
     bootinfo["home_page"] = navigation["home_page"]
