@@ -9,6 +9,12 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_status_for_stage_status,
     next_stage_type,
 )
+from almdina_erp.almdina_erp.domain.orders.production_authorization import (
+    ProductionActionFacts,
+    build_production_action_context,
+    decide_production_action,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 class ShopFloorQueryError(ValueError):
@@ -23,6 +29,8 @@ class ShopFloorQueryPort(Protocol):
     def current_user(self) -> str: ...
 
     def is_admin(self) -> bool: ...
+
+    def capabilities_for_order(self, order: Any) -> frozenset[str]: ...
 
     def list_inbox_stages(self, *, user: str, is_admin: bool) -> list[Any]: ...
 
@@ -55,6 +63,13 @@ def _value(row: Any, fieldname: str, default: Any = None) -> Any:
     if isinstance(row, Mapping):
         return row.get(fieldname, default)
     return getattr(row, fieldname, default)
+
+
+def _as_bool(value: Any) -> bool:
+    try:
+        return bool(int(value or 0))
+    except (TypeError, ValueError):
+        return bool(value)
 
 
 def _filter_active_stages(
@@ -145,7 +160,51 @@ def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     return _enrich_stage_rows(repository, stages)
 
 
-def get_dispatch_options(repository: ShopFloorQueryPort) -> dict[str, Any]:
+def _production_facts(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    stage: Any | None = None,
+) -> ProductionActionFacts:
+    return ProductionActionFacts(
+        order_status=_value(order, "status"),
+        production_path=_value(order, "production_path"),
+        current_stage_name=_value(order, "current_production_stage"),
+        has_cutting_plan=bool(_value(order, "cutting_plan_json")),
+        plan_needs_recalculation=_as_bool(_value(order, "plan_needs_recalculation")),
+        stage_name=_value(stage, "name") if stage else None,
+        stage_type=_value(stage, "stage_type") if stage else None,
+        stage_status=_value(stage, "status") if stage else None,
+        assigned_to=_value(stage, "assigned_to") if stage else None,
+        actor=repository.current_user(),
+        drawing_dxf_status=_value(order, "drawing_dxf_status"),
+    )
+
+
+def _assert_query_action(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    action: str,
+    *,
+    stage: Any | None = None,
+) -> None:
+    decision = decide_production_action(
+        action,
+        capabilities=repository.capabilities_for_order(order),
+        facts=_production_facts(repository, order, stage),
+    )
+    if decision.allowed:
+        return
+    if decision.code == "missing_capability":
+        raise ShopFloorPermissionDenied(decision.reason)
+    raise ShopFloorQueryError(decision.reason)
+
+
+def get_dispatch_options(
+    repository: ShopFloorQueryPort,
+    order_name: str,
+) -> dict[str, Any]:
+    order = repository.get_order(order_name)
+    _assert_query_action(repository, order, Capability.DISPATCH_ORDER)
     return {
         "paths": [
             {
@@ -170,8 +229,8 @@ def get_revert_targets(
     repository: ShopFloorQueryPort,
     order_name: str,
 ) -> list[dict[str, Any]]:
-    if repository.get_order_status(order_name) == "Delivered":
-        return []
+    order = repository.get_order(order_name)
+    _assert_query_action(repository, order, Capability.REVERT_DEPARTMENT)
     targets: list[dict[str, Any]] = []
     seen: set[str] = set()
     for row in repository.list_revert_stages(order_name):
@@ -197,25 +256,24 @@ def _active_stage_snapshot(
     order: Any,
 ) -> dict[str, Any]:
     stage_name = _value(order, "current_production_stage")
-    if not stage_name:
-        return {
-            "active_stage_name": None,
-            "active_stage_status": None,
-            "active_stage_type": None,
-            "can_start_stage": False,
-            "can_handoff_stage": False,
-            "can_handoff_to": None,
-        }
-    stage = repository.get_stage_summary(str(stage_name))
+    stage = repository.get_stage_summary(str(stage_name)) if stage_name else None
+    actions = build_production_action_context(
+        capabilities=repository.capabilities_for_order(order),
+        facts=_production_facts(repository, order, stage),
+    )
     if not stage:
         return {
             "active_stage_name": stage_name,
             "active_stage_status": None,
             "active_stage_type": None,
+            "active_stage_assigned_to": None,
             "can_start_stage": False,
             "can_handoff_stage": False,
+            "can_reassign_worker": False,
             "can_handoff_to": None,
+            "production_actions": actions,
         }
+
     stage_status = str(_value(stage, "status") or "")
     stage_type = str(_value(stage, "stage_type") or "")
     production_path = _value(order, "production_path")
@@ -229,9 +287,16 @@ def _active_stage_snapshot(
         "active_stage_name": _value(stage, "name"),
         "active_stage_status": stage_status,
         "active_stage_type": stage_type,
-        "can_start_stage": stage_status == "Pending",
-        "can_handoff_stage": stage_status in {"In Progress", "Paused"},
+        "active_stage_assigned_to": _value(stage, "assigned_to"),
+        "can_start_stage": bool(
+            actions[Capability.START_ASSIGNED_STAGE]["allowed"]
+        ),
+        "can_handoff_stage": bool(
+            actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]
+        ),
+        "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),
         "can_handoff_to": can_handoff_to,
+        "production_actions": actions,
     }
 
 
