@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ PERMISSION_SERVICE = SERVICES / "permission_management_service.py"
 PERMISSION_PAGE = PAGES / "factory_permissions" / "factory_permissions.js"
 SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
+TEMPLATE_POLICY = APP / "application" / "security" / "permission_templates.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
 
@@ -34,14 +36,38 @@ def _active_authorization_sources() -> list[Path]:
     return [path for path in paths if path.name != "shop_floor_service.py"]
 
 
+def _function_calls(source: str, function_name: str) -> set[str]:
+    tree = ast.parse(source)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == function_name
+    )
+    calls: set[str] = set()
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            calls.add(node.func.id)
+        elif isinstance(node.func, ast.Attribute):
+            calls.add(node.func.attr)
+    return calls
+
+
 class TestFinalSecurityArchitecture(unittest.TestCase):
     def test_active_services_and_ui_have_no_fixed_business_role_gates(self) -> None:
         offenders: list[str] = []
-        for path in _active_authorization_sources():
+        for path in sorted(SERVICES.glob("*.py")):
+            if path.name == "shop_floor_service.py":
+                continue
             source = path.read_text(encoding="utf-8")
             for role in _FIXED_BUSINESS_ROLES:
                 if role in source:
                     offenders.append(f"{path.relative_to(ROOT)}: fixed role {role}")
+
+        for path in _active_authorization_sources():
+            source = path.read_text(encoding="utf-8")
             for pattern in (
                 r"frappe\.get_roles\(",
                 r"frappe\.user_roles",
@@ -78,14 +104,16 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "preview_permission_import",
             "update_role_permissions",
         ):
-            function = service.split(f"def {endpoint}", 1)[1].split("\n\n", 1)[0]
-            self.assertIn("_require_permission_management()", function)
+            self.assertIn(
+                "_require_permission_management",
+                _function_calls(service, endpoint),
+            )
         self.assertNotIn("import_role_permissions", service)
         self.assertIn("preview_permission_template", page)
         self.assertIn("preview_permission_import", page)
         self.assertIn("export_role_permissions", page)
         self.assertIn("لن يتم الحفظ تلقائيًا", page)
-        self.assertIn("Checksum", (APP / "application" / "security" / "permission_templates.py").read_text(encoding="utf-8").replace("checksum", "Checksum"))
+        self.assertIn("checksum", TEMPLATE_POLICY.read_text(encoding="utf-8"))
         self.assertNotIn("frappe.user_roles", page)
 
     def test_rollout_checklist_covers_backup_validation_and_rollback(self) -> None:
