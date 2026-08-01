@@ -33,6 +33,8 @@ def test_customer_document_model_never_contains_internal_report_sections() -> No
     assert '"operations"' not in customer
     assert '"special_prices"' not in customer
     assert '"classification"' not in customer
+    assert '"عدد الدرف"' in customer
+    assert '"عدد الألواح"' not in customer
 
 
 def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
@@ -63,6 +65,17 @@ def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
     assert "MutationObserver" in source
     assert "__almdina_financial_observer.disconnect()" in source
     assert "root.find(`.${CUSTOMER_CLASS},.${INTERNAL_CLASS}`).remove()" not in source
+
+
+def test_customer_and_internal_reports_use_distinct_print_layouts() -> None:
+    source = UX_PATH.read_text(encoding="utf-8")
+    assert '@page{size:A4 ${internal ? "landscape" : "portrait"}' in source
+    assert "financial-summary.customer" in source
+    assert "financial-summary.internal" in source
+    measurements = source.split("function measurementsHtml", 1)[1].split(
+        "function invoiceLinesHtml", 1
+    )[0]
+    assert "متر القشاط" not in measurements
 
 
 def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:
