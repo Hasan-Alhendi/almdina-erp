@@ -1,11 +1,45 @@
 (() => {
     "use strict";
 
+    const EMPTY_NAVIGATION = Object.freeze({
+        shared_shell: true,
+        app_only: false,
+        profile: "shared",
+        home_page: "almdina-erp",
+        default_route: "/app/almdina-erp",
+        workspaces: Object.freeze([]),
+        sections: Object.freeze({}),
+    });
+
     const EMPTY_CONTEXT = Object.freeze({
         version: 0,
-        profile: "full",
+        profile: "shared",
         capabilities: Object.freeze({}),
+        navigation: EMPTY_NAVIGATION,
     });
+
+    function normalizeNavigation(raw) {
+        if (!raw || typeof raw !== "object") return EMPTY_NAVIGATION;
+        const sections = {};
+        const sourceSections = raw.sections;
+        if (sourceSections && typeof sourceSections === "object") {
+            Object.keys(sourceSections).forEach(section => {
+                sections[String(section)] = sourceSections[section] === true;
+            });
+        }
+        const workspaces = Array.isArray(raw.workspaces)
+            ? raw.workspaces.map(value => String(value || "")).filter(Boolean)
+            : [];
+        return Object.freeze({
+            shared_shell: raw.shared_shell !== false,
+            app_only: raw.app_only === true,
+            profile: String(raw.profile || "shared"),
+            home_page: String(raw.home_page || "almdina-erp"),
+            default_route: String(raw.default_route || "/app/almdina-erp"),
+            workspaces: Object.freeze(workspaces),
+            sections: Object.freeze(sections),
+        });
+    }
 
     function normalize(raw) {
         if (!raw || typeof raw !== "object") return EMPTY_CONTEXT;
@@ -17,11 +51,13 @@
                 capabilities[String(capability)] = source[capability] === true;
             });
         }
+        const navigation = normalizeNavigation(raw.navigation);
 
         return Object.freeze({
             version: Number.isFinite(Number(raw.version)) ? Number(raw.version) : 0,
-            profile: String(raw.profile || "full"),
+            profile: String(raw.profile || navigation.profile || "shared"),
             capabilities: Object.freeze(capabilities),
+            navigation,
         });
     }
 
@@ -42,8 +78,20 @@
             const requested = requestedCapabilities(capabilities);
             return requested.length > 0 && requested.every(capability => this.can(capability));
         },
+        section(sectionName) {
+            return context.navigation.sections[String(sectionName || "")] === true;
+        },
         profile() {
             return context.profile;
+        },
+        navigation() {
+            return context.navigation;
+        },
+        home() {
+            return context.navigation.home_page;
+        },
+        workspaces() {
+            return context.navigation.workspaces.slice();
         },
         version() {
             return context.version;
