@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.domain.replacements.replacement_authorization impor
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
     document_has_capability,
     require_document_capability,
 )
@@ -55,7 +56,11 @@ def replacement_action_context(replacement: Any) -> dict[str, Any]:
         "replacement_name": replacement.name,
         "order_name": replacement.door_cutting_order,
         "status": replacement.status,
-        "cutting_plan": replacement.cutting_plan,
+        "cutting_plan": (
+            replacement.cutting_plan
+            if doctype_has_capability(Capability.VIEW_CUTTING_PLAN)
+            else None
+        ),
         "actions": actions,
     }
 
@@ -72,7 +77,11 @@ def require_replacement_action(
     )
     if decision.allowed:
         return
-    exception = frappe.PermissionError if decision.code == "missing_capability" else frappe.ValidationError
+    exception = (
+        frappe.PermissionError
+        if decision.code == "missing_capability"
+        else frappe.ValidationError
+    )
     frappe.throw(_(decision.reason), exception)
 
 
