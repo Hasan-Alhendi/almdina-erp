@@ -6,19 +6,31 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_doctype_capability,
+)
 from almdina_erp.almdina_erp.services.cutting_engine import PACKING_OPTIONS
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
+
+
+def _require_factory_settings() -> None:
+    require_doctype_capability(
+        Capability.MANAGE_FACTORY_SETTINGS,
+        message=_("You do not have permission to manage factory settings."),
+    )
 
 
 @frappe.whitelist()
 def get_production_settings() -> dict[str, Any]:
-    require_any_role("Production Manager")
+    _require_factory_settings()
     settings = frappe.get_single("Almdina ERP Settings")
     return {
         "default_production_routing": settings.default_production_routing,
         "default_kerf_mm": flt(settings.default_kerf_mm),
         "default_trim_margin_mm": flt(settings.default_trim_margin_mm),
-        "default_cutting_cost_per_board_usd": flt(settings.default_cutting_cost_per_board_usd),
+        "default_cutting_cost_per_board_usd": flt(
+            settings.default_cutting_cost_per_board_usd
+        ),
         "default_packing_mode": settings.default_packing_mode or "Auto",
         "packing_options": list(PACKING_OPTIONS),
         "allow_stage_override": int(settings.allow_stage_override or 0),
@@ -27,7 +39,7 @@ def get_production_settings() -> dict[str, Any]:
 
 @frappe.whitelist()
 def update_production_settings(values: str | dict[str, Any]) -> dict[str, Any]:
-    require_any_role("Production Manager")
+    _require_factory_settings()
     payload = frappe.parse_json(values) if isinstance(values, str) else dict(values or {})
     settings = frappe.get_single("Almdina ERP Settings")
 
@@ -71,3 +83,6 @@ def update_production_settings(values: str | dict[str, Any]) -> dict[str, Any]:
         text=_("Production defaults updated by {0}.").format(frappe.session.user),
     )
     return get_production_settings()
+
+
+__all__ = ["get_production_settings", "update_production_settings"]
