@@ -41,6 +41,7 @@ def test_boot_exposes_capability_navigation_without_roles() -> None:
     assert 'bootinfo["almdina_permissions"]' in source
     assert 'bootinfo["almdina_navigation"]' in source
     assert 'bootinfo["almdina_shared_shell"]' in source
+    assert 'if not navigation.get("shared_shell")' in source
     assert "frappe.get_roles" not in source
     for legacy in ("almdina_shop_floor_only", "almdina_order_entry_only"):
         assert legacy not in source
@@ -52,6 +53,7 @@ def test_frontend_permission_api_is_boot_backed_and_fail_closed() -> None:
     assert "window.AlmdinaPermissions" in source
     assert "navigation()" in source
     assert "section(sectionName)" in source
+    assert 'shared_shell: false' in source
     assert '=== true' in source
     assert "frappe.user_roles" not in source
 
@@ -61,6 +63,7 @@ def test_shared_shell_keeps_desk_and_uses_navigation_context() -> None:
     assert "AlmdinaPermissions" in source
     assert "navigation()" in source
     assert "shared_shell" in source
+    assert "!nav.shared_shell || !nav.home_page || !routeIsRoot()" in source
     assert "frappe.user_roles" not in source
     assert "frappe.set_route =" not in source
     assert "MutationObserver" not in source
