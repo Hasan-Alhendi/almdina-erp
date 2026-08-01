@@ -39,46 +39,50 @@ def test_shape_output_contract_is_pure_immutable_and_version_aware():
     assert "dxfPoints" in source
 
 
-def test_contract_loads_before_all_shape_output_consumers():
+def test_contract_loads_before_all_active_shape_output_consumers():
     hooks = _source(HOOKS)
     geometry = '"/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js"'
     contract = '"/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js"'
     secure_dxf = '"/assets/almdina_erp/js/secure_dxf_export.js"'
 
     assert hooks.index(geometry) < hooks.index(contract) < hooks.index(secure_dxf)
-    for consumer in (
+    active_consumers = (
         '"public/js/door_cutting_order_cutting_plan_renderer.js"',
-        '"public/js/door_cutting_order_workflow.js"',
         '"public/js/door_cutting_order_shape_print.js"',
         '"public/js/door_cutting_order_operator_ux.js"',
         '"public/js/door_cutting_order_special_shape_ux.js"',
         '"public/js/door_cutting_order_table_performance_ux.js"',
         '"public/js/door_cutting_order_measurement_actions_ux.js"',
-        '"public/js/door_cutting_order_cost_invoice_ux.js"',
-    ):
+        '"public/js/door_cutting_order_document_print_presenter.js"',
+    )
+    for consumer in active_consumers:
+        assert consumer in hooks
         assert hooks.index(contract) < hooks.index(consumer)
+    assert '"public/js/door_cutting_order_workflow.js"' not in hooks
+    assert '"public/js/door_cutting_order_cost_invoice_ux.js"' not in hooks
 
 
-def test_order_form_boots_shape_dependencies_from_formmeta_before_consumers():
+def test_order_form_boots_shape_dependencies_from_formmeta_before_active_consumers():
     hooks = runpy.run_path(str(HOOKS))
     scripts = hooks["doctype_js"]["Door Cutting Order"]
     geometry = "public/js/door_cutting_order_special_shape_geometry.js"
     contract = "public/js/door_cutting_order_shape_output_contract.js"
     consumers = (
         "public/js/door_cutting_order_cutting_plan_renderer.js",
-        "public/js/door_cutting_order_workflow.js",
         "public/js/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
-        "public/js/door_cutting_order_cost_invoice_ux.js",
+        "public/js/door_cutting_order_document_print_presenter.js",
     )
 
     assert geometry in scripts
     assert contract in scripts
     assert scripts.index(geometry) < scripts.index(contract)
     assert scripts.index(contract) < min(scripts.index(item) for item in consumers)
+    assert "public/js/door_cutting_order_workflow.js" not in scripts
+    assert "public/js/door_cutting_order_cost_invoice_ux.js" not in scripts
 
 
 def test_special_shape_button_resolves_the_editor_at_click_time():
