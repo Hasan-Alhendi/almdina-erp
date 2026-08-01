@@ -25,8 +25,9 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         scripts = hooks["doctype_js"]["Door Cutting Order"]
 
         shape = scripts.index("public/js/door_cutting_order_shape_print.js")
-        costing = scripts.index("public/js/door_cutting_order_cost_invoice_ux.js")
-        theme = scripts.index("public/js/door_cutting_order_document_print_theme.js")
+        theme = scripts.index(
+            "public/js/door_cutting_order_document_print_theme.js"
+        )
         presenter = scripts.index(
             "public/js/door_cutting_order_document_print_presenter.js"
         )
@@ -34,10 +35,13 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             "public/js/door_cutting_order_multi_edge_documents_ux.js"
         )
 
-        self.assertLess(shape, costing)
-        self.assertLess(costing, theme)
+        self.assertLess(shape, theme)
         self.assertLess(theme, presenter)
         self.assertLess(presenter, documents)
+        self.assertNotIn(
+            "public/js/door_cutting_order_cost_invoice_ux.js",
+            scripts,
+        )
         self.assertNotIn(
             "public/js/door_cutting_order_measurement_print_presenter.js",
             scripts,
@@ -59,7 +63,10 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             source,
         )
         self.assertIn("القشاط المخصص", source)
-        self.assertIn('if (note.includes("من القشاط الافتراضي")) return ""', source)
+        self.assertIn(
+            'if (note.includes("من القشاط الافتراضي")) return ""',
+            source,
+        )
         self.assertNotIn("rate_usd_per_meter *", source)
         self.assertNotIn("width_cm *", source)
 
@@ -72,7 +79,9 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("function documentHtml(frm, mode)", source)
         self.assertIn('mode === "invoice" ? invoiceSummary(frm) : ""', source)
         self.assertIn('mode === "invoice" ? invoiceLines(frm) : []', source)
-        self.assertIn('event.target.closest(".dco-print-customer-invoice")', source)
+        self.assertIn(
+            'event.target.closest(".dco-print-customer-invoice")', source
+        )
         self.assertIn(
             'event.target.closest(".dco-print-measurements,.dco-entry-window-print")',
             source,
@@ -86,14 +95,24 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         source = THEME_PATH.read_text(encoding="utf-8")
 
         self.assertIn('@page{size:A4 portrait;margin:${pageMargin}}', source)
-        self.assertIn('const bodySize = measurements ? "8.1pt" : "8.5pt"', source)
-        self.assertIn('const tableSize = measurements ? "7.65pt" : "8.05pt"', source)
-        self.assertIn('const rowPadding = measurements ? "1.05mm 1.1mm"', source)
-        self.assertIn("grid-template-columns:repeat(6,minmax(0,1fr))", source)
+        self.assertIn(
+            'const bodySize = measurements ? "8.1pt" : "8.5pt"', source
+        )
+        self.assertIn(
+            'const tableSize = measurements ? "7.65pt" : "8.05pt"', source
+        )
+        self.assertIn(
+            'const rowPadding = measurements ? "1.05mm 1.1mm"', source
+        )
+        self.assertIn(
+            "grid-template-columns:repeat(6,minmax(0,1fr))", source
+        )
         self.assertIn("table-layout:fixed", source)
         self.assertIn("display:table-header-group", source)
         self.assertIn("break-inside:avoid", source)
-        self.assertIn('const sketchHeight = measurements ? "27mm" : "31mm"', source)
+        self.assertIn(
+            'const sketchHeight = measurements ? "27mm" : "31mm"', source
+        )
         self.assertNotIn("body{font-size:7.4px", source)
 
     def test_printed_drawing_notes_respect_font_size_and_have_no_box(self) -> None:
