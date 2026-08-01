@@ -14,6 +14,7 @@ class Capability:
     CREATE_ORDER_REVISION = "create_order_revision"
     SUBMIT_ORDER = "submit_order"
     APPROVE_ORDER = "approve_order"
+    CANCEL_ORDER = "cancel_order"
 
     # Costing and customer documents
     VIEW_COSTS = "view_costs"
@@ -76,6 +77,7 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.CREATE_ORDER_REVISION, Capability.CREATE_ORDER_REVISION, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.SUBMIT_ORDER, Capability.SUBMIT_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.APPROVE_ORDER, Capability.APPROVE_ORDER, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.CANCEL_ORDER, Capability.CANCEL_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.VIEW_COSTS, Capability.VIEW_COSTS, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
