@@ -85,6 +85,12 @@ class TestPermissionTypeIntegration(unittest.TestCase):
             Capability.APPROVE_ORDER,
             Capability.CANCEL_ORDER,
             Capability.RETURN_ORDER_TO_DRAFT,
+            Capability.DISPATCH_ORDER,
+            Capability.START_ASSIGNED_STAGE,
+            Capability.HANDOFF_ASSIGNED_STAGE,
+            Capability.REVERT_DEPARTMENT,
+            Capability.MARK_DELIVERED,
+            Capability.REASSIGN_WORKER,
             Capability.RECALCULATE_PLAN,
             Capability.EXPORT_DXF,
             Capability.UPLOAD_DXF,
@@ -140,6 +146,19 @@ class TestPermissionTypeIntegration(unittest.TestCase):
             Capability.RETURN_ORDER_TO_DRAFT,
             "ReturnOrder",
         )
+
+    def test_administrator_can_grant_production_actions_to_any_role(self) -> None:
+        grants = (
+            (Capability.DISPATCH_ORDER, "DispatchOrder"),
+            (Capability.START_ASSIGNED_STAGE, "StartStage"),
+            (Capability.HANDOFF_ASSIGNED_STAGE, "HandoffStage"),
+            (Capability.REVERT_DEPARTMENT, "RevertDepartment"),
+            (Capability.MARK_DELIVERED, "MarkDelivered"),
+            (Capability.REASSIGN_WORKER, "ReassignWorker"),
+        )
+        for permission_type, suffix in grants:
+            with self.subTest(permission_type=permission_type):
+                self._assert_arbitrary_role_grant(permission_type, suffix)
 
     def test_permission_type_sync_is_idempotent(self) -> None:
         before = frappe.db.count("Permission Type")
