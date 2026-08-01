@@ -182,6 +182,15 @@ def decide_workforce_action(
             "outside_scope",
             "This account is outside the Almdina workforce scope.",
         )
+    if (
+        action == WorkforceAction.ASSIGN_PROFILE
+        and facts.active_assignments > 0
+    ):
+        return WorkforceDecision(
+            False,
+            "active_assignments",
+            "Reassign the user's active production stages before changing the operational profile.",
+        )
     if action == WorkforceAction.DISABLE:
         if facts.target_user == facts.actor:
             return WorkforceDecision(
