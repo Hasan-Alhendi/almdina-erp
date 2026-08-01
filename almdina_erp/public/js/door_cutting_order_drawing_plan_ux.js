@@ -67,9 +67,8 @@
 		return frappe.db
 			.get_value("Production Stage", requestedStage, "stage_type")
 			.then((response) => {
-				if (!context.isCurrent(frm, identity) || frm.doc.current_production_stage !== requestedStage) {
-					return false;
-				}
+				if (!context.isCurrent(frm, identity)) return false;
+				if (frm.doc.current_production_stage !== requestedStage) return false;
 				frm.__almdina_stage_type = (response.message && response.message.stage_type) || null;
 				return true;
 			})
@@ -127,17 +126,21 @@
 			</div>`;
 	}
 
+	function recalculationArgs(orderName, detail, packingMode) {
+		return {
+			order_name: orderName,
+			packing_mode: packingMode || (detail && detail.packing_mode) || "Auto Pro",
+			cutting_machine_type: detail && detail.cutting_machine_type,
+			kerf_mm: detail && detail.kerf_mm,
+			trim_margin_mm: detail && detail.trim_margin_mm,
+		};
+	}
+
 	function recalcOrder(orderName, detail, packingMode, onSuccess) {
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
-				args: {
-					order_name: orderName,
-					packing_mode: packingMode || (detail && detail.packing_mode) || "Auto Pro",
-					cutting_machine_type: detail && detail.cutting_machine_type,
-					kerf_mm: detail && detail.kerf_mm,
-					trim_margin_mm: detail && detail.trim_margin_mm,
-				},
+				args: recalculationArgs(orderName, detail, packingMode),
 				freeze: true,
 				freeze_message: __("جاري حساب خطة القص..."),
 			})
@@ -150,12 +153,39 @@
 			});
 	}
 
-	function bindPanel(root, orderName, detail, onSuccess) {
+	function recalcCurrentOrder(frm, packingMode) {
+		const context = documentContext();
+		const identity = context.capture(frm);
+		const orderName = frm.doc.name;
+		return frappe
+			.call({
+				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
+				args: recalculationArgs(orderName, frm.doc, packingMode),
+				freeze: true,
+				freeze_message: __("جاري حساب خطة القص..."),
+			})
+			.then((r) => {
+				if (!context.isCurrent(frm, identity)) return r.message;
+				frappe.show_alert({ message: __("تم تحديث خطة النظام."), indicator: "green" });
+				return frm.reload_doc().then(() => r.message);
+			});
+	}
+
+	function bindInboxPanel(root, orderName, detail, onSuccess) {
 		root.find("[data-drawing-recalc]").on("click", () =>
 			recalcOrder(orderName, detail, root.find("[data-drawing-mode]").val(), onSuccess)
 		);
 		root.find("[data-drawing-mode-btn]").on("click", function selectMode() {
 			recalcOrder(orderName, detail, $(this).attr("data-drawing-mode-btn"), onSuccess);
+		});
+	}
+
+	function bindFormPanel(root, frm) {
+		root.find("[data-drawing-recalc]").on("click", () =>
+			recalcCurrentOrder(frm, root.find("[data-drawing-mode]").val())
+		);
+		root.find("[data-drawing-mode-btn]").on("click", function selectMode() {
+			recalcCurrentOrder(frm, $(this).attr("data-drawing-mode-btn"));
 		});
 	}
 
@@ -166,7 +196,7 @@
 		}
 		const plan = parsePlan(detail.system_plan_json);
 		host.html(buildDrawingPanelHtml(plan, detail.packing_mode || "Auto Pro"));
-		bindPanel(host, meta.order, detail, onSuccess);
+		bindInboxPanel(host, meta.order, detail, onSuccess);
 	}
 
 	function renderPanel(frm, host) {
@@ -187,7 +217,7 @@
 			if (existing.length) existing.replaceWith($(html));
 			else root.prepend(html);
 		}
-		bindPanel(root.find(".dco-drawing-plan-panel"), frm.doc.name, frm.doc, () => frm.reload_doc());
+		bindFormPanel(root.find(".dco-drawing-plan-panel"), frm);
 	}
 
 	function refreshPlanView(frm) {
@@ -221,8 +251,9 @@
 		refresh(frm) {
 			const context = documentContext();
 			const identity = context.capture(frm);
-			ensureStageType(frm).then((current) => {
-				if (!current || !context.isCurrent(frm, identity) || !canUseDrawingOptimizer(frm)) return;
+			ensureStageType(frm).then((stageTypeIsCurrent) => {
+				if (!stageTypeIsCurrent || !context.isCurrent(frm, identity)) return;
+				if (!canUseDrawingOptimizer(frm)) return;
 				if (window.AlmdinaPlanTabsUX && window.AlmdinaPlanTabsUX.shouldShowPlanTabs(frm)) {
 					window.AlmdinaPlanTabsUX.renderDualTabs(frm);
 					return;
