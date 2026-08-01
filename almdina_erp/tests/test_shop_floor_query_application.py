@@ -5,9 +5,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.shop_floor import queries
-from almdina_erp.almdina_erp.domain.orders.production_authorization import (
-    PRODUCTION_ACTIONS,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
@@ -15,7 +12,8 @@ class FakeRepository:
     def __init__(self) -> None:
         self.user = "drawing@example.com"
         self.admin = False
-        self.capabilities = set(PRODUCTION_ACTIONS)
+        self.capabilities = set(queries.SHOP_FLOOR_DETAIL_CAPABILITIES)
+        self.global_grants = set(self.capabilities)
         self.inbox: list[Any] = []
         self.archive: list[Any] = []
         self.current: dict[str, str | None] = {}
@@ -30,6 +28,17 @@ class FakeRepository:
 
     def current_user(self) -> str:
         return self.user
+
+    def session_identity(self) -> dict[str, Any]:
+        return {
+            "user": self.user,
+            "full_name": "Drawing Worker",
+            "departments": ["رسم"],
+            "roles": ["must-not-leak"],
+        }
+
+    def global_capabilities(self) -> frozenset[str]:
+        return frozenset(self.global_grants)
 
     def is_admin(self) -> bool:
         return self.admin
@@ -79,6 +88,19 @@ class FakeRepository:
 
 
 class TestShopFloorQueryApplication(unittest.TestCase):
+    def test_session_context_is_capability_driven_and_does_not_expose_roles(self) -> None:
+        repository = FakeRepository()
+        context = queries.get_shop_floor_context(repository)
+        self.assertEqual(context["identity"]["user"], repository.user)
+        self.assertEqual(context["identity"]["departments"], ["رسم"])
+        self.assertNotIn("roles", context["identity"])
+        self.assertTrue(context["navigation"]["shared_shell"])
+        self.assertTrue(context["capabilities"][Capability.START_ASSIGNED_STAGE])
+
+        repository.global_grants.clear()
+        with self.assertRaises(queries.ShopFloorPermissionDenied):
+            queries.get_shop_floor_context(repository)
+
     def test_inbox_filters_stale_rows_and_enriches_current_stage(self) -> None:
         repository = FakeRepository()
         repository.inbox = [
@@ -116,13 +138,18 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual(rows[0]["department_label"], "رسم")
         self.assertEqual(repository.last_inbox_args, (repository.user, False))
 
-    def test_guest_and_unassigned_order_are_rejected(self) -> None:
+    def test_guest_ungranted_and_unassigned_order_are_rejected(self) -> None:
         repository = FakeRepository()
         repository.user = "Guest"
         with self.assertRaises(queries.ShopFloorPermissionDenied):
             queries.get_my_inbox(repository)
 
         repository.user = "worker@example.com"
+        repository.global_grants.clear()
+        with self.assertRaises(queries.ShopFloorPermissionDenied):
+            queries.get_my_inbox(repository)
+
+        repository.global_grants = {Capability.START_ASSIGNED_STAGE}
         repository.order = SimpleNamespace(name="DCO-1")
         repository.can_view = False
         with self.assertRaises(queries.ShopFloorPermissionDenied):
@@ -147,7 +174,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         with self.assertRaises(queries.ShopFloorPermissionDenied):
             queries.get_dispatch_options(repository, "DCO-1")
 
-    def test_order_detail_uses_server_action_context(self) -> None:
+    def test_order_detail_uses_server_action_and_document_context(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-2",
@@ -189,6 +216,12 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertTrue(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
         self.assertTrue(actions[Capability.REASSIGN_WORKER]["allowed"])
         self.assertTrue(detail["can_recalculate_drawing_plan"])
+        self.assertTrue(detail["document_capabilities"][Capability.VIEW_CUTTING_PLAN])
+        self.assertTrue(detail["document_capabilities"][Capability.PRINT_CUTTING_PLAN])
+
+        repository.capabilities.remove(Capability.RECALCULATE_PLAN)
+        detail = queries.get_order_detail(repository, "DCO-2")
+        self.assertFalse(detail["can_recalculate_drawing_plan"])
 
     def test_action_context_denies_another_workers_stage(self) -> None:
         repository = FakeRepository()
@@ -235,30 +268,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             drawing_dxf_status="Approved by Drawing",
         )
         repository.revert_rows = [
-            {
-                "name": "PST-1",
-                "stage_type": "Drawing",
-                "status": "Completed",
-                "sequence": 10,
-                "assigned_to": "a@example.com",
-                "piece_label": None,
-            },
-            {
-                "name": "PST-2",
-                "stage_type": "Drawing",
-                "status": "Completed",
-                "sequence": 11,
-                "assigned_to": "b@example.com",
-                "piece_label": None,
-            },
-            {
-                "name": "PST-3",
-                "stage_type": "CNC",
-                "status": "Pending",
-                "sequence": 20,
-                "assigned_to": "c@example.com",
-                "piece_label": None,
-            },
+            {"name": "PST-1", "stage_type": "Drawing", "status": "Completed", "sequence": 10, "assigned_to": "a@example.com", "piece_label": None},
+            {"name": "PST-2", "stage_type": "Drawing", "status": "Completed", "sequence": 11, "assigned_to": "b@example.com", "piece_label": None},
+            {"name": "PST-3", "stage_type": "CNC", "status": "Pending", "sequence": 20, "assigned_to": "c@example.com", "piece_label": None},
         ]
 
         targets = queries.get_revert_targets(repository, "DCO-1")
