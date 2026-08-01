@@ -18,8 +18,8 @@ add_to_apps_screen = [
     }
 ]
 
-after_install = "almdina_erp.install.after_install"
-after_migrate = "almdina_erp.install.after_migrate"
+after_install = "almdina_erp.lifecycle.after_install"
+after_migrate = "almdina_erp.lifecycle.after_migrate"
 
 # Keep only genuinely global Desk behaviour here. Door Cutting Order scripts are
 # loaded through doctype_js below, which Frappe reads from the app source and
