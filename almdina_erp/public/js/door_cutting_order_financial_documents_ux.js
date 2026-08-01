@@ -5,6 +5,7 @@
     const CUSTOMER_CLASS = "dco-secure-print-customer-invoice";
     const INTERNAL_CLASS = "dco-secure-print-internal-cost-report";
     const LEGACY_CUSTOMER_CLASS = "dco-print-customer-invoice";
+    let activeFrm = null;
 
     function can(capability) {
         return Boolean(
@@ -376,10 +377,14 @@
         schedule();
     }
 
+    function resolvedForm(targetFrm) {
+        return targetFrm || activeFrm;
+    }
+
     function secureLegacyGlobals(frm) {
         const costApi = window.AlmdinaOrderCostUX;
         if (costApi && typeof costApi === "object") {
-            costApi.printInvoice = targetFrm => printFinancialDocument(targetFrm || frm, "customer_invoice");
+            costApi.printInvoice = targetFrm => printFinancialDocument(resolvedForm(targetFrm) || frm, "customer_invoice");
         }
 
         const previous = window.AlmdinaOrderDocumentPrint;
@@ -388,10 +393,10 @@
                 ...previous,
                 __secureFinancialDocuments: true,
                 printInvoice(targetFrm) {
-                    return printFinancialDocument(targetFrm || frm, "customer_invoice");
+                    return printFinancialDocument(resolvedForm(targetFrm) || frm, "customer_invoice");
                 },
                 printInternalCostReport(targetFrm) {
-                    return printFinancialDocument(targetFrm || frm, "internal_cost_report");
+                    return printFinancialDocument(resolvedForm(targetFrm) || frm, "internal_cost_report");
                 },
                 html(targetFrm, mode) {
                     if (mode === "invoice") {
@@ -404,6 +409,7 @@
     }
 
     function apply(frm) {
+        activeFrm = frm;
         secureLegacyGlobals(frm);
         observeFinancialActions(frm);
     }
@@ -421,10 +427,10 @@
         apply,
         documentHtml,
         printCustomerInvoice(frm) {
-            return printFinancialDocument(frm, "customer_invoice");
+            return printFinancialDocument(resolvedForm(frm), "customer_invoice");
         },
         printInternalCostReport(frm) {
-            return printFinancialDocument(frm, "internal_cost_report");
+            return printFinancialDocument(resolvedForm(frm), "internal_cost_report");
         },
     });
 })();
