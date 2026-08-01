@@ -63,9 +63,18 @@ class Capability:
     VIEW_OPERATIONAL_REPORTS = "view_operational_reports"
     VIEW_FINANCIAL_REPORTS = "view_financial_reports"
 
+    # Workforce administration
+    VIEW_USERS = "view_users"
+    CREATE_USERS = "create_users"
+    EDIT_USERS = "edit_users"
+    ASSIGN_WORKFORCE_PROFILE = "assign_workforce_profile"
+    ENABLE_USERS = "enable_users"
+    DISABLE_USERS = "disable_users"
+    RESET_USER_PASSWORD = "reset_user_password"
+    MANAGE_USERS = "manage_users"
+
     # Administration
     MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
-    MANAGE_USERS = "manage_users"
     MANAGE_PERMISSIONS = "manage_permissions"
 
 
@@ -134,8 +143,15 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.CANCEL_REPLACEMENT, Capability.CANCEL_REPLACEMENT, _REPLACEMENT_DOCTYPE, "control_center"),
     CapabilityDefinition(Capability.VIEW_OPERATIONAL_REPORTS, Capability.VIEW_OPERATIONAL_REPORTS, _ORDER_DOCTYPE, "reports"),
     CapabilityDefinition(Capability.VIEW_FINANCIAL_REPORTS, Capability.VIEW_FINANCIAL_REPORTS, _ORDER_DOCTYPE, "reports"),
+    CapabilityDefinition(Capability.VIEW_USERS, Capability.VIEW_USERS, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.CREATE_USERS, Capability.CREATE_USERS, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.EDIT_USERS, Capability.EDIT_USERS, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.ASSIGN_WORKFORCE_PROFILE, Capability.ASSIGN_WORKFORCE_PROFILE, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.ENABLE_USERS, Capability.ENABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.DISABLE_USERS, Capability.DISABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.RESET_USER_PASSWORD, Capability.RESET_USER_PASSWORD, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "administration"),
-    CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "administration"),
     CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
 )
 
@@ -181,6 +197,11 @@ REPORTING_CAPABILITIES = frozenset(
     capability
     for capability, definition in CAPABILITY_CATALOG.items()
     if definition.category == "reports"
+)
+WORKFORCE_CAPABILITIES = frozenset(
+    capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.category == "workforce"
 )
 ADMINISTRATION_CAPABILITIES = frozenset(
     capability
@@ -271,6 +292,7 @@ __all__ = [
     "PRODUCTION_SUPERVISOR_CAPABILITIES",
     "REPORTING_CAPABILITIES",
     "SHOP_FLOOR_ACCESS_CAPABILITIES",
+    "WORKFORCE_CAPABILITIES",
     "Capability",
     "CapabilityDefinition",
     "capability_definition",
