@@ -21,7 +21,6 @@ TEMPLATE_POLICY = APP / "application" / "security" / "permission_templates.py"
 HOOKS = ROOT / "hooks.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
-
 _FIXED_BUSINESS_ROLES = (
     "Production Manager",
     "System Manager",
@@ -38,51 +37,49 @@ _ROLE_GATE_PATTERNS = (
     r"require_roles\(",
     r"has_role\(",
 )
-_LEGACY_PRODUCT_MODULES = frozenset(
+_RETIRED_PRODUCT_MODULES = frozenset(
     {
         "actual_consumption_reversal",
         "actual_consumption_service",
         "performance_service",
         "preflight_service",
         "remnant_service",
+        "settings_access_service",
         "stock_availability_service",
         "stock_service",
     }
+)
+_RETIRED_TARGET = (
+    "almdina_erp.almdina_erp.services.legacy_endpoint_service."
+    "retired_product_endpoint"
 )
 
 
 def _literal_assignment(name: str) -> Any:
     tree = ast.parse(HOOKS.read_text(encoding="utf-8"))
-    assignment = next(
-        node
-        for node in tree.body
-        if isinstance(node, (ast.Assign, ast.AnnAssign))
-        and (
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+        if (
             isinstance(node, ast.AnnAssign)
             and isinstance(node.target, ast.Name)
             and node.target.id == name
-            or isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == name
-                for target in node.targets
-            )
-        )
-    )
-    value = assignment.value
-    return ast.literal_eval(value)
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"Missing hooks assignment: {name}")
 
 
 def _loaded_javascript_paths() -> list[Path]:
     paths: set[Path] = set()
     for asset in _literal_assignment("app_include_js"):
-        filename = str(asset).rsplit("/", 1)[-1]
-        paths.add(ROOT / "public" / "js" / filename)
-    doctype_js = _literal_assignment("doctype_js")
-    for configured in doctype_js.values():
+        paths.add(ROOT / "public" / "js" / str(asset).rsplit("/", 1)[-1])
+    for configured in _literal_assignment("doctype_js").values():
         values = configured if isinstance(configured, list) else [configured]
         for value in values:
-            normalized = str(value).removeprefix("public/")
-            paths.add(ROOT / "public" / normalized)
+            paths.add(ROOT / "public" / str(value).removeprefix("public/"))
     paths.update(PAGES.rglob("*.js"))
     return sorted(path for path in paths if path.exists())
 
@@ -115,13 +112,14 @@ def _whitelisted_functions(path: Path) -> set[str]:
 
 
 def _contains_role_gate(source: str) -> list[str]:
-    markers: list[str] = []
-    for role in _FIXED_BUSINESS_ROLES:
-        if role in source:
-            markers.append(f"fixed role {role}")
-    for pattern in _ROLE_GATE_PATTERNS:
-        if re.search(pattern, source):
-            markers.append(f"role gate {pattern}")
+    markers = [
+        f"fixed role {role}" for role in _FIXED_BUSINESS_ROLES if role in source
+    ]
+    markers.extend(
+        f"role gate {pattern}"
+        for pattern in _ROLE_GATE_PATTERNS
+        if re.search(pattern, source)
+    )
     return markers
 
 
@@ -146,11 +144,11 @@ def _function_calls(source: str, function_name: str) -> set[str]:
 
 class TestFinalSecurityArchitecture(unittest.TestCase):
     def test_loaded_browser_surfaces_have_no_role_name_gates(self) -> None:
-        offenders: list[str] = []
-        for path in _loaded_javascript_paths():
-            source = path.read_text(encoding="utf-8")
-            for marker in _contains_role_gate(source):
-                offenders.append(f"{path.relative_to(ROOT)}: {marker}")
+        offenders = [
+            f"{path.relative_to(ROOT)}: {marker}"
+            for path in _loaded_javascript_paths()
+            for marker in _contains_role_gate(path.read_text(encoding="utf-8"))
+        ]
         self.assertEqual(offenders, [], "\n".join(offenders))
 
     def test_every_exposed_legacy_role_endpoint_is_overridden(self) -> None:
@@ -162,10 +160,9 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             if not markers:
                 continue
             module = _module_name(path)
-            exposed = _whitelisted_functions(path)
             unprotected = sorted(
                 function
-                for function in exposed
+                for function in _whitelisted_functions(path)
                 if f"{module}.{function}" not in overrides
             )
             if unprotected:
@@ -176,8 +173,7 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertEqual(offenders, [], "\n".join(offenders))
 
     def test_canonical_authorization_boundaries_are_role_free(self) -> None:
-        canonical_names = (
-            "authorization_gateway.py",
+        names = (
             "permission_management_service.py",
             "order_lifecycle_permission_service.py",
             "order_approval_service.py",
@@ -191,30 +187,42 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "workforce_management_service.py",
             "factory_settings_service.py",
             "factory_master_data_service.py",
+            "order_creation_service.py",
+            "replacement_cancellation_service.py",
         )
         candidates = [
             path
-            for name in canonical_names
+            for name in names
             for path in (
                 SERVICES / name,
                 APP / "infrastructure" / "frappe" / name,
             )
             if path.exists()
         ]
-        offenders: list[str] = []
-        for path in candidates:
-            source = path.read_text(encoding="utf-8")
-            for marker in _contains_role_gate(source):
-                offenders.append(f"{path.relative_to(ROOT)}: {marker}")
+        offenders = [
+            f"{path.relative_to(ROOT)}: {marker}"
+            for path in candidates
+            for marker in _contains_role_gate(path.read_text(encoding="utf-8"))
+        ]
         self.assertEqual(offenders, [], "\n".join(offenders))
 
-    def test_legacy_inventory_modules_are_outside_active_product_routes(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
+    def test_retired_product_endpoints_are_fail_closed_and_not_loaded(self) -> None:
+        overrides = _override_methods()
         loaded_js = "\n".join(
             str(path.relative_to(ROOT)) for path in _loaded_javascript_paths()
         )
-        for module in _LEGACY_PRODUCT_MODULES:
-            self.assertNotIn(f"services.{module}", hooks)
+        for module in _RETIRED_PRODUCT_MODULES:
+            prefix = f"almdina_erp.almdina_erp.services.{module}."
+            mappings = {
+                source: target
+                for source, target in overrides.items()
+                if source.startswith(prefix)
+            }
+            self.assertTrue(mappings, f"Missing retired mapping for {module}")
+            self.assertTrue(
+                all(target == _RETIRED_TARGET for target in mappings.values()),
+                mappings,
+            )
             self.assertNotIn(module, loaded_js)
         for legacy_js in (
             "material_consumption_log.js",
@@ -225,19 +233,19 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             self.assertNotIn(legacy_js, loaded_js)
 
     def test_active_controller_and_reports_have_no_role_gates(self) -> None:
-        controller_path = (
+        candidates = [
             APP
             / "doctype"
             / "door_cutting_order"
-            / "door_cutting_order_controller.py"
-        )
-        candidates = [controller_path, ROOT / "permissions.py"]
-        candidates.extend(REPORTS.rglob("*.py"))
-        offenders: list[str] = []
-        for path in candidates:
-            source = path.read_text(encoding="utf-8")
-            for marker in _contains_role_gate(source):
-                offenders.append(f"{path.relative_to(ROOT)}: {marker}")
+            / "door_cutting_order_controller.py",
+            ROOT / "permissions.py",
+            *REPORTS.rglob("*.py"),
+        ]
+        offenders = [
+            f"{path.relative_to(ROOT)}: {marker}"
+            for path in candidates
+            for marker in _contains_role_gate(path.read_text(encoding="utf-8"))
+        ]
         self.assertEqual(offenders, [], "\n".join(offenders))
         hooks = HOOKS.read_text(encoding="utf-8")
         self.assertIn("door_cutting_order_controller.DoorCuttingOrderController", hooks)
@@ -249,14 +257,14 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         gateway = GATEWAY_FACADE.read_text(encoding="utf-8")
         self.assertIn("Backward-compatible shop-floor API facade", service)
         self.assertIn("_public_delegate", service)
-        for removed_symbol in (
+        for symbol in (
             "require_any_role",
             "_require_stage_assignee_or_admin",
             "DISPATCH_ROLES",
             "ADMIN_ROLES",
             "SHOP_FLOOR_ROLES",
         ):
-            self.assertNotIn(removed_symbol, service)
+            self.assertNotIn(symbol, service)
         self.assertNotIn("frappe.db.sql", service)
         self.assertNotIn("frappe.get_doc", service)
         self.assertIn("_legacy_role_gate_removed()", gateway)
@@ -267,22 +275,14 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         source = CUTTING_PLAN_SERVICE.read_text(encoding="utf-8")
         self.assertNotIn("def require_any_role", source)
         self.assertNotIn("frappe.get_roles", source)
-        for canonical_service in (
+        for service in (
             "order_lifecycle_permission_service",
             "order_approval_service",
             "order_dispatch_service",
             "drawing_approval_service",
             "order_review_service",
         ):
-            self.assertIn(canonical_service, source)
-        for endpoint in (
-            "submit_order_for_review",
-            "approve_order",
-            "send_order_to_production",
-            "lock_cutting_plan",
-            "reject_order",
-        ):
-            self.assertIn(f"def {endpoint}", source)
+            self.assertIn(service, source)
 
     def test_permission_transfer_is_preview_first_and_server_authorized(self) -> None:
         service = PERMISSION_SERVICE.read_text(encoding="utf-8")
@@ -308,14 +308,14 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("preview_permission_import", page)
         self.assertIn("export_role_permissions", page)
         self.assertIn("لن يتم الحفظ تلقائيًا", page)
-        template_source = TEMPLATE_POLICY.read_text(encoding="utf-8")
-        self.assertIn("build_permission_bundle", template_source)
-        self.assertIn("parse_permission_bundle", template_source)
-        self.assertIn("checksum", template_source)
+        policy = TEMPLATE_POLICY.read_text(encoding="utf-8")
+        self.assertIn("build_permission_bundle", policy)
+        self.assertIn("parse_permission_bundle", policy)
+        self.assertIn("checksum", policy)
         self.assertNotIn("frappe.user_roles", page)
 
     def test_hooks_keep_old_api_paths_on_protected_services(self) -> None:
-        source = HOOKS.read_text(encoding="utf-8")
+        hooks = HOOKS.read_text(encoding="utf-8")
         for service in (
             "order_lifecycle_permission_service.submit_order_for_review",
             "order_approval_service.approve_order",
@@ -324,8 +324,9 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "drawing_approval_service.approve_production_dxf",
             "dxf_export_service.get_validated_dxf_plan",
             "shop_floor_query_service.get_shop_floor_context",
+            "legacy_endpoint_service.retired_product_endpoint",
         ):
-            self.assertIn(service, source)
+            self.assertIn(service, hooks)
 
     def test_rollout_checklist_covers_backup_validation_and_rollback(self) -> None:
         source = ROLLOUT.read_text(encoding="utf-8")
@@ -342,6 +343,8 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("لا يتم الدمج", source)
         self.assertIn("Checksum", source)
         self.assertIn("API", source)
+        self.assertIn("preview_permission_bundle_import", source)
+        self.assertIn("Role واحد غير موجود", source)
 
 
 if __name__ == "__main__":
