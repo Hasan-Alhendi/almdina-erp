@@ -52,8 +52,8 @@ def test_financial_documents_use_the_server_document_and_edge_color_does_not_for
     assert "get_internal_cost_report_document" in financial
     assert "window.AlmdinaFinancialDocuments = Object.freeze" in financial
     assert "printHtml(documentHtml(payload))" in financial
-    assert "renderCustomerInvoice" in presenter
-    assert "renderInternalCostReport" in presenter
+    assert 'printDocument(frm, "invoice")' in presenter
+    assert 'printDocument(frm, "measurements")' in presenter
     assert "function printHtml(frm)" not in edge
     assert "event.stopImmediatePropagation()" not in edge
 
