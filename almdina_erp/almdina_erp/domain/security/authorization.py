@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
+from dataclasses import dataclass
+from types import MappingProxyType
 
 
 class Capability:
-    """Stable business capabilities independent from Frappe role APIs.
-
-    Capabilities describe what a user may do. They intentionally do not encode
-    document state, assignment, or Frappe UI concerns; adapters combine those
-    runtime rules with this role policy before allowing an action.
-    """
+    """Stable business capability keys used by UI and server authorization."""
 
     # Order lifecycle
     CREATE_ORDER = "create_order"
@@ -54,10 +51,66 @@ class Capability:
     MANAGE_PERMISSIONS = "manage_permissions"
 
 
-ALL_CAPABILITIES = frozenset(
-    value
-    for name, value in vars(Capability).items()
-    if name.isupper() and isinstance(value, str)
+@dataclass(frozen=True, slots=True)
+class CapabilityDefinition:
+    """Framework-independent metadata for one assignable business capability.
+
+    ``permission_type`` is the Frappe permission checked by the infrastructure
+    adapter. Standard rights such as ``create`` and ``write`` are reused instead
+    of adding confusing duplicate columns to Role Permission Manager.
+    """
+
+    key: str
+    permission_type: str
+    applies_to: str
+    category: str
+    custom: bool = True
+
+
+_ORDER_DOCTYPE = "Door Cutting Order"
+_SETTINGS_DOCTYPE = "Almdina ERP Settings"
+
+_CAPABILITY_DEFINITIONS = (
+    CapabilityDefinition(Capability.CREATE_ORDER, "create", _ORDER_DOCTYPE, "order", False),
+    CapabilityDefinition(Capability.EDIT_ORDER, "write", _ORDER_DOCTYPE, "order", False),
+    CapabilityDefinition(Capability.CREATE_ORDER_REVISION, Capability.CREATE_ORDER_REVISION, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.SUBMIT_ORDER, Capability.SUBMIT_ORDER, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.APPROVE_ORDER, Capability.APPROVE_ORDER, _ORDER_DOCTYPE, "order"),
+    CapabilityDefinition(Capability.VIEW_COSTS, Capability.VIEW_COSTS, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.EDIT_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.APPROVE_SPECIAL_PRICE, Capability.APPROVE_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.PRINT_MEASUREMENTS, Capability.PRINT_MEASUREMENTS, _ORDER_DOCTYPE, "documents"),
+    CapabilityDefinition(Capability.PRINT_CUSTOMER_INVOICE, Capability.PRINT_CUSTOMER_INVOICE, _ORDER_DOCTYPE, "documents"),
+    CapabilityDefinition(Capability.PRINT_INTERNAL_COST_REPORT, Capability.PRINT_INTERNAL_COST_REPORT, _ORDER_DOCTYPE, "documents"),
+    CapabilityDefinition(Capability.VIEW_CUTTING_PLAN, Capability.VIEW_CUTTING_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.RECALCULATE_PLAN, Capability.RECALCULATE_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.EDIT_OPTIMIZER_SETTINGS, Capability.EDIT_OPTIMIZER_SETTINGS, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.PRINT_CUTTING_PLAN, Capability.PRINT_CUTTING_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.VIEW_DRAWING_WORKSPACE, Capability.VIEW_DRAWING_WORKSPACE, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.EDIT_SPECIAL_DRAWING, Capability.EDIT_SPECIAL_DRAWING, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.EXPORT_DXF, Capability.EXPORT_DXF, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.UPLOAD_DXF, Capability.UPLOAD_DXF, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.REPLACE_DXF, Capability.REPLACE_DXF, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.APPROVE_DXF, Capability.APPROVE_DXF, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.DISPATCH_ORDER, Capability.DISPATCH_ORDER, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.START_ASSIGNED_STAGE, Capability.START_ASSIGNED_STAGE, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.HANDOFF_ASSIGNED_STAGE, Capability.HANDOFF_ASSIGNED_STAGE, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.REVERT_DEPARTMENT, Capability.REVERT_DEPARTMENT, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.RETURN_ORDER_TO_DRAFT, Capability.RETURN_ORDER_TO_DRAFT, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.MARK_DELIVERED, Capability.MARK_DELIVERED, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.REASSIGN_WORKER, Capability.REASSIGN_WORKER, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
+)
+
+CAPABILITY_CATALOG = MappingProxyType(
+    {definition.key: definition for definition in _CAPABILITY_DEFINITIONS}
+)
+ALL_CAPABILITIES = frozenset(CAPABILITY_CATALOG)
+CUSTOM_PERMISSION_DEFINITIONS = tuple(
+    definition for definition in _CAPABILITY_DEFINITIONS if definition.custom
 )
 
 SHOP_FLOOR_ROLES = frozenset({"عامل رسم", "عامل شريون", "عامل CNC", "عامل تقشيط"})
@@ -70,147 +123,36 @@ ADMIN_CONTEXT_ROLES = frozenset(
     }
 )
 
-# This is the default product policy. Frappe adapters may later merge explicit
-# Custom Permission Types, but the domain vocabulary and safe defaults remain
-# centralized here so UI and server actions cannot invent separate role rules.
-ROLE_CAPABILITIES: Mapping[str, frozenset[str]] = {
-    "Order Entry": frozenset(
-        {
-            Capability.CREATE_ORDER,
-            Capability.EDIT_ORDER,
-            Capability.CREATE_ORDER_REVISION,
-            Capability.SUBMIT_ORDER,
-            Capability.VIEW_CUTTING_PLAN,
-            Capability.PRINT_MEASUREMENTS,
-            Capability.PRINT_CUSTOMER_INVOICE,
-        }
-    ),
-    "Production Manager": frozenset(
-        {
-            Capability.EDIT_ORDER,
-            Capability.CREATE_ORDER_REVISION,
-            Capability.SUBMIT_ORDER,
-            Capability.APPROVE_ORDER,
-            Capability.VIEW_COSTS,
-            Capability.EDIT_COST_SETTINGS,
-            Capability.EDIT_SPECIAL_PRICE,
-            Capability.APPROVE_SPECIAL_PRICE,
-            Capability.PRINT_MEASUREMENTS,
-            Capability.PRINT_CUSTOMER_INVOICE,
-            Capability.PRINT_INTERNAL_COST_REPORT,
-            Capability.VIEW_CUTTING_PLAN,
-            Capability.RECALCULATE_PLAN,
-            Capability.EDIT_OPTIMIZER_SETTINGS,
-            Capability.PRINT_CUTTING_PLAN,
-            Capability.VIEW_DRAWING_WORKSPACE,
-            Capability.EDIT_SPECIAL_DRAWING,
-            Capability.EXPORT_DXF,
-            Capability.UPLOAD_DXF,
-            Capability.REPLACE_DXF,
-            Capability.APPROVE_DXF,
-            Capability.DISPATCH_ORDER,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-            Capability.REVERT_DEPARTMENT,
-            Capability.RETURN_ORDER_TO_DRAFT,
-            Capability.MARK_DELIVERED,
-            Capability.REASSIGN_WORKER,
-            Capability.MANAGE_FACTORY_SETTINGS,
-        }
-    ),
-    "عامل رسم": frozenset(
-        {
-            Capability.VIEW_CUTTING_PLAN,
-            Capability.RECALCULATE_PLAN,
-            Capability.PRINT_CUTTING_PLAN,
-            Capability.VIEW_DRAWING_WORKSPACE,
-            Capability.EDIT_SPECIAL_DRAWING,
-            Capability.EXPORT_DXF,
-            Capability.UPLOAD_DXF,
-            Capability.REPLACE_DXF,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-        }
-    ),
-    "عامل شريون": frozenset(
-        {
-            Capability.VIEW_CUTTING_PLAN,
-            Capability.PRINT_CUTTING_PLAN,
-            Capability.PRINT_MEASUREMENTS,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-        }
-    ),
-    "عامل CNC": frozenset(
-        {
-            Capability.VIEW_CUTTING_PLAN,
-            Capability.PRINT_CUTTING_PLAN,
-            Capability.VIEW_DRAWING_WORKSPACE,
-            Capability.EXPORT_DXF,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-        }
-    ),
-    "عامل تقشيط": frozenset(
-        {
-            Capability.PRINT_MEASUREMENTS,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-        }
-    ),
-    "Cutting Operator": frozenset(
-        {
-            Capability.VIEW_CUTTING_PLAN,
-            Capability.PRINT_CUTTING_PLAN,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-        }
-    ),
-    "Edge Operator": frozenset(
-        {
-            Capability.PRINT_MEASUREMENTS,
-            Capability.START_ASSIGNED_STAGE,
-            Capability.HANDOFF_ASSIGNED_STAGE,
-        }
-    ),
-    "Accounts Management": frozenset(
-        {
-            Capability.VIEW_COSTS,
-            Capability.EDIT_SPECIAL_PRICE,
-            Capability.APPROVE_SPECIAL_PRICE,
-            Capability.PRINT_CUSTOMER_INVOICE,
-            Capability.PRINT_INTERNAL_COST_REPORT,
-        }
-    ),
-}
+
+def capability_definition(capability: str) -> CapabilityDefinition:
+    try:
+        return CAPABILITY_CATALOG[capability]
+    except KeyError as exc:
+        raise ValueError(f"Unknown capability: {capability}") from exc
+
+
+def normalize_capabilities(capabilities: Iterable[str] | None) -> frozenset[str]:
+    normalized = frozenset(str(value) for value in (capabilities or ()) if value)
+    unknown = normalized.difference(ALL_CAPABILITIES)
+    if unknown:
+        raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}")
+    return normalized
+
+
+def capability_flags(capabilities: Iterable[str] | None) -> dict[str, bool]:
+    """Return a complete deterministic flag map for presentation adapters."""
+
+    granted = normalize_capabilities(capabilities)
+    return {capability: capability in granted for capability in sorted(ALL_CAPABILITIES)}
+
+
+def has_capability(capabilities: Iterable[str] | None, capability: str) -> bool:
+    capability_definition(capability)
+    return capability in normalize_capabilities(capabilities)
 
 
 def normalize_roles(roles: Iterable[str] | None) -> frozenset[str]:
     return frozenset(str(role) for role in (roles or ()) if role)
-
-
-def capabilities_for_roles(roles: Iterable[str] | None) -> frozenset[str]:
-    normalized = normalize_roles(roles)
-    if normalized.intersection({"System Manager", "Administrator"}):
-        return ALL_CAPABILITIES
-
-    granted: set[str] = set()
-    for role in normalized:
-        granted.update(ROLE_CAPABILITIES.get(role, ()))
-    return frozenset(granted)
-
-
-def capability_flags_for_roles(roles: Iterable[str] | None) -> dict[str, bool]:
-    """Return a deterministic JSON-safe capability map for presentation adapters."""
-
-    granted = capabilities_for_roles(roles)
-    return {capability: capability in granted for capability in sorted(ALL_CAPABILITIES)}
-
-
-def has_capability(roles: Iterable[str] | None, capability: str) -> bool:
-    if capability not in ALL_CAPABILITIES:
-        raise ValueError(f"Unknown capability: {capability}")
-    return capability in capabilities_for_roles(roles)
 
 
 def is_order_entry_profile(roles: Iterable[str] | None) -> bool:
