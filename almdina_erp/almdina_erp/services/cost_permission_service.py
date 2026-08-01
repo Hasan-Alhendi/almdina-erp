@@ -80,11 +80,7 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
     }
 
 
-@frappe.whitelist()
-def get_order_cost_snapshot(order_name: str) -> dict[str, Any]:
-    """Return cost data only to users granted ``view_costs`` by the administrator."""
-
-    order = _authorized_order(order_name, Capability.VIEW_COSTS)
+def _cost_snapshot(order: Any) -> dict[str, Any]:
     return {
         "order_name": order.name,
         "order": {
@@ -93,6 +89,14 @@ def get_order_cost_snapshot(order_name: str) -> dict[str, Any]:
         },
         "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
     }
+
+
+@frappe.whitelist()
+def get_order_cost_snapshot(order_name: str) -> dict[str, Any]:
+    """Return cost data only to users granted ``view_costs`` by the administrator."""
+
+    order = _authorized_order(order_name, Capability.VIEW_COSTS)
+    return _cost_snapshot(order)
 
 
 @frappe.whitelist()
@@ -114,7 +118,7 @@ def update_order_cost_settings(
     )
     order.flags.force_cutting_plan_recalculation = True
     order.save(ignore_permissions=True)
-    return get_order_cost_snapshot(order.name)
+    return _cost_snapshot(order)
 
 
 @frappe.whitelist()
