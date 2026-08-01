@@ -62,12 +62,16 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("import frappe", repository_source)
         self.assertIn("class FrappeShopFloorQueryRepository", repository_source)
         self.assertIn("class ShopFloorQueryPort", application_source)
+        self.assertIn("def session_identity", application_source)
+        self.assertIn("def global_capabilities", application_source)
 
     def test_query_service_composes_application_repository_and_presenter(self) -> None:
         source = QUERY_SERVICE_PATH.read_text(encoding="utf-8")
         self.assertIn("application.shop_floor import queries", source)
         self.assertIn("FrappeShopFloorQueryRepository", source)
         self.assertIn("present_order_detail", source)
+        self.assertIn("def get_shop_floor_context", source)
+        self.assertNotIn("frappe.get_roles", source)
 
     def test_legacy_service_is_only_a_small_lazy_compatibility_facade(self) -> None:
         source = LEGACY_PATH.read_text(encoding="utf-8")
@@ -79,6 +83,7 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("services.shop_floor_query_service", source)
         self.assertIn("services.shop_floor_dxf_service", source)
         self.assertIn("services.shop_floor_commands", source)
+        self.assertIn("get_shop_floor_context", source)
         self.assertNotIn(
             "from almdina_erp.almdina_erp.services.shop_floor_commands import",
             source,
@@ -88,6 +93,7 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
         query_methods = (
+            "get_shop_floor_context",
             "get_dispatch_options",
             "get_revert_targets",
             "get_my_inbox",
