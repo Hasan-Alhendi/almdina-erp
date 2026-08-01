@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     PRODUCTION_SUPERVISOR_CAPABILITIES,
     REPORTING_CAPABILITIES,
     SHOP_FLOOR_ACCESS_CAPABILITIES,
+    WORKFORCE_CAPABILITIES,
     Capability,
     normalize_capabilities,
 )
@@ -62,6 +63,7 @@ def _profile(granted: frozenset[str]) -> str:
         | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
         | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
+        | WORKFORCE_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES
     )
     if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
@@ -87,6 +89,7 @@ def _profile(granted: frozenset[str]) -> str:
         | PRODUCTION_CAPABILITIES
         | CONTROL_CENTER_CAPABILITIES
         | REPORTING_CAPABILITIES
+        | WORKFORCE_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES,
     ):
         return "order_entry"
@@ -97,13 +100,7 @@ def _profile(granted: frozenset[str]) -> str:
 def build_navigation_context(
     granted_capabilities: Iterable[str] | None,
 ) -> dict[str, Any]:
-    """Build the shared Almdina shell navigation from business capabilities.
-
-    The same Desk shell is retained for every authorized Almdina user.
-    Capabilities select the useful workspaces, home destination and visible
-    sections. Users without Almdina grants are left on their existing Desk and
-    application navigation.
-    """
+    """Build the shared Almdina shell navigation from business capabilities."""
 
     granted = normalize_capabilities(granted_capabilities)
     active = bool(granted)
@@ -114,6 +111,7 @@ def build_navigation_context(
     has_production = _intersects(granted, PRODUCTION_CAPABILITIES)
     has_quality = _intersects(granted, CONTROL_CENTER_CAPABILITIES)
     has_reports = _intersects(granted, REPORTING_CAPABILITIES)
+    has_workforce = _intersects(granted, WORKFORCE_CAPABILITIES)
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
     has_administration = _intersects(granted, ADMINISTRATION_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
@@ -134,6 +132,7 @@ def build_navigation_context(
         | _CONTROL_CENTER_MANAGEMENT_CAPABILITIES
         | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
+        | WORKFORCE_CAPABILITIES
         | ADMINISTRATION_CAPABILITIES,
     )
 
@@ -151,7 +150,7 @@ def build_navigation_context(
         if (
             Capability.EDIT_COST_SETTINGS in granted
             or Capability.MANAGE_FACTORY_SETTINGS in granted
-            or Capability.MANAGE_USERS in granted
+            or has_workforce
             or Capability.MANAGE_PERMISSIONS in granted
         ):
             workspaces.append(WORKSPACE_SETTINGS)
@@ -174,6 +173,7 @@ def build_navigation_context(
             "drawing": has_drawing,
             "production": has_production,
             "quality": has_quality,
+            "workforce": has_workforce,
             "administration": has_administration,
             "reports": has_reports,
         },
