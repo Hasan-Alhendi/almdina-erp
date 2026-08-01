@@ -16,6 +16,7 @@ REPOSITORY = (
 )
 SERVICE = ROOT / "almdina_erp" / "services" / "permission_management_service.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
+WORKFORCE_SERVICE = ROOT / "almdina_erp" / "services" / "workforce_service.py"
 PROVISION = ROOT / "almdina_erp" / "application" / "security" / "provision_user.py"
 PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
 PAGE_JSON = PAGE.with_suffix(".json")
@@ -62,11 +63,11 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
     def test_administration_services_use_capabilities_not_role_names(self) -> None:
         combined = "\n".join(
             path.read_text(encoding="utf-8")
-            for path in (SERVICE, SETTINGS_SERVICE, PROVISION)
+            for path in (SERVICE, SETTINGS_SERVICE, WORKFORCE_SERVICE, PROVISION)
         )
         self.assertIn("MANAGE_PERMISSIONS", combined)
         self.assertIn("MANAGE_FACTORY_SETTINGS", combined)
-        self.assertIn("MANAGE_USERS", combined)
+        self.assertIn("WorkforceAction", combined)
         self.assertNotIn('require_any_role("Production Manager")', combined)
         self.assertNotIn('"System Manager" not in', combined)
         self.assertNotIn("Only System Manager", combined)
@@ -103,6 +104,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         source = SHARED_SHELL.read_text(encoding="utf-8")
         self.assertIn("CAPABILITY_ROUTE_RULES", source)
         self.assertIn('any: ["manage_permissions"]', source)
+        self.assertIn('any: ["view_users", "manage_users"]', source)
         self.assertIn('any: ["manage_factory_settings"]', source)
         self.assertIn('any: ["approve_order", "reject_order"]', source)
         self.assertIn('any: ["view_operational_reports", "view_financial_reports"]', source)
