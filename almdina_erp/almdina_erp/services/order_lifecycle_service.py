@@ -76,13 +76,13 @@ def _cancel_unstarted_replacements(order_name: str, reason: str) -> list[str]:
         )
 
     from almdina_erp.almdina_erp.services.replacement_execution import (
-        cancel_replacement,
+        cancel_replacement_for_order_cancellation,
     )
 
     cancelled: list[str] = []
     for row in replacements:
         if row.status in {"Pending Approval", "Approved"}:
-            cancel_replacement(
+            cancel_replacement_for_order_cancellation(
                 row.name,
                 reason=_("Order cancelled: {0}").format(reason),
             )
