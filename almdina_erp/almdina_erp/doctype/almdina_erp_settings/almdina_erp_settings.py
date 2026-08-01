@@ -6,18 +6,15 @@ from frappe.model.document import Document
 
 
 class AlmdinaERPSettings(Document):
-    """Factory settings are mutated only through the field-aware service."""
+    """Factory settings are mutated only through trusted field-aware services."""
 
     def before_save(self) -> None:
-        if any(
+        trusted_write = bool(getattr(self.flags, "ignore_permissions", False))
+        lifecycle_write = any(
             bool(getattr(frappe.flags, flag, False))
-            for flag in (
-                "in_install",
-                "in_migrate",
-                "in_patch",
-                "allow_almdina_factory_settings_write",
-            )
-        ):
+            for flag in ("in_install", "in_migrate", "in_patch")
+        )
+        if trusted_write or lifecycle_write:
             return
         frappe.throw(
             _("Use the Almdina Factory Settings page to update these values."),
