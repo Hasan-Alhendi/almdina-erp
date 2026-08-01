@@ -73,20 +73,30 @@ class Capability:
     RESET_USER_PASSWORD = "reset_user_password"
     MANAGE_USERS = "manage_users"
 
-    # Administration
+    # Factory settings sections
+    VIEW_FACTORY_SETTINGS = "view_factory_settings"
+    EDIT_FACTORY_CUTTING_DEFAULTS = "edit_factory_cutting_defaults"
+    EDIT_FACTORY_COST_DEFAULTS = "edit_factory_cost_defaults"
+    EDIT_FACTORY_PRODUCTION_CONTROLS = "edit_factory_production_controls"
     MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
+
+    # Master data
+    VIEW_PRODUCTION_ROUTINGS = "view_production_routings"
+    CREATE_PRODUCTION_ROUTINGS = "create_production_routings"
+    EDIT_PRODUCTION_ROUTINGS = "edit_production_routings"
+    DELETE_PRODUCTION_ROUTINGS = "delete_production_routings"
+    VIEW_EDGE_BANDING_TYPES = "view_edge_banding_types"
+    CREATE_EDGE_BANDING_TYPES = "create_edge_banding_types"
+    EDIT_EDGE_BANDING_TYPES = "edit_edge_banding_types"
+    DELETE_EDGE_BANDING_TYPES = "delete_edge_banding_types"
+
+    # Administration
     MANAGE_PERMISSIONS = "manage_permissions"
 
 
 @dataclass(frozen=True, slots=True)
 class CapabilityDefinition:
-    """Framework-independent metadata for one assignable business capability.
-
-    ``permission_type`` is the Frappe permission checked by the infrastructure
-    adapter. Standard rights such as ``read``, ``create`` and ``write`` are
-    reused instead of adding confusing duplicate columns to Role Permission
-    Manager.
-    """
+    """Framework-independent metadata for one assignable business capability."""
 
     key: str
     permission_type: str
@@ -98,6 +108,8 @@ class CapabilityDefinition:
 _ORDER_DOCTYPE = "Door Cutting Order"
 _REPLACEMENT_DOCTYPE = "Replacement Piece"
 _SETTINGS_DOCTYPE = "Almdina ERP Settings"
+_ROUTING_DOCTYPE = "Production Routing"
+_EDGE_DOCTYPE = "Edge Banding Type"
 
 _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_ORDERS, "read", _ORDER_DOCTYPE, "order", False),
@@ -151,63 +163,47 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.DISABLE_USERS, Capability.DISABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.RESET_USER_PASSWORD, Capability.RESET_USER_PASSWORD, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.VIEW_FACTORY_SETTINGS, "read", _SETTINGS_DOCTYPE, "factory_settings", False),
+    CapabilityDefinition(Capability.EDIT_FACTORY_CUTTING_DEFAULTS, Capability.EDIT_FACTORY_CUTTING_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.EDIT_FACTORY_COST_DEFAULTS, Capability.EDIT_FACTORY_COST_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.DELETE_PRODUCTION_ROUTINGS, "delete", _ROUTING_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.VIEW_EDGE_BANDING_TYPES, "read", _EDGE_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.CREATE_EDGE_BANDING_TYPES, "create", _EDGE_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.EDIT_EDGE_BANDING_TYPES, "write", _EDGE_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.DELETE_EDGE_BANDING_TYPES, "delete", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
 )
 
-CAPABILITY_CATALOG = MappingProxyType(
-    {definition.key: definition for definition in _CAPABILITY_DEFINITIONS}
-)
+CAPABILITY_CATALOG = MappingProxyType({definition.key: definition for definition in _CAPABILITY_DEFINITIONS})
 ALL_CAPABILITIES = frozenset(CAPABILITY_CATALOG)
-CUSTOM_PERMISSION_DEFINITIONS = tuple(
-    definition for definition in _CAPABILITY_DEFINITIONS if definition.custom
-)
+CUSTOM_PERMISSION_DEFINITIONS = tuple(definition for definition in _CAPABILITY_DEFINITIONS if definition.custom)
 
-ORDER_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "order"
-)
-COSTING_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category in {"costing", "documents"}
-)
-PLANNING_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "cutting_plan"
-)
-DRAWING_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "drawing"
-)
-PRODUCTION_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "production"
-)
-CONTROL_CENTER_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "control_center"
-) | frozenset({Capability.APPROVE_ORDER, Capability.REJECT_ORDER})
-REPORTING_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "reports"
-)
-WORKFORCE_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "workforce"
-)
-ADMINISTRATION_CAPABILITIES = frozenset(
-    capability
-    for capability, definition in CAPABILITY_CATALOG.items()
-    if definition.category == "administration"
-)
+
+def _category_capabilities(*categories: str) -> frozenset[str]:
+    requested = frozenset(categories)
+    return frozenset(
+        capability
+        for capability, definition in CAPABILITY_CATALOG.items()
+        if definition.category in requested
+    )
+
+
+ORDER_CAPABILITIES = _category_capabilities("order")
+COSTING_CAPABILITIES = _category_capabilities("costing", "documents")
+PLANNING_CAPABILITIES = _category_capabilities("cutting_plan")
+DRAWING_CAPABILITIES = _category_capabilities("drawing")
+PRODUCTION_CAPABILITIES = _category_capabilities("production")
+CONTROL_CENTER_CAPABILITIES = _category_capabilities("control_center") | frozenset({Capability.APPROVE_ORDER, Capability.REJECT_ORDER})
+REPORTING_CAPABILITIES = _category_capabilities("reports")
+WORKFORCE_CAPABILITIES = _category_capabilities("workforce")
+FACTORY_SETTINGS_CAPABILITIES = _category_capabilities("factory_settings")
+MASTER_DATA_CAPABILITIES = _category_capabilities("master_data")
+ADMINISTRATION_CAPABILITIES = _category_capabilities("administration") | FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 
 PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
     {
@@ -239,9 +235,7 @@ PRODUCTION_SUPERVISOR_CAPABILITIES = frozenset(
         Capability.CANCEL_REPLACEMENT,
     }
 )
-SHOP_FLOOR_ACCESS_CAPABILITIES = frozenset(
-    PRODUCTION_OPERATOR_CAPABILITIES | PRODUCTION_SUPERVISOR_CAPABILITIES
-)
+SHOP_FLOOR_ACCESS_CAPABILITIES = frozenset(PRODUCTION_OPERATOR_CAPABILITIES | PRODUCTION_SUPERVISOR_CAPABILITIES)
 
 
 def capability_definition(capability: str) -> CapabilityDefinition:
@@ -260,8 +254,6 @@ def normalize_capabilities(capabilities: Iterable[str] | None) -> frozenset[str]
 
 
 def capability_flags(capabilities: Iterable[str] | None) -> dict[str, bool]:
-    """Return a complete deterministic flag map for presentation adapters."""
-
     granted = normalize_capabilities(capabilities)
     return {capability: capability in granted for capability in sorted(ALL_CAPABILITIES)}
 
@@ -272,8 +264,6 @@ def has_capability(capabilities: Iterable[str] | None, capability: str) -> bool:
 
 
 def normalize_roles(roles: Iterable[str] | None) -> frozenset[str]:
-    """Compatibility helper for operational adapters; never drives navigation."""
-
     return frozenset(str(role) for role in (roles or ()) if role)
 
 
@@ -285,6 +275,8 @@ __all__ = [
     "COSTING_CAPABILITIES",
     "CUSTOM_PERMISSION_DEFINITIONS",
     "DRAWING_CAPABILITIES",
+    "FACTORY_SETTINGS_CAPABILITIES",
+    "MASTER_DATA_CAPABILITIES",
     "ORDER_CAPABILITIES",
     "PLANNING_CAPABILITIES",
     "PRODUCTION_CAPABILITIES",
