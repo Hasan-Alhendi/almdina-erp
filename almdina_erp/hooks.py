@@ -114,6 +114,13 @@ permission_query_conditions = {
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_query",
 }
 
+has_permission = {
+    "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_has_permission",
+    "Production Stage": "almdina_erp.permissions.production_stage_has_permission",
+    "Cutting Plan": "almdina_erp.permissions.cutting_plan_has_permission",
+    "Replacement Piece": "almdina_erp.permissions.replacement_piece_has_permission",
+}
+
 boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
