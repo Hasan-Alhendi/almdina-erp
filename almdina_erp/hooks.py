@@ -37,7 +37,6 @@ doctype_js = {
         "public/js/door_cutting_order_shape_output_contract.js",
         "public/js/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order_workflow.js",
-        "public/js/order_lifecycle.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order_shape_print.js",
@@ -83,6 +82,7 @@ doctype_js = {
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
+        "public/js/order_lifecycle.js",
         "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
@@ -160,7 +160,7 @@ override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.shop_floor_service.revert_department":
         "almdina_erp.almdina_erp.services.shop_floor_commands.revert_department",
     "almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft":
-        "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
+        "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft",
     "almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft":
-        "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
+        "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft",
 }
