@@ -241,11 +241,17 @@ def approve_production_dxf(
     except DrawingActionDenied as error:
         _throw_policy_error(error)
 
+    # Transitional adapter: the legacy module still owns immutable plan creation,
+    # while every public drawing approval path is authorized here first.
     from almdina_erp.almdina_erp.services.cutting_plan_service import (
-        lock_cutting_plan,
+        _lock_order_for_production,
     )
 
-    result = lock_cutting_plan(order.name, plan_source=validated_source)
+    result = _lock_order_for_production(
+        order,
+        preserve_status=True,
+        plan_source=validated_source,
+    )
     result["approved_by"] = frappe.session.user
     result["approved_plan_source"] = validated_source
     return result
