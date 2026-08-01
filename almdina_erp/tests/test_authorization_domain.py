@@ -89,9 +89,10 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertTrue(first["navigation"]["shared_shell"])
         self.assertNotIn("roles", first)
 
-    def test_operator_navigation_preserves_shared_shell(self) -> None:
+    def test_operator_navigation_preserves_shared_shell_with_read_grant(self) -> None:
         navigation = build_navigation_context(
             {
+                Capability.VIEW_ORDERS,
                 Capability.START_ASSIGNED_STAGE,
                 Capability.HANDOFF_ASSIGNED_STAGE,
                 Capability.VIEW_CUTTING_PLAN,
@@ -102,6 +103,15 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertEqual(navigation["workspaces"], [WORKSPACE_SHOP_FLOOR])
         self.assertTrue(navigation["shared_shell"])
         self.assertTrue(navigation["sections"]["production"])
+
+    def test_no_grants_leave_other_desk_users_untouched(self) -> None:
+        navigation = build_navigation_context(set())
+        self.assertEqual(navigation["profile"], "shared")
+        self.assertFalse(navigation["shared_shell"])
+        self.assertFalse(navigation["app_only"])
+        self.assertEqual(navigation["home_page"], "")
+        self.assertEqual(navigation["default_route"], "")
+        self.assertEqual(navigation["workspaces"], [])
 
     def test_capabilities_expand_workspaces_without_changing_application(self) -> None:
         navigation = build_navigation_context(
