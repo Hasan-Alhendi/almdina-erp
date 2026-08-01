@@ -100,7 +100,8 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_costing_domain \
-            almdina_erp.tests.test_order_costing_architecture
+            almdina_erp.tests.test_order_costing_architecture \
+            almdina_erp.tests.test_financial_document_application
 
       - name: Run cutting-plan application tests
         run: |
