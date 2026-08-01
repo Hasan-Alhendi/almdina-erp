@@ -4,12 +4,16 @@ import unittest
 from pathlib import Path
 
 from almdina_erp.almdina_erp.application.security.permission_templates import (
+    MAX_TRANSFER_ROLES,
     PERMISSION_TEMPLATES,
     PERMISSION_TRANSFER_SCHEMA,
     PERMISSION_TRANSFER_VERSION,
+    build_permission_bundle,
     build_permission_export,
+    parse_permission_bundle,
     parse_permission_export,
     permission_template_catalog,
+    preview_permission_bundle,
     template_state,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
@@ -42,7 +46,12 @@ class TestPermissionTemplates(unittest.TestCase):
         for row in rows:
             self.assertIn(row["risk"], {"normal", "sensitive", "critical"})
             self.assertEqual(set(row["capabilities"]), set(ALL_CAPABILITIES))
-            self.assertTrue(all(isinstance(value, bool) for value in row["capabilities"].values()))
+            self.assertTrue(
+                all(
+                    isinstance(value, bool)
+                    for value in row["capabilities"].values()
+                )
+            )
             self.assertIn("navigation", row["impact"])
 
     def test_templates_are_optional_least_privilege_profiles(self) -> None:
@@ -66,12 +75,22 @@ class TestPermissionTemplates(unittest.TestCase):
         self.assertFalse(supervisor[Capability.APPROVE_ORDER])
         self.assertFalse(supervisor[Capability.VIEW_FINANCIAL_REPORTS])
 
+        control_center = template_state("control_center")
+        self.assertTrue(control_center[Capability.APPROVE_ORDER])
+        self.assertTrue(control_center[Capability.ARCHIVE_APPROVED_PLAN])
+        self.assertFalse(control_center[Capability.VIEW_COSTS])
+        self.assertFalse(control_center[Capability.VIEW_FINANCIAL_REPORTS])
+
         administrator = template_state("factory_administration")
         self.assertTrue(administrator[Capability.MANAGE_PERMISSIONS])
         self.assertTrue(administrator[Capability.CREATE_USERS])
-        self.assertTrue(administrator[Capability.DELETE_PRODUCTION_ROUTINGS])
+        self.assertTrue(
+            administrator[Capability.DELETE_PRODUCTION_ROUTINGS]
+        )
         self.assertFalse(administrator[Capability.APPROVE_ORDER])
         self.assertFalse(administrator[Capability.APPROVE_SPECIAL_PRICE])
+        self.assertFalse(administrator[Capability.VIEW_OPERATIONAL_REPORTS])
+        self.assertFalse(administrator[Capability.VIEW_FINANCIAL_REPORTS])
 
     def test_template_dependencies_are_normalized(self) -> None:
         pricing = template_state("pricing_and_documents")
@@ -99,7 +118,70 @@ class TestPermissionTemplates(unittest.TestCase):
         )
         parsed = parse_permission_export(document)
         self.assertEqual(parsed["source_role"], "Source Role")
-        self.assertTrue(parsed["capabilities"][Capability.START_ASSIGNED_STAGE])
+        self.assertTrue(
+            parsed["capabilities"][Capability.START_ASSIGNED_STAGE]
+        )
+
+    def test_matrix_bundle_round_trip_and_preview(self) -> None:
+        original = {
+            "Entry Role": template_state("order_entry"),
+            "Operator Role": template_state("production_operator"),
+        }
+        bundle = build_permission_bundle(
+            original,
+            exported_by="admin@example.com",
+            exported_at="2026-08-01 22:00:00",
+            app_version="1.0.0-dev",
+        )
+        self.assertEqual(bundle["kind"], "role_matrix")
+        self.assertEqual(len(bundle["roles"]), 2)
+        self.assertNotIn("users", bundle)
+        self.assertNotIn("passwords", bundle)
+        self.assertNotIn("audit", bundle)
+
+        parsed = parse_permission_bundle(bundle)
+        self.assertEqual(parsed, original)
+
+        current = {
+            "Entry Role": template_state("production_operator"),
+            "Operator Role": template_state("production_operator"),
+        }
+        preview = preview_permission_bundle(current, parsed)
+        self.assertEqual(preview["summary"]["role_count"], 2)
+        self.assertEqual(preview["summary"]["changed_role_count"], 1)
+        self.assertGreater(preview["summary"]["change_count"], 0)
+
+    def test_bundle_rejects_tampering_duplicates_and_excess_roles(self) -> None:
+        bundle = build_permission_bundle(
+            {"Source Role": template_state("order_entry")},
+            exported_by="Administrator",
+            exported_at="2026-08-01 22:00:00",
+            app_version="1.0.0-dev",
+        )
+        tampered = dict(bundle)
+        tampered["roles"] = [dict(bundle["roles"][0])]
+        tampered["roles"][0]["capabilities"] = list(
+            tampered["roles"][0]["capabilities"]
+        ) + [Capability.APPROVE_ORDER]
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            parse_permission_bundle(tampered)
+
+        duplicate = dict(bundle)
+        duplicate["roles"] = [bundle["roles"][0], bundle["roles"][0]]
+        with self.assertRaisesRegex(ValueError, "duplicate role"):
+            parse_permission_bundle(duplicate)
+
+        excessive = {
+            f"Role {index}": {}
+            for index in range(MAX_TRANSFER_ROLES + 1)
+        }
+        with self.assertRaisesRegex(ValueError, "more than"):
+            build_permission_bundle(
+                excessive,
+                exported_by="Administrator",
+                exported_at="2026-08-01 22:00:00",
+                app_version="1.0.0-dev",
+            )
 
     def test_tampering_future_versions_and_unknown_templates_fail_closed(self) -> None:
         document = build_permission_export(
