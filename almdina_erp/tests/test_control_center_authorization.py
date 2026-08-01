@@ -56,7 +56,12 @@ class TestControlCenterAuthorization(unittest.TestCase):
         )
         self.assertEqual(
             projection,
-            {"read": True, "create": False, "write": False},
+            {
+                "read": True,
+                "create": False,
+                "write": False,
+                "delete": False,
+            },
         )
 
     def test_report_access_requires_explicit_financial_pair(self) -> None:
