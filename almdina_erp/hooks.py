@@ -26,6 +26,8 @@ after_migrate = "almdina_erp.install.after_migrate"
 # injects into FormMeta server-side. This avoids production UX depending on a
 # sites/assets symlink being present in the frontend container.
 app_include_js = [
+    # One boot-backed capability API is shared by every page and form presenter.
+    "/assets/almdina_erp/js/permission_context.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
     # Protect every Desk form from asynchronous refreshes overwriting the active
     # input while an operator is typing or composing Arabic text.
