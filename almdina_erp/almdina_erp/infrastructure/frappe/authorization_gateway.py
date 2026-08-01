@@ -81,6 +81,22 @@ def doctype_has_capability(
     )
 
 
+def require_doctype_capability(
+    capability: str,
+    *,
+    user: str | None = None,
+    message: str | None = None,
+) -> None:
+    """Require one configurable capability without leaking role policy."""
+
+    if doctype_has_capability(capability, user=user):
+        return
+    frappe.throw(
+        message or _("You do not have permission for this operation."),
+        frappe.PermissionError,
+    )
+
+
 def document_has_capability(
     document: Any,
     capability: str,
@@ -120,5 +136,6 @@ __all__ = [
     "doctype_has_capability",
     "document_has_capability",
     "granted_capabilities",
+    "require_doctype_capability",
     "require_document_capability",
 ]
