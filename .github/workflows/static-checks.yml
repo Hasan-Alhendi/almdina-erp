@@ -67,6 +67,12 @@ jobs:
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
 
+      - name: Run permission administration architecture tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_permission_management_architecture
+
       - name: Run configurable lifecycle and production architecture tests
         run: |
           python -m pytest -q \
