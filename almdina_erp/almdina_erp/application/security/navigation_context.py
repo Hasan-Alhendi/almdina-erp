@@ -4,10 +4,11 @@ from collections.abc import Iterable
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
-    ADMINISTRATION_CAPABILITIES,
     CONTROL_CENTER_CAPABILITIES,
     COSTING_CAPABILITIES,
     DRAWING_CAPABILITIES,
+    FACTORY_SETTINGS_CAPABILITIES,
+    MASTER_DATA_CAPABILITIES,
     ORDER_CAPABILITIES,
     PLANNING_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
@@ -28,12 +29,8 @@ WORKSPACE_REPORTS = "Almdina Reports"
 WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
 
-_FINANCIAL_CAPABILITIES = frozenset(
-    COSTING_CAPABILITIES.difference({Capability.PRINT_MEASUREMENTS})
-)
-_ORDER_MANAGEMENT_CAPABILITIES = frozenset(
-    ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS})
-)
+_FINANCIAL_CAPABILITIES = frozenset(COSTING_CAPABILITIES.difference({Capability.PRINT_MEASUREMENTS}))
+_ORDER_MANAGEMENT_CAPABILITIES = frozenset(ORDER_CAPABILITIES.difference({Capability.VIEW_ORDERS}))
 _CONTROL_CENTER_OPERATOR_CAPABILITIES = frozenset(
     {
         Capability.RECORD_INCIDENT,
@@ -42,9 +39,8 @@ _CONTROL_CENTER_OPERATOR_CAPABILITIES = frozenset(
         Capability.COMPLETE_REPLACEMENT,
     }
 )
-_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
-    CONTROL_CENTER_CAPABILITIES.difference(_CONTROL_CENTER_OPERATOR_CAPABILITIES)
-)
+_CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(CONTROL_CENTER_CAPABILITIES.difference(_CONTROL_CENTER_OPERATOR_CAPABILITIES))
+_CONFIGURATION_CAPABILITIES = frozenset(FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES)
 
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
@@ -52,11 +48,8 @@ def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
 
 
 def _profile(granted: frozenset[str]) -> str:
-    """Return a compatibility profile derived only from capabilities."""
-
     if not granted:
         return "shared"
-
     broad = frozenset(
         _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
@@ -64,14 +57,11 @@ def _profile(granted: frozenset[str]) -> str:
         | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | WORKFORCE_CAPABILITIES
-        | ADMINISTRATION_CAPABILITIES
+        | _CONFIGURATION_CAPABILITIES
+        | frozenset({Capability.MANAGE_PERMISSIONS})
     )
-    if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
-        granted,
-        broad,
-    ):
+    if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(granted, broad):
         return "shop_floor"
-
     order_entry_actions = frozenset(
         {
             Capability.VIEW_ORDERS,
@@ -90,18 +80,14 @@ def _profile(granted: frozenset[str]) -> str:
         | CONTROL_CENTER_CAPABILITIES
         | REPORTING_CAPABILITIES
         | WORKFORCE_CAPABILITIES
-        | ADMINISTRATION_CAPABILITIES,
+        | _CONFIGURATION_CAPABILITIES
+        | frozenset({Capability.MANAGE_PERMISSIONS}),
     ):
         return "order_entry"
-
     return "full"
 
 
-def build_navigation_context(
-    granted_capabilities: Iterable[str] | None,
-) -> dict[str, Any]:
-    """Build the shared Almdina shell navigation from business capabilities."""
-
+def build_navigation_context(granted_capabilities: Iterable[str] | None) -> dict[str, Any]:
     granted = normalize_capabilities(granted_capabilities)
     active = bool(granted)
     has_orders = _intersects(granted, ORDER_CAPABILITIES)
@@ -112,20 +98,14 @@ def build_navigation_context(
     has_quality = _intersects(granted, CONTROL_CENTER_CAPABILITIES)
     has_reports = _intersects(granted, REPORTING_CAPABILITIES)
     has_workforce = _intersects(granted, WORKFORCE_CAPABILITIES)
+    has_factory_settings = _intersects(granted, FACTORY_SETTINGS_CAPABILITIES)
+    has_master_data = _intersects(granted, MASTER_DATA_CAPABILITIES)
+    has_permissions_admin = Capability.MANAGE_PERMISSIONS in granted
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
-    has_administration = _intersects(granted, ADMINISTRATION_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
-    has_control_center = (
-        has_quality
-        or has_supervision
-        or Capability.APPROVE_DXF in granted
-        or has_administration
-    )
+    has_control_center = has_quality or has_supervision or Capability.APPROVE_DXF in granted or has_permissions_admin
 
-    operator_only = active and _intersects(
-        granted,
-        PRODUCTION_OPERATOR_CAPABILITIES,
-    ) and not _intersects(
+    operator_only = active and _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
         granted,
         _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
@@ -133,7 +113,8 @@ def build_navigation_context(
         | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | WORKFORCE_CAPABILITIES
-        | ADMINISTRATION_CAPABILITIES,
+        | _CONFIGURATION_CAPABILITIES
+        | frozenset({Capability.MANAGE_PERMISSIONS}),
     )
 
     workspaces: list[str] = []
@@ -145,20 +126,20 @@ def build_navigation_context(
             workspaces.append(WORKSPACE_SHOP_FLOOR)
         if has_control_center:
             workspaces.append(WORKSPACE_CONTROL_CENTER)
-        if has_reports or has_administration:
+        if has_reports or has_permissions_admin:
             workspaces.append(WORKSPACE_REPORTS)
         if (
             Capability.EDIT_COST_SETTINGS in granted
-            or Capability.MANAGE_FACTORY_SETTINGS in granted
             or has_workforce
-            or Capability.MANAGE_PERMISSIONS in granted
+            or has_factory_settings
+            or has_master_data
+            or has_permissions_admin
         ):
             workspaces.append(WORKSPACE_SETTINGS)
-        if has_administration:
+        if has_permissions_admin:
             workspaces.append(WORKSPACE_GO_LIVE)
 
     home_page = "shop-floor-inbox" if operator_only else "almdina-erp"
-
     return {
         "shared_shell": active,
         "app_only": active,
@@ -174,7 +155,9 @@ def build_navigation_context(
             "production": has_production,
             "quality": has_quality,
             "workforce": has_workforce,
-            "administration": has_administration,
+            "factory_settings": has_factory_settings,
+            "master_data": has_master_data,
+            "administration": has_permissions_admin,
             "reports": has_reports,
         },
     }
