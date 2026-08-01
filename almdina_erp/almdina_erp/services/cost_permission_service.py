@@ -66,6 +66,10 @@ def _authorized_order(order_name: str, capability: str) -> Any:
     return order
 
 
+def _require_cost_visibility(order: Any) -> None:
+    require_document_capability(order, Capability.VIEW_COSTS)
+
+
 def _special_piece(order: Any, piece_name: str) -> Any:
     for piece in order.pieces or []:
         if piece.name == piece_name:
@@ -108,6 +112,7 @@ def update_order_cost_settings(
     """Update editable costing inputs without granting full document write access."""
 
     order = _authorized_order(order_name, Capability.EDIT_COST_SETTINGS)
+    _require_cost_visibility(order)
     if order.status not in EDITABLE_ORDER_STATUSES:
         frappe.throw(_("Cost settings can only be changed while the order is editable."))
 
@@ -132,6 +137,7 @@ def approve_special_piece_price(
 
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
+    _require_cost_visibility(order)
     piece = _special_piece(order, piece_name)
     required_capability = (
         Capability.EDIT_SPECIAL_PRICE
