@@ -65,6 +65,7 @@ doctype_js = {
         "public/js/door_cutting_order_document_print_presenter.js",
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order_document_compactness_ux.js",
+        "public/js/door_cutting_order_cost_permissions_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order_save_render_performance_ux.js",
@@ -77,6 +78,7 @@ doctype_js = {
         "public/js/door_cutting_order_drawing_plan_ux.js",
         "public/js/door_cutting_order_header_ux.js",
         "public/js/shop_floor_order_ux.js",
+        "public/js/door_cutting_order_drawing_approval_ux.js",
         "public/js/secure_dxf_export.js",
         "public/js/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order_revision_ux.js",
@@ -119,9 +121,11 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production":
         "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
-    # Preserve the legacy endpoint while applying the assigned-designer policy.
+    # Keep the legacy route while applying role-managed drawing approval.
     "almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan":
-        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.approve_production_dxf",
+        "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
+    "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price":
+        "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets":
@@ -139,7 +143,7 @@ override_whitelisted_methods = {
     "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan":
         "almdina_erp.almdina_erp.services.shop_floor_dxf_service.recalculate_drawing_plan",
     "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf":
-        "almdina_erp.almdina_erp.services.shop_floor_dxf_service.approve_production_dxf",
+        "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers":
         "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
     "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order":
