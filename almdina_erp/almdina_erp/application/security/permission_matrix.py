@@ -21,6 +21,8 @@ CATEGORY_ORDER = (
     "cutting_plan",
     "drawing",
     "production",
+    "control_center",
+    "reports",
     "administration",
 )
 
@@ -32,7 +34,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     },
     "costing": {
         "label": "التكلفة والتسعير",
-        "description": "عرض التكلفة وتعديل إعداداتها واعتماد أسعار الدرف الخاصة.",
+        "description": "عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.",
         "icon": "accounting",
     },
     "documents": {
@@ -55,6 +57,16 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
         "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.",
         "icon": "tool",
     },
+    "control_center": {
+        "label": "مركز التحكم والجودة",
+        "description": "أرشفة الخطط وتسجيل الحوادث وإدارة قطع التعويض.",
+        "icon": "dashboard",
+    },
+    "reports": {
+        "label": "التقارير",
+        "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.",
+        "icon": "chart",
+    },
     "administration": {
         "label": "الإدارة",
         "description": "إعدادات المعمل وإدارة المستخدمين ومصفوفة الصلاحيات.",
@@ -62,182 +74,74 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     },
 }
 
+
+def _presentation(label: str, description: str, risk: str = "normal") -> dict[str, str]:
+    return {"label": label, "description": description, "risk": risk}
+
+
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
-    Capability.VIEW_ORDERS: {
-        "label": "عرض الطلبات",
-        "description": "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية.",
-        "risk": "normal",
-    },
-    Capability.CREATE_ORDER: {
-        "label": "إنشاء طلب",
-        "description": "إنشاء طلبات قص جديدة.",
-        "risk": "normal",
-    },
-    Capability.EDIT_ORDER: {
-        "label": "تعديل الطلب",
-        "description": "تعديل الطلبات الموجودة في الحالات القابلة للتحرير.",
-        "risk": "sensitive",
-    },
-    Capability.CREATE_ORDER_REVISION: {
-        "label": "إنشاء نسخة تعديل",
-        "description": "إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.",
-        "risk": "sensitive",
-    },
-    Capability.SUBMIT_ORDER: {
-        "label": "إرسال للمراجعة",
-        "description": "نقل الطلب من المسودة إلى قائمة المراجعة.",
-        "risk": "normal",
-    },
-    Capability.APPROVE_ORDER: {
-        "label": "اعتماد الطلب",
-        "description": "اعتماد الطلب ليصبح جاهزًا للإنتاج.",
-        "risk": "critical",
-    },
-    Capability.CANCEL_ORDER: {
-        "label": "إلغاء الطلب",
-        "description": "إلغاء الطلب وفق ضوابط دورة الحياة.",
-        "risk": "critical",
-    },
-    Capability.VIEW_COSTS: {
-        "label": "عرض التكلفة",
-        "description": "عرض بيانات التكلفة والأسعار والربحية المحمية.",
-        "risk": "sensitive",
-    },
-    Capability.EDIT_COST_SETTINGS: {
-        "label": "تعديل إعدادات التكلفة",
-        "description": "تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.",
-        "risk": "critical",
-    },
-    Capability.EDIT_SPECIAL_PRICE: {
-        "label": "تعديل سعر معتمد",
-        "description": "تغيير سعر درفة خاصة بعد اعتماده سابقًا.",
-        "risk": "critical",
-    },
-    Capability.APPROVE_SPECIAL_PRICE: {
-        "label": "اعتماد سعر خاص",
-        "description": "اعتماد السعر النهائي للدرف الخاصة.",
-        "risk": "critical",
-    },
-    Capability.PRINT_MEASUREMENTS: {
-        "label": "طباعة القياسات",
-        "description": "طباعة مستند القياسات دون أي أسعار.",
-        "risk": "normal",
-    },
-    Capability.PRINT_CUSTOMER_INVOICE: {
-        "label": "طباعة فاتورة الزبون",
-        "description": "طباعة مستند الزبون المالي دون البيانات الداخلية.",
-        "risk": "sensitive",
-    },
-    Capability.PRINT_INTERNAL_COST_REPORT: {
-        "label": "طباعة تقرير التكلفة الداخلي",
-        "description": "طباعة التقرير السري الذي يتضمن التكلفة والخسائر والربحية.",
-        "risk": "critical",
-    },
-    Capability.VIEW_CUTTING_PLAN: {
-        "label": "عرض خطة القص",
-        "description": "عرض رسومات الخطة وبيانات ألواح القص.",
-        "risk": "normal",
-    },
-    Capability.RECALCULATE_PLAN: {
-        "label": "إعادة حساب الخطة",
-        "description": "إعادة تشغيل محرك توزيع القطع على الألواح.",
-        "risk": "sensitive",
-    },
-    Capability.EDIT_OPTIMIZER_SETTINGS: {
-        "label": "تعديل إعدادات المحسّن",
-        "description": "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث.",
-        "risk": "sensitive",
-    },
-    Capability.PRINT_CUTTING_PLAN: {
-        "label": "طباعة خطة القص",
-        "description": "طباعة الخطة المصرح بعرضها.",
-        "risk": "normal",
-    },
-    Capability.VIEW_DRAWING_WORKSPACE: {
-        "label": "فتح مساحة الرسم",
-        "description": "عرض أدوات الرسم الخاصة وخطة DXF.",
-        "risk": "normal",
-    },
-    Capability.EDIT_SPECIAL_DRAWING: {
-        "label": "تعديل الرسم الخاص",
-        "description": "تحرير هندسة وملاحظات الدرف الخاصة.",
-        "risk": "sensitive",
-    },
-    Capability.EXPORT_DXF: {
-        "label": "تصدير DXF",
-        "description": "تصدير رسم الإنتاج بصيغة DXF.",
-        "risk": "sensitive",
-    },
-    Capability.UPLOAD_DXF: {
-        "label": "رفع DXF",
-        "description": "رفع خطة DXF مخصصة للطلب.",
-        "risk": "sensitive",
-    },
-    Capability.REPLACE_DXF: {
-        "label": "استبدال DXF",
-        "description": "استبدال ملف DXF المرفوع سابقًا.",
-        "risk": "critical",
-    },
-    Capability.APPROVE_DXF: {
-        "label": "اعتماد الرسم",
-        "description": "اعتماد خطة النظام أو الخطة المرفوعة كمصدر للإنتاج.",
-        "risk": "critical",
-    },
-    Capability.DISPATCH_ORDER: {
-        "label": "إرسال الطلب للإنتاج",
-        "description": "اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.",
-        "risk": "critical",
-    },
-    Capability.START_ASSIGNED_STAGE: {
-        "label": "بدء المرحلة المسندة",
-        "description": "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه.",
-        "risk": "normal",
-    },
-    Capability.HANDOFF_ASSIGNED_STAGE: {
-        "label": "تسليم المرحلة المسندة",
-        "description": "إنهاء المرحلة وإرسال الطلب إلى العامل التالي.",
-        "risk": "normal",
-    },
-    Capability.REVERT_DEPARTMENT: {
-        "label": "إرجاع الطلب لقسم سابق",
-        "description": "إعادة الطلب إلى مرحلة أو قسم سابق مع سجل تدقيق.",
-        "risk": "critical",
-    },
-    Capability.RETURN_ORDER_TO_DRAFT: {
-        "label": "إعادة الطلب للمسودة",
-        "description": "إعادة الطلب إلى حالة قابلة للتعديل وفق السياسة.",
-        "risk": "critical",
-    },
-    Capability.MARK_DELIVERED: {
-        "label": "تأكيد التسليم",
-        "description": "تغيير حالة الطلب إلى تم التسليم.",
-        "risk": "critical",
-    },
-    Capability.REASSIGN_WORKER: {
-        "label": "تغيير العامل",
-        "description": "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.",
-        "risk": "sensitive",
-    },
-    Capability.MANAGE_FACTORY_SETTINGS: {
-        "label": "إدارة إعدادات المعمل",
-        "description": "تعديل إعدادات الإنتاج والمحسّن والتسعير الافتراضية.",
-        "risk": "critical",
-    },
-    Capability.MANAGE_USERS: {
-        "label": "إدارة المستخدمين",
-        "description": "إنشاء مستخدمي المعمل وتعديل حساباتهم وإسناد أدوارهم.",
-        "risk": "critical",
-    },
-    Capability.MANAGE_PERMISSIONS: {
-        "label": "إدارة الصلاحيات",
-        "description": "تعديل مصفوفة الصلاحيات لجميع الأدوار.",
-        "risk": "critical",
-    },
+    Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
+    Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
+    Capability.EDIT_ORDER: _presentation("تعديل الطلب", "تعديل الطلبات الموجودة في الحالات القابلة للتحرير.", "sensitive"),
+    Capability.CREATE_ORDER_REVISION: _presentation("إنشاء نسخة تعديل", "إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.", "sensitive"),
+    Capability.SUBMIT_ORDER: _presentation("إرسال للمراجعة", "نقل الطلب من المسودة إلى قائمة المراجعة."),
+    Capability.APPROVE_ORDER: _presentation("اعتماد الطلب", "اعتماد الطلب ليصبح جاهزًا للإنتاج.", "critical"),
+    Capability.REJECT_ORDER: _presentation("رفض الطلب", "رفض الطلب الموجود في قائمة المراجعة وإعادته للتعديل.", "critical"),
+    Capability.CANCEL_ORDER: _presentation("إلغاء الطلب", "إلغاء الطلب وفق ضوابط دورة الحياة.", "critical"),
+    Capability.VIEW_COSTS: _presentation("عرض التكلفة", "عرض بيانات التكلفة والأسعار والربحية المحمية.", "sensitive"),
+    Capability.EDIT_COST_SETTINGS: _presentation("تعديل إعدادات التكلفة", "تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.", "critical"),
+    Capability.EDIT_SPECIAL_PRICE: _presentation("تعديل سعر معتمد", "تغيير سعر درفة خاصة بعد اعتماده سابقًا.", "critical"),
+    Capability.APPROVE_SPECIAL_PRICE: _presentation("اعتماد سعر خاص", "اعتماد السعر النهائي للدرف الخاصة.", "critical"),
+    Capability.EDIT_REPLACEMENT_COST: _presentation("تعديل خسارة التعويض", "إدخال التكلفة الفعلية الداخلية عند إكمال قطعة التعويض.", "critical"),
+    Capability.PRINT_MEASUREMENTS: _presentation("طباعة القياسات", "طباعة مستند القياسات دون أي أسعار."),
+    Capability.PRINT_CUSTOMER_INVOICE: _presentation("طباعة فاتورة الزبون", "طباعة مستند الزبون المالي دون البيانات الداخلية.", "sensitive"),
+    Capability.PRINT_INTERNAL_COST_REPORT: _presentation("طباعة تقرير التكلفة الداخلي", "طباعة التقرير السري الذي يتضمن التكلفة والخسائر والربحية.", "critical"),
+    Capability.VIEW_CUTTING_PLAN: _presentation("عرض خطة القص", "عرض رسومات الخطة وبيانات ألواح القص."),
+    Capability.RECALCULATE_PLAN: _presentation("إعادة حساب الخطة", "إعادة تشغيل محرك توزيع القطع على الألواح.", "sensitive"),
+    Capability.EDIT_OPTIMIZER_SETTINGS: _presentation("تعديل إعدادات المحسّن", "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث.", "sensitive"),
+    Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
+    Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
+    Capability.EDIT_SPECIAL_DRAWING: _presentation("تعديل الرسم الخاص", "تحرير هندسة وملاحظات الدرف الخاصة.", "sensitive"),
+    Capability.EXPORT_DXF: _presentation("تصدير DXF", "تصدير رسم الإنتاج بصيغة DXF.", "sensitive"),
+    Capability.UPLOAD_DXF: _presentation("رفع DXF", "رفع خطة DXF مخصصة للطلب.", "sensitive"),
+    Capability.REPLACE_DXF: _presentation("استبدال DXF", "استبدال ملف DXF المرفوع سابقًا.", "critical"),
+    Capability.APPROVE_DXF: _presentation("اعتماد الرسم", "اعتماد خطة النظام أو الخطة المرفوعة كمصدر للإنتاج.", "critical"),
+    Capability.DISPATCH_ORDER: _presentation("إرسال الطلب للإنتاج", "اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.", "critical"),
+    Capability.START_ASSIGNED_STAGE: _presentation("بدء المرحلة المسندة", "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه."),
+    Capability.HANDOFF_ASSIGNED_STAGE: _presentation("تسليم المرحلة المسندة", "إنهاء المرحلة وإرسال الطلب إلى العامل التالي."),
+    Capability.REVERT_DEPARTMENT: _presentation("إرجاع الطلب لقسم سابق", "إعادة الطلب إلى مرحلة أو قسم سابق مع سجل تدقيق.", "critical"),
+    Capability.RETURN_ORDER_TO_DRAFT: _presentation("إعادة الطلب للمسودة", "إعادة الطلب إلى حالة قابلة للتعديل وفق السياسة.", "critical"),
+    Capability.MARK_DELIVERED: _presentation("تأكيد التسليم", "تغيير حالة الطلب إلى تم التسليم.", "critical"),
+    Capability.REASSIGN_WORKER: _presentation("تغيير العامل", "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.", "sensitive"),
+    Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),
+    Capability.RECORD_INCIDENT: _presentation("تسجيل حادث إنتاج", "تسجيل قطعة متضررة أو مشكلة أثناء التنفيذ.", "sensitive"),
+    Capability.CREATE_REPLACEMENT: _presentation("إنشاء قطعة تعويض", "إنشاء قطعة تعويض من حادث إنتاج مسجل.", "sensitive"),
+    Capability.VIEW_REPLACEMENTS: _presentation("عرض قطع التعويض", "فتح قطع التعويض ومتابعة حالتها."),
+    Capability.APPROVE_REPLACEMENT: _presentation("اعتماد قطعة التعويض", "اعتماد القطعة وإنشاء خطة القص المصغرة وتجميد تكلفتها المتوقعة.", "critical"),
+    Capability.START_REPLACEMENT: _presentation("بدء قطعة التعويض", "بدء تنفيذ قطعة تعويض معتمدة."),
+    Capability.COMPLETE_REPLACEMENT: _presentation("إكمال قطعة التعويض", "إنهاء قطعة التعويض وتحديث حالة الطلب."),
+    Capability.CANCEL_REPLACEMENT: _presentation("إلغاء قطعة التعويض", "إلغاء قطعة تعويض لم يبدأ تنفيذها بعد.", "critical"),
+    Capability.VIEW_OPERATIONAL_REPORTS: _presentation("عرض التقارير التشغيلية", "عرض الأداء والمراحل والحوادث دون التكلفة والخسائر المالية.", "sensitive"),
+    Capability.VIEW_FINANCIAL_REPORTS: _presentation("عرض التقارير المالية الداخلية", "عرض التكلفة الفعلية والهدر والخسائر الداخلية داخل التقارير.", "critical"),
+    Capability.MANAGE_FACTORY_SETTINGS: _presentation("إدارة إعدادات المعمل", "تعديل إعدادات الإنتاج والمحسّن والتسعير الافتراضية.", "critical"),
+    Capability.MANAGE_USERS: _presentation("إدارة المستخدمين", "إنشاء مستخدمي المعمل وتعديل حساباتهم وإسناد أدوارهم.", "critical"),
+    Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
 
+_REPLACEMENT_ACTIONS = frozenset(
+    {
+        Capability.APPROVE_REPLACEMENT,
+        Capability.START_REPLACEMENT,
+        Capability.COMPLETE_REPLACEMENT,
+        Capability.CANCEL_REPLACEMENT,
+        Capability.EDIT_REPLACEMENT_COST,
+    }
+)
+
+
 def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]:
-    """Normalize a role matrix and enforce the document-read dependency."""
+    """Normalize a role matrix and enforce cross-capability dependencies."""
 
     supplied = {str(key): value for key, value in dict(raw or {}).items()}
     unknown = set(supplied).difference(ALL_CAPABILITIES)
@@ -257,7 +161,48 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     }
     if order_actions:
         state[Capability.VIEW_ORDERS] = True
+
+    if any(state[capability] for capability in _REPLACEMENT_ACTIONS):
+        state[Capability.VIEW_REPLACEMENTS] = True
+
+    if state[Capability.ARCHIVE_APPROVED_PLAN]:
+        state[Capability.VIEW_CUTTING_PLAN] = True
+        state[Capability.PRINT_CUTTING_PLAN] = True
+
+    if state[Capability.VIEW_FINANCIAL_REPORTS]:
+        state[Capability.VIEW_OPERATIONAL_REPORTS] = True
+        state[Capability.VIEW_COSTS] = True
+
     return state
+
+
+def standard_permission_projection(
+    doctype: str,
+    state: Mapping[str, Any] | None,
+) -> dict[str, bool]:
+    """Project business grants onto the standard Frappe permission columns."""
+
+    normalized = normalize_capability_state(state)
+    enabled_for_doctype = any(
+        normalized[capability]
+        for capability, definition in CAPABILITY_CATALOG.items()
+        if definition.applies_to == doctype
+    )
+    if doctype == "Door Cutting Order":
+        return {
+            "read": normalized[Capability.VIEW_ORDERS],
+            "create": normalized[Capability.CREATE_ORDER],
+            "write": normalized[Capability.EDIT_ORDER],
+        }
+    if doctype == "Almdina ERP Settings":
+        return {
+            "read": enabled_for_doctype,
+            "create": False,
+            "write": normalized[Capability.MANAGE_FACTORY_SETTINGS],
+        }
+    if doctype == "Replacement Piece":
+        return {"read": enabled_for_doctype, "create": False, "write": False}
+    return {"read": enabled_for_doctype, "create": False, "write": False}
 
 
 def enabled_capabilities(state: Mapping[str, Any] | None) -> frozenset[str]:
@@ -348,4 +293,5 @@ __all__ = [
     "enabled_capabilities",
     "normalize_capability_state",
     "permission_impact",
+    "standard_permission_projection",
 ]
