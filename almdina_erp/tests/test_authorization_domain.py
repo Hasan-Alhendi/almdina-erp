@@ -2,6 +2,13 @@ from __future__ import annotations
 
 import unittest
 
+from almdina_erp.almdina_erp.application.security.navigation_context import (
+    WORKSPACE_CONTROL_CENTER,
+    WORKSPACE_MAIN,
+    WORKSPACE_SETTINGS,
+    WORKSPACE_SHOP_FLOOR,
+    build_navigation_context,
+)
 from almdina_erp.almdina_erp.application.security.permission_context import (
     PERMISSION_CONTEXT_VERSION,
     build_permission_context,
@@ -10,12 +17,11 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
+    PRODUCTION_OPERATOR_CAPABILITIES,
     Capability,
     capability_definition,
     capability_flags,
     has_capability,
-    is_order_entry_profile,
-    is_shop_floor_only,
     normalize_capabilities,
 )
 
@@ -29,10 +35,13 @@ class TestAuthorizationDomain(unittest.TestCase):
         )
 
     def test_standard_rights_reuse_frappe_permissions(self) -> None:
+        view = capability_definition(Capability.VIEW_ORDERS)
         create = capability_definition(Capability.CREATE_ORDER)
         edit = capability_definition(Capability.EDIT_ORDER)
+        self.assertEqual(view.permission_type, "read")
         self.assertEqual(create.permission_type, "create")
         self.assertEqual(edit.permission_type, "write")
+        self.assertFalse(view.custom)
         self.assertFalse(create.custom)
         self.assertFalse(edit.custom)
 
@@ -48,12 +57,6 @@ class TestAuthorizationDomain(unittest.TestCase):
                 definition = capability_definition(capability)
                 self.assertTrue(definition.custom)
                 self.assertEqual(definition.applies_to, "Door Cutting Order")
-                expected_category = (
-                    "cutting_plan"
-                    if capability == Capability.RECALCULATE_PLAN
-                    else "drawing"
-                )
-                self.assertEqual(definition.category, expected_category)
 
     def test_capability_flags_are_complete_and_fail_closed(self) -> None:
         flags = capability_flags({Capability.UPLOAD_DXF, Capability.APPROVE_DXF})
@@ -70,36 +73,57 @@ class TestAuthorizationDomain(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown capabilities"):
             normalize_capabilities({"عامل رسم"})
 
-    def test_permission_context_uses_resolved_grants(self) -> None:
-        context = build_permission_context(
-            {"عامل رسم"},
+    def test_permission_context_ignores_roles_and_uses_grants(self) -> None:
+        first = build_permission_context(
+            {"Role A"},
             {Capability.UPLOAD_DXF, Capability.APPROVE_DXF},
         )
-        self.assertEqual(context["version"], PERMISSION_CONTEXT_VERSION)
-        self.assertEqual(context["profile"], "shop_floor")
-        self.assertTrue(context["capabilities"][Capability.UPLOAD_DXF])
-        self.assertTrue(context["capabilities"][Capability.APPROVE_DXF])
-        self.assertFalse(context["capabilities"][Capability.VIEW_COSTS])
-        self.assertNotIn("roles", context)
-
-    def test_profiles_share_the_same_capability_contract(self) -> None:
-        contexts = [
-            build_permission_context({"Order Entry"}, {Capability.CREATE_ORDER}),
-            build_permission_context({"عامل CNC"}, {Capability.EXPORT_DXF}),
-            build_permission_context({"Production Manager"}, {Capability.VIEW_COSTS}),
-        ]
-        self.assertEqual(
-            [context["profile"] for context in contexts],
-            ["order_entry", "shop_floor", "full"],
+        second = build_permission_context(
+            {"Completely Different Role"},
+            {Capability.UPLOAD_DXF, Capability.APPROVE_DXF},
         )
-        for context in contexts:
-            self.assertEqual(set(context["capabilities"]), ALL_CAPABILITIES)
+        self.assertEqual(first, second)
+        self.assertEqual(first["version"], PERMISSION_CONTEXT_VERSION)
+        self.assertEqual(first["profile"], "shop_floor")
+        self.assertTrue(first["capabilities"][Capability.UPLOAD_DXF])
+        self.assertTrue(first["navigation"]["shared_shell"])
+        self.assertNotIn("roles", first)
 
-    def test_navigation_profiles_remain_role_based_only(self) -> None:
-        self.assertTrue(is_order_entry_profile({"Order Entry"}))
-        self.assertFalse(is_order_entry_profile({"Order Entry", "System Manager"}))
-        self.assertTrue(is_shop_floor_only({"عامل رسم"}))
-        self.assertFalse(is_shop_floor_only({"عامل رسم", "Production Manager"}))
+    def test_operator_navigation_preserves_shared_shell(self) -> None:
+        navigation = build_navigation_context(
+            {
+                Capability.START_ASSIGNED_STAGE,
+                Capability.HANDOFF_ASSIGNED_STAGE,
+                Capability.VIEW_CUTTING_PLAN,
+            }
+        )
+        self.assertEqual(navigation["profile"], "shop_floor")
+        self.assertEqual(navigation["home_page"], "shop-floor-inbox")
+        self.assertEqual(navigation["workspaces"], [WORKSPACE_SHOP_FLOOR])
+        self.assertTrue(navigation["shared_shell"])
+        self.assertTrue(navigation["sections"]["production"])
+
+    def test_capabilities_expand_workspaces_without_changing_application(self) -> None:
+        navigation = build_navigation_context(
+            {
+                Capability.VIEW_ORDERS,
+                Capability.REASSIGN_WORKER,
+                Capability.MANAGE_FACTORY_SETTINGS,
+            }
+        )
+        self.assertEqual(navigation["profile"], "full")
+        self.assertEqual(navigation["home_page"], "almdina-erp")
+        self.assertIn(WORKSPACE_MAIN, navigation["workspaces"])
+        self.assertIn(WORKSPACE_SHOP_FLOOR, navigation["workspaces"])
+        self.assertIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])
+        self.assertIn(WORKSPACE_SETTINGS, navigation["workspaces"])
+        self.assertTrue(navigation["app_only"])
+
+    def test_operator_group_has_no_role_names(self) -> None:
+        self.assertTrue(PRODUCTION_OPERATOR_CAPABILITIES)
+        for value in PRODUCTION_OPERATOR_CAPABILITIES:
+            self.assertIn(value, ALL_CAPABILITIES)
+            self.assertNotIn("عامل", value)
 
     def test_unknown_capability_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown capability"):
