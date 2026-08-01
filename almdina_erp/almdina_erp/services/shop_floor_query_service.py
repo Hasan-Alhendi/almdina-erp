@@ -59,12 +59,23 @@ def get_my_archive() -> list[dict[str, Any]]:
 @frappe.whitelist()
 def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
     result = _execute(queries.get_order_detail, order_name)
-    return present_order_detail(
+    payload = present_order_detail(
         result,
         translate=_,
         escape=lambda value: frappe.utils.escape_html(str(value)),
         dumps=frappe.as_json,
     )
+    stage_snapshot = result["stage_snapshot"]
+    payload.update(
+        {
+            "active_stage_assigned_to": stage_snapshot.get(
+                "active_stage_assigned_to"
+            ),
+            "can_reassign_worker": stage_snapshot.get("can_reassign_worker"),
+            "production_actions": stage_snapshot.get("production_actions") or {},
+        }
+    )
+    return payload
 
 
 __all__ = [
