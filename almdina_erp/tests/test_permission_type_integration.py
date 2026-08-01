@@ -80,6 +80,11 @@ class TestPermissionTypeIntegration(unittest.TestCase):
 
     def test_business_permission_types_are_installed_without_role_grants(self) -> None:
         capabilities = (
+            Capability.CREATE_ORDER_REVISION,
+            Capability.SUBMIT_ORDER,
+            Capability.APPROVE_ORDER,
+            Capability.CANCEL_ORDER,
+            Capability.RETURN_ORDER_TO_DRAFT,
             Capability.RECALCULATE_PLAN,
             Capability.EXPORT_DXF,
             Capability.UPLOAD_DXF,
@@ -125,6 +130,15 @@ class TestPermissionTypeIntegration(unittest.TestCase):
         self._assert_arbitrary_role_grant(
             Capability.PRINT_INTERNAL_COST_REPORT,
             "InternalReport",
+        )
+
+    def test_administrator_can_grant_lifecycle_actions_to_any_role(self) -> None:
+        self._assert_arbitrary_role_grant(Capability.SUBMIT_ORDER, "SubmitOrder")
+        self._assert_arbitrary_role_grant(Capability.APPROVE_ORDER, "ApproveOrder")
+        self._assert_arbitrary_role_grant(Capability.CANCEL_ORDER, "CancelOrder")
+        self._assert_arbitrary_role_grant(
+            Capability.RETURN_ORDER_TO_DRAFT,
+            "ReturnOrder",
         )
 
     def test_permission_type_sync_is_idempotent(self) -> None:
