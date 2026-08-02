@@ -114,6 +114,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.CREATE_EDGE_BANDING_TYPES: _presentation("إنشاء نوع قشاط", "إضافة نوع قشاط جديد.", "sensitive"),
     Capability.EDIT_EDGE_BANDING_TYPES: _presentation("تعديل أنواع القشاط", "تعديل السماكة والسعر والخصائص أو تعطيل النوع.", "critical"),
     Capability.DELETE_EDGE_BANDING_TYPES: _presentation("حذف نوع قشاط", "حذف نوع غير مستخدم في أي طلب أو قطعة.", "critical"),
+    Capability.VIEW_CUSTOMERS: _presentation("عرض الزبائن للطلبات", "اختيار الزبون وعرض اسمه عند إنشاء الطلب أو تعديله."),
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
@@ -174,6 +175,13 @@ _EDGE_ACTIONS = frozenset(
         Capability.DELETE_EDGE_BANDING_TYPES,
     }
 )
+_ORDER_INPUT_ACTIONS = frozenset(
+    {
+        Capability.CREATE_ORDER,
+        Capability.EDIT_ORDER,
+        Capability.CREATE_ORDER_REVISION,
+    }
+)
 
 
 def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]:
@@ -226,6 +234,13 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if any(state[capability] for capability in _ROUTING_ACTIONS):
         state[Capability.VIEW_PRODUCTION_ROUTINGS] = True
     if any(state[capability] for capability in _EDGE_ACTIONS):
+        state[Capability.VIEW_EDGE_BANDING_TYPES] = True
+    if any(state[capability] for capability in _ORDER_INPUT_ACTIONS):
+        # Customer and edge profiles are required inputs of an order.  Keep the
+        # dependency capability-based so any administrator-selected role can
+        # enter orders without inheriting Sales User, Order Entry, or another
+        # hard-coded role.
+        state[Capability.VIEW_CUSTOMERS] = True
         state[Capability.VIEW_EDGE_BANDING_TYPES] = True
     return state
 
@@ -280,6 +295,15 @@ def standard_permission_projection(
             "create": normalized[Capability.CREATE_PRODUCTION_ROUTINGS],
             "write": normalized[Capability.EDIT_PRODUCTION_ROUTINGS],
             "delete": normalized[Capability.DELETE_PRODUCTION_ROUTINGS],
+        }
+    if doctype == "Customer":
+        can_read = normalized[Capability.VIEW_CUSTOMERS]
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": False,
+            "write": False,
+            "delete": False,
         }
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]

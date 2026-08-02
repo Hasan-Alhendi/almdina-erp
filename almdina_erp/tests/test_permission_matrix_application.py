@@ -43,6 +43,17 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         empty = normalize_capability_state({Capability.VIEW_ORDERS: False})
         self.assertFalse(empty[Capability.VIEW_ORDERS])
 
+    def test_order_input_actions_include_required_customer_and_edge_reads(self) -> None:
+        for action in (
+            Capability.CREATE_ORDER,
+            Capability.EDIT_ORDER,
+            Capability.CREATE_ORDER_REVISION,
+        ):
+            with self.subTest(action=action):
+                state = normalize_capability_state({action: True})
+                self.assertTrue(state[Capability.VIEW_CUSTOMERS])
+                self.assertTrue(state[Capability.VIEW_EDGE_BANDING_TYPES])
+
     def test_plan_actions_automatically_require_plan_view(self) -> None:
         for action in (
             Capability.RECALCULATE_PLAN,
@@ -90,11 +101,17 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             "Edge Banding Type",
             {Capability.VIEW_EDGE_BANDING_TYPES: True},
         )
+        customer = standard_permission_projection(
+            "Customer",
+            {Capability.VIEW_CUSTOMERS: True},
+        )
 
         self.assertTrue(order["read"])
         self.assertTrue(order["select"])
         self.assertTrue(edge["read"])
         self.assertTrue(edge["select"])
+        self.assertTrue(customer["read"])
+        self.assertTrue(customer["select"])
 
     def test_cost_capabilities_project_to_field_permission_level_one(self) -> None:
         read_only = field_permission_projection(

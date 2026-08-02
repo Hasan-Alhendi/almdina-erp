@@ -163,13 +163,15 @@ def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost
     assert "جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية" in operator
 
 
-def test_accounting_approval_is_role_checked_audited_and_invalidated_by_geometry_changes():
+def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
     order = ORDER_PY.read_text(encoding="utf-8")
     cost = COST_UX.read_text(encoding="utf-8")
 
-    assert 'SPECIAL_PRICE_APPROVER_ROLES = {"Accounts Management", "System Manager"}' in service
-    assert "has_special_price_approval_role()" in service
+    assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
+    assert "doctype_has_any_capability" in service
+    assert "SPECIAL_PRICE_APPROVER_ROLES" not in service
+    assert "has_special_price_approval_permission()" in service
     assert "special_shape_price_approved_by = frappe.session.user" in service
     assert "special_shape_price_approved_on = now_datetime()" in service
     assert "order.save(ignore_permissions=True)" in service

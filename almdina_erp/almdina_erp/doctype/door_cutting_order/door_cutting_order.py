@@ -17,7 +17,7 @@ from almdina_erp.almdina_erp.services.cutting_engine import (
     validate_plan,
 )
 from almdina_erp.almdina_erp.services.special_shape_service import (
-    has_special_price_approval_role,
+    has_special_price_approval_permission,
     validate_special_shape_drawing,
     validate_special_shape_geometry,
 )
@@ -139,7 +139,7 @@ class DoorCuttingOrder(Document):
             old_doc
             and str(old_doc.default_edge_type or "") != str(self.default_edge_type or "")
         )
-        can_approve_price = has_special_price_approval_role()
+        can_approve_price = has_special_price_approval_permission()
         approval_action = bool(self.flags.get("special_price_approval_action"))
 
         for index, row in enumerate(self.pieces or [], start=1):
@@ -336,7 +336,7 @@ class DoorCuttingOrder(Document):
                 if protected_price_changed and not safe_geometry_invalidation:
                     frappe.throw(
                         _(
-                            "Row {0}: only Accounts Management can change or approve "
+                            "Row {0}: you do not have permission to change or approve "
                             "the special door price."
                         ).format(index),
                         frappe.PermissionError,
@@ -859,7 +859,7 @@ class DoorCuttingOrder(Document):
         if pending:
             frappe.throw(
                 _(
-                    "Accounts Management must approve every special door price before "
+                    "Every special door price must be approved before "
                     "production approval. Pending rows: {0}."
                 ).format(", ".join(pending))
             )

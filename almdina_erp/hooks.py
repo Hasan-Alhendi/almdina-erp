@@ -31,6 +31,10 @@ app_include_js = [
 
 doctype_js = {
     "Door Cutting Order": [
+        # Keep the authorization context inside FormMeta as well as the global
+        # Desk include.  Frappe reads these files from the app source, so order
+        # access does not fail when a Docker sites/assets volume is stale.
+        "public/js/permission_context.js",
         "public/js/door_cutting_order_document_context.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_output_contract.js",
@@ -64,6 +68,7 @@ doctype_js = {
         "public/js/door_cutting_order_cost_presenter.js",
         "public/js/door_cutting_order_cost_permissions_ux.js",
         "public/js/door_cutting_order_financial_documents_ux.js",
+        "public/js/door_cutting_order_customer_invoice_toolbar_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order_save_render_performance_ux.js",
@@ -73,6 +78,7 @@ doctype_js = {
         "public/js/door_cutting_order_plan_controls_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_plan_tabs_ux.js",
+        "public/js/door_cutting_order_tab_permissions_ux.js",
         "public/js/door_cutting_order_permission_refresh_ux.js",
         "public/js/door_cutting_order_drawing_plan_ux.js",
         "public/js/door_cutting_order_header_ux.js",
@@ -85,7 +91,10 @@ doctype_js = {
         "public/js/input_stability.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
-    "Replacement Piece": "public/js/replacement_piece.js",
+    "Replacement Piece": [
+        "public/js/permission_context.js",
+        "public/js/replacement_piece.js",
+    ],
 }
 
 doctype_list_js = {

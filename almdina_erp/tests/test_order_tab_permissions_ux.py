@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TAB_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_tab_permissions_ux.js"
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
+HOOKS = ROOT / "hooks.py"
 
 
 class TestOrderTabPermissionsUX(unittest.TestCase):
@@ -28,17 +29,15 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
         self.assertNotIn("Accounts Management", source)
         self.assertNotIn("System Manager", source)
 
-    def test_permission_context_loads_tab_policy_with_other_protected_modules(self) -> None:
+    def test_permission_context_waits_for_source_registered_protected_modules(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
-        path = '"/assets/almdina_erp/js/door_cutting_order_tab_permissions_ux.js"'
+        hooks = HOOKS.read_text(encoding="utf-8")
         global_name = 'global: "AlmdinaOrderTabPermissionsUX"'
 
-        self.assertIn(path, source)
         self.assertIn(global_name, source)
-        self.assertLess(
-            source.index('"/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js"'),
-            source.index(path),
-        )
+        self.assertIn("Waiting for their globals", source)
+        self.assertNotIn("frappe.require(module.path)", source)
+        self.assertIn('"public/js/door_cutting_order_tab_permissions_ux.js"', hooks)
 
 
 if __name__ == "__main__":

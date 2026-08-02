@@ -55,15 +55,38 @@ _CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
 _CONFIGURATION_CAPABILITIES = frozenset(
     FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 )
+_ORDER_INPUT_CAPABILITIES = frozenset(
+    {
+        Capability.CREATE_ORDER,
+        Capability.EDIT_ORDER,
+        Capability.CREATE_ORDER_REVISION,
+    }
+)
+_ORDER_SUPPORTING_MASTER_DATA = frozenset(
+    {
+        Capability.VIEW_CUSTOMERS,
+        Capability.VIEW_EDGE_BANDING_TYPES,
+    }
+)
 
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
     return bool(granted.intersection(requested))
 
 
+def _visible_configuration_capabilities(granted: frozenset[str]) -> frozenset[str]:
+    """Exclude read dependencies that exist only to complete order entry UX."""
+
+    visible = set(granted.intersection(_CONFIGURATION_CAPABILITIES))
+    if _intersects(granted, _ORDER_INPUT_CAPABILITIES):
+        visible.difference_update(_ORDER_SUPPORTING_MASTER_DATA)
+    return frozenset(visible)
+
+
 def _profile(granted: frozenset[str]) -> str:
     if not granted:
         return "shared"
+    visible_configuration = _visible_configuration_capabilities(granted)
     broad = frozenset(
         _ORDER_MANAGEMENT_CAPABILITIES
         | _FINANCIAL_CAPABILITIES
@@ -71,7 +94,7 @@ def _profile(granted: frozenset[str]) -> str:
         | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | WORKFORCE_CAPABILITIES
-        | _CONFIGURATION_CAPABILITIES
+        | visible_configuration
         | frozenset({Capability.MANAGE_PERMISSIONS})
     )
     if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
@@ -97,7 +120,7 @@ def _profile(granted: frozenset[str]) -> str:
         | CONTROL_CENTER_CAPABILITIES
         | REPORTING_CAPABILITIES
         | WORKFORCE_CAPABILITIES
-        | _CONFIGURATION_CAPABILITIES
+        | visible_configuration
         | frozenset({Capability.MANAGE_PERMISSIONS}),
     ):
         return "order_entry"
@@ -118,7 +141,8 @@ def build_navigation_context(
     has_reports = _intersects(granted, REPORTING_CAPABILITIES)
     has_workforce = _intersects(granted, WORKFORCE_CAPABILITIES)
     has_factory_settings = _intersects(granted, FACTORY_SETTINGS_CAPABILITIES)
-    has_master_data = _intersects(granted, MASTER_DATA_CAPABILITIES)
+    visible_configuration = _visible_configuration_capabilities(granted)
+    has_master_data = _intersects(visible_configuration, MASTER_DATA_CAPABILITIES)
     has_permissions_admin = Capability.MANAGE_PERMISSIONS in granted
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
@@ -140,7 +164,7 @@ def build_navigation_context(
             | REPORTING_CAPABILITIES
             | PRODUCTION_SUPERVISOR_CAPABILITIES
             | WORKFORCE_CAPABILITIES
-            | _CONFIGURATION_CAPABILITIES
+            | visible_configuration
             | frozenset({Capability.MANAGE_PERMISSIONS}),
         )
     )

@@ -120,6 +120,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             "Replacement Piece",
             "Almdina ERP Settings",
             "Production Routing",
+            "Customer",
             "Edge Banding Type",
         ):
             frappe.clear_cache(doctype=doctype)
@@ -253,8 +254,24 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             Capability.VIEW_COSTS,
             Capability.VIEW_CUTTING_PLAN,
             Capability.RECALCULATE_PLAN,
+            Capability.VIEW_CUSTOMERS,
+            Capability.VIEW_EDGE_BANDING_TYPES,
         ):
             self.assertTrue(result["capabilities"][capability], capability)
+
+        for doctype in ("Customer", "Edge Banding Type"):
+            permission = frappe.db.get_value(
+                "Custom DocPerm",
+                {
+                    "parent": doctype,
+                    "role": TARGET_ROLE,
+                    "permlevel": 0,
+                },
+                ["read", "select"],
+                as_dict=True,
+            )
+            self.assertEqual(int(permission.read), 1, doctype)
+            self.assertEqual(int(permission.select), 1, doctype)
 
         field_permission = frappe.db.get_value(
             "Custom DocPerm",
@@ -271,6 +288,8 @@ class TestPermissionManagementIntegration(FrappeTestCase):
 
         frappe.clear_cache(user=TARGET_USER)
         frappe.clear_cache(doctype="Door Cutting Order")
+        frappe.clear_cache(doctype="Customer")
+        frappe.clear_cache(doctype="Edge Banding Type")
         for permission_type in (
             "read",
             "create",
@@ -286,6 +305,16 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                     user=TARGET_USER,
                 ),
                 permission_type,
+            )
+
+        for doctype in ("Customer", "Edge Banding Type"):
+            self.assertTrue(
+                frappe.has_permission(
+                    doctype,
+                    ptype="read",
+                    user=TARGET_USER,
+                ),
+                doctype,
             )
 
         permitted_fields = frappe.get_meta(

@@ -85,5 +85,33 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
         ):
             self.assertEqual(int(row.get(capability)), 0)
 
+    def test_migrate_repairs_customer_and_edge_reads_for_order_editors(self) -> None:
+        frappe.get_doc(
+            {
+                "doctype": "Custom DocPerm",
+                "parent": "Door Cutting Order",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": ROLE,
+                "permlevel": 0,
+                "read": 1,
+                "create": 1,
+                "write": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        sync_permission_types()
+
+        for doctype in ("Customer", "Edge Banding Type"):
+            permission = frappe.db.get_value(
+                "Custom DocPerm",
+                {"parent": doctype, "role": ROLE, "permlevel": 0},
+                ["read", "select"],
+                as_dict=True,
+            )
+            self.assertIsNotNone(permission, doctype)
+            self.assertEqual(int(permission.read), 1, doctype)
+            self.assertEqual(int(permission.select), 1, doctype)
+
 
 __all__ = ["TestPermissionProjectionMigrationIntegration"]

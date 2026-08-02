@@ -1,6 +1,15 @@
 (() => {
     "use strict";
 
+    if (window.AlmdinaPermissions) {
+        window.setTimeout(() => {
+            window.AlmdinaPermissions.refresh()
+                .then(() => window.AlmdinaPermissions.loadOrderModules())
+                .catch(error => console.error("Failed to refresh Almdina permissions", error));
+        }, 0);
+        return;
+    }
+
     const EMPTY_NAVIGATION = Object.freeze({
         shared_shell: false,
         app_only: false,
@@ -27,6 +36,7 @@
         create_production_routings: "create",
         edit_production_routings: "write",
         delete_production_routings: "delete",
+        view_customers: "read",
         view_edge_banding_types: "read",
         create_edge_banding_types: "create",
         edit_edge_banding_types: "write",
@@ -35,19 +45,15 @@
 
     const ORDER_MODULES = Object.freeze([
         Object.freeze({
-            path: "/assets/almdina_erp/js/door_cutting_order_cost_presenter.js",
             global: "AlmdinaOrderCostUX",
         }),
         Object.freeze({
-            path: "/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js",
             global: "AlmdinaOrderPermissionRefreshUX",
         }),
         Object.freeze({
-            path: "/assets/almdina_erp/js/door_cutting_order_tab_permissions_ux.js",
             global: "AlmdinaOrderTabPermissionsUX",
         }),
         Object.freeze({
-            path: "/assets/almdina_erp/js/door_cutting_order_customer_invoice_toolbar_ux.js",
             global: "AlmdinaCustomerInvoiceToolbarUX",
         }),
     ]);
@@ -176,11 +182,9 @@
         if (globalExists(module.global)) {
             return Promise.resolve(window[module.global]);
         }
-        try {
-            frappe.require(module.path);
-        } catch (error) {
-            return Promise.reject(error);
-        }
+        // Protected order modules are registered through doctype_js/FormMeta.
+        // Waiting for their globals keeps the runtime independent from the
+        // mutable sites/assets volume used by container deployments.
         return waitForGlobal(module.global);
     }
 
@@ -201,8 +205,9 @@
     function loadOrderModules() {
         if (modulesPromise) return modulesPromise;
         if (
-            !window.frappe
-            || typeof frappe.require !== "function"
+            !window.cur_frm
+            || window.cur_frm.doctype !== "Door Cutting Order"
+            || !window.frappe
             || !frappe.ui
             || !frappe.ui.form
             || typeof frappe.ui.form.on !== "function"
@@ -277,6 +282,10 @@
     let attempts = 0;
     const timer = window.setInterval(() => {
         attempts += 1;
+        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
+            if (attempts >= 100) window.clearInterval(timer);
+            return;
+        }
         const loading = loadOrderModules();
         if (loading || attempts >= 100) {
             window.clearInterval(timer);
