@@ -117,17 +117,63 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
-_REPLACEMENT_ACTIONS = frozenset({
-    Capability.APPROVE_REPLACEMENT,
-    Capability.START_REPLACEMENT,
-    Capability.COMPLETE_REPLACEMENT,
-    Capability.CANCEL_REPLACEMENT,
-    Capability.EDIT_REPLACEMENT_COST,
-})
-_WORKFORCE_ACTIONS = frozenset(WORKFORCE_CAPABILITIES.difference({Capability.VIEW_USERS, Capability.MANAGE_USERS}))
-_FACTORY_SECTION_EDITS = frozenset(FACTORY_SETTINGS_CAPABILITIES.difference({Capability.VIEW_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS}))
-_ROUTING_ACTIONS = frozenset({Capability.CREATE_PRODUCTION_ROUTINGS, Capability.EDIT_PRODUCTION_ROUTINGS, Capability.DELETE_PRODUCTION_ROUTINGS})
-_EDGE_ACTIONS = frozenset({Capability.CREATE_EDGE_BANDING_TYPES, Capability.EDIT_EDGE_BANDING_TYPES, Capability.DELETE_EDGE_BANDING_TYPES})
+_REPLACEMENT_ACTIONS = frozenset(
+    {
+        Capability.APPROVE_REPLACEMENT,
+        Capability.START_REPLACEMENT,
+        Capability.COMPLETE_REPLACEMENT,
+        Capability.CANCEL_REPLACEMENT,
+        Capability.EDIT_REPLACEMENT_COST,
+    }
+)
+_COST_VIEW_ACTIONS = frozenset(
+    {
+        Capability.EDIT_COST_SETTINGS,
+        Capability.EDIT_SPECIAL_PRICE,
+        Capability.APPROVE_SPECIAL_PRICE,
+        Capability.PRINT_INTERNAL_COST_REPORT,
+    }
+)
+_PLAN_VIEW_ACTIONS = frozenset(
+    {
+        Capability.RECALCULATE_PLAN,
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        Capability.PRINT_CUTTING_PLAN,
+    }
+)
+_DRAWING_VIEW_ACTIONS = frozenset(
+    {
+        Capability.EDIT_SPECIAL_DRAWING,
+        Capability.EXPORT_DXF,
+        Capability.UPLOAD_DXF,
+        Capability.REPLACE_DXF,
+        Capability.APPROVE_DXF,
+    }
+)
+_WORKFORCE_ACTIONS = frozenset(
+    WORKFORCE_CAPABILITIES.difference(
+        {Capability.VIEW_USERS, Capability.MANAGE_USERS}
+    )
+)
+_FACTORY_SECTION_EDITS = frozenset(
+    FACTORY_SETTINGS_CAPABILITIES.difference(
+        {Capability.VIEW_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS}
+    )
+)
+_ROUTING_ACTIONS = frozenset(
+    {
+        Capability.CREATE_PRODUCTION_ROUTINGS,
+        Capability.EDIT_PRODUCTION_ROUTINGS,
+        Capability.DELETE_PRODUCTION_ROUTINGS,
+    }
+)
+_EDGE_ACTIONS = frozenset(
+    {
+        Capability.CREATE_EDGE_BANDING_TYPES,
+        Capability.EDIT_EDGE_BANDING_TYPES,
+        Capability.DELETE_EDGE_BANDING_TYPES,
+    }
+)
 
 
 def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]:
@@ -138,14 +184,25 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if unknown:
         raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}")
 
-    state = {capability: supplied.get(capability) is True for capability in sorted(ALL_CAPABILITIES)}
+    state = {
+        capability: supplied.get(capability) is True
+        for capability in sorted(ALL_CAPABILITIES)
+    }
     order_actions = {
         capability
         for capability, enabled in state.items()
-        if enabled and CAPABILITY_CATALOG[capability].applies_to == "Door Cutting Order" and capability != Capability.VIEW_ORDERS
+        if enabled
+        and CAPABILITY_CATALOG[capability].applies_to == "Door Cutting Order"
+        and capability != Capability.VIEW_ORDERS
     }
     if order_actions:
         state[Capability.VIEW_ORDERS] = True
+    if any(state[capability] for capability in _COST_VIEW_ACTIONS):
+        state[Capability.VIEW_COSTS] = True
+    if any(state[capability] for capability in _PLAN_VIEW_ACTIONS):
+        state[Capability.VIEW_CUTTING_PLAN] = True
+    if any(state[capability] for capability in _DRAWING_VIEW_ACTIONS):
+        state[Capability.VIEW_DRAWING_WORKSPACE] = True
     if any(state[capability] for capability in _REPLACEMENT_ACTIONS):
         state[Capability.VIEW_REPLACEMENTS] = True
     if state[Capability.ARCHIVE_APPROVED_PLAN]:
@@ -173,19 +230,48 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     return state
 
 
-def standard_permission_projection(doctype: str, state: Mapping[str, Any] | None) -> dict[str, bool]:
+def standard_permission_projection(
+    doctype: str,
+    state: Mapping[str, Any] | None,
+) -> dict[str, bool]:
     """Project business grants onto standard Frappe permission columns."""
 
     normalized = normalize_capability_state(state)
     if doctype == "Door Cutting Order":
         can_read = normalized[Capability.VIEW_ORDERS]
-        return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_ORDER], "write": normalized[Capability.EDIT_ORDER], "delete": False}
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": normalized[Capability.CREATE_ORDER],
+            "write": normalized[Capability.EDIT_ORDER],
+            "delete": False,
+        }
     if doctype == "Almdina ERP Settings":
-        can_read_settings = normalized[Capability.VIEW_FACTORY_SETTINGS] or any(normalized[value] for value in _FACTORY_SECTION_EDITS) or normalized[Capability.MANAGE_FACTORY_SETTINGS]
-        return {"read": can_read_settings, "select": can_read_settings, "create": False, "write": False, "delete": False}
+        can_read_settings = (
+            normalized[Capability.VIEW_FACTORY_SETTINGS]
+            or any(normalized[value] for value in _FACTORY_SECTION_EDITS)
+            or normalized[Capability.MANAGE_FACTORY_SETTINGS]
+        )
+        return {
+            "read": can_read_settings,
+            "select": can_read_settings,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
     if doctype == "Replacement Piece":
-        enabled = any(normalized[capability] for capability, definition in CAPABILITY_CATALOG.items() if definition.applies_to == doctype)
-        return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
+        enabled = any(
+            normalized[capability]
+            for capability, definition in CAPABILITY_CATALOG.items()
+            if definition.applies_to == doctype
+        )
+        return {
+            "read": enabled,
+            "select": enabled,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
     if doctype == "Production Routing":
         can_read = normalized[Capability.VIEW_PRODUCTION_ROUTINGS]
         return {
@@ -204,13 +290,27 @@ def standard_permission_projection(doctype: str, state: Mapping[str, Any] | None
             "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES],
             "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES],
         }
-    enabled = any(normalized[capability] for capability, definition in CAPABILITY_CATALOG.items() if definition.applies_to == doctype)
-    return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
+    enabled = any(
+        normalized[capability]
+        for capability, definition in CAPABILITY_CATALOG.items()
+        if definition.applies_to == doctype
+    )
+    return {
+        "read": enabled,
+        "select": enabled,
+        "create": False,
+        "write": False,
+        "delete": False,
+    }
 
 
 def enabled_capabilities(state: Mapping[str, Any] | None) -> frozenset[str]:
     normalized = normalize_capability_state(state)
-    return normalize_capabilities(capability for capability, enabled in normalized.items() if enabled)
+    return normalize_capabilities(
+        capability
+        for capability, enabled in normalized.items()
+        if enabled
+    )
 
 
 def capability_catalog_payload() -> list[dict[str, Any]]:
@@ -222,29 +322,37 @@ def capability_catalog_payload() -> list[dict[str, Any]]:
             if definition.category != category:
                 continue
             presentation = CAPABILITY_PRESENTATION[capability]
-            capabilities.append({
-                "key": capability,
-                "label": presentation["label"],
-                "description": presentation["description"],
-                "risk": presentation["risk"],
-                "permission_type": definition.permission_type,
-                "doctype": definition.applies_to,
-                "standard": not definition.custom,
-            })
-        groups.append({
-            "key": category,
-            "label": category_meta["label"],
-            "description": category_meta["description"],
-            "icon": category_meta["icon"],
-            "capabilities": capabilities,
-        })
+            capabilities.append(
+                {
+                    "key": capability,
+                    "label": presentation["label"],
+                    "description": presentation["description"],
+                    "risk": presentation["risk"],
+                    "permission_type": definition.permission_type,
+                    "doctype": definition.applies_to,
+                    "standard": not definition.custom,
+                }
+            )
+        groups.append(
+            {
+                "key": category,
+                "label": category_meta["label"],
+                "description": category_meta["description"],
+                "icon": category_meta["icon"],
+                "capabilities": capabilities,
+            }
+        )
     return groups
 
 
 def permission_impact(state: Mapping[str, Any] | None) -> dict[str, Any]:
     normalized = normalize_capability_state(state)
     granted = enabled_capabilities(normalized)
-    critical = sorted(capability for capability in granted if CAPABILITY_PRESENTATION[capability]["risk"] == "critical")
+    critical = sorted(
+        capability
+        for capability in granted
+        if CAPABILITY_PRESENTATION[capability]["risk"] == "critical"
+    )
     return {
         "enabled_count": len(granted),
         "critical_count": len(critical),
@@ -253,7 +361,10 @@ def permission_impact(state: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def changed_capabilities(before: Mapping[str, Any] | None, after: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+def changed_capabilities(
+    before: Mapping[str, Any] | None,
+    after: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
     old = normalize_capability_state(before)
     new = normalize_capability_state(after)
     changes = []
@@ -261,13 +372,15 @@ def changed_capabilities(before: Mapping[str, Any] | None, after: Mapping[str, A
         if old[capability] == new[capability]:
             continue
         presentation = CAPABILITY_PRESENTATION[capability]
-        changes.append({
-            "key": capability,
-            "label": presentation["label"],
-            "risk": presentation["risk"],
-            "before": old[capability],
-            "after": new[capability],
-        })
+        changes.append(
+            {
+                "key": capability,
+                "label": presentation["label"],
+                "risk": presentation["risk"],
+                "before": old[capability],
+                "after": new[capability],
+            }
+        )
     return changes
 
 
