@@ -256,6 +256,19 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         ):
             self.assertTrue(result["capabilities"][capability], capability)
 
+        field_permission = frappe.db.get_value(
+            "Custom DocPerm",
+            {
+                "parent": "Door Cutting Order",
+                "role": TARGET_ROLE,
+                "permlevel": 1,
+            },
+            ["read", "write"],
+            as_dict=True,
+        )
+        self.assertEqual(int(field_permission.read), 1)
+        self.assertEqual(int(field_permission.write), 0)
+
         frappe.clear_cache(user=TARGET_USER)
         frappe.clear_cache(doctype="Door Cutting Order")
         for permission_type in (
@@ -274,6 +287,52 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 ),
                 permission_type,
             )
+
+        permitted_fields = frappe.get_meta(
+            "Door Cutting Order"
+        ).get_permitted_fieldnames(user=TARGET_USER)
+        self.assertIn("board_rate_usd", permitted_fields)
+        self.assertIn("total_cost_usd", permitted_fields)
+
+    def test_cost_edit_grant_projects_write_and_noop_save_repairs_it(self) -> None:
+        from almdina_erp.almdina_erp.services.permission_management_service import (
+            update_role_permissions,
+        )
+
+        frappe.set_user(ADMIN_USER)
+        result = update_role_permissions(
+            TARGET_ROLE,
+            {
+                Capability.CREATE_ORDER: True,
+                Capability.EDIT_ORDER: True,
+                Capability.EDIT_COST_SETTINGS: True,
+            },
+        )
+        self.assertTrue(result["capabilities"][Capability.VIEW_COSTS])
+
+        filters = {
+            "parent": "Door Cutting Order",
+            "role": TARGET_ROLE,
+            "permlevel": 1,
+        }
+        permission_name = frappe.db.get_value("Custom DocPerm", filters)
+        frappe.db.set_value("Custom DocPerm", permission_name, "write", 0)
+        frappe.clear_cache(doctype="Door Cutting Order")
+
+        repaired = update_role_permissions(
+            TARGET_ROLE,
+            result["capabilities"],
+        )
+
+        self.assertFalse(repaired["changed"])
+        field_permission = frappe.db.get_value(
+            "Custom DocPerm",
+            filters,
+            ["read", "write"],
+            as_dict=True,
+        )
+        self.assertEqual(int(field_permission.read), 1)
+        self.assertEqual(int(field_permission.write), 1)
 
     def test_partial_custom_matrix_repairs_untouched_standard_role_access(self) -> None:
         frappe.set_user("Administrator")

@@ -14,6 +14,16 @@ ORDER_SCHEMA = (
 )
 COST_SERVICE = ROOT / "almdina_erp" / "services" / "cost_permission_service.py"
 COST_UX = ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
+PERMISSION_MATRIX = (
+    ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
+)
+PERMISSION_REPOSITORY = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "permission_matrix_repository.py"
+)
 HOOKS = ROOT / "hooks.py"
 
 
@@ -55,6 +65,16 @@ def test_cost_service_uses_capabilities_instead_of_role_names():
     assert "Accounts Management" not in source
     assert "System Manager" not in source
     assert "frappe.get_roles" not in source
+
+
+def test_cost_field_access_is_projected_from_the_configurable_matrix():
+    matrix = _source(PERMISSION_MATRIX)
+    repository = _source(PERMISSION_REPOSITORY)
+    assert "def field_permission_projection" in matrix
+    assert "Capability.VIEW_COSTS" in matrix
+    assert "Capability.EDIT_COST_SETTINGS" in matrix
+    assert "def _save_field_permission_state" in repository
+    assert "field_permission_projection" in repository
 
 
 def test_cost_ui_hides_and_scrubs_unauthorized_data():

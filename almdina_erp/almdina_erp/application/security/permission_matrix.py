@@ -304,6 +304,29 @@ def standard_permission_projection(
     }
 
 
+def field_permission_projection(
+    doctype: str,
+    state: Mapping[str, Any] | None,
+) -> dict[int, dict[str, bool]]:
+    """Project business capabilities onto Frappe field permission levels.
+
+    Cost fields on Door Cutting Order use permission level 1 so Frappe does not
+    serialize them to an unauthorized browser.  The corresponding role rule
+    must therefore be driven by the configurable matrix as well; otherwise a
+    role can own ``view_costs`` while Frappe silently removes every cost field.
+    """
+
+    normalized = normalize_capability_state(state)
+    if doctype != "Door Cutting Order":
+        return {}
+    return {
+        1: {
+            "read": normalized[Capability.VIEW_COSTS],
+            "write": normalized[Capability.EDIT_COST_SETTINGS],
+        }
+    }
+
+
 def enabled_capabilities(state: Mapping[str, Any] | None) -> frozenset[str]:
     normalized = normalize_capability_state(state)
     return normalize_capabilities(

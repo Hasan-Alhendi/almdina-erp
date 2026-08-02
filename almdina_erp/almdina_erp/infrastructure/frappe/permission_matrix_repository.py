@@ -10,6 +10,7 @@ from frappe.permissions import setup_custom_perms
 
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
+    field_permission_projection,
     normalize_capability_state,
     standard_permission_projection,
 )
@@ -150,6 +151,7 @@ class FrappePermissionMatrixRepository:
             desired = prepared[role]
             for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
                 self._save_doctype_state(doctype, role, definitions, desired)
+                self._save_field_permission_state(doctype, role, desired)
         for role in sorted(prepared):
             self.clear_role_cache(role)
         return {role: self.role_state(role) for role in sorted(prepared)}
@@ -245,7 +247,14 @@ class FrappePermissionMatrixRepository:
             filters={"role": role, "parenttype": "User"},
             pluck="parent",
         )
+        request_cache = getattr(
+            frappe.local,
+            "almdina_matrix_capabilities",
+            None,
+        )
         for user in users:
+            if request_cache is not None:
+                request_cache.pop(str(user), None)
             frappe.clear_cache(user=user)
 
     def _effective_rows(
@@ -377,7 +386,11 @@ class FrappePermissionMatrixRepository:
         return frappe.get_doc(payload)
 
     @staticmethod
-    def _blank_override(doctype: str, role: str) -> Any:
+    def _blank_override(
+        doctype: str,
+        role: str,
+        permlevel: int = 0,
+    ) -> Any:
         return frappe.get_doc(
             {
                 "doctype": "Custom DocPerm",
@@ -385,7 +398,7 @@ class FrappePermissionMatrixRepository:
                 "parenttype": "DocType",
                 "parentfield": "permissions",
                 "role": role,
-                "permlevel": 0,
+                "permlevel": int(permlevel),
             }
         )
 
@@ -441,6 +454,53 @@ class FrappePermissionMatrixRepository:
                 document.insert(ignore_permissions=True)
             else:
                 document.save(ignore_permissions=True)
+
+    def _save_field_permission_state(
+        self,
+        doctype: str,
+        role: str,
+        desired: Mapping[str, bool],
+    ) -> None:
+        """Keep higher field levels aligned with capability grants.
+
+        These rows contain only Frappe's native read/write projection. Custom
+        capability columns remain on level zero, which is the sole source used
+        by the permission console and authorization gateway.
+        """
+
+        for permlevel, rights in field_permission_projection(
+            doctype,
+            desired,
+        ).items():
+            row_names = frappe.get_all(
+                "Custom DocPerm",
+                filters={
+                    "parent": doctype,
+                    "role": role,
+                    "permlevel": permlevel,
+                    "if_owner": 0,
+                },
+                pluck="name",
+                order_by="creation asc",
+            )
+            enabled = any(bool(value) for value in rights.values())
+            if not row_names and not enabled:
+                continue
+
+            documents = [
+                frappe.get_doc("Custom DocPerm", name) for name in row_names
+            ]
+            if not documents:
+                documents = [self._blank_override(doctype, role, permlevel)]
+
+            for document in documents:
+                for permission_type, value in rights.items():
+                    if document.meta.has_field(permission_type):
+                        document.set(permission_type, int(bool(value)))
+                if document.is_new():
+                    document.insert(ignore_permissions=True)
+                else:
+                    document.save(ignore_permissions=True)
 
 
 __all__ = ["FrappePermissionMatrixRepository", "PROTECTED_ROLES"]

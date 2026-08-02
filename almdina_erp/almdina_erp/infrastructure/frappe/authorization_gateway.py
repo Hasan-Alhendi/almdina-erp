@@ -31,6 +31,17 @@ def _registered_permission_types() -> dict[str, frozenset[str]]:
     }
 
 
+def _matrix_repository() -> tuple[Any, frozenset[str]]:
+    """Load persistence lazily so adapters import without Frappe DB setup."""
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+        FrappePermissionMatrixRepository,
+        PROTECTED_ROLES,
+    )
+
+    return FrappePermissionMatrixRepository(), PROTECTED_ROLES
+
+
 def _permission_type_is_available(capability: str) -> bool:
     definition = capability_definition(capability)
     if not definition.custom:
@@ -54,15 +65,51 @@ def _raw_doctype_capability(capability: str, user: str) -> bool:
     )
 
 
+def _matrix_granted_capabilities(user: str) -> frozenset[str]:
+    """Read the same persisted matrix shown by the permission console.
+
+    Frappe metadata is cached independently from Custom DocPerm writes. During
+    an upgrade, that cache can temporarily expose the new switches in the
+    console while ``has_permission`` still evaluates an older projection. This
+    request-local fallback keeps business capabilities authoritative without
+    bypassing Frappe's native document read/create/write checks.
+    """
+
+    cache = getattr(frappe.local, "almdina_matrix_capabilities", None)
+    if cache is None:
+        cache = {}
+        frappe.local.almdina_matrix_capabilities = cache
+    if user in cache:
+        return cache[user]
+
+    repository, protected_roles = _matrix_repository()
+    granted: set[str] = set()
+    for role in repository.user_roles(user):
+        if role in protected_roles:
+            continue
+        try:
+            state = repository.role_state(role)["capabilities"]
+        except ValueError:
+            continue
+        granted.update(
+            capability
+            for capability, enabled in state.items()
+            if enabled is True
+        )
+    resolved = frozenset(granted)
+    cache[user] = resolved
+    return resolved
+
+
 def granted_capabilities(user: str | None = None) -> frozenset[str]:
-    """Resolve role assignments through Frappe's Role Permission Manager."""
+    """Resolve role assignments through Frappe and its persisted matrix."""
 
     resolved_user = user or frappe.session.user
     if resolved_user == "Administrator":
         return ALL_CAPABILITIES
 
     registered = _registered_permission_types()
-    granted: set[str] = set()
+    granted: set[str] = set(_matrix_granted_capabilities(resolved_user))
     for capability, definition in CAPABILITY_CATALOG.items():
         if definition.custom and definition.permission_type not in registered.get(
             definition.applies_to,
@@ -88,11 +135,17 @@ def doctype_has_capability(
         return True
     if _raw_doctype_capability(capability, resolved_user):
         return True
+    matrix_grants = _matrix_granted_capabilities(resolved_user)
+    if capability in matrix_grants:
+        return True
     if (
         capability in WORKFORCE_CAPABILITIES
         and capability != Capability.MANAGE_USERS
     ):
-        return _raw_doctype_capability(Capability.MANAGE_USERS, resolved_user)
+        return (
+            _raw_doctype_capability(Capability.MANAGE_USERS, resolved_user)
+            or Capability.MANAGE_USERS in matrix_grants
+        )
     return False
 
 
@@ -154,6 +207,16 @@ def document_has_capability(
         document,
         definition.permission_type,
         user=resolved_user,
+    ):
+        return True
+    # Custom capabilities are role grants, while document visibility remains a
+    # separate Frappe decision. This fallback is intentionally limited to the
+    # scoped transactional documents whose read hooks enforce assignment.
+    if (
+        definition.custom
+        and definition.applies_to in {"Door Cutting Order", "Replacement Piece"}
+        and capability in _matrix_granted_capabilities(resolved_user)
+        and frappe.has_permission(document, "read", user=resolved_user)
     ):
         return True
     if (

@@ -377,6 +377,14 @@ def update_role_permissions(
 
     changes = changed_capabilities(before, after)
     if not changes:
+        # A no-op console save is also a safe repair operation. Older releases
+        # could persist capability columns without their native create/write or
+        # higher field-level projection, leaving the switches enabled while the
+        # form stayed read-only or empty.
+        try:
+            _repository.save_role_state(role, after)
+        except ValueError as error:
+            frappe.throw(_(str(error)))
         return {
             **_role_payload(role),
             "changed": False,

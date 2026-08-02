@@ -3,3 +3,4 @@ almdina_erp.patches.v1_0.backfill_source_identity_and_validation
 almdina_erp.patches.v1_0.drop_obsolete_order_board_columns
 almdina_erp.patches.v1_0.backfill_revision_activation_state
 almdina_erp.patches.v1_0.bootstrap_legacy_role_capabilities
+almdina_erp.patches.v1_0.repair_capability_permission_projections

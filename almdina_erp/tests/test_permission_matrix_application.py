@@ -5,6 +5,7 @@ import unittest
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     capability_catalog_payload,
     changed_capabilities,
+    field_permission_projection,
     normalize_capability_state,
     permission_impact,
     standard_permission_projection,
@@ -94,6 +95,26 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertTrue(order["select"])
         self.assertTrue(edge["read"])
         self.assertTrue(edge["select"])
+
+    def test_cost_capabilities_project_to_field_permission_level_one(self) -> None:
+        read_only = field_permission_projection(
+            "Door Cutting Order",
+            {Capability.VIEW_COSTS: True},
+        )
+        editable = field_permission_projection(
+            "Door Cutting Order",
+            {Capability.EDIT_COST_SETTINGS: True},
+        )
+
+        self.assertEqual(read_only, {1: {"read": True, "write": False}})
+        self.assertEqual(editable, {1: {"read": True, "write": True}})
+        self.assertEqual(
+            field_permission_projection(
+                "Production Routing",
+                {Capability.VIEW_COSTS: True},
+            ),
+            {},
+        )
 
     def test_unknown_capability_fails_closed(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown capabilities"):

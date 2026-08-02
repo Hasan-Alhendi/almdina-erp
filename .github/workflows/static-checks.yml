@@ -70,6 +70,7 @@ jobs:
       - name: Run permission, persona, workforce, master data, and control center tests
         run: |
           python -m unittest -v \
+            almdina_erp.tests.test_authorization_gateway_matrix_fallback \
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
