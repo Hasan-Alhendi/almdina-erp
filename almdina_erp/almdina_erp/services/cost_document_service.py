@@ -73,10 +73,16 @@ def _snapshot(source: Any, fields: tuple[str, ...]) -> dict[str, Any]:
     return {fieldname: getattr(source, fieldname, None) for fieldname in fields}
 
 
-def _authorized_order(order_name: str, print_capability: str) -> Any:
+def _authorized_order(
+    order_name: str,
+    print_capability: str,
+    *,
+    requires_cost_access: bool,
+) -> Any:
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
-    require_document_capability(order, Capability.VIEW_COSTS)
+    if requires_cost_access:
+        require_document_capability(order, Capability.VIEW_COSTS)
     require_document_capability(order, print_capability)
     return order
 
@@ -105,9 +111,13 @@ def _finalize(payload: dict[str, Any], order: Any) -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
-    """Return a customer invoice only after server-side document authorization."""
+    """Return a customer invoice after read and explicit print authorization."""
 
-    order = _authorized_order(order_name, Capability.PRINT_CUSTOMER_INVOICE)
+    order = _authorized_order(
+        order_name,
+        Capability.PRINT_CUSTOMER_INVOICE,
+        requires_cost_access=False,
+    )
     order_snapshot, pieces = _document_context(order)
     return _finalize(
         build_customer_invoice_document(order_snapshot, pieces),
@@ -119,7 +129,11 @@ def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
 def get_internal_cost_report_document(order_name: str) -> dict[str, Any]:
     """Return the confidential internal report to explicitly authorized users."""
 
-    order = _authorized_order(order_name, Capability.PRINT_INTERNAL_COST_REPORT)
+    order = _authorized_order(
+        order_name,
+        Capability.PRINT_INTERNAL_COST_REPORT,
+        requires_cost_access=True,
+    )
     order_snapshot, pieces = _document_context(order)
     return _finalize(
         build_internal_cost_report_document(order_snapshot, pieces),
