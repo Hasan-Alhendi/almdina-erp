@@ -96,4 +96,11 @@
         applySurfaces,
         refreshPermissions,
     });
+
+    window.setTimeout(() => {
+        const frm = window.cur_frm;
+        if (frm && frm.doctype === "Door Cutting Order") {
+            refreshPermissions(frm);
+        }
+    }, 0);
 })();
