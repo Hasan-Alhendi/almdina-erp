@@ -54,7 +54,10 @@ class ShopFloorQueryPort(Protocol):
 
     def list_archive_stages(self, *, user: str, is_admin: bool) -> list[Any]: ...
 
-    def current_stage_names(self, order_names: Sequence[str]) -> Mapping[str, str | None]: ...
+    def current_stage_names(
+        self,
+        order_names: Sequence[str],
+    ) -> Mapping[str, str | None]: ...
 
     def order_summaries(self, order_names: Sequence[str]) -> Mapping[str, Any]: ...
 
@@ -66,7 +69,11 @@ class ShopFloorQueryPort(Protocol):
 
     def get_stage_summary(self, stage_name: str) -> Any | None: ...
 
-    def load_plan_snapshot(self, order: Any, plan_source: str | None = None) -> dict[str, Any]: ...
+    def load_plan_snapshot(
+        self,
+        order: Any,
+        plan_source: str | None = None,
+    ) -> dict[str, Any]: ...
 
     def user_can_view_dual_plans(self) -> bool: ...
 
@@ -93,8 +100,12 @@ def _as_bool(value: Any) -> bool:
 def _assert_shop_floor_access(repository: ShopFloorQueryPort) -> frozenset[str]:
     user = repository.current_user()
     capabilities = repository.global_capabilities()
-    if user == "Guest" or not capabilities.intersection(SHOP_FLOOR_ACCESS_CAPABILITIES):
-        raise ShopFloorPermissionDenied("You do not have access to the production workspace.")
+    if user == "Guest" or not capabilities.intersection(
+        SHOP_FLOOR_ACCESS_CAPABILITIES
+    ):
+        raise ShopFloorPermissionDenied(
+            "You do not have access to the production workspace."
+        )
     return capabilities
 
 
@@ -131,7 +142,9 @@ def _filter_active_stages(
     return [
         row
         for row in stages
-        if not current_by_order.get(str(_value(row, "door_cutting_order") or ""))
+        if not current_by_order.get(
+            str(_value(row, "door_cutting_order") or "")
+        )
         or _value(row, "name")
         == current_by_order.get(str(_value(row, "door_cutting_order") or ""))
     ]
@@ -160,7 +173,10 @@ def _enrich_stage_rows(
         can_handoff_to = None
         if production_path:
             try:
-                can_handoff_to = next_stage_type(str(production_path), stage_type)
+                can_handoff_to = next_stage_type(
+                    str(production_path),
+                    stage_type,
+                )
             except ValueError:
                 can_handoff_to = None
         enriched.append(
@@ -172,12 +188,15 @@ def _enrich_stage_rows(
                 "production_path": production_path,
                 "current_department": _value(order, "current_department"),
                 "department_status": _value(order, "department_status")
-                or department_status_for_stage_status(str(_value(stage, "status") or "")),
+                or department_status_for_stage_status(
+                    str(_value(stage, "status") or "")
+                ),
                 "approved_plan": _value(order, "approved_plan"),
                 "production_dxf": _value(order, "production_dxf"),
                 "drawing_dxf_status": _value(order, "drawing_dxf_status"),
                 "revision": _value(order, "revision"),
-                "department_label": department_for_stage_type(stage_type) or stage_type,
+                "department_label": department_for_stage_type(stage_type)
+                or stage_type,
                 "can_handoff_to": can_handoff_to,
             }
         )
@@ -187,14 +206,23 @@ def _enrich_stage_rows(
 def get_my_inbox(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     _assert_shop_floor_access(repository)
     user = repository.current_user()
-    stages = repository.list_inbox_stages(user=user, is_admin=repository.is_admin())
-    return _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
+    stages = repository.list_inbox_stages(
+        user=user,
+        is_admin=repository.is_admin(),
+    )
+    return _enrich_stage_rows(
+        repository,
+        _filter_active_stages(repository, stages),
+    )
 
 
 def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     _assert_shop_floor_access(repository)
     user = repository.current_user()
-    stages = repository.list_archive_stages(user=user, is_admin=repository.is_admin())
+    stages = repository.list_archive_stages(
+        user=user,
+        is_admin=repository.is_admin(),
+    )
     return _enrich_stage_rows(repository, stages)
 
 
@@ -208,7 +236,9 @@ def _production_facts(
         production_path=_value(order, "production_path"),
         current_stage_name=_value(order, "current_production_stage"),
         has_cutting_plan=bool(_value(order, "cutting_plan_json")),
-        plan_needs_recalculation=_as_bool(_value(order, "plan_needs_recalculation")),
+        plan_needs_recalculation=_as_bool(
+            _value(order, "plan_needs_recalculation")
+        ),
         stage_name=_value(stage, "name") if stage else None,
         stage_type=_value(stage, "stage_type") if stage else None,
         stage_status=_value(stage, "status") if stage else None,
@@ -319,7 +349,10 @@ def _active_stage_snapshot(
     can_handoff_to = None
     if production_path:
         try:
-            can_handoff_to = next_stage_type(str(production_path), stage_type)
+            can_handoff_to = next_stage_type(
+                str(production_path),
+                stage_type,
+            )
         except ValueError:
             can_handoff_to = None
     return {
@@ -327,12 +360,56 @@ def _active_stage_snapshot(
         "active_stage_status": stage_status,
         "active_stage_type": stage_type,
         "active_stage_assigned_to": _value(stage, "assigned_to"),
-        "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
-        "can_handoff_stage": bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]),
-        "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),
+        "can_start_stage": bool(
+            actions[Capability.START_ASSIGNED_STAGE]["allowed"]
+        ),
+        "can_handoff_stage": bool(
+            actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]
+        ),
+        "can_reassign_worker": bool(
+            actions[Capability.REASSIGN_WORKER]["allowed"]
+        ),
         "can_handoff_to": can_handoff_to,
         "production_actions": actions,
     }
+
+
+def _plan_snapshots(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    *,
+    can_view_plan: bool,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool, str, str]:
+    approved_plan = _value(order, "approved_plan")
+    approved_source = str(
+        _value(order, "approved_plan_source") or "System"
+    )
+    if not can_view_plan:
+        return {}, {}, {}, False, approved_source, approved_source
+
+    system_snapshot = repository.load_plan_snapshot(order, "System")
+    custom_snapshot = repository.load_plan_snapshot(order, "Custom")
+    can_view_dual = repository.user_can_view_dual_plans()
+    active_source = approved_source if can_view_dual and approved_plan else "System"
+    if not can_view_dual:
+        active_source = approved_source
+
+    active_snapshot = (
+        custom_snapshot
+        if active_source == "Custom" and custom_snapshot.get("sheets")
+        else system_snapshot
+    )
+    if approved_plan and not can_view_dual:
+        active_snapshot = repository.load_plan_snapshot(order)
+
+    return (
+        system_snapshot,
+        custom_snapshot,
+        active_snapshot,
+        can_view_dual,
+        approved_source,
+        active_source,
+    )
 
 
 def get_order_detail(
@@ -355,29 +432,31 @@ def get_order_detail(
         order,
         document_capabilities,
     )
-    system_snapshot = repository.load_plan_snapshot(order, "System")
-    custom_snapshot = repository.load_plan_snapshot(order, "Custom")
-    can_view_dual = repository.user_can_view_dual_plans()
-    approved_plan = _value(order, "approved_plan")
-    approved_source = str(_value(order, "approved_plan_source") or "System")
-    active_source = approved_source if can_view_dual and approved_plan else "System"
-    if not can_view_dual:
-        active_source = approved_source
-
-    active_snapshot = (
-        custom_snapshot
-        if active_source == "Custom" and custom_snapshot.get("sheets")
-        else system_snapshot
+    can_view_plan = Capability.VIEW_CUTTING_PLAN in document_capabilities
+    (
+        system_snapshot,
+        custom_snapshot,
+        active_snapshot,
+        can_view_dual,
+        approved_source,
+        active_source,
+    ) = _plan_snapshots(
+        repository,
+        order,
+        can_view_plan=can_view_plan,
     )
-    if approved_plan and not can_view_dual:
-        active_snapshot = repository.load_plan_snapshot(order)
 
+    approved_plan = _value(order, "approved_plan")
     current_stage_type = stage_snapshot.get("active_stage_type")
     can_recalculate = bool(
-        Capability.RECALCULATE_PLAN in document_capabilities
+        can_view_plan
+        and Capability.RECALCULATE_PLAN in document_capabilities
         and _value(order, "production_path") == "Drawing"
         and not approved_plan
-        and (current_stage_type == "Drawing" or _value(order, "status") == "At Drawing")
+        and (
+            current_stage_type == "Drawing"
+            or _value(order, "status") == "At Drawing"
+        )
     )
 
     return {
