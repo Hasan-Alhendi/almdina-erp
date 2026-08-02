@@ -18,6 +18,11 @@
         navigation: EMPTY_NAVIGATION,
     });
 
+    const ORDER_MODULES = Object.freeze([
+        "/assets/almdina_erp/js/door_cutting_order_cost_presenter.js",
+        "/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js",
+    ]);
+
     function normalizeNavigation(raw) {
         if (!raw || typeof raw !== "object") return EMPTY_NAVIGATION;
         const sections = {};
@@ -66,7 +71,60 @@
         return flattened.map(value => String(value || "")).filter(Boolean);
     }
 
-    const context = normalize(frappe.boot && frappe.boot.almdina_permissions);
+    let context = normalize(frappe.boot && frappe.boot.almdina_permissions);
+    let refreshPromise = null;
+    let modulesPromise = null;
+
+    function emitUpdatedContext() {
+        window.dispatchEvent(
+            new CustomEvent("almdina:permissions-updated", {
+                detail: context,
+            })
+        );
+    }
+
+    function refreshContext() {
+        if (!window.frappe || typeof frappe.call !== "function") {
+            return Promise.resolve(context);
+        }
+        if (frappe.session && frappe.session.user === "Guest") {
+            return Promise.resolve(context);
+        }
+        if (refreshPromise) return refreshPromise;
+
+        refreshPromise = frappe.call({
+            method: "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
+        }).then(response => {
+            context = normalize(response && response.message);
+            emitUpdatedContext();
+            return context;
+        }).finally(() => {
+            refreshPromise = null;
+        });
+
+        return refreshPromise;
+    }
+
+    function loadOrderModules() {
+        if (modulesPromise) return modulesPromise;
+        if (
+            !window.frappe
+            || typeof frappe.require !== "function"
+            || !frappe.ui
+            || !frappe.ui.form
+            || typeof frappe.ui.form.on !== "function"
+        ) {
+            return null;
+        }
+
+        modulesPromise = Promise.resolve(frappe.require(ORDER_MODULES)).catch(error => {
+            modulesPromise = null;
+            console.error("Failed to load Almdina protected order modules", error);
+            throw error;
+        });
+        return modulesPromise;
+    }
+
     const permissions = Object.freeze({
         can(capability) {
             return context.capabilities[String(capability || "")] === true;
@@ -99,9 +157,24 @@
         snapshot() {
             return context;
         },
+        refresh() {
+            return refreshContext();
+        },
+        loadOrderModules() {
+            return loadOrderModules();
+        },
     });
 
     window.AlmdinaPermissions = permissions;
     frappe.provide("frappe.almdina");
     frappe.almdina.permissions = permissions;
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+        attempts += 1;
+        const loading = loadOrderModules();
+        if (loading || attempts >= 50) {
+            window.clearInterval(timer);
+        }
+    }, 100);
 })();
