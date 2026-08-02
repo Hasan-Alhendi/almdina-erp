@@ -5,8 +5,6 @@ from typing import Any
 import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
-    ADMINISTRATION_CAPABILITIES,
-    COSTING_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
     REPORTING_CAPABILITIES,
@@ -27,6 +25,15 @@ _CONTROL_CENTER_BROAD_CAPABILITIES = frozenset(
         Capability.CANCEL_REPLACEMENT,
     }
 )
+_COST_BROAD_CAPABILITIES = frozenset(
+    {
+        Capability.VIEW_COSTS,
+        Capability.EDIT_COST_SETTINGS,
+        Capability.EDIT_SPECIAL_PRICE,
+        Capability.APPROVE_SPECIAL_PRICE,
+        Capability.PRINT_INTERNAL_COST_REPORT,
+    }
+)
 _BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
     {
         Capability.CREATE_ORDER,
@@ -38,10 +45,9 @@ _BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
         Capability.CANCEL_ORDER,
     }
     | _CONTROL_CENTER_BROAD_CAPABILITIES
+    | _COST_BROAD_CAPABILITIES
     | PRODUCTION_SUPERVISOR_CAPABILITIES
     | REPORTING_CAPABILITIES
-    | COSTING_CAPABILITIES
-    | ADMINISTRATION_CAPABILITIES
 )
 _READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
 
