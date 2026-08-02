@@ -28,6 +28,7 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_legacy_permission_bootstrap \
             almdina_erp.tests.test_shop_floor_data_policy \
             almdina_erp.tests.test_shop_floor_plan_loading_policy \
             almdina_erp.tests.test_workforce_service_authorization_order \
