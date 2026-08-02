@@ -1,0 +1,44 @@
+name: Security and Protected UI Regressions
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  regression-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Run permission and data-boundary contracts
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_shop_floor_data_policy \
+            almdina_erp.tests.test_workforce_service_authorization_order \
+            almdina_erp.tests.test_v16_desk_navigation \
+            almdina_erp.tests.test_read_only_boot_authorization \
+            almdina_erp.tests.test_protected_order_surface_recovery \
+            almdina_erp.tests.test_frontend_consolidation_contract
+
+      - name: Validate changed browser modules
+        run: |
+          node --check almdina_erp/public/js/permission_context.js
+          node --check almdina_erp/public/js/door_cutting_order_cost_presenter.js
+          node --check almdina_erp/public/js/door_cutting_order_permission_refresh_ux.js
+          node --check almdina_erp/public/js/door_cutting_order_customer_invoice_toolbar_ux.js
+          node --check almdina_erp/public/js/secure_dxf_export.js
