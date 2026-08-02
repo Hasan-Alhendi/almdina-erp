@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     WORKFORCE_CAPABILITIES,
 )
 from almdina_erp.almdina_erp.domain.security.workforce import (
+    ACTION_CAPABILITIES,
     PROFILES,
     WorkforceAction,
     WorkforceFacts,
@@ -57,6 +58,16 @@ def _granted() -> frozenset[str]:
 
 def _raise_value_error(error: ValueError) -> None:
     frappe.throw(_(str(error)), frappe.ValidationError)
+
+
+def _require_any_action_capability(*actions: WorkforceAction) -> None:
+    granted = _granted()
+    if any(ACTION_CAPABILITIES[action] in granted for action in actions):
+        return
+    frappe.throw(
+        _("You do not have permission for this workforce action."),
+        frappe.PermissionError,
+    )
 
 
 def _require_action(
@@ -182,6 +193,10 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
 
 @frappe.whitelist()
 def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
+    _require_any_action_capability(
+        WorkforceAction.EDIT,
+        WorkforceAction.ASSIGN_PROFILE,
+    )
     user_name = str(user or "").strip().lower()
     values = _payload(data)
     _repository.lock_user(user_name)
@@ -267,6 +282,9 @@ def set_workforce_user_enabled(user: str, enabled: int | bool | str) -> dict[str
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
+
+    action = WorkforceAction.ENABLE if target_enabled else WorkforceAction.DISABLE
+    _require_any_action_capability(action)
     _repository.lock_user(user_name)
     try:
         before = _repository.get_user(user_name)
@@ -274,7 +292,6 @@ def set_workforce_user_enabled(user: str, enabled: int | bool | str) -> dict[str
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
 
-    action = WorkforceAction.ENABLE if target_enabled else WorkforceAction.DISABLE
     _require_action(action, facts=_facts(before))
     after = _repository.set_enabled(user_name, target_enabled)
     audit_action = "Enabled" if target_enabled else "Disabled"
@@ -291,6 +308,7 @@ def set_workforce_user_enabled(user: str, enabled: int | bool | str) -> dict[str
 
 @frappe.whitelist()
 def reset_workforce_password(user: str, temporary_password: str) -> dict[str, Any]:
+    _require_any_action_capability(WorkforceAction.RESET_PASSWORD)
     user_name = str(user or "").strip().lower()
     _repository.lock_user(user_name)
     try:
