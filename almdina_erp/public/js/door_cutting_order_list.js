@@ -93,6 +93,8 @@
     }
 
     function schedule(listview) {
+        const root = rootNode(listview);
+        if (root) root.classList.add("dco-order-list");
         installCombinedSearch(listview);
         applySearchHint(listview);
         patchDepartmentColumn(listview);

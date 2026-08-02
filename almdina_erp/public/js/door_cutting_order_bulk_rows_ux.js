@@ -132,6 +132,7 @@
             cell.className = "dco-select-col";
             tr.prepend(cell);
         }
+        cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row";
 
         if (tr.classList.contains("dco-virtual-row")) {
             cell.innerHTML = "";

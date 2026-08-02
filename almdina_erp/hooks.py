@@ -6,6 +6,10 @@ app_email = ""
 app_license = "Proprietary"
 app_version = "1.0.0-dev"
 
+app_include_css = [
+    "/assets/almdina_erp/css/door_cutting_order_responsive.css",
+]
+
 add_to_apps_screen = [
     {
         "name": "almdina_erp",

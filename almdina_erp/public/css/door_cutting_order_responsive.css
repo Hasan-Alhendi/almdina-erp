@@ -1,0 +1,573 @@
+/*
+ * Door Cutting Order responsive presentation.
+ *
+ * Behaviour stays in the focused JavaScript controllers. This stylesheet owns
+ * only layout, touch sizing and viewport adaptation for the order surfaces.
+ */
+
+.dco-operator-form,
+.dco-order-list {
+    --dco-touch-target: 42px;
+    --dco-mobile-gap: 10px;
+}
+
+.dco-operator-form,
+.dco-operator-form .form-layout,
+.dco-operator-form .layout-main-section,
+.dco-operator-form .layout-main-section-wrapper,
+.dco-operator-form .form-page,
+.dco-operator-form .form-tab-content {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.dco-operator-form img,
+.dco-operator-form svg,
+.dco-operator-form canvas {
+    max-width: 100%;
+}
+
+.dco-operator-form :where(.btn, button, input, select, textarea):focus-visible,
+.page-head.dco-responsive-head :where(.btn, button, a):focus-visible,
+.dco-order-list :where(.btn, button, input, a):focus-visible {
+    outline: 2px solid var(--primary, #2490ef);
+    outline-offset: 2px;
+}
+
+/* Keep wide order layouts fluid before the mobile transformation is needed. */
+@media (max-width: 1200px) {
+    .dco-operator-form .dco-ui-card {
+        padding-inline: 12px !important;
+    }
+
+    .dco-operator-form .dco-cost-shell,
+    .dco-operator-form .dco-plan-shell,
+    .dco-operator-form .dco-drawing-plan-shell {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-summary-grid,
+    .dco-operator-form [data-fieldname="drawing_plan_html"] .dco-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+/* Tablet: preserve the fast grid workflow and make every surrounding surface fit. */
+@media (max-width: 900px) {
+    .page-head.dco-responsive-head .page-head-content {
+        padding-inline: 12px !important;
+    }
+
+    .page-head.dco-responsive-head .page-title,
+    .page-head.dco-responsive-head .title-area,
+    .page-head.dco-responsive-head .page-actions {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .page-head.dco-responsive-head .page-actions,
+    .page-head.dco-responsive-head .custom-actions,
+    .page-head.dco-responsive-head .standard-actions {
+        width: 100% !important;
+    }
+
+    .dco-operator-form .form-tabs,
+    .dco-operator-form .form-tabs-list,
+    .dco-operator-form .nav-tabs {
+        max-width: 100%;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .dco-operator-form .form-tabs-list,
+    .dco-operator-form .nav-tabs {
+        flex-wrap: nowrap !important;
+    }
+
+    .dco-operator-form .dco-sticky-tabs .nav-link,
+    .dco-operator-form .dco-sticky-tabs .form-tab {
+        flex: 0 0 auto;
+        min-width: 128px;
+    }
+
+    .dco-operator-form .dco-cost-hero,
+    .dco-operator-form .dco-cost-section-title,
+    .dco-operator-form .dco-plan-actions,
+    .dco-operator-form .dco-measurement-table-actions {
+        flex-wrap: wrap;
+    }
+
+    .dco-operator-form .dco-cost-table-wrap,
+    .dco-operator-form .dco-table-wrap,
+    .dco-operator-form .table-responsive {
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .dco-measurement-entry-window,
+    .dco-measurement-entry-window .dco-entry-window-shell {
+        width: 100vw !important;
+        max-width: 100vw !important;
+    }
+}
+
+/* Phone: actions are touch-friendly, form columns stack and measurements become cards. */
+@media (max-width: 720px) {
+    .dco-operator-form,
+    .dco-order-list {
+        --dco-touch-target: 44px;
+        --dco-mobile-gap: 9px;
+    }
+
+    .page-head.dco-responsive-head {
+        min-height: 0 !important;
+    }
+
+    .page-head.dco-responsive-head .page-head-content {
+        gap: 8px !important;
+        padding: 8px 10px !important;
+    }
+
+    .page-head.dco-responsive-head .page-title,
+    .page-head.dco-responsive-head .title-area {
+        overflow-wrap: anywhere;
+    }
+
+    .page-head.dco-responsive-head .page-actions {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px !important;
+    }
+
+    .page-head.dco-responsive-head .custom-actions,
+    .page-head.dco-responsive-head .standard-actions,
+    .page-head.dco-responsive-head .menu-btn-group {
+        display: contents !important;
+    }
+
+    .page-head.dco-responsive-head .page-actions > :where(.btn, .btn-group, .dropdown),
+    .page-head.dco-responsive-head .page-actions .custom-actions > :where(.btn, .btn-group, .dropdown),
+    .page-head.dco-responsive-head .page-actions .standard-actions > :where(.btn, .btn-group, .dropdown) {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .page-head.dco-responsive-head .page-actions :where(.btn, button) {
+        width: 100%;
+        min-height: var(--dco-touch-target);
+        justify-content: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dco-operator-form .form-page {
+        padding-inline: 8px !important;
+    }
+
+    .dco-operator-form .dco-ui-card {
+        margin-block: 9px !important;
+        padding: 3px 10px 11px !important;
+        border-radius: 12px !important;
+    }
+
+    .dco-operator-form .dco-ui-card .section-body,
+    .dco-operator-form .dco-ui-card .form-column,
+    .dco-operator-form .dco-ui-card .form-group,
+    .dco-operator-form .dco-ui-card .frappe-control {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .dco-operator-form .dco-ui-card .form-column {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+    }
+
+    .dco-operator-form .form-control,
+    .dco-operator-form .input-with-feedback,
+    .dco-operator-form select,
+    .dco-operator-form textarea {
+        min-height: var(--dco-touch-target);
+        font-size: 16px !important;
+    }
+
+    .dco-operator-form .dco-status-strip,
+    .dco-operator-form .dco-board-summary,
+    .dco-operator-form .dco-cost-kpis,
+    .dco-operator-form .dco-invoice-meta,
+    .dco-operator-form [data-fieldname="cutting_plan_html"] .dco-summary-grid,
+    .dco-operator-form [data-fieldname="drawing_plan_html"] .dco-summary-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .dco-operator-form .dco-summary-tile {
+        min-height: 0 !important;
+        padding: 10px 11px !important;
+    }
+
+    .dco-operator-form .dco-sticky-tabs .nav-link,
+    .dco-operator-form .dco-sticky-tabs .form-tab {
+        min-width: 112px;
+        min-height: var(--dco-touch-target) !important;
+        padding-inline: 14px !important;
+    }
+
+    .dco-operator-form .dco-fast-entry-shell {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        overflow: visible !important;
+    }
+
+    .dco-operator-form .dco-fast-entry-toolbar {
+        align-items: flex-start !important;
+        border: 1px solid var(--border-color, #dfe3e8) !important;
+        border-radius: 12px !important;
+        margin-bottom: 10px;
+        padding: 10px !important;
+    }
+
+    .dco-operator-form .dco-fast-entry-toolbar .dco-fast-help {
+        display: grid !important;
+        grid-template-columns: 1fr;
+        gap: 5px !important;
+        width: 100%;
+    }
+
+    .dco-operator-form .dco-fast-entry-toolbar .dco-arrow-nav-hint,
+    .dco-operator-form .dco-fast-entry-toolbar .dco-help-secondary {
+        display: none !important;
+    }
+
+    .dco-operator-form .dco-fast-entry-scroll {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: none !important;
+        overflow: visible !important;
+        scrollbar-gutter: auto !important;
+    }
+
+    .dco-operator-form .dco-fast-table {
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+    }
+
+    .dco-operator-form .dco-fast-table thead {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
+
+    .dco-operator-form .dco-fast-table tbody {
+        display: grid !important;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        width: 100%;
+    }
+
+    .dco-operator-form .dco-fast-table tbody tr {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--dco-mobile-gap);
+        width: 100%;
+        min-width: 0;
+        padding: 11px;
+        border: 1px solid var(--border-color, #dfe3e8);
+        border-radius: 14px;
+        background: var(--card-bg, var(--fg-color, #fff));
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .06);
+    }
+
+    .dco-operator-form .dco-fast-table tbody tr.dco-row-selected {
+        border-color: var(--primary, #2490ef);
+        box-shadow: inset -3px 0 0 var(--primary, #2490ef), 0 4px 14px rgba(15, 23, 42, .07);
+    }
+
+    .dco-operator-form .dco-fast-table tbody td {
+        position: static !important;
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 5px;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        height: auto !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        overflow: visible !important;
+        text-align: start !important;
+    }
+
+    .dco-operator-form .dco-fast-table tbody td::before {
+        content: attr(data-label);
+        display: block;
+        min-height: 17px;
+        color: var(--text-muted, #607080);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.35;
+    }
+
+    .dco-operator-form .dco-fast-table tbody :where(.dco-col-edges, .dco-col-edge-type, .dco-col-notes) {
+        grid-column: 1 / -1;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-select-col {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-col-no {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-col-type {
+        grid-column: 1 / -1;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-col-calc {
+        display: none !important;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-col-delete:empty {
+        display: none !important;
+    }
+
+    .dco-operator-form .dco-fast-table .dco-fast-input,
+    .dco-operator-form .dco-fast-table .dco-fast-select,
+    .dco-operator-form .dco-fast-table .dco-notes-expand,
+    .dco-operator-form .dco-fast-table .dco-check-toggle,
+    .dco-operator-form .dco-fast-table .dco-special-sketch-button,
+    .dco-operator-form .dco-fast-table .dco-delete-row {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: var(--dco-touch-target) !important;
+        height: var(--dco-touch-target) !important;
+        margin: 0 !important;
+    }
+
+    .dco-operator-form .dco-fast-table .dco-special-sketch-button > span:last-child {
+        display: inline !important;
+    }
+
+    .dco-operator-form .dco-fast-table .dco-edge-buttons {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 7px !important;
+    }
+
+    .dco-operator-form .dco-fast-table .dco-col-edges .dco-check-toggle {
+        min-height: 48px !important;
+    }
+
+    .dco-operator-form .dco-fast-table .dco-notes-editor {
+        grid-template-columns: minmax(0, 1fr) var(--dco-touch-target);
+        gap: 7px;
+    }
+
+    .dco-operator-form .dco-fast-table .dco-row-selector {
+        width: 22px !important;
+        height: 22px !important;
+        margin: 9px 2px;
+    }
+
+    .dco-operator-form .dco-bulk-footer {
+        position: static !important;
+        display: grid !important;
+        grid-template-columns: 1fr;
+        gap: 8px !important;
+        margin-top: 10px;
+        padding: 10px !important;
+        border: 1px solid var(--border-color, #dfe3e8);
+        border-radius: 12px;
+        box-shadow: none !important;
+    }
+
+    .dco-operator-form .dco-selection-actions {
+        display: grid !important;
+        grid-template-columns: 1fr;
+        width: 100%;
+    }
+
+    .dco-operator-form .dco-selection-actions[hidden] {
+        display: none !important;
+    }
+
+    .dco-operator-form .dco-bulk-footer :where(.btn, button),
+    .dco-operator-form .dco-measurement-table-actions :where(.btn, button),
+    .dco-operator-form [data-fieldname="plan_control_actions"] :where(.btn, button) {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: var(--dco-touch-target) !important;
+    }
+
+    .dco-operator-form .dco-cost-actions,
+    .dco-operator-form .dco-plan-actions,
+    .dco-operator-form .dco-measurement-table-actions {
+        display: grid !important;
+        grid-template-columns: 1fr;
+        width: 100%;
+        gap: 7px !important;
+    }
+
+    .dco-operator-form .dco-cost-actions :where(.btn, button),
+    .dco-operator-form .dco-plan-actions :where(.btn, button),
+    .dco-operator-form .dco-measurement-table-actions :where(.btn, button) {
+        width: 100% !important;
+        min-height: var(--dco-touch-target);
+    }
+
+    .dco-operator-form .dco-cost-section-title,
+    .dco-operator-form .dco-cost-hero,
+    .dco-operator-form .dco-invoice-summary,
+    .dco-operator-form .dco-special-price-card {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 9px !important;
+    }
+
+    .dco-operator-form .dco-cost-section-title > span {
+        max-width: 100% !important;
+        text-align: start !important;
+    }
+
+    .dco-special-shape-modal .modal-dialog,
+    .dco-clipped-corner-modal .modal-dialog,
+    .dco-large-notes-dialog .modal-dialog {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        min-height: 100dvh;
+        margin: 0 !important;
+    }
+
+    .dco-special-shape-modal .modal-content,
+    .dco-clipped-corner-modal .modal-content,
+    .dco-large-notes-dialog .modal-content {
+        min-height: 100dvh;
+        border: 0 !important;
+        border-radius: 0 !important;
+    }
+
+    .dco-large-notes-dialog textarea[data-fieldname="notes"] {
+        min-height: min(52dvh, 420px) !important;
+    }
+
+    .dco-measurement-entry-window .dco-entry-window-header,
+    .dco-measurement-entry-window .dco-entry-window-actions {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        width: 100%;
+        gap: 7px !important;
+    }
+
+    .dco-measurement-entry-window .dco-entry-window-actions .btn {
+        width: 100%;
+        min-height: var(--dco-touch-target);
+    }
+
+    .dco-order-list .page-form,
+    .dco-order-list .standard-filter-section,
+    .dco-order-list .list-search,
+    .dco-order-list .list-search .frappe-control {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .dco-order-list .page-form,
+    .dco-order-list .list-row :where(.level-left, .level-right) {
+        flex-wrap: wrap !important;
+        gap: 7px;
+    }
+
+    .dco-order-list .list-search input,
+    .dco-order-list .page-form :where(.btn, button, input) {
+        min-height: var(--dco-touch-target);
+    }
+
+    .dco-order-list .list-row {
+        min-width: 0;
+        padding-block: 10px;
+    }
+
+    .dco-order-list .list-row .list-row-col {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+}
+
+@media (max-width: 480px) {
+    .page-head.dco-responsive-head .page-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .dco-operator-form .dco-fast-table tbody tr {
+        grid-template-columns: 1fr;
+    }
+
+    .dco-operator-form .dco-fast-table tbody :where(.dco-select-col, .dco-col-no, .dco-col-type, .dco-col-edges, .dco-col-edge-type, .dco-col-notes, .dco-col-sketch, .dco-col-delete) {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-select-col,
+    .dco-operator-form .dco-fast-table tbody .dco-col-no {
+        display: grid !important;
+        grid-template-columns: minmax(80px, auto) 1fr;
+        align-items: center;
+    }
+
+    .dco-operator-form .dco-fast-table tbody .dco-select-col::before,
+    .dco-operator-form .dco-fast-table tbody .dco-col-no::before {
+        margin: 0;
+    }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+    .dco-special-shape-modal .modal-dialog,
+    .dco-clipped-corner-modal .modal-dialog,
+    .dco-large-notes-dialog .modal-dialog {
+        min-height: 100vh;
+    }
+
+    .dco-special-shape-modal .modal-content,
+    .dco-clipped-corner-modal .modal-content,
+    .dco-large-notes-dialog .modal-content {
+        min-height: 100vh;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dco-operator-form *,
+    .dco-order-list *,
+    .dco-special-shape-modal *,
+    .dco-clipped-corner-modal * {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
