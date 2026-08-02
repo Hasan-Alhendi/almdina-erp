@@ -91,13 +91,16 @@ def _assigned_read_decision(
     user: str,
     permission_type: str | None,
     order_name: str | None,
-) -> bool | None:
+) -> bool:
+    # Frappe v16 requires has_permission hooks to return an explicit boolean.
+    # Standard DocPerm checks run separately, so non-read actions only need this
+    # hook to avoid adding an extra restriction.
     if permission_type not in _READ_PERMISSION_TYPES:
-        return None
+        return True
     if user == "Guest":
         return False
     if not _requires_assigned_scope(user):
-        return None
+        return True
     return _assigned_order_exists(user, order_name)
 
 
@@ -145,7 +148,7 @@ def door_cutting_order_has_permission(
     doc: Any,
     user: str | None = None,
     permission_type: str | None = None,
-) -> bool | None:
+) -> bool:
     resolved_user = user or frappe.session.user
     return _assigned_read_decision(
         user=resolved_user,
@@ -158,14 +161,14 @@ def production_stage_has_permission(
     doc: Any,
     user: str | None = None,
     permission_type: str | None = None,
-) -> bool | None:
+) -> bool:
     resolved_user = user or frappe.session.user
     if permission_type not in _READ_PERMISSION_TYPES:
-        return None
+        return True
     if resolved_user == "Guest":
         return False
     if not _requires_assigned_scope(resolved_user):
-        return None
+        return True
     return bool(getattr(doc, "assigned_to", None) == resolved_user)
 
 
@@ -173,7 +176,7 @@ def cutting_plan_has_permission(
     doc: Any,
     user: str | None = None,
     permission_type: str | None = None,
-) -> bool | None:
+) -> bool:
     resolved_user = user or frappe.session.user
     return _assigned_read_decision(
         user=resolved_user,
@@ -186,7 +189,7 @@ def replacement_piece_has_permission(
     doc: Any,
     user: str | None = None,
     permission_type: str | None = None,
-) -> bool | None:
+) -> bool:
     resolved_user = user or frappe.session.user
     return _assigned_read_decision(
         user=resolved_user,
