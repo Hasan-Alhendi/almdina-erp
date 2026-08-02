@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 import frappe
 
 from almdina_erp.almdina_erp.application.security.legacy_permission_bootstrap import (
     legacy_role_state,
     legacy_roles,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    CAPABILITY_CATALOG,
+    CUSTOM_PERMISSION_DEFINITIONS,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
     FrappePermissionMatrixRepository,
 )
@@ -28,22 +33,60 @@ def _managed_doctypes() -> list[str]:
     )
 
 
-def _has_explicit_override(role: str, doctypes: list[str]) -> bool:
-    """Protect any matrix previously saved through Frappe or Almdina."""
+def _custom_fields_by_doctype() -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = defaultdict(list)
+    meta = frappe.get_meta("Custom DocPerm")
+    for definition in CUSTOM_PERMISSION_DEFINITIONS:
+        if meta.has_field(definition.permission_type):
+            grouped[definition.applies_to].append(definition.permission_type)
+    return dict(grouped)
+
+
+def _has_permission_audit(role: str) -> bool:
+    return bool(
+        frappe.db.exists("DocType", "Almdina Permission Audit")
+        and frappe.db.exists("Almdina Permission Audit", {"role": role})
+    )
+
+
+def _has_explicit_capability_grant(
+    role: str,
+    doctypes: list[str],
+) -> bool:
+    """Detect a matrix that was already configured with the new capability model."""
 
     if not doctypes or not frappe.db.exists("DocType", "Custom DocPerm"):
         return False
-    return bool(
-        frappe.get_all(
+    fields_by_doctype = _custom_fields_by_doctype()
+    for doctype in doctypes:
+        fields = fields_by_doctype.get(doctype) or []
+        if not fields:
+            continue
+        rows = frappe.get_all(
             "Custom DocPerm",
             filters={
-                "parent": ["in", doctypes],
+                "parent": doctype,
                 "role": role,
                 "permlevel": 0,
             },
-            pluck="name",
-            limit=1,
+            fields=fields,
         )
+        if any(
+            bool(row.get(fieldname))
+            for row in rows
+            for fieldname in fields
+        ):
+            return True
+    return False
+
+
+def _has_explicit_matrix(role: str, doctypes: list[str]) -> bool:
+    # Console saves are append-only audited, including an intentionally empty
+    # matrix. Direct Role Permission Manager configurations are recognized when
+    # at least one of the new custom capability columns is enabled.
+    return _has_permission_audit(role) or _has_explicit_capability_grant(
+        role,
+        doctypes,
     )
 
 
@@ -54,8 +97,8 @@ def execute() -> None:
     safe for new installations, but it makes existing operational users lose the
     custom plan, costing, production and administration permissions immediately
     after migration. This one-time patch maps only the historical Almdina roles,
-    skips roles with an explicit Custom DocPerm matrix, and records every applied
-    upgrade in the append-only permission audit.
+    skips matrices already configured with the capability model, and records every
+    applied upgrade in the append-only permission audit.
     """
 
     sync_permission_types()
@@ -65,7 +108,7 @@ def execute() -> None:
     for role in legacy_roles():
         if not frappe.db.exists("Role", role):
             continue
-        if _has_explicit_override(role, doctypes):
+        if _has_explicit_matrix(role, doctypes):
             continue
 
         before = repository.role_state(role)["capabilities"]
