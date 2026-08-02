@@ -7,6 +7,7 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
     normalize_capability_state,
     permission_impact,
+    standard_permission_projection,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
@@ -40,6 +41,21 @@ class TestPermissionMatrixApplication(unittest.TestCase):
 
         empty = normalize_capability_state({Capability.VIEW_ORDERS: False})
         self.assertFalse(empty[Capability.VIEW_ORDERS])
+
+    def test_read_grants_also_project_select_for_linked_records(self) -> None:
+        order = standard_permission_projection(
+            "Door Cutting Order",
+            {Capability.VIEW_ORDERS: True},
+        )
+        edge = standard_permission_projection(
+            "Edge Banding Type",
+            {Capability.VIEW_EDGE_BANDING_TYPES: True},
+        )
+
+        self.assertTrue(order["read"])
+        self.assertTrue(order["select"])
+        self.assertTrue(edge["read"])
+        self.assertTrue(edge["select"])
 
     def test_unknown_capability_fails_closed(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unknown capabilities"):
