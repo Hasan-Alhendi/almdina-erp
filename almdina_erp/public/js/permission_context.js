@@ -19,8 +19,14 @@
     });
 
     const ORDER_MODULES = Object.freeze([
-        "/assets/almdina_erp/js/door_cutting_order_cost_presenter.js",
-        "/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js",
+        Object.freeze({
+            path: "/assets/almdina_erp/js/door_cutting_order_cost_presenter.js",
+            global: "AlmdinaOrderCostUX",
+        }),
+        Object.freeze({
+            path: "/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js",
+            global: "AlmdinaOrderPermissionRefreshUX",
+        }),
     ]);
 
     function normalizeNavigation(raw) {
@@ -105,6 +111,55 @@
         return refreshPromise;
     }
 
+    function globalExists(name) {
+        return Boolean(name && window[name]);
+    }
+
+    function waitForGlobal(name, timeoutMs = 12000) {
+        if (globalExists(name)) return Promise.resolve(window[name]);
+
+        return new Promise((resolve, reject) => {
+            const started = Date.now();
+            const timer = window.setInterval(() => {
+                if (globalExists(name)) {
+                    window.clearInterval(timer);
+                    resolve(window[name]);
+                    return;
+                }
+                if (Date.now() - started >= timeoutMs) {
+                    window.clearInterval(timer);
+                    reject(new Error(`Timed out loading ${name}`));
+                }
+            }, 50);
+        });
+    }
+
+    function requireModule(module) {
+        if (globalExists(module.global)) {
+            return Promise.resolve(window[module.global]);
+        }
+        try {
+            frappe.require(module.path);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+        return waitForGlobal(module.global);
+    }
+
+    function recoverCurrentOrderSurface() {
+        const frm = window.cur_frm;
+        const recovery = window.AlmdinaOrderPermissionRefreshUX;
+        if (
+            !frm
+            || frm.doctype !== "Door Cutting Order"
+            || !recovery
+            || typeof recovery.refreshPermissions !== "function"
+        ) {
+            return Promise.resolve(false);
+        }
+        return Promise.resolve(recovery.refreshPermissions(frm));
+    }
+
     function loadOrderModules() {
         if (modulesPromise) return modulesPromise;
         if (
@@ -117,11 +172,15 @@
             return null;
         }
 
-        modulesPromise = Promise.resolve(frappe.require(ORDER_MODULES)).catch(error => {
-            modulesPromise = null;
-            console.error("Failed to load Almdina protected order modules", error);
-            throw error;
-        });
+        modulesPromise = ORDER_MODULES.reduce(
+            (promise, module) => promise.then(() => requireModule(module)),
+            Promise.resolve()
+        ).then(() => recoverCurrentOrderSurface())
+            .catch(error => {
+                modulesPromise = null;
+                console.error("Failed to load Almdina protected order modules", error);
+                throw error;
+            });
         return modulesPromise;
     }
 
@@ -173,7 +232,7 @@
     const timer = window.setInterval(() => {
         attempts += 1;
         const loading = loadOrderModules();
-        if (loading || attempts >= 50) {
+        if (loading || attempts >= 100) {
             window.clearInterval(timer);
         }
     }, 100);
