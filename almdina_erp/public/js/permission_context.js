@@ -28,6 +28,10 @@
             global: "AlmdinaOrderPermissionRefreshUX",
         }),
         Object.freeze({
+            path: "/assets/almdina_erp/js/door_cutting_order_tab_permissions_ux.js",
+            global: "AlmdinaOrderTabPermissionsUX",
+        }),
+        Object.freeze({
             path: "/assets/almdina_erp/js/door_cutting_order_customer_invoice_toolbar_ux.js",
             global: "AlmdinaCustomerInvoiceToolbarUX",
         }),
