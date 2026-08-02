@@ -93,6 +93,7 @@ doctype_js = {
         "public/js/door_cutting_order_revision_ux.js",
         "public/js/order_lifecycle.js",
         "public/js/input_stability.js",
+        "public/js/door_cutting_order_mobile_cards_ux.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Replacement Piece": [
