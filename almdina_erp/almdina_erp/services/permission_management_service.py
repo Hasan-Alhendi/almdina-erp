@@ -198,7 +198,10 @@ def _bundle_preview(
     payload: str | Mapping[str, Any],
 ) -> tuple[dict[str, dict[str, bool]], dict[str, Any]]:
     imported = _parse_bundle(payload)
-    current = _repository.role_states(list(imported))
+    try:
+        current = _repository.role_states(list(imported))
+    except ValueError as error:
+        frappe.throw(_(str(error)))
     preview = preview_permission_bundle(current, imported)
     preview.update(
         {
