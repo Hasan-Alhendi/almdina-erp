@@ -29,6 +29,7 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_shop_floor_data_policy \
+            almdina_erp.tests.test_shop_floor_plan_loading_policy \
             almdina_erp.tests.test_workforce_service_authorization_order \
             almdina_erp.tests.test_customer_invoice_permission_surface \
             almdina_erp.tests.test_v16_desk_navigation \
