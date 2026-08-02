@@ -1,6 +1,9 @@
 (() => {
     "use strict";
 
+    if (window.__almdinaSecureDxfExportLoaded) return;
+    window.__almdinaSecureDxfExportLoaded = true;
+
     const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
 
     function canExportDxf() {
