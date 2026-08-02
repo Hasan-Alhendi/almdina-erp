@@ -25,8 +25,16 @@
         return window.AlmdinaDocumentContext;
     }
 
-    function can(capability) {
-        return Boolean(permissions() && permissions().can(capability));
+    function can(frm, capability) {
+        const context = permissions();
+        return Boolean(
+            context &&
+            (
+                typeof context.canDocument === "function"
+                    ? context.canDocument(frm, capability)
+                    : context.can(capability)
+            )
+        );
     }
 
     function isDraftLike(status) {
@@ -35,18 +43,18 @@
 
     function orderCanEdit(frm) {
         if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
-        if (frm.is_new()) return can("create_order");
+        if (frm.is_new()) return can(frm, "create_order");
         const context = frm.__almdina_lifecycle_context;
         if (context && context.order_name === frm.doc.name) {
             return context.editable === true;
         }
-        return can("edit_order") && isDraftLike(frm.doc.status);
+        return can(frm, "edit_order") && isDraftLike(frm.doc.status);
     }
 
     function installGlobalPolicy() {
         frappe.provide("frappe.almdina");
         frappe.almdina.orderCanEdit = orderCanEdit;
-        frappe.almdina.isOrderEditor = () => can("edit_order");
+        frappe.almdina.isOrderEditor = frm => can(frm || window.cur_frm, "edit_order");
     }
 
     function removeLifecycleButtons(frm) {

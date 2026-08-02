@@ -33,10 +33,15 @@
         "special_shape_price_approved_on",
     ];
 
-    function can(capability) {
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
         return Boolean(
-            window.AlmdinaPermissions &&
-            window.AlmdinaPermissions.can(capability)
+            permissions &&
+            (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
+            )
         );
     }
 
@@ -186,13 +191,13 @@
         const wrapper = costWrapper(frm);
         if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
 
-        if (!(can("view_costs") && can("print_customer_invoice"))) {
+        if (!(can(frm, "view_costs") && can(frm, "print_customer_invoice"))) {
             wrapper.find(".dco-print-customer-invoice").remove();
         }
 
         const actions = wrapper.find(".dco-cost-actions");
         actions.find(".dco-edit-cost-settings").remove();
-        if (can("edit_cost_settings") && !frm.is_new()) {
+        if (can(frm, "edit_cost_settings") && !frm.is_new()) {
             actions.prepend(
                 `<button type="button" class="btn btn-default btn-sm dco-edit-cost-settings">${__("تعديل إعدادات التكلفة")}</button>`
             );
@@ -206,7 +211,7 @@
             if (!piece) return;
             const approved = piece.special_shape_price_status === "Approved";
             const capability = approved ? "edit_special_price" : "approve_special_price";
-            if (!can(capability) || frm.is_new() || piece.special_shape_status !== "Documented") {
+            if (!can(frm, capability) || frm.is_new() || piece.special_shape_status !== "Documented") {
                 return;
             }
             const button = $(
@@ -269,7 +274,7 @@
     }
 
     function apply(frm) {
-        if (!can("view_costs")) {
+        if (!can(frm, "view_costs")) {
             scrubCostData(frm);
             setCostTabVisibility(frm, false);
             return;

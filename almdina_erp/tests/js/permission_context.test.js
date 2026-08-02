@@ -62,6 +62,9 @@ const loaded = load({
 assert.equal(loaded.permissions.version(), 3);
 assert.equal(loaded.permissions.profile(), "shop_floor");
 assert.equal(loaded.permissions.can("view_cutting_plan"), true);
+assert.equal(loaded.permissions.permissionType("create_order"), "create");
+assert.equal(loaded.permissions.permissionType("edit_order"), "write");
+assert.equal(loaded.permissions.permissionType("view_costs"), "view_costs");
 assert.equal(loaded.permissions.can("upload_dxf"), false);
 assert.equal(loaded.permissions.can("print_cutting_plan"), false);
 assert.equal(loaded.permissions.can("unknown"), false);
@@ -84,6 +87,21 @@ const missing = load(undefined).permissions;
 assert.equal(missing.version(), 0);
 assert.equal(missing.profile(), "shared");
 assert.equal(missing.can("view_cutting_plan"), false);
+const nativeOrderForm = {
+    has_perm(permissionType) {
+        return ["create", "write", "view_costs", "view_cutting_plan"].includes(permissionType);
+    },
+};
+assert.equal(missing.canDocument(nativeOrderForm, "create_order"), true);
+assert.equal(missing.canDocument(nativeOrderForm, "edit_order"), true);
+assert.equal(missing.canDocument(nativeOrderForm, "view_costs"), true);
+assert.equal(missing.canDocument(nativeOrderForm, "view_cutting_plan"), true);
+assert.equal(missing.canDocument(nativeOrderForm, "approve_dxf"), false);
+assert.equal(
+    loaded.permissions.canDocument({ has_perm: () => false }, "view_cutting_plan"),
+    true,
+    "A refreshed server capability remains valid for Administrator and expanded grants"
+);
 assert.equal(missing.section("production"), false);
 assert.equal(missing.home(), "");
 assert.equal(missing.navigation().shared_shell, false);

@@ -6,9 +6,16 @@
 
     const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
 
-    function canExportDxf() {
+    function canExportDxf(frm = window.cur_frm) {
         const permissions = window.AlmdinaPermissions;
-        return Boolean(permissions && permissions.can("export_dxf"));
+        return Boolean(
+            permissions &&
+            (
+                frm && typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, "export_dxf")
+                    : permissions.can("export_dxf")
+            )
+        );
     }
 
     function isArabic() {
@@ -258,7 +265,7 @@
 
     function stripUnauthorizedExportButtons(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        if (canExportDxf()) {
+        if (canExportDxf(frm)) {
             ["تصدير DXF", "Export DXF", "تصدير DXF للرسم"].forEach(label => {
                 try {
                     frm.remove_custom_button(label);
@@ -283,7 +290,7 @@
         $(root).find("button, a.btn").filter(function () {
             return isExportButtonLabel($(this).text());
         }).each(function () {
-            if (canExportDxf() && $(this).text().trim() === buttonLabel()) return;
+            if (canExportDxf(frm) && $(this).text().trim() === buttonLabel()) return;
             $(this).remove();
         });
     }
@@ -309,7 +316,7 @@
         } catch (error) {
             void error;
         }
-        if (!canExportDxf()) return;
+        if (!canExportDxf(frm)) return;
         frm.add_custom_button(label, () => validatedExport(frm));
     }
 

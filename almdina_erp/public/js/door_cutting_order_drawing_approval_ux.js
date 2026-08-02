@@ -5,10 +5,15 @@
 	const APPROVE_LABEL = __("اعتماد الرسم");
 	const REAPPROVE_LABEL = __("إعادة اعتماد الرسم");
 
-	function canApprove() {
+	function canApprove(frm) {
+		const permissions = window.AlmdinaPermissions;
 		return Boolean(
-			window.AlmdinaPermissions &&
-			window.AlmdinaPermissions.can("approve_dxf")
+			permissions &&
+			(
+				typeof permissions.canDocument === "function"
+					? permissions.canDocument(frm, "approve_dxf")
+					: permissions.can("approve_dxf")
+			)
 		);
 	}
 
@@ -113,7 +118,7 @@
 		frm.remove_custom_button(REAPPROVE_LABEL, ACTION_GROUP);
 		if (
 			frm.is_new() ||
-			!canApprove() ||
+			!canApprove(frm) ||
 			!isAtDrawing(frm) ||
 			!approvalSources(frm).length
 		) {

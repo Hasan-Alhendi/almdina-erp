@@ -17,6 +17,8 @@ def test_recalculate_drawing_plan_api_uses_configurable_capability():
     assert 'recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")' in src
     dxf = _source(ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py")
     assert "Capability.RECALCULATE_PLAN" in dxf
+    assert "_get_recalculation_order" in dxf
+    assert "user_can_recalculate_drawing_system_plan" in dxf
     assert "force_cutting_plan_recalculation" in dxf
 
 
@@ -38,8 +40,8 @@ def test_drawing_optimizer_ui_calls_recalculate_api():
 
 def test_drawing_form_exposes_dual_approval_and_print_actions():
     ux = _source(SHOP_FLOOR_UX)
-    assert "اعتماد خطة النظام" in ux
-    assert "اعتماد الخطة المرفوعة" in ux
+    assert "خطة النظام" in ux
+    assert "الخطة المرفوعة" in ux
+    assert "اعتماد الرسم" in ux
     assert "طباعة خطة القص" in ux
-    assert 'plan_source: "System"' in ux
-    assert 'plan_source: "Custom"' in ux
+    assert "plan_source: source" in ux

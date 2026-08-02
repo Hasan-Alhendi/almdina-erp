@@ -27,8 +27,8 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
     def test_toolbar_uses_customer_print_capability_without_cost_gate(self) -> None:
         source = TOOLBAR.read_text(encoding="utf-8")
 
-        self.assertIn('permissions.can("print_customer_invoice")', source)
-        self.assertNotIn('permissions.can("view_costs")', source)
+        self.assertIn('permissions.canDocument(frm, "print_customer_invoice")', source)
+        self.assertNotIn('permissions.canDocument(frm, "view_costs")', source)
         self.assertIn("get_customer_invoice_document", source)
         self.assertIn("AlmdinaFinancialDocuments", source)
 

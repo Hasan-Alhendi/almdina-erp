@@ -7,12 +7,15 @@
     const GROUP = "طباعة";
     const FRAME_ID = "dco-customer-invoice-toolbar-print-frame";
 
-    function canPrint() {
+    function canPrint(frm) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
             permissions
-            && typeof permissions.can === "function"
-            && permissions.can("print_customer_invoice")
+            && (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, "print_customer_invoice")
+                    : permissions.can("print_customer_invoice")
+            )
         );
     }
 
@@ -73,7 +76,7 @@
     }
 
     function printCustomerInvoice(frm) {
-        if (!canPrint()) {
+        if (!canPrint(frm)) {
             frappe.msgprint(__("ليس لديك صلاحية طباعة فاتورة الزبون."));
             return Promise.resolve(false);
         }
@@ -109,7 +112,7 @@
 
     function install(frm) {
         removeButton(frm);
-        if (!canPrint() || frm.is_new()) return;
+        if (!canPrint(frm) || frm.is_new()) return;
         frm.add_custom_button(
             __(LABEL),
             () => printCustomerInvoice(frm),

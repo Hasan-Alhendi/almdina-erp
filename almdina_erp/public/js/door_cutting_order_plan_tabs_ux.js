@@ -5,9 +5,16 @@
 		return window.AlmdinaPermissions || null;
 	}
 
-	function canViewCuttingPlan() {
+	function canViewCuttingPlan(frm) {
 		const context = permissions();
-		return Boolean(context && context.can("view_cutting_plan"));
+		return Boolean(
+			context &&
+			(
+				typeof context.canDocument === "function"
+					? context.canDocument(frm, "view_cutting_plan")
+					: context.can("view_cutting_plan")
+			)
+		);
 	}
 
 	function parseJsonField(raw) {
@@ -26,7 +33,7 @@
 	}
 
 	function shouldShowPlanTabs(frm) {
-		return Boolean(frm && !frm.is_new() && canViewCuttingPlan());
+		return Boolean(frm && !frm.is_new() && canViewCuttingPlan(frm));
 	}
 
 	function canShowDualTabs(frm) {

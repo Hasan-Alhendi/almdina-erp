@@ -59,13 +59,13 @@ def test_lifecycle_ui_is_capability_driven_and_fail_closed():
     revision_ux = source(REVISION_UX)
 
     assert "get_order_lifecycle_context" in lifecycle_ux
-    assert 'can("create_order")' in lifecycle_ux
-    assert 'can("edit_order")' in lifecycle_ux
+    assert 'can(frm, "create_order")' in lifecycle_ux
+    assert 'can(frm, "edit_order")' in lifecycle_ux
     assert "documentContext().capture(frm)" in lifecycle_ux
     assert "documentContext().isCurrent(frm, identity)" in lifecycle_ux
     assert "removeLifecycleButtons(frm)" in lifecycle_ux
     assert "Failed to load order lifecycle permissions" in lifecycle_ux
-    assert 'can("create_order_revision")' in revision_ux
+    assert 'can(frm, "create_order_revision")' in revision_ux
 
     combined = lifecycle_ux + revision_ux
     assert "frappe.user_roles" not in combined

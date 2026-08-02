@@ -41,9 +41,10 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     source = UX_PATH.read_text(encoding="utf-8")
     assert "cost_document_service.get_customer_invoice_document" in source
     assert "cost_document_service.get_internal_cost_report_document" in source
-    assert 'can("view_costs")' in source
-    assert 'can("print_customer_invoice")' in source
-    assert 'can("print_internal_cost_report")' in source
+    assert 'can(frm, "view_costs")' in source
+    assert 'can(frm, "print_customer_invoice")' in source
+    assert 'can(frm, "print_internal_cost_report")' in source
+    assert "canDocument" in source
     assert "Customer invoice HTML is server-authorized" in source
     assert "AlmdinaOrderCostUX" in source
     assert "AlmdinaOrderDocumentPrint" in source

@@ -55,6 +55,8 @@ def test_frontend_permission_api_is_boot_backed_and_fail_closed() -> None:
     assert "section(sectionName)" in source
     assert 'shared_shell: false' in source
     assert '=== true' in source
+    assert "canDocument(frm, capability)" in source
+    assert "nativeDocumentPermission" in source
     assert "frappe.user_roles" not in source
 
 
@@ -103,7 +105,7 @@ def test_permission_queries_use_capabilities_and_assignment_not_role_names() -> 
 
 def test_cutting_plan_tabs_use_capability_not_role_names() -> None:
     source = PLAN_TABS_PATH.read_text(encoding="utf-8")
-    assert 'context.can("view_cutting_plan")' in source
+    assert 'context.canDocument(frm, "view_cutting_plan")' in source
     assert "frappe.user_roles" not in source
     assert "DUAL_ROLES" not in source
     for role in ("Order Entry", "Production Manager", "System Manager", "عامل رسم"):

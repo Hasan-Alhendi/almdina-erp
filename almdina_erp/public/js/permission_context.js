@@ -18,6 +18,21 @@
         navigation: EMPTY_NAVIGATION,
     });
 
+    const STANDARD_CAPABILITY_PERMISSION_TYPES = Object.freeze({
+        view_orders: "read",
+        create_order: "create",
+        edit_order: "write",
+        view_factory_settings: "read",
+        view_production_routings: "read",
+        create_production_routings: "create",
+        edit_production_routings: "write",
+        delete_production_routings: "delete",
+        view_edge_banding_types: "read",
+        create_edge_banding_types: "create",
+        edit_edge_banding_types: "write",
+        delete_edge_banding_types: "delete",
+    });
+
     const ORDER_MODULES = Object.freeze([
         Object.freeze({
             path: "/assets/almdina_erp/js/door_cutting_order_cost_presenter.js",
@@ -83,6 +98,21 @@
     function requestedCapabilities(values) {
         const flattened = values.flat ? values.flat(Infinity) : values;
         return flattened.map(value => String(value || "")).filter(Boolean);
+    }
+
+    function permissionTypeFor(capability) {
+        const key = String(capability || "");
+        return STANDARD_CAPABILITY_PERMISSION_TYPES[key] || key;
+    }
+
+    function nativeDocumentPermission(frm, capability) {
+        if (!frm || typeof frm.has_perm !== "function") return false;
+        try {
+            return Boolean(frm.has_perm(permissionTypeFor(capability)));
+        } catch (error) {
+            console.debug("Could not resolve native document permission", error);
+            return false;
+        }
     }
 
     let context = normalize(frappe.boot && frappe.boot.almdina_permissions);
@@ -195,6 +225,14 @@
     const permissions = Object.freeze({
         can(capability) {
             return context.capabilities[String(capability || "")] === true;
+        },
+        canDocument(frm, capability) {
+            const key = String(capability || "");
+            return context.capabilities[key] === true
+                || nativeDocumentPermission(frm, key);
+        },
+        permissionType(capability) {
+            return permissionTypeFor(capability);
         },
         any(...capabilities) {
             return requestedCapabilities(capabilities).some(capability => this.can(capability));

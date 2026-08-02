@@ -59,12 +59,13 @@ def test_cost_service_uses_capabilities_instead_of_role_names():
 
 def test_cost_ui_hides_and_scrubs_unauthorized_data():
     source = _source(COST_UX)
-    assert 'can("view_costs")' in source
+    assert 'can(frm, "view_costs")' in source
+    assert "canDocument" in source
     assert 'setCostTabVisibility(frm, false)' in source
     assert "scrubCostData(frm)" in source
     assert "get_order_cost_snapshot" in source
-    assert 'can("edit_cost_settings")' in source
-    assert 'can("print_customer_invoice")' in source
+    assert 'can(frm, "edit_cost_settings")' in source
+    assert 'can(frm, "print_customer_invoice")' in source
     assert '"edit_special_price"' in source
     assert '"approve_special_price"' in source
     assert "MutationObserver" in source

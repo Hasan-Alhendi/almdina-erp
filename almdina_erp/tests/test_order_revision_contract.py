@@ -51,7 +51,7 @@ class TestOrderRevisionContract(unittest.TestCase):
     def test_revision_and_return_actions_are_separate_and_capability_driven(self) -> None:
         revision_source = REVISION_UX_PATH.read_text(encoding="utf-8")
         lifecycle_source = LIFECYCLE_UX_PATH.read_text(encoding="utf-8")
-        self.assertIn('can("create_order_revision")', revision_source)
+        self.assertIn('can(frm, "create_order_revision")', revision_source)
         self.assertIn('__("إنشاء نسخة تعديل")', revision_source)
         self.assertIn("order_revision_service.create_order_revision", revision_source)
         self.assertIn("DRAFT_LIKE.has(frm.doc.status", revision_source)

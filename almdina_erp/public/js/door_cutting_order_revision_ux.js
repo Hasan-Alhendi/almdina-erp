@@ -22,10 +22,15 @@
         "optimization_time_limit_sec",
     ];
 
-    function can(capability) {
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
         return Boolean(
-            window.AlmdinaPermissions &&
-            window.AlmdinaPermissions.can(capability)
+            permissions &&
+            (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
+            )
         );
     }
 
@@ -35,12 +40,12 @@
 
     function isEditableDraft(frm) {
         if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
-        if (frm.is_new()) return can("create_order");
-        return can("edit_order") && DRAFT_LIKE.has(frm.doc.status || "Draft");
+        if (frm.is_new()) return can(frm, "create_order");
+        return can(frm, "edit_order") && DRAFT_LIKE.has(frm.doc.status || "Draft");
     }
 
     function canCreateRevision(frm) {
-        if (!frm || frm.is_new() || !can("create_order_revision")) return false;
+        if (!frm || frm.is_new() || !can(frm, "create_order_revision")) return false;
         const status = frm.doc.status || "Draft";
         if (DRAFT_LIKE.has(status) || TERMINAL.has(status)) return false;
         return revisionState(frm) !== "Superseded";
@@ -75,6 +80,18 @@
             frm.set_intro(
                 __("هذه هي النسخة الحالية ضمن سلسلة مراجعات الطلب."),
                 "green"
+            );
+            return;
+        }
+        if (
+            !frm.is_new()
+            && Number(frm.doc.docstatus || 0) === 0
+            && !DRAFT_LIKE.has(frm.doc.status || "Draft")
+            && !TERMINAL.has(frm.doc.status || "Draft")
+        ) {
+            frm.set_intro(
+                __("الطلب المعتمد أو الموجود في الإنتاج محفوظ كسجل غير قابل للتعديل المباشر. استخدم «إنشاء نسخة تعديل» لتغيير بياناته دون إتلاف الخطة الحالية."),
+                "orange"
             );
         }
     }
@@ -150,9 +167,16 @@
         },
     });
 
+    window.addEventListener("almdina:permissions-updated", () => {
+        const frm = window.cur_frm;
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        applyImmutableFields(frm);
+    });
+
     window.AlmdinaOrderRevisionUX = Object.freeze({
         canCreateRevision,
         createRevision,
+        applyImmutableFields,
         isEditableDraft,
         openRevision,
     });

@@ -65,6 +65,32 @@ def _get_authorized_order(
     return order
 
 
+def _get_recalculation_order(order_name: str) -> Any:
+    """Authorize plan calculation without turning it into an assignment grant.
+
+    Exporting or replacing the production DXF belongs to the assigned designer.
+    Recalculation is a separately configurable business capability and is allowed
+    for any role that owns it while the order is at Drawing and still unlocked.
+    """
+
+    order = shop_floor_gateway.get_order(order_name)
+    order.check_permission("read")
+    require_document_capability(order, Capability.RECALCULATE_PLAN)
+
+    from almdina_erp.almdina_erp.services.order_edit_policy import (
+        user_can_recalculate_drawing_system_plan,
+    )
+
+    if not user_can_recalculate_drawing_system_plan(order):
+        frappe.throw(
+            _(
+                "The system plan can only be recalculated while the order is at Drawing and before a plan is approved."
+            ),
+            frappe.PermissionError,
+        )
+    return order
+
+
 def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
     normalized_url = str(file_url or "").strip()
     if not normalized_url:
@@ -194,7 +220,7 @@ def recalculate_drawing_plan(
 ) -> dict[str, Any]:
     """Recalculate the system plan without granting full order-edit access."""
 
-    order = _get_authorized_order(order_name, Capability.RECALCULATE_PLAN)
+    order = _get_recalculation_order(order_name)
     if packing_mode:
         order.packing_mode = packing_mode
     if cutting_machine_type:

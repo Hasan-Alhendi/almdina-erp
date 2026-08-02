@@ -7,10 +7,15 @@
     const LEGACY_CUSTOMER_CLASS = "dco-print-customer-invoice";
     let activeFrm = null;
 
-    function can(capability) {
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
         return Boolean(
-            window.AlmdinaPermissions &&
-            window.AlmdinaPermissions.can(capability)
+            permissions &&
+            (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
+            )
         );
     }
 
@@ -276,7 +281,7 @@
 
     function printFinancialDocument(frm, kind) {
         const capability = requiredCapability(kind);
-        if (!can("view_costs") || !can(capability)) {
+        if (!can(frm, "view_costs") || !can(frm, capability)) {
             frappe.msgprint(__("ليس لديك صلاحية طباعة هذا المستند."));
             return Promise.reject(new Error(`Missing capability: ${capability}`));
         }
@@ -334,13 +339,13 @@
 
         const actions = costActions(frm);
         if (!actions.length) return;
-        const baseVisible = can("view_costs") && !frm.is_new();
+        const baseVisible = can(frm, "view_costs") && !frm.is_new();
 
         ensureActionButton(actions, {
             className: CUSTOMER_CLASS,
             label: __("طباعة فاتورة الزبون"),
             primary: true,
-            visible: baseVisible && can("print_customer_invoice"),
+            visible: baseVisible && can(frm, "print_customer_invoice"),
             handler: () => {
                 printFinancialDocument(frm, "customer_invoice").catch(() => undefined);
             },
@@ -349,7 +354,7 @@
             className: INTERNAL_CLASS,
             label: __("طباعة تقرير التكلفة الداخلي"),
             primary: false,
-            visible: baseVisible && can("print_internal_cost_report"),
+            visible: baseVisible && can(frm, "print_internal_cost_report"),
             handler: () => {
                 printFinancialDocument(frm, "internal_cost_report").catch(() => undefined);
             },

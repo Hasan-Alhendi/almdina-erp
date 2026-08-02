@@ -8,10 +8,15 @@
         cost_tab: "view_costs",
     });
 
-    function can(capability) {
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
         return Boolean(
-            window.AlmdinaPermissions
-            && window.AlmdinaPermissions.can(capability)
+            permissions
+            && (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
+            )
         );
     }
 
@@ -66,8 +71,8 @@
 
         const saved = !frm.is_new();
         const visibility = {
-            results_tab: saved && can(TAB_RULES.results_tab),
-            cost_tab: saved && can(TAB_RULES.cost_tab),
+            results_tab: saved && can(frm, TAB_RULES.results_tab),
+            cost_tab: saved && can(frm, TAB_RULES.cost_tab),
         };
 
         Object.entries(visibility).forEach(([fieldname, visible]) => {

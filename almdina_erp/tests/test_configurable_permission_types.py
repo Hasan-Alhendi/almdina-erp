@@ -31,7 +31,7 @@ def test_frappe_gateway_is_the_only_role_permission_adapter() -> None:
     assert "ROLE_CAPABILITIES" not in source
 
 
-def test_dxf_change_actions_keep_assignment_while_approval_is_role_managed() -> None:
+def test_dxf_file_changes_keep_assignment_while_plan_actions_are_role_managed() -> None:
     dxf_source = DXF_SERVICE_PATH.read_text(encoding="utf-8")
     approval_source = APPROVAL_SERVICE_PATH.read_text(encoding="utf-8")
 
@@ -39,13 +39,14 @@ def test_dxf_change_actions_keep_assignment_while_approval_is_role_managed() -> 
     assert "validate_assigned_drawing_action" in dxf_source
     assert "DXF_ROLES" not in dxf_source
     assert "require_roles" not in dxf_source
-    for capability in (
-        "EXPORT_DXF",
-        "UPLOAD_DXF",
-        "REPLACE_DXF",
-        "RECALCULATE_PLAN",
-    ):
+    for capability in ("EXPORT_DXF", "RECALCULATE_PLAN"):
         assert capability in dxf_source
+    assert "_get_recalculation_order" in dxf_source
+    recalculation = dxf_source.split("def _get_recalculation_order", 1)[1].split(
+        "def _validate_and_attach_dxf_file", 1
+    )[0]
+    assert "user_can_recalculate_drawing_system_plan" in recalculation
+    assert "validate_assigned_drawing_action" not in recalculation
 
     assert "Capability.APPROVE_DXF" in approval_source
     assert "require_document_capability" in approval_source
@@ -64,8 +65,8 @@ def test_drawing_presenters_use_capabilities_not_role_names() -> None:
     assert "has_role" not in combined
     assert "hasRole" not in combined
     assert "AlmdinaPermissions" in combined
-    assert 'can("approve_dxf")' in combined
-    assert 'can("recalculate_plan")' in combined
+    assert 'can(frm, "approve_dxf")' in combined or 'canApprove(frm)' in combined
+    assert 'can("recalculate_plan", frm)' in combined
     assert "current_assignee === frappe.session.user" in combined
 
     approval_ui = APPROVAL_UI_PATH.read_text(encoding="utf-8")

@@ -97,7 +97,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("printInvoice(frm)", document_print)
         self.assertIn('event.target.closest(".dco-print-customer-invoice")', document_print)
         self.assertIn("validatedExport(frm)", secure_dxf)
-        self.assertIn('permissions.can("export_dxf")', secure_dxf)
+        self.assertIn('permissions.canDocument(frm, "export_dxf")', secure_dxf)
         self.assertIn("__almdinaSecureDxfExportLoaded", secure_dxf)
         self.assertNotIn("DXF_EXPORT_ROLES", secure_dxf)
         self.assertNotIn("frappe.user_roles", secure_dxf)

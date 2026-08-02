@@ -31,7 +31,8 @@ def test_cost_presenter_is_loaded_without_reintroducing_role_gates() -> None:
 
     assert "/assets/almdina_erp/js/door_cutting_order_cost_presenter.js" in context
     assert "window.AlmdinaOrderCostUX" in presenter
-    assert 'can("view_costs")' in presenter
+    assert 'can(frm, "view_costs")' in presenter
+    assert "canDocument" in presenter
     assert "order_cost_invoice_html" in presenter
     assert "dco-cost-shell" in presenter
     assert "invoiceLines" in presenter
@@ -47,6 +48,8 @@ def test_permission_refresh_reapplies_both_protected_surfaces() -> None:
     assert "/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js" in context
     assert "AlmdinaCostPermissionsUX" in refresh
     assert "AlmdinaPlanTabsUX" in refresh
+    assert "AlmdinaOrderRevisionUX" in refresh
+    assert "AlmdinaOrderTabPermissionsUX" in refresh
     assert "permissions.refresh()" in refresh
     assert "applySurfaces(frm)" in refresh
     assert "__almdinaPermissionRefreshPromise" in refresh

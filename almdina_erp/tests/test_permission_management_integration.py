@@ -230,6 +230,51 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             1,
         )
 
+    def test_arbitrary_role_receives_complete_order_surface_permissions(self) -> None:
+        from almdina_erp.almdina_erp.services.permission_management_service import (
+            update_role_permissions,
+        )
+
+        frappe.set_user(ADMIN_USER)
+        result = update_role_permissions(
+            TARGET_ROLE,
+            {
+                Capability.CREATE_ORDER: True,
+                Capability.EDIT_ORDER: True,
+                Capability.VIEW_COSTS: True,
+                Capability.VIEW_CUTTING_PLAN: True,
+                Capability.RECALCULATE_PLAN: True,
+            },
+        )
+
+        for capability in (
+            Capability.CREATE_ORDER,
+            Capability.EDIT_ORDER,
+            Capability.VIEW_COSTS,
+            Capability.VIEW_CUTTING_PLAN,
+            Capability.RECALCULATE_PLAN,
+        ):
+            self.assertTrue(result["capabilities"][capability], capability)
+
+        frappe.clear_cache(user=TARGET_USER)
+        frappe.clear_cache(doctype="Door Cutting Order")
+        for permission_type in (
+            "read",
+            "create",
+            "write",
+            Capability.VIEW_COSTS,
+            Capability.VIEW_CUTTING_PLAN,
+            Capability.RECALCULATE_PLAN,
+        ):
+            self.assertTrue(
+                frappe.has_permission(
+                    "Door Cutting Order",
+                    ptype=permission_type,
+                    user=TARGET_USER,
+                ),
+                permission_type,
+            )
+
     def test_partial_custom_matrix_repairs_untouched_standard_role_access(self) -> None:
         frappe.set_user("Administrator")
         frappe.db.delete("Custom DocPerm", {"role": PRESERVED_ROLE})

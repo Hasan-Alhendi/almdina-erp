@@ -36,13 +36,19 @@
     function surfaceNeedsRecovery(frm, permissions) {
         if (!frm || !permissions) return false;
 
-        if (permissions.can("view_costs")) {
+        const can = capability => (
+            typeof permissions.canDocument === "function"
+                ? permissions.canDocument(frm, capability)
+                : permissions.can(capability)
+        );
+
+        if (can("view_costs")) {
             const field = frm.fields_dict.order_cost_invoice_html;
             const wrapper = field && field.$wrapper;
             if (!wrapper || !wrapper.find(".dco-cost-shell").length) return true;
         }
 
-        if (permissions.can("view_cutting_plan") && !frm.is_new()) {
+        if (can("view_cutting_plan") && !frm.is_new()) {
             const field = frm.fields_dict.cutting_plan_html;
             const wrapper = field && field.$wrapper;
             if (!wrapper || !wrapper.children().length) return true;
@@ -66,6 +72,16 @@
                 const field = frm.fields_dict.cutting_plan_html;
                 if (field && field.$wrapper) field.$wrapper.empty();
             }
+        }
+
+        const tabs = window.AlmdinaOrderTabPermissionsUX;
+        if (tabs && typeof tabs.apply === "function") {
+            tabs.apply(frm);
+        }
+
+        const revision = window.AlmdinaOrderRevisionUX;
+        if (revision && typeof revision.applyImmutableFields === "function") {
+            revision.applyImmutableFields(frm);
         }
     }
 

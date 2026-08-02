@@ -14,8 +14,16 @@
 		"Guillotine Best Area Fit",
 	];
 
-	function can(capability) {
-		return Boolean(window.AlmdinaPermissions && window.AlmdinaPermissions.can(capability));
+	function can(capability, frm = null) {
+		const permissions = window.AlmdinaPermissions;
+		return Boolean(
+			permissions &&
+			(
+				frm && typeof permissions.canDocument === "function"
+					? permissions.canDocument(frm, capability)
+					: permissions.can(capability)
+			)
+		);
 	}
 
 	function isAssignedToCurrentUser(value) {
@@ -32,9 +40,8 @@
 		return Boolean(
 			frm &&
 			!frm.is_new() &&
-			can("recalculate_plan") &&
+			can("recalculate_plan", frm) &&
 			isDrawingStage(frm) &&
-			isAssignedToCurrentUser(frm.doc.current_assignee) &&
 			!frm.doc.approved_plan
 		);
 	}

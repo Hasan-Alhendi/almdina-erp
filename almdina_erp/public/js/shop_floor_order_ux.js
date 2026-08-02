@@ -9,14 +9,26 @@
 		return window.AlmdinaPermissions || null;
 	}
 
-	function can(capability) {
+	function can(frm, capability) {
 		const context = permissionContext();
-		return Boolean(context && context.can(capability));
+		return Boolean(
+			context &&
+			(
+				typeof context.canDocument === "function"
+					? context.canDocument(frm, capability)
+					: context.can(capability)
+			)
+		);
 	}
 
-	function isShopFloorProfile() {
+	function isShopFloorProfile(frm) {
 		const context = permissionContext();
-		return Boolean(context && context.profile() === "shop_floor");
+		return Boolean(
+			context &&
+			context.profile() === "shop_floor" &&
+			!can(frm, "create_order") &&
+			!can(frm, "edit_order")
+		);
 	}
 
 	function isAssignedToCurrentUser(frm) {
@@ -151,7 +163,19 @@
 	}
 
 	function applyShopFloorPresentation(frm) {
-		if (!isShopFloorProfile()) return;
+		if (!isShopFloorProfile(frm)) {
+			const original = frm.__almdinaShopFloorHiddenState;
+			if (!original) return false;
+			Object.entries(original).forEach(([fieldname, hidden]) => {
+				frm.set_df_property(fieldname, "hidden", hidden ? 1 : 0);
+			});
+			frm.__almdinaShopFloorHiddenState = null;
+			const editable = frm.is_new()
+				? can(frm, "create_order")
+				: can(frm, "edit_order") && ["Draft", "Pending Review", "Rejected"].includes(frm.doc.status || "Draft");
+			if (editable && typeof frm.enable_save === "function") frm.enable_save();
+			return false;
+		}
 		const keep = new Set([
 			"operator_status_strip",
 			"results_tab",
@@ -167,6 +191,13 @@
 			"production_dxf",
 			"drawing_dxf_status",
 		]);
+		if (!frm.__almdinaShopFloorHiddenState) {
+			frm.__almdinaShopFloorHiddenState = Object.fromEntries(
+				(frm.meta.fields || [])
+					.filter(field => field && field.fieldname)
+					.map(field => [field.fieldname, Boolean(field.hidden)])
+			);
+		}
 		(frm.meta.fields || []).forEach((field) => {
 			if (!field || !field.fieldname) return;
 			frm.set_df_property(field.fieldname, "hidden", keep.has(field.fieldname) ? 0 : 1);
@@ -181,6 +212,7 @@
 		frm.disable_save();
 		frm.page.clear_inner_toolbar();
 		frm.add_custom_button(__("رجوع لصالة الإنتاج"), () => frappe.set_route("shop-floor-inbox"));
+		return true;
 	}
 
 	function openDispatchDialog(frm) {
@@ -234,14 +266,14 @@
 	frappe.almdina.open_dispatch_dialog = openDispatchDialog;
 
 	function addDispatchButton(frm) {
-		if (isShopFloorProfile() || frm.is_new() || !can("dispatch_order")) return;
+		if (isShopFloorProfile(frm) || frm.is_new() || !can(frm, "dispatch_order")) return;
 		if (frm.doc.status !== "Approved" || frm.doc.production_path || frm.doc.current_production_stage) return;
 		frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm), PRODUCTION_ACTION_GROUP);
 	}
 
 	function addDeliveryButtons(frm) {
-		if (isShopFloorProfile() || frm.is_new()) return;
-		if (frm.doc.status === "Ready for Delivery" && can("mark_delivered")) {
+		if (isShopFloorProfile(frm) || frm.is_new()) return;
+		if (frm.doc.status === "Ready for Delivery" && can(frm, "mark_delivered")) {
 			frm.add_custom_button(__("تم التسليم"), () => {
 				frappe.confirm(__("تأكيد تسليم الطلب للعميل؟"), () =>
 					callAction(
@@ -253,7 +285,7 @@
 				);
 			}, PRODUCTION_ACTION_GROUP);
 		}
-		if (frm.doc.production_path && frm.doc.status !== "Delivered" && can("revert_department")) {
+		if (frm.doc.production_path && frm.doc.status !== "Delivered" && can(frm, "revert_department")) {
 			frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm), PRODUCTION_ACTION_GROUP);
 		}
 	}
@@ -354,12 +386,12 @@
 	function addDrawingDxfButtons(frm) {
 		if (frm.is_new()) return;
 
-		if (frm.doc.production_dxf && can("export_dxf")) {
+		if (frm.doc.production_dxf && can(frm, "export_dxf")) {
 			frm.add_custom_button(__("تنزيل DXF للإنتاج"), () => window.open(frm.doc.production_dxf, "_blank"), DRAWING_ACTION_GROUP);
 		}
 		if (!isAtDrawing(frm) || !isAssignedToCurrentUser(frm) || frm.doc.approved_plan) return;
 
-		if (can("export_dxf")) {
+		if (can(frm, "export_dxf")) {
 			frm.add_custom_button(__("تصدير DXF للرسم"), () => {
 				const exporter = frappe.almdina && frappe.almdina.export_order_dxf;
 				const markExported = () => frappe.call({
@@ -373,7 +405,7 @@
 		}
 
 		const uploadCapability = frm.doc.production_dxf ? "replace_dxf" : "upload_dxf";
-		if (can(uploadCapability)) {
+		if (can(frm, uploadCapability)) {
 			frm.add_custom_button(
 				frm.doc.production_dxf ? __("استبدال ملف DXF") : __("رفع ملف DXF"),
 				() => uploadDrawingDxf(frm),
@@ -381,10 +413,10 @@
 			);
 		}
 
-		if (can("approve_dxf") && availableApprovalSources(frm).length) {
+		if (can(frm, "approve_dxf") && availableApprovalSources(frm).length) {
 			frm.add_custom_button(__("اعتماد الرسم"), () => approveDrawing(frm), DRAWING_ACTION_GROUP);
 		}
-		if (can("print_cutting_plan")) {
+		if (can(frm, "print_cutting_plan")) {
 			frm.add_custom_button(__("طباعة خطة القص"), () => {
 				if (window.AlmdinaDrawingPlanUX && window.AlmdinaDrawingPlanUX.printActivePlan) {
 					window.AlmdinaDrawingPlanUX.printActivePlan(frm);
@@ -467,7 +499,7 @@
 			const stageType = stage.stage_type || frm.doc.current_department;
 			const assignedToMe = Boolean(stage.assigned_to && stage.assigned_to === frappe.session.user);
 
-			if (ACTIVE_STAGE_STATUSES.has(stageStatus) && can("reassign_worker")) {
+			if (ACTIVE_STAGE_STATUSES.has(stageStatus) && can(frm, "reassign_worker")) {
 				frm.add_custom_button(
 					__("تغيير العامل"),
 					() => openReassignDialog(frm, stageName, stage.assigned_to),
@@ -476,7 +508,7 @@
 			}
 
 			if (!assignedToMe) return;
-			if (stageStatus === "Pending" && can("start_assigned_stage")) {
+			if (stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
 				frm.add_custom_button(__("بدء العمل"), () =>
 					callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
@@ -485,7 +517,7 @@
 						frm
 					), PRODUCTION_ACTION_GROUP);
 			}
-			if (!["In Progress", "Paused"].includes(stageStatus) || !can("handoff_assigned_stage")) return;
+			if (!["In Progress", "Paused"].includes(stageStatus) || !can(frm, "handoff_assigned_stage")) return;
 			const isSanding = stageType === "Sanding" || frm.doc.current_department === "تقشيط";
 			frm.add_custom_button(isSanding ? __("جاهزة للتسليم") : __("إرسال للقسم التالي"), () => {
 				if (isSanding) {
@@ -526,5 +558,12 @@
 			addDrawingDxfButtons(frm);
 			addWorkerStageButtons(frm);
 		},
+	});
+
+	window.addEventListener("almdina:permissions-updated", () => {
+		const frm = window.cur_frm;
+		if (frm && frm.doctype === "Door Cutting Order") {
+			applyShopFloorPresentation(frm);
+		}
 	});
 })();

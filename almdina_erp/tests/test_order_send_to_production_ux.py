@@ -73,7 +73,7 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
 
 def test_drawing_form_exposes_reapproval_with_warning():
     ux = _source(DRAWING_APPROVAL_UX)
-    assert 'can("approve_dxf")' in ux
+    assert 'permissions.canDocument(frm, "approve_dxf")' in ux
     assert 'const APPROVE_LABEL = __("اعتماد الرسم")' in ux
     assert 'const REAPPROVE_LABEL = __("إعادة اعتماد الرسم")' in ux
     assert "approve_production_dxf" in ux

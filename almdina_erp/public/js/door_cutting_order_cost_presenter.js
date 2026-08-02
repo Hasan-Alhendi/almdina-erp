@@ -5,10 +5,15 @@
 
     const STYLE_ID = "dco-capability-cost-presenter-css";
 
-    function can(capability) {
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
         return Boolean(
-            window.AlmdinaPermissions &&
-            window.AlmdinaPermissions.can(capability)
+            permissions &&
+            (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
+            )
         );
     }
 
@@ -275,7 +280,7 @@
     function render(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
         if (!field || !field.$wrapper) return false;
-        if (!can("view_costs")) {
+        if (!can(frm, "view_costs")) {
             field.$wrapper.empty();
             return false;
         }
