@@ -42,6 +42,44 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         empty = normalize_capability_state({Capability.VIEW_ORDERS: False})
         self.assertFalse(empty[Capability.VIEW_ORDERS])
 
+    def test_plan_actions_automatically_require_plan_view(self) -> None:
+        for action in (
+            Capability.RECALCULATE_PLAN,
+            Capability.EDIT_OPTIMIZER_SETTINGS,
+            Capability.PRINT_CUTTING_PLAN,
+        ):
+            with self.subTest(action=action):
+                state = normalize_capability_state({action: True})
+                self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+
+    def test_drawing_actions_automatically_require_drawing_workspace(self) -> None:
+        for action in (
+            Capability.EDIT_SPECIAL_DRAWING,
+            Capability.EXPORT_DXF,
+            Capability.UPLOAD_DXF,
+            Capability.REPLACE_DXF,
+            Capability.APPROVE_DXF,
+        ):
+            with self.subTest(action=action):
+                state = normalize_capability_state({action: True})
+                self.assertTrue(state[Capability.VIEW_DRAWING_WORKSPACE])
+
+    def test_internal_cost_actions_require_cost_view_but_customer_invoice_does_not(self) -> None:
+        for action in (
+            Capability.EDIT_COST_SETTINGS,
+            Capability.EDIT_SPECIAL_PRICE,
+            Capability.APPROVE_SPECIAL_PRICE,
+            Capability.PRINT_INTERNAL_COST_REPORT,
+        ):
+            with self.subTest(action=action):
+                state = normalize_capability_state({action: True})
+                self.assertTrue(state[Capability.VIEW_COSTS])
+
+        customer = normalize_capability_state(
+            {Capability.PRINT_CUSTOMER_INVOICE: True}
+        )
+        self.assertFalse(customer[Capability.VIEW_COSTS])
+
     def test_read_grants_also_project_select_for_linked_records(self) -> None:
         order = standard_permission_projection(
             "Door Cutting Order",
