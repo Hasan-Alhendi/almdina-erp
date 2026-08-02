@@ -23,6 +23,34 @@
         return Boolean(window.cur_frm === frm && capture(frm) === identity);
     }
 
+    function permissionSignature(permissions) {
+        const snapshot = permissions && typeof permissions.snapshot === "function"
+            ? permissions.snapshot()
+            : null;
+        const capabilities = snapshot && snapshot.capabilities
+            ? snapshot.capabilities
+            : {};
+        return JSON.stringify(capabilities);
+    }
+
+    function surfaceNeedsRecovery(frm, permissions) {
+        if (!frm || !permissions) return false;
+
+        if (permissions.can("view_costs")) {
+            const field = frm.fields_dict.order_cost_invoice_html;
+            const wrapper = field && field.$wrapper;
+            if (!wrapper || !wrapper.find(".dco-cost-shell").length) return true;
+        }
+
+        if (permissions.can("view_cutting_plan") && !frm.is_new()) {
+            const field = frm.fields_dict.cutting_plan_html;
+            const wrapper = field && field.$wrapper;
+            if (!wrapper || !wrapper.children().length) return true;
+        }
+
+        return false;
+    }
+
     function applySurfaces(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
 
@@ -51,6 +79,7 @@
 
         const identity = capture(frm);
         const permissions = window.AlmdinaPermissions;
+        const beforeSignature = permissionSignature(permissions);
         const operation = permissions && typeof permissions.refresh === "function"
             ? permissions.refresh()
             : Promise.resolve();
@@ -58,8 +87,12 @@
         frm.__almdinaPermissionRefreshPromise = Promise.resolve(operation)
             .then(() => {
                 if (!isCurrent(frm, identity)) return false;
-                applySurfaces(frm);
-                return true;
+                const changed = permissionSignature(permissions) !== beforeSignature;
+                if (changed || surfaceNeedsRecovery(frm, permissions)) {
+                    applySurfaces(frm);
+                    return true;
+                }
+                return false;
             })
             .catch(error => {
                 console.error("Failed to refresh Almdina permissions", error);
@@ -87,6 +120,7 @@
             frm
             && frm.doctype === "Door Cutting Order"
             && !frm.__almdinaPermissionRefreshPromise
+            && surfaceNeedsRecovery(frm, window.AlmdinaPermissions)
         ) {
             applySurfaces(frm);
         }
@@ -95,6 +129,7 @@
     window.AlmdinaOrderPermissionRefreshUX = Object.freeze({
         applySurfaces,
         refreshPermissions,
+        surfaceNeedsRecovery,
     });
 
     window.setTimeout(() => {
