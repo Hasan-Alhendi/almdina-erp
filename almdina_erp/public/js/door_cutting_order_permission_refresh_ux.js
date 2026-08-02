@@ -83,7 +83,11 @@
 
     window.addEventListener("almdina:permissions-updated", () => {
         const frm = window.cur_frm;
-        if (frm && frm.doctype === "Door Cutting Order") {
+        if (
+            frm
+            && frm.doctype === "Door Cutting Order"
+            && !frm.__almdinaPermissionRefreshPromise
+        ) {
             applySurfaces(frm);
         }
     });
