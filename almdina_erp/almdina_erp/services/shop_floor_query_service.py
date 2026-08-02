@@ -7,11 +7,15 @@ from frappe import _
 
 from almdina_erp.almdina_erp.application.shop_floor import queries
 from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    granted_capabilities,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_query_repository import (
     FrappeShopFloorQueryRepository,
 )
 from almdina_erp.almdina_erp.presentation.shop_floor.data_policy import (
     sanitize_shop_floor_detail,
+    sanitize_shop_floor_summary,
 )
 from almdina_erp.almdina_erp.presentation.shop_floor.presenters import (
     present_order_detail,
@@ -30,6 +34,10 @@ def _execute(function: Callable[..., _Result], *args: Any) -> _Result:
     except queries.ShopFloorQueryError as error:
         frappe.throw(_(str(error)))
     raise AssertionError("frappe.throw must interrupt execution")
+
+
+def _current_capabilities() -> frozenset[str]:
+    return granted_capabilities(user=frappe.session.user)
 
 
 @frappe.whitelist()
@@ -56,12 +64,14 @@ def get_revert_targets(order_name: str) -> list[dict[str, Any]]:
 
 @frappe.whitelist()
 def get_my_inbox() -> list[dict[str, Any]]:
-    return _execute(queries.get_my_inbox)
+    rows = _execute(queries.get_my_inbox)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
 @frappe.whitelist()
 def get_my_archive() -> list[dict[str, Any]]:
-    return _execute(queries.get_my_archive)
+    rows = _execute(queries.get_my_archive)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
 @frappe.whitelist()
