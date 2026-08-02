@@ -167,13 +167,18 @@ def build_navigation_context(
         if has_permissions_admin:
             workspaces.append(WORKSPACE_GO_LIVE)
 
-    home_page = "shop-floor-inbox" if operator_only else "almdina-erp"
+    # Frappe v16 owns the /desk root and renders the desktop/sidebar there.
+    # Keep that root for administrative and order-entry profiles. Only the
+    # operator-only profile needs a forced landing page in the shop-floor UI.
+    home_page = "shop-floor-inbox" if operator_only else ""
+    default_route = "/app/shop-floor-inbox" if operator_only else "/desk"
+
     return {
         "shared_shell": active,
         "app_only": active,
         "profile": _profile(granted),
         "home_page": home_page if active else "",
-        "default_route": f"/app/{home_page}" if active else "",
+        "default_route": default_route if active else "",
         "workspaces": workspaces,
         "sections": {
             "orders": has_orders,
