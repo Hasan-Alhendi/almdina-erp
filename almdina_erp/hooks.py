@@ -11,7 +11,7 @@ add_to_apps_screen = [
         "name": "almdina_erp",
         "logo": "/assets/almdina_erp/images/factory-app.svg",
         "title": "Factory Management",
-        "route": "/desk/almdina-erp",
+        "route": "/desk",
     }
 ]
 
@@ -61,6 +61,7 @@ doctype_js = {
         "public/js/door_cutting_order_document_print_presenter.js",
         "public/js/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order_document_compactness_ux.js",
+        "public/js/door_cutting_order_cost_presenter.js",
         "public/js/door_cutting_order_cost_permissions_ux.js",
         "public/js/door_cutting_order_financial_documents_ux.js",
         "public/js/door_cutting_order_edge_color_ux.js",
@@ -72,6 +73,7 @@ doctype_js = {
         "public/js/door_cutting_order_plan_controls_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_plan_tabs_ux.js",
+        "public/js/door_cutting_order_permission_refresh_ux.js",
         "public/js/door_cutting_order_drawing_plan_ux.js",
         "public/js/door_cutting_order_header_ux.js",
         "public/js/shop_floor_order_ux.js",
