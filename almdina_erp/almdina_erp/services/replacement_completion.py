@@ -6,7 +6,17 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
+from almdina_erp.almdina_erp.domain.replacements.replacement_authorization import (
+    ReplacementAction,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    document_has_capability,
+    require_doctype_capability,
+)
+from almdina_erp.almdina_erp.services.replacement_permission_service import (
+    require_replacement_action,
+)
 
 
 @frappe.whitelist()
@@ -14,16 +24,29 @@ def complete_replacement(
     replacement_name: str,
     internal_loss_cost_usd: float | None = None,
 ) -> dict[str, Any]:
-    """Complete replacement work and update operational cost only."""
+    """Complete replacement work and return only authorized cost data."""
 
-    require_any_role("Cutting Operator", "Production Manager")
+    require_doctype_capability(
+        Capability.COMPLETE_REPLACEMENT,
+        message=_("You do not have permission to complete replacement work."),
+    )
     frappe.db.sql(
         "select name from `tabReplacement Piece` where name = %s for update",
         (replacement_name,),
     )
     replacement = frappe.get_doc("Replacement Piece", replacement_name)
-    if replacement.status != "In Progress":
-        frappe.throw(_("Only an In Progress replacement can be completed."))
+    replacement.check_permission("read")
+    require_replacement_action(replacement, ReplacementAction.COMPLETE)
+
+    can_edit_cost = document_has_capability(
+        replacement,
+        Capability.EDIT_REPLACEMENT_COST,
+    )
+    if internal_loss_cost_usd is not None and not can_edit_cost:
+        require_replacement_action(
+            replacement,
+            ReplacementAction.EDIT_ACTUAL_COST,
+        )
 
     actual_loss = (
         flt(internal_loss_cost_usd)
@@ -33,6 +56,7 @@ def complete_replacement(
     if actual_loss < 0:
         frappe.throw(_("Actual internal loss cannot be negative."))
 
+    completed_on = now_datetime()
     frappe.db.set_value(
         "Replacement Piece",
         replacement.name,
@@ -41,7 +65,7 @@ def complete_replacement(
             "internal_loss_cost_usd": actual_loss,
             "charge_customer": 0,
             "completed_by": frappe.session.user,
-            "completed_on": now_datetime(),
+            "completed_on": completed_on,
             "generated_remnant": None,
             "generated_remnants_json": "[]",
         },
@@ -60,14 +84,28 @@ def complete_replacement(
         sync_replacement_order_status,
     )
 
-    order_status = sync_replacement_order_status(
-        replacement.door_cutting_order
+    order_status = sync_replacement_order_status(replacement.door_cutting_order)
+    cost_summary = sync_order_costs(replacement.door_cutting_order)
+    replacement.add_comment(
+        "Comment",
+        text=_("Replacement completed by {0} on {1}.").format(
+            frappe.session.user,
+            completed_on,
+        ),
     )
-    return {
+
+    result: dict[str, Any] = {
         "replacement_piece": replacement.name,
         "status": "Completed",
         "order_status": order_status,
-        "internal_loss_cost_usd": actual_loss,
-        "charge_customer": 0,
-        "cost_summary": sync_order_costs(replacement.door_cutting_order),
+        "completed_on": completed_on,
     }
+    if can_edit_cost:
+        result.update(
+            {
+                "internal_loss_cost_usd": actual_loss,
+                "charge_customer": 0,
+                "cost_summary": cost_summary,
+            }
+        )
+    return result

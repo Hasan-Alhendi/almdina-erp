@@ -67,7 +67,7 @@ class TestAlmdinaPermissions(FrappeTestCase):
                     f"{role} {permission_type}: expected {allowed}, got {actual}",
                 )
 
-    def test_worker_roles_do_not_receive_cost_permlevel(self):
+    def test_cost_permlevel_has_no_fixed_role_grants(self):
         meta = frappe.get_meta("Door Cutting Order")
         cost_fields = {
             "board_rate_usd",
@@ -95,16 +95,16 @@ class TestAlmdinaPermissions(FrappeTestCase):
             for permission in meta.permissions
             if int(permission.permlevel or 0) == 1 and permission.read
         }
-        self.assertNotIn("Cutting Operator", level_one_roles)
-        self.assertNotIn("Edge Operator", level_one_roles)
+        self.assertEqual(level_one_roles, set())
 
-    def test_production_settings_service_allows_production_manager(self):
-        from almdina_erp.almdina_erp.services.production_settings_service import get_production_settings
+    def test_production_manager_name_does_not_grant_factory_settings(self):
+        from almdina_erp.almdina_erp.services.production_settings_service import (
+            get_production_settings,
+        )
 
         frappe.set_user(TEST_USERS["Production Manager"])
-        result = get_production_settings()
-        self.assertIn("default_production_routing", result)
-        self.assertIn("packing_options", result)
+        with self.assertRaises(frappe.PermissionError):
+            get_production_settings()
 
     def test_sensitive_replacement_approval_rejects_order_entry_before_lookup(self):
         from almdina_erp.almdina_erp.services.replacement_approval import approve_replacement

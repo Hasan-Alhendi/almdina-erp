@@ -6,8 +6,34 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
-from almdina_erp.almdina_erp.services.stock_service import _active_reserved_qty, _stock_balance
+from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
+    reject_legacy_role_gate,
+)
+
+
+def _stock_balance(item_code: str, warehouse: str) -> float:
+    """Load retired stock infrastructure only for unreachable legacy internals.
+
+    The public endpoint fails closed before this helper can run. Keeping the
+    dependency lazy allows Frappe to discover pure historical calculation tests
+    without importing the retired stock service or reviving its role gate.
+    """
+
+    from almdina_erp.almdina_erp.services.stock_service import (
+        _stock_balance as implementation,
+    )
+
+    return implementation(item_code, warehouse)
+
+
+def _active_reserved_qty(item_code: str, warehouse: str) -> float:
+    """Lazy compatibility adapter for the retired inventory implementation."""
+
+    from almdina_erp.almdina_erp.services.stock_service import (
+        _active_reserved_qty as implementation,
+    )
+
+    return implementation(item_code, warehouse)
 
 
 def _planned_rows(log: Any) -> list[dict[str, Any]]:
@@ -15,10 +41,18 @@ def _planned_rows(log: Any) -> list[dict[str, Any]]:
     return list(payload.get("stock_materials") or [])
 
 
-def _normalize_actual(actual_materials: str | list[dict[str, Any]]) -> dict[str, float]:
-    rows = frappe.parse_json(actual_materials) if isinstance(actual_materials, str) else actual_materials
+def _normalize_actual(
+    actual_materials: str | list[dict[str, Any]],
+) -> dict[str, float]:
+    rows = (
+        frappe.parse_json(actual_materials)
+        if isinstance(actual_materials, str)
+        else actual_materials
+    )
     if not isinstance(rows, list):
-        frappe.throw(_("Actual materials must be a list of item_code / actual_qty rows."))
+        frappe.throw(
+            _("Actual materials must be a list of item_code / actual_qty rows.")
+        )
 
     result: dict[str, float] = {}
     for row in rows:
@@ -26,20 +60,34 @@ def _normalize_actual(actual_materials: str | list[dict[str, Any]]) -> dict[str,
         if not item_code:
             frappe.throw(_("Every actual-consumption row requires an Item."))
         if item_code in result:
-            frappe.throw(_("Item {0} appears more than once in actual consumption.").format(item_code))
+            frappe.throw(
+                _("Item {0} appears more than once in actual consumption.").format(
+                    item_code
+                )
+            )
         actual_qty = flt((row or {}).get("actual_qty"))
         if actual_qty < 0:
-            frappe.throw(_("Actual quantity for Item {0} cannot be negative.").format(item_code))
+            frappe.throw(
+                _("Actual quantity for Item {0} cannot be negative.").format(
+                    item_code
+                )
+            )
         result[item_code] = actual_qty
     return result
 
 
-def _variance_cost_usd(material: dict[str, Any], delta_stock_qty: float, plan: Any) -> float:
+def _variance_cost_usd(
+    material: dict[str, Any],
+    delta_stock_qty: float,
+    plan: Any,
+) -> float:
     if abs(delta_stock_qty) < 1e-9:
         return 0.0
 
     kind = material.get("kind")
-    planned_stock_qty = flt(material.get("required_qty") or material.get("qty"))
+    planned_stock_qty = flt(
+        material.get("required_qty") or material.get("qty")
+    )
     planned_business_qty = flt(material.get("planned_qty"))
 
     if kind == "Board":
@@ -54,7 +102,9 @@ def _variance_cost_usd(material: dict[str, Any], delta_stock_qty: float, plan: A
             )
         )
         if planned_stock_qty > 0:
-            cost_per_stock_unit = (planned_business_qty * rate) / planned_stock_qty
+            cost_per_stock_unit = (
+                planned_business_qty * rate
+            ) / planned_stock_qty
             return delta_stock_qty * cost_per_stock_unit
 
     return 0.0
@@ -101,7 +151,9 @@ def record_actual_consumption(
     consumption_log: str,
     actual_materials: str | list[dict[str, Any]],
 ) -> dict[str, Any]:
-    require_any_role("Production Manager", "Stock Manager")
+    # The HTTP method is overridden by hooks because inventory is outside the
+    # active product scope. Direct Python callers also fail closed here.
+    reject_legacy_role_gate("Production Manager", "Stock Manager")
 
     frappe.db.sql(
         "select name from `tabMaterial Consumption Log` where name = %s for update",
@@ -109,31 +161,55 @@ def record_actual_consumption(
     )
     log = frappe.get_doc("Material Consumption Log", consumption_log)
     if log.status != "Submitted":
-        frappe.throw(_("Actual consumption can only be recorded for a Submitted consumption log."))
+        frappe.throw(
+            _(
+                "Actual consumption can only be recorded for a Submitted "
+                "consumption log."
+            )
+        )
     if log.actual_recorded:
-        frappe.throw(_("Actual consumption was already recorded for this log. Reverse the adjustment before recording again."))
+        frappe.throw(
+            _(
+                "Actual consumption was already recorded for this log. "
+                "Reverse the adjustment before recording again."
+            )
+        )
 
     planned = _planned_rows(log)
     if not planned:
-        frappe.throw(_("Consumption log has no planned stock materials to reconcile."))
+        frappe.throw(
+            _("Consumption log has no planned stock materials to reconcile.")
+        )
 
     actual_by_item = _normalize_actual(actual_materials)
-    planned_codes = {row.get("item_code") for row in planned if row.get("item_code")}
+    planned_codes = {
+        row.get("item_code") for row in planned if row.get("item_code")
+    }
     actual_codes = set(actual_by_item)
     missing = planned_codes - actual_codes
     unknown = actual_codes - planned_codes
     if missing:
-        frappe.throw(_("Actual consumption is missing planned Items: {0}").format(", ".join(sorted(missing))))
+        frappe.throw(
+            _("Actual consumption is missing planned Items: {0}").format(
+                ", ".join(sorted(missing))
+            )
+        )
     if unknown:
-        frappe.throw(_("Actual consumption contains Items not present in the approved plan: {0}").format(", ".join(sorted(unknown))))
+        frappe.throw(
+            _(
+                "Actual consumption contains Items not present in the approved "
+                "plan: {0}"
+            ).format(", ".join(sorted(unknown)))
+        )
 
     plan = frappe.get_doc("Cutting Plan", log.cutting_plan)
     warehouse = log.warehouse
     company = frappe.db.get_value("Warehouse", warehouse, "company")
     if not company:
-        frappe.throw(_("Warehouse {0} is not linked to a Company.").format(warehouse))
+        frappe.throw(
+            _("Warehouse {0} is not linked to a Company.").format(warehouse)
+        )
 
-    # Serialize competing stock adjustments and preserve all active reservations.
     for item_code in sorted(planned_codes):
         frappe.db.sql(
             "select name from `tabBin` where item_code = %s and warehouse = %s for update",
@@ -147,13 +223,18 @@ def record_actual_consumption(
 
     for material in planned:
         item_code = material["item_code"]
-        planned_qty = flt(material.get("required_qty") or material.get("qty"))
+        planned_qty = flt(
+            material.get("required_qty") or material.get("qty")
+        )
         actual_qty = flt(actual_by_item[item_code])
         delta = actual_qty - planned_qty
         row_cost = _variance_cost_usd(material, delta, plan)
         variance_cost += row_cost
 
-        stock_uom = frappe.db.get_value("Item", item_code, "stock_uom") or material.get("stock_uom")
+        stock_uom = (
+            frappe.db.get_value("Item", item_code, "stock_uom")
+            or material.get("stock_uom")
+        )
         variance_rows.append(
             {
                 "item_code": item_code,
@@ -173,27 +254,41 @@ def record_actual_consumption(
             freely_available = max(0.0, physical - reserved)
             if freely_available + 1e-9 < delta:
                 frappe.throw(
-                    _("Cannot issue extra {0} of Item {1}: only {2} is free after active reservations in {3}.").format(
-                        delta, item_code, freely_available, warehouse
+                    _(
+                        "Cannot issue extra {0} of Item {1}: only {2} is free "
+                        "after active reservations in {3}."
+                    ).format(
+                        delta,
+                        item_code,
+                        freely_available,
+                        warehouse,
                     )
                 )
             issue_rows.append({"item_code": item_code, "qty": delta})
         elif delta < -1e-9:
-            return_rows.append({"item_code": item_code, "qty": abs(delta)})
+            return_rows.append(
+                {"item_code": item_code, "qty": abs(delta)}
+            )
 
     issue_entry = _create_adjustment_entry(
         warehouse=warehouse,
         company=company,
         purpose="Material Issue",
         rows=issue_rows,
-        remarks=_("Additional actual consumption for {0} / order {1}").format(log.name, log.door_cutting_order),
+        remarks=_("Additional actual consumption for {0} / order {1}").format(
+            log.name,
+            log.door_cutting_order,
+        ),
     )
     return_entry = _create_adjustment_entry(
         warehouse=warehouse,
         company=company,
         purpose="Material Receipt",
         rows=return_rows,
-        remarks=_("Unused material return for {0} / order {1}").format(log.name, log.door_cutting_order),
+        remarks=_("Unused material return for {0} / order {1}").format(
+            log.name,
+            log.door_cutting_order,
+        ),
     )
 
     log.set("variance_items", [])

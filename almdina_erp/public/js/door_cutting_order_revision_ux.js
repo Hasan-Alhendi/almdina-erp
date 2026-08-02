@@ -22,9 +22,11 @@
         "optimization_time_limit_sec",
     ];
 
-    function hasRole(role) {
-        const roles = frappe.user_roles || [];
-        return roles.includes("System Manager") || roles.includes(role);
+    function can(capability) {
+        return Boolean(
+            window.AlmdinaPermissions &&
+            window.AlmdinaPermissions.can(capability)
+        );
     }
 
     function revisionState(frm) {
@@ -32,17 +34,16 @@
     }
 
     function isEditableDraft(frm) {
-        return Boolean(
-            frm && frm.doc && frm.doc.docstatus === 0 && DRAFT_LIKE.has(frm.doc.status || "Draft")
-        );
+        if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
+        if (frm.is_new()) return can("create_order");
+        return can("edit_order") && DRAFT_LIKE.has(frm.doc.status || "Draft");
     }
 
     function canCreateRevision(frm) {
-        if (!frm || frm.is_new()) return false;
+        if (!frm || frm.is_new() || !can("create_order_revision")) return false;
         const status = frm.doc.status || "Draft";
         if (DRAFT_LIKE.has(status) || TERMINAL.has(status)) return false;
-        if (revisionState(frm) === "Superseded") return false;
-        return hasRole("Order Entry") || hasRole("Production Manager");
+        return revisionState(frm) !== "Superseded";
     }
 
     function installImmutableEditPolicy() {
@@ -65,14 +66,14 @@
         }
         if (state === "Superseded") {
             frm.set_intro(
-                __("هذه نسخة تاريخية تم استبدالها بنسخة أحدث، وهي للقراءة والتوثيق فقط ولا يمكن إرسالها للإنتاج."),
+                __("هذه نسخة تاريخية تم استبدالها بنسخة أحدث، وهي للقراءة والتوثيق فقط."),
                 "red"
             );
             return;
         }
         if (frm.doc.revision_of) {
             frm.set_intro(
-                __("هذه هي النسخة الحالية المفعّلة ضمن سلسلة مراجعات الطلب."),
+                __("هذه هي النسخة الحالية ضمن سلسلة مراجعات الطلب."),
                 "green"
             );
         }
@@ -87,73 +88,44 @@
             },
             freeze: true,
             freeze_message: __("جاري إنشاء نسخة تعديل مستقلة..."),
-        }).then(r => {
-            const data = r.message || {};
+        }).then(response => {
+            const data = response.message || {};
             if (!data.name) return;
             frappe.show_alert({
                 message: data.already_exists
                     ? __("توجد نسخة تعديل مرتبطة بهذا الطلب.")
-                    : __("تم إنشاء نسخة مسودة للتعديل مع الحفاظ على الطلب والخطة الأصلية."),
+                    : __("تم إنشاء نسخة مسودة مع الحفاظ على الطلب والخطة الأصلية."),
                 indicator: data.already_exists ? "orange" : "green",
-            });
+            }, 6);
             frappe.set_route("Form", "Door Cutting Order", data.name);
         });
     }
 
     function openRevision(frm) {
-        if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return;
-
         frappe.prompt(
             [{
                 fieldname: "reason",
                 fieldtype: "Small Text",
-                label: __("سبب إعادة الطلب للتعديل (اختياري)"),
-                description: __("يمكن ترك السبب فارغاً. لن يتم تعديل الطلب التاريخي الأصلي."),
+                label: __("سبب إنشاء نسخة التعديل (اختياري)"),
+                description: __("لن يتم تعديل الطلب التاريخي الأصلي."),
                 reqd: 0,
             }],
             values => createRevision(frm, values.reason),
-            __("إعادة الطلب للتعديل"),
+            __("إنشاء نسخة تعديل"),
             __("إنشاء النسخة المسودة")
         );
     }
 
-    function isLegacyReturnButton(button) {
-        if (!button) return false;
-        const label = String(button.textContent || "").replace(/\s+/g, " ").trim();
-        return label.includes(__("إعادة للمسودة")) || label.includes("إعادة للمسودة");
-    }
-
-    function installLegacyReturnButtonGuard() {
-        if (document._dcoRevisionReturnButtonGuard) return;
-
-        document._dcoRevisionReturnButtonGuard = true;
-        document.addEventListener("click", event => {
-            const button = event.target && event.target.closest
-                ? event.target.closest("button,.btn")
-                : null;
-            if (!isLegacyReturnButton(button)) return;
-
-            const frm = frappe.almdina && frappe.almdina.currentOrderRevisionForm;
-            if (!canCreateRevision(frm)) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            openRevision(frm);
-        }, true);
-    }
-
     installImmutableEditPolicy();
-    installLegacyReturnButtonGuard();
     frappe.almdina.openOrderRevisionDialog = openRevision;
     frappe.almdina.createOrderRevision = createRevision;
 
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
-            frappe.almdina.currentOrderRevisionForm = frm;
             applyImmutableFields(frm);
             renderRevisionState(frm);
-            frm.remove_custom_button(__("إعادة للمسودة"), __("دورة الطلب"));
+
+            frm.remove_custom_button(__("إنشاء نسخة تعديل"), __("دورة الطلب"));
 
             if (frm.doc.revision_of) {
                 frm.add_custom_button(__("فتح الطلب الأصلي"), () => {
@@ -169,8 +141,19 @@
             }
 
             if (canCreateRevision(frm)) {
-                frm.add_custom_button(__("إنشاء نسخة تعديل"), () => openRevision(frm), __("دورة الطلب"));
+                frm.add_custom_button(
+                    __("إنشاء نسخة تعديل"),
+                    () => openRevision(frm),
+                    __("دورة الطلب")
+                );
             }
         },
+    });
+
+    window.AlmdinaOrderRevisionUX = Object.freeze({
+        canCreateRevision,
+        createRevision,
+        isEditableDraft,
+        openRevision,
     });
 })();

@@ -1,0 +1,1 @@
+"""Almdina workforce management console."""

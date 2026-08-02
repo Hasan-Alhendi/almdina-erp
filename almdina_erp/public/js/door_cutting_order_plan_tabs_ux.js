@@ -1,11 +1,13 @@
 (() => {
 	"use strict";
 
-	const DUAL_ROLES = new Set(["Order Entry", "Production Manager", "System Manager", "عامل رسم"]);
+	function permissions() {
+		return window.AlmdinaPermissions || null;
+	}
 
-	function hasDualPlanRole() {
-		const roles = frappe.user_roles || [];
-		return roles.some((role) => DUAL_ROLES.has(role));
+	function canViewCuttingPlan() {
+		const context = permissions();
+		return Boolean(context && context.can("view_cutting_plan"));
 	}
 
 	function parseJsonField(raw) {
@@ -24,7 +26,7 @@
 	}
 
 	function shouldShowPlanTabs(frm) {
-		return Boolean(frm && !frm.is_new() && hasDualPlanRole());
+		return Boolean(frm && !frm.is_new() && canViewCuttingPlan());
 	}
 
 	function canShowDualTabs(frm) {
@@ -168,6 +170,7 @@
 
 	window.AlmdinaPlanTabsUX = {
 		canShowDualTabs,
+		canViewCuttingPlan,
 		shouldShowPlanTabs,
 		hasCustomPlan,
 		defaultTab,

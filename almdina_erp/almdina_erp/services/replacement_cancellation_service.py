@@ -6,7 +6,12 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
+from almdina_erp.almdina_erp.domain.replacements.replacement_authorization import (
+    ReplacementAction,
+)
+from almdina_erp.almdina_erp.services.replacement_permission_service import (
+    require_replacement_action,
+)
 
 
 def _release_material_reservations(replacement_name: str) -> list[str]:
@@ -39,7 +44,6 @@ def _release_or_restore_selected_remnant(replacement: Any) -> str | None:
         return None
     state = rows[0]
 
-    # Before start it is Reserved; after safe stock reversal it may be Consumed.
     if state.status in {"Reserved", "Consumed"}:
         frappe.db.set_value(
             "Board Remnant",
@@ -82,7 +86,6 @@ def cancel_replacement(
     reverse_stock: int | bool = 0,
     cancel_with_order: int | bool = 0,
 ) -> dict[str, Any]:
-    require_any_role("Production Manager")
     if not reason:
         frappe.throw(_("Cancellation reason is required."))
 
@@ -91,34 +94,48 @@ def cancel_replacement(
         (replacement_name,),
     )
     replacement = frappe.get_doc("Replacement Piece", replacement_name)
+    replacement.check_permission("read")
+    require_replacement_action(replacement, ReplacementAction.CANCEL)
 
     if replacement.status == "Cancelled":
-        return {"replacement_piece": replacement.name, "status": "Cancelled", "already_cancelled": True}
+        return {
+            "replacement_piece": replacement.name,
+            "status": "Cancelled",
+            "already_cancelled": True,
+        }
     if replacement.status == "Completed":
         frappe.throw(
             _(
-                "Completed replacement {0} cannot be automatically cancelled because physical material has already changed."
+                "Completed replacement {0} cannot be automatically cancelled "
+                "because physical material has already changed."
             ).format(replacement.name)
         )
 
-    if replacement.status == "In Progress" and replacement.stock_entry and not int(reverse_stock):
+    if (
+        replacement.status == "In Progress"
+        and replacement.stock_entry
+        and not int(reverse_stock)
+    ):
         frappe.throw(
             _(
-                "Replacement {0} already consumed material. Explicit stock reversal is required before cancellation."
+                "Replacement {0} already consumed material. Explicit stock "
+                "reversal is required before cancellation."
             ).format(replacement.name)
         )
 
-    # A completed replacement is blocked above. Therefore generated remnants
-    # should not exist for a cancellable flow; if they do, block rather than
-    # pretending the physical source can be restored safely.
-    generated = frappe.db.exists(
-        "Board Remnant",
-        {"source_plan": replacement.cutting_plan},
-    ) if replacement.cutting_plan else None
+    generated = (
+        frappe.db.exists(
+            "Board Remnant",
+            {"source_plan": replacement.cutting_plan},
+        )
+        if replacement.cutting_plan
+        else None
+    )
     if generated:
         frappe.throw(
             _(
-                "Replacement {0} already generated physical remnants. Reconcile physical stock before cancellation."
+                "Replacement {0} already generated physical remnants. "
+                "Reconcile physical stock before cancellation."
             ).format(replacement.name)
         )
 
@@ -141,7 +158,10 @@ def cancel_replacement(
     )
     replacement.add_comment(
         "Comment",
-        text=_("Replacement cancelled by {0}. Reason: {1}").format(frappe.session.user, reason),
+        text=_("Replacement cancelled by {0}. Reason: {1}").format(
+            frappe.session.user,
+            reason,
+        ),
     )
 
     if replacement.incident:
@@ -156,7 +176,7 @@ def cancel_replacement(
             )
             incident.add_comment(
                 "Comment",
-                text=_("Replacement was cancelled by Production Manager. Reason: {0}").format(reason),
+                text=_("Replacement was cancelled. Reason: {0}").format(reason),
             )
 
     from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
@@ -176,3 +196,6 @@ def cancel_replacement(
         "cost_summary": cost_summary,
         "cancel_with_order": bool(int(cancel_with_order)),
     }
+
+
+__all__ = ["cancel_replacement"]

@@ -82,7 +82,8 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
     def test_legacy_return_to_draft_remains_revision_only(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
         function_source = source.split("def return_order_to_draft", 1)[1]
-        self.assertIn("create_order_revision", function_source)
+        self.assertIn("return_order_to_draft", function_source)
+        self.assertIn("create_controlled_return", function_source)
         self.assertNotIn('"approved_plan": None', function_source)
         self.assertNotIn('"status": "Draft"', function_source)
 

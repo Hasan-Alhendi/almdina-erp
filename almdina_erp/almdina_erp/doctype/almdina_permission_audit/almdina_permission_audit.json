@@ -1,0 +1,89 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:PERM-AUDIT-{#####}",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "role",
+    "changed_by",
+    "changed_on",
+    "source",
+    "change_count",
+    "changed_capabilities",
+    "before_json",
+    "after_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "role",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Role",
+      "options": "Role",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "changed_by",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Changed By",
+      "options": "User",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "Now",
+      "fieldname": "changed_on",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Changed On",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "Almdina Permission Console",
+      "fieldname": "source",
+      "fieldtype": "Data",
+      "label": "Source",
+      "read_only": 1
+    },
+    {
+      "fieldname": "change_count",
+      "fieldtype": "Int",
+      "label": "Change Count",
+      "read_only": 1
+    },
+    {
+      "fieldname": "changed_capabilities",
+      "fieldtype": "Small Text",
+      "label": "Changed Capabilities",
+      "read_only": 1
+    },
+    {
+      "fieldname": "before_json",
+      "fieldtype": "Code",
+      "label": "Before JSON",
+      "options": "JSON",
+      "read_only": 1
+    },
+    {
+      "fieldname": "after_json",
+      "fieldtype": "Code",
+      "label": "After JSON",
+      "options": "JSON",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "is_submittable": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Almdina Permission Audit",
+  "permissions": [],
+  "quick_entry": 0,
+  "sort_field": "changed_on",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

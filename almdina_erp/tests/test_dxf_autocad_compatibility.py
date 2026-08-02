@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
 WORKFLOW_JS = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
+HOOKS = ROOT / "hooks.py"
 
 
 def _source(path: Path) -> str:
@@ -63,17 +64,19 @@ def test_export_keeps_required_cut_and_preview_layers():
     assert 'application/dxf;charset=us-ascii' in src
 
 
-def test_legacy_workflow_exporter_is_identifiable_for_removal():
-    # The historical source-aware workflow still contains the old exporter, so
-    # the secure exporter must remove every legacy label through one canonical
-    # label predicate rather than depending on one exact source-code expression.
+def test_secure_exporter_removes_legacy_buttons_without_loading_legacy_workflow():
     workflow = _source(WORKFLOW_JS)
     secure = _source(SECURE_DXF)
+    hooks = _source(HOOKS)
     assert 'frm.add_custom_button("تصدير DXF"' in workflow
+    assert '"public/js/door_cutting_order_workflow.js"' not in hooks
     assert 'const STRIP_EXPORT_LABELS = [' in secure
     assert 'function isExportButtonLabel(text)' in secure
-    assert 'STRIP_EXPORT_LABELS.includes(t)' in secure
+    assert 'STRIP_EXPORT_LABELS.includes(value)' in secure
+    assert '/تصدير\\s*DXF/i.test(value)' in secure
+    assert 'STRIP_EXPORT_LABELS.forEach(label =>' in secure
     assert 'frm.remove_custom_button(label)' in secure
+    assert 'new MutationObserver(() => stripUnauthorizedExportButtons(frm))' in secure
 
 
 def test_dxf_import_service_is_wired_for_round_trip():

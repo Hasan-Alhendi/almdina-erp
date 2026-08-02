@@ -6,10 +6,7 @@
   "module": "Almdina ERP",
   "name": "factory-production-settings",
   "page_name": "factory-production-settings",
-  "roles": [
-    {"role":"Production Manager"},
-    {"role":"System Manager"}
-  ],
+  "roles": [],
   "script": null,
   "standard": "Yes",
   "style": null,

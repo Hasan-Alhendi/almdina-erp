@@ -11,6 +11,7 @@ HOOKS_PATH = APP_ROOT / "hooks.py"
 EDIT_POLICY_PATH = APP_ROOT / "almdina_erp" / "services" / "order_edit_policy.py"
 REVISION_SERVICE_PATH = APP_ROOT / "almdina_erp" / "services" / "order_revision_service.py"
 REVISION_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
+LIFECYCLE_UX_PATH = APP_ROOT / "public" / "js" / "order_lifecycle.js"
 
 
 class TestOrderRevisionContract(unittest.TestCase):
@@ -29,25 +30,34 @@ class TestOrderRevisionContract(unittest.TestCase):
         self.assertNotIn("order.approved_plan = None", source)
         self.assertIn("Create a controlled revision instead", source)
 
-    def test_legacy_return_to_draft_routes_to_revision_use_case(self) -> None:
+    def test_legacy_return_to_draft_routes_to_dedicated_revision_use_case(self) -> None:
         hooks = HOOKS_PATH.read_text(encoding="utf-8")
-        target = "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision"
+        target = "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft"
         self.assertGreaterEqual(hooks.count(target), 2)
         self.assertIn('"public/js/door_cutting_order_revision_ux.js"', hooks)
+        self.assertIn('"public/js/order_lifecycle.js"', hooks)
 
     def test_revision_service_resets_new_copy_without_mutating_source_plan(self) -> None:
         source = REVISION_SERVICE_PATH.read_text(encoding="utf-8")
         self.assertIn('"approved_plan": None', source)
-        self.assertIn('frappe.copy_doc(source)', source)
-        self.assertIn('"superseded_by", revised.name', source)
-        self.assertNotIn('frappe.db.set_value("Door Cutting Order", source.name, "approved_plan"', source)
+        self.assertIn("frappe.copy_doc(source)", source)
+        self.assertIn('"superseded_by"', source)
+        self.assertIn("revised.name", source)
+        self.assertNotIn(
+            'frappe.db.set_value("Door Cutting Order", source.name, "approved_plan"',
+            source,
+        )
 
-    def test_revision_ui_replaces_direct_draft_rollback(self) -> None:
-        source = REVISION_UX_PATH.read_text(encoding="utf-8")
-        self.assertIn('frm.remove_custom_button(__("إعادة للمسودة")', source)
-        self.assertIn('__("إنشاء نسخة تعديل")', source)
-        self.assertIn("order_revision_service.create_order_revision", source)
-        self.assertIn("DRAFT_LIKE.has(frm.doc.status", source)
+    def test_revision_and_return_actions_are_separate_and_capability_driven(self) -> None:
+        revision_source = REVISION_UX_PATH.read_text(encoding="utf-8")
+        lifecycle_source = LIFECYCLE_UX_PATH.read_text(encoding="utf-8")
+        self.assertIn('can("create_order_revision")', revision_source)
+        self.assertIn('__("إنشاء نسخة تعديل")', revision_source)
+        self.assertIn("order_revision_service.create_order_revision", revision_source)
+        self.assertIn("DRAFT_LIKE.has(frm.doc.status", revision_source)
+        self.assertIn('LABELS.return_to_draft', lifecycle_source)
+        self.assertIn("order_revision_service.return_order_to_draft", lifecycle_source)
+        self.assertIn("removeLifecycleButtons(frm)", lifecycle_source)
 
 
 if __name__ == "__main__":

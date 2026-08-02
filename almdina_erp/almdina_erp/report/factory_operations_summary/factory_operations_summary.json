@@ -11,9 +11,5 @@
   "ref_doctype": "Door Cutting Order",
   "report_name": "Factory Operations Summary",
   "report_type": "Script Report",
-  "roles": [
-    {"role":"Production Manager"},
-    {"role":"Accounts Management"},
-    {"role":"System Manager"}
-  ]
+  "roles": []
 }

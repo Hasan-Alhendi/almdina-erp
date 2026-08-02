@@ -2,11 +2,13 @@
 
 New infrastructure code must depend on the focused modules directly. This module
 keeps historical imports working while owning no database or business logic.
+Legacy role-based action gates are retained only as fail-closed symbols so an
+old import cannot silently bypass the configurable capability policy.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
 from almdina_erp.almdina_erp.infrastructure.frappe import (
     order_tracking_repository,
@@ -17,17 +19,16 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
 
 
 STAGE_ROLE_BY_TYPE = shop_floor_authorization.STAGE_ROLE_BY_TYPE
-DISPATCH_ROLES = shop_floor_authorization.DISPATCH_ROLES
-ADMIN_ROLES = shop_floor_authorization.ADMIN_ROLES
-STAGE_ADMIN_ROLES = shop_floor_authorization.STAGE_ADMIN_ROLES
+
+# Compatibility symbols only. Production authorization no longer consumes role
+# tuples; every business action is resolved through document capabilities.
+DISPATCH_ROLES: tuple[str, ...] = ()
+ADMIN_ROLES: tuple[str, ...] = ()
+STAGE_ADMIN_ROLES: tuple[str, ...] = ()
 
 current_user = shop_floor_authorization.current_user
-require_roles = shop_floor_authorization.require_roles
 assert_enabled_user_has_stage_role = (
     shop_floor_authorization.assert_enabled_user_has_stage_role
-)
-require_stage_assignee_or_admin = (
-    shop_floor_authorization.require_stage_assignee_or_admin
 )
 get_users_for_stage = shop_floor_authorization.get_users_for_stage
 get_users_for_role = shop_floor_authorization.get_users_for_role
@@ -49,6 +50,27 @@ get_revert_stage_candidates = (
 get_later_stages = production_stage_repository.list_later_stages
 
 log_event = production_event_repository.log_event
+
+
+def _legacy_role_gate_removed() -> NoReturn:
+    raise PermissionError(
+        "Legacy role-based shop-floor authorization was removed. "
+        "Use the configurable production capability policy."
+    )
+
+
+def require_roles(*roles: str) -> NoReturn:
+    """Fail closed for historical imports of the removed role gate."""
+
+    del roles
+    _legacy_role_gate_removed()
+
+
+def require_stage_assignee_or_admin(stage: Any) -> NoReturn:
+    """Fail closed for the removed assignment/admin override helper."""
+
+    del stage
+    _legacy_role_gate_removed()
 
 
 def create_stage(

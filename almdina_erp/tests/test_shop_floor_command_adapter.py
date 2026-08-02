@@ -130,7 +130,10 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: None,
         )
-        with self.assertRaisesRegex(RuntimeError, "Only draft or rejected"):
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "status does not allow production dispatch",
+        ):
             adapter.assert_order_ready_for_dispatch(invalid)
 
     def test_private_compatibility_helpers_delegate_to_application(self) -> None:

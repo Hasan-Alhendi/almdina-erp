@@ -53,6 +53,17 @@ def create_stage(
     return stage
 
 
+def reassign_stage(stage_name: str, *, assignee: str) -> Any:
+    frappe.db.sql(
+        "select name from `tabProduction Stage` where name = %s for update",
+        (stage_name,),
+    )
+    stage = get_stage(stage_name)
+    stage.assigned_to = assignee
+    stage.save(ignore_permissions=True)
+    return stage
+
+
 def close_open_pause(
     stage_or_name: Any,
     resumed_by: str,
@@ -180,6 +191,7 @@ __all__ = [
     "get_stage",
     "list_later_stages",
     "list_revert_stage_candidates",
+    "reassign_stage",
     "reopen_stage",
     "stage_exists",
     "start_stage",

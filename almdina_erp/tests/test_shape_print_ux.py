@@ -14,16 +14,18 @@ def text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_shared_shape_print_renderer_loads_before_every_print_surface():
+def test_shared_shape_print_renderer_loads_before_every_active_print_surface():
     hooks = text(HOOKS)
     renderer = '"public/js/door_cutting_order_shape_print.js"'
     measurements = '"public/js/door_cutting_order_measurement_actions_ux.js"'
-    invoice = '"public/js/door_cutting_order_cost_invoice_ux.js"'
+    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
     edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
-    for script in (renderer, measurements, invoice, edge_color):
+    for script in (renderer, measurements, presenter, financial, edge_color):
         assert script in hooks
     assert hooks.index(renderer) < hooks.index(measurements)
-    assert hooks.index(renderer) < hooks.index(invoice) < hooks.index(edge_color)
+    assert hooks.index(renderer) < hooks.index(presenter) < hooks.index(financial) < hooks.index(edge_color)
+    assert '"public/js/door_cutting_order_cost_invoice_ux.js"' not in hooks
 
 
 def test_renderer_delegates_selection_to_the_shared_shape_output_contract():
@@ -52,7 +54,7 @@ def test_measurement_print_places_drawing_inside_notes_without_adding_a_column()
     assert "<th>الرسم</th>" not in source
 
 
-def test_customer_invoice_print_includes_drawing_in_the_canonical_print_path():
+def test_customer_invoice_print_includes_drawing_in_the_legacy_reference_renderer():
     invoice = text(INVOICE)
     edge_color = text(EDGE_COLOR)
     assert "renderer.notesCell(row, row.notes" in invoice
@@ -62,8 +64,7 @@ def test_customer_invoice_print_includes_drawing_in_the_canonical_print_path():
     assert "function buildPrintHtml(frm)" in invoice
     assert "frame.srcdoc = buildPrintHtml(frm)" in invoice
 
-    # Edge color is now a presentation-only patch. It must not rebuild or fork
-    # the invoice print HTML, which keeps a single authoritative print path.
+    # Edge color remains presentation-only and never forks print HTML.
     assert "patchMeasurementDrawings" not in edge_color
     assert "renderer.notesCell(" not in edge_color
     assert "removeLegacyColorDuplicates" in edge_color

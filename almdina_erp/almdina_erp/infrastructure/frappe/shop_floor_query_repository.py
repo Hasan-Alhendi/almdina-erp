@@ -5,13 +5,26 @@ from typing import Any
 
 import frappe
 
-from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_STAGE_TYPES
+from almdina_erp.almdina_erp.application.shop_floor.queries import (
+    SHOP_FLOOR_DETAIL_CAPABILITIES,
+)
+from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    SHOP_FLOOR_STAGE_TYPES,
+    department_for_stage_type,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
+    document_has_capability,
+    granted_capabilities,
+)
 
 
-ADMIN_ROLES = frozenset({"System Manager", "Production Manager", "Order Entry"})
-DUAL_PLAN_VIEWER_ROLES = frozenset(
-    {"Order Entry", "Production Manager", "System Manager", "عامل رسم"}
+_SUPERVISOR_CAPABILITIES = (
+    Capability.REASSIGN_WORKER,
+    Capability.REVERT_DEPARTMENT,
+    Capability.MARK_DELIVERED,
 )
 
 
@@ -21,8 +34,36 @@ class FrappeShopFloorQueryRepository:
     def current_user(self) -> str:
         return frappe.session.user
 
+    def session_identity(self) -> dict[str, Any]:
+        user = self.current_user()
+        full_name = frappe.get_cached_value("User", user, "full_name") or user
+        roles = set(frappe.get_roles(user))
+        departments = [
+            department_for_stage_type(stage_type) or stage_type
+            for stage_type, role in shop_floor_authorization.STAGE_ROLE_BY_TYPE.items()
+            if role in roles or user == "Administrator"
+        ]
+        return {
+            "user": user,
+            "full_name": full_name,
+            "departments": departments,
+        }
+
+    def global_capabilities(self) -> frozenset[str]:
+        return granted_capabilities(user=self.current_user())
+
     def is_admin(self) -> bool:
-        return bool(set(frappe.get_roles()).intersection(ADMIN_ROLES))
+        return any(
+            doctype_has_capability(capability)
+            for capability in _SUPERVISOR_CAPABILITIES
+        )
+
+    def capabilities_for_order(self, order: Any) -> frozenset[str]:
+        return frozenset(
+            capability
+            for capability in SHOP_FLOOR_DETAIL_CAPABILITIES
+            if document_has_capability(order, capability)
+        )
 
     def list_inbox_stages(self, *, user: str, is_admin: bool) -> list[Any]:
         filters: dict[str, Any] = {
@@ -113,7 +154,7 @@ class FrappeShopFloorQueryRepository:
         return frappe.get_doc("Door Cutting Order", order_name)
 
     def can_view_order(self, order: Any) -> bool:
-        if self.is_admin():
+        if self.is_admin() or frappe.has_permission(order, "read"):
             return True
         return bool(
             frappe.db.exists(
@@ -150,7 +191,7 @@ class FrappeShopFloorQueryRepository:
         return frappe.db.get_value(
             "Production Stage",
             stage_name,
-            ["name", "status", "stage_type"],
+            ["name", "status", "stage_type", "assigned_to"],
             as_dict=True,
         )
 
@@ -188,7 +229,13 @@ class FrappeShopFloorQueryRepository:
         return snapshot
 
     def user_can_view_dual_plans(self) -> bool:
-        return bool(set(frappe.get_roles()).intersection(DUAL_PLAN_VIEWER_ROLES))
+        return any(
+            doctype_has_capability(capability)
+            for capability in (
+                Capability.VIEW_DRAWING_WORKSPACE,
+                Capability.APPROVE_DXF,
+            )
+        )
 
     def get_order_status(self, order_name: str) -> str | None:
         return frappe.db.get_value("Door Cutting Order", order_name, "status")

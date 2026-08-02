@@ -6,8 +6,13 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.services.report_permission_service import (
+    require_operational_report_access,
+)
+
 
 def execute(filters: dict[str, Any] | None = None):
+    require_operational_report_access()
     filters = frappe._dict(filters or {})
     conditions: list[str] = []
     values: dict[str, Any] = {}

@@ -3,11 +3,31 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.application.security.navigation_context import (
+    build_navigation_context,
+)
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     SHOP_FLOOR_STAGE_TYPES,
     department_for_stage_type,
     department_status_for_stage_status,
     next_stage_type,
+)
+from almdina_erp.almdina_erp.domain.orders.production_authorization import (
+    ProductionActionFacts,
+    build_production_action_context,
+    decide_production_action,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    DRAWING_CAPABILITIES,
+    PLANNING_CAPABILITIES,
+    PRODUCTION_CAPABILITIES,
+    SHOP_FLOOR_ACCESS_CAPABILITIES,
+    Capability,
+)
+
+
+SHOP_FLOOR_DETAIL_CAPABILITIES = frozenset(
+    PLANNING_CAPABILITIES | DRAWING_CAPABILITIES | PRODUCTION_CAPABILITIES
 )
 
 
@@ -22,7 +42,13 @@ class ShopFloorPermissionDenied(PermissionError):
 class ShopFloorQueryPort(Protocol):
     def current_user(self) -> str: ...
 
+    def session_identity(self) -> dict[str, Any]: ...
+
+    def global_capabilities(self) -> frozenset[str]: ...
+
     def is_admin(self) -> bool: ...
+
+    def capabilities_for_order(self, order: Any) -> frozenset[str]: ...
 
     def list_inbox_stages(self, *, user: str, is_admin: bool) -> list[Any]: ...
 
@@ -55,6 +81,35 @@ def _value(row: Any, fieldname: str, default: Any = None) -> Any:
     if isinstance(row, Mapping):
         return row.get(fieldname, default)
     return getattr(row, fieldname, default)
+
+
+def _as_bool(value: Any) -> bool:
+    try:
+        return bool(int(value or 0))
+    except (TypeError, ValueError):
+        return bool(value)
+
+
+def _assert_shop_floor_access(repository: ShopFloorQueryPort) -> frozenset[str]:
+    user = repository.current_user()
+    capabilities = repository.global_capabilities()
+    if user == "Guest" or not capabilities.intersection(SHOP_FLOOR_ACCESS_CAPABILITIES):
+        raise ShopFloorPermissionDenied("You do not have access to the production workspace.")
+    return capabilities
+
+
+def get_shop_floor_context(repository: ShopFloorQueryPort) -> dict[str, Any]:
+    capabilities = _assert_shop_floor_access(repository)
+    identity = dict(repository.session_identity())
+    identity.pop("roles", None)
+    return {
+        "identity": identity,
+        "navigation": build_navigation_context(capabilities),
+        "capabilities": {
+            capability: capability in capabilities
+            for capability in sorted(SHOP_FLOOR_ACCESS_CAPABILITIES)
+        },
+    }
 
 
 def _filter_active_stages(
@@ -130,22 +185,64 @@ def _enrich_stage_rows(
 
 
 def get_my_inbox(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
+    _assert_shop_floor_access(repository)
     user = repository.current_user()
-    if user == "Guest":
-        raise ShopFloorPermissionDenied("Login required.")
     stages = repository.list_inbox_stages(user=user, is_admin=repository.is_admin())
     return _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
 
 
 def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
+    _assert_shop_floor_access(repository)
     user = repository.current_user()
-    if user == "Guest":
-        raise ShopFloorPermissionDenied("Login required.")
     stages = repository.list_archive_stages(user=user, is_admin=repository.is_admin())
     return _enrich_stage_rows(repository, stages)
 
 
-def get_dispatch_options(repository: ShopFloorQueryPort) -> dict[str, Any]:
+def _production_facts(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    stage: Any | None = None,
+) -> ProductionActionFacts:
+    return ProductionActionFacts(
+        order_status=_value(order, "status"),
+        production_path=_value(order, "production_path"),
+        current_stage_name=_value(order, "current_production_stage"),
+        has_cutting_plan=bool(_value(order, "cutting_plan_json")),
+        plan_needs_recalculation=_as_bool(_value(order, "plan_needs_recalculation")),
+        stage_name=_value(stage, "name") if stage else None,
+        stage_type=_value(stage, "stage_type") if stage else None,
+        stage_status=_value(stage, "status") if stage else None,
+        assigned_to=_value(stage, "assigned_to") if stage else None,
+        actor=repository.current_user(),
+        drawing_dxf_status=_value(order, "drawing_dxf_status"),
+    )
+
+
+def _assert_query_action(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    action: str,
+    *,
+    stage: Any | None = None,
+) -> None:
+    decision = decide_production_action(
+        action,
+        capabilities=repository.capabilities_for_order(order),
+        facts=_production_facts(repository, order, stage),
+    )
+    if decision.allowed:
+        return
+    if decision.code == "missing_capability":
+        raise ShopFloorPermissionDenied(decision.reason)
+    raise ShopFloorQueryError(decision.reason)
+
+
+def get_dispatch_options(
+    repository: ShopFloorQueryPort,
+    order_name: str,
+) -> dict[str, Any]:
+    order = repository.get_order(order_name)
+    _assert_query_action(repository, order, Capability.DISPATCH_ORDER)
     return {
         "paths": [
             {
@@ -170,8 +267,8 @@ def get_revert_targets(
     repository: ShopFloorQueryPort,
     order_name: str,
 ) -> list[dict[str, Any]]:
-    if repository.get_order_status(order_name) == "Delivered":
-        return []
+    order = repository.get_order(order_name)
+    _assert_query_action(repository, order, Capability.REVERT_DEPARTMENT)
     targets: list[dict[str, Any]] = []
     seen: set[str] = set()
     for row in repository.list_revert_stages(order_name):
@@ -195,27 +292,27 @@ def get_revert_targets(
 def _active_stage_snapshot(
     repository: ShopFloorQueryPort,
     order: Any,
+    document_capabilities: frozenset[str],
 ) -> dict[str, Any]:
     stage_name = _value(order, "current_production_stage")
-    if not stage_name:
-        return {
-            "active_stage_name": None,
-            "active_stage_status": None,
-            "active_stage_type": None,
-            "can_start_stage": False,
-            "can_handoff_stage": False,
-            "can_handoff_to": None,
-        }
-    stage = repository.get_stage_summary(str(stage_name))
+    stage = repository.get_stage_summary(str(stage_name)) if stage_name else None
+    actions = build_production_action_context(
+        capabilities=document_capabilities,
+        facts=_production_facts(repository, order, stage),
+    )
     if not stage:
         return {
             "active_stage_name": stage_name,
             "active_stage_status": None,
             "active_stage_type": None,
+            "active_stage_assigned_to": None,
             "can_start_stage": False,
             "can_handoff_stage": False,
+            "can_reassign_worker": False,
             "can_handoff_to": None,
+            "production_actions": actions,
         }
+
     stage_status = str(_value(stage, "status") or "")
     stage_type = str(_value(stage, "stage_type") or "")
     production_path = _value(order, "production_path")
@@ -229,9 +326,12 @@ def _active_stage_snapshot(
         "active_stage_name": _value(stage, "name"),
         "active_stage_status": stage_status,
         "active_stage_type": stage_type,
-        "can_start_stage": stage_status == "Pending",
-        "can_handoff_stage": stage_status in {"In Progress", "Paused"},
+        "active_stage_assigned_to": _value(stage, "assigned_to"),
+        "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
+        "can_handoff_stage": bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]),
+        "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),
         "can_handoff_to": can_handoff_to,
+        "production_actions": actions,
     }
 
 
@@ -239,16 +339,22 @@ def get_order_detail(
     repository: ShopFloorQueryPort,
     order_name: str,
 ) -> dict[str, Any]:
+    _assert_shop_floor_access(repository)
     order = repository.get_order(order_name)
     if not repository.can_view_order(order):
         raise ShopFloorPermissionDenied("Not permitted to view this order.")
 
+    document_capabilities = repository.capabilities_for_order(order)
     stages = [
         row
         for row in repository.list_order_stages(order_name)
         if not _value(row, "piece_label")
     ]
-    stage_snapshot = _active_stage_snapshot(repository, order)
+    stage_snapshot = _active_stage_snapshot(
+        repository,
+        order,
+        document_capabilities,
+    )
     system_snapshot = repository.load_plan_snapshot(order, "System")
     custom_snapshot = repository.load_plan_snapshot(order, "Custom")
     can_view_dual = repository.user_can_view_dual_plans()
@@ -268,7 +374,8 @@ def get_order_detail(
 
     current_stage_type = stage_snapshot.get("active_stage_type")
     can_recalculate = bool(
-        _value(order, "production_path") == "Drawing"
+        Capability.RECALCULATE_PLAN in document_capabilities
+        and _value(order, "production_path") == "Drawing"
         and not approved_plan
         and (current_stage_type == "Drawing" or _value(order, "status") == "At Drawing")
     )
@@ -284,4 +391,22 @@ def get_order_detail(
         "active_plan_source": active_source,
         "show_dual_tabs": can_view_dual,
         "can_recalculate_drawing_plan": can_recalculate,
+        "document_capabilities": {
+            capability: capability in document_capabilities
+            for capability in sorted(SHOP_FLOOR_DETAIL_CAPABILITIES)
+        },
     }
+
+
+__all__ = [
+    "SHOP_FLOOR_DETAIL_CAPABILITIES",
+    "ShopFloorPermissionDenied",
+    "ShopFloorQueryError",
+    "ShopFloorQueryPort",
+    "get_dispatch_options",
+    "get_my_archive",
+    "get_my_inbox",
+    "get_order_detail",
+    "get_revert_targets",
+    "get_shop_floor_context",
+]

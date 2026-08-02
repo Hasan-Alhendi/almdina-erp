@@ -4,10 +4,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
+DRAWING_APPROVAL_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
+)
+DRAWING_APPROVAL_POLICY = (
+    ROOT / "almdina_erp" / "application" / "security" / "drawing_approval_policy.py"
+)
 SHOP_FLOOR_COMMANDS = (
     ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
 )
-SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+PRODUCTION_POLICY = (
+    ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
+)
+DRAWING_APPROVAL_UX = (
+    ROOT / "public" / "js" / "door_cutting_order_drawing_approval_ux.js"
+)
 
 
 def _source(path: Path) -> str:
@@ -24,36 +35,50 @@ def test_order_creator_dispatches_without_locking_cutting_plan():
     assert "frappe.almdina.orderCanEdit" in workflow
 
 
-def test_dispatch_accepts_draft_orders_with_calculated_plan_only():
+def test_dispatch_uses_capability_and_calculated_plan_policy():
     shop_floor = _source(SHOP_FLOOR_COMMANDS)
-    ready = shop_floor.split("def assert_order_ready_for_dispatch", 1)[1].split(
-        "def get_handoff_workers", 1
-    )[0]
+    policy = _source(PRODUCTION_POLICY)
     dispatch = shop_floor.split("def dispatch_order", 1)[1].split(
         "def start_my_stage", 1
     )[0]
-    assert "assert_order_ready_for_dispatch(order)" in dispatch
-    assert "can_dispatch_from_status(order.status)" in ready
-    assert "order.has_cutting_plan" in ready
-    assert "plan_needs_recalculation" in ready
+
+    assert "Capability.DISPATCH_ORDER" in dispatch
+    assert "_assert_action_allowed" in dispatch
+    assert "can_dispatch_from_status(facts.order_status)" in policy
+    assert "facts.has_cutting_plan" in policy
+    assert "facts.plan_needs_recalculation" in policy
+    assert '"already_dispatched"' in policy
 
 
-def test_drawing_worker_locks_plan_without_resetting_shop_floor_status():
+def test_role_managed_drawing_approval_preserves_shop_floor_status():
     plan_service = _source(PLAN_SERVICE)
-    lock_block = plan_service.split("def lock_cutting_plan", 1)[1].split(
-        "def _lock_order_for_production", 1
-    )[0]
+    approval_service = _source(DRAWING_APPROVAL_SERVICE)
+    policy = _source(DRAWING_APPROVAL_POLICY)
     lock_impl = plan_service.split("def _lock_order_for_production", 1)[1].split(
         "@frappe.whitelist()\ndef reject_order", 1
     )[0]
-    assert 'require_any_role("عامل رسم", "Production Manager")' in lock_block
-    assert "preserve_status=True" in lock_block
+
+    assert "Capability.APPROVE_DXF" in approval_service
+    assert "require_document_capability" in approval_service
+    assert "validate_drawing_approval" in approval_service
+    assert "current_assignee" not in policy
+    assert "session_user" not in policy
+    assert "approval_warning" in policy
+    assert "preserve_status=True" in approval_service
+    assert "was_previously_approved" in approval_service
     assert "if preserve_status:" in lock_impl
     assert '"status": "Approved"' in lock_impl
+    assert "require_any_role" not in approval_service
 
 
-def test_drawing_form_exposes_lock_plan_action_for_drawing_path():
-    ux = _source(SHOP_FLOOR_UX)
-    assert "lock_cutting_plan" in ux
-    assert 'frm.add_custom_button(__("اعتماد خطة النظام")' in ux
-    assert 'plan_source: "System"' in ux
+def test_drawing_form_exposes_reapproval_with_warning():
+    ux = _source(DRAWING_APPROVAL_UX)
+    assert 'can("approve_dxf")' in ux
+    assert 'const APPROVE_LABEL = __("اعتماد الرسم")' in ux
+    assert 'const REAPPROVE_LABEL = __("إعادة اعتماد الرسم")' in ux
+    assert "approve_production_dxf" in ux
+    assert "plan_source: source" in ux
+    assert "تم اعتماد خطة لهذا الطلب سابقًا" in ux
+    assert "current_assignee" not in ux
+    assert "isAssignedToCurrentUser" not in ux
+    assert "lock_cutting_plan" not in ux
