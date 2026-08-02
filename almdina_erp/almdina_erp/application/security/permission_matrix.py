@@ -117,7 +117,6 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
-
 _REPLACEMENT_ACTIONS = frozenset({
     Capability.APPROVE_REPLACEMENT,
     Capability.START_REPLACEMENT,
@@ -179,29 +178,34 @@ def standard_permission_projection(doctype: str, state: Mapping[str, Any] | None
 
     normalized = normalize_capability_state(state)
     if doctype == "Door Cutting Order":
-        return {"read": normalized[Capability.VIEW_ORDERS], "create": normalized[Capability.CREATE_ORDER], "write": normalized[Capability.EDIT_ORDER], "delete": False}
+        can_read = normalized[Capability.VIEW_ORDERS]
+        return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_ORDER], "write": normalized[Capability.EDIT_ORDER], "delete": False}
     if doctype == "Almdina ERP Settings":
         can_read_settings = normalized[Capability.VIEW_FACTORY_SETTINGS] or any(normalized[value] for value in _FACTORY_SECTION_EDITS) or normalized[Capability.MANAGE_FACTORY_SETTINGS]
-        return {"read": can_read_settings, "create": False, "write": False, "delete": False}
+        return {"read": can_read_settings, "select": can_read_settings, "create": False, "write": False, "delete": False}
     if doctype == "Replacement Piece":
         enabled = any(normalized[capability] for capability, definition in CAPABILITY_CATALOG.items() if definition.applies_to == doctype)
-        return {"read": enabled, "create": False, "write": False, "delete": False}
+        return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
     if doctype == "Production Routing":
+        can_read = normalized[Capability.VIEW_PRODUCTION_ROUTINGS]
         return {
-            "read": normalized[Capability.VIEW_PRODUCTION_ROUTINGS],
+            "read": can_read,
+            "select": can_read,
             "create": normalized[Capability.CREATE_PRODUCTION_ROUTINGS],
             "write": normalized[Capability.EDIT_PRODUCTION_ROUTINGS],
             "delete": normalized[Capability.DELETE_PRODUCTION_ROUTINGS],
         }
     if doctype == "Edge Banding Type":
+        can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {
-            "read": normalized[Capability.VIEW_EDGE_BANDING_TYPES],
+            "read": can_read,
+            "select": can_read,
             "create": normalized[Capability.CREATE_EDGE_BANDING_TYPES],
             "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES],
             "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES],
         }
     enabled = any(normalized[capability] for capability, definition in CAPABILITY_CATALOG.items() if definition.applies_to == doctype)
-    return {"read": enabled, "create": False, "write": False, "delete": False}
+    return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
 
 
 def enabled_capabilities(state: Mapping[str, Any] | None) -> frozenset[str]:
