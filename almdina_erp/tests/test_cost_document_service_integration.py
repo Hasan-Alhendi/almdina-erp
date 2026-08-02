@@ -26,7 +26,7 @@ class TestCostDocumentServiceIntegration(unittest.TestCase):
         order.check_permission = Mock()
         return order
 
-    def test_customer_invoice_checks_read_view_and_print_permissions(self) -> None:
+    def test_customer_invoice_checks_read_and_customer_print_permission(self) -> None:
         order = self._order()
         with (
             patch.object(cost_document_service.frappe, "get_doc", return_value=order),
@@ -45,10 +45,7 @@ class TestCostDocumentServiceIntegration(unittest.TestCase):
         order.check_permission.assert_called_once_with("read")
         self.assertEqual(
             require_capability.call_args_list,
-            [
-                call(order, Capability.VIEW_COSTS),
-                call(order, Capability.PRINT_CUSTOMER_INVOICE),
-            ],
+            [call(order, Capability.PRINT_CUSTOMER_INVOICE)],
         )
         builder.assert_called_once()
         self.assertEqual(result["kind"], "customer_invoice")
