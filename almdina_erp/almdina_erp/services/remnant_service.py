@@ -6,7 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
+from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
+    reject_legacy_role_gate,
+)
 
 
 def _intersection(a: dict[str, float], b: dict[str, float]) -> tuple[float, float, float, float] | None:
@@ -195,5 +197,7 @@ def register_plan_remnants(order_name: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def generate_order_remnants(order_name: str) -> dict[str, Any]:
-    require_any_role("Production Manager", "Stock Manager")
+    # Inventory/remnant management is outside the active product scope. The
+    # HTTP method is overridden by hooks, and direct Python callers fail closed.
+    reject_legacy_role_gate("Production Manager", "Stock Manager")
     return register_plan_remnants(order_name)
