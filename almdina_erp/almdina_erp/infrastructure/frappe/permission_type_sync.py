@@ -121,7 +121,18 @@ def sync_permission_types() -> None:
             }
         ).insert(ignore_permissions=True)
 
+    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+        FrappePermissionMatrixRepository,
+    )
+
+    # Reconcile only roles that already had custom rows. Baseline creation adds
+    # the standard roles to Custom DocPerm, so doing it first would make those
+    # untouched roles look like permission-console roles and could normalize
+    # rights that this app does not own.
     reconcile_custom_permission_projections()
+    FrappePermissionMatrixRepository().ensure_custom_permission_baseline(
+        _managed_doctypes()
+    )
 
 
 __all__ = ["reconcile_custom_permission_projections", "sync_permission_types"]

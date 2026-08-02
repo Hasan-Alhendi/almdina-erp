@@ -27,7 +27,8 @@ class TestPermissionPersonasE2E(unittest.TestCase):
     def test_order_entry_sees_only_order_work(self) -> None:
         state, navigation = self._navigation("order_entry")
         self.assertEqual(navigation["profile"], "order_entry")
-        self.assertEqual(navigation["home_page"], "almdina-erp")
+        self.assertEqual(navigation["home_page"], "")
+        self.assertEqual(navigation["default_route"], "/desk")
         self.assertTrue(navigation["sections"]["orders"])
         for section in (
             "costing",

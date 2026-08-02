@@ -71,6 +71,8 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_permission_custom_docperm_baseline \
+            almdina_erp.tests.test_frappe_v16_permission_hook_contract \
             almdina_erp.tests.test_permission_management_architecture \
             almdina_erp.tests.test_permission_templates \
             almdina_erp.tests.test_permission_personas_e2e \

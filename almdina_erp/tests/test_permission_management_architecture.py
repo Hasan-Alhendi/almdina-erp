@@ -36,6 +36,13 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn("frappe.db.sql", service)
         self.assertIn("FrappePermissionMatrixRepository", service)
 
+    def test_custom_permission_baseline_preserves_unedited_roles(self) -> None:
+        repository = REPOSITORY.read_text(encoding="utf-8")
+        self.assertIn("ensure_custom_permission_baseline", repository)
+        self.assertIn("setup_custom_perms", repository)
+        self.assertIn("_override_from_standard", repository)
+        self.assertIn('frappe.db.exists("Custom DocPerm", {"parent": doctype})', repository)
+
     def test_administration_services_use_capabilities_not_role_names(self) -> None:
         combined = "\n".join(
             path.read_text(encoding="utf-8")

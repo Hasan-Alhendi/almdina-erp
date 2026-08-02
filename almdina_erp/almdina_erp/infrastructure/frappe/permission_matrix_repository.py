@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 import frappe
+from frappe.permissions import setup_custom_perms
 
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
@@ -47,6 +48,23 @@ _DEFINITIONS_BY_DOCTYPE = _definitions_by_doctype()
 
 class FrappePermissionMatrixRepository:
     """Read and write Almdina capability fields through Custom DocPerm."""
+
+    def ensure_custom_permission_baseline(
+        self,
+        doctypes: Sequence[str] | None = None,
+    ) -> None:
+        """Preserve every standard role rule before custom permissions take over.
+
+        Frappe switches an entire DocType from ``DocPerm`` to ``Custom DocPerm``
+        as soon as the first custom row exists. Creating an override for only the
+        edited role would therefore revoke the untouched roles at runtime. Keep a
+        complete custom baseline, including repairs for sites affected by older
+        releases that created only a partial override set.
+        """
+
+        selected = tuple(doctypes or _DEFINITIONS_BY_DOCTYPE)
+        for doctype in selected:
+            self._ensure_doctype_custom_permission_baseline(str(doctype))
 
     def list_roles(self) -> list[dict[str, Any]]:
         role_meta = frappe.get_meta("Role")
@@ -127,6 +145,7 @@ class FrappePermissionMatrixRepository:
                 "select name from `tabRole` where name = %s for update",
                 (role,),
             )
+        self.ensure_custom_permission_baseline(tuple(_DEFINITIONS_BY_DOCTYPE))
         for role in sorted(prepared):
             desired = prepared[role]
             for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
@@ -238,16 +257,26 @@ class FrappePermissionMatrixRepository:
         fields = self._available_fields("Custom DocPerm", definitions)
         custom = frappe.get_all(
             "Custom DocPerm",
-            filters={"parent": doctype, "role": role, "permlevel": 0},
+            filters={
+                "parent": doctype,
+                "role": role,
+                "permlevel": 0,
+                "if_owner": 0,
+            },
             fields=fields,
             order_by="creation asc",
         )
-        if custom:
+        if custom or frappe.db.exists("Custom DocPerm", {"parent": doctype}):
             return [dict(row) for row in custom], "custom"
         fields = self._available_fields("DocPerm", definitions)
         standard = frappe.get_all(
             "DocPerm",
-            filters={"parent": doctype, "role": role, "permlevel": 0},
+            filters={
+                "parent": doctype,
+                "role": role,
+                "permlevel": 0,
+                "if_owner": 0,
+            },
             fields=fields,
             order_by="idx asc",
         )
@@ -271,32 +300,81 @@ class FrappePermissionMatrixRepository:
     def _new_override_documents(self, doctype: str, role: str) -> list[Any]:
         standard_names = frappe.get_all(
             "DocPerm",
-            filters={"parent": doctype, "role": role, "permlevel": 0},
+            filters={
+                "parent": doctype,
+                "role": role,
+                "permlevel": 0,
+                "if_owner": 0,
+            },
             pluck="name",
             order_by="idx asc",
         )
         if not standard_names:
             return [self._blank_override(doctype, role)]
+        return [
+            self._override_from_standard(doctype, str(name))
+            for name in standard_names
+        ]
+
+    def _ensure_doctype_custom_permission_baseline(self, doctype: str) -> None:
+        standard_rows = frappe.get_all(
+            "DocPerm",
+            filters={"parent": doctype},
+            fields=["name", "role", "permlevel", "if_owner"],
+            order_by="idx asc",
+        )
+        if not standard_rows:
+            return
+
+        if not frappe.db.exists("Custom DocPerm", {"parent": doctype}):
+            setup_custom_perms(doctype)
+            return
+
+        custom_rows = frappe.get_all(
+            "Custom DocPerm",
+            filters={"parent": doctype},
+            fields=["role", "permlevel", "if_owner"],
+        )
+        existing = Counter(self._permission_identity(row) for row in custom_rows)
+        required = Counter(self._permission_identity(row) for row in standard_rows)
+        missing = required - existing
+        if not missing:
+            return
+
+        for row in standard_rows:
+            identity = self._permission_identity(row)
+            if missing[identity] <= 0:
+                continue
+            document = self._override_from_standard(doctype, str(row.get("name")))
+            document.insert(ignore_permissions=True)
+            missing[identity] -= 1
+
+    @staticmethod
+    def _permission_identity(row: Mapping[str, Any] | Any) -> tuple[str, int, int]:
+        return (
+            str(row.get("role") or ""),
+            int(row.get("permlevel") or 0),
+            int(bool(row.get("if_owner"))),
+        )
+
+    def _override_from_standard(self, doctype: str, name: str) -> Any:
+        standard = frappe.get_doc("DocPerm", name)
         custom_meta = frappe.get_meta("Custom DocPerm")
-        documents: list[Any] = []
-        for name in standard_names:
-            standard = frappe.get_doc("DocPerm", name)
-            payload: dict[str, Any] = {
-                "doctype": "Custom DocPerm",
-                "parent": doctype,
-                "parenttype": "DocType",
-                "parentfield": "permissions",
-                "role": role,
-                "permlevel": 0,
-            }
-            for field in custom_meta.fields:
-                fieldname = str(field.fieldname or "")
-                if not fieldname or fieldname in _IDENTITY_FIELDS:
-                    continue
-                if standard.meta.has_field(fieldname):
-                    payload[fieldname] = standard.get(fieldname)
-            documents.append(frappe.get_doc(payload))
-        return documents
+        payload: dict[str, Any] = {
+            "doctype": "Custom DocPerm",
+            "parent": doctype,
+            "parenttype": "DocType",
+            "parentfield": "permissions",
+            "role": standard.role,
+            "permlevel": int(standard.permlevel or 0),
+        }
+        for field in custom_meta.fields:
+            fieldname = str(field.fieldname or "")
+            if not fieldname or fieldname in _IDENTITY_FIELDS:
+                continue
+            if standard.meta.has_field(fieldname):
+                payload[fieldname] = standard.get(fieldname)
+        return frappe.get_doc(payload)
 
     @staticmethod
     def _blank_override(doctype: str, role: str) -> Any:
@@ -320,14 +398,24 @@ class FrappePermissionMatrixRepository:
     ) -> None:
         row_names = frappe.get_all(
             "Custom DocPerm",
-            filters={"parent": doctype, "role": role, "permlevel": 0},
+            filters={
+                "parent": doctype,
+                "role": role,
+                "permlevel": 0,
+                "if_owner": 0,
+            },
             pluck="name",
             order_by="creation asc",
         )
         has_standard = bool(
             frappe.db.exists(
                 "DocPerm",
-                {"parent": doctype, "role": role, "permlevel": 0},
+                {
+                    "parent": doctype,
+                    "role": role,
+                    "permlevel": 0,
+                    "if_owner": 0,
+                },
             )
         )
         any_enabled = any(

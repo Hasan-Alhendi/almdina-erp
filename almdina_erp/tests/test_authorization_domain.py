@@ -122,7 +122,8 @@ class TestAuthorizationDomain(unittest.TestCase):
             }
         )
         self.assertEqual(navigation["profile"], "full")
-        self.assertEqual(navigation["home_page"], "almdina-erp")
+        self.assertEqual(navigation["home_page"], "")
+        self.assertEqual(navigation["default_route"], "/desk")
         self.assertIn(WORKSPACE_MAIN, navigation["workspaces"])
         self.assertIn(WORKSPACE_SHOP_FLOOR, navigation["workspaces"])
         self.assertIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])

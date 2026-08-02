@@ -18,10 +18,10 @@ def _source(path: Path) -> str:
 
 def test_order_entry_can_edit_after_dispatch_via_shared_policy():
     policy = _source(POLICY)
-    assert "ORDER_EDITOR_ROLES" in policy
+    assert "Capability.RECALCULATE_PLAN" in policy
+    assert "frappe.get_roles" not in policy
     assert "LOCKED_ORDER_STATUSES" in policy
     assert "def user_can_edit_order" in policy
-    assert "def unlock_frozen_plan_for_editor" in policy
     assert "def user_can_recalculate_drawing_system_plan" in policy
     assert "def enforce_order_immutability_on_save" in policy
     assert "enforce_order_immutability_on_save" in _source(ORDER_PY)

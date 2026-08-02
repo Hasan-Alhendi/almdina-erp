@@ -5,18 +5,11 @@ from collections.abc import Collection
 
 DRAFT_LIKE_STATUSES = frozenset({"Draft", "Pending Review", "Rejected"})
 LOCKED_ORDER_STATUSES = frozenset({"Delivered", "Cancelled"})
-ORDER_EDITOR_ROLES = frozenset({"Order Entry", "Production Manager", "System Manager"})
-DRAWING_OPERATOR_ROLES = frozenset({"عامل رسم", "Production Manager", "System Manager"})
 
 
 def normalize_status(status: str | None) -> str:
     """Return the business default used for orders without an explicit status."""
     return status or "Draft"
-
-
-def has_any_role(roles: Collection[str], allowed_roles: Collection[str]) -> bool:
-    """Return whether the actor owns at least one role allowed by a policy."""
-    return not set(roles).isdisjoint(allowed_roles)
 
 
 def is_draft_like(status: str | None) -> bool:
@@ -52,14 +45,14 @@ def is_drawing_stage(
 
 def can_recalculate_drawing_system_plan(
     *,
-    roles: Collection[str],
+    has_recalculate_permission: bool,
     approved_plan: str | None,
     production_path: str | None,
     status: str | None,
     current_stage_type: str | None,
 ) -> bool:
     """Evaluate the exceptional drawing-stage recalculation policy."""
-    if not has_any_role(roles, DRAWING_OPERATOR_ROLES):
+    if not has_recalculate_permission:
         return False
     if approved_plan:
         return False

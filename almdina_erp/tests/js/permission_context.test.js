@@ -11,7 +11,12 @@ const source = fs.readFileSync(
 );
 
 function load(rawContext) {
-    const fakeWindow = {};
+    const fakeWindow = {
+        setInterval() {
+            return 1;
+        },
+        clearInterval() {},
+    };
     const fakeFrappe = {
         boot: rawContext === undefined ? {} : { almdina_permissions: rawContext },
         provide(namespace) {

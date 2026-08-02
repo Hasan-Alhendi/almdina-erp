@@ -58,6 +58,7 @@ class TestControlCenterAuthorization(unittest.TestCase):
             projection,
             {
                 "read": True,
+                "select": True,
                 "create": False,
                 "write": False,
                 "delete": False,

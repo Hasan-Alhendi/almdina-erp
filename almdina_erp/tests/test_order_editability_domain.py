@@ -54,9 +54,9 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
             )
         )
 
-    def test_drawing_recalculation_requires_role_stage_and_unapproved_plan(self) -> None:
+    def test_drawing_recalculation_requires_permission_stage_and_unapproved_plan(self) -> None:
         allowed = dict(
-            roles={"عامل رسم"},
+            has_recalculate_permission=True,
             approved_plan=None,
             production_path="Drawing",
             status="At Drawing",
@@ -65,7 +65,7 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         self.assertTrue(can_recalculate_drawing_system_plan(**allowed))
 
         blocked_cases = (
-            {**allowed, "roles": {"Order Entry"}},
+            {**allowed, "has_recalculate_permission": False},
             {**allowed, "approved_plan": "PLAN-0001"},
             {**allowed, "production_path": "CNC"},
             {**allowed, "status": "At CNC", "current_stage_type": "CNC"},

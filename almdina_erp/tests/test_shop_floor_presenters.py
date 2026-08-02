@@ -173,7 +173,7 @@ class TestShopFloorPresenters(unittest.TestCase):
         for fieldname in PLAN_AND_DXF_PAYLOAD_FIELDS:
             self.assertNotIn(fieldname, sanitized)
 
-    def test_plan_and_dxf_data_remain_for_authorized_document(self) -> None:
+    def test_plan_permission_does_not_leak_dxf_data(self) -> None:
         payload = {
             "name": "DCO-4",
             "production_dxf": "/private/files/order.dxf",
@@ -183,7 +183,13 @@ class TestShopFloorPresenters(unittest.TestCase):
             payload,
             {Capability.VIEW_CUTTING_PLAN: True},
         )
-        self.assertEqual(sanitized, payload)
+        self.assertEqual(
+            sanitized,
+            {
+                "name": "DCO-4",
+                "system_plan_json": '{"sheets":[]}',
+            },
+        )
         self.assertIsNot(sanitized, payload)
 
 

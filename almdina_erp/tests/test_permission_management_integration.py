@@ -11,8 +11,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
 
 ADMIN_ROLE = "Almdina Permission Console Admin Test"
 TARGET_ROLE = "Almdina Permission Console Target Test"
+PRESERVED_ROLE = "Almdina Permission Baseline Test"
 ADMIN_USER = "almdina.permission.console.admin@example.com"
 TARGET_USER = "almdina.permission.console.target@example.com"
+PRESERVED_USER = "almdina.permission.baseline@example.com"
 
 
 class TestPermissionManagementIntegration(FrappeTestCase):
@@ -23,8 +25,10 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         sync_permission_types()
         cls._ensure_role(ADMIN_ROLE)
         cls._ensure_role(TARGET_ROLE)
+        cls._ensure_role(PRESERVED_ROLE)
         cls._ensure_user(ADMIN_USER, ADMIN_ROLE)
         cls._ensure_user(TARGET_USER, TARGET_ROLE)
+        cls._ensure_user(PRESERVED_USER, PRESERVED_ROLE)
         cls._replace_role_permissions(
             ADMIN_ROLE,
             "Almdina ERP Settings",
@@ -40,13 +44,15 @@ class TestPermissionManagementIntegration(FrappeTestCase):
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
-        frappe.db.delete("Almdina Permission Audit", {"role": ["in", [ADMIN_ROLE, TARGET_ROLE]]})
-        for role in (ADMIN_ROLE, TARGET_ROLE):
+        managed_roles = [ADMIN_ROLE, TARGET_ROLE, PRESERVED_ROLE]
+        frappe.db.delete("Almdina Permission Audit", {"role": ["in", managed_roles]})
+        for role in managed_roles:
             frappe.db.delete("Custom DocPerm", {"role": role})
-        for user in (ADMIN_USER, TARGET_USER):
+            frappe.db.delete("DocPerm", {"role": role})
+        for user in (ADMIN_USER, TARGET_USER, PRESERVED_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
-        for role in (ADMIN_ROLE, TARGET_ROLE):
+        for role in managed_roles:
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
@@ -222,6 +228,58 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         self.assertEqual(
             frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}),
             1,
+        )
+
+    def test_partial_custom_matrix_repairs_untouched_standard_role_access(self) -> None:
+        frappe.set_user("Administrator")
+        frappe.db.delete("Custom DocPerm", {"role": PRESERVED_ROLE})
+        frappe.db.delete("DocPerm", {"role": PRESERVED_ROLE})
+        frappe.get_doc(
+            {
+                "doctype": "DocPerm",
+                "parent": "Door Cutting Order",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": PRESERVED_ROLE,
+                "permlevel": 0,
+                "read": 1,
+                "report": 1,
+                "print": 1,
+            }
+        ).insert(ignore_permissions=True)
+
+        self.assertTrue(
+            frappe.db.exists(
+                "Custom DocPerm",
+                {"parent": "Door Cutting Order"},
+            )
+        )
+        self.assertFalse(
+            frappe.db.exists(
+                "Custom DocPerm",
+                {"parent": "Door Cutting Order", "role": PRESERVED_ROLE},
+            )
+        )
+
+        sync_permission_types()
+        frappe.clear_cache(user=PRESERVED_USER)
+        frappe.clear_cache(doctype="Door Cutting Order")
+
+        copied = frappe.db.get_value(
+            "Custom DocPerm",
+            {"parent": "Door Cutting Order", "role": PRESERVED_ROLE},
+            ["read", "report", "print"],
+            as_dict=True,
+        )
+        self.assertEqual(int(copied.read), 1)
+        self.assertEqual(int(copied.report), 1)
+        self.assertEqual(int(copied.print), 1)
+        self.assertTrue(
+            frappe.has_permission(
+                "Door Cutting Order",
+                ptype="read",
+                user=PRESERVED_USER,
+            )
         )
 
     def test_control_center_and_report_grants_are_persisted_per_doctype(self) -> None:

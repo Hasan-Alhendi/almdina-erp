@@ -189,6 +189,7 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "factory_master_data_service.py",
             "order_creation_service.py",
             "replacement_cancellation_service.py",
+            "order_edit_policy.py",
         )
         candidates = [
             path

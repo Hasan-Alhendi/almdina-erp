@@ -11,19 +11,20 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_recalculate_drawing_plan_api_exists_for_drawing_role():
+def test_recalculate_drawing_plan_api_uses_configurable_capability():
     src = _source(SHOP_FLOOR)
-    block = src.split("def recalculate_drawing_plan", 1)[1].split("@frappe.whitelist()", 1)[0]
-    assert 'require_any_role("عامل رسم", "Production Manager", "System Manager")' in block
-    assert "_assert_order_at_drawing(order_name)" in block
-    assert "force_cutting_plan_recalculation" in block
-    assert "_serialize_order_preview" in block
+    assert "shop_floor_dxf_service" in src
+    assert 'recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")' in src
+    dxf = _source(ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py")
+    assert "Capability.RECALCULATE_PLAN" in dxf
+    assert "force_cutting_plan_recalculation" in dxf
 
 
 def test_drawing_recalc_uses_shared_immutability_bypass():
     policy = _source(ROOT / "almdina_erp" / "services" / "order_edit_policy.py")
     assert "is_order_at_drawing_stage" in policy
-    assert "DRAWING_OPERATOR_ROLES" in policy
+    assert "Capability.RECALCULATE_PLAN" in policy
+    assert "frappe.get_roles" not in policy
 
 
 def test_drawing_optimizer_ui_calls_recalculate_api():

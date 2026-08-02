@@ -52,6 +52,15 @@ _BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
 _READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
 
 
+def _resolved_permission_type(
+    ptype: str | None,
+    permission_type: str | None,
+) -> str | None:
+    """Accept Frappe v16's ``ptype`` and the historical local test keyword."""
+
+    return ptype if ptype is not None else permission_type
+
+
 def _has_any(user: str, capabilities: frozenset[str]) -> bool:
     return any(
         doctype_has_capability(capability, user=user)
@@ -153,12 +162,13 @@ def replacement_piece_query(user: str | None = None) -> str:
 def door_cutting_order_has_permission(
     doc: Any,
     user: str | None = None,
+    ptype: str | None = None,
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
     return _assigned_read_decision(
         user=resolved_user,
-        permission_type=permission_type,
+        permission_type=_resolved_permission_type(ptype, permission_type),
         order_name=getattr(doc, "name", None),
     )
 
@@ -166,10 +176,12 @@ def door_cutting_order_has_permission(
 def production_stage_has_permission(
     doc: Any,
     user: str | None = None,
+    ptype: str | None = None,
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
-    if permission_type not in _READ_PERMISSION_TYPES:
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+    if resolved_type not in _READ_PERMISSION_TYPES:
         return True
     if resolved_user == "Guest":
         return False
@@ -181,12 +193,13 @@ def production_stage_has_permission(
 def cutting_plan_has_permission(
     doc: Any,
     user: str | None = None,
+    ptype: str | None = None,
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
     return _assigned_read_decision(
         user=resolved_user,
-        permission_type=permission_type,
+        permission_type=_resolved_permission_type(ptype, permission_type),
         order_name=getattr(doc, "door_cutting_order", None),
     )
 
@@ -194,12 +207,13 @@ def cutting_plan_has_permission(
 def replacement_piece_has_permission(
     doc: Any,
     user: str | None = None,
+    ptype: str | None = None,
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
     return _assigned_read_decision(
         user=resolved_user,
-        permission_type=permission_type,
+        permission_type=_resolved_permission_type(ptype, permission_type),
         order_name=getattr(doc, "door_cutting_order", None),
     )
 
