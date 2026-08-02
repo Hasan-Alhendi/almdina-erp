@@ -49,6 +49,18 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         ):
             self.assertLess(hooks.index(renderer), hooks.index(consumer))
 
+    def test_protected_surfaces_have_deterministic_form_load_order(self) -> None:
+        hooks = HOOKS.read_text(encoding="utf-8")
+        cost_presenter = '"public/js/door_cutting_order_cost_presenter.js"'
+        cost_permissions = '"public/js/door_cutting_order_cost_permissions_ux.js"'
+        plan_tabs = '"public/js/door_cutting_order_plan_tabs_ux.js"'
+        permission_refresh = '"public/js/door_cutting_order_permission_refresh_ux.js"'
+
+        self.assertIn('"route": "/desk"', hooks)
+        self.assertNotIn('"route": "/desk/almdina-erp"', hooks)
+        self.assertLess(hooks.index(cost_presenter), hooks.index(cost_permissions))
+        self.assertLess(hooks.index(plan_tabs), hooks.index(permission_refresh))
+
     def test_duplicate_legacy_form_controllers_are_not_loaded(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
         for legacy in (
@@ -86,6 +98,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn('event.target.closest(".dco-print-customer-invoice")', document_print)
         self.assertIn("validatedExport(frm)", secure_dxf)
         self.assertIn('permissions.can("export_dxf")', secure_dxf)
+        self.assertIn("__almdinaSecureDxfExportLoaded", secure_dxf)
         self.assertNotIn("DXF_EXPORT_ROLES", secure_dxf)
         self.assertNotIn("frappe.user_roles", secure_dxf)
 
