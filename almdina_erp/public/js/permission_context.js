@@ -27,6 +27,10 @@
             path: "/assets/almdina_erp/js/door_cutting_order_permission_refresh_ux.js",
             global: "AlmdinaOrderPermissionRefreshUX",
         }),
+        Object.freeze({
+            path: "/assets/almdina_erp/js/door_cutting_order_customer_invoice_toolbar_ux.js",
+            global: "AlmdinaCustomerInvoiceToolbarUX",
+        }),
     ]);
 
     function normalizeNavigation(raw) {
