@@ -9,10 +9,31 @@ from frappe.utils import flt, now_datetime
 from almdina_erp.almdina_erp.services.legacy_endpoint_service import (
     reject_legacy_role_gate,
 )
-from almdina_erp.almdina_erp.services.stock_service import (
-    _active_reserved_qty,
-    _stock_balance,
-)
+
+
+def _stock_balance(item_code: str, warehouse: str) -> float:
+    """Load retired stock infrastructure only for unreachable legacy internals.
+
+    The public endpoint fails closed before this helper can run. Keeping the
+    dependency lazy allows Frappe to discover pure historical calculation tests
+    without importing the retired stock service or reviving its role gate.
+    """
+
+    from almdina_erp.almdina_erp.services.stock_service import (
+        _stock_balance as implementation,
+    )
+
+    return implementation(item_code, warehouse)
+
+
+def _active_reserved_qty(item_code: str, warehouse: str) -> float:
+    """Lazy compatibility adapter for the retired inventory implementation."""
+
+    from almdina_erp.almdina_erp.services.stock_service import (
+        _active_reserved_qty as implementation,
+    )
+
+    return implementation(item_code, warehouse)
 
 
 def _planned_rows(log: Any) -> list[dict[str, Any]]:
