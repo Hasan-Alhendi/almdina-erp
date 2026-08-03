@@ -30,9 +30,9 @@ class _FakeCache:
 
 
 class _FakeFrappe(types.ModuleType):
-    def __init__(self):
+    def __init__(self, user: str = "worker@example.com"):
         super().__init__("frappe")
-        self.session = SimpleNamespace(user="worker@example.com")
+        self.session = SimpleNamespace(user=user)
         self.local = SimpleNamespace()
         self.cache = lambda: _FakeCache()
         self.get_roles = lambda user=None: ["Some Role"]
@@ -41,9 +41,9 @@ class _FakeFrappe(types.ModuleType):
 
 
 class BootHarness:
-    def __init__(self, granted):
+    def __init__(self, granted, *, user: str = "worker@example.com"):
         self.granted = frozenset(granted)
-        self.frappe = _FakeFrappe()
+        self.frappe = _FakeFrappe(user=user)
 
     def load(self):
         fake_gateway = types.ModuleType(
@@ -132,13 +132,14 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "order_entry")
         self.assertEqual(bootinfo["home_page"], "almadina-erp")
-        self.assertEqual(bootinfo["default_route"], "/desk/almadina-erp")
+        self.assertEqual(bootinfo["default_route"], "/desk/almdina-erp")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
             ["Almdina ERP"],
         )
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
         self.assertTrue(context["navigation"]["shared_shell"])
+        self.assertTrue(context["navigation"]["app_only"])
         self.assertNotIn("almdina_shop_floor_only", bootinfo)
         self.assertNotIn("almdina_order_entry_only", bootinfo)
 
@@ -174,6 +175,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         boot.boot_session(bootinfo)
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "shop_floor")
+        self.assertEqual(bootinfo["home_page"], "shop-floor-inbox")
         self.assertEqual(bootinfo["default_route"], "/app/shop-floor-inbox")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
@@ -181,6 +183,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         )
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
         self.assertTrue(context["navigation"]["shared_shell"])
+        self.assertTrue(context["navigation"]["app_only"])
         self.assertNotIn("almdina_shop_floor_only", bootinfo)
         self.assertNotIn("almdina_order_entry_only", bootinfo)
 
@@ -208,7 +211,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "full")
         self.assertEqual(bootinfo["home_page"], "almadina-erp")
-        self.assertEqual(bootinfo["default_route"], "/desk/almadina-erp")
+        self.assertEqual(bootinfo["default_route"], "/desk/almdina-erp")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
             [
@@ -222,7 +225,48 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertTrue(context["navigation"]["sections"]["production"])
         self.assertTrue(context["navigation"]["sections"]["costing"])
         self.assertTrue(context["navigation"]["sections"]["factory_settings"])
+        self.assertTrue(context["navigation"]["app_only"])
         self.assertFalse(context["navigation"]["sections"]["reports"])
+
+    def test_builtin_administrator_keeps_complete_frappe_desktop(self) -> None:
+        boot = BootHarness(
+            {Capability.MANAGE_PERMISSIONS},
+            user="Administrator",
+        ).load()
+        bootinfo = {
+            "workspaces": {
+                "pages": [
+                    {"name": "Almdina ERP", "module": "Almdina ERP", "app": "almdina_erp"},
+                    {"name": "Stock", "module": "Stock", "app": "erpnext"},
+                ]
+            },
+            "app_data": [
+                {"app_name": "almdina_erp", "app_route": "/desk"},
+                {"app_name": "erpnext", "app_route": "/desk/accounting"},
+            ],
+            "module_wise_workspaces": {
+                "Almdina ERP": ["Almdina ERP"],
+                "Stock": ["Stock"],
+            },
+        }
+
+        boot.boot_session(bootinfo)
+
+        context = bootinfo["almdina_permissions"]
+        self.assertEqual(bootinfo["home_page"], "desktop")
+        self.assertEqual(bootinfo["default_route"], "/desk/desktop")
+        self.assertFalse(context["navigation"]["app_only"])
+        self.assertEqual(
+            [row["name"] for row in bootinfo["workspaces"]["pages"]],
+            ["Almdina ERP", "Stock"],
+        )
+        self.assertEqual(
+            [row["app_name"] for row in bootinfo["app_data"]],
+            ["almdina_erp", "erpnext"],
+        )
+        self.assertEqual(bootinfo["app_data"][0]["app_route"], "/desk/almdina-erp")
+        self.assertEqual(bootinfo["app_data"][1]["app_route"], "/desk/accounting")
+        self.assertNotIn("almdina_allowed_apps", bootinfo)
 
     def test_no_default_password_is_stored_in_install_or_provisioning_code(self) -> None:
         combined = INSTALL_PATH.read_text(encoding="utf-8") + PROVISION_PATH.read_text(encoding="utf-8")
