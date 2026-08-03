@@ -2,12 +2,13 @@
     "use strict";
 
     const STYLE_ID = "dco-mobile-piece-cards-css";
-    const CARD_MAX_WIDTH = 900;
+    const PHONE_SHORT_SIDE_MAX_WIDTH = 600;
+    const PHONE_VIEWPORT_MAX_WIDTH = 900;
 
     const CARD_CSS = `
         .dco-mobile-piece-cards {
-            --dco-card-touch-target:44px;
-            --dco-card-gap:9px;
+            --dco-compact-control-height:38px;
+            --dco-compact-gap:6px;
             width:100%;
             min-width:0;
             max-width:100%;
@@ -23,21 +24,24 @@
         .dco-mobile-piece-cards .dco-fast-entry-toolbar {
             display:block!important;
             width:100%;
-            margin-bottom:10px;
-            padding:10px!important;
+            margin-bottom:7px;
+            padding:7px 8px!important;
             border:1px solid var(--border-color,#dfe3e8)!important;
-            border-radius:12px!important;
+            border-radius:9px!important;
             background:var(--subtle-fg,#f8f9fa)!important;
+            font-size:11px!important;
         }
         .dco-mobile-piece-cards .dco-fast-help {
-            display:grid!important;
-            grid-template-columns:1fr;
-            gap:5px!important;
+            display:flex!important;
+            flex-wrap:wrap;
+            align-items:center;
+            gap:3px 7px!important;
             width:100%;
             min-width:0;
         }
         .dco-mobile-piece-cards .dco-arrow-nav-hint,
-        .dco-mobile-piece-cards .dco-help-secondary {
+        .dco-mobile-piece-cards .dco-help-secondary,
+        .dco-mobile-piece-cards .dco-fast-help > span:last-child {
             display:none!important;
         }
         .dco-mobile-piece-cards .dco-fast-entry-scroll {
@@ -71,39 +75,39 @@
         .dco-mobile-piece-cards .dco-fast-table tbody {
             display:grid!important;
             grid-template-columns:1fr;
-            gap:12px;
+            gap:8px;
             width:100%;
             min-width:0;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody tr {
             position:relative;
             display:grid!important;
-            grid-template-columns:repeat(2,minmax(0,1fr));
-            gap:var(--dco-card-gap);
+            grid-template-columns:repeat(6,minmax(0,1fr));
+            gap:var(--dco-compact-gap);
             width:100%!important;
             min-width:0!important;
             max-width:100%!important;
-            padding:12px!important;
+            padding:8px!important;
             border:1px solid var(--border-color,#dfe3e8)!important;
-            border-radius:15px!important;
+            border-radius:10px!important;
             background:var(--card-bg,var(--fg-color,#fff))!important;
-            box-shadow:0 5px 16px rgba(15,23,42,.07)!important;
+            box-shadow:0 1px 4px rgba(15,23,42,.055)!important;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody tr.dco-virtual-row {
             border-style:dashed!important;
-            background:rgba(36,144,239,.025)!important;
+            background:rgba(36,144,239,.02)!important;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody tr.dco-row-selected {
             border-color:var(--primary,#2490ef)!important;
-            box-shadow:inset -3px 0 0 var(--primary,#2490ef),0 5px 16px rgba(15,23,42,.08)!important;
+            box-shadow:inset -2px 0 0 var(--primary,#2490ef),0 1px 4px rgba(15,23,42,.06)!important;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody td {
             position:static!important;
             display:flex!important;
             flex-direction:column;
             align-items:stretch;
-            justify-content:flex-start;
-            gap:5px;
+            justify-content:flex-end;
+            gap:2px;
             width:auto!important;
             min-width:0!important;
             max-width:none!important;
@@ -118,22 +122,72 @@
         .dco-mobile-piece-cards .dco-fast-table tbody td::before {
             content:attr(data-label);
             display:block;
-            min-height:17px;
+            min-height:13px;
             color:var(--text-muted,#607080);
-            font-size:11px;
-            font-weight:800;
-            line-height:1.35;
-        }
-        .dco-mobile-piece-cards .dco-fast-table tbody :where(.dco-col-type,.dco-col-edges,.dco-col-edge-type,.dco-col-notes) {
-            grid-column:1/-1;
+            font-size:9.5px;
+            font-weight:750;
+            line-height:1.2;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody .dco-select-col {
             grid-column:1;
             grid-row:1;
+            align-items:center;
+            justify-content:center;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-no {
             grid-column:2;
             grid-row:1;
+            align-items:center;
+            justify-content:center;
+            min-height:var(--dco-compact-control-height)!important;
+            border-radius:7px!important;
+            background:var(--subtle-fg,#f5f6f7)!important;
+            font-size:12px;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody :where(.dco-select-col,.dco-col-no)::before,
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-delete::before {
+            display:none!important;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-type {
+            grid-column:3/7;
+            grid-row:1;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-width {
+            grid-column:1/3;
+            grid-row:2;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-length {
+            grid-column:3/5;
+            grid-row:2;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-qty {
+            grid-column:5/7;
+            grid-row:2;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-rotate {
+            grid-column:1/3;
+            grid-row:3;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-edges {
+            grid-column:3/7;
+            grid-row:3;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-edge-type {
+            grid-column:1/4;
+            grid-row:4;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-sketch {
+            grid-column:4/7;
+            grid-row:4;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-notes {
+            grid-column:1/6;
+            grid-row:5;
+        }
+        .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-delete {
+            grid-column:6;
+            grid-row:5;
+            justify-content:flex-end;
         }
         .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-calc,
         .dco-mobile-piece-cards .dco-fast-table tbody .dco-col-delete:empty {
@@ -142,51 +196,61 @@
         .dco-mobile-piece-cards .dco-fast-table :where(.dco-fast-input,.dco-fast-select,.dco-notes-expand,.dco-check-toggle,.dco-special-sketch-button,.dco-delete-row) {
             width:100%!important;
             min-width:0!important;
-            min-height:var(--dco-card-touch-target)!important;
-            height:var(--dco-card-touch-target)!important;
+            min-height:var(--dco-compact-control-height)!important;
+            height:var(--dco-compact-control-height)!important;
             margin:0!important;
+            padding-block:3px!important;
             font-size:16px!important;
+        }
+        .dco-mobile-piece-cards .dco-fast-table .dco-check-toggle {
+            padding-inline:3px!important;
+            font-size:10px!important;
+            line-height:1.1!important;
+        }
+        .dco-mobile-piece-cards .dco-fast-table .dco-special-sketch-button {
+            font-size:11px!important;
         }
         .dco-mobile-piece-cards .dco-fast-table .dco-special-sketch-button > span:last-child {
             display:inline!important;
         }
         .dco-mobile-piece-cards .dco-fast-table .dco-edge-buttons {
             display:grid!important;
-            grid-template-columns:repeat(2,minmax(0,1fr))!important;
-            gap:7px!important;
+            grid-template-columns:repeat(4,minmax(0,1fr))!important;
+            gap:3px!important;
             width:100%;
         }
         .dco-mobile-piece-cards .dco-fast-table .dco-col-edges .dco-check-toggle {
-            min-height:48px!important;
+            min-height:var(--dco-compact-control-height)!important;
         }
         .dco-mobile-piece-cards .dco-fast-table .dco-notes-editor {
             display:grid!important;
-            grid-template-columns:minmax(0,1fr) var(--dco-card-touch-target)!important;
-            gap:7px!important;
+            grid-template-columns:minmax(0,1fr) var(--dco-compact-control-height)!important;
+            gap:4px!important;
             width:100%;
         }
         .dco-mobile-piece-cards .dco-fast-table .dco-row-selector {
-            width:22px!important;
-            height:22px!important;
-            margin:9px 2px!important;
+            width:20px!important;
+            height:20px!important;
+            margin:0!important;
         }
         .dco-mobile-piece-cards .dco-bulk-footer {
             position:static!important;
             display:grid!important;
-            grid-template-columns:1fr;
-            gap:8px!important;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:6px!important;
             width:100%;
-            margin-top:10px;
-            padding:10px!important;
+            margin-top:7px;
+            padding:7px!important;
             border:1px solid var(--border-color,#dfe3e8)!important;
-            border-radius:12px!important;
+            border-radius:9px!important;
             background:var(--card-bg,var(--fg-color,#fff));
             box-shadow:none!important;
         }
         .dco-mobile-piece-cards .dco-selection-actions {
             display:grid!important;
-            grid-template-columns:1fr;
-            gap:7px;
+            grid-column:1/-1;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:5px;
             width:100%;
         }
         .dco-mobile-piece-cards .dco-selection-actions[hidden] {
@@ -195,20 +259,17 @@
         .dco-mobile-piece-cards .dco-bulk-footer :where(.btn,button) {
             width:100%!important;
             min-width:0!important;
-            min-height:var(--dco-card-touch-target)!important;
+            min-height:38px!important;
+            padding:5px 7px!important;
+            font-size:11px!important;
         }
-        @media(max-width:480px) {
+        @media(max-width:360px) {
             .dco-mobile-piece-cards .dco-fast-table tbody tr {
-                grid-template-columns:1fr;
+                gap:5px;
+                padding:6px!important;
             }
-            .dco-mobile-piece-cards .dco-fast-table tbody td {
-                grid-column:1/-1!important;
-                grid-row:auto!important;
-            }
-            .dco-mobile-piece-cards .dco-fast-table tbody :where(.dco-select-col,.dco-col-no) {
-                display:grid!important;
-                grid-template-columns:minmax(96px,auto) 1fr;
-                align-items:center;
+            .dco-mobile-piece-cards .dco-fast-table .dco-check-toggle {
+                font-size:9px!important;
             }
         }
     `;
@@ -232,17 +293,24 @@
         return Number.isFinite(width) && width > 0 ? width : null;
     }
 
+    function deviceShortSide() {
+        const screenWidth = positiveWidth(window.screen && window.screen.width);
+        const screenHeight = positiveWidth(window.screen && window.screen.height);
+        if (screenWidth && screenHeight) return Math.min(screenWidth, screenHeight);
+        return screenWidth || screenHeight || Number.POSITIVE_INFINITY;
+    }
+
     function availableWidth(root) {
         const documentWidth = positiveWidth(document.documentElement && document.documentElement.clientWidth);
         const viewportWidth = positiveWidth(window.innerWidth);
-        const screenWidth = positiveWidth(window.screen && window.screen.width);
         const rootWidth = positiveWidth(root && root.getBoundingClientRect().width);
-        const widths = [documentWidth, viewportWidth, screenWidth, rootWidth].filter(Boolean);
+        const widths = [documentWidth, viewportWidth, rootWidth].filter(Boolean);
         return widths.length ? Math.min(...widths) : Number.POSITIVE_INFINITY;
     }
 
     function shouldUseCardLayout(root) {
-        return availableWidth(root) <= CARD_MAX_WIDTH;
+        return deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH
+            && availableWidth(root) <= PHONE_VIEWPORT_MAX_WIDTH;
     }
 
     function apply(frm) {

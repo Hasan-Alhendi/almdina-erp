@@ -60,11 +60,16 @@ def test_phone_measurements_use_labelled_cards_without_fixed_table_width():
 
     assert ".dco-mobile-piece-cards .dco-fast-table tbody tr" in cards
     assert "display:grid!important" in cards
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in cards
+    assert "grid-template-columns:repeat(6,minmax(0,1fr))" in cards
+    assert ".dco-col-width" in cards
+    assert ".dco-col-length" in cards
+    assert ".dco-col-qty" in cards
+    assert "grid-row:2" in cards
     assert "min-width:0!important" in cards
     assert "content:attr(data-label)" in cards
     assert "width:940px" not in cards
     assert "min-width:940px" not in cards
+    assert "grid-template-columns:1fr;\n            }\n            .dco-mobile-piece-cards .dco-fast-table tbody td" not in cards
 
     for label_key in (
         "labels.row",
@@ -89,9 +94,10 @@ def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():
 
     assert "--dco-touch-target: 44px" in css
     assert "min-height: var(--dco-touch-target)" in css
-    assert "--dco-card-touch-target:44px" in cards
+    assert "--dco-compact-control-height:38px" in cards
     assert ".dco-edge-buttons" in cards
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))!important" in cards
+    assert "grid-template-columns:repeat(4,minmax(0,1fr))!important" in cards
+    assert "min-height:48px!important" not in cards
     assert ".dco-status-strip" in css
     assert ".dco-cost-kpis" in css
     assert "grid-template-columns: 1fr !important" in css
@@ -120,15 +126,19 @@ def test_accessibility_preferences_remain_first_class():
     assert "-webkit-overflow-scrolling: touch" in css
 
 
-def test_card_activation_uses_actual_available_width_not_only_a_media_query():
+def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel():
     cards = source(MOBILE_CARDS_UX)
 
-    assert "const CARD_MAX_WIDTH = 900" in cards
+    assert "const PHONE_SHORT_SIDE_MAX_WIDTH = 600" in cards
+    assert "const PHONE_VIEWPORT_MAX_WIDTH = 900" in cards
     assert "document.documentElement.clientWidth" in cards
     assert "window.innerWidth" in cards
     assert "window.screen && window.screen.width" in cards
+    assert "window.screen && window.screen.height" in cards
+    assert "function deviceShortSide()" in cards
     assert "root && root.getBoundingClientRect().width" in cards
     assert "Math.min(...widths)" in cards
+    assert "deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH" in cards
     assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
 
 
