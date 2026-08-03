@@ -62,6 +62,8 @@
         },
     ]);
 
+    let initialized = false;
+
     function permissions() {
         return window.AlmdinaPermissions || null;
     }
@@ -82,30 +84,62 @@
         return (any.length === 0 || any.some(can)) && all.every(can);
     }
 
-    function workspaceName(page) {
-        if (typeof page === "string") return page;
-        if (!page || typeof page !== "object") return "";
-        return String(page.name || page.title || page.label || "");
+    function routeSlug(value) {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        if (frappe.router && typeof frappe.router.slug === "function") {
+            return frappe.router.slug(text);
+        }
+        return text
+            .toLowerCase()
+            .replace(/[^a-z0-9\u0600-\u06ff]+/g, "-")
+            .replace(/^-+|-+$/g, "");
     }
 
-    function trimBootMetadata() {
-        const nav = navigation();
-        if (!nav || !frappe.boot) return;
-        const allowed = new Set(nav.workspaces || []);
+    function registeredWorkspace(route) {
+        const key = routeSlug(route);
+        return Boolean(
+            key
+            && frappe.workspaces
+            && Object.prototype.hasOwnProperty.call(frappe.workspaces, key)
+        );
+    }
 
-        if (frappe.boot.workspaces && Array.isArray(frappe.boot.workspaces.pages) && allowed.size) {
-            frappe.boot.workspaces.pages = frappe.boot.workspaces.pages.filter(page =>
-                allowed.has(workspaceName(page))
-            );
-            frappe.boot.allowed_workspaces = frappe.boot.workspaces.pages;
+    function registeredPage(route) {
+        const key = String(route || "").trim();
+        return Boolean(
+            key
+            && frappe.boot
+            && frappe.boot.page_info
+            && Object.prototype.hasOwnProperty.call(frappe.boot.page_info, key)
+        );
+    }
+
+    function resolveHomeRoute(nav) {
+        const requested = routeSlug(nav && nav.home_page);
+        if (registeredWorkspace(requested) || registeredPage(requested)) {
+            return requested;
         }
 
-        if (nav.app_only && frappe.boot.apps_data && Array.isArray(frappe.boot.apps_data.apps)) {
-            frappe.boot.apps_data.apps = frappe.boot.apps_data.apps.filter(app => {
-                const name = app && typeof app === "object" ? app.name : app;
-                return name === APP_NAME;
-            });
+        for (const workspace of nav && Array.isArray(nav.workspaces) ? nav.workspaces : []) {
+            const candidate = routeSlug(workspace);
+            if (registeredWorkspace(candidate)) return candidate;
+        }
+        return "";
+    }
+
+    function syncAppDefaultRoute() {
+        const nav = navigation();
+        if (!nav || !frappe.boot || !nav.default_route) return;
+
+        if (frappe.boot.apps_data && typeof frappe.boot.apps_data === "object") {
             frappe.boot.apps_data.default_path = nav.default_route;
+        }
+        if (Array.isArray(frappe.boot.app_data)) {
+            const app = frappe.boot.app_data.find(item =>
+                item && (item.app_name || item.name) === APP_NAME
+            );
+            if (app) app.app_route = nav.default_route;
         }
     }
 
@@ -151,7 +185,7 @@
         const nav = navigation();
         if (!nav || !nav.shared_shell) return;
         document
-            .querySelectorAll("[data-link-to], [data-route], a[href*='/app/']")
+            .querySelectorAll("[data-link-to], [data-route], a[href*='/app/'], a[href*='/desk/']")
             .forEach(element => {
                 const route = normalizedRoute(element);
                 const rule = CAPABILITY_ROUTE_RULES.find(item =>
@@ -182,13 +216,18 @@
 
     function openConfiguredHome() {
         const nav = navigation();
-        if (!nav || !nav.shared_shell || !nav.home_page || !routeIsRoot()) return;
-        const home = String(nav.home_page);
-        if (frappe.set_route) {
+        if (!nav || !nav.shared_shell || !nav.home_page || !routeIsRoot()) return true;
+
+        const home = resolveHomeRoute(nav);
+        if (!home) return false;
+
+        if (typeof frappe.set_route === "function") {
             frappe.set_route(home);
-            return;
+            return true;
         }
-        window.location.href = String(nav.default_route || `/app/${home}`);
+
+        window.location.replace(`/desk/${home}`);
+        return true;
     }
 
     function injectStyles() {
@@ -218,39 +257,65 @@
         if (!nav || !nav.shared_shell) return;
         document.body.classList.add("almdina-shared-shell");
         document.body.dataset.almdinaProfile = String(nav.profile || "shared");
-        trimBootMetadata();
+        syncAppDefaultRoute();
         hideOtherAppCards();
         hideUnauthorizedShortcuts();
         injectStyles();
     }
 
+    function retryConfiguredHome(attempt = 0) {
+        if (openConfiguredHome() || attempt >= 20 || !routeIsRoot()) return;
+        window.setTimeout(() => retryConfiguredHome(attempt + 1), 100);
+    }
+
     function init() {
+        if (initialized) return;
         const nav = navigation();
         if (!nav || !nav.shared_shell) return;
+
+        initialized = true;
         applyShell();
-        openConfiguredHome();
+        retryConfiguredHome();
+
         if (frappe.router && !frappe.router.__almdinaSharedShell) {
             frappe.router.__almdinaSharedShell = true;
             frappe.router.on("change", () => {
                 applyShell();
+                window.setTimeout(() => retryConfiguredHome(), 0);
                 [150, 500].forEach(delay => setTimeout(hideUnauthorizedShortcuts, delay));
             });
         }
         [300, 900, 1800].forEach(delay => setTimeout(applyShell, delay));
     }
 
-    function waitForBoot(attempt) {
-        if (window.frappe && frappe.boot && permissions()) {
+    function deskIsReady() {
+        return Boolean(
+            window.frappe
+            && frappe.boot
+            && frappe.app
+            && frappe.router
+            && frappe.router.current_route !== null
+            && frappe.workspaces
+            && permissions()
+        );
+    }
+
+    function waitForDesk(attempt) {
+        if (deskIsReady()) {
             init();
             return;
         }
-        if (attempt >= 60) return;
-        setTimeout(() => waitForBoot(attempt + 1), 150);
+        if (attempt >= 100) return;
+        setTimeout(() => waitForDesk(attempt + 1), 100);
+    }
+
+    if (window.jQuery) {
+        window.jQuery(document).on("app_ready.almdinaSharedShell", () => waitForDesk(0));
     }
 
     if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => waitForBoot(0));
+        document.addEventListener("DOMContentLoaded", () => waitForDesk(0));
     } else {
-        waitForBoot(0);
+        waitForDesk(0);
     }
 })();
