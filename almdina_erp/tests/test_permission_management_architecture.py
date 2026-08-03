@@ -18,6 +18,7 @@ SETTINGS_PAGE_JSON = ROOT / "almdina_erp" / "page" / "factory_production_setting
 SETTINGS_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
 AUDIT_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "almdina_permission_audit" / "almdina_permission_audit.json"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
+SETTINGS_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "almdina_settings.json"
 
 
 class TestPermissionManagementArchitecture(unittest.TestCase):
@@ -97,6 +98,15 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("ruleAllowed", source)
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertNotIn("frappe.user_roles", source)
+
+    def test_settings_workspace_has_direct_administration_entries(self) -> None:
+        workspace = json.loads(SETTINGS_WORKSPACE.read_text(encoding="utf-8"))
+        targets = {row["label"]: row["link_to"] for row in workspace["shortcuts"]}
+        self.assertEqual(targets["إدارة الأدوار"], "Role")
+        self.assertEqual(targets["إدارة المستخدمين"], "factory-workforce")
+        self.assertEqual(targets["إدارة الصلاحيات"], "factory-permissions")
+        self.assertEqual(targets["إدارة مسارات الإنتاج"], "factory-master-data")
+        self.assertIn('routes: ["factory-permissions", "role"]', SHARED_SHELL.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

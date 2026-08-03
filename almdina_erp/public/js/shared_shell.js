@@ -3,7 +3,7 @@
 
     const APP_NAME = "almdina_erp";
     const CAPABILITY_ROUTE_RULES = Object.freeze([
-        { any: ["manage_permissions"], routes: ["factory-permissions"] },
+        { any: ["manage_permissions"], routes: ["factory-permissions", "role"] },
         { any: ["view_users", "manage_users"], routes: ["factory-workforce"] },
         {
             any: [

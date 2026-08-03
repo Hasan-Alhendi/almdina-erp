@@ -1,6 +1,6 @@
 {
   "charts": [],
-  "content": "[{\"id\":\"settings-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>إعدادات وبيانات المعمل</b></span>\",\"col\":12}},{\"id\":\"production-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إعدادات المعمل\",\"col\":4}},{\"id\":\"master-data\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"البيانات الأساسية\",\"col\":4}},{\"id\":\"security-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>المستخدمون والأمان</b></span>\",\"col\":12}},{\"id\":\"workforce-users\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"المستخدمون والقوى العاملة\",\"col\":4}},{\"id\":\"permission-matrix\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"مصفوفة الصلاحيات\",\"col\":4}}]",
+  "content": "[{\"id\":\"administration-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>إدارة النظام والمعمل</b></span>\",\"col\":12}},{\"id\":\"role-management\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة الأدوار\",\"col\":4}},{\"id\":\"user-management\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة المستخدمين\",\"col\":4}},{\"id\":\"permission-management\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة الصلاحيات\",\"col\":4}},{\"id\":\"routing-management\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إدارة مسارات الإنتاج\",\"col\":6}},{\"id\":\"production-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"إعدادات المعمل\",\"col\":6}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -11,10 +11,11 @@
   "is_hidden": 0,
   "label": "Almdina Settings",
   "links": [
-    {"hidden":0,"is_query_report":0,"label":"إعدادات المعمل","link_count":0,"link_to":"factory-production-settings","link_type":"Page","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"البيانات الأساسية","link_count":0,"link_to":"factory-master-data","link_type":"Page","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"المستخدمون والقوى العاملة","link_count":0,"link_to":"factory-workforce","link_type":"Page","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"مصفوفة الصلاحيات","link_count":0,"link_to":"factory-permissions","link_type":"Page","onboard":0,"type":"Link"}
+    {"hidden":0,"is_query_report":0,"label":"إدارة الأدوار","link_count":0,"link_to":"Role","link_type":"DocType","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"إدارة المستخدمين","link_count":0,"link_to":"factory-workforce","link_type":"Page","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"إدارة الصلاحيات","link_count":0,"link_to":"factory-permissions","link_type":"Page","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"إدارة مسارات الإنتاج","link_count":0,"link_to":"factory-master-data","link_type":"Page","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"إعدادات المعمل","link_count":0,"link_to":"factory-production-settings","link_type":"Page","onboard":0,"type":"Link"}
   ],
   "module": "Almdina ERP",
   "name": "Almdina Settings",
@@ -25,10 +26,11 @@
   "roles": [],
   "sequence_id": 3,
   "shortcuts": [
-    {"color":"Blue","label":"إعدادات المعمل","link_to":"factory-production-settings","type":"Page"},
-    {"color":"Orange","label":"البيانات الأساسية","link_to":"factory-master-data","type":"Page"},
-    {"color":"Green","label":"المستخدمون والقوى العاملة","link_to":"factory-workforce","type":"Page"},
-    {"color":"Purple","label":"مصفوفة الصلاحيات","link_to":"factory-permissions","type":"Page"}
+    {"color":"Purple","doc_view":"List","label":"إدارة الأدوار","link_to":"Role","type":"DocType"},
+    {"color":"Green","label":"إدارة المستخدمين","link_to":"factory-workforce","type":"Page"},
+    {"color":"Blue","label":"إدارة الصلاحيات","link_to":"factory-permissions","type":"Page"},
+    {"color":"Orange","label":"إدارة مسارات الإنتاج","link_to":"factory-master-data","type":"Page"},
+    {"color":"Grey","label":"إعدادات المعمل","link_to":"factory-production-settings","type":"Page"}
   ],
   "title": "Almdina Settings"
 }
