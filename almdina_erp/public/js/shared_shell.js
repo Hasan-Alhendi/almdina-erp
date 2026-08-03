@@ -130,7 +130,10 @@
 
     function syncAppDefaultRoute() {
         const nav = navigation();
-        if (!nav || !frappe.boot || !nav.default_route) return;
+        // Only app-confined profiles should have their app card rewritten to
+        // their forced landing route. Administrator keeps the app's own route
+        // so /desk opens Desktop while the Almdina card opens its workspace.
+        if (!nav || !nav.app_only || !frappe.boot || !nav.default_route) return;
 
         if (frappe.boot.apps_data && typeof frappe.boot.apps_data === "object") {
             frappe.boot.apps_data.default_path = nav.default_route;
