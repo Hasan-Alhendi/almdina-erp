@@ -23,6 +23,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 
 
 WORKSPACE_MAIN = "Almdina ERP"
+WORKSPACE_MAIN_ROUTE = "almdina-erp"
 WORKSPACE_SHOP_FLOOR = "Shop Floor"
 WORKSPACE_CONTROL_CENTER = "Almdina Control Center"
 WORKSPACE_REPORTS = "Almdina Reports"
@@ -191,11 +192,15 @@ def build_navigation_context(
         if has_permissions_admin:
             workspaces.append(WORKSPACE_GO_LIVE)
 
-    # Frappe v16 owns the /desk root and renders the desktop/sidebar there.
-    # Keep that root for administrative and order-entry profiles. Only the
-    # operator-only profile needs a forced landing page in the shop-floor UI.
-    home_page = "shop-floor-inbox" if operator_only else ""
-    default_route = "/app/shop-floor-inbox" if operator_only else "/desk"
+    # Frappe v16 renders an empty page when /desk has no sub-route.  Always
+    # provide a real landing route for active Almdina users.  Operators keep
+    # their focused inbox; all other profiles land on the main factory workspace.
+    home_page = "shop-floor-inbox" if operator_only else WORKSPACE_MAIN_ROUTE
+    default_route = (
+        "/app/shop-floor-inbox"
+        if operator_only
+        else f"/desk/{WORKSPACE_MAIN_ROUTE}"
+    )
 
     return {
         "shared_shell": active,
@@ -224,6 +229,7 @@ __all__ = [
     "WORKSPACE_CONTROL_CENTER",
     "WORKSPACE_GO_LIVE",
     "WORKSPACE_MAIN",
+    "WORKSPACE_MAIN_ROUTE",
     "WORKSPACE_REPORTS",
     "WORKSPACE_SETTINGS",
     "WORKSPACE_SHOP_FLOOR",
