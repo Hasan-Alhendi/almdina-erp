@@ -33,6 +33,7 @@ jobs:
             almdina_erp.tests.test_order_edit_policy_adapter \
             almdina_erp.tests.test_legacy_permission_bootstrap \
             almdina_erp.tests.test_order_tab_permissions_ux \
+            almdina_erp.tests.test_routing_migration_phase \
             almdina_erp.tests.test_shop_floor_data_policy \
             almdina_erp.tests.test_shop_floor_plan_loading_policy \
             almdina_erp.tests.test_workforce_service_authorization_order \
