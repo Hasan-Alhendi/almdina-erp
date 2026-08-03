@@ -75,6 +75,7 @@ Board,اللوح
 Board Item,صنف اللوح
 Board Material,مادة اللوح
 Board Color,لون اللوح
+Edge Color,لون القشاط
 Board Thickness (MM),سماكة اللوح (مم)
 Board Length (MM),طول اللوح (مم)
 Board Width (MM),عرض اللوح (مم)

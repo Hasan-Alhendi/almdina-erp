@@ -10,6 +10,10 @@ MOBILE_CARDS_UX = ROOT / "public" / "js" / "door_cutting_order_mobile_cards_ux.j
 OPERATOR_UX = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 BULK_ROWS_UX = ROOT / "public" / "js" / "door_cutting_order_bulk_rows_ux.js"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
+QUICK_ACTIONS_UX = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
+SHOP_FLOOR_INBOX = (
+    ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
+)
 
 
 def source(path: Path) -> str:
@@ -126,3 +130,31 @@ def test_card_activation_uses_actual_available_width_not_only_a_media_query():
     assert "root && root.getBoundingClientRect().width" in cards
     assert "Math.min(...widths)" in cards
     assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
+
+
+def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions():
+    css = source(RESPONSIVE_CSS)
+    list_source = source(LIST_UX)
+    quick_actions = source(QUICK_ACTIONS_UX)
+    inbox = source(SHOP_FLOOR_INBOX)
+    hooks = source(HOOKS)
+
+    assert "const CARD_MAX_WIDTH = 900" in list_source
+    assert 'root.classList.toggle("dco-order-card-layout"' in list_source
+    assert 'class="dco-mobile-order-card"' in list_source
+    assert 'field("لون القشاط", doc.edge_color' in list_source
+    assert 'field("صنف اللوح", doc.board_description)' in list_source
+    assert 'field("القسم الحالي", doc.current_department)' in list_source
+    assert 'field("العامل", doc.current_assignee)' in list_source
+    assert "AlmdinaShopFloorQuickActions.perform" in list_source
+    assert ".dco-order-card-container > .list-row" in css
+    assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+
+    assert '"/assets/almdina_erp/js/shop_floor_quick_actions.js"' in hooks
+    assert "services.shop_floor_commands.start_my_stage" in quick_actions
+    assert "services.shop_floor_commands.handoff_to_next" in quick_actions
+    assert "frappe.db.set_value" not in quick_actions
+    assert "sf-quick-action" in inbox
+    assert 'row.edge_color || "—"' in inbox
+    assert 'row.board_description || "—"' in inbox

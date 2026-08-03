@@ -112,6 +112,24 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
             });
     }
 
+    function quickActionContext(row) {
+        return {
+            order: row.door_cutting_order,
+            stage: row.name,
+            stageType: row.stage_type,
+            canStart: mode === "inbox" && row.can_start_stage === true,
+            canHandoff: mode === "inbox" && row.can_handoff_stage === true,
+        };
+    }
+
+    function quickActionHtml(row) {
+        const controller = window.AlmdinaShopFloorQuickActions;
+        const action = controller && controller.actionFor(quickActionContext(row));
+        if (!action) return "";
+        const buttonClass = action.indicator === "success" ? "btn-success" : "btn-primary";
+        return `<button type="button" class="btn ${buttonClass} sf-quick-action" style="flex:1;min-height:44px;font-weight:750;border-radius:10px">${esc(action.label)}</button>`;
+    }
+
     function renderList(rows) {
         const title = mode === "archive" ? __("الطلبات المؤرشفة") : __("الطلبات الواردة");
         if (!rows.length) {
@@ -131,8 +149,10 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                     data-stage="${esc(row.name)}"
                     data-status="${esc(row.status)}"
                     data-stage-type="${esc(row.stage_type)}"
-                    data-next="${esc(row.can_handoff_to || "")}">
-                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+                    data-next="${esc(row.can_handoff_to || "")}"
+                    data-can-start="${row.can_start_stage === true ? "1" : "0"}"
+                    data-can-handoff="${row.can_handoff_stage === true ? "1" : "0"}">
+                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
                         <div style="min-width:0;flex:1">
                             <div style="font-size:1.05rem;font-weight:800">${esc(row.door_cutting_order)}</div>
                             <div class="text-muted" style="font-size:13px;margin:4px 0">${esc(row.customer || "")} · ${esc(row.order_date || "")}</div>
@@ -140,7 +160,21 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                             <div style="font-size:13px">${__("الحالة")}: <b>${esc(statusLabel(row.status))}</b></div>
                             ${row.assigned_to ? `<div class="text-muted" style="font-size:12px;margin-top:3px">${__("العامل")}: ${esc(row.assigned_to)}</div>` : ""}
                         </div>
-                        <button type="button" class="btn btn-primary sf-open-btn open-detail">${__("فتح")}</button>
+                        <span class="indicator-pill ${row.status === "Completed" ? "green" : "blue"}">${esc(statusLabel(row.status))}</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">
+                        <div style="background:var(--subtle-fg,#f7f8fa);padding:9px 10px;border-radius:10px;min-width:0">
+                            <span class="text-muted" style="display:block;font-size:11px">${__("لون القشاط")}</span>
+                            <b style="display:block;font-size:13px;overflow-wrap:anywhere">${esc(row.edge_color || "—")}</b>
+                        </div>
+                        <div style="background:var(--subtle-fg,#f7f8fa);padding:9px 10px;border-radius:10px;min-width:0">
+                            <span class="text-muted" style="display:block;font-size:11px">${__("صنف اللوح")}</span>
+                            <b style="display:block;font-size:13px;overflow-wrap:anywhere">${esc(row.board_description || "—")}</b>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:12px">
+                        ${quickActionHtml(row)}
+                        <button type="button" class="btn btn-default sf-open-btn open-detail" style="flex:1">${__("فتح التفاصيل")}</button>
                     </div>
                 </div>
             `)
@@ -153,7 +187,8 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 <div class="shop-floor-detail" style="display:none"></div>
             </div>
         `);
-        $content.find(".shop-floor-order-card").on("click", function () {
+        $content.find(".shop-floor-order-card").on("click", function (event) {
+            if ($(event.target).closest(".sf-quick-action").length) return;
             const $card = $(this);
             openDetail({
                 order: String($card.data("order") || ""),
@@ -161,6 +196,22 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 status: String($card.data("status") || ""),
                 stageType: String($card.data("stage-type") || ""),
                 next: String($card.data("next") || ""),
+            });
+        });
+        $content.find(".sf-quick-action").on("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const $card = $(this).closest(".shop-floor-order-card");
+            if (!window.AlmdinaShopFloorQuickActions) return;
+            window.AlmdinaShopFloorQuickActions.perform({
+                order: String($card.data("order") || ""),
+                stage: String($card.data("stage") || ""),
+                stageType: String($card.data("stage-type") || ""),
+                canStart: String($card.attr("data-can-start") || "") === "1",
+                canHandoff: String($card.attr("data-can-handoff") || "") === "1",
+            }, {
+                button: this,
+                onSuccess: loadList,
             });
         });
     }

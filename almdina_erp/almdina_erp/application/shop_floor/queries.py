@@ -179,11 +179,17 @@ def _enrich_stage_rows(
                 )
             except ValueError:
                 can_handoff_to = None
+        actions = build_production_action_context(
+            capabilities=repository.capabilities_for_order(order),
+            facts=_production_facts(repository, order, stage),
+        )
         enriched.append(
             {
                 **dict(stage),
                 "customer": _value(order, "customer"),
                 "order_date": _value(order, "order_date"),
+                "board_description": _value(order, "board_description"),
+                "edge_color": _value(order, "edge_color"),
                 "order_status": _value(order, "status"),
                 "production_path": production_path,
                 "current_department": _value(order, "current_department"),
@@ -198,6 +204,12 @@ def _enrich_stage_rows(
                 "department_label": department_for_stage_type(stage_type)
                 or stage_type,
                 "can_handoff_to": can_handoff_to,
+                "can_start_stage": bool(
+                    actions[Capability.START_ASSIGNED_STAGE]["allowed"]
+                ),
+                "can_handoff_stage": bool(
+                    actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]
+                ),
             }
         )
     return enriched

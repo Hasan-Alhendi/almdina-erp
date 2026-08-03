@@ -34,6 +34,191 @@
     outline-offset: 2px;
 }
 
+.dco-mobile-order-card {
+    display: none;
+}
+
+.dco-list-edge-color {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 9px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 999px;
+    background: var(--subtle-fg, #f4f5f6);
+    font-weight: 650;
+}
+
+/* The class is driven by the actual available width, including device emulation. */
+.dco-order-list.dco-order-card-layout .list-row-head {
+    display: none !important;
+}
+
+.dco-order-list.dco-order-card-layout .result {
+    background: transparent;
+}
+
+.dco-order-list.dco-order-card-layout .list-row-container.dco-order-card-container {
+    margin-block: 10px;
+    border: 0 !important;
+    border-radius: 16px;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.dco-order-list.dco-order-card-layout .dco-order-card-container > .list-row {
+    display: none !important;
+}
+
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 16px;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 3px 14px rgba(15, 23, 42, .07);
+}
+
+.dco-order-list .dco-card-header,
+.dco-order-list .dco-card-header-actions,
+.dco-order-list .dco-card-actions {
+    display: flex;
+    align-items: center;
+}
+
+.dco-order-list .dco-card-header {
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.dco-order-list .dco-card-identity {
+    min-width: 0;
+}
+
+.dco-order-list .dco-card-order-link {
+    display: block;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-color, #111827);
+    font-size: 1.02rem;
+    font-weight: 800;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    text-align: start;
+}
+
+.dco-order-list .dco-card-customer {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-muted, #6b7280);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.dco-order-list .dco-card-header-actions {
+    flex: 0 0 auto;
+    gap: 9px;
+}
+
+.dco-order-list .dco-card-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--subtle-fg, #f3f4f6);
+    color: var(--text-color, #374151);
+    font-size: 12px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.dco-order-list .dco-card-status.is-active {
+    background: rgba(37, 99, 235, .11);
+    color: #1d4ed8;
+}
+
+.dco-order-list .dco-card-status.is-success {
+    background: rgba(22, 163, 74, .12);
+    color: #15803d;
+}
+
+.dco-order-list .dco-card-status.is-danger {
+    background: rgba(220, 38, 38, .11);
+    color: #b91c1c;
+}
+
+.dco-order-list .dco-card-select {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--primary, #2490ef);
+}
+
+.dco-order-list .dco-card-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding-block: 13px;
+}
+
+.dco-order-list .dco-card-field {
+    min-width: 0;
+    padding: 9px 10px;
+    border-radius: 11px;
+    background: var(--subtle-fg, #f7f8fa);
+}
+
+.dco-order-list .dco-card-field > span,
+.dco-order-list .dco-card-field > b {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.dco-order-list .dco-card-field > span {
+    margin-bottom: 3px;
+    color: var(--text-muted, #6b7280);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.dco-order-list .dco-card-field > b {
+    color: var(--text-color, #111827);
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.45;
+}
+
+.dco-order-list .dco-card-edge-color {
+    box-shadow: inset 3px 0 0 var(--primary, #2490ef);
+}
+
+.dco-order-list .dco-card-wide-field {
+    grid-column: 1 / -1;
+}
+
+.dco-order-list .dco-card-actions {
+    gap: 8px;
+}
+
+.dco-order-list .dco-card-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: var(--dco-touch-target);
+    border-radius: 11px;
+    font-weight: 750;
+}
+
+.dco-order-list .dco-card-production-action.is-loading {
+    opacity: .75;
+}
+
 /* Keep wide order layouts fluid before the mobile transformation is needed. */
 @media (max-width: 1200px) {
     .dco-operator-form .dco-ui-card {

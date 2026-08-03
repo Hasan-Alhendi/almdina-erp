@@ -202,5 +202,7 @@ jobs:
           node almdina_erp/tests/js/sketch_renderer.test.js
           node almdina_erp/tests/js/shape_output_contract.test.js
           node almdina_erp/tests/js/mobile_piece_cards.test.js
+          node almdina_erp/tests/js/order_list_cards.test.js
+          node almdina_erp/tests/js/shop_floor_quick_actions.test.js
           node almdina_erp/tests/test_special_shape_smoothing.js
           node almdina_erp/tests/test_shape_print.js

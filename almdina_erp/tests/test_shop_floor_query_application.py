@@ -123,10 +123,14 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         repository.orders = {
             "DCO-1": {
                 "customer": "Customer",
+                "board_description": "MDF أبيض 18 مم",
+                "edge_color": "أبيض",
                 "status": "At Drawing",
                 "production_path": "Drawing",
                 "current_department": "رسم",
                 "department_status": "قيد العمل",
+                "current_production_stage": "PST-CURRENT",
+                "drawing_dxf_status": "Approved by Drawing",
                 "revision": 2,
             }
         }
@@ -136,6 +140,10 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual([row["name"] for row in rows], ["PST-CURRENT"])
         self.assertEqual(rows[0]["can_handoff_to"], "CNC")
         self.assertEqual(rows[0]["department_label"], "رسم")
+        self.assertEqual(rows[0]["edge_color"], "أبيض")
+        self.assertEqual(rows[0]["board_description"], "MDF أبيض 18 مم")
+        self.assertTrue(rows[0]["can_handoff_stage"])
+        self.assertFalse(rows[0]["can_start_stage"])
         self.assertEqual(repository.last_inbox_args, (repository.user, False))
 
     def test_guest_ungranted_and_unassigned_order_are_rejected(self) -> None:

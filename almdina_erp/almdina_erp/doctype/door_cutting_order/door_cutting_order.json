@@ -40,7 +40,7 @@
     {"default":"122","fieldname":"board_width_cm","fieldtype":"Float","label":"Board Width (CM)","non_negative":1,"reqd":1},
     {"fieldname":"cutting_settings_section","fieldtype":"Section Break","label":"Order Material and Cost Settings"},
     {"fieldname":"default_edge_type","fieldtype":"Link","label":"Default Edge Type","options":"Edge Banding Type"},
-    {"description":"Defaulted from the selected edge type and editable for this order.","fieldname":"edge_color","fieldtype":"Data","label":"Edge Color"},
+    {"description":"Defaulted from the selected edge type and editable for this order.","fieldname":"edge_color","fieldtype":"Data","in_list_view":1,"label":"Edge Color"},
     {"fieldname":"cutting_settings_column","fieldtype":"Column Break"},
     {"default":"1","fieldname":"cutting_cost_per_board_usd","fieldtype":"Currency","label":"Cutting Cost / Board USD","non_negative":1,"permlevel":1},
     {"fieldname":"board_rate_usd","fieldtype":"Currency","label":"Board Rate USD","non_negative":1,"permlevel":1},
