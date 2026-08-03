@@ -16,9 +16,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 def get_permission_context() -> dict[str, Any]:
     """Return the current user's capability context without mutating session data."""
 
+    user = frappe.session.user
     return build_permission_context(
         (),
-        granted_capabilities(user=frappe.session.user),
+        granted_capabilities(user=user),
+        system_administrator=user == "Administrator",
     )
 
 
