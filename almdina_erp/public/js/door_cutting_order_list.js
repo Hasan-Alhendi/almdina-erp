@@ -1,7 +1,6 @@
 (() => {
     "use strict";
 
-    const CARD_MAX_WIDTH = 900;
     const METHODS = Object.freeze({
         doctype: "Door Cutting Order",
     });
@@ -128,21 +127,22 @@
         });
     }
 
-    function availableWidth(root) {
-        const widths = [
-            root && root.getBoundingClientRect ? root.getBoundingClientRect().width : 0,
-            document.documentElement && document.documentElement.clientWidth,
-            window.innerWidth,
-            window.screen && window.screen.width,
-        ].filter(width => Number.isFinite(width) && width >= 280);
-        return widths.length ? Math.min(...widths) : Number.POSITIVE_INFINITY;
+    function isPhoneLayout(root) {
+        const responsiveDevice = window.AlmdinaResponsiveDevice;
+        return Boolean(
+            responsiveDevice
+            && typeof responsiveDevice.isPhoneLayout === "function"
+            && responsiveDevice.isPhoneLayout(root)
+        );
     }
 
     function applyCardLayoutClass(listview) {
         const root = rootNode(listview);
-        if (!root) return;
+        if (!root) return false;
+        const enabled = isPhoneLayout(root);
         root.classList.add("dco-order-list");
-        root.classList.toggle("dco-order-card-layout", availableWidth(root) <= CARD_MAX_WIDTH);
+        root.classList.toggle("dco-order-card-layout", enabled);
+        return enabled;
     }
 
     function orderDocuments(listview) {
@@ -205,6 +205,7 @@
     }
 
     function field(label, value, className = "") {
+        if (!String(value ?? "").trim()) return "";
         return `
             <div class="dco-card-field ${className}">
                 <span>${escapeHtml(__(label))}</span>
@@ -218,26 +219,41 @@
         const quickActions = window.AlmdinaShopFloorQuickActions;
         const action = quickActions && quickActions.actionFor(context);
         const actionClass = action && action.indicator === "success" ? "btn-success" : "btn-primary";
+        const department = String(doc.current_department || "").trim() || __("لم يبدأ الإنتاج");
+        const departmentStatus = String(doc.department_status || "").trim() || __("غير مسند");
+        const assignee = String(doc.current_assignee || "").trim();
         return `
             <article class="dco-mobile-order-card" data-order-name="${escapeHtml(doc.name)}">
                 <header class="dco-card-header">
-                    <div class="dco-card-identity">
-                        <button type="button" class="dco-card-order-link" aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(doc.name)}">
-                            ${escapeHtml(doc.name)}
-                        </button>
-                        <span class="dco-card-customer">${escapeHtml(displayValue(doc.customer))}</span>
+                    <div class="dco-card-leading">
+                        ${hasSelection ? `<input type="checkbox" class="dco-card-select" aria-label="${escapeHtml(__("تحديد الطلب"))} ${escapeHtml(doc.name)}">` : ""}
+                        <div class="dco-card-identity">
+                            <button type="button" class="dco-card-order-link" aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(doc.name)}">
+                                ${escapeHtml(doc.name)}
+                            </button>
+                            <span class="dco-card-customer">${escapeHtml(displayValue(doc.customer))}</span>
+                        </div>
                     </div>
                     <div class="dco-card-header-actions">
                         <span class="dco-card-status ${statusTone(doc.status)}">${escapeHtml(statusLabel(doc))}</span>
-                        ${hasSelection ? `<input type="checkbox" class="dco-card-select" aria-label="${escapeHtml(__("تحديد الطلب"))} ${escapeHtml(doc.name)}">` : ""}
                     </div>
                 </header>
+                <section class="dco-card-workflow" aria-label="${escapeHtml(__("حالة الإنتاج"))}">
+                    <div class="dco-card-workflow-main">
+                        <span class="dco-card-workflow-label">${escapeHtml(__("المرحلة الحالية"))}</span>
+                        <b class="dco-card-workflow-value">${escapeHtml(department)}</b>
+                    </div>
+                    <span class="dco-card-stage-status">${escapeHtml(departmentStatus)}</span>
+                    ${assignee ? `
+                        <div class="dco-card-assignee">
+                            <span class="dco-card-assignee-label">${escapeHtml(__("العامل"))}</span>
+                            <b class="dco-card-assignee-value">${escapeHtml(assignee)}</b>
+                        </div>
+                    ` : ""}
+                </section>
                 <div class="dco-card-fields">
+                    ${field("صنف اللوح", doc.board_description, "dco-card-wide-field")}
                     ${field("لون القشاط", doc.edge_color, "dco-card-edge-color")}
-                    ${field("صنف اللوح", doc.board_description)}
-                    ${field("القسم الحالي", doc.current_department)}
-                    ${field("حالة المرحلة", doc.department_status)}
-                    ${field("العامل", doc.current_assignee)}
                     ${field("تاريخ الطلب", dateLabel(doc.order_date))}
                     ${field("مسار الإنتاج", productionPathLabel(doc.production_path), "dco-card-wide-field")}
                 </div>
@@ -288,14 +304,17 @@
     function renderMobileCards(listview) {
         const root = rootNode(listview);
         if (!root) return;
-        applyCardLayoutClass(listview);
-        const docs = orderDocuments(listview);
         const containers = [...root.querySelectorAll(".list-row-container")];
         containers.forEach((container, index) => {
             container.classList.remove("dco-order-card-container");
             const previous = [...container.children]
                 .find(child => child.classList.contains("dco-mobile-order-card"));
             if (previous) previous.remove();
+        });
+        if (!applyCardLayoutClass(listview)) return;
+
+        const docs = orderDocuments(listview);
+        containers.forEach((container, index) => {
             const fallback = (listview.data || [])[index];
             const name = rowDocumentName(container, fallback);
             const doc = docs.get(name) || fallback;
@@ -313,7 +332,11 @@
     function installResponsiveObserver(listview) {
         const root = rootNode(listview);
         if (!root || listview._dcoResponsiveObserverInstalled) return;
-        const refreshLayout = () => applyCardLayoutClass(listview);
+        const refreshLayout = () => {
+            const wasPhoneLayout = root.classList.contains("dco-order-card-layout");
+            const needsPhoneLayout = isPhoneLayout(root);
+            if (wasPhoneLayout !== needsPhoneLayout) renderMobileCards(listview);
+        };
         if (typeof ResizeObserver === "function") {
             listview._dcoResponsiveObserver = new ResizeObserver(refreshLayout);
             listview._dcoResponsiveObserver.observe(root);
@@ -322,11 +345,38 @@
         listview._dcoResponsiveObserverInstalled = true;
     }
 
+    function installRowsObserver(listview) {
+        if (listview._dcoRowsObserverInstalled || typeof MutationObserver !== "function") return;
+        const root = rootNode(listview);
+        const result = root && root.querySelector(".result");
+        if (!result) return;
+
+        let scheduled = false;
+        const observer = new MutationObserver(mutations => {
+            const frappeRowsAdded = mutations.some(mutation =>
+                [...mutation.addedNodes].some(node =>
+                    node.nodeType === 1
+                    && (node.matches(".list-row-container") || node.querySelector(".list-row-container"))
+                )
+            );
+            if (!frappeRowsAdded || scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(() => {
+                scheduled = false;
+                renderMobileCards(listview);
+            });
+        });
+        observer.observe(result, { childList: true, subtree: true });
+        listview._dcoRowsObserver = observer;
+        listview._dcoRowsObserverInstalled = true;
+    }
+
     function schedule(listview) {
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
+        installRowsObserver(listview);
         applySearchHint(listview);
         renderMobileCards(listview);
         requestAnimationFrame(() => {
@@ -374,6 +424,7 @@
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         buildCard,
+        isPhoneLayout,
         quickActionContext,
         renderMobileCards,
     });

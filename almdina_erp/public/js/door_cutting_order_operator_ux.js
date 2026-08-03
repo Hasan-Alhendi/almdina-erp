@@ -416,9 +416,9 @@
                 <div class="dco-fast-entry-toolbar">
                     <div class="dco-fast-help">
                         <b>${isArabic() ? "إدخال سريع:" : "Fast entry:"}</b>
-                        <span>${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
-                        <span>${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
-                        <span>${isArabic() ? "في الدرفة الخاصة: جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية." : "For a special door, selected edge sides are preliminary and feed the estimate."}</span>
+                        <span class="dco-keyboard-flow">${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
+                        <span class="dco-help-secondary">${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
+                        <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية." : "For a special door, selected edge sides are preliminary and feed the estimate."}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
                 </div>

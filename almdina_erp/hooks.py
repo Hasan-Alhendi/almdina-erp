@@ -24,6 +24,7 @@ after_migrate = "almdina_erp.lifecycle.after_migrate"
 
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
+    "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",

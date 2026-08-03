@@ -4,6 +4,10 @@ const assert = require("assert");
 const fs = require("fs");
 const vm = require("vm");
 
+const responsiveSource = fs.readFileSync(
+    "almdina_erp/public/js/responsive_device.js",
+    "utf8"
+);
 const source = fs.readFileSync(
     "almdina_erp/public/js/door_cutting_order_list.js",
     "utf8"
@@ -24,7 +28,7 @@ const context = {
     },
     window: {
         innerWidth: 390,
-        screen: { width: 390 },
+        screen: { width: 390, height: 844 },
         AlmdinaShopFloorQuickActions: {
             actionFor(actionContext) {
                 return actionContext.canStart
@@ -37,6 +41,7 @@ const context = {
 };
 context.window.window = context.window;
 vm.createContext(context);
+vm.runInContext(responsiveSource, context);
 vm.runInContext(source, context);
 
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
@@ -56,11 +61,20 @@ const doc = {
 
 const html = api.buildCard(doc, true);
 assert(html.includes('class="dco-mobile-order-card"'), "the mobile row must be a real card");
+assert(html.includes('class="dco-card-workflow"'), "production state must have a dedicated visual group");
 assert(html.includes("أسود"), "the card must show edge color");
 assert(html.includes("MDF أبيض 18 مم"), "the card must show the board description");
 assert(html.includes("بدء العمل"), "the assigned worker must get the valid quick action");
 assert(html.includes("فتح الطلب"), "the card must retain a clear detail action");
 assert(!html.includes("<select"), "the card must not expose an arbitrary status selector");
+
+const narrowRoot = { getBoundingClientRect: () => ({ width: 340 }) };
+assert.strictEqual(api.isPhoneLayout(narrowRoot), true, "a real phone must use order cards");
+context.document.documentElement.clientWidth = 700;
+context.window.innerWidth = 700;
+context.window.screen.width = 1366;
+context.window.screen.height = 768;
+assert.strictEqual(api.isPhoneLayout(narrowRoot), false, "a laptop must retain the original list table");
 
 const otherWorker = { ...doc, current_assignee: "other@example.com" };
 assert.strictEqual(api.quickActionContext(otherWorker).canStart, false);

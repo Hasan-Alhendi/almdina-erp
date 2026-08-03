@@ -4,12 +4,19 @@ const assert = require("assert");
 const fs = require("fs");
 const vm = require("vm");
 
+const responsiveSource = fs.readFileSync(
+    "almdina_erp/public/js/responsive_device.js",
+    "utf8"
+);
 const source = fs.readFileSync(
     "almdina_erp/public/js/door_cutting_order_mobile_cards_ux.js",
     "utf8"
 );
+const cardCss = fs.readFileSync(
+    "almdina_erp/public/css/door_cutting_order_responsive.css",
+    "utf8"
+);
 
-const installed = new Map();
 const handlers = {};
 const rootClasses = new Set();
 let rootWidth = 390;
@@ -42,17 +49,6 @@ const context = {
     console,
     document: {
         documentElement: { clientWidth: 390 },
-        head: {
-            appendChild(node) {
-                installed.set(node.id, node);
-            },
-        },
-        createElement() {
-            return { id: "", textContent: "" };
-        },
-        getElementById(id) {
-            return installed.get(id) || null;
-        },
     },
     frappe: {
         ui: {
@@ -77,6 +73,7 @@ const context = {
 };
 context.window.window = context.window;
 vm.createContext(context);
+vm.runInContext(responsiveSource, context);
 vm.runInContext(source, context);
 
 const frm = {
@@ -89,11 +86,10 @@ const frm = {
 
 handlers.refresh(frm);
 assert(rootClasses.has("dco-mobile-piece-cards"), "a phone screen must force card rows");
-assert(installed.has("dco-mobile-piece-cards-css"), "card CSS must be installed from doctype source");
-const cardCss = installed.get("dco-mobile-piece-cards-css").textContent;
-assert(cardCss.includes("grid-template-columns:repeat(6,minmax(0,1fr))"), "phone cards must keep a compact six-track grid");
-assert(cardCss.includes("--dco-compact-control-height:38px"), "phone controls must use the compact height");
-assert(!cardCss.includes("grid-template-columns:1fr;\n            }\n            .dco-mobile-piece-cards .dco-fast-table tbody td"), "phone cards must not collapse every field into one long column");
+assert(cardCss.includes("grid-template-columns: repeat(6, minmax(0, 1fr))"), "phone cards must use a structured six-track grid");
+assert(cardCss.includes("--dco-piece-control-height: 42px"), "phone controls must remain compact and usable");
+assert(cardCss.includes("grid-template-columns: repeat(2, minmax(0, 1fr)) !important"), "edge choices must remain readable on a narrow phone");
+assert(cardCss.includes(".dco-help-secondary"), "secondary desktop help must be hidden in the mobile surface");
 
 context.document.documentElement.clientWidth = 700;
 context.window.innerWidth = 700;
