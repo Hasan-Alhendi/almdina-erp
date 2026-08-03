@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 )
 
 
+DESKTOP_PAGE_ROUTE = "desktop"
 WORKSPACE_MAIN = "Almdina ERP"
 WORKSPACE_MAIN_ROUTE = "almdina-erp"
 WORKSPACE_SHOP_FLOOR = "Shop Floor"
@@ -130,9 +131,11 @@ def _profile(granted: frozenset[str]) -> str:
 
 def build_navigation_context(
     granted_capabilities: Iterable[str] | None,
+    *,
+    system_administrator: bool = False,
 ) -> dict[str, Any]:
     granted = normalize_capabilities(granted_capabilities)
-    active = bool(granted)
+    active = bool(granted) or system_administrator
     has_orders = _intersects(granted, ORDER_CAPABILITIES)
     has_costing = _intersects(granted, _FINANCIAL_CAPABILITIES)
     has_planning = _intersects(granted, PLANNING_CAPABILITIES)
@@ -156,6 +159,7 @@ def build_navigation_context(
 
     operator_only = (
         active
+        and not system_administrator
         and _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES)
         and not _intersects(
             granted,
@@ -192,19 +196,21 @@ def build_navigation_context(
         if has_permissions_admin:
             workspaces.append(WORKSPACE_GO_LIVE)
 
-    # Frappe v16 renders an empty page when /desk has no sub-route.  Always
-    # provide a real landing route for active Almdina users.  Operators keep
-    # their focused inbox; all other profiles land on the main factory workspace.
-    home_page = "shop-floor-inbox" if operator_only else WORKSPACE_MAIN_ROUTE
-    default_route = (
-        "/app/shop-floor-inbox"
-        if operator_only
-        else f"/desk/{WORKSPACE_MAIN_ROUTE}"
-    )
+    if system_administrator:
+        home_page = DESKTOP_PAGE_ROUTE
+        default_route = f"/desk/{DESKTOP_PAGE_ROUTE}"
+    elif operator_only:
+        home_page = "shop-floor-inbox"
+        default_route = "/app/shop-floor-inbox"
+    else:
+        home_page = WORKSPACE_MAIN_ROUTE
+        default_route = f"/desk/{WORKSPACE_MAIN_ROUTE}"
 
     return {
         "shared_shell": active,
-        "app_only": active,
+        # The built-in Administrator keeps the complete Frappe Desktop, apps and
+        # workspace registry. Every other Almdina profile stays inside the factory app.
+        "app_only": active and not system_administrator,
         "profile": _profile(granted),
         "home_page": home_page if active else "",
         "default_route": default_route if active else "",
@@ -226,6 +232,7 @@ def build_navigation_context(
 
 
 __all__ = [
+    "DESKTOP_PAGE_ROUTE",
     "WORKSPACE_CONTROL_CENTER",
     "WORKSPACE_GO_LIVE",
     "WORKSPACE_MAIN",
