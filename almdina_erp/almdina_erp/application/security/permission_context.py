@@ -11,24 +11,30 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     normalize_capabilities,
 )
 
-PERMISSION_CONTEXT_VERSION = 4
+PERMISSION_CONTEXT_VERSION = 5
 
 
 def build_permission_context(
     roles: Iterable[str] | None,
     granted_capabilities: Iterable[str] | None,
+    *,
+    system_administrator: bool = False,
 ) -> dict[str, Any]:
     """Build the stable permission and shared-shell navigation context.
 
     ``roles`` remains in the signature for backward compatibility with older
     adapters, but it is intentionally ignored. Navigation, page presentation
-    and actions are derived exclusively from administrator-managed capability
-    grants.
+    and actions are derived from administrator-managed capability grants. The
+    built-in Frappe Administrator is identified separately so it can retain the
+    complete Desktop while ordinary System Manager users remain capability-bound.
     """
 
     del roles
     normalized_capabilities = normalize_capabilities(granted_capabilities)
-    navigation = build_navigation_context(normalized_capabilities)
+    navigation = build_navigation_context(
+        normalized_capabilities,
+        system_administrator=system_administrator,
+    )
     return {
         "version": PERMISSION_CONTEXT_VERSION,
         "profile": navigation["profile"],
