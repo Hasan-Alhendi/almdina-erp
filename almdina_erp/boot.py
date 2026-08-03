@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 
 ALMDINA_APP = "almdina_erp"
 ALMDINA_MODULE = "Almdina ERP"
+ALMDINA_WORKSPACE_ROUTE = "/desk/almdina-erp"
 SYSTEM_ADMINISTRATOR = "Administrator"
 
 
@@ -96,6 +97,18 @@ def _filter_apps(bootinfo: dict[str, Any]) -> None:
         bootinfo["apps_data"] = apps_data
 
 
+def _set_almdina_app_route(bootinfo: dict[str, Any], route: str) -> None:
+    app_data = bootinfo.get("app_data")
+    if not isinstance(app_data, list):
+        return
+
+    for app in app_data:
+        if not isinstance(app, dict):
+            continue
+        if (app.get("app_name") or app.get("name")) == ALMDINA_APP:
+            app["app_route"] = route
+
+
 def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
     context = _context()
     navigation = context["navigation"]
@@ -123,6 +136,10 @@ def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
         apps_data = bootinfo.get("apps_data")
         if isinstance(apps_data, dict):
             apps_data["default_path"] = navigation["default_route"]
+    else:
+        # /desk is the Administrator's Desktop. The Almdina app card itself must
+        # still enter the factory workspace instead of returning to Desktop.
+        _set_almdina_app_route(bootinfo, ALMDINA_WORKSPACE_ROUTE)
 
 
 def boot_session(bootinfo: dict[str, Any]) -> None:
