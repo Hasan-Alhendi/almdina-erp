@@ -34,6 +34,7 @@ jobs:
             almdina_erp.tests.test_legacy_permission_bootstrap \
             almdina_erp.tests.test_order_tab_permissions_ux \
             almdina_erp.tests.test_routing_migration_phase \
+            almdina_erp.tests.test_shared_shell_workspace_boot_order \
             almdina_erp.tests.test_shop_floor_data_policy \
             almdina_erp.tests.test_shop_floor_plan_loading_policy \
             almdina_erp.tests.test_workforce_service_authorization_order \
@@ -46,6 +47,7 @@ jobs:
       - name: Validate changed browser modules
         run: |
           node --check almdina_erp/public/js/permission_context.js
+          node --check almdina_erp/public/js/shared_shell.js
           node --check almdina_erp/public/js/door_cutting_order_cost_presenter.js
           node --check almdina_erp/public/js/door_cutting_order_permission_refresh_ux.js
           node --check almdina_erp/public/js/door_cutting_order_tab_permissions_ux.js
