@@ -5,9 +5,6 @@ from typing import Any
 import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
-from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_STAGE_TYPES
-
-
 def get_stage(stage_name: str) -> Any:
     return frappe.get_doc("Production Stage", stage_name)
 
@@ -16,7 +13,14 @@ def stage_exists(stage_name: str | None) -> bool:
     return bool(stage_name and frappe.db.exists("Production Stage", stage_name))
 
 
-def cancel_non_shop_floor_active_stages(order_name: str) -> None:
+def cancel_active_order_stages(order_name: str) -> None:
+    """Cancel stale order-wide stages before a fresh route is dispatched.
+
+    Exceptional-piece stages are independent work items and must survive the
+    order dispatch. Every other active stage is route work; no stage code is
+    privileged here because routes are administrator-configurable.
+    """
+
     rows = frappe.get_all(
         "Production Stage",
         filters={
@@ -26,7 +30,7 @@ def cancel_non_shop_floor_active_stages(order_name: str) -> None:
         fields=["name", "piece_label", "stage_type"],
     )
     for row in rows:
-        if row.piece_label or row.stage_type in SHOP_FLOOR_STAGE_TYPES:
+        if row.piece_label:
             continue
         frappe.db.set_value(
             "Production Stage",
@@ -42,11 +46,16 @@ def create_stage(
     stage_type: str,
     assignee: str,
     sequence: int,
+    *,
+    department_label: str | None = None,
+    operational_role: str | None = None,
 ) -> Any:
     stage = frappe.new_doc("Production Stage")
     stage.door_cutting_order = order_name
     stage.sequence = sequence
     stage.stage_type = stage_type
+    stage.department_label = department_label or stage_type
+    stage.operational_role = operational_role or ""
     stage.status = "Pending"
     stage.assigned_to = assignee
     stage.insert(ignore_permissions=True)
@@ -183,7 +192,7 @@ def reopen_stage(stage_name: str, *, target_status: str) -> Any:
 
 
 __all__ = [
-    "cancel_non_shop_floor_active_stages",
+    "cancel_active_order_stages",
     "cancel_stage",
     "close_open_pause",
     "complete_stage",

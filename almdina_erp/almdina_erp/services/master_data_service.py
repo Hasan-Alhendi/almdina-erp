@@ -47,6 +47,34 @@ def _permission_flags() -> dict[str, bool]:
     }
 
 
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def search_operational_roles(
+    doctype: str,
+    txt: str,
+    searchfield: str,
+    start: int,
+    page_len: int,
+    filters: dict[str, Any] | None = None,
+) -> list[list[str]]:
+    """Role link query for routing editors without general role administration."""
+
+    del doctype, searchfield, filters
+    require_doctype_capability(Capability.VIEW_PRODUCTION_ROUTINGS)
+    rows = frappe.db.sql(
+        """
+        select name, name
+          from `tabRole`
+         where name like %s
+           and name not in ('All', 'Guest')
+         order by name asc
+         limit %s offset %s
+        """,
+        (f"%{txt or ''}%", max(1, min(cint(page_len or 20), 100)), cint(start)),
+    )
+    return [[str(row[0]), str(row[1])] for row in rows]
+
+
 def _routing_rows() -> list[dict[str, Any]]:
     rows = frappe.get_all(
         "Production Routing",
@@ -58,7 +86,14 @@ def _routing_rows() -> list[dict[str, Any]]:
         stages = frappe.get_all(
             "Production Routing Stage",
             filters={"parent": row.name, "parenttype": "Production Routing"},
-            fields=["sequence", "stage_type", "required", "auto_complete_if_not_applicable"],
+            fields=[
+                "sequence",
+                "stage_type",
+                "department_label",
+                "operational_role",
+                "required",
+                "auto_complete_if_not_applicable",
+            ],
             order_by="sequence asc, idx asc",
         )
         result.append(
@@ -201,5 +236,6 @@ __all__ = [
     "can_open_master_data",
     "delete_master_data_record",
     "get_master_data_console",
+    "search_operational_roles",
     "set_master_data_disabled",
 ]

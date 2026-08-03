@@ -17,6 +17,31 @@ def current_user() -> str:
     return str(frappe.session.user)
 
 
+def assert_enabled_user_has_role(user: str, role: str) -> None:
+    """Ensure an assignee is active and belongs to the configured route role."""
+
+    resolved_user = str(user or "").strip()
+    resolved_role = str(role or "").strip()
+    if not resolved_user:
+        frappe.throw(_("Select a worker."))
+    if not resolved_role:
+        frappe.throw(_("The production stage has no operational role."))
+    if not frappe.db.exists("Role", resolved_role):
+        frappe.throw(_("Operational role {0} does not exist.").format(resolved_role))
+    if not frappe.db.exists("User", resolved_user) or not cint(
+        frappe.db.get_value("User", resolved_user, "enabled")
+    ):
+        frappe.throw(_("User {0} is not an enabled system user.").format(resolved_user))
+    user_roles = set(frappe.get_roles(resolved_user))
+    if resolved_role not in user_roles and resolved_user != "Administrator":
+        frappe.throw(
+            _("User {0} is not assigned to operational role {1}.").format(
+                resolved_user,
+                resolved_role,
+            )
+        )
+
+
 def assert_enabled_user_has_stage_role(user: str, stage_type: str) -> None:
     """Validate operational eligibility for an assignment.
 
@@ -28,15 +53,7 @@ def assert_enabled_user_has_stage_role(user: str, stage_type: str) -> None:
     role = STAGE_ROLE_BY_TYPE.get(stage_type)
     if not role:
         frappe.throw(_("Unsupported shop-floor stage: {0}").format(stage_type))
-    if not user:
-        frappe.throw(_("Select a worker."))
-    if not frappe.db.exists("User", user) or not cint(
-        frappe.db.get_value("User", user, "enabled")
-    ):
-        frappe.throw(_("User {0} is not an enabled system user.").format(user))
-    user_roles = set(frappe.get_roles(user))
-    if role not in user_roles and user != "Administrator":
-        frappe.throw(_("User {0} is not assigned to department {1}.").format(user, role))
+    assert_enabled_user_has_role(user, role)
 
 
 def get_users_for_stage(stage_type: str) -> list[dict[str, str]]:
@@ -69,6 +86,7 @@ def get_users_for_role(role: str) -> list[dict[str, str]]:
 
 __all__ = [
     "STAGE_ROLE_BY_TYPE",
+    "assert_enabled_user_has_role",
     "assert_enabled_user_has_stage_role",
     "current_user",
     "get_users_for_role",

@@ -133,7 +133,11 @@ frappe.pages["factory-master-data"].on_page_load = function (wrapper) {
     }
 
     function routingCard(row) {
-        const stages = (row.stages || []).map(stage => `<span class="amd-stage">${esc(stage.sequence)} · ${esc(__(stage.stage_type || ""))}</span>`).join("");
+        const stages = (row.stages || []).map((stage, index) => `
+            <span class="amd-stage" title="${esc(stage.operational_role || "")}">
+                <b>${esc(index + 1)}</b> · ${esc(stage.department_label || __(stage.stage_type || ""))}
+                <small style="display:block;color:var(--text-muted,#667085);margin-top:2px">${esc(stage.operational_role || __("دون دور"))}</small>
+            </span>`).join('<span style="align-self:center;color:var(--text-muted,#98a2b3)">←</span>');
         return `
             <article class="amd-card">
                 <div class="amd-card-head"><div><h3>${esc(row.label)}</h3><div class="amd-sub">${esc(row.name)}</div></div>${statusBadge(row.disabled)}</div>

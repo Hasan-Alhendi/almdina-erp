@@ -38,8 +38,7 @@ def is_drawing_stage(
     current_stage_type: str | None,
 ) -> bool:
     """Evaluate whether an order is currently handled by the drawing department."""
-    if production_path != "Drawing":
-        return False
+    del production_path  # Route names are configurable; the active stage owns behavior.
     return normalize_status(status) == "At Drawing" or current_stage_type == "Drawing"
 
 

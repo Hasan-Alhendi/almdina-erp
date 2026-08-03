@@ -52,6 +52,11 @@ def get_handoff_workers(stage_name: str) -> list[dict[str, str]]:
 
 
 @frappe.whitelist()
+def get_handoff_context(stage_name: str) -> dict[str, Any]:
+    return _execute(commands.get_handoff_context, stage_name)
+
+
+@frappe.whitelist()
 def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
     return _execute(commands.dispatch_order, order_name, path, assignee)
 
@@ -113,6 +118,7 @@ _validate_path = commands._validate_path
 __all__ = [
     "assert_order_ready_for_dispatch",
     "dispatch_order",
+    "get_handoff_context",
     "get_handoff_workers",
     "handoff_to_next",
     "mark_delivered",

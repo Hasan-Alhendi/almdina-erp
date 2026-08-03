@@ -99,6 +99,8 @@ def ensure_default_stages(
         stage.door_cutting_order = order_name
         stage.sequence = cint(route_row.sequence)
         stage.stage_type = route_row.stage_type
+        stage.department_label = route_row.department_label or route_row.stage_type
+        stage.operational_role = route_row.operational_role or ""
 
         auto_completed = route_row.stage_type == "Review / Preparation" or (
             not applicable and cint(route_row.auto_complete_if_not_applicable)

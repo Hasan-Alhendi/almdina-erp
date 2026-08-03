@@ -98,6 +98,7 @@ doctype_js = {
         "public/js/door_cutting_order_mobile_cards_ux.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
+    "Production Routing": "public/js/production_routing_ux.js",
     "Replacement Piece": [
         "public/js/permission_context.js",
         "public/js/replacement_piece.js",
@@ -210,6 +211,8 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers":
         "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
+    "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_context":
+        "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
     "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order":
         "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order",
     "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order":

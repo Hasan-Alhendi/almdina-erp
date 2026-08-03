@@ -43,6 +43,9 @@ Factory Operations Summary,ملخص حركة المعمل
 Almdina Settings,إعدادات المعمل
 Production Routing,تسلسل مراحل الإنتاج
 Production Routing Stage,مرحلة ضمن تسلسل الإنتاج
+Stage Code,رمز المرحلة
+Department Label,اسم القسم الظاهر
+Operational Role,الدور التشغيلي المؤهل
 Master Data,البيانات الأساسية
 Edge Banding Types,أنواع القشاط
 Edge Banding Type,نوع القشاط

@@ -41,7 +41,7 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         )
         self.assertTrue(
             is_drawing_stage(
-                production_path="Drawing",
+                production_path="Custom Routed Production",
                 status="Production In Progress",
                 current_stage_type="Drawing",
             )
@@ -49,8 +49,8 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         self.assertFalse(
             is_drawing_stage(
                 production_path="CNC",
-                status="At Drawing",
-                current_stage_type="Drawing",
+                status="At CNC",
+                current_stage_type="CNC",
             )
         )
 
@@ -67,12 +67,22 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         blocked_cases = (
             {**allowed, "has_recalculate_permission": False},
             {**allowed, "approved_plan": "PLAN-0001"},
-            {**allowed, "production_path": "CNC"},
             {**allowed, "status": "At CNC", "current_stage_type": "CNC"},
         )
         for case in blocked_cases:
             with self.subTest(case=case):
                 self.assertFalse(can_recalculate_drawing_system_plan(**case))
+
+        self.assertTrue(
+            can_recalculate_drawing_system_plan(
+                **{
+                    **allowed,
+                    "production_path": "Custom Routed Production",
+                    "status": "Production In Progress",
+                    "current_stage_type": "Drawing",
+                }
+            )
+        )
 
     def test_domain_module_has_no_framework_dependency(self) -> None:
         domain_source = (

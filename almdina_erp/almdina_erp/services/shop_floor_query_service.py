@@ -52,7 +52,9 @@ def get_dispatch_options(order_name: str) -> dict[str, Any]:
         first_stage_type = path.pop("first_stage_type")
         path["label"] = _(path["label"])
         path["department"] = _(
-            department_for_stage_type(first_stage_type) or first_stage_type
+            path.get("department")
+            or department_for_stage_type(first_stage_type)
+            or first_stage_type
         )
     return result
 
@@ -60,6 +62,11 @@ def get_dispatch_options(order_name: str) -> dict[str, Any]:
 @frappe.whitelist()
 def get_revert_targets(order_name: str) -> list[dict[str, Any]]:
     return _execute(queries.get_revert_targets, order_name)
+
+
+@frappe.whitelist()
+def get_current_stage_context(order_name: str) -> dict[str, Any]:
+    return _execute(queries.get_current_stage_context, order_name)
 
 
 @frappe.whitelist()
@@ -100,6 +107,7 @@ def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
 
 __all__ = [
     "get_dispatch_options",
+    "get_current_stage_context",
     "get_my_archive",
     "get_my_inbox",
     "get_order_shop_floor_detail",

@@ -8,12 +8,11 @@ import frappe
 from almdina_erp.almdina_erp.application.shop_floor.queries import (
     SHOP_FLOOR_DETAIL_CAPABILITIES,
 )
-from almdina_erp.almdina_erp.domain.orders.lifecycle import (
-    SHOP_FLOOR_STAGE_TYPES,
-    department_for_stage_type,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
+from almdina_erp.almdina_erp.infrastructure.frappe import (
+    production_routing_repository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
     document_has_capability,
@@ -38,15 +37,17 @@ class FrappeShopFloorQueryRepository:
         user = self.current_user()
         full_name = frappe.get_cached_value("User", user, "full_name") or user
         roles = set(frappe.get_roles(user))
-        departments = [
-            department_for_stage_type(stage_type) or stage_type
-            for stage_type, role in shop_floor_authorization.STAGE_ROLE_BY_TYPE.items()
-            if role in roles or user == "Administrator"
-        ]
+        departments: set[str] = set()
+        for route in production_routing_repository.list_active_routes():
+            departments.update(
+                stage.department_label
+                for stage in route.stages
+                if stage.operational_role in roles or user == "Administrator"
+            )
         return {
             "user": user,
             "full_name": full_name,
-            "departments": departments,
+            "departments": sorted(departments),
         }
 
     def global_capabilities(self) -> frozenset[str]:
@@ -65,10 +66,16 @@ class FrappeShopFloorQueryRepository:
             if document_has_capability(order, capability)
         )
 
+    def list_active_routes(self):
+        return production_routing_repository.list_active_routes()
+
+    def get_production_route(self, route_name: str):
+        return production_routing_repository.get_route(route_name)
+
     def list_inbox_stages(self, *, user: str, is_admin: bool) -> list[Any]:
         filters: dict[str, Any] = {
             "status": ["in", ["Pending", "In Progress", "Paused"]],
-            "stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
+            "piece_label": ["is", "not set"],
         }
         if not is_admin:
             filters["assigned_to"] = user
@@ -79,6 +86,8 @@ class FrappeShopFloorQueryRepository:
                 "name",
                 "door_cutting_order",
                 "stage_type",
+                "department_label",
+                "operational_role",
                 "status",
                 "assigned_to",
                 "sequence",
@@ -90,7 +99,7 @@ class FrappeShopFloorQueryRepository:
     def list_archive_stages(self, *, user: str, is_admin: bool) -> list[Any]:
         filters: dict[str, Any] = {
             "status": "Completed",
-            "stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
+            "piece_label": ["is", "not set"],
         }
         if not is_admin:
             filters["assigned_to"] = user
@@ -101,6 +110,8 @@ class FrappeShopFloorQueryRepository:
                 "name",
                 "door_cutting_order",
                 "stage_type",
+                "department_label",
+                "operational_role",
                 "status",
                 "assigned_to",
                 "sequence",
@@ -165,7 +176,6 @@ class FrappeShopFloorQueryRepository:
                 {
                     "door_cutting_order": order.name,
                     "assigned_to": self.current_user(),
-                    "stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
                 },
             )
         )
@@ -175,11 +185,12 @@ class FrappeShopFloorQueryRepository:
             "Production Stage",
             filters={
                 "door_cutting_order": order_name,
-                "stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
             },
             fields=[
                 "name",
                 "stage_type",
+                "department_label",
+                "operational_role",
                 "status",
                 "assigned_to",
                 "sequence",
@@ -194,7 +205,14 @@ class FrappeShopFloorQueryRepository:
         return frappe.db.get_value(
             "Production Stage",
             stage_name,
-            ["name", "status", "stage_type", "assigned_to"],
+            [
+                "name",
+                "status",
+                "stage_type",
+                "department_label",
+                "operational_role",
+                "assigned_to",
+            ],
             as_dict=True,
         )
 
@@ -248,12 +266,13 @@ class FrappeShopFloorQueryRepository:
             "Production Stage",
             filters={
                 "door_cutting_order": order_name,
-                "stage_type": ["in", list(SHOP_FLOOR_STAGE_TYPES)],
                 "status": ["in", ["Completed", "In Progress", "Paused", "Pending"]],
             },
             fields=[
                 "name",
                 "stage_type",
+                "department_label",
+                "operational_role",
                 "status",
                 "sequence",
                 "assigned_to",
@@ -262,8 +281,16 @@ class FrappeShopFloorQueryRepository:
             order_by="sequence asc",
         )
 
-    def get_users_for_stage(self, stage_type: str) -> list[dict[str, str]]:
-        return shop_floor_authorization.get_users_for_stage(stage_type)
+    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
+        return shop_floor_authorization.get_users_for_role(role)
+
+    def default_production_route(self) -> str | None:
+        if not frappe.db.exists("DocType", "Almdina ERP Settings"):
+            return None
+        return frappe.db.get_single_value(
+            "Almdina ERP Settings",
+            "default_production_routing",
+        ) or None
 
     @staticmethod
     def _parse_snapshot(raw: Any) -> dict[str, Any]:

@@ -41,9 +41,8 @@ required_piece_qty = order_tracking_repository.required_piece_qty
 
 get_stage = production_stage_repository.get_stage
 stage_exists = production_stage_repository.stage_exists
-cancel_non_shop_floor_active_stages = (
-    production_stage_repository.cancel_non_shop_floor_active_stages
-)
+cancel_active_order_stages = production_stage_repository.cancel_active_order_stages
+cancel_non_shop_floor_active_stages = cancel_active_order_stages
 get_revert_stage_candidates = (
     production_stage_repository.list_revert_stage_candidates
 )
@@ -107,6 +106,7 @@ __all__ = [
     "STAGE_ADMIN_ROLES",
     "STAGE_ROLE_BY_TYPE",
     "assert_enabled_user_has_stage_role",
+    "cancel_active_order_stages",
     "cancel_non_shop_floor_active_stages",
     "close_open_pause",
     "create_stage",

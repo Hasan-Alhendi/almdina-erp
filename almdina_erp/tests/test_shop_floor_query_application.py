@@ -5,6 +5,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.shop_floor import queries
+from almdina_erp.almdina_erp.domain.orders.production_routing import (
+    ProductionRoute,
+    RoutingStage,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
@@ -25,6 +29,25 @@ class FakeRepository:
         self.can_view = True
         self.dual_plans = True
         self.revert_rows: list[Any] = []
+        self.routes = {
+            "Sharyoun": ProductionRoute(
+                "Sharyoun",
+                "شريون",
+                (
+                    RoutingStage(10, "Sharyoun", "شريون", "عامل شريون"),
+                    RoutingStage(20, "Sanding", "تقشيط", "عامل تقشيط"),
+                ),
+            ),
+            "Drawing": ProductionRoute(
+                "Drawing",
+                "رسم وCNC",
+                (
+                    RoutingStage(10, "Drawing", "رسم", "عامل رسم"),
+                    RoutingStage(20, "CNC", "CNC", "عامل CNC"),
+                    RoutingStage(30, "Sanding", "تقشيط", "عامل تقشيط"),
+                ),
+            ),
+        }
 
     def current_user(self) -> str:
         return self.user
@@ -45,6 +68,12 @@ class FakeRepository:
 
     def capabilities_for_order(self, order: Any) -> frozenset[str]:
         return frozenset(self.capabilities)
+
+    def list_active_routes(self) -> list[ProductionRoute]:
+        return list(self.routes.values())
+
+    def get_production_route(self, route_name: str) -> ProductionRoute:
+        return self.routes[route_name]
 
     def list_inbox_stages(self, *, user: str, is_admin: bool) -> list[Any]:
         self.last_inbox_args = (user, is_admin)
@@ -83,8 +112,11 @@ class FakeRepository:
     def list_revert_stages(self, order_name: str) -> list[Any]:
         return list(self.revert_rows)
 
-    def get_users_for_stage(self, stage_type: str) -> list[dict[str, str]]:
-        return [{"name": f"{stage_type.lower()}@example.com", "full_name": stage_type}]
+    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
+        return [{"name": f"{role.lower()}@example.com", "full_name": role}]
+
+    def default_production_route(self) -> str | None:
+        return "Sharyoun"
 
 
 class TestShopFloorQueryApplication(unittest.TestCase):
@@ -231,6 +263,36 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         detail = queries.get_order_detail(repository, "DCO-2")
         self.assertFalse(detail["can_recalculate_drawing_plan"])
 
+    def test_custom_route_drawing_stage_keeps_drawing_recalculation(self) -> None:
+        repository = FakeRepository()
+        repository.routes["Custom Route"] = ProductionRoute(
+            "Custom Route",
+            "مسار مخصص",
+            (RoutingStage(10, "Drawing", "التصميم", "مصمم مخصص"),),
+        )
+        repository.order = SimpleNamespace(
+            name="DCO-2",
+            customer="Customer",
+            status="At Drawing",
+            production_path="Custom Route",
+            current_production_stage="PST-2",
+            approved_plan=None,
+            approved_plan_source="System",
+            cutting_plan_json='{"sheets":[{}]}',
+            plan_needs_recalculation=0,
+            drawing_dxf_status="None",
+        )
+        repository.stage_summaries["PST-2"] = {
+            "name": "PST-2",
+            "status": "In Progress",
+            "stage_type": "Drawing",
+            "assigned_to": repository.user,
+        }
+
+        detail = queries.get_order_detail(repository, "DCO-2")
+
+        self.assertTrue(detail["can_recalculate_drawing_plan"])
+
     def test_action_context_denies_another_workers_stage(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
@@ -263,6 +325,34 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             "not_assigned",
         )
         self.assertTrue(detail["stage_snapshot"]["can_reassign_worker"])
+
+    def test_minimal_current_stage_context_uses_server_action_policy(self) -> None:
+        repository = FakeRepository()
+        repository.order = SimpleNamespace(
+            name="DCO-2",
+            status="At CNC",
+            production_path="Drawing",
+            current_production_stage="PST-2",
+            cutting_plan_json='{"sheets":[{}]}',
+            plan_needs_recalculation=0,
+            drawing_dxf_status="Approved by Drawing",
+        )
+        repository.stage_summaries["PST-2"] = {
+            "name": "PST-2",
+            "status": "Pending",
+            "stage_type": "CNC",
+            "assigned_to": repository.user,
+        }
+
+        context = queries.get_current_stage_context(repository, "DCO-2")
+
+        self.assertEqual(context["active_stage_name"], "PST-2")
+        self.assertTrue(context["can_start_stage"])
+        self.assertEqual(
+            [stage["department"] for stage in context["route_stages"]],
+            ["رسم", "CNC", "تقشيط"],
+        )
+        self.assertNotIn("cutting_plan_json", context)
 
     def test_revert_targets_are_unique_and_permission_protected(self) -> None:
         repository = FakeRepository()

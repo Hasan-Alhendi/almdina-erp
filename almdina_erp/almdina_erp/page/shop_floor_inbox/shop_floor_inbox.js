@@ -7,7 +7,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         archive: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_archive",
         detail: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_shop_floor_detail",
         start: "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
-        handoffWorkers: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
+        handoffContext: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
         handoff: "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
         reassignmentWorkers: "almdina_erp.almdina_erp.services.production_worker_service.get_reassignment_workers",
         reassign: "almdina_erp.almdina_erp.services.shop_floor_commands.reassign_worker",
@@ -332,7 +332,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
             actions.push(`<button type="button" class="btn btn-primary start-stage">${__("بدء العمل")}</button>`);
         }
         if (mode === "inbox" && detail.can_handoff_stage) {
-            actions.push(`<button type="button" class="btn btn-success handoff-stage">${context.stageType === "Sanding" ? __("جاهزة للتسليم") : __("إرسال للقسم التالي")}</button>`);
+            actions.push(`<button type="button" class="btn btn-success handoff-stage">${!context.next ? __("جاهزة للتسليم") : __("إرسال للقسم التالي")}</button>`);
         }
         if (mode === "inbox" && detail.can_reassign_worker) {
             actions.push(`<button type="button" class="btn btn-default reassign-worker">${__("تغيير العامل")}</button>`);
@@ -438,8 +438,8 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
     }
 
     function handoffStage(context) {
-        if (context.stageType === "Sanding" || !context.next) {
-            frappe.confirm(__("تأكيد إنهاء التقشيط واعتبار الطلب جاهزًا للتسليم؟"), () => {
+        if (!context.next) {
+            frappe.confirm(__("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"), () => {
                 frappe.call({
                     method: METHODS.handoff,
                     args: { stage_name: context.stage },
@@ -452,17 +452,18 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
             return;
         }
 
-        frappe.call({ method: METHODS.handoffWorkers, args: { stage_name: context.stage } }).then(response => {
-            const workers = response.message || [];
+        frappe.call({ method: METHODS.handoffContext, args: { stage_name: context.stage } }).then(response => {
+            const handoff = response.message || {};
+            const workers = handoff.workers || [];
             if (!workers.length) {
-                frappe.msgprint(__("لا يوجد عمال متاحون للقسم التالي."));
+                frappe.msgprint(__("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [handoff.operational_role || ""]));
                 return;
             }
             frappe.prompt(
                 [{
                     fieldname: "next_assignee",
                     fieldtype: "Select",
-                    label: __("العامل التالي"),
+                    label: `${__("العامل التالي")} — ${handoff.next_department || handoff.next_stage_type || ""}`,
                     options: workerOptions(workers),
                     reqd: 1,
                 }],

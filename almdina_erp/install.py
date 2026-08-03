@@ -215,9 +215,9 @@ def seed_default_routing() -> None:
     routing = frappe.new_doc("Production Routing")
     routing.routing_name = DEFAULT_ROUTING_NAME
     routing.disabled = 0
-    routing.append("stages", {"sequence":10,"stage_type":"Review / Preparation","required":1,"auto_complete_if_not_applicable":1})
-    routing.append("stages", {"sequence":20,"stage_type":"Cutting","required":1,"auto_complete_if_not_applicable":0})
-    routing.append("stages", {"sequence":30,"stage_type":"Edge Banding","required":1,"auto_complete_if_not_applicable":1})
+    routing.append("stages", {"sequence":10,"stage_type":"Review / Preparation","department_label":"مراجعة وتجهيز","operational_role":"Production Manager","required":1,"auto_complete_if_not_applicable":1})
+    routing.append("stages", {"sequence":20,"stage_type":"Cutting","department_label":"قص","operational_role":"Cutting Operator","required":1,"auto_complete_if_not_applicable":0})
+    routing.append("stages", {"sequence":30,"stage_type":"Edge Banding","department_label":"قشاط","operational_role":"Edge Operator","required":1,"auto_complete_if_not_applicable":1})
     routing.insert(ignore_permissions=True)
 
 

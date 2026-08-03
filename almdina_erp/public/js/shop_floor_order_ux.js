@@ -117,7 +117,12 @@
 	}
 
 	function renderProgressSteps(frm) {
-		const steps = PATH_STEPS[frm.doc.production_path];
+		const configured = frm.__almdinaProductionRouteName === frm.doc.production_path && Array.isArray(frm.__almdinaProductionRouteSteps)
+			? frm.__almdinaProductionRouteSteps.map((stage) => stage.department || stage.stage_type).filter(Boolean)
+			: [];
+		const steps = configured.length
+			? [...configured, "تسليم"]
+			: PATH_STEPS[frm.doc.production_path] || (frm.doc.current_department ? [frm.doc.current_department, "تسليم"] : null);
 		if (!steps) return "";
 		const current = STATUS_STEP[frm.doc.status] || frm.doc.current_department || "";
 		const delivered = frm.doc.status === "Delivered";
@@ -222,28 +227,65 @@
 				args: { order_name: frm.doc.name },
 			})
 			.then((response) => {
-				const workers = (response.message && response.message.workers) || {};
+				const payload = response.message || {};
+				const paths = Array.isArray(payload.paths) ? payload.paths : [];
+				const workers = payload.workers || {};
+				if (!paths.length) {
+					frappe.msgprint(__("لا يوجد مسار إنتاج مفعّل. أنشئ مسارًا من البيانات الأساسية أولًا."));
+					return;
+				}
+				const pathOptions = paths.map((path) => ({
+					label: `${path.label} · ${path.stage_count || 0} ${__("مراحل")}`,
+					value: path.value,
+				}));
+				const workerOptions = (path) => (workers[path] || []).map((worker) => ({
+					label: worker.full_name && worker.full_name !== worker.name
+						? `${worker.full_name} — ${worker.name}`
+						: worker.name,
+					value: worker.name,
+				}));
+				const routePreview = (pathName) => {
+					const route = paths.find((row) => row.value === pathName) || paths[0];
+					const stages = (route.stages || []).map((stage, index) => `
+						<span title="${frappe.utils.escape_html(stage.operational_role || "")}" style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;padding:7px 10px;border-radius:12px;background:var(--subtle-fg,#f3f5f7);font-size:12px;font-weight:700">
+							<span>${index + 1}. ${frappe.utils.escape_html(stage.department || stage.stage_type)}</span>
+							<small style="font-weight:500;color:var(--text-muted,#667085)">${frappe.utils.escape_html(stage.operational_role || "")}</small>
+						</span>`).join('<span style="color:var(--text-muted,#98a2b3)">←</span>');
+					return `<div style="direction:rtl;padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:12px;background:var(--fg-color,#fff)">
+						<div style="font-weight:800;margin-bottom:8px">${frappe.utils.escape_html(route.label || route.value)}</div>
+						<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${stages}</div>
+					</div>`;
+				};
+				const firstPath = paths.some((path) => path.value === payload.default_path)
+					? payload.default_path
+					: paths[0].value;
+				const firstWorkers = workerOptions(firstPath);
 				const dialog = new frappe.ui.Dialog({
 					title: __("إرسال للإنتاج"),
+					size: "large",
 					fields: [
 						{
 							fieldname: "path",
 							fieldtype: "Select",
 							label: __("المسار"),
-							options: "Sharyoun\nDrawing",
+							options: pathOptions,
 							reqd: 1,
-							default: "Sharyoun",
+							default: firstPath,
 							onchange() {
-								const list = workers[dialog.get_value("path")] || [];
-								dialog.set_df_property("assignee", "options", list.map((row) => row.name).join("\n"));
-								dialog.set_value("assignee", list[0] ? list[0].name : "");
+								const path = dialog.get_value("path");
+								const list = workerOptions(path);
+								dialog.set_df_property("assignee", "options", list);
+								dialog.set_value("assignee", list[0] ? list[0].value : "");
+								dialog.fields_dict.route_preview.$wrapper.html(routePreview(path));
 							},
 						},
+						{ fieldname: "route_preview", fieldtype: "HTML" },
 						{
 							fieldname: "assignee",
 							fieldtype: "Select",
-							label: __("العامل"),
-							options: (workers.Sharyoun || []).map((row) => row.name).join("\n"),
+							label: __("العامل المسؤول عن أول مرحلة"),
+							options: firstWorkers,
+							default: firstWorkers[0] ? firstWorkers[0].value : "",
 							reqd: 1,
 						},
 					],
@@ -259,6 +301,7 @@
 					},
 				});
 				dialog.show();
+				dialog.fields_dict.route_preview.$wrapper.html(routePreview(firstPath));
 			});
 	}
 
@@ -427,16 +470,37 @@
 
 	function openHandoffDialog(frm, stageName) {
 		frappe.call({
-			method: "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers",
+			method: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
 			args: { stage_name: stageName },
 		}).then((response) => {
-			const workers = response.message || [];
+			const handoff = response.message || {};
+			if (handoff.final_stage) {
+				frappe.confirm(__("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"), () =>
+					callAction(
+						"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
+						{ stage_name: stageName },
+						__("الطلب جاهز للتسليم."),
+						frm
+					)
+				);
+				return;
+			}
+			const workers = handoff.workers || [];
 			if (!workers.length) {
-				frappe.msgprint(__("لا يوجد عمال متاحون للقسم التالي."));
+				frappe.msgprint(__("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [handoff.operational_role || ""]));
 				return;
 			}
 			frappe.prompt(
-				[{ fieldname: "next_assignee", fieldtype: "Select", label: __("العامل التالي"), options: workers.map((worker) => worker.name).join("\n"), reqd: 1 }],
+				[{
+					fieldname: "next_assignee",
+					fieldtype: "Select",
+					label: `${__("العامل التالي")} — ${handoff.next_department || handoff.next_stage_type || ""}`,
+					options: workers.map((worker) => ({
+						label: worker.full_name && worker.full_name !== worker.name ? `${worker.full_name} — ${worker.name}` : worker.name,
+						value: worker.name,
+					})),
+					reqd: 1,
+				}],
 				(values) => callAction(
 					"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
 					{ stage_name: stageName, next_assignee: values.next_assignee },
@@ -490,25 +554,32 @@
 
 	function addWorkerStageButtons(frm) {
 		if (frm.is_new() || !frm.doc.current_production_stage) return;
+		if (!["start_assigned_stage", "handoff_assigned_stage", "reassign_worker"].some((capability) => can(frm, capability))) return;
 		const documentName = frm.doc.name;
 		const stageName = frm.doc.current_production_stage;
-		frappe.db.get_value("Production Stage", stageName, ["status", "stage_type", "assigned_to"]).then((response) => {
+		frappe.call({
+			method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
+			args: { order_name: documentName },
+		}).then((response) => {
 			if (!frm.doc || frm.doc.name !== documentName || frm.doc.current_production_stage !== stageName) return;
 			const stage = response.message || {};
-			const stageStatus = stage.status || "";
-			const stageType = stage.stage_type || frm.doc.current_department;
-			const assignedToMe = Boolean(stage.assigned_to && stage.assigned_to === frappe.session.user);
+			frm.__almdinaProductionRouteName = frm.doc.production_path;
+			frm.__almdinaProductionRouteSteps = Array.isArray(stage.route_stages) ? stage.route_stages : [];
+			renderTrackingStrip(frm);
+			const stageStatus = stage.active_stage_status || "";
+			const assignedTo = stage.active_stage_assigned_to || "";
+			const assignedToMe = Boolean(assignedTo && assignedTo === frappe.session.user);
 
-			if (ACTIVE_STAGE_STATUSES.has(stageStatus) && can(frm, "reassign_worker")) {
+			if (stage.can_reassign_worker && ACTIVE_STAGE_STATUSES.has(stageStatus) && can(frm, "reassign_worker")) {
 				frm.add_custom_button(
 					__("تغيير العامل"),
-					() => openReassignDialog(frm, stageName, stage.assigned_to),
+					() => openReassignDialog(frm, stageName, assignedTo),
 					PRODUCTION_ACTION_GROUP
 				);
 			}
 
 			if (!assignedToMe) return;
-			if (stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
+			if (stage.can_start_stage && stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
 				frm.add_custom_button(__("بدء العمل"), () =>
 					callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
@@ -517,20 +588,8 @@
 						frm
 					), PRODUCTION_ACTION_GROUP);
 			}
-			if (!["In Progress", "Paused"].includes(stageStatus) || !can(frm, "handoff_assigned_stage")) return;
-			const isSanding = stageType === "Sanding" || frm.doc.current_department === "تقشيط";
-			frm.add_custom_button(isSanding ? __("جاهزة للتسليم") : __("إرسال للقسم التالي"), () => {
-				if (isSanding) {
-					frappe.confirm(__("تأكيد إنهاء التقشيط؟"), () =>
-						callAction(
-							"almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next",
-							{ stage_name: stageName },
-							__("الطلب جاهز للتسليم."),
-							frm
-						)
-					);
-					return;
-				}
+			if (!stage.can_handoff_stage || !["In Progress", "Paused"].includes(stageStatus) || !can(frm, "handoff_assigned_stage")) return;
+			frm.add_custom_button(__("إنهاء وإرسال"), () => {
 				openHandoffDialog(frm, stageName);
 			}, PRODUCTION_ACTION_GROUP);
 		});
@@ -544,6 +603,7 @@
 			"بدء العمل",
 			"إرسال للقسم التالي",
 			"جاهزة للتسليم",
+			"إنهاء وإرسال",
 			"تغيير العامل",
 		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
 	}

@@ -136,10 +136,11 @@ async function flushPromises() {
     // the order opened while that lookup was in flight.
     frm.doc.current_production_stage = "STAGE-DRAWING";
     const stageLookup = fakeWindow.AlmdinaDrawingPlanUX.ensureStageType(frm);
-    assert.equal(databaseCalls.length, 2);
+    assert.equal(calls.length, 2);
+    assert.equal(databaseCalls.length, 1);
     frm.doc.name = "DCO-2026-00004";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    databaseCalls[1].resolve({ message: { stage_type: "Drawing" } });
+    calls[1].resolve({ message: { active_stage_type: "Drawing" } });
     assert.equal(await stageLookup, false);
     assert.equal(frm.__almdina_stage_type, null);
 

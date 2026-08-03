@@ -82,7 +82,6 @@ def _assigned_order_subquery(user: str) -> str:
     return (
         " select distinct door_cutting_order from `tabProduction Stage`"
         f" where assigned_to = {frappe.db.escape(user)}"
-        " and stage_type in ('Sharyoun','Drawing','CNC','Sanding')"
     )
 
 
@@ -95,7 +94,6 @@ def _assigned_order_exists(user: str, order_name: str | None) -> bool:
             {
                 "door_cutting_order": order_name,
                 "assigned_to": user,
-                "stage_type": ["in", ["Sharyoun", "Drawing", "CNC", "Sanding"]],
             },
         )
     )

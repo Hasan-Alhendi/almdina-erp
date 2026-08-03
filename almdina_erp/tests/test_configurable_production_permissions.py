@@ -81,10 +81,12 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
     def test_reassignment_has_a_thin_server_boundary(self) -> None:
         command_source = COMMAND_SERVICE.read_text(encoding="utf-8")
         worker_source = WORKER_SERVICE.read_text(encoding="utf-8")
+        application_source = APPLICATION_COMMANDS.read_text(encoding="utf-8")
         self.assertIn("def reassign_worker", command_source)
         self.assertIn("commands.reassign_worker", command_source)
-        self.assertIn("Capability.REASSIGN_WORKER", worker_source)
-        self.assertIn("decide_production_action", worker_source)
+        self.assertIn("commands.get_reassignment_workers", worker_source)
+        self.assertIn("Capability.REASSIGN_WORKER", application_source)
+        self.assertNotIn("get_users_for_stage", worker_source)
         self.assertIn("frappe.PermissionError", worker_source)
 
     def test_query_service_publishes_server_action_context(self) -> None:

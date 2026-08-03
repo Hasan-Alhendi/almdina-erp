@@ -39,10 +39,9 @@ def _value(order: Any, fieldname: str) -> Any:
 
 
 def _current_stage_type(order: Any) -> str | None:
-    production_path = _value(order, "production_path")
     status = order_status(order)
-    if production_path != "Drawing" or status == "At Drawing":
-        return None
+    if status == "At Drawing":
+        return "Drawing"
 
     stage_name = _value(order, "current_production_stage")
     if not stage_name:

@@ -9,6 +9,10 @@ from almdina_erp.almdina_erp.application.shop_floor import commands
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     PRODUCTION_ACTIONS,
 )
+from almdina_erp.almdina_erp.domain.orders.production_routing import (
+    ProductionRoute,
+    RoutingStage,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
@@ -19,6 +23,25 @@ class FakeShopFloorCommandRepository:
         self.orders: dict[str, commands.OrderState] = {}
         self.stages: dict[str, commands.StageState] = {}
         self.users: dict[str, list[dict[str, str]]] = {}
+        self.routes = {
+            "Sharyoun": ProductionRoute(
+                "Sharyoun",
+                "شريون",
+                (
+                    RoutingStage(10, "Sharyoun", "شريون", "عامل شريون"),
+                    RoutingStage(20, "Sanding", "تقشيط", "عامل تقشيط"),
+                ),
+            ),
+            "Drawing": ProductionRoute(
+                "Drawing",
+                "رسم وCNC",
+                (
+                    RoutingStage(10, "Drawing", "رسم", "عامل رسم"),
+                    RoutingStage(20, "CNC", "CNC", "عامل CNC"),
+                    RoutingStage(30, "Sanding", "تقشيط", "عامل تقشيط"),
+                ),
+            ),
+        }
         self.calls: list[tuple[Any, ...]] = []
         self._counter = 0
 
@@ -38,14 +61,17 @@ class FakeShopFloorCommandRepository:
     def validate_special_shapes(self, order_name: str) -> None:
         self.calls.append(("validate_special_shapes", order_name))
 
-    def assert_worker_for_stage(self, user: str, stage_type: str) -> None:
-        self.calls.append(("assert_worker_for_stage", user, stage_type))
+    def get_production_route(self, route_name: str) -> ProductionRoute:
+        return self.routes[route_name]
 
-    def get_users_for_stage(self, stage_type: str) -> list[dict[str, str]]:
-        return list(self.users.get(stage_type, []))
+    def assert_worker_for_role(self, user: str, role: str) -> None:
+        self.calls.append(("assert_worker_for_role", user, role))
 
-    def cancel_non_shop_floor_active_stages(self, order_name: str) -> None:
-        self.calls.append(("cancel_non_shop_floor_active_stages", order_name))
+    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
+        return list(self.users.get(role, []))
+
+    def cancel_active_order_stages(self, order_name: str) -> None:
+        self.calls.append(("cancel_active_order_stages", order_name))
 
     def create_stage(
         self,
@@ -54,6 +80,8 @@ class FakeShopFloorCommandRepository:
         stage_type: str,
         assignee: str,
         sequence: int,
+        department_label: str | None = None,
+        operational_role: str | None = None,
     ) -> commands.StageState:
         self._counter += 1
         stage = commands.StageState(
@@ -63,6 +91,8 @@ class FakeShopFloorCommandRepository:
             status="Pending",
             assigned_to=assignee,
             sequence=sequence,
+            department_label=department_label,
+            operational_role=operational_role,
         )
         self.stages[stage.name] = stage
         self.calls.append(("create_stage", order_name, stage_type, assignee, sequence))
@@ -240,10 +270,38 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         self.assertEqual(result["stage"], "PST-1")
         self.assertIn(("validate_special_shapes", "DCO-1"), repository.calls)
         self.assertIn(
-            ("assert_worker_for_stage", "drawing@example.com", "Drawing"),
+            ("assert_worker_for_role", "drawing@example.com", "عامل رسم"),
             repository.calls,
         )
         self.assertEqual(repository.orders["DCO-1"].current_stage, "PST-1")
+
+    def test_custom_route_uses_configured_stage_role_and_department(self) -> None:
+        repository = FakeShopFloorCommandRepository()
+        repository.routes["PVC Route"] = ProductionRoute(
+            "PVC Route",
+            "مسار PVC",
+            (
+                RoutingStage(10, "Cutting", "قص", "عامل قص مخصص"),
+                RoutingStage(20, "PVC", "تلبيس PVC", "عامل PVC"),
+            ),
+        )
+        repository.orders["DCO-1"] = self._approved_order()
+
+        result = commands.dispatch_order(
+            repository,
+            "DCO-1",
+            "PVC Route",
+            "cutter@example.com",
+        )
+
+        self.assertEqual(result["department"], "قص")
+        self.assertIn(
+            ("assert_worker_for_role", "cutter@example.com", "عامل قص مخصص"),
+            repository.calls,
+        )
+        stage = repository.stages[result["stage"]]
+        self.assertEqual(stage.operational_role, "عامل قص مخصص")
+        self.assertEqual(stage.department_label, "قص")
 
     def test_missing_capability_fails_before_any_production_write(self) -> None:
         repository = FakeShopFloorCommandRepository()
@@ -324,6 +382,31 @@ class TestShopFloorCommandApplication(unittest.TestCase):
                 "cnc@example.com",
             )
 
+    def test_handoff_validates_next_worker_before_completing_current_stage(self) -> None:
+        repository = FakeShopFloorCommandRepository()
+        repository.orders["DCO-1"] = commands.OrderState(
+            name="DCO-1",
+            status="At CNC",
+            production_path="Drawing",
+            current_stage="PST-1",
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+        )
+        repository.stages["PST-1"] = commands.StageState(
+            name="PST-1",
+            order_name="DCO-1",
+            stage_type="CNC",
+            status="In Progress",
+            assigned_to=repository.actor,
+            sequence=20,
+        )
+
+        with self.assertRaisesRegex(commands.ShopFloorCommandError, "next worker"):
+            commands.handoff_to_next(repository, "PST-1")
+
+        self.assertEqual(repository.stages["PST-1"].status, "In Progress")
+        self.assertFalse(any(call[0] == "complete_stage" for call in repository.calls))
+
     def test_final_handoff_marks_order_ready_for_delivery(self) -> None:
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
@@ -380,7 +463,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         self.assertTrue(result["changed"])
         self.assertEqual(result["assigned_to"], "new@example.com")
         self.assertIn(
-            ("assert_worker_for_stage", "new@example.com", "CNC"),
+            ("assert_worker_for_role", "new@example.com", "عامل CNC"),
             repository.calls,
         )
         self.assertIn(
@@ -392,6 +475,39 @@ class TestShopFloorCommandApplication(unittest.TestCase):
         )
         self.assertEqual(event[3]["previous_assignee"], "old@example.com")
         self.assertEqual(event[3]["assignee"], "new@example.com")
+
+    def test_custom_stage_reassignment_workers_use_the_configured_role(self) -> None:
+        repository = FakeShopFloorCommandRepository()
+        repository.routes["PVC Route"] = ProductionRoute(
+            "PVC Route",
+            "مسار PVC",
+            (RoutingStage(10, "PVC", "تلبيس PVC", "مشغل PVC"),),
+        )
+        repository.orders["DCO-1"] = commands.OrderState(
+            name="DCO-1",
+            status="Production In Progress",
+            production_path="PVC Route",
+            current_stage="PST-1",
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+        )
+        repository.stages["PST-1"] = commands.StageState(
+            name="PST-1",
+            order_name="DCO-1",
+            stage_type="PVC",
+            status="Pending",
+            assigned_to="old@example.com",
+            sequence=10,
+            department_label="تلبيس PVC",
+            operational_role="مشغل PVC",
+        )
+        repository.users["مشغل PVC"] = [
+            {"name": "pvc@example.com", "full_name": "عامل PVC"}
+        ]
+
+        workers = commands.get_reassignment_workers(repository, "PST-1")
+
+        self.assertEqual(workers[0]["name"], "pvc@example.com")
 
     def test_revert_cancels_later_stages_and_reopens_target(self) -> None:
         repository = FakeShopFloorCommandRepository()

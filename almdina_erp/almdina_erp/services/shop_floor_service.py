@@ -76,6 +76,7 @@ recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")
 approve_production_dxf = _public_delegate(_DXF, "approve_production_dxf")
 
 get_handoff_workers = _public_delegate(_COMMANDS, "get_handoff_workers")
+get_handoff_context = _public_delegate(_COMMANDS, "get_handoff_context")
 start_my_stage = _public_delegate(_COMMANDS, "start_my_stage")
 handoff_to_next = _public_delegate(_COMMANDS, "handoff_to_next")
 mark_delivered = _public_delegate(_COMMANDS, "mark_delivered")
@@ -123,6 +124,7 @@ __all__ = [
     "assert_order_ready_for_dispatch",
     "dispatch_order",
     "get_dispatch_options",
+    "get_handoff_context",
     "get_handoff_workers",
     "get_my_archive",
     "get_my_inbox",

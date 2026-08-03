@@ -32,8 +32,7 @@
 
 	function isDrawingStage(frm) {
 		if (frm.doc.status === "At Drawing") return true;
-		if (frm.doc.production_path !== "Drawing") return false;
-		return frm.doc.current_department === "رسم" || frm.__almdina_stage_type === "Drawing";
+		return frm.__almdina_stage_type === "Drawing" || frm.doc.current_department === "رسم";
 	}
 
 	function canUseDrawingOptimizer(frm) {
@@ -52,7 +51,6 @@
 			meta &&
 			can("recalculate_plan") &&
 			meta.stageType === "Drawing" &&
-			detail.production_path === "Drawing" &&
 			isAssignedToCurrentUser(detail.current_assignee) &&
 			!detail.approved_plan &&
 			(detail.current_department === "رسم" || detail.status === "At Drawing")
@@ -71,12 +69,15 @@
 			frm.__almdina_stage_type = null;
 			return Promise.resolve(context.isCurrent(frm, identity));
 		}
-		return frappe.db
-			.get_value("Production Stage", requestedStage, "stage_type")
+		return frappe
+			.call({
+				method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
+				args: { order_name: frm.doc.name },
+			})
 			.then((response) => {
 				if (!context.isCurrent(frm, identity)) return false;
 				if (frm.doc.current_production_stage !== requestedStage) return false;
-				frm.__almdina_stage_type = (response.message && response.message.stage_type) || null;
+				frm.__almdina_stage_type = (response.message && response.message.active_stage_type) || null;
 				return true;
 			})
 			.catch((error) => {
