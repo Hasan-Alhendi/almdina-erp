@@ -14,12 +14,15 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 
 ALMDINA_APP = "almdina_erp"
 ALMDINA_MODULE = "Almdina ERP"
+SYSTEM_ADMINISTRATOR = "Administrator"
 
 
 def _context() -> dict[str, Any]:
+    user = frappe.session.user
     return build_permission_context(
         (),
-        granted_capabilities(user=frappe.session.user),
+        granted_capabilities(user=user),
+        system_administrator=user == SYSTEM_ADMINISTRATOR,
     )
 
 
@@ -104,19 +107,22 @@ def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
     if not navigation.get("shared_shell"):
         return
 
-    allowed = set(navigation.get("workspaces") or ())
     bootinfo["almdina_shared_shell"] = 1
-    bootinfo["almdina_allowed_apps"] = [ALMDINA_APP]
     bootinfo["home_page"] = navigation["home_page"]
     bootinfo["default_route"] = navigation["default_route"]
 
-    _filter_workspaces(bootinfo, allowed)
+    # Ordinary Almdina users stay inside the factory application. The built-in
+    # Administrator deliberately keeps Frappe's complete app/workspace registry
+    # so /desk can render the standard Desktop and every installed app remains usable.
     if navigation.get("app_only"):
+        allowed = set(navigation.get("workspaces") or ())
+        bootinfo["almdina_allowed_apps"] = [ALMDINA_APP]
+        _filter_workspaces(bootinfo, allowed)
         _filter_apps(bootinfo)
 
-    apps_data = bootinfo.get("apps_data")
-    if isinstance(apps_data, dict) and navigation.get("app_only"):
-        apps_data["default_path"] = navigation["default_route"]
+        apps_data = bootinfo.get("apps_data")
+        if isinstance(apps_data, dict):
+            apps_data["default_path"] = navigation["default_route"]
 
 
 def boot_session(bootinfo: dict[str, Any]) -> None:
