@@ -5,12 +5,15 @@
     const LABELS = Object.freeze({
         submit_for_review: __("إرسال للمراجعة"),
         approve: __("اعتماد الطلب"),
+        create_revision: __("تعديل الطلب"),
         return_to_draft: __("إعادة للمسودة"),
         cancel: __("إلغاء الطلب"),
     });
     const LEGACY_LABELS = Object.freeze([
         __("إرسال للمراجعة"),
         __("اعتماد الطلب"),
+        __("تعديل الطلب"),
+        __("إنشاء نسخة تعديل"),
         __("إعادة للمسودة"),
         __("إلغاء الطلب"),
         __("Cancel Order"),
@@ -37,18 +40,44 @@
         );
     }
 
-    function isDraftLike(status) {
-        return ["Draft", "Pending Review", "Rejected"].includes(status || "Draft");
-    }
-
     function orderCanEdit(frm) {
         if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
         if (frm.is_new()) return can(frm, "create_order");
-        const context = frm.__almdina_lifecycle_context;
-        if (context && context.order_name === frm.doc.name) {
-            return context.editable === true;
+        if ((frm.doc.revision_state || "Current") === "Superseded") return false;
+
+        const revisionUx = window.AlmdinaOrderRevisionUX;
+        if (revisionUx && typeof revisionUx.isEditableDraft === "function") {
+            return revisionUx.isEditableDraft(frm);
         }
-        return can(frm, "edit_order") && isDraftLike(frm.doc.status);
+
+        const context = frm.__almdina_lifecycle_context;
+        const status = frm.doc.status || "Draft";
+        const cuttingOrLater = [
+            "At Sharyoun",
+            "At CNC",
+            "At Sanding",
+            "Ready for Delivery",
+            "Delivered",
+            "Cancelled",
+            "Completed",
+        ].includes(status);
+        if (cuttingOrLater) return false;
+
+        let allowed = can(frm, "edit_order");
+        if (context && context.order_name === frm.doc.name) {
+            allowed = context.editable === true;
+        }
+        const sessionActive = Boolean(
+            frm.__almdina_edit_session
+            || (
+                frappe.almdina
+                && frappe.almdina._orderEditSessions
+                && frm.doc.name
+                && frappe.almdina._orderEditSessions[frm.doc.name]
+                && frappe.almdina._orderEditSessions[frm.doc.name].active
+            )
+        );
+        return allowed && sessionActive;
     }
 
     function installGlobalPolicy() {

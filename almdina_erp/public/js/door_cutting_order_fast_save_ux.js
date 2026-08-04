@@ -62,6 +62,13 @@
     function markClientPlanStale(frm) {
         if (!editable(frm)) return;
         frm.doc.plan_needs_recalculation = 1;
+        if (
+            window.frappe
+            && frappe.almdina
+            && typeof frappe.almdina.invalidateOrderEditSessionRecalculation === "function"
+        ) {
+            frappe.almdina.invalidateOrderEditSessionRecalculation(frm);
+        }
         renderStaleState(frm);
     }
 
@@ -109,7 +116,7 @@
     async function runExplicitRecalculation(frm, requestedMode) {
         if (frm._dco_plan_recalculation_running) return;
         if (!editable(frm)) {
-            frappe.msgprint("لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج.");
+            frappe.msgprint("فعّل وضع «تعديل» أولًا، أو تحقق أن الطلب ما زال قبل مرحلة القص.");
             return;
         }
 
@@ -144,8 +151,20 @@
                 method: "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order",
                 args: { order_name: frm.doc.name },
             });
+            if (
+                window.frappe
+                && frappe.almdina
+                && typeof frappe.almdina.markOrderEditSessionRecalculated === "function"
+            ) {
+                frappe.almdina.markOrderEditSessionRecalculated(frm);
+            } else if (
+                window.AlmdinaOrderRevisionUX
+                && typeof window.AlmdinaOrderRevisionUX.markEditSessionRecalculated === "function"
+            ) {
+                window.AlmdinaOrderRevisionUX.markEditSessionRecalculated(frm);
+            }
             await frm.reload_doc();
-            frappe.show_alert({ message: "تم تحديث خطة القص والتكلفة", indicator: "green" }, 3);
+            frappe.show_alert({ message: "تم تحديث خطة القص والتكلفة (بدون اعتماد الطلب)", indicator: "green" }, 4);
         } catch (error) {
             console.error("Explicit cutting plan recalculation failed", error);
             throw error;

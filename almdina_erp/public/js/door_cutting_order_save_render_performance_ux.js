@@ -94,6 +94,23 @@
         );
     }
 
+    function htmlLooksEditable(value) {
+        if (typeof value !== "string" || !value.includes("dco-fast-entry-shell")) return false;
+        // Locked shells always include this note; editable shells include a virtual row.
+        if (value.includes("dco-fast-readonly-note")) return false;
+        return value.includes("dco-virtual-row");
+    }
+
+    function currentShellEditable(root) {
+        if (!root) return false;
+        if (root.querySelector(".dco-fast-readonly-note")) return false;
+        const input = root.querySelector(
+            "tr:not(.dco-virtual-row) input.dco-fast-input[data-field='width_cm']"
+        );
+        if (input) return !input.disabled;
+        return Boolean(root.querySelector("tr.dco-virtual-row"));
+    }
+
     function syncToggle(button, checked) {
         if (!button) return;
         button.classList.toggle("is-checked", checked);
@@ -150,6 +167,10 @@
         const originalHtml = wrapper.html;
         wrapper.html = function guardedHtml(value) {
             const currentFrm = wrapper._dcoFastHtmlGuardForm || frm;
+            if (wrapper._dcoForceHtmlReplace) {
+                wrapper._dcoForceHtmlReplace = false;
+                return originalHtml.apply(this, arguments);
+            }
             if (
                 arguments.length === 1
                 && typeof value === "string"
@@ -162,6 +183,11 @@
                 const root = getNode(this);
                 const existing = root && root.querySelector(".dco-fast-entry-shell");
                 if (existing && sameRows(currentFrm, root)) {
+                    // Same piece rows, but lock/unlock flipped (edit session):
+                    // must replace HTML so disabled attributes update.
+                    if (htmlLooksEditable(value) !== currentShellEditable(root)) {
+                        return originalHtml.apply(this, arguments);
+                    }
                     syncExistingTable(currentFrm, root);
                     return this;
                 }

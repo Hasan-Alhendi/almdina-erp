@@ -52,7 +52,11 @@ def _presentation(label: str, description: str, risk: str = "normal") -> dict[st
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
     Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
-    Capability.EDIT_ORDER: _presentation("تعديل الطلب", "تعديل الطلبات الموجودة في الحالات القابلة للتحرير.", "sensitive"),
+    Capability.EDIT_ORDER: _presentation(
+        "تعديل الطلب",
+        "تفعيل وضع التعديل على نفس الطلب قبل الوصول لمرحلة القص (شريون أو CNC).",
+        "sensitive",
+    ),
     Capability.CREATE_ORDER_REVISION: _presentation("إنشاء نسخة تعديل", "إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.", "sensitive"),
     Capability.SUBMIT_ORDER: _presentation("إرسال للمراجعة", "نقل الطلب من المسودة إلى قائمة المراجعة."),
     Capability.APPROVE_ORDER: _presentation("اعتماد الطلب", "اعتماد الطلب ليصبح جاهزًا للإنتاج.", "critical"),

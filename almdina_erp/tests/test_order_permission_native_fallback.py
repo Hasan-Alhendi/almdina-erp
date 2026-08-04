@@ -68,8 +68,12 @@ def test_shop_floor_presentation_cannot_lock_an_order_editor() -> None:
 def test_locked_order_explains_the_controlled_revision_path() -> None:
     revision = source("door_cutting_order_revision_ux.js")
 
-    assert "الطلب المعتمد أو الموجود في الإنتاج محفوظ كسجل غير قابل للتعديل المباشر" in revision
-    assert "إنشاء نسخة تعديل" in revision
+    assert "canOfferEditSession" in revision
+    assert "__(\"تعديل\")" in revision or '__("تعديل")' in revision
+    assert "__(\"اعتماد التعديل\")" in revision or '__("اعتماد التعديل")' in revision
+    assert "At Sharyoun" in revision
+    assert "At CNC" in revision
+    assert 'can(frm, "edit_order")' in revision
 
 
 def test_drawing_recalculation_is_capability_driven_not_client_assignment_driven() -> None:

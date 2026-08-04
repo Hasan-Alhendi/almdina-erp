@@ -128,6 +128,46 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
                 has_capability=True,
             ).allowed
         )
+        self.assertTrue(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.EDIT,
+                status="Approved",
+                revision_state="Current",
+                has_capability=True,
+            ).allowed
+        )
+        self.assertTrue(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.EDIT,
+                status="At Drawing",
+                revision_state="Current",
+                has_capability=True,
+            ).allowed
+        )
+        self.assertFalse(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.EDIT,
+                status="At Sharyoun",
+                revision_state="Current",
+                has_capability=True,
+            ).allowed
+        )
+        self.assertFalse(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.EDIT,
+                status="At CNC",
+                revision_state="Current",
+                has_capability=True,
+            ).allowed
+        )
+        self.assertFalse(
+            decide_lifecycle_action(
+                action=OrderLifecycleAction.EDIT,
+                status="Delivered",
+                revision_state="Current",
+                has_capability=True,
+            ).allowed
+        )
 
     def test_terminal_and_historical_orders_are_locked(self) -> None:
         for action in ACTION_CAPABILITIES:

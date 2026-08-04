@@ -692,6 +692,7 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
+        almdina_edit_session_changed(frm) { refreshOperatorUI(frm); },
         default_edge_type(frm) { refreshEdgeSelects(frm); },
         before_save(frm) { pruneEmptyTrailingRows(frm); },
     });

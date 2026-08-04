@@ -3,6 +3,22 @@
 
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
     const TERMINAL = new Set(["Delivered", "Cancelled"]);
+    const CUTTING_OR_LATER = new Set([
+        "At Sharyoun",
+        "At CNC",
+        "At Sanding",
+        "Ready for Delivery",
+        "Delivered",
+        "Cancelled",
+        "Completed",
+        "Cutting In Progress",
+        "Cut Completed",
+        "Edge Banding In Progress",
+        "Quality Check",
+        "Partially Completed",
+    ]);
+    const EDIT_LABEL = __("تعديل");
+    const CONFIRM_EDIT_LABEL = __("اعتماد التعديل");
     const ORDER_INPUT_FIELDS = [
         "customer",
         "order_date",
@@ -38,10 +54,116 @@
         return (frm && frm.doc && frm.doc.revision_state) || "Current";
     }
 
-    function isEditableDraft(frm) {
+    function isBeforeCutting(status) {
+        const normalized = status || "Draft";
+        if (TERMINAL.has(normalized)) return false;
+        return !CUTTING_OR_LATER.has(normalized);
+    }
+
+    function sessionStore() {
+        frappe.provide("frappe.almdina");
+        if (!frappe.almdina._orderEditSessions) {
+            frappe.almdina._orderEditSessions = Object.create(null);
+        }
+        return frappe.almdina._orderEditSessions;
+    }
+
+    function sessionEntry(name) {
+        if (!name) return null;
+        const store = sessionStore();
+        const raw = store[name];
+        if (!raw) return null;
+        if (raw === true) {
+            store[name] = { active: true, recalculated: false };
+            return store[name];
+        }
+        return raw;
+    }
+
+    function isEditSessionActive(frm) {
+        if (!frm || !frm.doc) return false;
+        if (frm.__almdina_edit_session) return true;
+        const entry = sessionEntry(frm.doc.name);
+        return Boolean(entry && entry.active);
+    }
+
+    function setEditSession(frm, active, options = {}) {
+        if (!frm) return;
+        const enabled = Boolean(active);
+        frm.__almdina_edit_session = enabled;
+        const name = frm.doc && frm.doc.name;
+        if (!name || frm.is_new()) {
+            if (!enabled) {
+                frm.__almdina_recalc_after_edit = false;
+            }
+            return;
+        }
+        if (enabled) {
+            let recalculated = false;
+            if (options.resetRecalc === true) {
+                recalculated = false;
+            } else if (options.recalculated === true) {
+                recalculated = true;
+            } else {
+                const previous = sessionEntry(name);
+                recalculated = Boolean(previous && previous.recalculated);
+            }
+            sessionStore()[name] = { active: true, recalculated };
+            frm.__almdina_recalc_after_edit = recalculated;
+        } else {
+            delete sessionStore()[name];
+            frm.__almdina_recalc_after_edit = false;
+        }
+    }
+
+    function markEditSessionRecalculated(frm) {
+        if (!frm || !frm.doc || !frm.doc.name || !isEditSessionActive(frm)) return;
+        frm.__almdina_recalc_after_edit = true;
+        const entry = sessionEntry(frm.doc.name) || { active: true, recalculated: false };
+        entry.active = true;
+        entry.recalculated = true;
+        sessionStore()[frm.doc.name] = entry;
+    }
+
+    function invalidateEditSessionRecalculation(frm) {
+        if (!frm || !isEditSessionActive(frm)) return;
+        frm.__almdina_recalc_after_edit = false;
+        frm.doc.plan_needs_recalculation = 1;
+        const name = frm.doc && frm.doc.name;
+        if (!name) return;
+        const entry = sessionEntry(name) || { active: true, recalculated: false };
+        entry.active = true;
+        entry.recalculated = false;
+        sessionStore()[name] = entry;
+    }
+
+    function editSessionRecalculated(frm) {
+        if (frm && frm.__almdina_recalc_after_edit) return true;
+        const entry = frm && frm.doc && sessionEntry(frm.doc.name);
+        return Boolean(entry && entry.recalculated);
+    }
+
+    function canOfferEditSession(frm) {
+        if (!frm || !frm.doc || frm.is_new()) return false;
+        if (Number(frm.doc.docstatus || 0) !== 0) return false;
+        if (revisionState(frm) === "Superseded") return false;
+        if (!can(frm, "edit_order")) return false;
+        return isBeforeCutting(frm.doc.status || "Draft");
+    }
+
+    function orderCanEdit(frm) {
         if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
         if (frm.is_new()) return can(frm, "create_order");
-        return can(frm, "edit_order") && DRAFT_LIKE.has(frm.doc.status || "Draft");
+        return canOfferEditSession(frm) && isEditSessionActive(frm);
+    }
+
+    function planReadyForConfirm(frm) {
+        if (!frm || !frm.doc) return false;
+        if (!editSessionRecalculated(frm)) return false;
+        if (Number(frm.doc.plan_needs_recalculation || 0) === 1) return false;
+        if (!frm.doc.cutting_plan_json) return false;
+        if (frm.is_dirty && frm.is_dirty()) return false;
+        return true;
     }
 
     function canCreateRevision(frm) {
@@ -51,13 +173,118 @@
         return revisionState(frm) !== "Superseded";
     }
 
-    function installImmutableEditPolicy() {
+    function installEditPolicy() {
         frappe.provide("frappe.almdina");
-        frappe.almdina.orderCanEdit = isEditableDraft;
+        frappe.almdina.orderCanEdit = orderCanEdit;
+        frappe.almdina.isOrderEditSessionActive = isEditSessionActive;
+        frappe.almdina.canOfferOrderEditSession = canOfferEditSession;
+        frappe.almdina.markOrderEditSessionRecalculated = markEditSessionRecalculated;
+        frappe.almdina.invalidateOrderEditSessionRecalculation = invalidateEditSessionRecalculation;
     }
 
-    function applyImmutableFields(frm) {
-        frm.toggle_enable(ORDER_INPUT_FIELDS, isEditableDraft(frm));
+    function applyEditableFields(frm) {
+        const editable = orderCanEdit(frm);
+        frm.toggle_enable(ORDER_INPUT_FIELDS, editable);
+        if (frm.is_new()) {
+            frm.enable_save();
+            return;
+        }
+        if (editable) {
+            frm.enable_save();
+        } else {
+            frm.disable_save();
+        }
+    }
+
+    function removeEditSessionButtons(frm) {
+        frm.remove_custom_button(EDIT_LABEL);
+        frm.remove_custom_button(CONFIRM_EDIT_LABEL);
+        frm.remove_custom_button(EDIT_LABEL, __("دورة الطلب"));
+        frm.remove_custom_button(CONFIRM_EDIT_LABEL, __("دورة الطلب"));
+        frm.remove_custom_button(__("تعديل الطلب"));
+        frm.remove_custom_button(__("تعديل الطلب"), __("دورة الطلب"));
+    }
+
+    function refreshDependentUx(frm) {
+        const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        if (field && field.$wrapper) {
+            // Bypass the save-render HTML guard so lock/unlock actually replaces
+            // disabled inputs on already-entered piece rows.
+            field.$wrapper._dcoForceHtmlReplace = true;
+        }
+        if (typeof frm.trigger === "function") {
+            frm.trigger("almdina_edit_session_changed");
+            frm.trigger("refresh_plan_controls");
+        }
+        // Re-render custom HTML UIs after the session gate flips. Do not call
+        // refresh_field on pieces_fast_entry: it wipes the operator table.
+        if (field && field.$wrapper) {
+            field.$wrapper._dcoForceHtmlReplace = true;
+        }
+        if (
+            window.AlmdinaDoorCuttingFastEntry
+            && typeof window.AlmdinaDoorCuttingFastEntry.render === "function"
+        ) {
+            window.AlmdinaDoorCuttingFastEntry.render(frm);
+        }
+        if (window.AlmdinaDoorCuttingPlanUX && typeof window.AlmdinaDoorCuttingPlanUX.refresh === "function") {
+            window.AlmdinaDoorCuttingPlanUX.refresh(frm);
+        }
+    }
+
+    function enterEditSession(frm) {
+        if (!canOfferEditSession(frm)) {
+            frappe.msgprint(__("لا يمكن تعديل هذا الطلب بعد بدء مرحلة القص (شريون أو CNC)."));
+            return;
+        }
+        setEditSession(frm, true, { resetRecalc: true });
+        // Edits are not confirmed until an explicit recalculation runs in this session.
+        frm.doc.plan_needs_recalculation = 1;
+        frm.__almdina_recalc_after_edit = false;
+        applyEditableFields(frm);
+        installEditSessionButtons(frm);
+        refreshDependentUx(frm);
+        frappe.show_alert({
+            message: __("وضع التعديل مفعّل. عدّل الدرف والحقول، ثم أعد حساب الخطة قبل «اعتماد التعديل»."),
+            indicator: "blue",
+        }, 6);
+    }
+
+    function confirmEditSession(frm) {
+        if (!planReadyForConfirm(frm)) {
+            frappe.msgprint(
+                __("لا يمكن اعتماد التعديل قبل إعادة حساب خطة القص بالبيانات الجديدة. احفظ التغييرات إن لزم، ثم اضغط «إعادة الحساب».")
+            );
+            return;
+        }
+
+        // Confirming an edit only locks the form. It never approves the order/plan.
+        setEditSession(frm, false);
+        applyEditableFields(frm);
+        installEditSessionButtons(frm);
+        refreshDependentUx(frm);
+        frappe.show_alert({
+            message: __("تم اعتماد التعديل بعد إعادة الحساب، وأُعيد قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم."),
+            indicator: "green",
+        }, 6);
+    }
+
+    function installEditSessionButtons(frm) {
+        removeEditSessionButtons(frm);
+        if (!canOfferEditSession(frm)) return;
+
+        if (isEditSessionActive(frm)) {
+            const button = frm.add_custom_button(CONFIRM_EDIT_LABEL, () => confirmEditSession(frm));
+            if (button && typeof button.addClass === "function") {
+                button.addClass("btn-primary");
+            }
+            return;
+        }
+
+        const button = frm.add_custom_button(EDIT_LABEL, () => enterEditSession(frm));
+        if (button && typeof button.addClass === "function") {
+            button.addClass("btn-primary");
+        }
     }
 
     function renderRevisionState(frm) {
@@ -84,14 +311,13 @@
             return;
         }
         if (
-            !frm.is_new()
-            && Number(frm.doc.docstatus || 0) === 0
+            canOfferEditSession(frm)
+            && !isEditSessionActive(frm)
             && !DRAFT_LIKE.has(frm.doc.status || "Draft")
-            && !TERMINAL.has(frm.doc.status || "Draft")
         ) {
             frm.set_intro(
-                __("الطلب المعتمد أو الموجود في الإنتاج محفوظ كسجل غير قابل للتعديل المباشر. استخدم «إنشاء نسخة تعديل» لتغيير بياناته دون إتلاف الخطة الحالية."),
-                "orange"
+                __("الحقول مقفلة. استخدم «تعديل» لتغيير الدرف والبيانات على نفس الطلب قبل القص، ثم أعد الحساب واضغط «اعتماد التعديل»."),
+                "blue"
             );
         }
     }
@@ -124,7 +350,7 @@
                 fieldname: "reason",
                 fieldtype: "Small Text",
                 label: __("سبب إنشاء نسخة التعديل (اختياري)"),
-                description: __("لن يتم تعديل الطلب التاريخي الأصلي."),
+                description: __("ينشئ مستندًا مسودة مستقلاً دون تعديل الطلب الحالي مباشرة."),
                 reqd: 0,
             }],
             values => createRevision(frm, values.reason),
@@ -133,14 +359,36 @@
         );
     }
 
-    installImmutableEditPolicy();
+    installEditPolicy();
     frappe.almdina.openOrderRevisionDialog = openRevision;
     frappe.almdina.createOrderRevision = createRevision;
 
     frappe.ui.form.on("Door Cutting Order", {
+        onload(frm) {
+            // Restore an in-progress edit session for this order after reload/recalc.
+            const entry = frm.doc && sessionEntry(frm.doc.name);
+            if (entry && entry.active) {
+                frm.__almdina_edit_session = true;
+                frm.__almdina_recalc_after_edit = Boolean(entry.recalculated);
+            } else if (!frm.is_new()) {
+                frm.__almdina_edit_session = false;
+                frm.__almdina_recalc_after_edit = false;
+            }
+        },
         refresh(frm) {
-            applyImmutableFields(frm);
+            const entry = frm.doc && sessionEntry(frm.doc.name);
+            if (entry && entry.active) {
+                frm.__almdina_edit_session = true;
+                frm.__almdina_recalc_after_edit = Boolean(entry.recalculated);
+            } else if (frm.is_new()) {
+                frm.__almdina_edit_session = true;
+            } else {
+                frm.__almdina_edit_session = false;
+            }
+
+            applyEditableFields(frm);
             renderRevisionState(frm);
+            removeEditSessionButtons(frm);
 
             frm.remove_custom_button(__("إنشاء نسخة تعديل"), __("دورة الطلب"));
 
@@ -157,12 +405,19 @@
                 return;
             }
 
-            if (canCreateRevision(frm)) {
+            installEditSessionButtons(frm);
+
+            if (canCreateRevision(frm) && !canOfferEditSession(frm)) {
                 frm.add_custom_button(
                     __("إنشاء نسخة تعديل"),
                     () => openRevision(frm),
                     __("دورة الطلب")
                 );
+            }
+
+            if (isEditSessionActive(frm)) {
+                // After reload_doc (e.g. recalc), re-enable the piece grid.
+                requestAnimationFrame(() => refreshDependentUx(frm));
             }
         },
     });
@@ -170,14 +425,24 @@
     window.addEventListener("almdina:permissions-updated", () => {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        applyImmutableFields(frm);
+        if (!canOfferEditSession(frm)) {
+            setEditSession(frm, false);
+        }
+        applyEditableFields(frm);
+        installEditSessionButtons(frm);
     });
 
     window.AlmdinaOrderRevisionUX = Object.freeze({
         canCreateRevision,
+        canOfferEditSession,
         createRevision,
-        applyImmutableFields,
-        isEditableDraft,
+        applyImmutableFields: applyEditableFields,
+        isEditableDraft: orderCanEdit,
+        isEditSessionActive,
+        markEditSessionRecalculated,
+        invalidateEditSessionRecalculation,
         openRevision,
+        enterEditSession,
+        confirmEditSession,
     });
 })();

@@ -9,7 +9,6 @@ from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
 from almdina_erp.almdina_erp.services.cutting_engine import expand_piece_groups
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 
 
 MAX_EXPANDED_PIECES = 200
@@ -43,7 +42,7 @@ def benchmark_order_cutting_engine(
     packing_mode: str | None = None,
 ) -> dict[str, Any]:
     """Benchmark the optimizer on a real order without saving or moving stock."""
-    require_any_role("Production Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
 

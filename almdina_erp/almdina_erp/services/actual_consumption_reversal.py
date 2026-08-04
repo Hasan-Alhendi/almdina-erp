@@ -5,8 +5,6 @@ from typing import Any
 import frappe
 from frappe import _
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
-
 
 def _cancel_stock_entry(name: str | None) -> str | None:
     if not name:
@@ -19,7 +17,7 @@ def _cancel_stock_entry(name: str | None) -> str | None:
 
 @frappe.whitelist()
 def reverse_actual_consumption(consumption_log: str, reason: str) -> dict[str, Any]:
-    require_any_role("Production Manager", "Stock Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     if not reason:
         frappe.throw(_("Reversal reason is required."))
 

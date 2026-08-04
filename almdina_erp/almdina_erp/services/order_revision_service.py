@@ -47,8 +47,8 @@ RESET_FIELDS: dict[str, Any] = {
 }
 
 
-def _require_revision_capability(capability: str) -> None:
-    if doctype_has_capability(capability):
+def _require_revision_capability(*capabilities: str) -> None:
+    if any(doctype_has_capability(capability) for capability in capabilities):
         return
     frappe.throw(
         _("You do not have permission to create an editable order revision."),
@@ -84,9 +84,9 @@ def _create_revision(
     order_name: str,
     *,
     reason: str | None,
-    capability: str,
+    capabilities: tuple[str, ...],
 ) -> dict[str, Any]:
-    _require_revision_capability(capability)
+    _require_revision_capability(*capabilities)
     reason = str(reason or "").strip()
 
     frappe.db.sql(
@@ -178,7 +178,7 @@ def create_order_revision(
     return _create_revision(
         order_name,
         reason=reason,
-        capability=Capability.CREATE_ORDER_REVISION,
+        capabilities=(Capability.CREATE_ORDER_REVISION,),
     )
 
 
@@ -193,7 +193,7 @@ def return_order_to_draft(
         order_name,
         reason=reason
         or _("Order returned for controlled editing through the lifecycle action."),
-        capability=Capability.RETURN_ORDER_TO_DRAFT,
+        capabilities=(Capability.RETURN_ORDER_TO_DRAFT,),
     )
 
 

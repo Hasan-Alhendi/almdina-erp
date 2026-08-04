@@ -429,5 +429,8 @@
         refresh(frm) {
             requestAnimationFrame(() => enhance(frm));
         },
+        almdina_edit_session_changed(frm) {
+            requestAnimationFrame(() => enhance(frm));
+        },
     });
 })();

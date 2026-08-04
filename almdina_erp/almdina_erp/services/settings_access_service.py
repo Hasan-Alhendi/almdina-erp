@@ -6,8 +6,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
-
 
 STOCK_CONSUMPTION_POINTS = {"Cutting Start", "Cutting Finish"}
 REMNANT_COST_POLICIES = {"Zero", "Average Valuation", "Configured Rate"}
@@ -15,7 +13,7 @@ REMNANT_COST_POLICIES = {"Zero", "Average Valuation", "Configured Rate"}
 
 @frappe.whitelist()
 def get_stock_settings() -> dict[str, Any]:
-    require_any_role("Stock Manager", "Production Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     settings = frappe.get_single("Almdina ERP Settings")
     return {
         "default_warehouse": settings.default_warehouse,
@@ -33,7 +31,7 @@ def get_stock_settings() -> dict[str, Any]:
 
 @frappe.whitelist()
 def update_stock_settings(values: str | dict[str, Any]) -> dict[str, Any]:
-    require_any_role("Stock Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     payload = frappe.parse_json(values) if isinstance(values, str) else dict(values or {})
     settings = frappe.get_single("Almdina ERP Settings")
 

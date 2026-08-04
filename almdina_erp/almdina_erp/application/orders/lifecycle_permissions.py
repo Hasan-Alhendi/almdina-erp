@@ -60,8 +60,20 @@ def _state_reason(action: str, status: str, revision_state: str) -> str:
         return "This is a historical superseded revision and cannot be changed."
 
     if action == OrderLifecycleAction.EDIT:
-        if status not in {"Draft", "Pending Review", "Rejected"}:
-            return "Approved or production orders are immutable. Create a controlled revision instead."
+        if status in {"Delivered", "Cancelled", "Completed"}:
+            return "Delivered, cancelled, or completed orders cannot be edited."
+        if status in {
+            "At Sharyoun",
+            "At CNC",
+            "At Sanding",
+            "Ready for Delivery",
+            "Cutting In Progress",
+            "Cut Completed",
+            "Edge Banding In Progress",
+            "Quality Check",
+            "Partially Completed",
+        }:
+            return "Orders cannot be edited after cutting has started (Sharyoun or CNC)."
         return ""
 
     if action == OrderLifecycleAction.SUBMIT_FOR_REVIEW:

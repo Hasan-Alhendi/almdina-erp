@@ -24,11 +24,23 @@
                     justify-content:flex-start !important;
                     gap:8px !important;
                 }
+                [data-fieldname="plan_control_actions"] .dco-plan-document-actions {
+                    display:flex !important;
+                    align-items:center !important;
+                    gap:8px !important;
+                    flex-wrap:wrap !important;
+                }
                 [data-fieldname="plan_control_actions"] .dco-recalculate-plan {
                     min-width:230px;
                     min-height:40px !important;
                     font-weight:850 !important;
                     border-radius:10px !important;
+                }
+                [data-fieldname="plan_control_actions"] .dco-print-cutting-plan,
+                [data-fieldname="plan_control_actions"] .dco-export-dxf {
+                    min-height:36px !important;
+                    border-radius:10px !important;
+                    font-weight:800 !important;
                 }
                 [data-fieldname="plan_control_actions"] .dco-plan-actions-title {
                     margin-bottom:10px !important;
@@ -37,6 +49,10 @@
                     [data-fieldname="plan_control_actions"] .dco-recalculate-plan {
                         width:100%;
                         min-width:0;
+                    }
+                    [data-fieldname="plan_control_actions"] .dco-print-cutting-plan,
+                    [data-fieldname="plan_control_actions"] .dco-export-dxf {
+                        width:100%;
                     }
                 }
             </style>

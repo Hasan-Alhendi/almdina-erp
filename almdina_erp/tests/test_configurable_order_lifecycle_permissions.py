@@ -44,6 +44,9 @@ def test_server_actions_use_one_lifecycle_policy_without_role_names():
     assert "OrderLifecycleAction.CANCEL" in cancel_service
     assert "Capability.CREATE_ORDER_REVISION" in revision_service
     assert "Capability.RETURN_ORDER_TO_DRAFT" in revision_service
+    assert "Capability.EDIT_ORDER" not in revision_service.split("def create_order_revision", 1)[1].split(
+        "def return_order_to_draft", 1
+    )[0]
 
     combined = "\n".join(
         (context_service, approval_service, cancel_service, revision_service)
@@ -66,6 +69,9 @@ def test_lifecycle_ui_is_capability_driven_and_fail_closed():
     assert "removeLifecycleButtons(frm)" in lifecycle_ux
     assert "Failed to load order lifecycle permissions" in lifecycle_ux
     assert 'can(frm, "create_order_revision")' in revision_ux
+    assert 'can(frm, "edit_order")' in revision_ux
+    assert "canOfferEditSession" in revision_ux
+    assert "__almdina_edit_session" in revision_ux
 
     combined = lifecycle_ux + revision_ux
     assert "frappe.user_roles" not in combined
