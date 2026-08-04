@@ -78,12 +78,14 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         service = DXF_SERVICE.read_text(encoding="utf-8")
         policy = DRAWING_POLICY.read_text(encoding="utf-8")
 
-        self.assertIn("Capability.UPLOAD_DXF", service)
-        self.assertIn("Capability.REPLACE_DXF", service)
-        self.assertIn("validate_drawing_upload", service)
-        self.assertIn("validate_upload", service)
-        self.assertIn("assigned_designer", policy)
-        self.assertIn("existing_dxf", policy)
+        self.assertIn("required_upload_capability", service)
+        self.assertIn("Capability.UPLOAD_DXF", policy)
+        self.assertIn("Capability.REPLACE_DXF", policy)
+        self.assertIn("_validate_and_attach_dxf_file", service)
+        self.assertIn("parse_production_dxf", service)
+        self.assertIn("validate_imported_plan", service)
+        self.assertIn("current_assignee", policy)
+        self.assertIn("production_dxf", policy)
         self.assertIn("approved_plan", policy)
 
     def test_shop_floor_dxf_link_uses_dxf_permissions_not_plan_permission(self) -> None:
