@@ -29,11 +29,6 @@ _OPTIMIZER_DEFAULTS = {
     "trim_margin_mm": "default_trim_margin_mm",
     "optimization_time_limit_sec": "default_optimization_time_limit_sec",
 }
-_DRAWING_FIELDS = (
-    "special_shape_drawing_json",
-    "special_shape_geometry_json",
-    "special_shape_status",
-)
 _NUMERIC_OPTIMIZER_FIELDS = frozenset(
     {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
 )
@@ -75,9 +70,15 @@ def _piece_key(row: Any, index: int) -> str:
 
 
 def _drawing_snapshot(row: Any | None) -> tuple[str, str, str]:
+    """Return only meaningful drawing state, not normal-row default statuses."""
+
     if not row:
         return ("", "", "")
-    return tuple(str(row.get(fieldname) or "") for fieldname in _DRAWING_FIELDS)
+    drawing = str(row.get("special_shape_drawing_json") or "")
+    geometry = str(row.get("special_shape_geometry_json") or "")
+    raw_status = str(row.get("special_shape_status") or "")
+    status = raw_status if drawing or geometry or raw_status == "Documented" else ""
+    return (drawing, geometry, status)
 
 
 def _drawing_changed(doc: Any, old: Any | None) -> bool:
