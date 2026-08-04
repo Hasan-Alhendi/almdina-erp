@@ -184,6 +184,44 @@
         });
     }
 
+    function protectPlanPrintApis(frm) {
+        const renderer = window.AlmdinaCuttingPlanRender;
+        if (
+            renderer
+            && !renderer.__almdinaPrintPermissionGuarded
+            && typeof renderer.print === "function"
+        ) {
+            const originalRendererPrint = renderer.print.bind(renderer);
+            renderer.print = targetFrm => {
+                const active = targetFrm || frm || window.cur_frm;
+                if (!can(active, "print_cutting_plan")) {
+                    deny("ليس لديك صلاحية طباعة خطة القص.");
+                    return false;
+                }
+                return originalRendererPrint(active);
+            };
+            renderer.__almdinaPrintPermissionGuarded = true;
+        }
+
+        const tabs = window.AlmdinaPlanTabsUX;
+        if (
+            tabs
+            && !tabs.__almdinaPrintPermissionGuarded
+            && typeof tabs.printActivePlan === "function"
+        ) {
+            const originalTabsPrint = tabs.printActivePlan.bind(tabs);
+            tabs.printActivePlan = targetFrm => {
+                const active = targetFrm || frm || window.cur_frm;
+                if (!can(active, "print_cutting_plan")) {
+                    deny("ليس لديك صلاحية طباعة خطة القص.");
+                    return false;
+                }
+                return originalTabsPrint(active);
+            };
+            tabs.__almdinaPrintPermissionGuarded = true;
+        }
+    }
+
     function apply(frm = window.cur_frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         protectPlanActions(frm);
@@ -191,6 +229,7 @@
         protectSpecialDrawingEditor(frm);
         protectMeasurementApi(frm);
         protectUnifiedPrintApi(frm);
+        protectPlanPrintApis(frm);
     }
 
     function bindCaptureGuard(frm) {
