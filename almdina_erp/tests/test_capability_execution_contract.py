@@ -67,10 +67,16 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             "edit_special_drawing",
             "view_drawing_workspace",
             "print_measurements",
+            "print_customer_invoice",
+            "print_cutting_plan",
         ):
             with self.subTest(capability=capability):
                 self.assertIn(f'"{capability}"', source)
         self.assertIn("orderEditable", source)
+        self.assertIn("secureInvoicePrint", source)
+        self.assertIn("AlmdinaCustomerInvoiceToolbarUX", source)
+        self.assertIn("protectUnifiedPrintApi", source)
+        self.assertIn("protectPlanPrintApis", source)
         self.assertIn("requestAnimationFrame", source)
         self.assertIn("MutationObserver(scheduleObserverApply)", source)
 
