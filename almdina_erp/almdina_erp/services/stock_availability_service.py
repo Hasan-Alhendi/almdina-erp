@@ -15,7 +15,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.inventory import (
     FrappeStockAvailabilityRepository,
     StockAvailabilityRepositoryError,
 )
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
 
 
 _repository = FrappeStockAvailabilityRepository()
@@ -94,12 +93,7 @@ def validate_stock_for_order(
 
 @frappe.whitelist()
 def check_order_stock(order_name: str) -> dict[str, Any]:
-    require_any_role(
-        "Order Entry",
-        "Cutting Operator",
-        "Production Manager",
-        "Stock Manager",
-    )
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     return validate_stock_for_order(order_name, throw_on_shortage=False)
 
 

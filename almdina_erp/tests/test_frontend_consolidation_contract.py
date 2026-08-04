@@ -84,6 +84,12 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("print_measurements_table", source)
         self.assertNotIn("export_cutting_plan_dxf", source)
         self.assertNotIn("setup_pieces_excel_ux", source)
+        # Screen-faithful A4 print: sheet cards only, no toolbar extras/header.
+        self.assertIn("size: A4 portrait", source)
+        self.assertIn("sheetCardsFromVisibleDom", source)
+        self.assertIn("dco-print-plan-sheets", source)
+        self.assertNotIn("print-header", source)
+        self.assertNotIn("ERPNext Cutting Plan", source)
 
     def test_modern_modules_own_recalculation_printing_and_dxf(self) -> None:
         fast_save = FAST_SAVE.read_text(encoding="utf-8")

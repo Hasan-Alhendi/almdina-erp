@@ -283,75 +283,152 @@
     }
 
     // =====================================================
-    // Print cutting plan
+    // Print cutting plan — screen-faithful A4 sheets only
     // =====================================================
 
-    function print_cutting_plan(frm) {
-        const plan = parse_plan(frm);
-        if (!plan || !plan.sheets || !plan.sheets.length) {
+    function stripPlanExtras(container) {
+        if (!container) return;
+        container.querySelectorAll(".dco-cutting-plan").forEach(planRoot => {
+            [...planRoot.children].forEach(child => {
+                if (!(child instanceof HTMLElement)) return;
+                if (!child.classList.contains("dco-sheet-card")) child.remove();
+            });
+        });
+        // Also drop orphaned non-sheet nodes when HTML is a bare fragment.
+        [...container.children].forEach(child => {
+            if (!(child instanceof HTMLElement)) return;
+            if (child.classList.contains("dco-cutting-plan")) return;
+            if (!child.classList.contains("dco-sheet-card")) child.remove();
+        });
+    }
+
+    function fitBoardForA4(board) {
+        if (!board) return;
+        const width = parseFloat(board.style.width) || board.offsetWidth || 560;
+        const height = parseFloat(board.style.height) || board.offsetHeight || 260;
+        board.style.width = "100%";
+        board.style.maxWidth = "180mm";
+        board.style.height = "auto";
+        board.style.aspectRatio = `${Math.max(1, width)} / ${Math.max(1, height)}`;
+        board.style.margin = "0 auto";
+    }
+
+    function sheetCardsFromVisibleDom(frm) {
+        const field = frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const root = field && field.$wrapper && field.$wrapper.get(0);
+        if (!root) return [];
+        return [...root.querySelectorAll(".dco-sheet-card")].map(card => card.cloneNode(true));
+    }
+
+    function sheetCardsFromPlan(frm, plan) {
+        if (!plan || !plan.sheets || !plan.sheets.length) return [];
+        const holder = document.createElement("div");
+        holder.innerHTML = build_cutting_plan_html(frm, plan);
+        stripPlanExtras(holder);
+        return [...holder.querySelectorAll(".dco-sheet-card")].map(card => card.cloneNode(true));
+    }
+
+    function buildPrintDocument(title, sheetCards) {
+        const body = document.createElement("div");
+        body.className = "dco-cutting-plan dco-print-plan-sheets";
+        sheetCards.forEach(card => {
+            fitBoardForA4(card.querySelector(".dco-sheet-board"));
+            body.appendChild(card);
+        });
+
+        return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>${escape_html(title)}</title>
+<style>
+@page { size: A4 portrait; margin: 8mm; }
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box !important; }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff !important;
+    color: #111 !important;
+    font-family: Arial, Tahoma, sans-serif;
+    direction: rtl;
+}
+.dco-print-plan-sheets {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+}
+.dco-sheet-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 0 0 !important;
+    padding: 8px !important;
+    border: 1px solid #bbb !important;
+    border-radius: 10px !important;
+    background: #fff !important;
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+}
+.dco-sheet-card:last-child {
+    page-break-after: auto;
+    break-after: auto;
+}
+.dco-sheet-title {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    margin-bottom: 8px !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+}
+.dco-sheet-board {
+    position: relative !important;
+    direction: ltr !important;
+    display: block !important;
+    border: 2px solid #111 !important;
+    background:
+        linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px),
+        linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+        #fff !important;
+    background-size: 32px 32px !important;
+    overflow: hidden !important;
+}
+.dco-piece { overflow: hidden !important; }
+.dco-piece-label { direction: ltr !important; text-align: center !important; }
+.dco-edge-line { border-color: #d00000 !important; }
+</style>
+</head>
+<body>${body.innerHTML}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},400);};<\/script></body>
+</html>`;
+    }
+
+    function print_cutting_plan(frm, planOverride = null) {
+        let cards = [];
+        if (planOverride) {
+            cards = sheetCardsFromPlan(frm, planOverride);
+        }
+        if (!cards.length) {
+            cards = sheetCardsFromVisibleDom(frm);
+        }
+        if (!cards.length) {
+            cards = sheetCardsFromPlan(frm, parse_plan(frm));
+        }
+        if (!cards.length) {
             frappe.msgprint("لا يوجد مخطط قص للطباعة. اضغط أولًا على إعادة حساب خطة القص.");
             return;
         }
 
-        const plan_html = build_cutting_plan_html(frm, plan);
         const title = "خطة قص - " + (frm.doc.name || "");
         const print_window = window.open("", "_blank");
-
         if (!print_window) {
             frappe.msgprint("المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.");
             return;
         }
 
         print_window.document.open();
-        print_window.document.write(`
-            <!DOCTYPE html>
-            <html lang="ar" dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <title>${escape_html(title)}</title>
-                <style>
-                    @page { size:A4 portrait; margin:6mm; }
-                    * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; box-sizing:border-box !important; }
-                    html,body { margin:0;padding:0;background:#fff !important;color:#111 !important;font-family:Arial,Tahoma,sans-serif;direction:rtl; }
-                    body { padding:5mm; }
-                    .print-header { display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:5px;margin-bottom:6px;page-break-after:avoid; }
-                    .print-title { font-size:18px;font-weight:bold;margin-bottom:4px; }
-                    .print-info { font-size:10px;line-height:1.5; }
-                    .print-info-ltr { direction:ltr;text-align:left; }
-                    .dco-cutting-plan { color:#111 !important;background:#fff !important;padding:0 !important;margin:0 !important;font-family:Arial,Tahoma,sans-serif !important;font-size:10px !important; }
-                    .dco-cutting-plan h2 { display:none !important; }
-                    .dco-cutting-plan > div:first-of-type { font-size:10px !important;line-height:1.35 !important;margin-bottom:4px !important; }
-                    .dco-summary-grid { display:grid !important;grid-template-columns:repeat(4,1fr) !important;gap:4px !important;margin:4px 0 6px 0 !important; }
-                    .dco-summary-card { border:1px solid #aaa !important;border-radius:4px !important;padding:4px !important;background:#f8f8f8 !important;font-size:9px !important; }
-                    .dco-summary-card b { display:block !important;font-size:8px !important;color:#444 !important;margin-bottom:2px !important; }
-                    .dco-summary-card span { font-size:11px !important;font-weight:bold !important;color:#111 !important; }
-                    .dco-sheet-card { border:1px solid #777 !important;border-radius:5px !important;padding:5px !important;margin:7px 0 0 0 !important;background:#fff !important;page-break-inside:avoid !important;break-inside:avoid !important;zoom:.68; }
-                    .dco-sheet-card + .dco-sheet-card { page-break-before:always !important;break-before:page !important; }
-                    .dco-sheet-title { display:flex !important;justify-content:space-between !important;align-items:center !important;font-size:11px !important;font-weight:bold !important;margin-bottom:4px !important; }
-                    .dco-sheet-board { border:2px solid #111 !important;background:linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),#fff !important;background-size:32px 32px !important;overflow:hidden !important;direction:ltr !important;margin:0 auto 5px auto !important; }
-                    .dco-piece:not(.dco-clipped-corner-piece) { border:1px solid #111 !important;background:#e4f5ff !important; }
-                    .dco-piece { color:#111 !important;font-size:8px !important;line-height:1.1 !important;padding:1px !important;display:flex !important;align-items:center !important;justify-content:center !important; }
-                    .dco-clipped-corner-piece { border:0 !important;background:transparent !important; }
-                    .dco-piece-label { direction:ltr !important;text-align:center !important;color:#111 !important; }
-                    .dco-piece b { font-size:9px !important;font-weight:bold !important; }
-                    .dco-piece span,.dco-piece small { font-size:8px !important; }
-                    .dco-edge-line { border-color:#d00000 !important; }
-                    @media print { .no-print { display:none !important; } a[href]:after { content:"" !important; } }
-                </style>
-            </head>
-            <body>
-                <div class="print-header">
-                    <div>
-                        <div class="print-title">خطة قص</div>
-                        <div class="print-info">رقم الطلب: ${escape_html(frm.doc.name || "")}<br>الزبون: ${escape_html(frm.doc.customer || "")}<br>نوع اللوح: <span dir="ltr">${escape_html(frm.doc.board_description || "")}</span></div>
-                    </div>
-                    <div class="print-info print-info-ltr">${frappe.datetime.now_datetime()}<br>ERPNext Cutting Plan</div>
-                </div>
-                ${plan_html}
-                <script>window.onload=function(){setTimeout(function(){window.focus();window.print();},700);};<\/script>
-            </body>
-            </html>
-        `);
+        print_window.document.write(buildPrintDocument(title, cards));
         print_window.document.close();
     }
 

@@ -919,13 +919,22 @@ class DoorCuttingOrder(Document):
 
 @frappe.whitelist()
 def recalculate_order(order_name: str) -> dict[str, Any]:
-    """Run the expensive optimizer only from the explicit plan action."""
+    """Run the expensive optimizer only from the explicit plan action.
+
+    Recalculation refreshes live plan JSON and costs only. It must never approve
+    the order or freeze a production Cutting Plan snapshot.
+    """
     from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
 
     doc = frappe.get_doc("Door Cutting Order", order_name)
     doc.check_permission("write")
     assert_order_editable(doc)
+    # Editing + recalculating invalidates any previously frozen production plan.
+    if doc.approved_plan:
+        doc.approved_plan = None
+        doc.approved_plan_source = "System"
     doc.flags.force_cutting_plan_recalculation = True
+    doc.flags.allow_approved_edit = True
     doc.save()
     return {
         "name": doc.name,
@@ -946,5 +955,6 @@ def recalculate_order(order_name: str) -> dict[str, Any]:
         "customer_quote_total_usd": doc.customer_quote_total_usd,
         "customer_quote_status": doc.customer_quote_status,
         "plan_needs_recalculation": doc.plan_needs_recalculation,
+        "approved_plan": doc.approved_plan,
         "cutting_plan_json": doc.cutting_plan_json,
     }

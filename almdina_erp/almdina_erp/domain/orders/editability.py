@@ -5,6 +5,23 @@ from collections.abc import Collection
 
 DRAFT_LIKE_STATUSES = frozenset({"Draft", "Pending Review", "Rejected"})
 LOCKED_ORDER_STATUSES = frozenset({"Delivered", "Cancelled"})
+# Once cutting has started (Sharyoun/CNC) or later stages, in-place edits stop.
+CUTTING_OR_LATER_STATUSES = frozenset(
+    {
+        "At Sharyoun",
+        "At CNC",
+        "At Sanding",
+        "Ready for Delivery",
+        "Delivered",
+        "Cancelled",
+        "Completed",
+        "Cutting In Progress",
+        "Cut Completed",
+        "Edge Banding In Progress",
+        "Quality Check",
+        "Partially Completed",
+    }
+)
 
 
 def normalize_status(status: str | None) -> str:
@@ -20,15 +37,34 @@ def is_locked_status(status: str | None) -> bool:
     return (status or "") in LOCKED_ORDER_STATUSES
 
 
-def can_edit_order(status: str | None, roles: Collection[str] = ()) -> bool:
-    """Only draft-like documents are editable in place.
+def is_before_cutting(status: str | None) -> bool:
+    """True while the order has not reached Sharyoun/CNC cutting or later."""
+    normalized = normalize_status(status)
+    if normalized in LOCKED_ORDER_STATUSES:
+        return False
+    return normalized not in CUTTING_OR_LATER_STATUSES
 
-    The ``roles`` argument is retained for API compatibility, but privileged users
-    must create a controlled revision instead of modifying approved history.
+
+def can_edit_order(
+    status: str | None,
+    roles: Collection[str] = (),
+    *,
+    privileged: bool | None = None,
+) -> bool:
+    """Decide whether an order document may be edited in place.
+
+    Editing is allowed only before cutting (Sharyoun/CNC). Draft-like statuses
+    stay editable. Approved / At Drawing / similar pre-cut statuses require a
+    privileged editor (capability or role signal from the adapter).
     """
 
-    del roles
-    return is_draft_like(status)
+    if not is_before_cutting(status):
+        return False
+    if is_draft_like(status):
+        return True
+    if privileged is None:
+        privileged = bool(roles)
+    return bool(privileged)
 
 
 def is_drawing_stage(

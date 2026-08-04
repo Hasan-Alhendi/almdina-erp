@@ -139,6 +139,10 @@ def test_post_save_dom_layer_reuses_unchanged_measurement_table():
     assert "wrapper._dcoFastHtmlGuardForm = frm" in source
     assert "root._dcoDeferredRenderForm = frm" in source
     assert 'window.AlmdinaOrderCostUX.render(currentFrm)' in source
+    # Edit-session unlock must replace HTML; value-only sync leaves disabled inputs.
+    assert "htmlLooksEditable(value) !== currentShellEditable(root)" in source
+    assert "_dcoForceHtmlReplace" in source
+    assert "dco-fast-readonly-note" in source
 
 
 def test_post_save_dom_layer_loads_after_table_and_invoice_renderers():

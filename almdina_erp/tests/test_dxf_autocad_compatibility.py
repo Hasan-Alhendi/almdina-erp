@@ -74,10 +74,23 @@ def test_secure_exporter_removes_legacy_buttons_without_loading_legacy_workflow(
     assert 'function isExportButtonLabel(text)' in secure
     assert 'STRIP_EXPORT_LABELS.includes(value)' in secure
     assert '/تصدير\\s*DXF/i.test(value)' in secure
-    assert 'STRIP_EXPORT_LABELS.forEach(label =>' in secure
+    assert 'function installToolbarGuard(frm)' in secure
+    assert "plan_control_actions" in secure
     assert 'frm.remove_custom_button(label)' in secure
     assert 'new MutationObserver(() => stripUnauthorizedExportButtons(frm))' in secure
+    # AutoCAD export is hosted in the cutting-plan section, not the toolbar.
+    assert "frm.add_custom_button(label, () => validatedExport(frm))" not in secure
+    assert "frm.add_custom_button(buttonLabel()" not in secure
 
+
+def test_plan_section_hosts_permissioned_print_and_dxf_actions():
+    plan = _source(ROOT / "public" / "js" / "door_cutting_order_plan_ux.js")
+    assert "dco-print-cutting-plan" in plan
+    assert "dco-export-dxf" in plan
+    assert 'can(frm, "print_cutting_plan")' in plan or "print_cutting_plan" in plan
+    assert "printCuttingPlan" in plan
+    assert "exportCuttingPlanDxf" in plan
+    assert "export_order_dxf" in plan
 
 def test_dxf_import_service_is_wired_for_round_trip():
     importer = ROOT / "almdina_erp" / "services" / "dxf_import_service.py"

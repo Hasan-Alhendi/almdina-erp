@@ -7,9 +7,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
-
-
 METER_UOMS = {"meter", "metre", "meters", "metres", "m"}
 
 
@@ -441,12 +438,12 @@ def consume_planned_material_if_due(order_name: str, *, trigger: str) -> dict[st
 
 @frappe.whitelist()
 def check_order_stock(order_name: str) -> dict[str, Any]:
-    require_any_role("Order Entry", "Cutting Operator", "Production Manager", "Stock Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     return validate_stock_for_order(order_name, throw_on_shortage=False)
 
 
 @frappe.whitelist()
 def consume_order_materials(order_name: str) -> dict[str, Any] | None:
-    require_any_role("Production Manager", "Stock Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     settings = get_settings()
     return consume_planned_material_if_due(order_name, trigger=settings.stock_consumption_point or "Cutting Start")

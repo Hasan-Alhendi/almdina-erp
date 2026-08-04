@@ -6,8 +6,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
-
 
 REQUIRED_ROLES = (
     "Order Entry",
@@ -50,7 +48,7 @@ def _check(checks: list[dict[str, Any]], key: str, ok: bool, severity: str, mess
 
 @frappe.whitelist()
 def run_factory_preflight() -> dict[str, Any]:
-    require_any_role("Production Manager")
+    # Public API is fail-closed via hooks override to retired_product_endpoint.
     checks: list[dict[str, Any]] = []
     settings = frappe.get_single("Almdina ERP Settings")
 

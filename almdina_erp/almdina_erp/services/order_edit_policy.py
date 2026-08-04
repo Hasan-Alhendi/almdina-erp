@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.domain.orders.editability import (
     LOCKED_ORDER_STATUSES,
     can_edit_order,
     can_recalculate_drawing_system_plan,
+    is_before_cutting,
     is_draft_like as domain_is_draft_like,
     is_drawing_stage,
     is_locked_status as domain_is_locked_status,
@@ -82,21 +83,42 @@ def is_locked_status(status: str | None) -> bool:
     return domain_is_locked_status(status)
 
 
-def user_can_edit_order(status: str | None = None, user: str | None = None) -> bool:
-    """Only draft-like orders are editable; roles do not unlock approved history."""
+def _revision_state(order: Any) -> str:
+    value = _value(order, "revision_state") or "Current"
+    return str(value)
 
-    del user
-    return can_edit_order(status)
+
+def user_can_edit_order(
+    status: str | None = None,
+    user: str | None = None,
+    *,
+    revision_state: str | None = None,
+) -> bool:
+    """Editors with ``edit_order`` may change the same document before cutting.
+
+    Superseded revisions and orders that reached Sharyoun/CNC (or later) stay
+    read-only. Draft-like statuses remain editable under normal write access.
+    """
+
+    if str(revision_state or "Current") == "Superseded":
+        return False
+    if not is_before_cutting(status):
+        return False
+    if is_draft_like(status):
+        return can_edit_order(status, privileged=False)
+    return can_edit_order(
+        status,
+        privileged=doctype_has_capability(Capability.EDIT_ORDER, user=user),
+    )
 
 
 def assert_order_editable(order: Any) -> None:
     status = order_status(order)
-    if user_can_edit_order(status):
+    if user_can_edit_order(status, revision_state=_revision_state(order)):
         return
     frappe.throw(
         _(
-            "Order {0} is already approved or in production and cannot be edited/recalculated in place. "
-            "Create a controlled revision instead."
+            "Order {0} cannot be edited after cutting has started, or in its current state."
         ).format(order_display_name(order))
     )
 
@@ -107,10 +129,10 @@ def enforce_order_immutability_on_save(order: Any, old: Any) -> None:
     if not old:
         return
 
-    if user_can_edit_order(order_status(old)):
+    if user_can_edit_order(order_status(old), revision_state=_revision_state(old)):
         return
 
     if order.flags.get("force_cutting_plan_recalculation") and user_can_recalculate_drawing_system_plan(order):
         return
 
-    assert_order_editable(order)
+    assert_order_editable(old)

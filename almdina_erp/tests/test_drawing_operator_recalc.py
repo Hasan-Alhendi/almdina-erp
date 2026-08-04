@@ -40,8 +40,15 @@ def test_drawing_optimizer_ui_calls_recalculate_api():
 
 def test_drawing_form_exposes_dual_approval_and_print_actions():
     ux = _source(SHOP_FLOOR_UX)
+    plan_ux = _source(ROOT / "public" / "js" / "door_cutting_order_plan_ux.js")
     assert "خطة النظام" in ux
     assert "الخطة المرفوعة" in ux
     assert "اعتماد الرسم" in ux
-    assert "طباعة خطة القص" in ux
     assert "plan_source: source" in ux
+    # Print + AutoCAD DXF belong to the cutting-plan section, gated by capability.
+    assert "طباعة خطة القص" in plan_ux
+    assert "dco-print-cutting-plan" in plan_ux
+    assert "print_cutting_plan" in plan_ux
+    assert "dco-export-dxf" in plan_ux
+    assert "export_dxf" in plan_ux
+    assert "طباعة خطة القص" not in ux

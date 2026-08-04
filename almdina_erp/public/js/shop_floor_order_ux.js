@@ -459,13 +459,7 @@
 		if (can(frm, "approve_dxf") && availableApprovalSources(frm).length) {
 			frm.add_custom_button(__("اعتماد الرسم"), () => approveDrawing(frm), DRAWING_ACTION_GROUP);
 		}
-		if (can(frm, "print_cutting_plan")) {
-			frm.add_custom_button(__("طباعة خطة القص"), () => {
-				if (window.AlmdinaDrawingPlanUX && window.AlmdinaDrawingPlanUX.printActivePlan) {
-					window.AlmdinaDrawingPlanUX.printActivePlan(frm);
-				}
-			}, DRAWING_ACTION_GROUP);
-		}
+		// Print and AutoCAD DXF export live in the cutting-plan section.
 	}
 
 	function openHandoffDialog(frm, stageName) {

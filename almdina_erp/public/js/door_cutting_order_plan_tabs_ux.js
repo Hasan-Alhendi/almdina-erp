@@ -156,23 +156,11 @@
 			);
 			return;
 		}
-		if (!renderer || !renderer.build) {
-			frappe.msgprint(__("تعذر تجهيز الطباعة."));
+		if (renderer && typeof renderer.print === "function") {
+			renderer.print(frm, plan);
 			return;
 		}
-		const planHtml = renderer.build(frm, plan);
-		const win = window.open("", "_blank");
-		if (!win) {
-			frappe.msgprint(__("المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى."));
-			return;
-		}
-		const title = `${__("خطة قص")} - ${frm.doc.name || ""}`;
-		win.document.open();
-		win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${frappe.utils.escape_html(title)}</title><style>
-			@page{size:A4 portrait;margin:6mm}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;box-sizing:border-box!important}
-			html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Arial,Tahoma,sans-serif;direction:rtl}body{padding:5mm}
-		</style></head><body>${planHtml}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},700);};<\/script></body></html>`);
-		win.document.close();
+		frappe.msgprint(__("تعذر تجهيز الطباعة."));
 	}
 
 	window.AlmdinaPlanTabsUX = {
