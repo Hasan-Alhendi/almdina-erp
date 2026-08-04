@@ -27,6 +27,7 @@ app_include_js = [
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
+    "/assets/almdina_erp/js/shop_floor_dxf_visibility_ux.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
@@ -61,6 +62,7 @@ doctype_js = {
         "public/js/door_cutting_order_inline_note_editor.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
+        "public/js/door_cutting_order_action_permission_guard.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_multi_edge_ux.js",
@@ -115,6 +117,10 @@ override_doctype_class = {
 }
 
 doc_events = {
+    "Door Cutting Order": {
+        "before_validate":
+            "almdina_erp.almdina_erp.services.order_plan_permission_service.enforce_plan_and_drawing_permissions",
+    },
     "Replacement Piece": {
         "on_update": "almdina_erp.almdina_erp.services.cost_service.on_replacement_update",
     },
@@ -141,6 +147,8 @@ boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
 override_whitelisted_methods = {
+    "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order":
+        "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review":
         "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.submit_order_for_review",
     "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order":
