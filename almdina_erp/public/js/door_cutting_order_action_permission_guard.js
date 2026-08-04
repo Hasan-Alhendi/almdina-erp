@@ -26,6 +26,7 @@
         ".dco-print-measurements",
         ".dco-entry-window-print",
     ].join(",");
+    const CUSTOMER_INVOICE_SELECTOR = ".dco-print-customer-invoice";
     const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     let observerFrame = null;
 
@@ -56,6 +57,19 @@
 
     function deny(message) {
         frappe.msgprint(__(message));
+    }
+
+    function secureInvoicePrint(frm) {
+        if (!can(frm, "print_customer_invoice")) {
+            deny("ليس لديك صلاحية طباعة فاتورة الزبون.");
+            return Promise.resolve(false);
+        }
+        const toolbar = window.AlmdinaCustomerInvoiceToolbarUX;
+        if (!toolbar || typeof toolbar.printCustomerInvoice !== "function") {
+            deny("تعذر تحميل خدمة فاتورة الزبون الآمنة. أعد تحميل الصفحة.");
+            return Promise.resolve(false);
+        }
+        return Promise.resolve(toolbar.printCustomerInvoice(frm));
     }
 
     function protectPlanActions(frm) {
@@ -144,12 +158,39 @@
         actions.__almdinaPermissionGuarded = true;
     }
 
+    function protectUnifiedPrintApi(frm) {
+        const presenter = window.AlmdinaOrderDocumentPrint;
+        if (!presenter || presenter.__almdinaPermissionGuarded) return;
+        const originalMeasurements = typeof presenter.printMeasurements === "function"
+            ? presenter.printMeasurements.bind(presenter)
+            : null;
+        const originalHtml = presenter.html;
+        window.AlmdinaOrderDocumentPrint = Object.freeze({
+            __almdinaPermissionGuarded: true,
+            printInvoice(targetFrm) {
+                return secureInvoicePrint(targetFrm || frm || window.cur_frm);
+            },
+            printMeasurements(targetFrm) {
+                const active = targetFrm || frm || window.cur_frm;
+                if (!can(active, "print_measurements")) {
+                    deny("ليس لديك صلاحية طباعة القياسات.");
+                    return Promise.resolve(false);
+                }
+                return originalMeasurements
+                    ? Promise.resolve(originalMeasurements(active))
+                    : Promise.resolve(false);
+            },
+            html: originalHtml,
+        });
+    }
+
     function apply(frm = window.cur_frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         protectPlanActions(frm);
         protectMeasurementPrint(frm);
         protectSpecialDrawingEditor(frm);
         protectMeasurementApi(frm);
+        protectUnifiedPrintApi(frm);
     }
 
     function bindCaptureGuard(frm) {
@@ -176,12 +217,23 @@
         }, true);
     }
 
-    function bindGlobalPrintGuard() {
-        if (document.__almdinaMeasurementPrintPermissionBound) return;
-        document.__almdinaMeasurementPrintPermissionBound = true;
+    function bindGlobalDocumentGuard() {
+        if (document.__almdinaDocumentPermissionBound) return;
+        document.__almdinaDocumentPermissionBound = true;
         document.addEventListener("click", event => {
-            const button = event.target.closest && event.target.closest(MEASUREMENT_PRINT_SELECTOR);
-            if (!button) return;
+            const invoiceButton = event.target.closest && event.target.closest(CUSTOMER_INVOICE_SELECTOR);
+            if (invoiceButton) {
+                const frm = window.cur_frm;
+                if (!frm || frm.doctype !== "Door Cutting Order") return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                secureInvoicePrint(frm);
+                return;
+            }
+
+            const measurementButton = event.target.closest && event.target.closest(MEASUREMENT_PRINT_SELECTOR);
+            if (!measurementButton) return;
             const frm = window.cur_frm;
             if (frm && frm.doctype === "Door Cutting Order" && can(frm, "print_measurements")) return;
             event.preventDefault();
@@ -193,7 +245,7 @@
 
     function schedule(frm) {
         bindCaptureGuard(frm);
-        bindGlobalPrintGuard();
+        bindGlobalDocumentGuard();
         apply(frm);
         requestAnimationFrame(() => apply(frm));
         [100, 350, 900].forEach(delay => setTimeout(() => apply(frm), delay));
