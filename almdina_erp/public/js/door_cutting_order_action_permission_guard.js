@@ -26,6 +26,8 @@
         ".dco-print-measurements",
         ".dco-entry-window-print",
     ].join(",");
+    const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
+    let observerFrame = null;
 
     function permissions() {
         return window.AlmdinaPermissions || null;
@@ -40,6 +42,18 @@
         return typeof api.can === "function" && api.can(capability);
     }
 
+    function orderEditable(frm) {
+        if (window.frappe && frappe.almdina && typeof frappe.almdina.orderCanEdit === "function") {
+            return Boolean(frappe.almdina.orderCanEdit(frm));
+        }
+        return Boolean(
+            frm
+            && frm.doc
+            && Number(frm.doc.docstatus || 0) === 0
+            && EDITABLE_STATUSES.has(frm.doc.status || "Draft")
+        );
+    }
+
     function deny(message) {
         frappe.msgprint(__(message));
     }
@@ -50,21 +64,33 @@
 
         const mayRecalculate = can(frm, "recalculate_plan");
         const mayEditOptimizer = can(frm, "edit_optimizer_settings");
+        const editable = orderEditable(frm);
         root.querySelectorAll(PLAN_ACTION_SELECTOR).forEach(button => {
             const modeButton = button.matches(MODE_ACTION_SELECTOR);
-            const allowed = mayRecalculate && (!modeButton || mayEditOptimizer);
-            button.disabled = !allowed;
-            button.setAttribute("aria-disabled", allowed ? "false" : "true");
+            const allowed = editable && mayRecalculate && (!modeButton || mayEditOptimizer);
+            if (button.disabled === allowed) button.disabled = !allowed;
+            const ariaValue = allowed ? "false" : "true";
+            if (button.getAttribute("aria-disabled") !== ariaValue) {
+                button.setAttribute("aria-disabled", ariaValue);
+            }
             if (!allowed) {
-                button.title = modeButton && !mayEditOptimizer
-                    ? "لا تملك صلاحية تعديل إعدادات المحسّن"
-                    : "لا تملك صلاحية إعادة حساب خطة القص";
+                button.title = !editable
+                    ? "لا يمكن تعديل خطة طلب معتمد أو دخل الإنتاج"
+                    : modeButton && !mayEditOptimizer
+                        ? "لا تملك صلاحية تعديل إعدادات المحسّن"
+                        : "لا تملك صلاحية إعادة حساب خطة القص";
+            } else if (button.title && button.title.includes("صلاحية")) {
+                button.removeAttribute("title");
             }
         });
 
+        const desiredReadOnly = mayEditOptimizer && editable ? 0 : 1;
         OPTIMIZER_FIELDS.forEach(fieldname => {
-            if (!frm.fields_dict || !frm.fields_dict[fieldname]) return;
-            frm.set_df_property(fieldname, "read_only", mayEditOptimizer ? 0 : 1);
+            const field = frm.fields_dict && frm.fields_dict[fieldname];
+            if (!field || !field.df) return;
+            if (Number(field.df.read_only || 0) !== desiredReadOnly) {
+                frm.set_df_property(fieldname, "read_only", desiredReadOnly);
+            }
         });
     }
 
@@ -72,12 +98,14 @@
         const allowed = can(frm, "print_measurements");
         document.querySelectorAll(MEASUREMENT_PRINT_SELECTOR).forEach(button => {
             if (allowed) {
-                button.hidden = false;
+                if (button.hidden) button.hidden = false;
                 button.removeAttribute("aria-hidden");
                 return;
             }
-            button.hidden = true;
-            button.setAttribute("aria-hidden", "true");
+            if (!button.hidden) button.hidden = true;
+            if (button.getAttribute("aria-hidden") !== "true") {
+                button.setAttribute("aria-hidden", "true");
+            }
         });
     }
 
@@ -87,12 +115,13 @@
 
         const originalOpen = editor.open.bind(editor);
         editor.open = (targetFrm, row, options = {}) => {
+            const activeFrm = targetFrm || frm;
             const readOnly = Boolean(options && options.readOnly);
-            if (readOnly || can(targetFrm || frm, "edit_special_drawing")) {
-                return originalOpen(targetFrm, row, options);
+            if (readOnly || can(activeFrm, "edit_special_drawing")) {
+                return originalOpen(activeFrm, row, options);
             }
-            if (can(targetFrm || frm, "view_drawing_workspace")) {
-                return originalOpen(targetFrm, row, { ...options, readOnly: true });
+            if (can(activeFrm, "view_drawing_workspace")) {
+                return originalOpen(activeFrm, row, { ...options, readOnly: true });
             }
             deny("ليس لديك صلاحية فتح مساحة رسم الدرفة الخاصة.");
             return undefined;
@@ -170,6 +199,14 @@
         [100, 350, 900].forEach(delay => setTimeout(() => apply(frm), delay));
     }
 
+    function scheduleObserverApply() {
+        if (observerFrame !== null) return;
+        observerFrame = requestAnimationFrame(() => {
+            observerFrame = null;
+            apply(window.cur_frm);
+        });
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
@@ -177,6 +214,6 @@
 
     window.addEventListener("almdina:permissions-updated", () => schedule(window.cur_frm));
 
-    const observer = new MutationObserver(() => apply(window.cur_frm));
+    const observer = new MutationObserver(scheduleObserverApply);
     observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
