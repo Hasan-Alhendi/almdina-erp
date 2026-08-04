@@ -20,6 +20,7 @@
     }
 
     function isShopFloorRoute() {
+        if (!window.frappe) return false;
         const route = String((frappe.get_route_str && frappe.get_route_str()) || "").toLowerCase();
         return route.includes("shop-floor-inbox");
     }
@@ -62,7 +63,7 @@
 
         const heading = card.querySelector(".almdina-sf-detail-title");
         const orderName = String(heading && heading.textContent || "").trim();
-        if (!orderName) return;
+        if (!orderName || card.dataset.almdinaDxfHydrated === orderName) return;
 
         card.dataset.almdinaDxfHydrating = "1";
         frappe.call({
@@ -75,6 +76,7 @@
                 card.querySelector(".almdina-sf-detail-title")?.textContent || ""
             ).trim();
             if (currentHeading !== orderName) return;
+            card.dataset.almdinaDxfHydrated = orderName;
             injectLink(card, detail);
         }).catch(error => {
             if (error && error.exc_type !== "PermissionError") {
@@ -105,5 +107,5 @@
     if (window.jQuery) {
         window.jQuery(document).on("app_ready.almdinaDxfVisibility", schedule);
     }
-    if (frappe.router) frappe.router.on("change", schedule);
+    if (window.frappe && frappe.router) frappe.router.on("change", schedule);
 })();
