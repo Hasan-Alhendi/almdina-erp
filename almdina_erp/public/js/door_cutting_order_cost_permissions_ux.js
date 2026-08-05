@@ -1,6 +1,11 @@
 (() => {
     "use strict";
 
+    const COST_INPUT_FIELDS = Object.freeze([
+        "board_rate_usd",
+        "cutting_cost_per_board_usd",
+    ]);
+    const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const ORDER_COST_FIELDS = [
         "board_rate_usd",
         "cutting_cost_per_board_usd",
@@ -31,6 +36,11 @@
         "special_shape_price_note",
         "special_shape_price_approved_by",
         "special_shape_price_approved_on",
+        "clipped_corner_edge_price_usd",
+        "clipped_corner_edge_price_status",
+        "clipped_corner_edge_price_note",
+        "clipped_corner_edge_price_set_by",
+        "clipped_corner_edge_price_set_on",
     ];
 
     function can(frm, capability) {
@@ -92,58 +102,45 @@
         return (frm.doc.pieces || []).find((row) => row.name === rowName) || null;
     }
 
-    function editCostSettings(frm) {
-        frappe.prompt(
-            [
-                {
-                    fieldname: "board_rate_usd",
-                    fieldtype: "Currency",
-                    label: __("سعر اللوح ($)"),
-                    reqd: 1,
-                    non_negative: 1,
-                    default: Number(frm.doc.board_rate_usd || 0),
-                },
-                {
-                    fieldname: "cutting_cost_per_board_usd",
-                    fieldtype: "Currency",
-                    label: __("أجور القص لكل لوح ($)"),
-                    reqd: 1,
-                    non_negative: 1,
-                    default: Number(frm.doc.cutting_cost_per_board_usd || 0),
-                },
-            ],
-            (values) => {
-                frappe.call({
-                    method: "almdina_erp.almdina_erp.services.cost_permission_service.update_order_cost_settings",
-                    args: {
-                        order_name: frm.doc.name,
-                        board_rate_usd: values.board_rate_usd,
-                        cutting_cost_per_board_usd: values.cutting_cost_per_board_usd,
-                    },
-                    freeze: true,
-                    freeze_message: __("جاري تحديث إعدادات التكلفة..."),
-                }).then((response) => {
-                    mergeSnapshot(frm, response.message || {});
-                    frappe.show_alert({
-                        message: __("تم تحديث إعدادات التكلفة وإعادة حساب الطلب."),
-                        indicator: "green",
-                    }, 5);
-                    return frm.reload_doc();
-                });
-            },
-            __("إعدادات تكلفة الطلب"),
-            __("حفظ وإعادة الحساب")
+    function orderIsEditable(frm) {
+        if (!frm || !frm.doc || frm.is_new()) return false;
+        if (window.frappe && frappe.almdina && typeof frappe.almdina.orderCanEdit === "function") {
+            return Boolean(frappe.almdina.orderCanEdit(frm));
+        }
+        return (
+            Number(frm.doc.docstatus || 0) === 0
+            && EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft")
         );
     }
 
+    function orderCostFieldsEditable(frm) {
+        return Boolean(
+            can(frm, "edit_cost_settings")
+            && orderIsEditable(frm)
+        );
+    }
+
+    function configureCostInputFields(frm) {
+        const visible = can(frm, "view_costs");
+        const editable = orderCostFieldsEditable(frm);
+        COST_INPUT_FIELDS.forEach(fieldname => {
+            frm.set_df_property(fieldname, "hidden", visible ? 0 : 1);
+            frm.set_df_property(fieldname, "read_only", editable ? 0 : 1);
+        });
+    }
+
     function editSpecialPrice(frm, piece) {
+        if (!orderIsEditable(frm)) {
+            frappe.msgprint(__("افتح الطلب للتعديل أولاً قبل تغيير أسعار القشاط."));
+            return;
+        }
         const approved = piece.special_shape_price_status === "Approved";
         frappe.prompt(
             [
                 {
                     fieldname: "unit_price_usd",
                     fieldtype: "Currency",
-                    label: __("السعر الشامل للدرفة الواحدة ($)"),
+                    label: __("إجمالي تكلفة قشاط الدرفة الخاصة ($)"),
                     reqd: 1,
                     non_negative: 1,
                     default: Number(
@@ -170,39 +167,98 @@
                     },
                     freeze: true,
                     freeze_message: approved
-                        ? __("جاري تحديث السعر المعتمد...")
-                        : __("جاري اعتماد سعر الدرفة الخاصة..."),
+                        ? __("جاري تحديث سعر القشاط...")
+                        : __("جاري حفظ سعر قشاط الدرفة الخاصة..."),
                 }).then(() => {
                     frappe.show_alert({
                         message: approved
-                            ? __("تم تحديث السعر المعتمد.")
-                            : __("تم اعتماد السعر الشامل."),
+                            ? __("تم تحديث سعر القشاط.")
+                            : __("تم حفظ سعر قشاط الدرفة الخاصة."),
                         indicator: "green",
                     }, 5);
                     return frm.reload_doc();
                 });
             },
-            approved ? __("تعديل السعر المعتمد") : __("اعتماد سعر الدرفة الخاصة"),
-            approved ? __("تحديث السعر") : __("اعتماد السعر")
+            __("تعديل السعر"),
+            __("حفظ السعر")
         );
+    }
+
+    function editCutCornerEdgePrice(frm, piece) {
+        if (!orderIsEditable(frm)) {
+            frappe.msgprint(__("افتح الطلب للتعديل أولاً قبل تغيير أسعار القشاط."));
+            return;
+        }
+        const priced = piece.clipped_corner_edge_price_status === "Priced";
+        frappe.prompt(
+            [
+                {
+                    fieldname: "edge_price_usd",
+                    fieldtype: "Currency",
+                    label: __("تكلفة معالجة قشاط الزاوية المقصوصة ($)"),
+                    reqd: 1,
+                    non_negative: 1,
+                    default: Number(piece.clipped_corner_edge_price_usd) || 0,
+                },
+                {
+                    fieldname: "note",
+                    fieldtype: "Small Text",
+                    label: __("ملاحظة التسعير (اختياري)"),
+                    default: piece.clipped_corner_edge_price_note || "",
+                },
+            ],
+            (values) => {
+                frappe.call({
+                    method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
+                    args: {
+                        order_name: frm.doc.name,
+                        piece_name: piece.name,
+                        edge_price_usd: values.edge_price_usd,
+                        note: values.note || "",
+                    },
+                    freeze: true,
+                    freeze_message: __("جاري حفظ سعر قشاط الزاوية المقصوصة..."),
+                }).then(() => {
+                    frappe.show_alert({
+                        message: priced
+                            ? __("تم تحديث سعر قشاط الزاوية المقصوصة.")
+                            : __("تم حفظ سعر قشاط الزاوية المقصوصة."),
+                        indicator: "green",
+                    }, 5);
+                    return frm.reload_doc();
+                });
+            },
+            __("تعديل السعر"),
+            __("حفظ السعر")
+        );
+    }
+
+    function canUseCostTab(frm) {
+        return can(frm, "view_costs") || can(frm, "print_customer_invoice");
+    }
+
+    function ensurePrintInvoiceButton(frm) {
+        const wrapper = costWrapper(frm);
+        if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
+
+        const selectors = ".dco-print-customer-invoice, .dco-secure-print-customer-invoice";
+        if (!can(frm, "print_customer_invoice")) {
+            wrapper.find(selectors).remove();
+            return;
+        }
+
+        wrapper.find(selectors)
+            .prop("disabled", false)
+            .removeClass("is-plan-stale")
+            .attr("aria-disabled", "false");
     }
 
     function installActionPermissions(frm) {
         const wrapper = costWrapper(frm);
         if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
 
-        if (!(can(frm, "view_costs") && can(frm, "print_customer_invoice"))) {
-            wrapper.find(".dco-print-customer-invoice").remove();
-        }
-
-        const actions = wrapper.find(".dco-cost-actions");
-        actions.find(".dco-edit-cost-settings").remove();
-        if (can(frm, "edit_cost_settings") && !frm.is_new()) {
-            actions.prepend(
-                `<button type="button" class="btn btn-default btn-sm dco-edit-cost-settings">${__("تعديل إعدادات التكلفة")}</button>`
-            );
-            actions.find(".dco-edit-cost-settings").on("click", () => editCostSettings(frm));
-        }
+        ensurePrintInvoiceButton(frm);
+        wrapper.find(".dco-edit-cost-settings").remove();
 
         wrapper.find(".dco-approve-special-price,.dco-capability-special-price").remove();
         wrapper.find("[data-special-row]").each(function installPriceAction() {
@@ -211,14 +267,31 @@
             if (!piece) return;
             const approved = piece.special_shape_price_status === "Approved";
             const capability = approved ? "edit_special_price" : "approve_special_price";
-            if (!can(frm, capability) || frm.is_new() || piece.special_shape_status !== "Documented") {
+            if (!can(frm, capability) || !orderIsEditable(frm)) {
                 return;
             }
             const button = $(
-                `<button type="button" class="btn ${approved ? "btn-default" : "btn-primary"} btn-xs dco-capability-special-price">${approved ? __("تعديل السعر") : __("اعتماد سعر")}</button>`
+                `<button type="button" class="btn btn-primary btn-xs dco-capability-special-price">${__("تعديل السعر")}</button>`
             );
-            card.find(".dco-special-price-actions").find(".dco-view-special-sketch").after(button);
+            card.find(".dco-special-price-actions").prepend(button);
             button.on("click", () => editSpecialPrice(frm, piece));
+        });
+
+        wrapper.find(".dco-capability-cut-corner-price").remove();
+        wrapper.find("[data-cut-corner-row]").each(function installCutCornerPriceAction() {
+            const card = $(this);
+            const piece = sourcePiece(frm, card.attr("data-cut-corner-row"));
+            if (!piece) return;
+            const priced = piece.clipped_corner_edge_price_status === "Priced";
+            const capability = priced ? "edit_special_price" : "approve_special_price";
+            if (!can(frm, capability) || !orderIsEditable(frm)) {
+                return;
+            }
+            const button = $(
+                `<button type="button" class="btn btn-primary btn-xs dco-capability-cut-corner-price">${__("تعديل السعر")}</button>`
+            );
+            card.find(".dco-special-price-actions").prepend(button);
+            button.on("click", () => editCutCornerEdgePrice(frm, piece));
         });
     }
 
@@ -274,17 +347,26 @@
     }
 
     function apply(frm) {
-        if (!can(frm, "view_costs")) {
+        configureCostInputFields(frm);
+
+        if (!canUseCostTab(frm)) {
             scrubCostData(frm);
             setCostTabVisibility(frm, false);
             return;
         }
+
         setCostTabVisibility(frm, true);
-        loadCostSnapshot(frm).catch((error) => {
-            console.error("Failed to load protected cost snapshot", error);
-            scrubCostData(frm);
-            setCostTabVisibility(frm, false);
-        });
+
+        if (can(frm, "view_costs")) {
+            loadCostSnapshot(frm).catch((error) => {
+                console.error("Failed to load protected cost snapshot", error);
+                scrubCostData(frm);
+                setCostTabVisibility(frm, false);
+            });
+            return;
+        }
+
+        renderAuthorizedCost(frm);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -293,6 +375,21 @@
         },
         refresh(frm) {
             setTimeout(() => apply(frm), 0);
+        },
+        almdina_edit_session_changed(frm) {
+            setTimeout(() => apply(frm), 0);
+        },
+        before_save(frm) {
+            if (frm.is_new()) return;
+            const costApi = window.AlmdinaOrderCostUX;
+            const pending = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
+                ? costApi.pendingCustomEdgePriceLabels(frm)
+                : [];
+            if (!pending.length) return;
+            frappe.validated = false;
+            frappe.throw(__(
+                "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ. المتبقي: {0}."
+            ).replace("{0}", pending.join("، ")));
         },
     });
 

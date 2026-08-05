@@ -36,6 +36,17 @@ def test_optimizer_controls_and_actions_are_one_group():
         assert section < order.index(fieldname) < result, fieldname
 
 
+def test_machine_type_and_current_plan_result_are_hidden_from_plan_tab():
+    fields = {
+        row["fieldname"]: row
+        for row in json.loads(DOCTYPE_JSON.read_text(encoding="utf-8"))["fields"]
+    }
+    assert fields["cutting_machine_type"].get("hidden") == 1
+    assert fields["plan_result_section"].get("hidden") == 1
+    assert fields["plan_controls_intro"].get("hidden") == 1
+    assert fields["cutting_machine_type"].get("default") == "Auto"
+
+
 def test_board_layout_is_not_prefaced_by_duplicate_measurement_summary_on_screen():
     js = CONTENT_UX.read_text(encoding="utf-8")
     assert ".dco-piece-groups" in js

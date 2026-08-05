@@ -73,6 +73,19 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "special_shape_price_status": "Approved",
                 "special_shape_price_approved_by": "accounts@example.com",
             },
+            {
+                "piece_no": 3,
+                "piece_type": "Clipped Corner",
+                "width_cm": 60,
+                "length_cm": 90,
+                "qty": 1,
+                "edge_type": "2cm عادي",
+                "edge_meters": 3,
+                "edge_rate_usd": 0.5,
+                "edge_cost_usd": 1.5,
+                "clipped_corner_edge_price_usd": 7.5,
+                "clipped_corner_edge_price_status": "Priced",
+            },
         ]
 
     def test_application_layer_has_no_frappe_dependency(self) -> None:
@@ -88,16 +101,21 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertNotIn("operations", payload)
         self.assertNotIn("special_prices", payload)
         self.assertNotIn("classification", payload)
-        self.assertEqual(payload["totals"][0]["value_usd"], 78.0)
+        self.assertEqual(payload["totals"][0]["value_usd"], 85.5)
         self.assertEqual(
             [line["type"] for line in payload["lines"]],
-            ["material", "cutting", "edge", "special"],
+            ["material", "cutting", "edge", "special", "cut_corner"],
         )
+        descriptions = [line["description"] for line in payload["lines"]]
+        self.assertIn("درفة خاصة رقم 2", descriptions)
+        self.assertIn("درفة زاوية مقصوصة 3", descriptions)
+        cut_corner = next(line for line in payload["lines"] if line["type"] == "cut_corner")
+        self.assertEqual(cut_corner["amount_usd"], 7.5)
 
     def test_customer_summary_uses_door_count_not_board_count(self) -> None:
         payload = build_customer_invoice_document(self.order, self.pieces)
         summary = {item["label"]: item["value"] for item in payload["summary"]}
-        self.assertEqual(summary["عدد الدرف"], 3)
+        self.assertEqual(summary["عدد الدرف"], 4)
         self.assertNotIn("عدد الألواح", summary)
         self.assertTrue(all("edge_meters" not in row for row in payload["measurements"]))
 

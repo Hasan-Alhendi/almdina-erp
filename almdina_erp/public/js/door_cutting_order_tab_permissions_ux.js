@@ -69,10 +69,9 @@
     function apply(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
 
-        const saved = !frm.is_new();
         const visibility = {
-            results_tab: saved && can(frm, TAB_RULES.results_tab),
-            cost_tab: saved && can(frm, TAB_RULES.cost_tab),
+            results_tab: can(frm, TAB_RULES.results_tab),
+            cost_tab: can(frm, TAB_RULES.cost_tab) || can(frm, "print_customer_invoice"),
         };
 
         Object.entries(visibility).forEach(([fieldname, visible]) => {

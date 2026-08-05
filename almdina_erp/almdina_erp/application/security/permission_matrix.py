@@ -77,8 +77,16 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
     Capability.EDIT_SPECIAL_DRAWING: _presentation("تعديل الرسم الخاص", "تحرير هندسة وملاحظات الدرف الخاصة.", "sensitive"),
     Capability.EXPORT_DXF: _presentation("تصدير DXF", "تصدير رسم الإنتاج بصيغة DXF.", "sensitive"),
-    Capability.UPLOAD_DXF: _presentation("رفع DXF", "رفع خطة DXF مخصصة للطلب.", "sensitive"),
-    Capability.REPLACE_DXF: _presentation("استبدال DXF", "استبدال ملف DXF المرفوع سابقًا.", "critical"),
+    Capability.UPLOAD_DXF: _presentation(
+        "رفع خطة قص DXF",
+        "رفع خطة قص كملف DXF مع التحقق قبل اعتمادها. مخصصة لعامل الرسم.",
+        "sensitive",
+    ),
+    Capability.REPLACE_DXF: _presentation(
+        "استبدال خطة قص DXF",
+        "استبدال ملف DXF المرفوع سابقًا بعد التحقق. مخصصة لعامل الرسم.",
+        "critical",
+    ),
     Capability.APPROVE_DXF: _presentation("اعتماد الرسم", "اعتماد خطة النظام أو الخطة المرفوعة كمصدر للإنتاج.", "critical"),
     Capability.DISPATCH_ORDER: _presentation("إرسال الطلب للإنتاج", "اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.", "critical"),
     Capability.START_ASSIGNED_STAGE: _presentation("بدء المرحلة المسندة", "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه."),

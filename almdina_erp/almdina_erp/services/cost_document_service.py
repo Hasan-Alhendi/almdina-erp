@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import now_datetime
 
 from almdina_erp.almdina_erp.application.costing.financial_documents import (
     build_customer_invoice_document,
     build_internal_cost_report_document,
+)
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    pending_custom_edge_price_labels,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -66,6 +70,11 @@ PIECE_DOCUMENT_FIELDS = (
     "special_shape_price_note",
     "special_shape_price_approved_by",
     "special_shape_price_approved_on",
+    "clipped_corner_edge_price_usd",
+    "clipped_corner_edge_price_status",
+    "clipped_corner_edge_price_note",
+    "clipped_corner_edge_price_set_by",
+    "clipped_corner_edge_price_set_on",
 )
 
 
@@ -109,6 +118,16 @@ def _finalize(payload: dict[str, Any], order: Any) -> dict[str, Any]:
     }
 
 
+def _require_custom_edge_prices(order: Any) -> None:
+    pending = pending_custom_edge_price_labels(order.pieces or [])
+    if pending:
+        frappe.throw(
+            _(
+                "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل طباعة الفاتورة. المتبقي: {0}."
+            ).format("، ".join(pending))
+        )
+
+
 @frappe.whitelist()
 def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
     """Return a customer invoice after read and explicit print authorization."""
@@ -118,6 +137,7 @@ def get_customer_invoice_document(order_name: str) -> dict[str, Any]:
         Capability.PRINT_CUSTOMER_INVOICE,
         requires_cost_access=False,
     )
+    _require_custom_edge_prices(order)
     order_snapshot, pieces = _document_context(order)
     return _finalize(
         build_customer_invoice_document(order_snapshot, pieces),

@@ -6,6 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.services.order_board_identity import (
+    order_board_color,
+    order_board_material,
+    order_board_thickness_mm,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_doctype_capability,
@@ -95,11 +100,11 @@ def _draft_manifest(order: Any, snapshot: dict[str, Any]) -> dict[str, Any]:
                 "sheet_no": int(sheet.get("sheet_no") or index + 1),
                 "source_type": sheet.get("source_type") or "Full Board",
                 "remnant": sheet.get("remnant"),
-                "board_item": order.board_item,
-                "material": sheet.get("material") or order.board_material or "",
-                "color": sheet.get("color") or order.board_color or "",
+                "board_item": getattr(order, "board_item", None),
+                "material": sheet.get("material") or order_board_material(order),
+                "color": sheet.get("color") or order_board_color(order),
                 "thickness_mm": flt(
-                    sheet.get("thickness_mm") or order.board_thickness_mm
+                    sheet.get("thickness_mm") or order_board_thickness_mm(order)
                 ),
                 "full_width_mm": flt(sheet.get("full_width_cm")) * 10,
                 "full_length_mm": flt(sheet.get("full_length_cm")) * 10,

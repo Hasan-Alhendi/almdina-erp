@@ -33,7 +33,7 @@
 	}
 
 	function shouldShowPlanTabs(frm) {
-		return Boolean(frm && !frm.is_new() && canViewCuttingPlan(frm));
+		return Boolean(frm && canViewCuttingPlan(frm));
 	}
 
 	function canShowDualTabs(frm) {

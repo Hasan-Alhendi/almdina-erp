@@ -82,3 +82,4 @@ def test_drawing_form_exposes_reapproval_with_warning():
     assert "current_assignee" not in ux
     assert "isAssignedToCurrentUser" not in ux
     assert "lock_cutting_plan" not in ux
+    assert "frm.add_custom_button" not in ux

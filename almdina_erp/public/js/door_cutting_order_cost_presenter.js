@@ -3,7 +3,7 @@
 
     if (window.AlmdinaOrderCostUX) return;
 
-    const STYLE_ID = "dco-capability-cost-presenter-css";
+    const STYLE_ID = "dco-capability-cost-presenter-css-v3";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -65,15 +65,23 @@
             priceStatus: source.special_shape_price_status || "Not Applicable",
             priceNote: source.special_shape_price_note || "",
             drawingStatus: source.special_shape_status || "Not Required",
+            clippedEdgePrice: number(source.clipped_corner_edge_price_usd),
+            clippedEdgeStatus: source.clipped_corner_edge_price_status || "Unpriced",
+            clippedEdgeNote: source.clipped_corner_edge_price_note || "",
+            clippedPosition: source.clipped_corner_position || "",
+            clippedWidth: number(source.clipped_corner_width_cm),
+            clippedLength: number(source.clipped_corner_length_cm),
         }));
     }
 
     function invoiceLines(frm) {
         const result = [];
         const allRows = rows(frm);
-        const specialRows = allRows.filter(row => row.pieceType === "Special");
-        const regularRows = specialRows.length
-            ? allRows.filter(row => row.pieceType !== "Special")
+        const customDoorRows = allRows.filter(row =>
+            row.pieceType === "Special" || row.pieceType === "Clipped Corner"
+        );
+        const regularRows = customDoorRows.length
+            ? allRows.filter(row => row.pieceType !== "Special" && row.pieceType !== "Clipped Corner")
             : allRows;
         const boardCount = Math.max(0, Math.trunc(number(frm.doc.required_boards)));
         const boardRate = number(frm.doc.board_rate_usd);
@@ -125,7 +133,7 @@
         });
         result.push(...edgeGroups.values());
 
-        if (!edgeGroups.size && !specialRows.length && number(frm.doc.edge_cost_usd) > 0) {
+        if (!edgeGroups.size && !customDoorRows.length && number(frm.doc.edge_cost_usd) > 0) {
             result.push({
                 type: "edge",
                 description: "القشاط",
@@ -136,19 +144,45 @@
             });
         }
 
-        specialRows.forEach(row => {
-            result.push({
-                type: "special",
-                description: `درفة خاصة رقم ${row.index} — ${row.priceStatus === "Approved" ? "سعر معتمد شامل" : "سعر تقديري شامل"}`,
-                quantity: row.qty,
-                unit: "درفة",
-                rate: row.finalUnit,
-                amount: row.finalUnit * row.qty,
-                note: row.priceNote,
-            });
+        allRows.forEach(row => {
+            if (row.pieceType === "Special") {
+                result.push({
+                    type: "special",
+                    description: `درفة خاصة رقم ${row.index}`,
+                    quantity: row.qty,
+                    unit: "درفة",
+                    rate: row.finalUnit,
+                    amount: row.finalUnit * row.qty,
+                    note: row.priceNote,
+                });
+                return;
+            }
+            if (row.pieceType === "Clipped Corner") {
+                result.push({
+                    type: "cut_corner",
+                    description: `درفة زاوية مقصوصة ${row.index}`,
+                    quantity: row.qty,
+                    unit: "درفة",
+                    rate: row.clippedEdgePrice,
+                    amount: row.clippedEdgePrice * row.qty,
+                    note: row.clippedEdgeNote,
+                });
+            }
         });
 
         return result;
+    }
+
+    function pendingCustomEdgePriceLabels(frm) {
+        return rows(frm).flatMap(row => {
+            if (row.pieceType === "Special" && row.priceStatus !== "Approved") {
+                return [`درفة خاصة رقم ${row.index}`];
+            }
+            if (row.pieceType === "Clipped Corner" && row.clippedEdgeStatus !== "Priced") {
+                return [`درفة زاوية مقصوصة ${row.index}`];
+            }
+            return [];
+        });
     }
 
     function effectiveInvoiceLines(frm) {
@@ -183,9 +217,7 @@
         style.id = STYLE_ID;
         style.textContent = `
             .dco-cost-shell{direction:rtl;max-width:1440px;margin:0 auto;padding:4px 0 18px}
-            .dco-cost-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border:1px solid var(--border-color,#dfe4e8);border-radius:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f7f9fb));box-shadow:0 8px 24px rgba(23,32,51,.045)}
-            .dco-cost-hero h3{margin:0 0 5px;font-size:20px;font-weight:900}
-            .dco-cost-hero p{margin:0;color:var(--text-muted,#67727e);font-size:12px;line-height:1.7}
+            .dco-cost-actions-bar{display:flex;justify-content:flex-start;margin:0 0 12px}
             .dco-cost-actions{display:flex;gap:8px;flex-wrap:wrap}
             .dco-cost-actions .btn{border-radius:9px;font-weight:800}
             .dco-cost-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
@@ -204,15 +236,21 @@
             .dco-cost-table tr:last-child td{border-bottom:0}
             .dco-cost-table .text-start{text-align:right}
             .dco-special-price-list{display:grid;gap:9px;padding:12px}
-            .dco-special-price-card{display:grid;grid-template-columns:minmax(190px,1.2fr) repeat(3,minmax(110px,.7fr)) auto;align-items:center;gap:9px;padding:12px;border:1px solid var(--border-color,#e0e5e9);border-radius:13px;background:var(--card-bg,#fff)}
+            .dco-special-price-card{display:grid;grid-template-columns:minmax(150px,.9fr) minmax(160px,1fr) minmax(140px,.85fr) auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--border-color,#e0e5e9);border-radius:13px;background:var(--card-bg,#fff)}
+            .dco-special-price-id{font-size:14px;font-weight:900;letter-spacing:.02em}
+            .dco-special-price-id small{display:block;margin-top:3px;font-size:10px;font-weight:700;color:var(--text-muted,#687481);letter-spacing:0}
             .dco-special-price-cell{padding:8px 9px;border-radius:10px;background:var(--subtle-fg,#f7f9fa)}
             .dco-special-price-cell span{display:block;font-size:9px;color:var(--text-muted,#687481);margin-bottom:3px}
             .dco-special-price-cell b{display:block;direction:ltr;text-align:right}
-            .dco-special-price-actions{display:flex;flex-direction:column;gap:6px}
+            .dco-special-price-cell.is-unpriced b{color:var(--text-muted,#8a939c);font-weight:800}
+            .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:118px}
             .dco-special-price-note{grid-column:1/-1;font-size:10px;color:var(--text-muted,#687481)}
+            .dco-invoice-total-card{margin:0;padding:18px 20px;border:1px solid rgba(31,130,82,.35);border-radius:0;border-top:0;background:linear-gradient(135deg,rgba(31,130,82,.12),rgba(31,130,82,.045));display:flex;align-items:center;justify-content:space-between;gap:16px}
+            .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:#1f8252}
+            .dco-invoice-total-card b{display:block;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:#14653d;letter-spacing:.01em}
             .dco-cost-empty{padding:24px;text-align:center;color:var(--text-muted,#687481)}
-            @media(max-width:900px){.dco-cost-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dco-cost-hero{flex-direction:column}.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>strong,.dco-special-price-note{grid-column:1/-1}}
-            @media(max-width:560px){.dco-cost-kpis{grid-template-columns:1fr}.dco-cost-actions .btn{width:100%}}
+            @media(max-width:900px){.dco-cost-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}
+            @media(max-width:560px){.dco-cost-kpis{grid-template-columns:1fr}.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{flex-direction:column;align-items:flex-start}.dco-invoice-total-card b{font-size:24px}}
         `;
         document.head.appendChild(style);
     }
@@ -244,21 +282,76 @@
         </tr>`).join("")}</tbody></table></div>`;
     }
 
+    function invoiceTotalCardHtml(frm) {
+        const total = quoteTotal(frm);
+        return `<div class="dco-invoice-total-card">
+            <span>${__("الإجمالي النهائي للفاتورة")}</span>
+            <b>$ ${money(total)}</b>
+        </div>`;
+    }
+
+    function specialDoorLabel(row) {
+        return `درفة خاصة رقم ${row.index}`;
+    }
+
+    function cutCornerDoorLabel(row) {
+        return `درفة زاوية مقصوصة ${row.index}`;
+    }
+
+    function specialPriceLabel(row) {
+        const priced = row.priceStatus === "Approved" && number(row.approvedUnit) > 0;
+        if (priced) return `$ ${money(row.approvedUnit)}`;
+        return __("غير مسعّر");
+    }
+
+    function cutCornerPriceLabel(row) {
+        const priced = row.clippedEdgeStatus === "Priced";
+        if (priced) return `$ ${money(row.clippedEdgePrice)}`;
+        return __("غير مسعّر");
+    }
+
     function specialPricingHtml(frm) {
         const specialRows = rows(frm).filter(row => row.pieceType === "Special");
         if (!specialRows.length) return "";
         return `<div class="dco-cost-section"><div class="dco-cost-section-title">
-            <h4>تسعير الدرف الخاصة</h4><span>السعر النهائي المستخدم لكل درفة خاصة</span>
+            <h4>تسعير قشط الدرفات الخاصة</h4><span>سعر قشاط كل درفة خاصة مع إجراءات التعديل وعرض الرسم</span>
         </div><div class="dco-special-price-list">${specialRows.map(row => {
-            const approved = row.priceStatus === "Approved";
-            const documented = row.drawingStatus === "Documented";
-            return `<div class="dco-special-price-card" data-special-row="${esc(row.name)}">
-                <strong>درفة خاصة رقم ${row.index}<small style="display:block;color:var(--text-muted,#687481)">${quantity(row.width)} × ${quantity(row.length)} سم — عدد ${row.qty}</small></strong>
-                <div class="dco-special-price-cell"><span>التقديري / الوحدة</span><b>$ ${money(row.estimatedUnit)}</b></div>
-                <div class="dco-special-price-cell"><span>المعتمد / الوحدة</span><b>${approved ? `$ ${money(row.approvedUnit)}` : "—"}</b></div>
-                <div class="dco-special-price-cell"><span>الإجمالي المستخدم</span><b>$ ${money(row.finalUnit * row.qty)}</b></div>
-                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>عرض الرسم</button></div>
+            const doorLabel = specialDoorLabel(row);
+            const priced = row.priceStatus === "Approved" && number(row.approvedUnit) > 0;
+            const documented = row.drawingStatus === "Documented"
+                || Boolean(String(row.source.special_shape_geometry_json || "").trim())
+                || Boolean(String(row.source.special_shape_drawing_json || "").trim());
+            return `<div class="dco-special-price-card" data-special-row="${esc(row.name)}" data-custom-id="${esc(doorLabel)}">
+                <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
+                <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
+                <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}"><span>${__("سعر القشاط")}</span><b>${priced ? `$ ${money(row.approvedUnit)}` : "—"}</b>${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${esc(specialPriceLabel(row))}</small>`}</div>
+                <div class="dco-special-price-actions">
+                    <button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${__("عرض الرسم")}</button>
+                </div>
                 ${row.priceNote ? `<div class="dco-special-price-note">${esc(row.priceNote)}</div>` : ""}
+            </div>`;
+        }).join("")}</div></div>`;
+    }
+
+    function cutCornerPricingHtml(frm) {
+        const cutRows = rows(frm).filter(row => row.pieceType === "Clipped Corner");
+        if (!cutRows.length) return "";
+        return `<div class="dco-cost-section"><div class="dco-cost-section-title">
+            <h4>تسعير قشاط درف الزاوية المقصوصة</h4><span>سعر معالجة قشاط كل درفة زاوية مقصوصة</span>
+        </div><div class="dco-special-price-list">${cutRows.map(row => {
+            const doorLabel = cutCornerDoorLabel(row);
+            const priced = row.clippedEdgeStatus === "Priced";
+            const hasDrawing = Boolean(row.clippedPosition)
+                && number(row.clippedWidth) > 0
+                && number(row.clippedLength) > 0;
+            return `<div class="dco-special-price-card" data-cut-corner-row="${esc(row.name)}" data-custom-id="${esc(doorLabel)}">
+                <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
+                <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
+                <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}"><span>${__("سعر القشاط")}</span><b>${priced ? `$ ${money(row.clippedEdgePrice)}` : "—"}</b>${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${esc(cutCornerPriceLabel(row))}</small>`}</div>
+                <div class="dco-special-price-actions">
+                    <button type="button" class="btn btn-default btn-xs dco-view-cut-corner-sketch" ${hasDrawing ? "" : "disabled"}>${__("عرض الرسم")}</button>
+                </div>
+                ${row.clippedEdgeNote ? `<div class="dco-special-price-note">${esc(row.clippedEdgeNote)}</div>` : ""}
             </div>`;
         }).join("")}</div></div>`;
     }
@@ -269,40 +362,54 @@
             const source = (frm.doc.pieces || []).find(
                 row => row.name === (card && card.dataset.specialRow)
             );
-            if (!source || !window.AlmdinaSpecialShapeEditor || !window.AlmdinaSpecialShapeEditor.view) {
+            if (!source || !window.AlmdinaSpecialShapeEditor || typeof window.AlmdinaSpecialShapeEditor.view !== "function") {
                 frappe.msgprint(__("تعذر تحميل رسم الدرفة الخاصة."));
                 return;
             }
             window.AlmdinaSpecialShapeEditor.view(frm, source);
+        });
+        wrapper.find(".dco-view-cut-corner-sketch").on("click", function onViewCutCorner() {
+            const card = this.closest("[data-cut-corner-row]");
+            const source = (frm.doc.pieces || []).find(
+                row => row.name === (card && card.dataset.cutCornerRow)
+            );
+            if (!source || !window.AlmdinaClippedCornerEditor || typeof window.AlmdinaClippedCornerEditor.view !== "function") {
+                frappe.msgprint(__("تعذر تحميل رسم الزاوية المقصوصة."));
+                return;
+            }
+            window.AlmdinaClippedCornerEditor.view(frm, source);
         });
     }
 
     function render(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
         if (!field || !field.$wrapper) return false;
-        if (!can(frm, "view_costs")) {
+
+        const canView = can(frm, "view_costs");
+        const canPrint = can(frm, "print_customer_invoice");
+        if (!canView && !canPrint) {
             field.$wrapper.empty();
             return false;
         }
 
         installStyles();
-        const boardAmount = number(frm.doc.mdf_cost_usd);
-        const cuttingAmount = number(frm.doc.cutting_cost_usd);
-        const edgeAmount = number(frm.doc.edge_cost_usd);
-        const total = quoteTotal(frm);
+        if (!canView) {
+            field.$wrapper.html(`<div class="dco-cost-shell">
+                <div class="dco-cost-actions-bar">
+                    <div class="dco-cost-actions"><button type="button" class="btn btn-primary btn-sm dco-print-customer-invoice">${__("طباعة فاتورة الزبون")}</button></div>
+                </div>
+            </div>`);
+            return true;
+        }
+
         field.$wrapper.html(`<div class="dco-cost-shell">
-            <div class="dco-cost-hero"><div><h3>تكلفة الطلب</h3><p>تفاصيل سعر البيع والقياسات والخدمات المحسوبة لهذا الطلب.</p></div>
-                <div class="dco-cost-actions"><button type="button" class="btn btn-default btn-sm dco-print-customer-invoice">طباعة فاتورة الزبون</button></div>
-            </div>
-            <div class="dco-cost-kpis">
-                <div class="dco-cost-kpi"><span>الألواح</span><b>$ ${money(boardAmount)}</b></div>
-                <div class="dco-cost-kpi"><span>أجور القص</span><b>$ ${money(cuttingAmount)}</b></div>
-                <div class="dco-cost-kpi"><span>القشاط</span><b>$ ${money(edgeAmount)}</b></div>
-                <div class="dco-cost-kpi total"><span>الإجمالي النهائي</span><b>$ ${money(total)}</b></div>
+            <div class="dco-cost-actions-bar">
+                <div class="dco-cost-actions"><button type="button" class="btn btn-primary btn-sm dco-print-customer-invoice">${__("طباعة فاتورة الزبون")}</button></div>
             </div>
             <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
-            <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة</span></div>${invoiceRowsHtml(frm)}</div>
+            ${cutCornerPricingHtml(frm)}
+            <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
         </div>`);
         bindViewDrawing(frm, field.$wrapper);
         return true;
@@ -313,5 +420,6 @@
         invoiceLines,
         invoiceTotal,
         quoteTotal,
+        pendingCustomEdgePriceLabels,
     });
 })();

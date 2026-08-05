@@ -310,18 +310,25 @@
         }
     }
 
-    function open(frm, row) {
+    function open(frm, row, options = {}) {
         if (!frm || !row || row.piece_type !== CLIPPED_TYPE) return;
         installStyles();
         prepareRow(row);
+        const readOnly = Boolean(options.readOnly);
 
         const dialog = new frappe.ui.Dialog({
             title: isArabic()
-                ? `إعداد الزاوية المقصوصة — الدرفة ${row.piece_no || row.idx || ""}`
-                : `Clipped corner — piece ${row.piece_no || row.idx || ""}`,
+                ? `${readOnly ? "عرض" : "إعداد"} الزاوية المقصوصة — الدرفة ${row.piece_no || row.idx || ""}`
+                : `${readOnly ? "View" : "Edit"} clipped corner — piece ${row.piece_no || row.idx || ""}`,
             fields: [{ fieldname: "corner_editor", fieldtype: "HTML" }],
-            primary_action_label: isArabic() ? "اعتماد الزاوية" : "Apply corner",
+            primary_action_label: readOnly
+                ? (isArabic() ? "إغلاق" : "Close")
+                : (isArabic() ? "اعتماد الزاوية" : "Apply corner"),
             primary_action() {
+                if (readOnly) {
+                    dialog.hide();
+                    return;
+                }
                 const root = dialog.$wrapper.find(".dco-corner-editor").get(0);
                 if (!root) return;
                 const config = readEditor(root, row);
@@ -352,6 +359,13 @@
         const field = dialog.fields_dict.corner_editor;
         field.$wrapper.html(editorHtml(row));
         const root = field.$wrapper.find(".dco-corner-editor").get(0);
+        if (readOnly) {
+            root.querySelectorAll("input,button").forEach(control => {
+                control.disabled = true;
+            });
+            renderPreview(root, row);
+            return;
+        }
         root.querySelectorAll(".dco-corner-position").forEach(button => {
             button.addEventListener("click", () => {
                 root.querySelectorAll(".dco-corner-position").forEach(item => item.classList.remove("is-active"));
@@ -372,6 +386,10 @@
         renderPreview(root, row);
     }
 
+    function view(frm, row) {
+        open(frm, row, { readOnly: true });
+    }
+
     window.AlmdinaClippedCornerGeometry = Object.freeze({
         TYPE: CLIPPED_TYPE,
         positions: POSITIONS.map(position => position.value),
@@ -384,5 +402,5 @@
         positionLabel,
         summary,
     });
-    window.AlmdinaClippedCornerEditor = Object.freeze({ open, prepare: prepareRow });
+    window.AlmdinaClippedCornerEditor = Object.freeze({ open, view, prepare: prepareRow });
 })();

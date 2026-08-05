@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import runpy
 from pathlib import Path
 
@@ -10,6 +11,7 @@ APPLICATION_PATH = (
     ROOT / "almdina_erp" / "application" / "costing" / "financial_documents.py"
 )
 UX_PATH = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+PRESENTER_PATH = ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
 HOOKS_PATH = ROOT / "hooks.py"
 
 
@@ -43,6 +45,74 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "cost_document_service.get_internal_cost_report_document" in source
     assert 'can(frm, "view_costs")' in source
     assert 'can(frm, "print_customer_invoice")' in source
+    assert 'visible: !frm.is_new() && can(frm, "print_customer_invoice")' in source
+    presenter = PRESENTER_PATH.read_text(encoding="utf-8")
+    permissions = (
+        ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
+    ).read_text(encoding="utf-8")
+    assert "dco-cost-hero" not in presenter
+    assert "dco-cost-actions-bar" in presenter
+    assert '<div class="dco-cost-kpis">' not in presenter
+    assert "تسعير قشط الدرفات الخاصة" in presenter
+    assert "تسعير قشاط درف الزاوية المقصوصة" in presenter
+    assert "specialPricingHtml(frm)" in presenter
+    assert "cutCornerPricingHtml(frm)" in presenter
+    assert "درفة خاصة رقم" in presenter
+    assert "درفة زاوية مقصوصة" in presenter
+    assert "specialDoorLabel(row)" in presenter
+    assert "cutCornerDoorLabel(row)" in presenter
+    assert "dco-invoice-total-card" in presenter
+    assert "الإجمالي النهائي للفاتورة" in presenter
+    assert "invoiceTotalCardHtml(frm)" in presenter
+    assert "#Custom-" not in presenter
+    assert "#CutCorner-" not in presenter
+    assert "pendingCustomEdgePriceLabels" in presenter
+    assert "عرض الرسم" in presenter
+    assert "غير مسعّر" in presenter
+    assert "سعر القشاط" in presenter
+    assert "dco-view-cut-corner-sketch" in presenter
+    assert '__("تعديل السعر")' in permissions
+    assert "إجمالي تكلفة قشاط الدرفة الخاصة" in permissions
+    assert "update_clipped_corner_edge_price" in permissions
+    assert "تكلفة معالجة قشاط الزاوية المقصوصة" in permissions
+    assert "orderIsEditable(frm)" in permissions
+    assert "frappe.almdina.orderCanEdit" in permissions
+    assert "almdina_edit_session_changed(frm)" in permissions
+    assert "أدخل أسعار قشاط" in permissions
+    assert "before_save(frm)" in permissions
+    assert "pendingCustomEdgePriceLabels" in source
+    assert "أدخل أسعار قشاط" in source
+    assert "assert_order_editable(order)" in (
+        ROOT / "almdina_erp" / "services" / "cost_permission_service.py"
+    ).read_text(encoding="utf-8")
+    assert "ensure_custom_edge_prices" in (
+        ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "piece_policy_adapter.py"
+    ).read_text(encoding="utf-8")
+    assert "pending_custom_edge_price_labels" in (
+        ROOT / "almdina_erp" / "domain" / "orders" / "piece_policy.py"
+    ).read_text(encoding="utf-8")
+    assert "_require_custom_edge_prices" in (
+        ROOT / "almdina_erp" / "services" / "cost_document_service.py"
+    ).read_text(encoding="utf-8")
+    service = (
+        ROOT / "almdina_erp" / "services" / "cost_permission_service.py"
+    ).read_text(encoding="utf-8")
+    assert "def update_clipped_corner_edge_price" in service
+    assert "clipped_corner_edge_price_usd" in service
+    detail = json.loads(
+        (
+            ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
+        ).read_text(encoding="utf-8")
+    )
+    detail_fields = {row["fieldname"]: row for row in detail["fields"]}
+    assert detail_fields["clipped_corner_edge_price_usd"]["fieldtype"] == "Currency"
+    assert detail_fields["clipped_corner_edge_price_status"]["options"] == "Unpriced\nPriced"
+    clipped_ux = (
+        ROOT / "public" / "js" / "door_cutting_order_clipped_corner_ux.js"
+    ).read_text(encoding="utf-8")
+    assert "function view(frm, row)" in clipped_ux
+    assert "view," in clipped_ux
+    assert 'can(frm, "print_customer_invoice")' in presenter
     assert 'can(frm, "print_internal_cost_report")' in source
     assert "canDocument" in source
     assert "Customer invoice HTML is server-authorized" in source

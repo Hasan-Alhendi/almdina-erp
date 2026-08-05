@@ -22,6 +22,13 @@
         );
     }
 
+    function canUploadDxf(frm) {
+        if (!frm || frm.is_new()) return false;
+        return Boolean(frm.doc.production_dxf)
+            ? can(frm, "replace_dxf")
+            : can(frm, "upload_dxf");
+    }
+
     function canPrintCuttingPlan(frm) {
         return can(frm, "print_cutting_plan");
     }
@@ -296,6 +303,10 @@
     function renderSummary(frm) {
         const field = frm.fields_dict.plan_controls_intro;
         if (!field || !field.$wrapper) return;
+        if (field.df && Number(field.df.hidden || 0) === 1) {
+            field.$wrapper.empty();
+            return;
+        }
 
         const plan = parsePlan(frm);
         const metrics = plan.industrial_metrics || {};
@@ -368,10 +379,51 @@
         return null;
     }
 
+    function uploadCuttingPlanDxf(frm) {
+        if (!canUploadDxf(frm)) {
+            frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF."));
+            return;
+        }
+        if (frappe.almdina && typeof frappe.almdina.upload_production_dxf === "function") {
+            frappe.almdina.upload_production_dxf(frm);
+            return;
+        }
+        if (frm.is_new()) {
+            frappe.msgprint(__("احفظ الطلب قبل رفع ملف DXF."));
+            return;
+        }
+        const replacing = Boolean(frm.doc.production_dxf);
+        new frappe.ui.FileUploader({
+            doctype: "Door Cutting Order",
+            docname: frm.doc.name,
+            folder: "Home/Attachments",
+            is_private: 1,
+            restrictions: { allowed_file_types: [".dxf"], max_file_size: 10 * 1024 * 1024 },
+            on_success(file) {
+                frappe.call({
+                    method: "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf",
+                    args: { order_name: frm.doc.name, file_url: file.file_url },
+                    freeze: true,
+                    freeze_message: __("جاري التحقق من ملف DXF وتطبيق الخطة..."),
+                }).then(() => {
+                    frappe.show_alert({
+                        message: replacing
+                            ? __("تم استبدال ملف DXF والتحقق منه.")
+                            : __("تم رفع ملف DXF والتحقق منه."),
+                        indicator: "green",
+                    }, 5);
+                    return frm.reload_doc();
+                });
+            },
+        });
+    }
+
     function documentActionsHtml(frm) {
         const printAllowed = canPrintCuttingPlan(frm);
         const exportAllowed = canExportDxf(frm);
-        if (!printAllowed && !exportAllowed) return "";
+        const uploadAllowed = canUploadDxf(frm);
+        const replacing = Boolean(frm.doc.production_dxf);
+        if (!printAllowed && !exportAllowed && !uploadAllowed) return "";
         return `
             <div class="dco-plan-document-actions">
                 ${printAllowed
@@ -379,6 +431,9 @@
                     : ""}
                 ${exportAllowed
                     ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf">تصدير DXF لأوتوكاد</button>`
+                    : ""}
+                ${uploadAllowed
+                    ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${replacing ? "استبدال خطة القص DXF" : "رفع خطة قص كملف DXF"}</button>`
                     : ""}
             </div>
         `;
@@ -414,7 +469,7 @@
                 ${documentActionsHtml(frm)}
                 <div class="dco-plan-note">
                     ${canEdit
-                        ? "غيّر طريقة ترتيب القطع ونوع ماكينة القص من نفس المجموعة، ثم نفّذ الحساب مباشرة. إعادة الحساب تحدّث النتائج فقط ولا تعتمد الطلب."
+                        ? "غيّر طريقة ترتيب القطع من نفس المجموعة، ثم نفّذ الحساب مباشرة. إعادة الحساب تحدّث النتائج فقط ولا تعتمد الطلب."
                         : "الحقول مقفلة. اضغط «تعديل» قبل إعادة الحساب. بعد بدء القص تبقى الخطة التاريخية ثابتة."}
                 </div>
             </div>
@@ -438,6 +493,7 @@
         });
         field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
         field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
+        field.$wrapper.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
     }
 
     async function recalculate(frm) {

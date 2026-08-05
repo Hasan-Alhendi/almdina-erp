@@ -85,12 +85,31 @@ def test_cost_ui_hides_and_scrubs_unauthorized_data():
     assert "scrubCostData(frm)" in source
     assert "get_order_cost_snapshot" in source
     assert 'can(frm, "edit_cost_settings")' in source
+    assert "configureCostInputFields" in source
+    assert "ensurePrintInvoiceButton" in source
+    assert "canUseCostTab" in source
+    assert "COST_INPUT_FIELDS" in source
     assert 'can(frm, "print_customer_invoice")' in source
+    assert 'can(frm, "view_costs") && can(frm, "print_customer_invoice")' not in source
     assert '"edit_special_price"' in source
     assert '"approve_special_price"' in source
     assert "MutationObserver" in source
+    assert 'class="btn btn-default btn-sm dco-edit-cost-settings"' not in source
+    assert "تعديل إعدادات التكلفة" not in source
+    assert "update_order_cost_settings" not in source
     assert "Accounts Management" not in source
     assert "System Manager" not in source
+
+
+def test_cost_input_fields_live_on_cost_tab():
+    schema = json.loads(_source(ORDER_SCHEMA))
+    order = schema["field_order"]
+    cost_index = order.index("cost_tab")
+    board_index = order.index("board_rate_usd")
+    cutting_index = order.index("cutting_cost_per_board_usd")
+    html_index = order.index("order_cost_invoice_html")
+    assert cost_index < board_index < cutting_index < html_index
+    assert "board_rate_usd" not in order[:order.index("pieces_section")]
 
 
 def test_hooks_route_legacy_price_api_to_capability_service():

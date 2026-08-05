@@ -133,7 +133,9 @@ def _customer_invoice_lines(
         )
 
     special_pieces = [
-        piece for piece in pieces if _text(_value(piece, "piece_type")) == "Special"
+        piece
+        for piece in pieces
+        if _text(_value(piece, "piece_type")) in {"Special", "Clipped Corner"}
     ]
     edge_source = (
         [piece for piece in pieces if piece not in special_pieces]
@@ -182,25 +184,34 @@ def _customer_invoice_lines(
             )
 
     for index, piece in enumerate(pieces, start=1):
-        if _text(_value(piece, "piece_type")) != "Special":
-            continue
-        status = _text(_value(piece, "special_shape_price_status"))
-        final_rate = _number(_value(piece, "special_shape_final_unit_price_usd"))
+        piece_type = _text(_value(piece, "piece_type"), "Regular")
         quantity = _quantity(_value(piece, "qty"))
-        lines.append(
-            {
-                "type": "special",
-                "description": (
-                    f"درفة خاصة رقم {index} — "
-                    f"{'سعر معتمد شامل' if status == 'Approved' else 'سعر تقديري شامل'}"
-                ),
-                "quantity": quantity,
-                "unit": "درفة",
-                "rate_usd": _money(final_rate),
-                "amount_usd": _money(final_rate * quantity),
-                "note": _text(_value(piece, "special_shape_price_note")),
-            }
-        )
+        if piece_type == "Special":
+            final_rate = _number(_value(piece, "special_shape_final_unit_price_usd"))
+            lines.append(
+                {
+                    "type": "special",
+                    "description": f"درفة خاصة رقم {index}",
+                    "quantity": quantity,
+                    "unit": "درفة",
+                    "rate_usd": _money(final_rate),
+                    "amount_usd": _money(final_rate * quantity),
+                    "note": _text(_value(piece, "special_shape_price_note")),
+                }
+            )
+        elif piece_type == "Clipped Corner":
+            edge_rate = _number(_value(piece, "clipped_corner_edge_price_usd"))
+            lines.append(
+                {
+                    "type": "cut_corner",
+                    "description": f"درفة زاوية مقصوصة {index}",
+                    "quantity": quantity,
+                    "unit": "درفة",
+                    "rate_usd": _money(edge_rate),
+                    "amount_usd": _money(edge_rate * quantity),
+                    "note": _text(_value(piece, "clipped_corner_edge_price_note")),
+                }
+            )
 
     return lines
 

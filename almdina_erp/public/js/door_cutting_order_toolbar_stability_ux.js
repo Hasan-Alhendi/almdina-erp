@@ -9,10 +9,19 @@
         "طباعة جدول القياسات",
         "طباعة القياسات",
         "طباعة خطة القص",
+        "طباعة فاتورة الزبون",
+        "Print Customer Invoice",
         "تصدير DXF لأوتوكاد",
         "Export DXF for AutoCAD",
         "تصدير DXF",
         "Export DXF",
+        "تصدير DXF للرسم",
+        "تصدير DXF للتعديل",
+        "تنزيل DXF للإنتاج",
+        "رفع ملف DXF",
+        "استبدال ملف DXF",
+        "اعتماد الرسم",
+        "إعادة اعتماد الرسم",
         "Reset Piece Edge Customization",
         "Reset Edge Customization",
     ]);
@@ -101,16 +110,26 @@
             try { frm.remove_custom_button(label); } catch (error) { /* button may not exist */ }
             try { frm.remove_custom_button(label, __("الرسم / DXF")); } catch (error) { /* optional group */ }
             try { frm.remove_custom_button(label, __("دورة الطلب")); } catch (error) { /* optional group */ }
+            try { frm.remove_custom_button(label, __("طباعة")); } catch (error) { /* optional group */ }
         });
         head.querySelectorAll(".page-actions button,.page-actions a,.page-actions .dropdown-item").forEach(node => {
             const label = text(node);
-            const isPlanPrint = label === "طباعة خطة القص";
-            const isAutocadDxf = /تصدير\s*DXF\s*لأوتوكاد/i.test(label) || /^export\s*dxf\s*for\s*autocad$/i.test(label);
-            const isLegacyDxf = label === "تصدير DXF" || label === "Export DXF";
-            if (REMOVE_LABELS.has(label) || isPlanPrint || isAutocadDxf || isLegacyDxf) {
+            const isPlanPrint = label === "طباعة خطة القص" || /^print\s*cutting\s*plan$/i.test(label);
+            const isDxfExport = /تصدير\s*DXF/i.test(label) || /^export\s*dxf/i.test(label);
+            const isCustomerInvoicePrint = label === "طباعة فاتورة الزبون" || /^print\s*customer\s*invoice$/i.test(label);
+            if (REMOVE_LABELS.has(label) || isPlanPrint || isDxfExport || isCustomerInvoicePrint) {
                 const group = node.closest(".btn-group,.dropdown");
                 if (node.matches(".dropdown-item") && group) node.remove();
                 else (group && actionLabel(group) === text(node) ? group : node).remove();
+            }
+        });
+    }
+
+    function removeDrawingDxfGroup(head) {
+        head.querySelectorAll(".custom-actions > .btn-group,.custom-actions > .dropdown").forEach(group => {
+            const label = actionLabel(group);
+            if (label === "الرسم / DXF" || /^drawing\s*\/\s*dxf$/i.test(label)) {
+                group.remove();
             }
         });
     }
@@ -160,6 +179,7 @@
             head.classList.add("dco-stable-actions-head");
         }
         removeLegacyButtons(frm, head);
+        removeDrawingDxfGroup(head);
         dedupeButtons(head);
         removeEmptyGroups(head);
     }

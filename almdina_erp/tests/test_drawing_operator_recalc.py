@@ -45,10 +45,21 @@ def test_drawing_form_exposes_dual_approval_and_print_actions():
     assert "الخطة المرفوعة" in ux
     assert "اعتماد الرسم" in ux
     assert "plan_source: source" in ux
-    # Print + AutoCAD DXF belong to the cutting-plan section, gated by capability.
+    # Print + AutoCAD DXF + upload belong to the cutting-plan section, gated by capability.
     assert "طباعة خطة القص" in plan_ux
     assert "dco-print-cutting-plan" in plan_ux
     assert "print_cutting_plan" in plan_ux
     assert "dco-export-dxf" in plan_ux
     assert "export_dxf" in plan_ux
-    assert "طباعة خطة القص" not in ux
+    assert "dco-upload-dxf-plan" in plan_ux
+    assert "رفع خطة قص كملف DXF" in plan_ux
+    assert 'can(frm, "upload_dxf")' in plan_ux
+    assert 'can(frm, "replace_dxf")' in plan_ux
+    assert "upload_production_dxf" in plan_ux
+    assert 'frm.add_custom_button(__("طباعة خطة القص")' not in ux
+    assert 'frm.add_custom_button(__("تصدير DXF للرسم")' not in ux
+    assert 'frm.add_custom_button(__("تنزيل DXF للإنتاج")' not in ux
+    assert 'frm.add_custom_button(__("رفع ملف DXF")' not in ux
+    assert 'frm.add_custom_button(__("استبدال ملف DXF")' not in ux
+    assert "removeDrawingDxfToolbarButtons" in ux
+    assert "frappe.almdina.upload_production_dxf = uploadDrawingDxf" in ux

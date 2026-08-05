@@ -281,13 +281,28 @@
 
     function printFinancialDocument(frm, kind) {
         const capability = requiredCapability(kind);
-        if (!can(frm, "view_costs") || !can(frm, capability)) {
+        const canPrint = kind === "customer_invoice"
+            ? can(frm, capability)
+            : can(frm, "view_costs") && can(frm, capability);
+        if (!canPrint) {
             frappe.msgprint(__("ليس لديك صلاحية طباعة هذا المستند."));
             return Promise.reject(new Error(`Missing capability: ${capability}`));
         }
         if (frm.is_new()) {
             frappe.msgprint(__("احفظ الطلب قبل طباعة المستند."));
             return Promise.reject(new Error("Unsaved order"));
+        }
+        if (kind === "customer_invoice") {
+            const costApi = window.AlmdinaOrderCostUX;
+            const pending = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
+                ? costApi.pendingCustomEdgePriceLabels(frm)
+                : [];
+            if (pending.length) {
+                frappe.msgprint(__(
+                    "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل طباعة الفاتورة. المتبقي: {0}."
+                ).replace("{0}", pending.join("، ")));
+                return Promise.reject(new Error("Missing custom edge prices"));
+            }
         }
 
         return frappe.call({
@@ -339,13 +354,12 @@
 
         const actions = costActions(frm);
         if (!actions.length) return;
-        const baseVisible = can(frm, "view_costs") && !frm.is_new();
 
         ensureActionButton(actions, {
             className: CUSTOMER_CLASS,
             label: __("طباعة فاتورة الزبون"),
             primary: true,
-            visible: baseVisible && can(frm, "print_customer_invoice"),
+            visible: !frm.is_new() && can(frm, "print_customer_invoice"),
             handler: () => {
                 printFinancialDocument(frm, "customer_invoice").catch(() => undefined);
             },
@@ -354,7 +368,7 @@
             className: INTERNAL_CLASS,
             label: __("طباعة تقرير التكلفة الداخلي"),
             primary: false,
-            visible: baseVisible && can(frm, "print_internal_cost_report"),
+            visible: can(frm, "view_costs") && !frm.is_new() && can(frm, "print_internal_cost_report"),
             handler: () => {
                 printFinancialDocument(frm, "internal_cost_report").catch(() => undefined);
             },

@@ -87,10 +87,15 @@ def test_plan_section_hosts_permissioned_print_and_dxf_actions():
     plan = _source(ROOT / "public" / "js" / "door_cutting_order_plan_ux.js")
     assert "dco-print-cutting-plan" in plan
     assert "dco-export-dxf" in plan
+    assert "dco-upload-dxf-plan" in plan
     assert 'can(frm, "print_cutting_plan")' in plan or "print_cutting_plan" in plan
+    assert 'can(frm, "upload_dxf")' in plan
+    assert 'can(frm, "replace_dxf")' in plan
     assert "printCuttingPlan" in plan
     assert "exportCuttingPlanDxf" in plan
+    assert "uploadCuttingPlanDxf" in plan
     assert "export_order_dxf" in plan
+    assert "upload_production_dxf" in plan
 
 def test_dxf_import_service_is_wired_for_round_trip():
     importer = ROOT / "almdina_erp" / "services" / "dxf_import_service.py"

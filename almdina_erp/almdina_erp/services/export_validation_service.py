@@ -6,6 +6,12 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.services.order_board_identity import (
+    order_board_color,
+    order_board_material,
+    order_board_thickness_mm,
+)
+
 # Only the drawing operator needs the editable geometry; other shop-floor
 # operators work from the rendered plan and the approved production DXF.
 DXF_EXPORT_ROLES = ("عامل رسم", "Production Manager", "System Manager")
@@ -44,13 +50,29 @@ def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[s
     tolerance = 0.001
     sheet_no = source.sheet_no
 
-    if source.board_item and source.board_item != plan.board_item:
+    if source.board_item and getattr(plan, "board_item", None) and source.board_item != plan.board_item:
         errors.append(_("Source sheet {0} uses a different Board Item.").format(sheet_no))
-    if (source.material or "") != (order.board_material or ""):
+
+    expected_board = str(getattr(order, "board_description", "") or "").strip()
+    source_board = str(getattr(source, "board_description", "") or "").strip()
+    if expected_board and source_board and source_board != expected_board:
+        errors.append(
+            _("Source sheet {0} board description does not match the order snapshot.").format(sheet_no)
+        )
+
+    source_material = str(getattr(source, "material", "") or "").strip()
+    expected_material = str(order_board_material(order) or "").strip()
+    if source_material and expected_material and source_material != expected_material:
         errors.append(_("Source sheet {0} material does not match the order snapshot.").format(sheet_no))
-    if (source.color or "") != (order.board_color or ""):
+
+    source_color = str(getattr(source, "color", "") or "").strip()
+    expected_color = str(order_board_color(order) or "").strip()
+    if source_color and expected_color and source_color != expected_color:
         errors.append(_("Source sheet {0} color does not match the order snapshot.").format(sheet_no))
-    if abs(flt(source.thickness_mm) - flt(order.board_thickness_mm)) > tolerance:
+
+    source_thickness = flt(getattr(source, "thickness_mm", 0))
+    expected_thickness = order_board_thickness_mm(order)
+    if source_thickness and expected_thickness and abs(source_thickness - expected_thickness) > tolerance:
         errors.append(_("Source sheet {0} thickness does not match the order snapshot.").format(sheet_no))
 
     if source.source_type != "Remnant":
@@ -300,10 +322,10 @@ def _enrich_export_snapshot(snapshot: dict[str, Any], order: Any) -> dict[str, A
     for sheet in snapshot.get("sheets") or []:
         sheet.setdefault("source_type", "Full Board")
         sheet.setdefault("remnant", None)
-        sheet.setdefault("board_item", order.board_item)
-        sheet.setdefault("material", getattr(order, "board_material", None) or "")
-        sheet.setdefault("color", getattr(order, "board_color", None) or "")
-        sheet.setdefault("thickness_mm", flt(getattr(order, "board_thickness_mm", 0)))
+        sheet.setdefault("board_item", getattr(order, "board_item", None))
+        sheet.setdefault("material", order_board_material(order))
+        sheet.setdefault("color", order_board_color(order))
+        sheet.setdefault("thickness_mm", order_board_thickness_mm(order))
         sheet.setdefault("full_width_cm", flt(snapshot.get("full_board_width_cm")))
         sheet.setdefault("full_length_cm", flt(snapshot.get("full_board_length_cm")))
         sheet.setdefault("usable_width_cm", flt(snapshot.get("usable_board_width_cm")))
@@ -352,10 +374,10 @@ def _manifest_from_order_snapshot(order: Any, snapshot: dict[str, Any], *, plan_
                 "sheet_no": int(sheet.get("sheet_no") or index + 1),
                 "source_type": sheet.get("source_type") or "Full Board",
                 "remnant": sheet.get("remnant"),
-                "board_item": order.board_item,
-                "material": sheet.get("material") or getattr(order, "board_material", None) or "",
-                "color": sheet.get("color") or getattr(order, "board_color", None) or "",
-                "thickness_mm": flt(sheet.get("thickness_mm") or getattr(order, "board_thickness_mm", 0)),
+                "board_item": getattr(order, "board_item", None),
+                "material": sheet.get("material") or order_board_material(order),
+                "color": sheet.get("color") or order_board_color(order),
+                "thickness_mm": flt(sheet.get("thickness_mm") or order_board_thickness_mm(order)),
                 "full_width_mm": flt(sheet.get("full_width_cm")) * 10,
                 "full_length_mm": flt(sheet.get("full_length_cm")) * 10,
                 "usable_width_mm": flt(sheet.get("usable_width_cm")) * 10,
@@ -437,10 +459,10 @@ def get_validated_dxf_plan(
                 "sheet_no": int(sheet.get("sheet_no") or index + 1),
                 "source_type": sheet.get("source_type") or "Full Board",
                 "remnant": sheet.get("remnant"),
-                "board_item": editable.board_item,
-                "material": sheet.get("material") or editable.board_material or "",
-                "color": sheet.get("color") or editable.board_color or "",
-                "thickness_mm": flt(sheet.get("thickness_mm") or editable.board_thickness_mm),
+                "board_item": getattr(editable, "board_item", None),
+                "material": sheet.get("material") or order_board_material(editable),
+                "color": sheet.get("color") or order_board_color(editable),
+                "thickness_mm": flt(sheet.get("thickness_mm") or order_board_thickness_mm(editable)),
                 "full_width_mm": flt(sheet.get("full_width_cm")) * 10,
                 "full_length_mm": flt(sheet.get("full_length_cm")) * 10,
                 "usable_width_mm": flt(sheet.get("usable_width_cm")) * 10,

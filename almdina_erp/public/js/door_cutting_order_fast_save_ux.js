@@ -36,21 +36,6 @@
                 }
                 .dco-plan-stale-banner strong { display:block; font-size:12px; }
                 .dco-plan-stale-banner .icon { font-size:18px; line-height:1.2; }
-                .dco-cost-plan-stale {
-                    margin:12px 0 0;
-                    padding:11px 13px;
-                    border:1px solid #f0c36d;
-                    border-radius:11px;
-                    background:#fff8e6;
-                    color:#6f4b00;
-                    font-size:11px;
-                    line-height:1.65;
-                    font-weight:750;
-                }
-                .dco-print-customer-invoice.is-plan-stale {
-                    opacity:.55;
-                    cursor:not-allowed !important;
-                }
             </style>
         `);
     }
@@ -89,19 +74,6 @@
                         </div>
                     </div>`);
                 planActions.$wrapper.find(".dco-plan-dirty-note").addClass("is-visible");
-            }
-        }
-
-        const costField = frm.fields_dict.order_cost_invoice_html;
-        if (costField && costField.$wrapper) {
-            costField.$wrapper.find(".dco-cost-plan-stale").remove();
-            const printButton = costField.$wrapper.find(".dco-print-customer-invoice");
-            printButton.toggleClass("is-plan-stale", stale).attr("aria-disabled", stale ? "true" : "false");
-            if (stale) {
-                costField.$wrapper.find(".dco-cost-hero").after(`
-                    <div class="dco-cost-plan-stale">
-                        تكلفة الألواح والقص غير نهائية لأن خطة القص تغيرت. أعد حساب خطة القص قبل طباعة فاتورة الزبون.
-                    </div>`);
             }
         }
     }
@@ -188,15 +160,6 @@
                 event.stopPropagation();
                 event.stopImmediatePropagation();
                 runExplicitRecalculation(frm, requestedMode);
-                return;
-            }
-
-            const printButton = event.target.closest(".dco-print-customer-invoice");
-            if (printButton && root.contains(printButton) && planIsStale(frm)) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.stopImmediatePropagation();
-                frappe.msgprint("أعد حساب خطة القص أولًا حتى تكون تكلفة الطلب والفاتورة صحيحة.");
             }
         }, true);
     }
