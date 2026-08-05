@@ -1,17 +1,29 @@
 # Almdina ERP
 
+> **Current scope (2026-07-29):** customer costing, quote/invoice calculation
+> and printing remain required. Inventory, warehouses, reservations, material
+> consumption, Stock Entry and board-remnant inventory are outside the active
+> product. [See the binding scope policy](docs/PRODUCT_SCOPE_v1.1.md).
+>
+> Any older stock/remnant description below is historical migration context and
+> must not be treated as an active requirement.
+
+The current detailed Arabic SRS is
+[`docs/REQUIREMENTS_v1.1_AR.md`](docs/REQUIREMENTS_v1.1_AR.md).
+
 نظام إدارة معمل MDF والقص مبني على ERPNext / Frappe.
 
-## Version 1.0 — Scope Lock
+## Version 1.1 — Current Scope
 
-النسخة الأولى من المشروع يجب أن تطابق **وثيقة متطلبات نظام إدارة معمل MDF والقص v1.0** المعتمدة للمشروع حرفيًا من حيث النطاق والسلوك الوظيفي.
+النطاق الحالي يثبت ميزات الطلب والقص والإنتاج والتكلفة وفاتورة الزبون
+والطباعة، ويستبعد المخزون والمستودعات والحجز والاستهلاك وبقايا الألواح.
 
-- لا تُضاف أي ميزة غير موجودة في المتطلبات المعتمدة للنسخة 1.0.
-- لا يُحذف أو يُختصر أي متطلب معتمد للنسخة 1.0.
-- أي تطوير أو توسعة مستقبلية تتم في إصدار لاحق وبشكل منفصل عن Baseline v1.0.
-- `docs/REQUIREMENTS_v1.0.md` هو المرجع الرسمي للمتطلبات.
+- `docs/REQUIREMENTS_v1.1_AR.md` هو المرجع الرسمي الحالي للمتطلبات.
+- `docs/PRODUCT_SCOPE_v1.1.md` هو عقد حدود النطاق المختصر.
+- `docs/REQUIREMENTS_v1.0.md` مرجع تاريخي فقط عند البنود الملغاة.
 - `docs/UAT_v1.0.md` هو بوابة القبول الميداني وGo-Live.
-- السلوك الموجود في Client Script المرجعي السابق يعد Baseline وظيفيًا إلزاميًا؛ لا يجوز أن تفقد إعادة الهندسة أي وظيفة منه.
+- لا يجوز أن تفقد إعادة الهندسة حساب التكلفة أو سعر الزبون أو الفاتورة أو
+  الطباعة أو دورة الإنتاج.
 
 **Current version:** `1.0.0-dev`
 

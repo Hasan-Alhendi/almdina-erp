@@ -1,13 +1,6 @@
 (() => {
     "use strict";
 
-    const PRINT_TRIGGER_SELECTOR = [
-        ".dco-print-customer-invoice",
-        ".dco-print-measurements",
-        ".dco-open-measurements-window",
-        ".dco-entry-window-print",
-    ].join(",");
-
     function controlValue(frm, fieldname) {
         const field = frm.fields_dict && frm.fields_dict[fieldname];
         if (!field) return frm.doc[fieldname];
@@ -80,7 +73,7 @@
 
         root.querySelectorAll(".dco-invoice-meta-item").forEach(item => {
             const name = item.querySelector(".label");
-            if (!name || name.textContent.trim() !== "صنف اللوح") return;
+            if (!name || name.textContent.trim() !== "اللوح") return;
             const value = item.querySelector(".value");
             if (value) value.textContent = label;
         });
@@ -108,43 +101,9 @@
         root._dcoBoardTextObserver = observer;
     }
 
-    function withBoardDescriptionForPrint(frm, callback) {
-        const description = boardLabel(frm);
-        const previous = frm.doc.board_item;
-        frm.doc.board_item = description === "—" ? "" : description;
-        try {
-            callback();
-        } finally {
-            window.setTimeout(() => {
-                frm.doc.board_item = previous;
-            }, 0);
-        }
-    }
-
-    function installPrintBridge(frm) {
-        if (frm._dcoBoardTextPrintBridge) return;
-        frm._dcoBoardTextPrintBridge = true;
-        document.addEventListener("click", event => {
-            const trigger = event.target.closest(PRINT_TRIGGER_SELECTOR);
-            if (!trigger) return;
-            const wrapper = frm.wrapper && (frm.wrapper.nodeType ? frm.wrapper : frm.wrapper[0]);
-            const editor = frm._dcoMeasurementEntryWindow && frm._dcoMeasurementEntryWindow.overlay;
-            if (wrapper && !wrapper.contains(trigger) && !(editor && editor.contains(trigger))) return;
-
-            const description = boardLabel(frm);
-            if (!description || description === "—") return;
-            const previous = frm.doc.board_item;
-            frm.doc.board_item = description;
-            window.setTimeout(() => {
-                frm.doc.board_item = previous;
-            }, 0);
-        }, true);
-    }
-
     function refresh(frm) {
         patchCostView(frm);
         installCostObserver(frm);
-        installPrintBridge(frm);
         requestAnimationFrame(() => patchCostView(frm));
         window.setTimeout(() => patchCostView(frm), 250);
     }
@@ -165,6 +124,5 @@
         hasMeasurablePieces,
         canCalculatePlan,
         syncInputs,
-        withBoardDescriptionForPrint,
     };
 })();

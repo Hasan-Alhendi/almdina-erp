@@ -1,83 +1,116 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import frappe
 from frappe import _
 
 from almdina_erp.almdina_erp.application.shop_floor import queries
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
+from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    granted_capabilities,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_query_repository import (
     FrappeShopFloorQueryRepository,
+)
+from almdina_erp.almdina_erp.presentation.shop_floor.data_policy import (
+    sanitize_shop_floor_detail,
+    sanitize_shop_floor_summary,
 )
 from almdina_erp.almdina_erp.presentation.shop_floor.presenters import (
     present_order_detail,
 )
 
 
+_Result = TypeVar("_Result")
 _repository = FrappeShopFloorQueryRepository()
 
 
-def _permission_error(error: queries.ShopFloorPermissionDenied) -> None:
-    frappe.throw(_(str(error)), frappe.PermissionError)
+def _execute(function: Callable[..., _Result], *args: Any) -> _Result:
+    try:
+        return function(_repository, *args)
+    except queries.ShopFloorPermissionDenied as error:
+        frappe.throw(_(str(error)), frappe.PermissionError)
+    except queries.ShopFloorQueryError as error:
+        frappe.throw(_(str(error)))
+    raise AssertionError("frappe.throw must interrupt execution")
+
+
+def _current_capabilities() -> frozenset[str]:
+    return granted_capabilities(user=frappe.session.user)
 
 
 @frappe.whitelist()
-def get_dispatch_options() -> dict[str, Any]:
-    shop_floor_authorization.require_roles(*shop_floor_authorization.DISPATCH_ROLES)
-    result = queries.get_dispatch_options(_repository)
+def get_shop_floor_context() -> dict[str, Any]:
+    return _execute(queries.get_shop_floor_context)
+
+
+@frappe.whitelist()
+def get_dispatch_options(order_name: str) -> dict[str, Any]:
+    result = _execute(queries.get_dispatch_options, order_name)
     for path in result["paths"]:
         first_stage_type = path.pop("first_stage_type")
         path["label"] = _(path["label"])
-        path["first_role"] = shop_floor_authorization.STAGE_ROLE_BY_TYPE[
-            first_stage_type
-        ]
+        path["department"] = _(
+            path.get("department")
+            or department_for_stage_type(first_stage_type)
+            or first_stage_type
+        )
     return result
 
 
 @frappe.whitelist()
 def get_revert_targets(order_name: str) -> list[dict[str, Any]]:
-    shop_floor_authorization.require_roles(*shop_floor_authorization.ADMIN_ROLES)
-    return queries.get_revert_targets(_repository, order_name)
+    return _execute(queries.get_revert_targets, order_name)
+
+
+@frappe.whitelist()
+def get_current_stage_context(order_name: str) -> dict[str, Any]:
+    return _execute(queries.get_current_stage_context, order_name)
 
 
 @frappe.whitelist()
 def get_my_inbox() -> list[dict[str, Any]]:
-    try:
-        return queries.get_my_inbox(_repository)
-    except queries.ShopFloorPermissionDenied as error:
-        _permission_error(error)
-    raise AssertionError("frappe.throw must interrupt execution")
+    rows = _execute(queries.get_my_inbox)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
 @frappe.whitelist()
 def get_my_archive() -> list[dict[str, Any]]:
-    try:
-        return queries.get_my_archive(_repository)
-    except queries.ShopFloorPermissionDenied as error:
-        _permission_error(error)
-    raise AssertionError("frappe.throw must interrupt execution")
+    rows = _execute(queries.get_my_archive)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
 @frappe.whitelist()
 def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
-    try:
-        result = queries.get_order_detail(_repository, order_name)
-    except queries.ShopFloorPermissionDenied as error:
-        _permission_error(error)
-        raise AssertionError("frappe.throw must interrupt execution")
-    return present_order_detail(
+    result = _execute(queries.get_order_detail, order_name)
+    document_capabilities = result.get("document_capabilities") or {}
+    payload = present_order_detail(
         result,
         translate=_,
         escape=lambda value: frappe.utils.escape_html(str(value)),
         dumps=frappe.as_json,
     )
+    stage_snapshot = result["stage_snapshot"]
+    payload.update(
+        {
+            "active_stage_assigned_to": stage_snapshot.get(
+                "active_stage_assigned_to"
+            ),
+            "can_reassign_worker": stage_snapshot.get("can_reassign_worker"),
+            "production_actions": stage_snapshot.get("production_actions") or {},
+            "document_capabilities": document_capabilities,
+        }
+    )
+    return sanitize_shop_floor_detail(payload, document_capabilities)
 
 
 __all__ = [
     "get_dispatch_options",
+    "get_current_stage_context",
     "get_my_archive",
     "get_my_inbox",
     "get_order_shop_floor_detail",
     "get_revert_targets",
+    "get_shop_floor_context",
 ]

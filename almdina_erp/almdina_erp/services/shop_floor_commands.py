@@ -52,6 +52,11 @@ def get_handoff_workers(stage_name: str) -> list[dict[str, str]]:
 
 
 @frappe.whitelist()
+def get_handoff_context(stage_name: str) -> dict[str, Any]:
+    return _execute(commands.get_handoff_context, stage_name)
+
+
+@frappe.whitelist()
 def dispatch_order(order_name: str, path: str, assignee: str) -> dict[str, Any]:
     return _execute(commands.dispatch_order, order_name, path, assignee)
 
@@ -67,6 +72,11 @@ def handoff_to_next(
     next_assignee: str | None = None,
 ) -> dict[str, Any]:
     return _execute(commands.handoff_to_next, stage_name, next_assignee)
+
+
+@frappe.whitelist()
+def reassign_worker(stage_name: str, assignee: str) -> dict[str, Any]:
+    return _execute(commands.reassign_worker, stage_name, assignee)
 
 
 @frappe.whitelist()
@@ -90,16 +100,13 @@ def revert_department(
 
 @frappe.whitelist()
 def return_order_to_draft(order_name: str) -> dict[str, Any]:
-    """Compatibility endpoint: immutable orders create controlled revisions."""
+    """Compatibility endpoint backed by the dedicated lifecycle capability."""
 
     from almdina_erp.almdina_erp.services.order_revision_service import (
-        create_order_revision,
+        return_order_to_draft as create_controlled_return,
     )
 
-    return create_order_revision(
-        order_name,
-        reason=_("Legacy return-to-draft request converted to a controlled revision."),
-    )
+    return create_controlled_return(order_name)
 
 
 # Private compatibility aliases retained for older Python callers and tests.
@@ -111,9 +118,11 @@ _validate_path = commands._validate_path
 __all__ = [
     "assert_order_ready_for_dispatch",
     "dispatch_order",
+    "get_handoff_context",
     "get_handoff_workers",
     "handoff_to_next",
     "mark_delivered",
+    "reassign_worker",
     "return_order_to_draft",
     "revert_department",
     "start_my_stage",

@@ -20,7 +20,7 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
 from almdina_erp.almdina_erp.services.cutting_engine import round_value
 from almdina_erp.almdina_erp.services.special_shape_service import (
-    has_special_price_approval_role,
+    has_special_price_approval_permission,
     validate_special_shape_drawing,
 )
 
@@ -277,11 +277,11 @@ class FastDoorCuttingOrder(BaseDoorCuttingOrder):
             )
             if protected_price_changed and not approval_action and not safe_geometry_invalidation:
                 if can_approve_price is None:
-                    can_approve_price = has_special_price_approval_role()
+                    can_approve_price = has_special_price_approval_permission()
                 if not can_approve_price:
                     frappe.throw(
                         _(
-                            "Row {0}: only Accounts Management can change or approve "
+                            "Row {0}: you do not have permission to change or approve "
                             "the special door price."
                         ).format(index),
                         frappe.PermissionError,

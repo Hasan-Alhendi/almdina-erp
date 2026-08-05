@@ -1,6 +1,6 @@
 {
   "charts": [],
-  "content": "[{\"id\":\"control-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Factory Control Center</b></span>\",\"col\":12}},{\"id\":\"approval\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Approval Queue\",\"col\":3}},{\"id\":\"archive\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Plan PDF Archive\",\"col\":3}},{\"id\":\"production-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Defaults\",\"col\":3}},{\"id\":\"stock-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock & Remnant Policy\",\"col\":3}},{\"id\":\"reports-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Monitoring</b></span>\",\"col\":12}},{\"id\":\"summary\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Factory Operations Summary\",\"col\":3}},{\"id\":\"stock-availability\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Order Stock Availability\",\"col\":3}},{\"id\":\"incidents\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Incidents and Replacements\",\"col\":3}},{\"id\":\"performance\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Stage Performance\",\"col\":3}}]",
+  "content": "[{\"id\":\"control-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>مركز تحكم المعمل</b></span>\",\"col\":12}},{\"id\":\"approval\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Approval Queue\",\"col\":4}},{\"id\":\"archive\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Plan PDF Archive\",\"col\":4}},{\"id\":\"replacements\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Replacement Pieces\",\"col\":4}},{\"id\":\"production-settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Defaults\",\"col\":4}},{\"id\":\"reports-header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>المتابعة والتقارير</b></span>\",\"col\":12}},{\"id\":\"summary\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Factory Operations Summary\",\"col\":4}},{\"id\":\"incidents\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Incidents and Replacements\",\"col\":4}},{\"id\":\"performance\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Production Stage Performance\",\"col\":4}}]",
   "custom_blocks": [],
   "docstatus": 0,
   "doctype": "Workspace",
@@ -13,10 +13,9 @@
   "links": [
     {"hidden":0,"is_query_report":0,"label":"Approval Queue","link_count":0,"link_to":"factory-approval-queue","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"Plan PDF Archive","link_count":0,"link_to":"factory-plan-archive","link_type":"Page","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"Replacement Pieces","link_count":0,"link_to":"Replacement Piece","link_type":"DocType","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"Production Defaults","link_count":0,"link_to":"factory-production-settings","link_type":"Page","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":0,"label":"Stock & Remnant Policy","link_count":0,"link_to":"factory-stock-settings","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":1,"label":"Factory Operations Summary","link_count":0,"link_to":"Factory Operations Summary","link_type":"Report","onboard":0,"type":"Link"},
-    {"hidden":0,"is_query_report":1,"label":"Order Stock Availability","link_count":0,"link_to":"Order Stock Availability","link_type":"Report","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":1,"label":"Production Incidents and Replacements","link_count":0,"link_to":"Production Incidents and Replacements","link_type":"Report","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":1,"label":"Production Stage Performance","link_count":0,"link_to":"Production Stage Performance","link_type":"Report","onboard":0,"type":"Link"}
   ],
@@ -31,10 +30,9 @@
   "shortcuts": [
     {"color":"Orange","label":"Approval Queue","link_to":"factory-approval-queue","type":"Page"},
     {"color":"Blue","label":"Plan PDF Archive","link_to":"factory-plan-archive","type":"Page"},
+    {"color":"Purple","doc_view":"List","label":"Replacement Pieces","link_to":"Replacement Piece","type":"DocType"},
     {"color":"Blue","label":"Production Defaults","link_to":"factory-production-settings","type":"Page"},
-    {"color":"Green","label":"Stock & Remnant Policy","link_to":"factory-stock-settings","type":"Page"},
     {"color":"Blue","label":"Factory Operations Summary","link_to":"Factory Operations Summary","type":"Report"},
-    {"color":"Red","label":"Order Stock Availability","link_to":"Order Stock Availability","type":"Report"},
     {"color":"Orange","label":"Production Incidents and Replacements","link_to":"Production Incidents and Replacements","type":"Report"},
     {"color":"Green","label":"Production Stage Performance","link_to":"Production Stage Performance","type":"Report"}
   ],

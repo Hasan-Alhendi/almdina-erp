@@ -3,7 +3,20 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import flt, now_datetime
+
+from almdina_erp.almdina_erp.domain.replacements.replacement_authorization import (
+    ReplacementAction,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    document_has_capability,
+    require_doctype_capability,
+)
+from almdina_erp.almdina_erp.services.replacement_permission_service import (
+    require_replacement_action,
+)
 
 
 @frappe.whitelist()
@@ -11,47 +24,88 @@ def complete_replacement(
     replacement_name: str,
     internal_loss_cost_usd: float | None = None,
 ) -> dict[str, Any]:
-    # Direct Python call intentionally bypasses whitelisted-method override
-    # dispatch, avoiding recursion while preserving the authoritative original
-    # replacement lifecycle implementation.
-    from almdina_erp.almdina_erp.services.replacement_service import complete_replacement as complete_core
-    from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
+    """Complete replacement work and return only authorized cost data."""
 
-    result = complete_core(
-        replacement_name=replacement_name,
-        internal_loss_cost_usd=internal_loss_cost_usd,
+    require_doctype_capability(
+        Capability.COMPLETE_REPLACEMENT,
+        message=_("You do not have permission to complete replacement work."),
     )
+    frappe.db.sql(
+        "select name from `tabReplacement Piece` where name = %s for update",
+        (replacement_name,),
+    )
+    replacement = frappe.get_doc("Replacement Piece", replacement_name)
+    replacement.check_permission("read")
+    require_replacement_action(replacement, ReplacementAction.COMPLETE)
 
-    replacement = frappe.db.get_value(
+    can_edit_cost = document_has_capability(
+        replacement,
+        Capability.EDIT_REPLACEMENT_COST,
+    )
+    if internal_loss_cost_usd is not None and not can_edit_cost:
+        require_replacement_action(
+            replacement,
+            ReplacementAction.EDIT_ACTUAL_COST,
+        )
+
+    actual_loss = (
+        flt(internal_loss_cost_usd)
+        if internal_loss_cost_usd is not None
+        else flt(replacement.planned_internal_loss_usd)
+    )
+    if actual_loss < 0:
+        frappe.throw(_("Actual internal loss cannot be negative."))
+
+    completed_on = now_datetime()
+    frappe.db.set_value(
         "Replacement Piece",
-        replacement_name,
-        ["door_cutting_order", "cutting_plan"],
-        as_dict=True,
+        replacement.name,
+        {
+            "status": "Completed",
+            "internal_loss_cost_usd": actual_loss,
+            "charge_customer": 0,
+            "completed_by": frappe.session.user,
+            "completed_on": completed_on,
+            "generated_remnant": None,
+            "generated_remnants_json": "[]",
+        },
+        update_modified=True,
     )
-    if replacement and replacement.cutting_plan:
-        plan = frappe.get_doc("Cutting Plan", replacement.cutting_plan)
-        generated = result.get("generated_remnants") or []
-        reusable = sum(
-            flt(frappe.db.get_value("Board Remnant", name, "area_m2"))
-            for name in generated
-        )
-        reusable = min(max(0.0, reusable), max(0.0, flt(plan.waste_area_m2)))
-        scrap = max(0.0, flt(plan.waste_area_m2) - reusable)
-        frappe.db.set_value(
-            "Cutting Plan",
-            plan.name,
-            {
-                "reusable_remnant_area_m2": reusable,
-                "scrap_area_m2": scrap,
-                "waste_reconciled_on": now_datetime(),
-            },
-            update_modified=True,
-        )
-        result["waste_reconciliation"] = {
-            "reusable_remnant_area_m2": reusable,
-            "scrap_area_m2": scrap,
-        }
+    frappe.db.set_value(
+        "Production Incident",
+        replacement.incident,
+        "status",
+        "Resolved",
+        update_modified=True,
+    )
 
-    order_name = replacement.door_cutting_order if replacement else None
-    result["cost_summary"] = sync_order_costs(order_name) if order_name else {}
+    from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
+    from almdina_erp.almdina_erp.services.replacement_status_service import (
+        sync_replacement_order_status,
+    )
+
+    order_status = sync_replacement_order_status(replacement.door_cutting_order)
+    cost_summary = sync_order_costs(replacement.door_cutting_order)
+    replacement.add_comment(
+        "Comment",
+        text=_("Replacement completed by {0} on {1}.").format(
+            frappe.session.user,
+            completed_on,
+        ),
+    )
+
+    result: dict[str, Any] = {
+        "replacement_piece": replacement.name,
+        "status": "Completed",
+        "order_status": order_status,
+        "completed_on": completed_on,
+    }
+    if can_edit_cost:
+        result.update(
+            {
+                "internal_loss_cost_usd": actual_loss,
+                "charge_customer": 0,
+                "cost_summary": cost_summary,
+            }
+        )
     return result

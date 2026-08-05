@@ -51,6 +51,15 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertIn("def _validate_clipped_corner", source)
         self.assertNotIn("math.isclose", source)
 
+    def test_active_special_price_policy_uses_configurable_capabilities(self) -> None:
+        source = ACTIVE_ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn("document_has_capability", source)
+        self.assertIn("Capability.APPROVE_SPECIAL_PRICE", source)
+        self.assertIn("Capability.EDIT_SPECIAL_PRICE", source)
+        self.assertNotIn("has_special_price_approval_role", source)
+        self.assertNotIn("Accounts Management", source)
+        self.assertNotIn("System Manager", source)
+
     def test_active_controller_is_framework_compatible_and_thin(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         self.assertEqual(

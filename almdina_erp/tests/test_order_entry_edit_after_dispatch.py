@@ -6,6 +6,7 @@ POLICY = ROOT / "almdina_erp" / "services" / "order_edit_policy.py"
 ORDER_PY = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
 FAST_PY = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order_fast.py"
 SHOP_FLOOR = ROOT / "almdina_erp" / "services" / "shop_floor_service.py"
+SHOP_FLOOR_QUERIES = ROOT / "almdina_erp" / "application" / "shop_floor" / "queries.py"
 WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
 OPERATOR = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
@@ -18,10 +19,10 @@ def _source(path: Path) -> str:
 
 def test_order_entry_can_edit_after_dispatch_via_shared_policy():
     policy = _source(POLICY)
-    assert "ORDER_EDITOR_ROLES" in policy
+    assert "Capability.RECALCULATE_PLAN" in policy
+    assert "frappe.get_roles" not in policy
     assert "LOCKED_ORDER_STATUSES" in policy
     assert "def user_can_edit_order" in policy
-    assert "def unlock_frozen_plan_for_editor" in policy
     assert "def user_can_recalculate_drawing_system_plan" in policy
     assert "def enforce_order_immutability_on_save" in policy
     assert "enforce_order_immutability_on_save" in _source(ORDER_PY)
@@ -50,18 +51,19 @@ def test_client_editable_checks_use_shared_order_can_edit_helper():
 
 def test_revert_targets_expose_stage_labels_not_ids_in_ui():
     shop_floor = _source(SHOP_FLOOR)
+    queries = _source(SHOP_FLOOR_QUERIES)
     ux = _source(SHOP_FLOOR_UX)
     inbox = _source(ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js")
-    assert '"label": STAGE_DEPARTMENT.get(row.stage_type, row.stage_type)' in shop_floor
-    assert "def return_order_to_draft" in shop_floor
-    assert "target_stage_type" in shop_floor
-    assert "target_stage_label" in ux
-    assert "اختر المرحلة بالاسم للعودة إليها." in ux
+    assert '"label": _value(row, "department_label")' in queries
+    assert "return_order_to_draft" in shop_floor
+    assert "revert_department" in shop_floor
+    assert "row.label" in ux
     assert 'options: rows.map((row) => `${row.name}`)' not in ux
-    assert "def _filter_active_shop_floor_stages" in shop_floor
-    assert "def _active_stage_snapshot" in shop_floor
-    assert "can_start_stage" in shop_floor
-    assert "can_handoff_stage" in shop_floor
-    assert "d.can_start_stage" in inbox
-    assert "d.can_handoff_stage" in inbox
-    assert 'frappe.db.get_value("Production Stage", stageName, ["status", "stage_type"])' in ux
+    assert "def _filter_active_stages" in queries
+    assert "def _active_stage_snapshot" in queries
+    assert "can_start_stage" in queries
+    assert "can_handoff_stage" in queries
+    assert "detail.can_start_stage" in inbox
+    assert "detail.can_handoff_stage" in inbox
+    assert "get_current_stage_context" in ux
+    assert 'frappe.db.get_value("Production Stage"' not in ux

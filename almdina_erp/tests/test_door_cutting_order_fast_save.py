@@ -29,6 +29,9 @@ def test_explicit_recalculation_sets_force_flag_before_save():
     recalculate = source.split("def recalculate_order(order_name: str)", 1)[1]
     assert "doc.flags.force_cutting_plan_recalculation = True" in recalculate
     assert "doc.save()" in recalculate
+    assert "doc.approved_plan = None" in recalculate
+    assert "allow_approved_edit" in recalculate
+    assert "must never approve" in recalculate
 
 
 def test_preview_api_uses_new_explicit_plan_calculation_contract():
@@ -71,6 +74,8 @@ def test_plan_button_uses_dedicated_recalculation_endpoint():
     assert "await frm.save()" in source
     assert "door_cutting_order.recalculate_order" in source
     assert "await frm.reload_doc()" in source
+    assert "markOrderEditSessionRecalculated" in source
+    assert "بدون اعتماد الطلب" in source
     assert "تم حفظ التعديلات دون تشغيل محرك القص الثقيل" in source
 
 

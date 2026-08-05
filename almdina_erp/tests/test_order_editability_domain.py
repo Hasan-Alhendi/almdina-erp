@@ -6,6 +6,7 @@ from pathlib import Path
 from almdina_erp.almdina_erp.domain.orders.editability import (
     can_edit_order,
     can_recalculate_drawing_system_plan,
+    is_before_cutting,
     is_draft_like,
     is_drawing_stage,
     is_locked_status,
@@ -17,19 +18,39 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         for status in (None, "Draft", "Pending Review", "Rejected"):
             with self.subTest(status=status):
                 self.assertTrue(is_draft_like(status))
+                self.assertTrue(is_before_cutting(status))
                 self.assertTrue(can_edit_order(status, roles=()))
+                self.assertTrue(can_edit_order(status, privileged=False))
 
-    def test_approved_and_production_orders_are_immutable_for_every_role(self) -> None:
-        for status in ("Approved", "At Drawing", "Cutting In Progress", "Ready for Delivery"):
-            for role in ("Order Entry", "Production Manager", "System Manager", "Cutting Operator"):
-                with self.subTest(status=status, role=role):
-                    self.assertFalse(can_edit_order(status, roles={role}))
+    def test_pre_cutting_orders_need_privilege_for_in_place_edit(self) -> None:
+        for status in ("Approved", "At Drawing", "On Hold", "Production In Progress"):
+            with self.subTest(status=status):
+                self.assertTrue(is_before_cutting(status))
+                self.assertFalse(can_edit_order(status, roles=()))
+                self.assertTrue(can_edit_order(status, privileged=True))
+                self.assertTrue(can_edit_order(status, roles={"Order Entry"}))
+
+    def test_cutting_and_later_orders_are_not_editable(self) -> None:
+        for status in (
+            "At Sharyoun",
+            "At CNC",
+            "At Sanding",
+            "Ready for Delivery",
+            "Delivered",
+            "Cancelled",
+            "Completed",
+        ):
+            with self.subTest(status=status):
+                self.assertFalse(is_before_cutting(status))
+                self.assertFalse(can_edit_order(status, privileged=True))
+                self.assertFalse(can_edit_order(status, roles={"System Manager"}))
 
     def test_locked_orders_are_never_editable(self) -> None:
         for status in ("Delivered", "Cancelled"):
             with self.subTest(status=status):
                 self.assertTrue(is_locked_status(status))
                 self.assertFalse(can_edit_order(status, roles={"System Manager"}))
+                self.assertFalse(can_edit_order(status, privileged=True))
 
     def test_drawing_stage_can_be_resolved_from_status_or_stage_type(self) -> None:
         self.assertTrue(
@@ -41,7 +62,7 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         )
         self.assertTrue(
             is_drawing_stage(
-                production_path="Drawing",
+                production_path="Custom Routed Production",
                 status="Production In Progress",
                 current_stage_type="Drawing",
             )
@@ -49,14 +70,14 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         self.assertFalse(
             is_drawing_stage(
                 production_path="CNC",
-                status="At Drawing",
-                current_stage_type="Drawing",
+                status="At CNC",
+                current_stage_type="CNC",
             )
         )
 
-    def test_drawing_recalculation_requires_role_stage_and_unapproved_plan(self) -> None:
+    def test_drawing_recalculation_requires_permission_stage_and_unapproved_plan(self) -> None:
         allowed = dict(
-            roles={"عامل رسم"},
+            has_recalculate_permission=True,
             approved_plan=None,
             production_path="Drawing",
             status="At Drawing",
@@ -65,9 +86,8 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
         self.assertTrue(can_recalculate_drawing_system_plan(**allowed))
 
         blocked_cases = (
-            {**allowed, "roles": {"Order Entry"}},
+            {**allowed, "has_recalculate_permission": False},
             {**allowed, "approved_plan": "PLAN-0001"},
-            {**allowed, "production_path": "CNC"},
             {**allowed, "status": "At CNC", "current_stage_type": "CNC"},
         )
         for case in blocked_cases:

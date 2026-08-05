@@ -3,7 +3,7 @@ name = "almdina_erp"
 authors = [
     { name = "Horizon Tech" }
 ]
-description = "ERPNext/Frappe application for MDF cutting, optimization, production and inventory management"
+description = "ERPNext/Frappe application for MDF cutting, optimization, production and customer costing"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

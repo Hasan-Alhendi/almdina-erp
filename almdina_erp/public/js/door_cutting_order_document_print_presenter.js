@@ -3,6 +3,7 @@
 
     const FRAME_ID = "dco-unified-document-print-frame";
     let activeFrm = null;
+    let activeIdentity = "";
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -22,6 +23,27 @@
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
+    }
+
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function captureIdentity(frm) {
+        const context = documentContext();
+        if (context && typeof context.capture === "function") {
+            return context.capture(frm);
+        }
+        const doc = frm && frm.doc;
+        return doc ? `${doc.doctype || frm.doctype || ""}::${doc.name || "__new__"}` : "";
+    }
+
+    function isCurrent(frm, identity) {
+        const context = documentContext();
+        if (context && typeof context.isCurrent === "function") {
+            return context.isCurrent(frm, identity);
+        }
+        return Boolean(frm && identity && frm === activeFrm && identity === activeIdentity);
     }
 
     function edgeBandingApi() {
@@ -203,7 +225,7 @@
         return `<div class="info shared-info">
             <div><b>رقم الطلب</b>${esc(frm.doc.name || "مسودة")}</div>
             <div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div>
-            <div><b>صنف اللوح</b>${esc(frm.doc.board_description || frm.doc.board_item || "—")}</div>
+            <div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div>
             <div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div>
             <div><b>لون القشاط</b>${esc(frm.doc.edge_color || "غير محدد")}</div>
             <div><b>عدد الدرف</b>${quantity(doorCount)}</div>
@@ -282,21 +304,27 @@
     }
 
     async function printDocument(frm, mode) {
+        const identity = captureIdentity(frm);
+        if (!isCurrent(frm, identity)) return false;
         await ensureProfiles(frm);
+        if (!isCurrent(frm, identity)) return false;
         printHtml(documentHtml(frm, mode));
+        return true;
     }
 
     function bindPrintInterception() {
         if (document._dcoUnifiedDocumentPrintBound) return;
         document._dcoUnifiedDocumentPrintBound = true;
         document.addEventListener("click", event => {
-            if (!activeFrm) return;
+            const frm = activeFrm;
+            const identity = activeIdentity;
+            if (!frm || !isCurrent(frm, identity)) return;
             const invoiceButton = event.target.closest(".dco-print-customer-invoice");
             const measurementButton = event.target.closest(".dco-print-measurements,.dco-entry-window-print");
             if (!invoiceButton && !measurementButton) return;
             event.preventDefault();
             event.stopImmediatePropagation();
-            printDocument(activeFrm, invoiceButton ? "invoice" : "measurements").catch(error => {
+            printDocument(frm, invoiceButton ? "invoice" : "measurements").catch(error => {
                 console.error("Order document preparation failed", error);
                 frappe.msgprint("تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
             });
@@ -305,6 +333,7 @@
 
     function schedule(frm) {
         activeFrm = frm;
+        activeIdentity = captureIdentity(frm);
         bindPrintInterception();
     }
 

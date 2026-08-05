@@ -23,7 +23,7 @@ PLACED = (
     / "cutting_plan_piece.json"
 )
 ORDER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
-ORDER_JS = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.js"
+PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 SERVICE = ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 PLAN = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
@@ -53,15 +53,17 @@ def test_exact_geometry_is_separate_from_legacy_documentation_and_persisted_in_p
 
 def test_geometry_module_stays_available_but_classic_editor_remains_primary():
     hooks = HOOKS.read_text(encoding="utf-8")
-    geometry_hook = '"public/js/door_cutting_order_special_shape_geometry.js"'
+    geometry_hook = '"/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js"'
+    contract_hook = '"/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js"'
     operator_hook = '"public/js/door_cutting_order_operator_ux.js"'
     legacy_hook = '"public/js/door_cutting_order_special_shape_ux.js"'
     builder_hook = '"public/js/door_cutting_order_special_shape_builder_ux.js"'
 
     assert geometry_hook in hooks
+    assert contract_hook in hooks
     assert legacy_hook in hooks
     assert builder_hook not in hooks
-    assert hooks.index(geometry_hook) < hooks.index(operator_hook)
+    assert hooks.index(geometry_hook) < hooks.index(contract_hook) < hooks.index(operator_hook)
     assert hooks.index(operator_hook) < hooks.index(legacy_hook)
 
     legacy = (ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js").read_text(
@@ -140,14 +142,16 @@ def test_exact_geometry_survives_every_packing_and_approved_export_path():
 
 
 def test_plan_print_and_all_dxf_paths_use_exact_special_polygon_when_available():
-    order_js = ORDER_JS.read_text(encoding="utf-8")
+    order_js = PLAN_RENDERER.read_text(encoding="utf-8")
     workflow = WORKFLOW.read_text(encoding="utf-8")
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
 
     for source in (order_js, workflow, secure_dxf):
-        assert "AlmdinaSpecialShapeGeometry" in source
-        assert "isExact(piece)" in source
-        assert "dxfPoints(piece" in source
+        assert "AlmdinaShapeOutputContract" in source
+        assert "hasExactCutPath(piece)" in source
+        assert "AlmdinaSpecialShapeGeometry" not in source
+    for source in (workflow, secure_dxf):
+        assert "shapeOutput.dxfPoints(piece" in source
 
     assert "dco-special-exact-piece" in order_js
     assert "◆ درفة خاصة · مسار هندسي" in order_js

@@ -7,13 +7,18 @@ from almdina_erp.almdina_erp.application.shop_floor.commands import (
     ShopFloorCommandPort,
     StageState,
 )
+from almdina_erp.almdina_erp.domain.orders.production_authorization import (
+    PRODUCTION_ACTIONS,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe import (
     order_tracking_repository,
     production_event_repository,
+    production_routing_repository,
     production_stage_repository,
-    remnant_execution_gateway,
     shop_floor_authorization,
-    stock_execution_gateway,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    document_has_capability,
 )
 
 
@@ -36,6 +41,8 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             status=str(stage.status),
             assigned_to=stage.assigned_to or None,
             sequence=_as_int(stage.sequence),
+            department_label=getattr(stage, "department_label", None) or None,
+            operational_role=getattr(stage, "operational_role", None) or None,
             start_time=stage.start_time or None,
             paused_seconds=_as_int(stage.paused_seconds),
             piece_label=stage.piece_label or None,
@@ -44,18 +51,13 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
     def current_user(self) -> str:
         return shop_floor_authorization.current_user()
 
-    def require_dispatch_permission(self) -> None:
-        shop_floor_authorization.require_roles(*shop_floor_authorization.DISPATCH_ROLES)
-
-    def require_delivery_permission(self) -> None:
-        shop_floor_authorization.require_roles(*shop_floor_authorization.ADMIN_ROLES)
-
-    def require_revert_permission(self) -> None:
-        shop_floor_authorization.require_roles(*shop_floor_authorization.ADMIN_ROLES)
-
-    def require_stage_access(self, stage_name: str) -> None:
-        stage = production_stage_repository.get_stage(stage_name)
-        shop_floor_authorization.require_stage_assignee_or_admin(stage)
+    def capabilities_for_order(self, order_name: str) -> frozenset[str]:
+        order = order_tracking_repository.get_order(order_name)
+        return frozenset(
+            capability
+            for capability in PRODUCTION_ACTIONS
+            if document_has_capability(order, capability)
+        )
 
     def get_order_state(self, order_name: str) -> OrderState:
         order = order_tracking_repository.get_order(order_name)
@@ -75,14 +77,17 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
     def validate_special_shapes(self, order_name: str) -> None:
         order_tracking_repository.get_order(order_name).ensure_special_shapes_documented()
 
-    def assert_worker_for_stage(self, user: str, stage_type: str) -> None:
-        shop_floor_authorization.assert_enabled_user_has_stage_role(user, stage_type)
+    def get_production_route(self, route_name: str):
+        return production_routing_repository.get_route(route_name)
 
-    def get_users_for_stage(self, stage_type: str) -> list[dict[str, str]]:
-        return shop_floor_authorization.get_users_for_stage(stage_type)
+    def assert_worker_for_role(self, user: str, role: str) -> None:
+        shop_floor_authorization.assert_enabled_user_has_role(user, role)
 
-    def cancel_non_shop_floor_active_stages(self, order_name: str) -> None:
-        production_stage_repository.cancel_non_shop_floor_active_stages(order_name)
+    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
+        return shop_floor_authorization.get_users_for_role(role)
+
+    def cancel_active_order_stages(self, order_name: str) -> None:
+        production_stage_repository.cancel_active_order_stages(order_name)
 
     def create_stage(
         self,
@@ -91,14 +96,26 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
         stage_type: str,
         assignee: str,
         sequence: int,
+        department_label: str | None = None,
+        operational_role: str | None = None,
     ) -> StageState:
         stage = production_stage_repository.create_stage(
             order_name,
             stage_type,
             assignee,
             sequence,
+            department_label=department_label,
+            operational_role=operational_role,
         )
         return self._stage_state(stage)
+
+    def reassign_stage(self, stage_name: str, *, assignee: str) -> StageState:
+        return self._stage_state(
+            production_stage_repository.reassign_stage(
+                stage_name,
+                assignee=assignee,
+            )
+        )
 
     def track_order_to_stage(
         self,
@@ -141,21 +158,6 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             event_type,
             details,
         )
-
-    def consume_stock_if_due(
-        self,
-        order_name: str,
-        stage_type: str,
-        trigger: str,
-    ) -> None:
-        stock_execution_gateway.consume_stock_if_due(order_name, stage_type, trigger)
-
-    def register_remnants_if_due(
-        self,
-        order_name: str,
-        stage_type: str,
-    ) -> dict[str, Any] | None:
-        return remnant_execution_gateway.register_remnants_if_due(order_name, stage_type)
 
     def close_open_pause(self, stage_name: str, resumed_by: str) -> None:
         production_stage_repository.close_open_pause(stage_name, resumed_by)

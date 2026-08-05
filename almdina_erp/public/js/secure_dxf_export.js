@@ -1,15 +1,21 @@
 (() => {
     "use strict";
 
+    if (window.__almdinaSecureDxfExportLoaded) return;
+    window.__almdinaSecureDxfExportLoaded = true;
+
     const DXF_VERSION = "AC1009"; // AutoCAD R11/R12 ASCII. AutoCAD 2020 opens this legacy format.
 
-    // Mirrors DXF_EXPORT_ROLES in export_validation_service.py.
-    const DXF_EXPORT_ROLES = ["عامل رسم", "Production Manager", "System Manager"];
-
-    function canExportDxf() {
-        const boot_roles = (frappe.boot && frappe.boot.user && frappe.boot.user.roles) || [];
-        const roles = (frappe.user_roles || []).concat(boot_roles);
-        return DXF_EXPORT_ROLES.some(role => roles.includes(role));
+    function canExportDxf(frm = window.cur_frm) {
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions &&
+            (
+                frm && typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, "export_dxf")
+                    : permissions.can("export_dxf")
+            )
+        );
     }
 
     function isArabic() {
@@ -111,12 +117,16 @@
                 const x = offsetX + trimMm + num(piece.x) * 10;
                 const y = offsetY + fullHeight - trimMm - num(piece.y) * 10 - pieceHeight;
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
-                const specialGeometry = window.AlmdinaSpecialShapeGeometry;
-                const pathGeometry = clippedGeometry && clippedGeometry.isClipped(piece)
-                    ? clippedGeometry
-                    : (specialGeometry && specialGeometry.isExact(piece) ? specialGeometry : null);
-                entities += pathGeometry
-                    ? closedPath("CUT_PATH", pathGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight))
+                const shapeOutput = window.AlmdinaShapeOutputContract;
+                const clipped = clippedGeometry && clippedGeometry.isClipped(piece);
+                const exactSpecial = shapeOutput && shapeOutput.hasExactCutPath(piece);
+                const cutPath = clipped
+                    ? clippedGeometry.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
+                    : (exactSpecial
+                        ? shapeOutput.dxfPoints(piece, x, y, pieceWidth, pieceHeight)
+                        : null);
+                entities += cutPath
+                    ? closedPath("CUT_PATH", cutPath)
                     : rectangle("CUT_PATH", x, y, pieceWidth, pieceHeight);
             });
         });
@@ -228,7 +238,6 @@
         return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name));
     }
 
-    // Shared entry point so the shop-floor page can offer the same validated export.
     function exportOrderDxf(orderName) {
         return fetchValidatedPlan({ order_name: orderName }).then(r =>
             downloadValidatedPlan(r.message, orderName)
@@ -238,9 +247,8 @@
     frappe.provide("frappe.almdina");
     frappe.almdina.export_order_dxf = exportOrderDxf;
     frappe.almdina.can_export_dxf = canExportDxf;
+    frappe.almdina.export_validated_dxf = validatedExport;
 
-    // Every historical / alternate export label that must never appear for
-    // CNC / Sharyoun / Sanding operators.
     const STRIP_EXPORT_LABELS = [
         "تصدير DXF",
         "Export DXF",
@@ -251,32 +259,40 @@
     ];
 
     function isExportButtonLabel(text) {
-        const t = String(text || "").trim();
-        if (STRIP_EXPORT_LABELS.includes(t)) return true;
-        // Catch translated / slightly varied labels that still mean "export DXF".
-        return /تصدير\s*DXF/i.test(t) || /^export\s*dxf/i.test(t);
+        const value = String(text || "").trim();
+        if (STRIP_EXPORT_LABELS.includes(value)) return true;
+        return /تصدير\s*DXF/i.test(value) || /^export\s*dxf/i.test(value);
     }
 
     function stripUnauthorizedExportButtons(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        if (canExportDxf()) {
-            // Allowed users: only remove the old insecure exporters; keep the
-            // single validated AutoCAD button installed below.
-            ["تصدير DXF", "Export DXF", "تصدير DXF للرسم"].forEach(label => {
+
+        // Keep drawing-stage export ("تصدير DXF للرسم") when permitted; remove
+        // legacy AutoCAD toolbar exporters so the plan-section button owns that job.
+        const toolbarLegacy = [
+            "تصدير DXF",
+            "Export DXF",
+            "تصدير DXF للتعديل",
+            "تصدير DXF لأوتوكاد",
+            "Export DXF for AutoCAD",
+        ];
+        toolbarLegacy.forEach(label => {
+            try {
+                frm.remove_custom_button(label);
+                frm.remove_custom_button(label, __("الرسم / DXF"));
+                frm.remove_custom_button(label, __("دورة الطلب"));
+            } catch (error) {
+                void error;
+            }
+        });
+
+        if (!canExportDxf(frm)) {
+            ["تصدير DXF للرسم", ...toolbarLegacy].forEach(label => {
                 try {
                     frm.remove_custom_button(label);
                     frm.remove_custom_button(label, __("الرسم / DXF"));
-                } catch (e) {
-                    /* ignore */
-                }
-            });
-        } else {
-            STRIP_EXPORT_LABELS.forEach(label => {
-                try {
-                    frm.remove_custom_button(label);
-                    frm.remove_custom_button(label, __("الرسم / DXF"));
-                } catch (e) {
-                    /* ignore */
+                } catch (error) {
+                    void error;
                 }
             });
         }
@@ -284,10 +300,13 @@
         const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
         if (!root) return;
         $(root).find("button, a.btn").filter(function () {
-            return isExportButtonLabel($(this).text());
+            if ($(this).closest("[data-fieldname='plan_control_actions']").length) return false;
+            if ($(this).hasClass("dco-export-dxf")) return false;
+            const label = String($(this).text() || "").trim();
+            // Drawing workflow button stays when export_dxf is granted.
+            if (canExportDxf(frm) && label === "تصدير DXF للرسم") return false;
+            return isExportButtonLabel(label);
         }).each(function () {
-            // Never strip the validated button for users who are allowed to export.
-            if (canExportDxf() && $(this).text().trim() === buttonLabel()) return;
             $(this).remove();
         });
     }
@@ -303,27 +322,24 @@
         frm._almdina_secure_dxf_observer = observer;
     }
 
-    function installButton(frm) {
+    function installToolbarGuard(frm) {
         if (frm.doctype !== "Door Cutting Order") return;
         stripUnauthorizedExportButtons(frm);
-        // Always watch: other scripts re-add export buttons after refresh.
         ensureExportStripObserver(frm);
-        const label = buttonLabel();
+        // DXF export lives in the cutting-plan section, not the page toolbar.
         try {
-            frm.remove_custom_button(label);
-        } catch (e) {
-            /* ignore */
+            frm.remove_custom_button(buttonLabel());
+        } catch (error) {
+            void error;
         }
-        if (!canExportDxf()) return;
-        frm.add_custom_button(label, () => validatedExport(frm));
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         refresh(frm) {
-            installButton(frm);
-            [250, 900, 1600].forEach(delay => setTimeout(() => installButton(frm), delay));
+            installToolbarGuard(frm);
+            [250, 900, 1600].forEach(delay => setTimeout(() => installToolbarGuard(frm), delay));
             if (frappe.after_ajax) {
-                frappe.after_ajax(() => setTimeout(() => installButton(frm), 0));
+                frappe.after_ajax(() => setTimeout(() => installToolbarGuard(frm), 0));
             }
         },
     });

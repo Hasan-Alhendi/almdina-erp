@@ -2,9 +2,9 @@ name: Static Checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, Develop, develop]
   pull_request:
-    branches: [main]
+    branches: [main, Develop, develop]
 
 permissions:
   contents: read
@@ -20,6 +20,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Install static test runner
+        run: python -m pip install pytest
 
       - name: Validate JSON files
         run: |
@@ -55,12 +58,39 @@ jobs:
             almdina_erp.tests.test_order_revision_activation_adapter \
             almdina_erp.tests.test_order_revision_activation_contract \
             almdina_erp.tests.test_order_lifecycle_domain \
+            almdina_erp.tests.test_order_lifecycle_permissions \
+            almdina_erp.tests.test_production_authorization_domain \
             almdina_erp.tests.test_shop_floor_command_adapter \
             almdina_erp.tests.test_shop_floor_infrastructure_gateway \
             almdina_erp.tests.test_authorization_domain \
             almdina_erp.tests.test_read_only_boot_authorization \
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
+
+      - name: Run permission, persona, workforce, master data, and control center tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_authorization_gateway_matrix_fallback \
+            almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_permission_custom_docperm_baseline \
+            almdina_erp.tests.test_frappe_v16_permission_hook_contract \
+            almdina_erp.tests.test_permission_management_architecture \
+            almdina_erp.tests.test_permission_templates \
+            almdina_erp.tests.test_permission_personas_e2e \
+            almdina_erp.tests.test_final_security_architecture \
+            almdina_erp.tests.test_workforce_authorization \
+            almdina_erp.tests.test_workforce_management_architecture \
+            almdina_erp.tests.test_factory_master_data_authorization \
+            almdina_erp.tests.test_factory_master_data_architecture \
+            almdina_erp.tests.test_control_center_authorization \
+            almdina_erp.tests.test_control_center_architecture
+
+      - name: Run configurable lifecycle and production architecture tests
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_configurable_order_lifecycle_permissions.py \
+            almdina_erp/tests/test_configurable_production_permissions.py \
+            almdina_erp/tests/test_configurable_production_routing_domain.py
 
       - name: Run shop-floor command application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_command_application
@@ -97,7 +127,8 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_costing_domain \
-            almdina_erp.tests.test_order_costing_architecture
+            almdina_erp.tests.test_order_costing_architecture \
+            almdina_erp.tests.test_financial_document_application
 
       - name: Run cutting-plan application tests
         run: |
@@ -117,18 +148,29 @@ jobs:
             almdina_erp.tests.test_order_save_application \
             almdina_erp.tests.test_unified_order_controller_architecture
 
-      - name: Run inventory availability tests
+      - name: Enforce the no-stock product boundary
         run: |
           python -m unittest -v \
-            almdina_erp.tests.test_inventory_domain \
-            almdina_erp.tests.test_stock_availability_application \
-            almdina_erp.tests.test_stock_availability_architecture
+            almdina_erp.tests.test_numeric_input_domain \
+            almdina_erp.tests.test_product_scope_contract \
+            almdina_erp.tests.test_replacement_planning
 
       - name: Run revision, board input, and typing stability regression tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_revision_board_input_ux_contract \
+            almdina_erp.tests.test_document_context_ux_contract \
+            almdina_erp.tests.test_frontend_consolidation_contract \
             almdina_erp.tests.test_input_stability_ux_contract
+
+      - name: Run UI, DXF, invoice, and optimizer function contracts
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_*ux.py \
+            almdina_erp/tests/test_dxf_autocad_compatibility.py \
+            almdina_erp/tests/test_arabic_operator_localization.py \
+            almdina_erp/tests/test_compact_invoice_print_contract.py \
+            almdina_erp/tests/test_advanced_cutting_optimizer.py
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -146,5 +188,22 @@ jobs:
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
 
-      - name: Run input stability browser simulation
-        run: node almdina_erp/tests/js/input_stability.test.js
+      - name: Run frontend browser simulations
+        run: |
+          node almdina_erp/tests/js/permission_context.test.js
+          node almdina_erp/tests/js/order_lifecycle_permissions.test.js
+          node almdina_erp/tests/js/financial_documents.test.js
+          node almdina_erp/tests/js/cutting_plan_renderer.test.js
+          node almdina_erp/tests/js/document_context.test.js
+          node almdina_erp/tests/js/document_context_async.test.js
+          node almdina_erp/tests/js/input_stability.test.js
+          node almdina_erp/tests/js/inline_note_editor.test.js
+          node almdina_erp/tests/js/sketch_interaction.test.js
+          node almdina_erp/tests/js/sketch_history.test.js
+          node almdina_erp/tests/js/sketch_renderer.test.js
+          node almdina_erp/tests/js/shape_output_contract.test.js
+          node almdina_erp/tests/js/mobile_piece_cards.test.js
+          node almdina_erp/tests/js/order_list_cards.test.js
+          node almdina_erp/tests/js/shop_floor_quick_actions.test.js
+          node almdina_erp/tests/test_special_shape_smoothing.js
+          node almdina_erp/tests/test_shape_print.js

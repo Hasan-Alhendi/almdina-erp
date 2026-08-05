@@ -18,6 +18,13 @@ REPOSITORY_PATH = (
 )
 SERVICE_PATH = ROOT / "almdina_erp" / "services" / "stock_availability_service.py"
 HOOKS_PATH = ROOT / "hooks.py"
+LEGACY_STOCK_ENDPOINT = (
+    "almdina_erp.almdina_erp.services.stock_service.check_order_stock"
+)
+RETIRED_PRODUCT_ENDPOINT = (
+    "almdina_erp.almdina_erp.services.legacy_endpoint_service."
+    "retired_product_endpoint"
+)
 
 
 class TestStockAvailabilityArchitecture(unittest.TestCase):
@@ -55,14 +62,12 @@ class TestStockAvailabilityArchitecture(unittest.TestCase):
         self.assertNotIn("frappe.db.", service)
         self.assertNotIn("actual_qty - reserved_qty", service)
 
-    def test_legacy_public_endpoint_routes_to_new_slice(self) -> None:
+    def test_legacy_public_endpoint_is_fail_closed(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
         self.assertEqual(
-            overrides[
-                "almdina_erp.almdina_erp.services.stock_service.check_order_stock"
-            ],
-            "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
+            overrides.get(LEGACY_STOCK_ENDPOINT),
+            RETIRED_PRODUCT_ENDPOINT,
         )
 
 

@@ -145,7 +145,9 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         for fieldname in override_fields:
             self.assertEqual(detail_fields[fieldname]["fieldtype"], "Link")
-            self.assertEqual(detail_fields[fieldname]["options"], "Edge Banding Type")
+            self.assertEqual(
+                detail_fields[fieldname]["options"], "Edge Banding Type"
+            )
             self.assertEqual(detail_fields[fieldname]["hidden"], 1)
             self.assertNotEqual(detail_fields[fieldname].get("read_only"), 1)
 
@@ -184,8 +186,8 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         cut_index = scripts.index(
             "public/js/door_cutting_order_cut_dimensions_ux.js"
         )
-        invoice_index = scripts.index(
-            "public/js/door_cutting_order_cost_invoice_ux.js"
+        theme_index = scripts.index(
+            "public/js/door_cutting_order_document_print_theme.js"
         )
         print_index = scripts.index(
             "public/js/door_cutting_order_document_print_presenter.js"
@@ -197,8 +199,13 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertGreater(side_edge_index, performance_index)
         self.assertGreater(controls_index, side_edge_index)
         self.assertGreater(cut_index, controls_index)
-        self.assertGreater(print_index, invoice_index)
+        self.assertGreater(theme_index, cut_index)
+        self.assertGreater(print_index, theme_index)
         self.assertGreater(documents_index, print_index)
+        self.assertNotIn(
+            "public/js/door_cutting_order_cost_invoice_ux.js",
+            scripts,
+        )
         self.assertNotIn(
             "public/js/door_cutting_order_measurement_print_presenter.js",
             scripts,
@@ -233,16 +240,25 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("removeSideDropdownRows", controls_source)
         self.assertIn(':scope > .dco-edge-profile-grid', controls_source)
         self.assertNotIn("function ensureSideGrid", controls_source)
-        self.assertNotIn('select.className = "dco-side-profile-select"', controls_source)
-        self.assertNotIn('select = document.createElement("select")', controls_source)
+        self.assertNotIn(
+            'select.className = "dco-side-profile-select"', controls_source
+        )
+        self.assertNotIn(
+            'select = document.createElement("select")', controls_source
+        )
         self.assertIn("dco-all-sides-profile-button", controls_source)
         self.assertIn("ensureBulkButton", controls_source)
         self.assertIn("openBulkPopover", controls_source)
         self.assertIn("bulkPopoverOptionsHtml", controls_source)
         self.assertIn("dco-col-edge-bulk", controls_source)
         self.assertIn("ensureBulkHeader", controls_source)
-        self.assertIn('edgeTypeHeader.insertAdjacentElement("afterend", header)', controls_source)
-        self.assertIn("tbody td{vertical-align:middle!important;", controls_source)
+        self.assertIn(
+            'edgeTypeHeader.insertAdjacentElement("afterend", header)',
+            controls_source,
+        )
+        self.assertIn(
+            "tbody td{vertical-align:middle!important;", controls_source
+        )
         self.assertIn('root.addEventListener("dblclick"', controls_source)
         self.assertIn("openSidePopover", controls_source)
         self.assertIn("dco-edge-profile-popover", controls_source)
@@ -251,11 +267,15 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("scrollbar-gutter:stable", controls_source)
         self.assertIn("touch-action:pan-y", controls_source)
         self.assertIn('popover.addEventListener("wheel"', controls_source)
-        self.assertIn("activePopover.element.contains(event.target)", controls_source)
+        self.assertIn(
+            "activePopover.element.contains(event.target)", controls_source
+        )
         self.assertIn("is-edge-custom", controls_source)
         self.assertIn("نقرة للتفعيل والتعطيل", controls_source)
-        self.assertIn("document.addEventListener(\"pointerdown\"", controls_source)
-        self.assertIn("document.addEventListener(\"keydown\"", controls_source)
+        self.assertIn(
+            'document.addEventListener("pointerdown"', controls_source
+        )
+        self.assertIn('document.addEventListener("keydown"', controls_source)
         self.assertIn("الافتراضي", controls_source)
         self.assertIn("تطبيق على الأربعة", controls_source)
         self.assertIn("الأربعة بالافتراضي", controls_source)
@@ -272,19 +292,29 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn("display:none!important", cut_source)
         self.assertNotIn("dco-cut-size-card", cut_source)
         self.assertNotIn("function renderCell", cut_source)
-        self.assertNotIn('header.textContent = isArabic() ? "مقاس القص"', cut_source)
+        self.assertNotIn(
+            'header.textContent = isArabic() ? "مقاس القص"', cut_source
+        )
         self.assertIn("الخصم حسب سماكة كل ضلع", cut_source)
 
         self.assertIn("module.details(frm, source)", print_source)
-        self.assertIn("await Promise.resolve(module.ensureProfiles(frm))", print_source)
-        self.assertIn(".dco-print-measurements,.dco-entry-window-print", print_source)
+        self.assertIn(
+            "await Promise.resolve(module.ensureProfiles(frm))", print_source
+        )
+        self.assertIn(
+            ".dco-print-measurements,.dco-entry-window-print", print_source
+        )
         self.assertIn(".dco-print-customer-invoice", print_source)
         self.assertIn("event.stopImmediatePropagation()", print_source)
         self.assertIn("القشاط المخصص", print_source)
-        self.assertIn(".filter(detail => Boolean(detail.custom))", print_source)
+        self.assertIn(
+            ".filter(detail => Boolean(detail.custom))", print_source
+        )
         self.assertIn("notesCellHtml", print_source)
         self.assertIn("shapePrintCss", print_source)
-        self.assertNotIn("row.edge_type || frm.doc.default_edge_type", print_source)
+        self.assertNotIn(
+            "row.edge_type || frm.doc.default_edge_type", print_source
+        )
         self.assertNotIn("rate_usd_per_meter *", print_source)
 
         self.assertIn("قشاط الأطراف", document_source)

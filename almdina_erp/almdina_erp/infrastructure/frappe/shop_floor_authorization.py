@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import frappe
 from frappe import _
 from frappe.utils import cint
@@ -14,50 +12,48 @@ STAGE_ROLE_BY_TYPE: dict[str, str] = {
     "Sanding": "عامل تقشيط",
 }
 
-DISPATCH_ROLES = ("Order Entry", "Production Manager")
-ADMIN_ROLES = ("Order Entry", "Production Manager", "System Manager")
-STAGE_ADMIN_ROLES = frozenset({"Production Manager", "System Manager"})
-
 
 def current_user() -> str:
     return str(frappe.session.user)
 
 
-def require_roles(*roles: str) -> None:
-    user_roles = set(frappe.get_roles())
-    if "System Manager" in user_roles:
-        return
-    if not user_roles.intersection(roles):
+def assert_enabled_user_has_role(user: str, role: str) -> None:
+    """Ensure an assignee is active and belongs to the configured route role."""
+
+    resolved_user = str(user or "").strip()
+    resolved_role = str(role or "").strip()
+    if not resolved_user:
+        frappe.throw(_("Select a worker."))
+    if not resolved_role:
+        frappe.throw(_("The production stage has no operational role."))
+    if not frappe.db.exists("Role", resolved_role):
+        frappe.throw(_("Operational role {0} does not exist.").format(resolved_role))
+    if not frappe.db.exists("User", resolved_user) or not cint(
+        frappe.db.get_value("User", resolved_user, "enabled")
+    ):
+        frappe.throw(_("User {0} is not an enabled system user.").format(resolved_user))
+    user_roles = set(frappe.get_roles(resolved_user))
+    if resolved_role not in user_roles and resolved_user != "Administrator":
         frappe.throw(
-            _("You do not have permission for this operation."),
-            frappe.PermissionError,
+            _("User {0} is not assigned to operational role {1}.").format(
+                resolved_user,
+                resolved_role,
+            )
         )
 
 
 def assert_enabled_user_has_stage_role(user: str, stage_type: str) -> None:
+    """Validate operational eligibility for an assignment.
+
+    Business action authorization is resolved separately through configurable
+    Permission Types. This mapping only answers whether a selected worker is a
+    member of the operational department represented by the stage type.
+    """
+
     role = STAGE_ROLE_BY_TYPE.get(stage_type)
     if not role:
         frappe.throw(_("Unsupported shop-floor stage: {0}").format(stage_type))
-    if not user:
-        frappe.throw(_("Select a worker."))
-    if not frappe.db.exists("User", user) or not cint(
-        frappe.db.get_value("User", user, "enabled")
-    ):
-        frappe.throw(_("User {0} is not an enabled system user.").format(user))
-    user_roles = set(frappe.get_roles(user))
-    if role not in user_roles and "System Manager" not in user_roles:
-        frappe.throw(_("User {0} does not have role {1}.").format(user, role))
-
-
-def require_stage_assignee_or_admin(stage: Any) -> None:
-    roles = set(frappe.get_roles())
-    if roles.intersection(STAGE_ADMIN_ROLES):
-        return
-    expected_role = STAGE_ROLE_BY_TYPE.get(stage.stage_type)
-    if expected_role:
-        require_roles(expected_role)
-    if stage.assigned_to and stage.assigned_to != frappe.session.user:
-        frappe.throw(_("This stage is assigned to another worker."))
+    assert_enabled_user_has_role(user, role)
 
 
 def get_users_for_stage(stage_type: str) -> list[dict[str, str]]:
@@ -89,14 +85,10 @@ def get_users_for_role(role: str) -> list[dict[str, str]]:
 
 
 __all__ = [
-    "ADMIN_ROLES",
-    "DISPATCH_ROLES",
-    "STAGE_ADMIN_ROLES",
     "STAGE_ROLE_BY_TYPE",
+    "assert_enabled_user_has_role",
     "assert_enabled_user_has_stage_role",
     "current_user",
     "get_users_for_role",
     "get_users_for_stage",
-    "require_roles",
-    "require_stage_assignee_or_admin",
 ]

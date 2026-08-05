@@ -8,17 +8,18 @@
         "إلغاء تخصيص القشاط",
         "طباعة جدول القياسات",
         "طباعة القياسات",
+        "طباعة خطة القص",
+        "تصدير DXF لأوتوكاد",
+        "Export DXF for AutoCAD",
+        "تصدير DXF",
+        "Export DXF",
         "Reset Piece Edge Customization",
         "Reset Edge Customization",
     ]);
     const ORDER = new Map([
         ["إعادة حساب خطة القص", 10],
-        ["طباعة خطة القص", 20],
-        ["تصدير DXF لأوتوكاد", 30],
-        ["تصدير DXF", 30],
         ["دورة الطلب", 40],
         ["عرض", 50],
-        ["المخزون", 60],
     ]);
 
     function text(node) {
@@ -98,9 +99,15 @@
     function removeLegacyButtons(frm, head) {
         REMOVE_LABELS.forEach(label => {
             try { frm.remove_custom_button(label); } catch (error) { /* button may not exist */ }
+            try { frm.remove_custom_button(label, __("الرسم / DXF")); } catch (error) { /* optional group */ }
+            try { frm.remove_custom_button(label, __("دورة الطلب")); } catch (error) { /* optional group */ }
         });
         head.querySelectorAll(".page-actions button,.page-actions a,.page-actions .dropdown-item").forEach(node => {
-            if (REMOVE_LABELS.has(text(node))) {
+            const label = text(node);
+            const isPlanPrint = label === "طباعة خطة القص";
+            const isAutocadDxf = /تصدير\s*DXF\s*لأوتوكاد/i.test(label) || /^export\s*dxf\s*for\s*autocad$/i.test(label);
+            const isLegacyDxf = label === "تصدير DXF" || label === "Export DXF";
+            if (REMOVE_LABELS.has(label) || isPlanPrint || isAutocadDxf || isLegacyDxf) {
                 const group = node.closest(".btn-group,.dropdown");
                 if (node.matches(".dropdown-item") && group) node.remove();
                 else (group && actionLabel(group) === text(node) ? group : node).remove();

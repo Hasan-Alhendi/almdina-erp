@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION_UX = ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
+LIFECYCLE_UX = ROOT / "public" / "js" / "order_lifecycle.js"
 REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
 BOARD_TEXT_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
 FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
@@ -30,7 +31,7 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         source = REVISION_UX.read_text(encoding="utf-8")
         self.assertIn('fieldname: "reason"', source)
         self.assertIn("reqd: 0", source)
-        self.assertIn('سبب إعادة الطلب للتعديل (اختياري)', source)
+        self.assertIn("سبب إنشاء نسخة التعديل (اختياري)", source)
         self.assertIn("function createRevision(frm, reason = \"\")", source)
         self.assertIn(
             "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
@@ -39,27 +40,38 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         self.assertIn('reason: String(reason || "").trim()', source)
         self.assertNotIn("اكتب سبب إعادة الطلب للتعديل", source)
 
+    def test_return_to_draft_dialog_keeps_reason_optional(self) -> None:
+        source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("سبب إعادة الطلب للتعديل (اختياري)", source)
+        self.assertIn("reqd: 0", source)
+        self.assertIn(
+            "order_revision_service.return_order_to_draft",
+            source,
+        )
+        self.assertIn('reason: String(values.reason || "").trim()', source)
+
     def test_server_accepts_missing_reason_as_the_final_safety_boundary(self) -> None:
         source = REVISION_SERVICE.read_text(encoding="utf-8")
         self.assertIn('reason = str(reason or "").strip()', source)
         self.assertNotIn("A revision reason is required.", source)
         self.assertNotIn("if not reason:", source)
 
-    def test_legacy_return_to_draft_button_is_intercepted_globally(self) -> None:
-        source = REVISION_UX.read_text(encoding="utf-8")
-        self.assertIn("function installLegacyReturnButtonGuard()", source)
-        self.assertIn("document.addEventListener(\"click\"", source)
-        self.assertIn("document._dcoRevisionReturnButtonGuard", source)
-        self.assertIn("frappe.almdina.currentOrderRevisionForm", source)
-        self.assertIn('label.includes(__("إعادة للمسودة"))', source)
-        self.assertIn("event.stopImmediatePropagation()", source)
-        self.assertIn("openRevision(frm)", source)
-        self.assertNotIn("const pageRoot = frm.page", source)
+    def test_legacy_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
+        source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("function removeLifecycleButtons(frm)", source)
+        self.assertIn("LEGACY_LABELS.forEach", source)
+        self.assertIn('__("إعادة للمسودة")', source)
+        self.assertIn('__("Cancel Order")', source)
+        self.assertIn("removeLifecycleButtons(frm)", source)
+        self.assertNotIn('document.addEventListener("click"', source)
+        self.assertNotIn("stopImmediatePropagation", source)
 
-    def test_refresh_updates_the_active_form_used_by_global_guard(self) -> None:
-        source = REVISION_UX.read_text(encoding="utf-8")
-        self.assertIn("frappe.almdina.currentOrderRevisionForm = frm", source)
-        self.assertIn("if (!canCreateRevision(frm)) return", source)
+    def test_document_context_replaces_the_global_active_form_guard(self) -> None:
+        source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("documentContext().capture(frm)", source)
+        self.assertIn("documentContext().isCurrent(frm, identity)", source)
+        self.assertIn("context.order_name !== frm.doc.name", source)
+        self.assertNotIn("currentOrderRevisionForm", source)
 
 
 class TestBoardInputSyncContract(unittest.TestCase):

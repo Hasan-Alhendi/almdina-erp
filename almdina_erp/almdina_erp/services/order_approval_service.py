@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
-from frappe import _
 
+from almdina_erp.almdina_erp.application.orders.lifecycle_permissions import (
+    OrderLifecycleAction,
+)
 from almdina_erp.almdina_erp.services.cutting_plan_service import (
     _lock_order_for_production,
-    require_any_role,
+)
+from almdina_erp.almdina_erp.services.order_lifecycle_permission_service import (
+    require_lifecycle_action,
 )
 from almdina_erp.almdina_erp.services.order_revision_activation import (
     finalize_revision_activation,
@@ -20,10 +24,9 @@ from almdina_erp.almdina_erp.services.order_revision_activation import (
 def approve_order(order_name: str) -> dict[str, Any]:
     """Approve an order and atomically activate a pending revision when needed."""
 
-    require_any_role("Production Manager")
     order = load_locked_revision_order(order_name)
-    if order.status not in {"Draft", "Rejected", "Pending Review"}:
-        frappe.throw(_("Only Draft, Rejected or Pending Review orders can be approved."))
+    order.check_permission("read")
+    require_lifecycle_action(order, OrderLifecycleAction.APPROVE)
 
     activation_context = prepare_revision_activation(order)
     result = _lock_order_for_production(order)

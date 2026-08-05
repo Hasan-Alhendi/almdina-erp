@@ -7,6 +7,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.orders.numeric_input import (
+    default_if_missing,
+)
+
 
 _OLD_PIECE_FIELDS = [
     "name",
@@ -134,7 +138,10 @@ class FrappeOrderDocumentAccess:
             _("Cutting Cost / Board USD"),
         )
         time_limit = self.finite(
-            self.document.optimization_time_limit_sec or 10,
+            default_if_missing(
+                self.document.optimization_time_limit_sec,
+                10,
+            ),
             _("Optimization Time Limit (Sec)"),
         )
 
@@ -192,11 +199,17 @@ class FrappeOrderDocumentAccess:
             frappe.throw(_("Board description is required."))
 
         length_cm = self.finite(
-            getattr(self.document, "board_length_cm", None) or 244,
+            default_if_missing(
+                getattr(self.document, "board_length_cm", None),
+                244,
+            ),
             _("Board Length (CM)"),
         )
         width_cm = self.finite(
-            getattr(self.document, "board_width_cm", None) or 122,
+            default_if_missing(
+                getattr(self.document, "board_width_cm", None),
+                122,
+            ),
             _("Board Width (CM)"),
         )
         if length_cm <= 0:

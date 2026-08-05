@@ -10,6 +10,29 @@
         return frm.doc.docstatus === 0 && EDITABLE_STATUSES.has(frm.doc.status || "Draft");
     }
 
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions &&
+            (
+                typeof permissions.canDocument === "function"
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
+            )
+        );
+    }
+
+    function canPrintCuttingPlan(frm) {
+        return can(frm, "print_cutting_plan");
+    }
+
+    function canExportDxf(frm) {
+        if (frappe.almdina && typeof frappe.almdina.can_export_dxf === "function") {
+            return Boolean(frappe.almdina.can_export_dxf(frm));
+        }
+        return can(frm, "export_dxf");
+    }
+
     function num(value, digits = 2) {
         const n = Number(value || 0);
         return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
@@ -167,6 +190,21 @@
                 .dco-plan-actions .dco-recalculate-plan {
                     box-shadow:0 4px 10px rgba(36,144,239,.16);
                 }
+                .dco-plan-document-actions {
+                    display:flex;
+                    gap:8px;
+                    flex-wrap:wrap;
+                    align-items:center;
+                    margin-top:10px;
+                    padding-top:10px;
+                    border-top:1px dashed var(--border-color,#dfe3e8);
+                }
+                .dco-plan-document-actions .btn {
+                    border-radius:9px;
+                    font-weight:750;
+                    min-height:34px;
+                    padding-inline:13px;
+                }
                 .dco-plan-note {
                     width:100%;
                     font-size:10px;
@@ -285,9 +323,9 @@
                     ${solver ? `<span class="dco-solver-badge">${esc(solver)}</span>` : ""}
                 </div>
                 <div class="dco-plan-card">
-                    <span class="label">جودة البقايا</span>
+                    <span class="label">أكبر مساحة فارغة</span>
                     <span class="value">${num(reusable,3)} م²</span>
-                    <span class="sub">أكبر مستطيل متبقٍ قابل لإعادة الاستخدام وفق حدود المعمل.</span>
+                    <span class="sub">أكبر مستطيل فارغ داخل اللوح بعد توزيع القطع.</span>
                 </div>
                 <div class="dco-plan-card">
                     <span class="label">سهولة التنفيذ</span>
@@ -296,6 +334,54 @@
                 </div>
             </div>
         `);
+    }
+
+    function printCuttingPlan(frm) {
+        if (!canPrintCuttingPlan(frm)) {
+            frappe.msgprint("ليست لديك صلاحية طباعة خطة القص.");
+            return;
+        }
+        if (window.AlmdinaCuttingPlanRender && typeof window.AlmdinaCuttingPlanRender.print === "function") {
+            window.AlmdinaCuttingPlanRender.print(frm);
+            return;
+        }
+        if (window.AlmdinaPlanTabsUX && typeof window.AlmdinaPlanTabsUX.printActivePlan === "function") {
+            window.AlmdinaPlanTabsUX.printActivePlan(frm);
+            return;
+        }
+        if (window.AlmdinaDrawingPlanUX && typeof window.AlmdinaDrawingPlanUX.printActivePlan === "function") {
+            window.AlmdinaDrawingPlanUX.printActivePlan(frm);
+            return;
+        }
+        frappe.msgprint("تعذر تجهيز طباعة خطة القص.");
+    }
+
+    function exportCuttingPlanDxf(frm) {
+        if (!canExportDxf(frm)) {
+            frappe.msgprint("ليست لديك صلاحية تصدير DXF.");
+            return;
+        }
+        if (frappe.almdina && typeof frappe.almdina.export_order_dxf === "function") {
+            return frappe.almdina.export_order_dxf(frm.doc.name);
+        }
+        frappe.msgprint("تعذر تشغيل مصدر DXF الآمن.");
+        return null;
+    }
+
+    function documentActionsHtml(frm) {
+        const printAllowed = canPrintCuttingPlan(frm);
+        const exportAllowed = canExportDxf(frm);
+        if (!printAllowed && !exportAllowed) return "";
+        return `
+            <div class="dco-plan-document-actions">
+                ${printAllowed
+                    ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan">طباعة خطة القص</button>`
+                    : ""}
+                ${exportAllowed
+                    ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf">تصدير DXF لأوتوكاد</button>`
+                    : ""}
+            </div>
+        `;
     }
 
     function renderActions(frm) {
@@ -325,10 +411,11 @@
                         بحث أمثل
                     </button>
                 </div>
+                ${documentActionsHtml(frm)}
                 <div class="dco-plan-note">
                     ${canEdit
-                        ? "غيّر طريقة ترتيب القطع ونوع ماكينة القص من نفس المجموعة، ثم نفّذ الحساب مباشرة. لا حاجة للانتقال إلى أي تبويب آخر."
-                        : "الخطة المعتمدة أو التي دخلت الإنتاج محفوظة كنسخة تاريخية ثابتة ولا يعاد حسابها في مكانها."}
+                        ? "غيّر طريقة ترتيب القطع ونوع ماكينة القص من نفس المجموعة، ثم نفّذ الحساب مباشرة. إعادة الحساب تحدّث النتائج فقط ولا تعتمد الطلب."
+                        : "الحقول مقفلة. اضغط «تعديل» قبل إعادة الحساب. بعد بدء القص تبقى الخطة التاريخية ثابتة."}
                 </div>
             </div>
         `);
@@ -349,11 +436,13 @@
             await frm.set_value("packing_mode", "Optimal Search");
             await recalculate(frm);
         });
+        field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
+        field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
     }
 
     async function recalculate(frm) {
         if (!editable(frm)) {
-            frappe.msgprint("لا يمكن إعادة حساب طلب معتمد أو دخل الإنتاج. يجب الحفاظ على الخطة المعتمدة كنسخة تاريخية ثابتة.");
+            frappe.msgprint("فعّل وضع «تعديل» أولًا لإعادة حساب الخطة. إعادة الحساب لا تعتمد الطلب.");
             return;
         }
         if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
@@ -414,10 +503,23 @@
             refreshPlanUX(frm);
             requestAnimationFrame(() => refreshPlanUX(frm));
         },
+        almdina_edit_session_changed(frm) { refreshPlanUX(frm); },
+        refresh_plan_controls(frm) { refreshPlanUX(frm); },
         packing_mode(frm) { applyReadOnlyState(frm); renderActions(frm); markPending(frm); },
         cutting_machine_type(frm) { markPending(frm); },
         kerf_mm(frm) { markPending(frm); },
         trim_margin_mm(frm) { markPending(frm); },
         optimization_time_limit_sec(frm) { markPending(frm); },
     });
+
+    window.addEventListener("almdina:permissions-updated", () => {
+        const frm = window.cur_frm;
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        refreshPlanUX(frm);
+    });
+
+    window.AlmdinaDoorCuttingPlanUX = Object.assign(
+        window.AlmdinaDoorCuttingPlanUX || {},
+        { refresh: refreshPlanUX }
+    );
 })();

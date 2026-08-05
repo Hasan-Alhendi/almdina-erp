@@ -132,6 +132,7 @@
             cell.className = "dco-select-col";
             tr.prepend(cell);
         }
+        cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row";
 
         if (tr.classList.contains("dco-virtual-row")) {
             cell.innerHTML = "";
@@ -426,6 +427,9 @@
             requestAnimationFrame(() => enhance(frm));
         },
         refresh(frm) {
+            requestAnimationFrame(() => enhance(frm));
+        },
+        almdina_edit_session_changed(frm) {
             requestAnimationFrame(() => enhance(frm));
         },
     });

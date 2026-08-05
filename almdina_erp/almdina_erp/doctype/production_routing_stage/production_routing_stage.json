@@ -3,10 +3,12 @@
   "doctype": "DocType",
   "editable_grid": 1,
   "engine": "InnoDB",
-  "field_order": ["sequence", "stage_type", "required", "auto_complete_if_not_applicable"],
+  "field_order": ["sequence", "stage_type", "department_label", "operational_role", "required", "auto_complete_if_not_applicable"],
   "fields": [
     {"fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence","reqd":1},
-    {"fieldname":"stage_type","fieldtype":"Select","in_list_view":1,"label":"Stage Type","options":"Review / Preparation\nCutting\nEdge Banding\nDrilling\nAssembly\nQuality Check\nPacking\nSharyoun\nDrawing\nCNC\nSanding","reqd":1},
+    {"description":"معرّف ثابت للمرحلة، مثل CNC أو Sharyoun أو PVC.","fieldname":"stage_type","fieldtype":"Data","in_list_view":1,"label":"Stage Code","reqd":1},
+    {"description":"الاسم الذي يظهر للعامل، مثل CNC أو الشريون.","fieldname":"department_label","fieldtype":"Data","in_list_view":1,"label":"Department Label","reqd":1},
+    {"description":"لا يمنح صلاحيات؛ يحدد المستخدمين المؤهلين لاستلام هذه المرحلة.","fieldname":"operational_role","fieldtype":"Link","in_list_view":1,"label":"Operational Role","options":"Role","reqd":1},
     {"default":"1","fieldname":"required","fieldtype":"Check","in_list_view":1,"label":"Required"},
     {"default":"1","fieldname":"auto_complete_if_not_applicable","fieldtype":"Check","label":"Auto Complete If Not Applicable"}
   ],

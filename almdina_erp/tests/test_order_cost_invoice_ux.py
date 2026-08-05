@@ -113,6 +113,13 @@ def test_invoice_printing_uses_isolated_iframe_not_popup_window():
     assert "اسمح بالنوافذ المنبثقة" not in src
 
 
-def test_cost_invoice_script_is_loaded_for_door_cutting_order():
+def test_legacy_cost_invoice_is_not_loaded_and_secure_financial_layers_are():
     hooks = HOOKS.read_text(encoding="utf-8")
-    assert '"public/js/door_cutting_order_cost_invoice_ux.js"' in hooks
+    legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
+    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
+    cost_permissions = '"public/js/door_cutting_order_cost_permissions_ux.js"'
+    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
+    assert legacy not in hooks
+    for script in (presenter, cost_permissions, financial):
+        assert script in hooks
+    assert hooks.index(presenter) < hooks.index(cost_permissions) < hooks.index(financial)

@@ -17,8 +17,11 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     reset_price_values,
     resolve_clipped_corner,
 )
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    document_has_capability,
+)
 from almdina_erp.almdina_erp.services.special_shape_service import (
-    has_special_price_approval_role,
     validate_special_shape_drawing,
 )
 
@@ -79,6 +82,15 @@ class FrappeOrderPiecePolicyAdapter:
             approved_on=get_datetime(approved_on) if approved_on else None,
         )
 
+    @staticmethod
+    def _required_price_capability(old_row: Any | None) -> str:
+        return (
+            Capability.EDIT_SPECIAL_PRICE
+            if old_row
+            and str(old_row.special_shape_price_status or "") == "Approved"
+            else Capability.APPROVE_SPECIAL_PRICE
+        )
+
     def _validate_clipped_corner(self, row: Any, index: int) -> None:
         try:
             result = resolve_clipped_corner(
@@ -125,7 +137,7 @@ class FrappeOrderPiecePolicyAdapter:
         approval_action = bool(
             self.document.flags.get("special_price_approval_action")
         )
-        can_approve_price: bool | None = None
+        permission_cache: dict[str, bool] = {}
 
         for index, row in enumerate(self.document.pieces or [], start=1):
             row.piece_type = row.piece_type or "Regular"
@@ -168,12 +180,16 @@ class FrappeOrderPiecePolicyAdapter:
             )
 
             if decision.requires_price_permission:
-                if can_approve_price is None:
-                    can_approve_price = has_special_price_approval_role()
-                if not can_approve_price:
+                capability = self._required_price_capability(old_row)
+                if capability not in permission_cache:
+                    permission_cache[capability] = document_has_capability(
+                        self.document,
+                        capability,
+                    )
+                if not permission_cache[capability]:
                     frappe.throw(
                         _(
-                            "Row {0}: only Accounts Management can change or approve "
+                            "Row {0}: you do not have permission to approve or edit "
                             "the special door price."
                         ).format(index),
                         frappe.PermissionError,
@@ -215,8 +231,8 @@ class FrappeOrderPiecePolicyAdapter:
         if pending:
             frappe.throw(
                 _(
-                    "Accounts Management must approve every special door price "
-                    "before production approval. Pending rows: {0}."
+                    "Every special door price must be approved before production "
+                    "approval. Pending rows: {0}."
                 ).format(", ".join(pending))
             )
 

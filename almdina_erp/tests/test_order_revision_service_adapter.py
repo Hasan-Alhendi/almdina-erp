@@ -16,6 +16,9 @@ SERVICE_PATH = (
     / "services"
     / "order_revision_service.py"
 )
+GATEWAY_MODULE = (
+    "almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway"
+)
 
 
 class FakeOrder(SimpleNamespace):
@@ -77,8 +80,8 @@ class RevisionHarness:
             packing_method="MaxRects",
             packing_score="score",
             engine_version="2.1",
-            cutting_plan_json="{\"sheets\": [{}]}",
-            system_plan_json="{\"sheets\": [{}]}",
+            cutting_plan_json='{"sheets": [{}]}',
+            system_plan_json='{"sheets": [{}]}',
             custom_plan_json="",
             calculated_plan_input_hash="input",
             calculated_plan_metadata_hash="metadata",
@@ -105,7 +108,6 @@ class RevisionHarness:
         fake_frappe.PermissionError = RuntimeError
         fake_frappe._ = lambda message: message
         fake_frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
-        fake_frappe.get_roles = lambda: ["Order Entry"]
         fake_frappe.get_doc = lambda doctype, name: self.source
 
         def copy_doc(source: FakeOrder) -> FakeOrder:
@@ -122,8 +124,13 @@ class RevisionHarness:
 
         fake_frappe.throw = throw
 
-        previous = sys.modules.get("frappe")
+        fake_gateway = types.ModuleType(GATEWAY_MODULE)
+        fake_gateway.doctype_has_capability = lambda *args, **kwargs: True
+
+        previous_frappe = sys.modules.get("frappe")
+        previous_gateway = sys.modules.get(GATEWAY_MODULE)
         sys.modules["frappe"] = fake_frappe
+        sys.modules[GATEWAY_MODULE] = fake_gateway
         try:
             spec = importlib.util.spec_from_file_location(
                 "_almdina_order_revision_service_adapter_test",
@@ -135,10 +142,14 @@ class RevisionHarness:
             spec.loader.exec_module(module)
             return module
         finally:
-            if previous is None:
+            if previous_frappe is None:
                 sys.modules.pop("frappe", None)
             else:
-                sys.modules["frappe"] = previous
+                sys.modules["frappe"] = previous_frappe
+            if previous_gateway is None:
+                sys.modules.pop(GATEWAY_MODULE, None)
+            else:
+                sys.modules[GATEWAY_MODULE] = previous_gateway
 
 
 class TestOrderRevisionServiceAdapter(unittest.TestCase):
@@ -171,9 +182,15 @@ class TestOrderRevisionServiceAdapter(unittest.TestCase):
         self.assertEqual(result["name"], "DCO-REVISION-00002")
         self.assertFalse(result["already_exists"])
         self.assertTrue(
-            any(call[2:] == ("superseded_by", "DCO-REVISION-00002") for call in harness.db.set_calls)
+            any(
+                call[2:] == ("superseded_by", "DCO-REVISION-00002")
+                for call in harness.db.set_calls
+            )
         )
-        self.assertIn("Reason: Customer changed the measurements", harness.source.comments[0])
+        self.assertIn(
+            "Reason: Customer changed the measurements",
+            harness.source.comments[0],
+        )
 
     def test_revision_can_be_created_without_a_reason(self) -> None:
         harness = RevisionHarness()
