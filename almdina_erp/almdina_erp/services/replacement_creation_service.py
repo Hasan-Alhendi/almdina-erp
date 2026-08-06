@@ -29,6 +29,39 @@ def _source_row_for_label(order: Any, piece_label: str) -> Any:
     return order.pieces[group_no - 1]
 
 
+def _validate_incident_stage(
+    order_name: str,
+    production_stage: str | None,
+) -> str | None:
+    """Return a normalized stage link after enforcing the order boundary.
+
+    The stage name is supplied by the client, so Link-field validation alone is
+    not enough: a valid stage from another order must never be attached to this
+    incident. An omitted stage remains valid for incidents recorded outside a
+    specific shop-floor action.
+    """
+
+    stage_name = str(production_stage or "").strip()
+    if not stage_name:
+        return None
+
+    stage = frappe.db.get_value(
+        "Production Stage",
+        stage_name,
+        ["name", "door_cutting_order"],
+        as_dict=True,
+    )
+    if not stage:
+        frappe.throw(_("Selected production stage does not exist."))
+    if str(stage.door_cutting_order or "").strip() != str(order_name or "").strip():
+        frappe.throw(
+            _("Selected production stage does not belong to order {0}.").format(
+                order_name,
+            )
+        )
+    return str(stage.name)
+
+
 def _create_replacement(incident: Any, order: Any) -> Any:
     if incident.replacement_piece:
         return frappe.get_doc("Replacement Piece", incident.replacement_piece)
@@ -96,6 +129,7 @@ def record_incident(
     order.check_permission("read")
     require_document_capability(order, Capability.RECORD_INCIDENT)
     _source_row_for_label(order, piece_label)
+    validated_stage = _validate_incident_stage(order.name, production_stage)
 
     reason = str(reason or "").strip()
     description = str(description or "").strip()
@@ -115,7 +149,7 @@ def record_incident(
     incident = frappe.new_doc("Production Incident")
     incident.door_cutting_order = order.name
     incident.piece_label = piece_label
-    incident.production_stage = production_stage
+    incident.production_stage = validated_stage
     incident.worker = frappe.session.user
     incident.reason = reason
     incident.description = description
