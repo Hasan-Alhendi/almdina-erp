@@ -40,7 +40,7 @@ jobs:
               print(f"validated {path}")
           PY
 
-      - name: Run role domain, application, architecture, routing, and UI tests
+      - name: Run role, routing, stage-boundary, and UI tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_role_management_domain \
@@ -48,6 +48,7 @@ jobs:
             almdina_erp.tests.test_role_administration_architecture \
             almdina_erp.tests.test_routing_role_references \
             almdina_erp.tests.test_routing_role_migration \
+            almdina_erp.tests.test_production_stage_write_boundary \
             almdina_erp.tests.test_role_console_ui
 
       - name: Validate role console JavaScript
