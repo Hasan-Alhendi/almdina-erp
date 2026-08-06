@@ -1,8 +1,9 @@
 """Backward-compatible shop-floor API facade.
 
 New code must use the focused command, query, DXF, or infrastructure modules.
-This facade preserves historical whitelisted endpoints and stable routing helpers
-without exposing removed role-based business authorization symbols.
+This facade preserves historical whitelisted endpoints while delegating every
+operation to the canonical capability-protected services. It owns no route,
+role, database, or business policy.
 """
 
 from __future__ import annotations
@@ -11,21 +12,6 @@ from importlib import import_module
 from typing import Any, Callable
 
 import frappe
-
-from almdina_erp.almdina_erp.domain.orders.lifecycle import (
-    CUTTING_LIKE_STAGE_TYPES,
-    DEPARTMENT_STATUS_BY_STAGE_STATUS,
-    PRODUCTION_PATHS,
-    SHOP_FLOOR_ORDER_STATUSES,
-    STAGE_DEPARTMENTS,
-    next_stage_type,
-    production_path_sequence,
-    resolve_shop_floor_stage_type,
-    stage_sequence,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_authorization import (
-    STAGE_ROLE_BY_TYPE,
-)
 
 
 _COMMANDS = "almdina_erp.almdina_erp.services.shop_floor_commands"
@@ -59,7 +45,7 @@ def _public_delegate(
 
 
 # Historical API paths remain valid, but every call reaches the canonical
-# capability-protected service. No role-based authorization is owned here.
+# capability-protected service. No role or route policy is owned here.
 get_shop_floor_context = _public_delegate(_QUERIES, "get_shop_floor_context")
 get_dispatch_options = _public_delegate(_QUERIES, "get_dispatch_options")
 get_revert_targets = _public_delegate(_QUERIES, "get_revert_targets")
@@ -91,32 +77,6 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 
 def sync_order_status(order_name: str) -> str:
     return _delegate(_PRODUCTION, "sync_order_status", order_name)
-
-
-# Read-only routing aliases are retained for older Python callers. STAGE_ROLE
-# describes operational assignment eligibility, never business authorization.
-PATH_SEQUENCE = PRODUCTION_PATHS
-STAGE_ROLE = STAGE_ROLE_BY_TYPE
-STAGE_DEPARTMENT = STAGE_DEPARTMENTS
-STAGE_ORDER_STATUS = SHOP_FLOOR_ORDER_STATUSES
-DEPARTMENT_STATUS_MAP = DEPARTMENT_STATUS_BY_STAGE_STATUS
-CUTTING_LIKE_STAGES = CUTTING_LIKE_STAGE_TYPES
-
-
-def _path_sequence(path: str) -> tuple[str, ...]:
-    return production_path_sequence(path)
-
-
-def _next_stage_type(path: str, current_stage_type: str) -> str | None:
-    return next_stage_type(path, current_stage_type)
-
-
-def _sequence_for_stage(path: str, stage_type: str) -> int:
-    return stage_sequence(path, stage_type)
-
-
-def _resolve_revert_stage_type(value: str | None) -> str:
-    return resolve_shop_floor_stage_type(value)
 
 
 __all__ = [
