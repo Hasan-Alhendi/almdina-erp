@@ -35,6 +35,10 @@ class _FakeDatabase:
     def exists(doctype: str, name: str) -> bool:
         return doctype == "DocType" and bool(name)
 
+    def sql(self, query: str, values=()):
+        self.owner.sql_calls.append((query, tuple(values or ())))
+        return []
+
     def set_value(
         self,
         doctype: str,
@@ -54,6 +58,7 @@ class _FakeFrappe(types.ModuleType):
         self.rows = rows
         self.meta = _FakeMeta(fields)
         self.writes: list[tuple[str, str, dict[str, object], bool]] = []
+        self.sql_calls: list[tuple[str, tuple[object, ...]]] = []
         self.db = _FakeDatabase(self)
 
     def get_meta(self, doctype: str) -> _FakeMeta:
@@ -61,9 +66,17 @@ class _FakeFrappe(types.ModuleType):
 
     def get_all(self, doctype: str, **kwargs):
         requested = kwargs.get("fields") or []
+        rows = list(self.rows)
+        filters = kwargs.get("filters") or {}
+        name_filter = filters.get("name") if isinstance(filters, dict) else None
+        if isinstance(name_filter, list) and len(name_filter) == 2 and name_filter[0] == "in":
+            allowed = set(name_filter[1])
+            rows = [row for row in rows if row.get("name") in allowed]
+        if kwargs.get("order_by") == "name asc":
+            rows.sort(key=lambda row: str(row.get("name") or ""))
         return [
             {field: row.get(field) for field in requested}
-            for row in self.rows
+            for row in rows
         ]
 
 
@@ -103,10 +116,17 @@ class TestRoutingRoleReferences(unittest.TestCase):
         )
 
         self.assertEqual(counts, {"Target": 1})
+        self.assertEqual(fake.sql_calls, [])
 
-    def test_rename_updates_all_snapshot_fields_and_deduplicates(self) -> None:
+    def test_rename_locks_then_updates_all_snapshot_fields(self) -> None:
         fake = _FakeFrappe(
             [
+                {
+                    "name": "ROW-2",
+                    "eligible_roles_json": json.dumps(["Unrelated"]),
+                    "eligible_roles_display": "Unrelated",
+                    "operational_role": "Unrelated",
+                },
                 {
                     "name": "ROW-1",
                     "eligible_roles_json": json.dumps(
@@ -114,7 +134,7 @@ class TestRoutingRoleReferences(unittest.TestCase):
                     ),
                     "eligible_roles_display": "Primary، Old Role، New Role",
                     "operational_role": "Primary",
-                }
+                },
             ],
             self.FIELDS,
         )
@@ -127,16 +147,19 @@ class TestRoutingRoleReferences(unittest.TestCase):
         )
 
         self.assertEqual(changed, 1)
+        updated = next(row for row in fake.rows if row["name"] == "ROW-1")
         self.assertEqual(
-            json.loads(fake.rows[0]["eligible_roles_json"]),
+            json.loads(updated["eligible_roles_json"]),
             ["Primary", "New Role"],
         )
-        self.assertEqual(
-            fake.rows[0]["eligible_roles_display"],
-            "Primary، New Role",
-        )
-        self.assertEqual(fake.rows[0]["operational_role"], "Primary")
+        self.assertEqual(updated["eligible_roles_display"], "Primary، New Role")
+        self.assertEqual(updated["operational_role"], "Primary")
         self.assertFalse(fake.writes[0][3])
+        self.assertEqual(len(fake.sql_calls), 1)
+        query, values = fake.sql_calls[0]
+        self.assertIn("for update", query.lower())
+        self.assertIn("order by name", query.lower())
+        self.assertEqual(values, ("ROW-1",))
 
     def test_malformed_json_uses_and_repairs_the_legacy_role(self) -> None:
         fake = _FakeFrappe(
@@ -169,6 +192,19 @@ class TestRoutingRoleReferences(unittest.TestCase):
             ["New Role"],
         )
         self.assertEqual(fake.rows[0]["operational_role"], "New Role")
+
+    def test_dynamic_table_names_are_rejected_by_allowlist(self) -> None:
+        fake = _FakeFrappe([], self.FIELDS)
+        module = _load_module(fake)
+
+        with self.assertRaisesRegex(ValueError, "Unsupported role snapshot"):
+            module.rename_configured_role_references(
+                "Role; drop table tabUser",
+                "Old",
+                "New",
+            )
+        self.assertEqual(fake.sql_calls, [])
+        self.assertEqual(fake.writes, [])
 
 
 if __name__ == "__main__":
