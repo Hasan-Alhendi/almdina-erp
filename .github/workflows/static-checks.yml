@@ -67,7 +67,7 @@ jobs:
             almdina_erp.tests.test_frappe_v16_ci_contract \
             almdina_erp.tests.test_door_cutting_order_hidden_pieces_contract
 
-      - name: Run permission, persona, workforce, master data, and control center tests
+      - name: Run permission, role, workforce, master data, and control center tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_authorization_gateway_matrix_fallback \
@@ -75,7 +75,9 @@ jobs:
             almdina_erp.tests.test_permission_custom_docperm_baseline \
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
             almdina_erp.tests.test_permission_management_architecture \
-            almdina_erp.tests.test_permission_templates \
+            almdina_erp.tests.test_permission_transfer \
+            almdina_erp.tests.test_role_management_domain \
+            almdina_erp.tests.test_legacy_permission_bootstrap \
             almdina_erp.tests.test_permission_personas_e2e \
             almdina_erp.tests.test_final_security_architecture \
             almdina_erp.tests.test_workforce_authorization \
