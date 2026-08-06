@@ -5,26 +5,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOMAIN_POLICY = (
-    ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
-)
-APPLICATION_COMMANDS = (
-    ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
-)
-COMMAND_REPOSITORY = (
-    ROOT
-    / "almdina_erp"
-    / "infrastructure"
-    / "frappe"
-    / "shop_floor_command_repository.py"
-)
-AUTHORIZATION = (
-    ROOT
-    / "almdina_erp"
-    / "infrastructure"
-    / "frappe"
-    / "shop_floor_authorization.py"
-)
+DOMAIN_POLICY = ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
+APPLICATION_COMMANDS = ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
+COMMAND_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "shop_floor_command_repository.py"
+AUTHORIZATION = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "shop_floor_authorization.py"
 DISPATCH_SERVICE = ROOT / "almdina_erp" / "services" / "order_dispatch_service.py"
 COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
 QUERY_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
@@ -43,28 +27,40 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
 
     def test_application_commands_depend_on_capabilities_not_role_names(self) -> None:
         source = APPLICATION_COMMANDS.read_text(encoding="utf-8")
-        self.assertNotIn("Order Entry", source)
-        self.assertNotIn("Production Manager", source)
-        self.assertNotIn("System Manager", source)
-        self.assertNotIn("عامل شريون", source)
-        self.assertNotIn("عامل رسم", source)
-        self.assertNotIn("عامل CNC", source)
-        self.assertNotIn("عامل تقشيط", source)
+        for role in (
+            "Order Entry",
+            "Production Manager",
+            "System Manager",
+            "عامل شريون",
+            "عامل رسم",
+            "عامل CNC",
+            "عامل تقشيط",
+        ):
+            self.assertNotIn(role, source)
         self.assertIn("capabilities_for_order", source)
         self.assertIn("Capability.REASSIGN_WORKER", source)
+        self.assertIn("assert_worker_for_roles", source)
+        self.assertIn("eligible_roles", source)
 
     def test_infrastructure_resolves_document_permissions(self) -> None:
         source = COMMAND_REPOSITORY.read_text(encoding="utf-8")
         self.assertIn("document_has_capability", source)
         self.assertIn("PRODUCTION_ACTIONS", source)
+        self.assertIn("assert_enabled_user_has_any_role", source)
         self.assertNotIn("DISPATCH_ROLES", source)
         self.assertNotIn("ADMIN_ROLES", source)
         self.assertNotIn("require_stage_assignee_or_admin", source)
 
-    def test_operational_roles_are_not_action_authorization(self) -> None:
+    def test_stage_roles_define_eligibility_not_action_authorization(self) -> None:
         source = AUTHORIZATION.read_text(encoding="utf-8")
-        self.assertIn("STAGE_ROLE_BY_TYPE", source)
-        self.assertIn("operational department", source)
+        self.assertIn("WORKER_EXECUTION_CAPABILITIES", source)
+        self.assertIn("assert_enabled_user_has_any_role", source)
+        self.assertIn("user_roles.intersection(eligible_roles)", source)
+        self.assertIn("granted_capabilities", source)
+        self.assertEqual(source.count("STAGE_ROLE_BY_TYPE"), 2)
+        self.assertIn("STAGE_ROLE_BY_TYPE: dict[str, str] = {}", source)
+        for role in ("Production Manager", "عامل رسم", "عامل CNC"):
+            self.assertNotIn(role, source)
         self.assertNotIn("DISPATCH_ROLES", source)
         self.assertNotIn("ADMIN_ROLES", source)
         self.assertNotIn("STAGE_ADMIN_ROLES", source)
