@@ -92,7 +92,8 @@ jobs:
           python -m pytest -q \
             almdina_erp/tests/test_configurable_order_lifecycle_permissions.py \
             almdina_erp/tests/test_configurable_production_permissions.py \
-            almdina_erp/tests/test_configurable_production_routing_domain.py
+            almdina_erp/tests/test_configurable_production_routing_domain.py \
+            almdina_erp/tests/test_executable_routing_stage_migration.py
 
       - name: Run shop-floor command application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_command_application
