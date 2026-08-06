@@ -30,7 +30,6 @@ class ProductionRouting(Document):
 
         sequences: set[int] = set()
         stage_types: set[str] = set()
-        required_count = 0
         prepared: list[tuple[object, tuple[str, ...]]] = []
         ordered = sorted(self.stages, key=lambda row: cint(row.sequence))
         for index, row in enumerate(ordered, start=1):
@@ -45,28 +44,30 @@ class ProductionRouting(Document):
                 frappe.throw(_("Routing stage code is required."))
             if row.stage_type in stage_types:
                 frappe.throw(_("Routing stage {0} is duplicated.").format(row.stage_type))
+            if not row.department_label:
+                frappe.throw(
+                    _("Department label is required for stage {0}.").format(
+                        row.stage_type
+                    )
+                )
 
             roles = self._stage_roles(row)
-            if cint(row.required):
-                required_count += 1
-                if not row.department_label:
-                    frappe.throw(
-                        _("Department label is required for stage {0}.").format(
-                            row.stage_type
-                        )
+            if not roles:
+                frappe.throw(
+                    _("Choose at least one eligible role for stage {0}.").format(
+                        row.stage_type
                     )
-                if not roles:
-                    frappe.throw(
-                        _("Choose at least one eligible role for stage {0}.").format(
-                            row.stage_type
-                        )
-                    )
+                )
+
+            # Applicability rules are not part of the current route model. Every
+            # row is therefore an executable stage; do not preserve misleading
+            # optional/auto-skip values from older schemas.
+            row.required = 1
+            row.auto_complete_if_not_applicable = 0
             prepared.append((row, roles))
             sequences.add(sequence)
             stage_types.add(row.stage_type)
             row.idx = index
-        if not required_count:
-            frappe.throw(_("Production Routing requires at least one required stage."))
 
         # Every route save and role rename locks the same Role rows in sorted
         # order. A concurrent save therefore either finishes before the rename
@@ -80,7 +81,7 @@ class ProductionRouting(Document):
             row.eligible_roles_display = eligible_roles_display(roles)
             # Keep the first role only as a read-only compatibility snapshot for
             # older reports and in-flight records. New authorization uses all roles.
-            row.operational_role = roles[0] if roles else ""
+            row.operational_role = roles[0]
 
         self._prevent_active_route_mutation()
 
@@ -166,7 +167,7 @@ class ProductionRouting(Document):
                     row.eligible_roles_json,
                     legacy_role=row.operational_role,
                 ),
-                cint(row.required),
+                1,
             )
             for row in previous_rows
         ]
@@ -176,7 +177,7 @@ class ProductionRouting(Document):
                 str(row.stage_type or ""),
                 str(row.department_label or ""),
                 self._stage_roles(row),
-                cint(row.required),
+                1,
             )
             for row in sorted(self.stages or (), key=lambda item: cint(item.sequence))
         ]
