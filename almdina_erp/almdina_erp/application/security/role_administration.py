@@ -81,6 +81,7 @@ def _facts(snapshot: Mapping[str, Any], *, actor: str = "") -> RoleFacts:
         role_name=str(snapshot.get("name") or ""),
         role_exists=bool(snapshot.get("role_exists", True)),
         role_enabled=bool(snapshot.get("enabled", True)),
+        role_is_custom=bool(snapshot.get("is_custom", False)),
         assigned_users=int(snapshot.get("assigned_users") or 0),
         production_routing_references=int(
             snapshot.get("production_routing_references") or 0
@@ -172,6 +173,7 @@ class RoleAdministration:
                 role_name=definition.name,
                 role_exists=self.repository.role_exists(definition.name),
                 role_enabled=True,
+                role_is_custom=True,
             ),
         )
         created = self.repository.create_role(definition)
