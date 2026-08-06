@@ -6,6 +6,9 @@ from typing import Any
 import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
+from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_write_guard import (
+    authorize_internal_stage_write,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
     decode_eligible_roles,
     eligible_roles_display,
@@ -19,6 +22,25 @@ def get_stage(stage_name: str) -> Any:
 
 def stage_exists(stage_name: str | None) -> bool:
     return bool(stage_name and frappe.db.exists("Production Stage", stage_name))
+
+
+def _lock_stage(stage_name: str) -> None:
+    frappe.db.sql(
+        "select name from `tabProduction Stage` where name = %s for update",
+        (stage_name,),
+    )
+
+
+def _save_stage(stage: Any) -> Any:
+    authorize_internal_stage_write(stage)
+    stage.save(ignore_permissions=True)
+    return stage
+
+
+def _insert_stage(stage: Any) -> Any:
+    authorize_internal_stage_write(stage)
+    stage.insert(ignore_permissions=True)
+    return stage
 
 
 def cancel_active_order_stages(order_name: str) -> None:
@@ -35,18 +57,16 @@ def cancel_active_order_stages(order_name: str) -> None:
             "door_cutting_order": order_name,
             "status": ["in", ["Pending", "In Progress", "Paused"]],
         },
-        fields=["name", "piece_label", "stage_type"],
+        fields=["name", "piece_label"],
+        order_by="name asc",
     )
     for row in rows:
         if row.piece_label:
             continue
-        frappe.db.set_value(
-            "Production Stage",
-            row.name,
-            "status",
-            "Cancelled",
-            update_modified=True,
-        )
+        _lock_stage(str(row.name))
+        stage = get_stage(str(row.name))
+        stage.status = "Cancelled"
+        _save_stage(stage)
 
 
 def create_stage(
@@ -75,19 +95,14 @@ def create_stage(
     stage.operational_role = roles[0] if roles else ""
     stage.status = "Pending"
     stage.assigned_to = assignee
-    stage.insert(ignore_permissions=True)
-    return stage
+    return _insert_stage(stage)
 
 
 def reassign_stage(stage_name: str, *, assignee: str) -> Any:
-    frappe.db.sql(
-        "select name from `tabProduction Stage` where name = %s for update",
-        (stage_name,),
-    )
+    _lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.assigned_to = assignee
-    stage.save(ignore_permissions=True)
-    return stage
+    return _save_stage(stage)
 
 
 def close_open_pause(
@@ -96,11 +111,13 @@ def close_open_pause(
     *,
     save: bool = True,
 ) -> Any:
-    stage = (
-        get_stage(stage_or_name)
+    stage_name = (
+        str(stage_or_name)
         if isinstance(stage_or_name, str)
-        else stage_or_name
+        else str(stage_or_name.name)
     )
+    _lock_stage(stage_name)
+    stage = get_stage(stage_name)
     open_pause = None
     for row in reversed(stage.pauses or []):
         if row.pause_start and not row.pause_end:
@@ -117,7 +134,7 @@ def close_open_pause(
             cint(row.duration_seconds) for row in (stage.pauses or [])
         )
         if save:
-            stage.save(ignore_permissions=True)
+            _save_stage(stage)
     return stage
 
 
@@ -127,14 +144,14 @@ def start_stage(
     actor: str,
     target_status: str,
 ) -> Any:
+    _lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.started_by = actor
     stage.start_time = now_datetime()
     stage.status = target_status
     if not stage.assigned_to:
         stage.assigned_to = actor
-    stage.save(ignore_permissions=True)
-    return stage
+    return _save_stage(stage)
 
 
 def complete_stage(
@@ -144,6 +161,7 @@ def complete_stage(
     target_status: str,
     completed_qty: int,
 ) -> Any:
+    _lock_stage(stage_name)
     stage = get_stage(stage_name)
     finish_time = now_datetime()
     stage.finish_time = finish_time
@@ -159,8 +177,7 @@ def complete_stage(
             0,
             total_seconds - cint(stage.paused_seconds),
         )
-    stage.save(ignore_permissions=True)
-    return stage
+    return _save_stage(stage)
 
 
 def list_revert_stage_candidates(order_name: str, stage_type: str) -> list[Any]:
@@ -171,7 +188,7 @@ def list_revert_stage_candidates(order_name: str, stage_type: str) -> list[Any]:
             "stage_type": stage_type,
         },
         fields=["name", "piece_label", "sequence"],
-        order_by="sequence asc",
+        order_by="sequence asc, name asc",
     )
 
 
@@ -182,18 +199,20 @@ def list_later_stages(order_name: str, sequence: int) -> list[Any]:
             "door_cutting_order": order_name,
             "sequence": [">", sequence],
         },
-        fields=["name", "piece_label"],
+        fields=["name", "piece_label", "sequence"],
+        order_by="sequence asc, name asc",
     )
 
 
 def cancel_stage(stage_name: str, *, target_status: str) -> Any:
+    _lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.status = target_status
-    stage.save(ignore_permissions=True)
-    return stage
+    return _save_stage(stage)
 
 
 def reopen_stage(stage_name: str, *, target_status: str) -> Any:
+    _lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.status = target_status
     stage.started_by = None
@@ -204,8 +223,7 @@ def reopen_stage(stage_name: str, *, target_status: str) -> Any:
     stage.paused_seconds = 0
     stage.completed_qty = 0
     stage.pauses = []
-    stage.save(ignore_permissions=True)
-    return stage
+    return _save_stage(stage)
 
 
 __all__ = [
