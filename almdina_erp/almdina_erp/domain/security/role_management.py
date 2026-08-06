@@ -19,8 +19,10 @@ PROTECTED_ROLE_NAMES = frozenset(
 class RoleAction(str, Enum):
     """Administrative actions that can be evaluated without Frappe imports."""
 
+    VIEW = "view"
     CREATE = "create"
     EDIT = "edit"
+    ENABLE = "enable"
     DISABLE = "disable"
     DELETE = "delete"
     ASSIGN = "assign"
@@ -58,6 +60,7 @@ class RoleFacts:
     assigned_users: int = 0
     production_routing_references: int = 0
     workflow_references: int = 0
+    production_stage_references: int = 0
     active_stage_references: int = 0
     permission_count: int = 0
 
@@ -139,12 +142,30 @@ def effective_capabilities(
     return frozenset(granted)
 
 
+def _delete_blockers(facts: RoleFacts) -> dict[str, int]:
+    return {
+        "assigned_users": int(facts.assigned_users or 0),
+        "production_routing_references": int(
+            facts.production_routing_references or 0
+        ),
+        "workflow_references": int(facts.workflow_references or 0),
+        "production_stage_references": int(
+            facts.production_stage_references or 0
+        ),
+        "active_stage_references": int(facts.active_stage_references or 0),
+        "permission_count": int(facts.permission_count or 0),
+    }
+
+
 def decide_role_action(
     *,
     action: RoleAction,
     facts: RoleFacts,
 ) -> RoleDecision:
     role_name = normalize_role_name(facts.role_name) if facts.role_name else ""
+
+    if action == RoleAction.VIEW:
+        return RoleDecision(True, "allowed", "Allowed.")
 
     if action == RoleAction.CREATE:
         if facts.role_exists:
@@ -176,16 +197,33 @@ def decide_role_action(
             )
         return RoleDecision(True, "allowed", "Allowed.")
 
-    if action == RoleAction.DELETE:
-        references = {
-            "assigned_users": facts.assigned_users,
-            "production_routing_references": facts.production_routing_references,
-            "workflow_references": facts.workflow_references,
-            "active_stage_references": facts.active_stage_references,
-            "permission_count": facts.permission_count,
+    if action == RoleAction.ENABLE:
+        if facts.role_enabled:
+            return RoleDecision(False, "already_enabled", "Role is already enabled.")
+        return RoleDecision(True, "allowed", "Allowed.")
+
+    if action == RoleAction.DISABLE:
+        if not facts.role_enabled:
+            return RoleDecision(False, "already_disabled", "Role is already disabled.")
+        active_references = {
+            "production_routing_references": int(
+                facts.production_routing_references or 0
+            ),
+            "workflow_references": int(facts.workflow_references or 0),
+            "active_stage_references": int(facts.active_stage_references or 0),
         }
-        blockers = [key for key, count in references.items() if int(count) > 0]
-        if blockers:
+        if any(active_references.values()):
+            return RoleDecision(
+                False,
+                "role_in_active_use",
+                "Remove the role from active production routes, workflows and "
+                "active stages before disabling it.",
+            )
+        return RoleDecision(True, "allowed", "Allowed.")
+
+    if action == RoleAction.DELETE:
+        blockers = _delete_blockers(facts)
+        if any(blockers.values()):
             return RoleDecision(
                 False,
                 "role_in_use",
@@ -196,12 +234,27 @@ def decide_role_action(
     return RoleDecision(True, "allowed", "Allowed.")
 
 
+def action_context(facts: RoleFacts) -> dict[str, dict[str, object]]:
+    """Return action availability for a role-management interface."""
+
+    return {
+        action.value: {
+            "allowed": decision.allowed,
+            "code": decision.code,
+            "reason": decision.reason,
+        }
+        for action in RoleAction
+        for decision in [decide_role_action(action=action, facts=facts)]
+    }
+
+
 __all__ = [
     "PROTECTED_ROLE_NAMES",
     "RoleAction",
     "RoleDecision",
     "RoleDefinition",
     "RoleFacts",
+    "action_context",
     "decide_role_action",
     "effective_capabilities",
     "new_role_definition",
