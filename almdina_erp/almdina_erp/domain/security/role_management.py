@@ -206,6 +206,7 @@ def decide_role_action(
         if not facts.role_enabled:
             return RoleDecision(False, "already_disabled", "Role is already disabled.")
         active_references = {
+            "assigned_users": int(facts.assigned_users or 0),
             "production_routing_references": int(
                 facts.production_routing_references or 0
             ),
@@ -216,8 +217,8 @@ def decide_role_action(
             return RoleDecision(
                 False,
                 "role_in_active_use",
-                "Remove the role from active production routes, workflows and "
-                "active stages before disabling it.",
+                "Remove assigned users and the role from active production routes, "
+                "workflows and active stages before disabling it.",
             )
         return RoleDecision(True, "allowed", "Allowed.")
 
