@@ -57,6 +57,7 @@ class RoleFacts:
     role_name: str = ""
     role_exists: bool = True
     role_enabled: bool = True
+    role_is_custom: bool = True
     assigned_users: int = 0
     production_routing_references: int = 0
     workflow_references: int = 0
@@ -186,6 +187,19 @@ def decide_role_action(
             False,
             "protected_role",
             "This framework role is protected from the Almdina role console.",
+        )
+
+    if action in {
+        RoleAction.EDIT,
+        RoleAction.ENABLE,
+        RoleAction.DISABLE,
+        RoleAction.DELETE,
+    } and not facts.role_is_custom:
+        return RoleDecision(
+            False,
+            "standard_framework_role",
+            "Standard framework roles cannot be renamed, disabled or deleted "
+            "from the Almdina role console.",
         )
 
     if action == RoleAction.ASSIGN:
