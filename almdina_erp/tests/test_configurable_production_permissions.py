@@ -9,6 +9,8 @@ DOMAIN_POLICY = ROOT / "almdina_erp" / "domain" / "orders" / "production_authori
 APPLICATION_COMMANDS = ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
 COMMAND_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "shop_floor_command_repository.py"
 AUTHORIZATION = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "shop_floor_authorization.py"
+ROLE_REFERENCES = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "routing_role_references.py"
+ROUTING_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "production_routing" / "production_routing.py"
 DISPATCH_SERVICE = ROOT / "almdina_erp" / "services" / "order_dispatch_service.py"
 COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
 QUERY_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
@@ -50,6 +52,17 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertNotIn("next_stage_type(", source)
         self.assertNotIn("def _next_stage", source)
         self.assertNotIn("def _validate_path", source)
+
+    def test_route_save_and_role_rename_are_serialized(self) -> None:
+        routing = ROUTING_CONTROLLER.read_text(encoding="utf-8")
+        references = ROLE_REFERENCES.read_text(encoding="utf-8")
+        self.assertIn("def _lock_roles", routing)
+        self.assertIn("for role in sorted(set(roles))", routing)
+        self.assertIn("where name = %s for update", routing)
+        self.assertIn("def _lock_snapshot_rows", references)
+        self.assertIn("order by name for update", references)
+        self.assertIn("_SUPPORTED_SNAPSHOT_DOCTYPES", references)
+        self.assertIn("_assert_supported_doctype", references)
 
     def test_infrastructure_resolves_document_permissions(self) -> None:
         source = COMMAND_REPOSITORY.read_text(encoding="utf-8")
