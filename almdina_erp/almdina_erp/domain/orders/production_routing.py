@@ -1,16 +1,53 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+
+
+def normalize_eligible_roles(values: Iterable[str] | str | None) -> tuple[str, ...]:
+    """Return unique role names in stable order without inventing defaults."""
+
+    source = (values,) if isinstance(values, str) else tuple(values or ())
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in source:
+        role = " ".join(str(value or "").split())
+        if not role or role in seen:
+            continue
+        seen.add(role)
+        normalized.append(role)
+    return tuple(normalized)
 
 
 @dataclass(frozen=True, slots=True)
 class RoutingStage:
-    """One immutable stage definition inside a production route."""
+    """One immutable stage definition inside a production route.
+
+    A stage may be assigned to a worker who owns any one of its eligible roles.
+    Role names are configuration data; this domain never contains role catalogs
+    or stage-to-role defaults.
+    """
 
     sequence: int
     stage_type: str
     department_label: str
-    operational_role: str
+    eligible_roles: tuple[str, ...] | str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "eligible_roles",
+            normalize_eligible_roles(self.eligible_roles),
+        )
+
+    @property
+    def operational_role(self) -> str:
+        """Compatibility view for old callers while plural roles are rolled out."""
+
+        return self.eligible_roles[0] if self.eligible_roles else ""
+
+    def accepts_any_role(self, roles: Iterable[str] | None) -> bool:
+        return bool(set(normalize_eligible_roles(roles)).intersection(self.eligible_roles))
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +74,8 @@ class ProductionRoute:
             raise ValueError("Production route stage types must be unique.")
         if any(not stage.stage_type.strip() for stage in self.stages):
             raise ValueError("Production route stage type is required.")
-        if any(not stage.operational_role.strip() for stage in self.stages):
-            raise ValueError("Every production route stage requires an operational role.")
+        if any(not stage.eligible_roles for stage in self.stages):
+            raise ValueError("Every production route stage requires an eligible role.")
         if tuple(sequences) != tuple(sorted(sequences)):
             raise ValueError("Production route stages must be ordered by sequence.")
 
@@ -65,4 +102,8 @@ class ProductionRoute:
         return any(stage.stage_type == resolved for stage in self.stages)
 
 
-__all__ = ["ProductionRoute", "RoutingStage"]
+__all__ = [
+    "ProductionRoute",
+    "RoutingStage",
+    "normalize_eligible_roles",
+]
