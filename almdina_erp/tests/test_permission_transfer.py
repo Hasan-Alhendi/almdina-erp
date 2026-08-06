@@ -162,20 +162,8 @@ class TestPermissionTransfer(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "version"):
             parse_permission_export(future)
 
-        unknown = build_permission_export(
-            role="Source Role",
-            state=state(Capability.VIEW_ORDERS),
-        )
+        unknown = dict(document)
         unknown["capabilities"] = ["unknown_capability"]
-        canonical = {
-            "schema": PERMISSION_TRANSFER_SCHEMA,
-            "version": PERMISSION_TRANSFER_VERSION,
-            "role": "Source Role",
-            "capabilities": ["unknown_capability"],
-        }
-        # The checksum is intentionally left stale: untrusted documents must
-        # fail before any unknown capability can enter the permission matrix.
-        self.assertNotEqual(unknown["checksum"], document["checksum"] if canonical == document else "")
         with self.assertRaises(ValueError):
             parse_permission_export(unknown)
 
