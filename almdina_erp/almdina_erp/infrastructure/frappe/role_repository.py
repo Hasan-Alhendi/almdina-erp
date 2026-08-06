@@ -83,17 +83,21 @@ class FrappeRoleRepository:
             role_field: ["in", roles],
             **dict(filters or {}),
         }
+        # Frappe v16 rejects SQL aggregate expressions supplied as strings in
+        # get_all(fields=...).  Counting the narrow role projection in Python
+        # keeps this adapter version-safe and avoids raw dynamic SQL identifiers.
         rows = frappe.get_all(
             doctype,
             filters=conditions,
-            fields=[f"{role_field} as role", "count(name) as total"],
-            group_by=role_field,
+            fields=[role_field],
+            limit_page_length=0,
         )
-        return {
-            str(row.role): int(row.total or 0)
-            for row in rows
-            if row.get("role")
-        }
+        counts: defaultdict[str, int] = defaultdict(int)
+        for row in rows:
+            role = str(row.get(role_field) or "").strip()
+            if role:
+                counts[role] += 1
+        return dict(counts)
 
     @staticmethod
     def _sum_counts(*maps: Mapping[str, int]) -> dict[str, int]:
