@@ -1,129 +1,38 @@
 from __future__ import annotations
 
-from typing import Any
-
 import frappe
 
 
-STAGE_DEFAULTS: dict[str, tuple[str, str]] = {
-    "Sharyoun": ("شريون", "عامل شريون"),
-    "Drawing": ("رسم", "عامل رسم"),
-    "CNC": ("CNC", "عامل CNC"),
-    "Sanding": ("تقشيط", "عامل تقشيط"),
-    "Cutting": ("قص", "Cutting Operator"),
-    "Edge Banding": ("قشاط", "Edge Operator"),
-    "Review / Preparation": ("مراجعة وتجهيز", "Production Manager"),
-    "Drilling": ("تثقيب", "Production Manager"),
-    "Assembly": ("تجميع", "Production Manager"),
-    "Quality Check": ("فحص الجودة", "Production Manager"),
-    "Packing": ("تغليف", "Production Manager"),
-}
-
-LEGACY_ROUTES: dict[str, tuple[str, ...]] = {
-    "Sharyoun": ("Sharyoun", "Sanding"),
-    "Drawing": ("Drawing", "CNC", "Sanding"),
-}
+# This historical patch used to create fixed roles and two fixed routes. New
+# installations must start empty and let administrators build their own roles
+# and routes. Existing sites retain every record previously created by older
+# releases; this patch now only normalizes blank display labels safely.
 
 
-def _default(stage_type: str) -> tuple[str, str]:
-    resolved = str(stage_type or "").strip()
-    return STAGE_DEFAULTS.get(resolved, (resolved, "Production Manager"))
-
-
-def _ensure_role(role: str) -> None:
-    if frappe.db.exists("Role", role):
+def _backfill_department_labels(doctype: str) -> None:
+    if not frappe.db.exists("DocType", doctype):
         return
-    frappe.get_doc(
-        {
-            "doctype": "Role",
-            "role_name": role,
-            "desk_access": 1,
-        }
-    ).insert(ignore_permissions=True)
-
-
-def _append_stage(route: Any, stage_type: str, sequence: int) -> None:
-    label, role = _default(stage_type)
-    _ensure_role(role)
-    route.append(
-        "stages",
-        {
-            "sequence": sequence,
-            "stage_type": stage_type,
-            "department_label": label,
-            "operational_role": role,
-            "required": 1,
-            "auto_complete_if_not_applicable": 0,
-        },
-    )
-
-
-def _ensure_legacy_routes() -> None:
-    for route_name, stage_types in LEGACY_ROUTES.items():
-        if frappe.db.exists("Production Routing", route_name):
-            continue
-        route = frappe.new_doc("Production Routing")
-        route.routing_name = route_name
-        route.disabled = 0
-        for index, stage_type in enumerate(stage_types, start=1):
-            _append_stage(route, stage_type, index * 10)
-        route.insert(ignore_permissions=True)
-
-
-def _backfill_route_stages() -> None:
     rows = frappe.get_all(
-        "Production Routing Stage",
-        fields=["name", "stage_type", "department_label", "operational_role"],
+        doctype,
+        fields=["name", "stage_type", "department_label"],
     )
     for row in rows:
-        label, role = _default(str(row.stage_type or ""))
-        _ensure_role(role)
-        values: dict[str, Any] = {}
-        if not str(row.department_label or "").strip():
-            values["department_label"] = label
-        if not str(row.operational_role or "").strip():
-            values["operational_role"] = role
-        if values:
+        stage_type = str(row.stage_type or "").strip()
+        if stage_type and not str(row.department_label or "").strip():
             frappe.db.set_value(
-                "Production Routing Stage",
+                doctype,
                 row.name,
-                values,
-                update_modified=False,
-            )
-
-
-def _backfill_production_stages() -> None:
-    rows = frappe.get_all(
-        "Production Stage",
-        fields=["name", "stage_type", "department_label", "operational_role"],
-    )
-    for row in rows:
-        label, role = _default(str(row.stage_type or ""))
-        _ensure_role(role)
-        values: dict[str, Any] = {}
-        if not str(row.department_label or "").strip():
-            values["department_label"] = label
-        if not str(row.operational_role or "").strip():
-            values["operational_role"] = role
-        if values:
-            frappe.db.set_value(
-                "Production Stage",
-                row.name,
-                values,
+                "department_label",
+                stage_type,
                 update_modified=False,
             )
 
 
 def execute() -> None:
-    """Activate UI-managed routes while preserving every in-flight legacy order."""
+    """Preserve existing route data without creating roles or routes."""
 
-    if not frappe.db.exists("DocType", "Production Routing"):
-        return
-    for _, role in STAGE_DEFAULTS.values():
-        _ensure_role(role)
-    _ensure_legacy_routes()
-    _backfill_route_stages()
-    _backfill_production_stages()
+    _backfill_department_labels("Production Routing Stage")
+    _backfill_department_labels("Production Stage")
 
 
 __all__ = ["execute"]
