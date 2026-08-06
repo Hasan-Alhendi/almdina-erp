@@ -10,7 +10,7 @@ from .authorization import Capability, WORKFORCE_CAPABILITIES, normalize_capabil
 
 @dataclass(frozen=True, slots=True)
 class OperationalProfile:
-    """Operational eligibility and default navigation, never business grants."""
+    """Legacy operational bundle kept only for backwards-compatible API input."""
 
     key: str
     label: str
@@ -90,7 +90,8 @@ class WorkforceAction(str, Enum):
     VIEW = "view"
     CREATE = "create"
     EDIT = "edit"
-    ASSIGN_PROFILE = "assign_profile"
+    ASSIGN_ROLES = "assign_roles"
+    ASSIGN_PROFILE = "assign_profile"  # legacy clients only
     ENABLE = "enable"
     DISABLE = "disable"
     RESET_PASSWORD = "reset_password"
@@ -101,6 +102,7 @@ ACTION_CAPABILITIES = MappingProxyType(
         WorkforceAction.VIEW: Capability.VIEW_USERS,
         WorkforceAction.CREATE: Capability.CREATE_USERS,
         WorkforceAction.EDIT: Capability.EDIT_USERS,
+        WorkforceAction.ASSIGN_ROLES: Capability.ASSIGN_WORKFORCE_PROFILE,
         WorkforceAction.ASSIGN_PROFILE: Capability.ASSIGN_WORKFORCE_PROFILE,
         WorkforceAction.ENABLE: Capability.ENABLE_USERS,
         WorkforceAction.DISABLE: Capability.DISABLE_USERS,
@@ -182,14 +184,14 @@ def decide_workforce_action(
             "outside_scope",
             "This account is outside the Almdina workforce scope.",
         )
-    if (
-        action == WorkforceAction.ASSIGN_PROFILE
-        and facts.active_assignments > 0
-    ):
+    if action in {
+        WorkforceAction.ASSIGN_ROLES,
+        WorkforceAction.ASSIGN_PROFILE,
+    } and facts.active_assignments > 0:
         return WorkforceDecision(
             False,
             "active_assignments",
-            "Reassign the user's active production stages before changing the operational profile.",
+            "Reassign the user's active production stages before changing assigned roles.",
         )
     if action == WorkforceAction.DISABLE:
         if facts.target_user == facts.actor:
