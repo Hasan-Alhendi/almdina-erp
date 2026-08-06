@@ -35,6 +35,12 @@ REPOSITORY_PATH = (
     / "frappe"
     / "production_stage_repository.py"
 )
+WRITE_GUARD_PATH = (
+    RUNTIME_ROOT
+    / "infrastructure"
+    / "frappe"
+    / "production_stage_write_guard.py"
+)
 
 
 class _FakePermissionError(PermissionError):
@@ -260,6 +266,10 @@ class TestProductionStageWriteBoundary(unittest.TestCase):
     def test_runtime_has_no_stage_write_bypass(self) -> None:
         violations: list[str] = []
         allowed_repository = REPOSITORY_PATH.resolve()
+        allowed_privileged_paths = {
+            allowed_repository,
+            WRITE_GUARD_PATH.resolve(),
+        }
         database_mutators = {
             "frappe.db.set_value",
             "frappe.db.delete",
@@ -329,7 +339,7 @@ class TestProductionStageWriteBoundary(unittest.TestCase):
 
                 if (
                     function_name.rsplit(".", 1)[-1] in privileged_calls
-                    and resolved_path != allowed_repository
+                    and resolved_path not in allowed_privileged_paths
                 ):
                     violations.append(
                         f"{path.relative_to(RUNTIME_ROOT)}: privileged write flag"
