@@ -227,7 +227,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
             row["label"]: row["link_to"]
             for row in workspace["shortcuts"]
         }
-        self.assertEqual(targets["إدارة الأدوار"], "Role")
+        self.assertEqual(targets["إدارة الأدوار"], "factory-roles")
         self.assertEqual(targets["إدارة المستخدمين"], "factory-workforce")
         self.assertEqual(targets["إدارة الصلاحيات"], "factory-permissions")
         self.assertEqual(
