@@ -94,6 +94,7 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
                 Capability.VIEW_ORDERS,
                 Capability.CREATE_ORDER,
                 Capability.SUBMIT_ORDER,
+                Capability.APPROVE_ORDER,
             ),
             ROLE_OPERATOR: manual_state(
                 Capability.VIEW_ORDERS,
@@ -126,7 +127,7 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
         operator = self.repository.role_state(ROLE_OPERATOR)["capabilities"]
         self.assertTrue(entry[Capability.CREATE_ORDER])
         self.assertTrue(entry[Capability.SUBMIT_ORDER])
-        self.assertFalse(entry[Capability.APPROVE_ORDER])
+        self.assertTrue(entry[Capability.APPROVE_ORDER])
         self.assertTrue(operator[Capability.START_ASSIGNED_STAGE])
         self.assertTrue(operator[Capability.HANDOFF_ASSIGNED_STAGE])
         self.assertFalse(operator[Capability.DISPATCH_ORDER])
