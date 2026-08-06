@@ -3,9 +3,11 @@ from __future__ import annotations
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from almdina_erp.almdina_erp.application.security.permission_templates import (
+from almdina_erp.almdina_erp.application.security.permission_matrix import (
+    normalize_capability_state,
+)
+from almdina_erp.almdina_erp.application.security.permission_transfer import (
     build_permission_bundle,
-    template_state,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
@@ -19,6 +21,12 @@ from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
 ROLE_ENTRY = "Almdina Portability Entry Test"
 ROLE_OPERATOR = "Almdina Portability Operator Test"
 MISSING_ROLE = "Almdina Portability Missing Test"
+
+
+def manual_state(*capabilities: str) -> dict[str, bool]:
+    return normalize_capability_state(
+        {capability: True for capability in capabilities}
+    )
 
 
 class TestPermissionPortabilityIntegration(FrappeTestCase):
@@ -82,8 +90,17 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
         )
 
         desired = {
-            ROLE_ENTRY: template_state("order_entry"),
-            ROLE_OPERATOR: template_state("production_operator"),
+            ROLE_ENTRY: manual_state(
+                Capability.VIEW_ORDERS,
+                Capability.CREATE_ORDER,
+                Capability.SUBMIT_ORDER,
+            ),
+            ROLE_OPERATOR: manual_state(
+                Capability.VIEW_ORDERS,
+                Capability.VIEW_CUTTING_PLAN,
+                Capability.START_ASSIGNED_STAGE,
+                Capability.HANDOFF_ASSIGNED_STAGE,
+            ),
         }
         bundle = build_permission_bundle(
             desired,
@@ -142,8 +159,14 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
         before = self.repository.role_state(ROLE_ENTRY)["capabilities"]
         bundle = build_permission_bundle(
             {
-                ROLE_ENTRY: template_state("order_entry"),
-                MISSING_ROLE: template_state("production_operator"),
+                ROLE_ENTRY: manual_state(
+                    Capability.VIEW_ORDERS,
+                    Capability.CREATE_ORDER,
+                ),
+                MISSING_ROLE: manual_state(
+                    Capability.VIEW_ORDERS,
+                    Capability.START_ASSIGNED_STAGE,
+                ),
             },
             exported_by="Administrator",
             exported_at="2026-08-01 22:00:00",
