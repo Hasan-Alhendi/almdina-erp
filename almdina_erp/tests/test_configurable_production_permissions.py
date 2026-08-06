@@ -42,6 +42,15 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertIn("assert_worker_for_roles", source)
         self.assertIn("eligible_roles", source)
 
+    def test_application_commands_use_only_configured_route_navigation(self) -> None:
+        source = APPLICATION_COMMANDS.read_text(encoding="utf-8")
+        self.assertIn("route.next_stage", source)
+        self.assertIn("route.contains", source)
+        self.assertNotIn("production_path_sequence(", source)
+        self.assertNotIn("next_stage_type(", source)
+        self.assertNotIn("def _next_stage", source)
+        self.assertNotIn("def _validate_path", source)
+
     def test_infrastructure_resolves_document_permissions(self) -> None:
         source = COMMAND_REPOSITORY.read_text(encoding="utf-8")
         self.assertIn("document_has_capability", source)
