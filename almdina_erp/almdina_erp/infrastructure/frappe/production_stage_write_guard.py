@@ -35,28 +35,34 @@ def revoke_internal_stage_write(document: Any) -> Any:
     return document
 
 
-@contextmanager
-def internal_stage_write(document: Any) -> Iterator[Any]:
-    """Grant write authority only for the duration of one repository action.
-
-    The flag is always revoked, including when Frappe validation or persistence
-    raises. This prevents a returned document from retaining reusable write
-    authority after the repository call completes.
-    """
-
-    authorize_internal_stage_write(document)
-    try:
-        yield document
-    finally:
-        revoke_internal_stage_write(document)
-
-
 def is_internal_stage_write(document: Any) -> bool:
     flags = getattr(document, "flags", None)
     return bool(
         flags
         and getattr(flags, INTERNAL_STAGE_WRITE_FLAG, False)
     )
+
+
+@contextmanager
+def internal_stage_write(document: Any) -> Iterator[Any]:
+    """Grant transient, nest-safe authority for one repository action.
+
+    The previous authority state is restored in ``finally``. This means an
+    inner repository helper cannot revoke the still-active authority of an
+    outer helper, while the outermost context always removes authority before
+    returning the document to its caller. Exception paths receive the same
+    cleanup guarantee.
+    """
+
+    was_authorized = is_internal_stage_write(document)
+    authorize_internal_stage_write(document)
+    try:
+        yield document
+    finally:
+        if was_authorized:
+            authorize_internal_stage_write(document)
+        else:
+            revoke_internal_stage_write(document)
 
 
 __all__ = [
