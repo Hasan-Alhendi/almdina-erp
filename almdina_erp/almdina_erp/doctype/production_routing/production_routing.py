@@ -31,6 +31,7 @@ class ProductionRouting(Document):
         sequences: set[int] = set()
         stage_types: set[str] = set()
         required_count = 0
+        prepared: list[tuple[object, tuple[str, ...]]] = []
         ordered = sorted(self.stages, key=lambda row: cint(row.sequence))
         for index, row in enumerate(ordered, start=1):
             row.stage_type = str(row.stage_type or "").strip()
@@ -60,17 +61,26 @@ class ProductionRouting(Document):
                             row.stage_type
                         )
                     )
+            prepared.append((row, roles))
+            sequences.add(sequence)
+            stage_types.add(row.stage_type)
+            row.idx = index
+        if not required_count:
+            frappe.throw(_("Production Routing requires at least one required stage."))
+
+        # Every route save and role rename locks the same Role rows in sorted
+        # order. A concurrent save therefore either finishes before the rename
+        # (and is included in it) or validates after the old role no longer exists.
+        self._lock_roles(
+            tuple(role for _row, roles in prepared for role in roles)
+        )
+        for row, roles in prepared:
             self._validate_roles(roles, stage_type=row.stage_type)
             row.eligible_roles_json = encode_eligible_roles(roles)
             row.eligible_roles_display = eligible_roles_display(roles)
             # Keep the first role only as a read-only compatibility snapshot for
             # older reports and in-flight records. New authorization uses all roles.
             row.operational_role = roles[0] if roles else ""
-            sequences.add(sequence)
-            stage_types.add(row.stage_type)
-            row.idx = index
-        if not required_count:
-            frappe.throw(_("Production Routing requires at least one required stage."))
 
         self._prevent_active_route_mutation()
 
@@ -84,6 +94,14 @@ class ProductionRouting(Document):
         except ValueError as error:
             frappe.throw(_(str(error)), frappe.ValidationError)
         raise AssertionError("frappe.throw must interrupt execution")
+
+    @staticmethod
+    def _lock_roles(roles: tuple[str, ...]) -> None:
+        for role in sorted(set(roles)):
+            frappe.db.sql(
+                "select name from `tabRole` where name = %s for update",
+                (role,),
+            )
 
     @staticmethod
     def _validate_roles(roles: tuple[str, ...], *, stage_type: str) -> None:
