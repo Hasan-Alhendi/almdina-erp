@@ -32,6 +32,23 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertIsNone(route.next_stage("Packing"))
         self.assertTrue(route.contains("PVC"))
 
+    def test_stage_identity_and_roles_are_normalized(self) -> None:
+        stage = RoutingStage(
+            "10",
+            "  Laser   Engraving ",
+            " نقش   ليزر ",
+            (" عامل ليزر ", "عامل ليزر", " مشرف ليزر "),
+        )
+        route = ProductionRoute("  Laser   Route  ", "", (stage,))
+
+        self.assertEqual(stage.sequence, 10)
+        self.assertEqual(stage.stage_type, "Laser Engraving")
+        self.assertEqual(stage.department_label, "نقش ليزر")
+        self.assertEqual(stage.eligible_roles, ("عامل ليزر", "مشرف ليزر"))
+        self.assertEqual(route.name, "Laser Route")
+        self.assertEqual(route.label, "Laser Route")
+        self.assertTrue(route.contains(" Laser   Engraving "))
+
     def test_role_normalization_is_stable_and_deduplicated(self) -> None:
         self.assertEqual(
             normalize_eligible_roles((" عامل قص ", "مشرف قص", "عامل قص", "")),
@@ -39,12 +56,18 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         )
         self.assertEqual(normalize_eligible_roles("عامل PVC"), ("عامل PVC",))
 
-    def test_route_rejects_missing_roles_and_duplicate_sequences(self) -> None:
+    def test_route_rejects_incomplete_stages_and_duplicate_sequences(self) -> None:
         with self.assertRaisesRegex(ValueError, "eligible role"):
             ProductionRoute(
                 "Invalid",
                 "غير صالح",
                 (RoutingStage(10, "CNC", "CNC", ()),),
+            )
+        with self.assertRaisesRegex(ValueError, "department label"):
+            ProductionRoute(
+                "Invalid",
+                "غير صالح",
+                (RoutingStage(10, "CNC", "", ("عامل CNC",)),),
             )
         with self.assertRaisesRegex(ValueError, "sequences must be unique"):
             ProductionRoute(
