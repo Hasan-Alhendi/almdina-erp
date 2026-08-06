@@ -33,15 +33,20 @@ jobs:
           paths = (
               Path("almdina_erp/almdina_erp/doctype/almdina_role_metadata/almdina_role_metadata.json"),
               Path("almdina_erp/almdina_erp/doctype/almdina_role_audit/almdina_role_audit.json"),
+              Path("almdina_erp/almdina_erp/page/factory_roles/factory_roles.json"),
           )
           for path in paths:
               json.loads(path.read_text(encoding="utf-8"))
               print(f"validated {path}")
           PY
 
-      - name: Run role domain and application tests
+      - name: Run role domain, application, architecture, and UI tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_role_management_domain \
             almdina_erp.tests.test_role_administration_application \
-            almdina_erp.tests.test_role_administration_architecture
+            almdina_erp.tests.test_role_administration_architecture \
+            almdina_erp.tests.test_role_console_ui
+
+      - name: Validate role console JavaScript
+        run: node --check almdina_erp/almdina_erp/page/factory_roles/factory_roles.js
