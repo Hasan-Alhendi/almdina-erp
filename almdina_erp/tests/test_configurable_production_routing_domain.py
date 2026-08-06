@@ -84,6 +84,15 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertEqual(route_fields["eligible_roles_json"]["options"], "JSON")
         self.assertEqual(route_fields["configure_roles"]["fieldtype"], "Button")
         self.assertTrue(route_fields["operational_role"]["hidden"])
+        self.assertTrue(route_fields["required"]["hidden"])
+        self.assertTrue(route_fields["required"]["read_only"])
+        self.assertEqual(route_fields["required"]["default"], "1")
+        self.assertTrue(route_fields["auto_complete_if_not_applicable"]["hidden"])
+        self.assertTrue(route_fields["auto_complete_if_not_applicable"]["read_only"])
+        self.assertEqual(
+            route_fields["auto_complete_if_not_applicable"]["default"],
+            "0",
+        )
 
         commands = (
             root / "almdina_erp" / "application" / "shop_floor" / "commands.py"
@@ -97,6 +106,13 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
             / "infrastructure"
             / "frappe"
             / "production_routing_repository.py"
+        ).read_text(encoding="utf-8")
+        routing_controller = (
+            root
+            / "almdina_erp"
+            / "doctype"
+            / "production_routing"
+            / "production_routing.py"
         ).read_text(encoding="utf-8")
         authorization = (
             root
@@ -118,6 +134,9 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertIn("get_users_for_roles", commands)
         self.assertIn("list_active_routes", queries)
         self.assertIn("eligible_roles", queries)
+        self.assertIn("if not roles:", routing_controller)
+        self.assertIn("row.required = 1", routing_controller)
+        self.assertIn("row.auto_complete_if_not_applicable = 0", routing_controller)
         self.assertNotIn('options: "Sharyoun\\nDrawing"', order_ux)
         self.assertNotIn('frappe.db.get_value("Production Stage"', order_ux)
         self.assertNotIn("Production Manager", routing_ux)
@@ -127,22 +146,32 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertNotIn("STAGE_ROLE_BY_TYPE", routing_repository)
         self.assertIn("STAGE_ROLE_BY_TYPE: dict[str, str] = {}", authorization)
 
-    def test_migration_preserves_legacy_role_snapshots_without_seeding(self) -> None:
+    def test_migrations_preserve_roles_and_normalize_executable_stages(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        patch_name = "almdina_erp.patches.v1_0.migrate_routing_stage_eligible_roles"
+        role_patch = "almdina_erp.patches.v1_0.migrate_routing_stage_eligible_roles"
+        executable_patch = (
+            "almdina_erp.patches.v1_0.normalize_executable_routing_stages"
+        )
         patches = (root / "patches.txt").read_text(encoding="utf-8")
         migration = (
             root / "patches" / "v1_0" / "migrate_routing_stage_eligible_roles.py"
         ).read_text(encoding="utf-8")
+        executable = (
+            root / "patches" / "v1_0" / "normalize_executable_routing_stages.py"
+        ).read_text(encoding="utf-8")
         historical = (
             root / "patches" / "v1_0" / "activate_configurable_production_routings.py"
         ).read_text(encoding="utf-8")
-        self.assertIn(patch_name, patches)
+        self.assertIn(role_patch, patches)
+        self.assertIn(executable_patch, patches)
+        self.assertLess(patches.index(role_patch), patches.index(executable_patch))
         self.assertIn("eligible_roles_json", migration)
         self.assertIn("eligible_roles_display", migration)
         self.assertIn("operational_role", migration)
         self.assertIn("Production Routing Stage", migration)
         self.assertIn("Production Stage", migration)
+        self.assertIn('{"required": 1}', executable)
+        self.assertIn('values["auto_complete_if_not_applicable"] = 0', executable)
         self.assertNotIn("STAGE_DEFAULTS", historical)
         self.assertNotIn("LEGACY_ROUTES", historical)
         self.assertNotIn("_ensure_role", historical)
