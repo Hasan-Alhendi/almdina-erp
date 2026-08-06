@@ -12,11 +12,18 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
     WorkforceIdentity,
     audit_snapshot,
 )
+from almdina_erp.almdina_erp.domain.security.role_management import (
+    PROTECTED_ROLE_NAMES,
+)
 from almdina_erp.almdina_erp.domain.security.workforce import (
     MANAGED_OPERATIONAL_ROLES,
     OperationalProfile,
+    PROFILES,
     infer_profile,
 )
+
+
+_ROLE_METADATA_DOCTYPE = "Almdina Role Metadata"
 
 
 class FrappeWorkforceRepository:
@@ -33,11 +40,78 @@ class FrappeWorkforceRepository:
             )
         )
 
-    @staticmethod
-    def _is_almdina_user(*, default_app: str, roles: tuple[str, ...]) -> bool:
+    def _is_almdina_user(self, *, default_app: str, roles: tuple[str, ...]) -> bool:
         return default_app == "almdina_erp" or bool(
-            set(roles).intersection(MANAGED_OPERATIONAL_ROLES)
+            set(roles).intersection(self.managed_role_names())
         )
+
+    @staticmethod
+    def _doctype_exists(doctype: str) -> bool:
+        return bool(frappe.db.exists("DocType", doctype))
+
+    def _metadata_map(self) -> dict[str, dict[str, Any]]:
+        if not self._doctype_exists(_ROLE_METADATA_DOCTYPE):
+            return {}
+        rows = frappe.get_all(
+            _ROLE_METADATA_DOCTYPE,
+            filters={"managed_by_almdina": 1},
+            fields=["role", "description", "managed_by_almdina"],
+            limit_page_length=0,
+        )
+        return {
+            str(row.role): {
+                "description": str(row.description or ""),
+                "managed_by_almdina": bool(cint(row.managed_by_almdina)),
+            }
+            for row in rows
+            if str(row.role or "").strip()
+        }
+
+    def managed_role_names(self) -> frozenset[str]:
+        """Roles that this console owns; standard/technical roles remain untouched."""
+
+        metadata_roles = set(self._metadata_map())
+        existing_legacy = {
+            str(role)
+            for role in MANAGED_OPERATIONAL_ROLES
+            if frappe.db.exists("Role", role)
+        }
+        return frozenset(metadata_roles | existing_legacy)
+
+    def list_assignable_roles(self) -> list[dict[str, Any]]:
+        metadata = self._metadata_map()
+        managed = self.managed_role_names()
+        if not managed:
+            return []
+        rows = frappe.get_all(
+            "Role",
+            filters={
+                "name": ["in", sorted(managed)],
+                "disabled": 0,
+                "desk_access": 1,
+            },
+            fields=["name", "role_name", "desk_access", "disabled"],
+            order_by="role_name asc",
+            limit_page_length=0,
+        )
+        return [
+            {
+                "name": str(row.name),
+                "label": str(row.role_name or row.name),
+                "description": str(metadata.get(str(row.name), {}).get("description") or ""),
+            }
+            for row in rows
+            if str(row.name) not in PROTECTED_ROLE_NAMES
+        ]
+
+    def ensure_assignable_roles(self, roles: tuple[str, ...]) -> None:
+        assignable = {row["name"] for row in self.list_assignable_roles()}
+        missing = sorted(set(roles).difference(assignable))
+        if missing:
+            raise ValueError(
+                "These roles are missing, disabled, lack Desk Access, or are not managed by Almdina: "
+                + ", ".join(missing)
+            )
 
     def lock_user(self, user: str) -> None:
         frappe.db.sql(
@@ -49,14 +123,7 @@ class FrappeWorkforceRepository:
         return bool(frappe.db.exists("User", user))
 
     def ensure_profile_roles(self, profile: OperationalProfile) -> None:
-        missing = [
-            role for role in profile.roles if not frappe.db.exists("Role", role)
-        ]
-        if missing:
-            raise ValueError(
-                "Create the required operational roles first: "
-                + ", ".join(missing)
-            )
+        self.ensure_assignable_roles(tuple(profile.roles))
 
     def active_assignment_count(self, user: str) -> int:
         return int(
@@ -70,8 +137,23 @@ class FrappeWorkforceRepository:
             or 0
         )
 
+    @staticmethod
+    def _default_workspace_for_roles(roles: tuple[str, ...]) -> str:
+        operator_roles = {
+            role
+            for profile in PROFILES.values()
+            if profile.default_workspace == "Shop Floor"
+            for role in profile.roles
+        }
+        selected = set(roles)
+        if selected and selected.issubset(operator_roles):
+            return "Shop Floor"
+        return "Almdina ERP"
+
     def _snapshot_from_doc(self, user: Any) -> dict[str, Any]:
         roles = self._roles_for_user(user.name)
+        managed_roles = self.managed_role_names()
+        workforce_roles = tuple(role for role in roles if role in managed_roles)
         profile = infer_profile(roles)
         return {
             "email": str(user.name),
@@ -80,6 +162,8 @@ class FrappeWorkforceRepository:
             "full_name": str(user.full_name or user.name),
             "enabled": bool(cint(user.enabled)),
             "language": str(user.language or "ar"),
+            "roles": list(roles),
+            "workforce_roles": list(workforce_roles),
             "profile": profile,
             "default_workspace": str(user.default_workspace or ""),
             "default_app": str(user.default_app or ""),
@@ -106,18 +190,23 @@ class FrappeWorkforceRepository:
         enabled: bool | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        managed_roles = tuple(sorted(MANAGED_OPERATIONAL_ROLES))
-        role_placeholders = ", ".join(["%s"] * len(managed_roles))
+        managed_roles = tuple(sorted(self.managed_role_names()))
         conditions = [
             "u.user_type = 'System User'",
             "u.name not in ('Guest', 'Administrator')",
-            "(coalesce(u.default_app, '') = 'almdina_erp' or exists ("
-            "select 1 from `tabHas Role` hr "
-            "where hr.parent = u.name and hr.parenttype = 'User' "
-            f"and hr.role in ({role_placeholders})"
-            "))",
         ]
-        values: list[Any] = list(managed_roles)
+        values: list[Any] = []
+        scope_conditions = ["coalesce(u.default_app, '') = 'almdina_erp'"]
+        if managed_roles:
+            role_placeholders = ", ".join(["%s"] * len(managed_roles))
+            scope_conditions.append(
+                "exists (select 1 from `tabHas Role` hr "
+                "where hr.parent = u.name and hr.parenttype = 'User' "
+                f"and hr.role in ({role_placeholders}))"
+            )
+            values.extend(managed_roles)
+        conditions.append(f"({' or '.join(scope_conditions)})")
+
         normalized_search = str(search or "").strip()
         if normalized_search:
             pattern = f"%{normalized_search}%"
@@ -148,12 +237,13 @@ class FrappeWorkforceRepository:
         self,
         *,
         identity: WorkforceIdentity,
-        profile: OperationalProfile,
+        roles: tuple[str, ...],
         temporary_password: str,
     ) -> dict[str, Any]:
         if self.user_exists(identity.email):
             raise ValueError("A user with this email already exists.")
-        self.ensure_profile_roles(profile)
+        self.ensure_assignable_roles(roles)
+        workspace = self._default_workspace_for_roles(roles)
         user = frappe.get_doc(
             {
                 "doctype": "User",
@@ -164,11 +254,11 @@ class FrappeWorkforceRepository:
                 "user_type": "System User",
                 "language": identity.language,
                 "enabled": 1,
-                "default_app": profile.default_app,
-                "default_workspace": profile.default_workspace,
+                "default_app": "almdina_erp",
+                "default_workspace": workspace,
             }
         )
-        for role in ("Desk User", *profile.roles):
+        for role in dict.fromkeys(("Desk User", *roles)):
             if frappe.db.exists("Role", role):
                 user.append("roles", {"role": role})
         user.flags.ignore_permissions = True
@@ -192,29 +282,40 @@ class FrappeWorkforceRepository:
         frappe.clear_cache(user=user_name)
         return self.get_user(user_name)
 
+    def assign_roles(
+        self,
+        user_name: str,
+        roles: tuple[str, ...],
+    ) -> dict[str, Any]:
+        self.ensure_assignable_roles(roles)
+        managed_roles = self.managed_role_names()
+        user = frappe.get_doc("User", user_name)
+        retained = [
+            row.role
+            for row in (user.roles or [])
+            if row.role not in managed_roles
+        ]
+        required = list(dict.fromkeys([*retained, "Desk User", *roles]))
+        user.set("roles", [])
+        for role in required:
+            if frappe.db.exists("Role", role):
+                user.append("roles", {"role": role})
+        user.default_app = "almdina_erp"
+        workspace = self._default_workspace_for_roles(roles)
+        if frappe.db.exists("Workspace", workspace):
+            user.default_workspace = workspace
+        user.save(ignore_permissions=True)
+        frappe.clear_cache(user=user_name)
+        return self.get_user(user_name)
+
     def assign_profile(
         self,
         user_name: str,
         profile: OperationalProfile,
     ) -> dict[str, Any]:
-        self.ensure_profile_roles(profile)
-        user = frappe.get_doc("User", user_name)
-        retained = [
-            row.role
-            for row in (user.roles or [])
-            if row.role not in MANAGED_OPERATIONAL_ROLES
-        ]
-        required = list(dict.fromkeys([*retained, "Desk User", *profile.roles]))
-        user.set("roles", [])
-        for role in required:
-            if frappe.db.exists("Role", role):
-                user.append("roles", {"role": role})
-        user.default_app = profile.default_app
-        if frappe.db.exists("Workspace", profile.default_workspace):
-            user.default_workspace = profile.default_workspace
-        user.save(ignore_permissions=True)
-        frappe.clear_cache(user=user_name)
-        return self.get_user(user_name)
+        """Backwards-compatible adapter for callers that still send a profile."""
+
+        return self.assign_roles(user_name, tuple(profile.roles))
 
     def set_enabled(self, user_name: str, enabled: bool) -> dict[str, Any]:
         frappe.db.set_value(
