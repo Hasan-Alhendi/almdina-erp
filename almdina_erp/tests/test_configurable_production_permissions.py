@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_POLICY = ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
 APPLICATION_COMMANDS = ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
 COMMAND_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "shop_floor_command_repository.py"
+ROUTING_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "production_routing_repository.py"
 AUTHORIZATION = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "shop_floor_authorization.py"
 ROLE_REFERENCES = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "routing_role_references.py"
 ROUTING_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "production_routing" / "production_routing.py"
@@ -52,6 +53,12 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertNotIn("next_stage_type(", source)
         self.assertNotIn("def _next_stage", source)
         self.assertNotIn("def _validate_path", source)
+
+    def test_route_repository_loads_every_persisted_stage(self) -> None:
+        source = ROUTING_REPOSITORY.read_text(encoding="utf-8")
+        self.assertIn("for row in sorted(document.stages", source)
+        self.assertNotIn("if cint(row.required)", source)
+        self.assertIn("Invalid legacy rows stay out of dispatch", source)
 
     def test_route_save_and_role_rename_are_serialized(self) -> None:
         routing = ROUTING_CONTROLLER.read_text(encoding="utf-8")
