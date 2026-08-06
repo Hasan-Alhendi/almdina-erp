@@ -145,7 +145,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         frappe.clear_cache()
         super().tearDown()
 
-    def test_manager_can_run_full_workforce_lifecycle(self) -> None:
+    def test_manager_can_run_multi_role_workforce_lifecycle(self) -> None:
         from almdina_erp.almdina_erp.services.workforce_service import (
             create_workforce_user,
             get_workforce_console,
@@ -161,12 +161,16 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 "first_name": "عامل",
                 "last_name": "اختبار",
                 "language": "ar",
-                "profile": "drawing_operator",
+                "roles": ["عامل رسم", "عامل CNC"],
                 "temporary_password": "SecureTemp123!",
             }
         )
         self.assertEqual(result["user"]["email"], WORKER_USER)
-        self.assertEqual(result["user"]["profile"], "drawing_operator")
+        self.assertEqual(
+            set(result["user"]["workforce_roles"]),
+            {"عامل رسم", "عامل CNC"},
+        )
+        self.assertEqual(result["user"]["profile"], "custom")
         self.assertTrue(result["user"]["enabled"])
 
         roles = set(
@@ -177,6 +181,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             )
         )
         self.assertIn("عامل رسم", roles)
+        self.assertIn("عامل CNC", roles)
         self.assertNotIn("Production Manager", roles)
         self.assertNotIn("Accounts Management", roles)
 
@@ -191,11 +196,12 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             WORKER_USER,
             {
                 "first_name": "عامل CNC",
-                "profile": "cnc_operator",
+                "roles": ["عامل CNC"],
                 "language": "ar",
             },
         )["user"]
         self.assertEqual(updated["profile"], "cnc_operator")
+        self.assertEqual(updated["workforce_roles"], ["عامل CNC"])
         roles = set(
             frappe.get_all(
                 "Has Role",
@@ -219,6 +225,10 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         console = get_workforce_console(search=WORKER_USER)
         self.assertEqual(len(console["users"]), 1)
         self.assertEqual(console["users"][0]["email"], WORKER_USER)
+        assignable = {role["name"] for role in console["roles"]}
+        self.assertIn("عامل رسم", assignable)
+        self.assertIn("عامل CNC", assignable)
+        self.assertNotIn(UNRELATED_ROLE, assignable)
 
         audits = frappe.get_all(
             "Almdina User Audit",
@@ -227,12 +237,29 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         )
         actions = {row.action for row in audits}
         self.assertTrue(
-            {"Created", "Identity Updated", "Profile Changed", "Password Reset", "Disabled", "Enabled"}.issubset(actions)
+            {"Created", "Identity Updated", "Roles Changed", "Password Reset", "Disabled", "Enabled"}.issubset(actions)
         )
         for row in audits:
             serialized = f"{row.before_json}\n{row.after_json}"
             self.assertNotIn("SecureTemp123", serialized)
             self.assertNotIn("AnotherSecure123", serialized)
+
+    def test_legacy_profile_payload_remains_supported(self) -> None:
+        from almdina_erp.almdina_erp.services.workforce_service import (
+            create_workforce_user,
+        )
+
+        frappe.set_user(MANAGER_USER)
+        result = create_workforce_user(
+            {
+                "email": WORKER_USER,
+                "first_name": "عامل",
+                "profile": "drawing_operator",
+                "temporary_password": "SecureTemp123!",
+            }
+        )
+        self.assertEqual(result["user"]["profile"], "drawing_operator")
+        self.assertEqual(result["user"]["workforce_roles"], ["عامل رسم"])
 
     def test_viewer_can_list_but_cannot_create(self) -> None:
         from almdina_erp.almdina_erp.services.workforce_service import (
@@ -247,7 +274,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 {
                     "email": WORKER_USER,
                     "first_name": "Denied",
-                    "profile": "drawing_operator",
+                    "roles": ["عامل رسم"],
                     "temporary_password": "DeniedSecure123!",
                 }
             )
