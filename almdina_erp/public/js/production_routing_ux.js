@@ -61,7 +61,6 @@
         return (frm.doc.stages || [])
             .slice()
             .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
-            .filter(row => Number(row.required || 0))
             .map(row => ({
                 label: row.department_label || row.stage_type,
                 roles: rowRoles(row),
@@ -153,7 +152,7 @@
                         fieldname: "roles",
                         fieldtype: "MultiSelectList",
                         label: __("الأدوار المؤهلة"),
-                        reqd: Number(row.required || 0) ? 1 : 0,
+                        reqd: 1,
                         get_data: txt => roleOptions(roles, txt),
                         description: __("لا يعتمد النظام على اسم المرحلة أو اسم دور ثابت داخل الكود."),
                     },
@@ -161,8 +160,8 @@
                 primary_action_label: __("اعتماد الأدوار"),
                 primary_action: values => {
                     const selected = normalizeRoles(values.roles);
-                    if (Number(row.required || 0) && !selected.length) {
-                        frappe.msgprint(__("اختر دورًا واحدًا على الأقل للمرحلة المطلوبة."));
+                    if (!selected.length) {
+                        frappe.msgprint(__("اختر دورًا واحدًا على الأقل لهذه المرحلة."));
                         return;
                     }
                     dialog.get_primary_btn().prop("disabled", true);
@@ -185,7 +184,7 @@
     frappe.ui.form.on("Production Routing", {
         refresh(frm) {
             frm.set_intro(
-                __("رتّب المراحل وحدد لكل مرحلة دورًا واحدًا أو عدة أدوار مؤهلة. لا يستطيع استلام المرحلة إلا مستخدم مفعّل يملك أحد الأدوار وصلاحيات التنفيذ اللازمة. تعديل المسار المستخدم في طلب نشط محمي تلقائيًا."),
+                __("رتّب المراحل وحدد لكل مرحلة دورًا واحدًا أو عدة أدوار مؤهلة. كل صف في المسار مرحلة تنفيذ فعلية، ولا يستطيع استلامها إلا مستخدم مفعّل يملك أحد الأدوار وصلاحيات التنفيذ اللازمة. تعديل المسار المستخدم في طلب نشط محمي تلقائيًا."),
                 "blue"
             );
             if (!frm.is_new() && routePreviewRows(frm).length) {
@@ -201,11 +200,11 @@
         },
         validate(frm) {
             const missing = (frm.doc.stages || []).filter(
-                row => Number(row.required || 0) && !rowRoles(row).length
+                row => !rowRoles(row).length
             );
             if (missing.length) {
                 frappe.throw(
-                    __("حدد الأدوار المؤهلة للمراحل المطلوبة: {0}", [
+                    __("حدد الأدوار المؤهلة لجميع مراحل المسار: {0}", [
                         missing.map(row => row.department_label || row.stage_type).join("، "),
                     ])
                 );
@@ -219,9 +218,8 @@
             if (!row.sequence) {
                 frappe.model.set_value(cdt, cdn, "sequence", nextSequence(frm));
             }
-            if (row.required === undefined || row.required === null) {
-                frappe.model.set_value(cdt, cdn, "required", 1);
-            }
+            frappe.model.set_value(cdt, cdn, "required", 1);
+            frappe.model.set_value(cdt, cdn, "auto_complete_if_not_applicable", 0);
         },
         stage_type(frm, cdt, cdn) {
             const row = locals[cdt][cdn];
@@ -232,12 +230,6 @@
         },
         configure_roles(frm, cdt, cdn) {
             openRolePicker(frm, cdt, cdn);
-        },
-        required(frm, cdt, cdn) {
-            const row = locals[cdt][cdn];
-            if (!Number(row.required || 0) && !rowRoles(row).length) {
-                setRowRoles(frm, cdt, cdn, []);
-            }
         },
     });
 })();
