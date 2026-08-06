@@ -7,7 +7,7 @@ import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
 from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_write_guard import (
-    authorize_internal_stage_write,
+    internal_stage_write,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
     decode_eligible_roles,
@@ -32,14 +32,14 @@ def _lock_stage(stage_name: str) -> None:
 
 
 def _save_stage(stage: Any) -> Any:
-    authorize_internal_stage_write(stage)
-    stage.save(ignore_permissions=True)
+    with internal_stage_write(stage):
+        stage.save(ignore_permissions=True)
     return stage
 
 
 def _insert_stage(stage: Any) -> Any:
-    authorize_internal_stage_write(stage)
-    stage.insert(ignore_permissions=True)
+    with internal_stage_write(stage):
+        stage.insert(ignore_permissions=True)
     return stage
 
 
