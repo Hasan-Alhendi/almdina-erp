@@ -205,6 +205,28 @@ class TestProductionStageWriteBoundary(unittest.TestCase):
 
         self.assertFalse(is_internal_stage_write(document))
 
+    def test_nested_write_context_restores_outer_authority(self) -> None:
+        document = SimpleNamespace()
+
+        with internal_stage_write(document):
+            self.assertTrue(is_internal_stage_write(document))
+            with internal_stage_write(document):
+                self.assertTrue(is_internal_stage_write(document))
+            self.assertTrue(is_internal_stage_write(document))
+
+        self.assertFalse(is_internal_stage_write(document))
+
+    def test_nested_exception_preserves_outer_authority(self) -> None:
+        document = SimpleNamespace()
+
+        with internal_stage_write(document):
+            with self.assertRaisesRegex(RuntimeError, "inner failed"):
+                with internal_stage_write(document):
+                    raise RuntimeError("inner failed")
+            self.assertTrue(is_internal_stage_write(document))
+
+        self.assertFalse(is_internal_stage_write(document))
+
     def test_controller_rejects_direct_save_and_delete(self) -> None:
         module = _ControllerHarness.load()
         stage = module.ProductionStage()
