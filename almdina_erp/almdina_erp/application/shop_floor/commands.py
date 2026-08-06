@@ -50,6 +50,7 @@ class StageState:
     sequence: int
     department_label: str | None = None
     operational_role: str | None = None
+    eligible_roles: tuple[str, ...] = ()
     start_time: datetime | None = None
     paused_seconds: int = 0
     piece_label: str | None = None
@@ -68,9 +69,9 @@ class ShopFloorCommandPort(Protocol):
 
     def get_production_route(self, route_name: str) -> ProductionRoute: ...
 
-    def assert_worker_for_role(self, user: str, role: str) -> None: ...
+    def assert_worker_for_roles(self, user: str, roles: tuple[str, ...]) -> None: ...
 
-    def get_users_for_role(self, role: str) -> list[dict[str, str]]: ...
+    def get_users_for_roles(self, roles: tuple[str, ...]) -> list[dict[str, Any]]: ...
 
     def cancel_active_order_stages(self, order_name: str) -> None: ...
 
@@ -83,6 +84,7 @@ class ShopFloorCommandPort(Protocol):
         sequence: int,
         department_label: str | None = None,
         operational_role: str | None = None,
+        eligible_roles: tuple[str, ...] = (),
     ) -> StageState: ...
 
     def reassign_stage(self, stage_name: str, *, assignee: str) -> StageState: ...
@@ -222,6 +224,17 @@ def _assert_action_allowed(
     raise ShopFloorCommandError(decision.reason)
 
 
+def _roles_for_stage(
+    repository: ShopFloorCommandPort,
+    order: OrderState,
+    stage: StageState,
+) -> tuple[str, ...]:
+    if stage.eligible_roles:
+        return stage.eligible_roles
+    route = _production_route(repository, order.production_path or "")
+    return route.stage(stage.stage_type).eligible_roles
+
+
 def assert_order_ready_for_dispatch(order: OrderState) -> None:
     """Compatibility validator that evaluates state without an authorization port."""
 
@@ -259,6 +272,7 @@ def get_handoff_context(
             "final_stage": True,
             "next_stage_type": None,
             "next_department": None,
+            "eligible_roles": [],
             "operational_role": None,
             "workers": [],
         }
@@ -266,22 +280,23 @@ def get_handoff_context(
         "final_stage": False,
         "next_stage_type": target_stage.stage_type,
         "next_department": target_stage.department_label,
+        "eligible_roles": list(target_stage.eligible_roles),
         "operational_role": target_stage.operational_role,
-        "workers": repository.get_users_for_role(target_stage.operational_role),
+        "workers": repository.get_users_for_roles(target_stage.eligible_roles),
     }
 
 
 def get_handoff_workers(
     repository: ShopFloorCommandPort,
     stage_name: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     return list(get_handoff_context(repository, stage_name)["workers"])
 
 
 def get_reassignment_workers(
     repository: ShopFloorCommandPort,
     stage_name: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     stage = repository.get_stage_state(stage_name)
     order = repository.get_order_state(stage.order_name)
     _assert_action_allowed(
@@ -291,11 +306,7 @@ def get_reassignment_workers(
         stage=stage,
         actor=repository.current_user(),
     )
-    role = stage.operational_role
-    if not role:
-        route = _production_route(repository, order.production_path or "")
-        role = route.stage(stage.stage_type).operational_role
-    return repository.get_users_for_role(role)
+    return repository.get_users_for_roles(_roles_for_stage(repository, order, stage))
 
 
 def dispatch_order(
@@ -310,7 +321,7 @@ def dispatch_order(
 
     route = _production_route(repository, path)
     first = route.first_stage
-    repository.assert_worker_for_role(assignee, first.operational_role)
+    repository.assert_worker_for_roles(assignee, first.eligible_roles)
     repository.cancel_active_order_stages(order_name)
 
     stage = repository.create_stage(
@@ -320,12 +331,18 @@ def dispatch_order(
         sequence=first.sequence,
         department_label=first.department_label,
         operational_role=first.operational_role,
+        eligible_roles=first.eligible_roles,
     )
     repository.track_order_to_stage(order_name, path=path, stage_name=stage.name)
     repository.log_stage_event(
         stage.name,
         "Created",
-        {"path": path, "assignee": assignee, "shop_floor_dispatch": True},
+        {
+            "path": path,
+            "assignee": assignee,
+            "eligible_roles": list(first.eligible_roles),
+            "shop_floor_dispatch": True,
+        },
     )
     return {
         "name": order_name,
@@ -408,9 +425,9 @@ def handoff_to_next(
     if target_stage:
         if not next_assignee:
             raise ShopFloorCommandError("Select the next worker.")
-        repository.assert_worker_for_role(
+        repository.assert_worker_for_roles(
             next_assignee,
-            target_stage.operational_role,
+            target_stage.eligible_roles,
         )
     if stage.status == "Paused":
         repository.close_open_pause(stage_name, actor)
@@ -447,6 +464,7 @@ def handoff_to_next(
         sequence=target_stage.sequence,
         department_label=target_stage.department_label,
         operational_role=target_stage.operational_role,
+        eligible_roles=target_stage.eligible_roles,
     )
     repository.track_order_to_stage(stage.order_name, stage_name=next_stage.name)
     repository.log_stage_event(
@@ -455,6 +473,7 @@ def handoff_to_next(
         {
             "from_stage": stage_name,
             "assignee": next_assignee,
+            "eligible_roles": list(target_stage.eligible_roles),
             "shop_floor_handoff": True,
         },
     )
@@ -483,11 +502,8 @@ def reassign_worker(
         stage=stage,
         actor=repository.current_user(),
     )
-    role = stage.operational_role
-    if not role:
-        route = _production_route(repository, order.production_path or "")
-        role = route.stage(stage.stage_type).operational_role
-    repository.assert_worker_for_role(assignee, role)
+    roles = _roles_for_stage(repository, order, stage)
+    repository.assert_worker_for_roles(assignee, roles)
     if assignee == stage.assigned_to:
         return {
             "stage": stage.name,
