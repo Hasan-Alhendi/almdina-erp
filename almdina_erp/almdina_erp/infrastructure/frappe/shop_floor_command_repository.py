@@ -20,6 +20,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
+    decode_eligible_roles,
+)
 
 
 def _as_int(value: Any) -> int:
@@ -34,6 +37,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
 
     @staticmethod
     def _stage_state(stage: Any) -> StageState:
+        legacy_role = getattr(stage, "operational_role", None) or None
         return StageState(
             name=str(stage.name),
             order_name=str(stage.door_cutting_order),
@@ -42,7 +46,11 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             assigned_to=stage.assigned_to or None,
             sequence=_as_int(stage.sequence),
             department_label=getattr(stage, "department_label", None) or None,
-            operational_role=getattr(stage, "operational_role", None) or None,
+            operational_role=legacy_role,
+            eligible_roles=decode_eligible_roles(
+                getattr(stage, "eligible_roles_json", None),
+                legacy_role=legacy_role,
+            ),
             start_time=stage.start_time or None,
             paused_seconds=_as_int(stage.paused_seconds),
             piece_label=stage.piece_label or None,
@@ -80,11 +88,11 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
     def get_production_route(self, route_name: str):
         return production_routing_repository.get_route(route_name)
 
-    def assert_worker_for_role(self, user: str, role: str) -> None:
-        shop_floor_authorization.assert_enabled_user_has_role(user, role)
+    def assert_worker_for_roles(self, user: str, roles: tuple[str, ...]) -> None:
+        shop_floor_authorization.assert_enabled_user_has_any_role(user, roles)
 
-    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
-        return shop_floor_authorization.get_users_for_role(role)
+    def get_users_for_roles(self, roles: tuple[str, ...]) -> list[dict[str, Any]]:
+        return shop_floor_authorization.get_users_for_roles(roles)
 
     def cancel_active_order_stages(self, order_name: str) -> None:
         production_stage_repository.cancel_active_order_stages(order_name)
@@ -98,6 +106,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
         sequence: int,
         department_label: str | None = None,
         operational_role: str | None = None,
+        eligible_roles: tuple[str, ...] = (),
     ) -> StageState:
         stage = production_stage_repository.create_stage(
             order_name,
@@ -106,6 +115,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             sequence,
             department_label=department_label,
             operational_role=operational_role,
+            eligible_roles=eligible_roles,
         )
         return self._stage_state(stage)
 
