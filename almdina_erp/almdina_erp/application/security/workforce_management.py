@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import json
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.security.role_management import (
+    PROTECTED_ROLE_NAMES,
+    normalize_role_name,
+)
 from almdina_erp.almdina_erp.domain.security.workforce import PROFILES, profile_for_key
 
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 SUPPORTED_LANGUAGES = frozenset({"ar", "en"})
+MAX_WORKFORCE_ROLES = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +69,52 @@ def validate_temporary_password(password: str, *, email: str = "") -> str:
     return value
 
 
+def _role_values(raw: Any) -> Iterable[Any]:
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        value = raw.strip()
+        if not value:
+            return ()
+        if value.startswith("["):
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError as exc:
+                raise ValueError("Invalid role selection.") from exc
+            if not isinstance(decoded, list):
+                raise ValueError("Role selection must be a list.")
+            return decoded
+        return (value,)
+    if isinstance(raw, Mapping):
+        raise ValueError("Role selection must be a list.")
+    if isinstance(raw, Iterable):
+        return raw
+    raise ValueError("Role selection must be a list.")
+
+
+def normalize_role_selection(raw: Any) -> tuple[str, ...]:
+    """Normalize an explicit multi-role selection without adding hidden roles."""
+
+    roles: list[str] = []
+    seen: set[str] = set()
+    for value in _role_values(raw):
+        role = normalize_role_name(str(value or ""))
+        if role in PROTECTED_ROLE_NAMES:
+            raise ValueError(f"Protected role cannot be assigned here: {role}")
+        if role in seen:
+            continue
+        seen.add(role)
+        roles.append(role)
+    if not roles:
+        raise ValueError("Select at least one role for the workforce user.")
+    if len(roles) > MAX_WORKFORCE_ROLES:
+        raise ValueError(f"A user cannot receive more than {MAX_WORKFORCE_ROLES} roles here.")
+    return tuple(roles)
+
+
 def profile_catalog_payload() -> list[dict[str, Any]]:
+    """Legacy profile catalogue retained for older API clients."""
+
     return [
         {
             "key": profile.key,
@@ -80,6 +132,13 @@ def validate_profile(profile_key: str) -> str:
 
 def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
     source = dict(user or {})
+    roles = sorted(
+        {
+            str(role).strip()
+            for role in source.get("roles", ())
+            if str(role).strip()
+        }
+    )
     return {
         "email": str(source.get("email") or source.get("name") or ""),
         "first_name": str(source.get("first_name") or ""),
@@ -87,6 +146,7 @@ def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
         "full_name": str(source.get("full_name") or ""),
         "enabled": bool(source.get("enabled")),
         "language": str(source.get("language") or ""),
+        "roles": roles,
         "profile": str(source.get("profile") or ""),
         "default_workspace": str(source.get("default_workspace") or ""),
         "default_app": str(source.get("default_app") or ""),
@@ -94,10 +154,12 @@ def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
 
 
 __all__ = [
+    "MAX_WORKFORCE_ROLES",
     "SUPPORTED_LANGUAGES",
     "WorkforceIdentity",
     "audit_snapshot",
     "normalize_identity",
+    "normalize_role_selection",
     "profile_catalog_payload",
     "validate_profile",
     "validate_temporary_password",
