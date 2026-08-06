@@ -23,7 +23,7 @@
       "reqd": 1
     },
     {
-      "description": "معرّف ثابت للمرحلة، مثل CNC أو Sharyoun أو PVC.",
+      "description": "معرّف حر للمرحلة، مثل CNC أو Sharyoun أو PVC أو Laser.",
       "fieldname": "stage_type",
       "fieldtype": "Data",
       "in_list_view": 1,
@@ -31,7 +31,7 @@
       "reqd": 1
     },
     {
-      "description": "الاسم الذي يظهر للعامل، مثل CNC أو الشريون.",
+      "description": "الاسم الذي يظهر للعامل في واجهة الإنتاج.",
       "fieldname": "department_label",
       "fieldtype": "Data",
       "in_list_view": 1,
@@ -70,16 +70,21 @@
     },
     {
       "default": "1",
+      "description": "حقل توافق داخلي. كل مرحلة محفوظة في المسار تُنفذ فعليًا.",
       "fieldname": "required",
       "fieldtype": "Check",
-      "in_list_view": 1,
-      "label": "Required"
+      "hidden": 1,
+      "label": "Required",
+      "read_only": 1
     },
     {
-      "default": "1",
+      "default": "0",
+      "description": "محجوب حتى تتوفر قواعد تطبيق صريحة للمرحلة.",
       "fieldname": "auto_complete_if_not_applicable",
       "fieldtype": "Check",
-      "label": "Auto Complete If Not Applicable"
+      "hidden": 1,
+      "label": "Auto Complete If Not Applicable",
+      "read_only": 1
     }
   ],
   "istable": 1,
