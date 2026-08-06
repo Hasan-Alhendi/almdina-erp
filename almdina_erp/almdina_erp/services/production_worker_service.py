@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import frappe
 from frappe import _
 
@@ -13,7 +15,7 @@ _repository = FrappeShopFloorCommandRepository()
 
 
 @frappe.whitelist()
-def get_reassignment_workers(stage_name: str) -> list[dict[str, str]]:
+def get_reassignment_workers(stage_name: str) -> list[dict[str, Any]]:
     try:
         return commands.get_reassignment_workers(_repository, stage_name)
     except commands.ShopFloorPermissionDenied as error:
