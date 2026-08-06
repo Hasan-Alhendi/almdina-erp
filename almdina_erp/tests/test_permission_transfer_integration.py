@@ -5,7 +5,10 @@ import json
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from almdina_erp.almdina_erp.application.security.permission_templates import (
+from almdina_erp.almdina_erp.application.security.permission_matrix import (
+    normalize_capability_state,
+)
+from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_SCHEMA,
     PERMISSION_TRANSFER_VERSION,
 )
@@ -21,6 +24,12 @@ TARGET_ROLE = "Almdina Transfer Target Test"
 UNAUTHORIZED_ROLE = "Almdina Transfer Unauthorized Test"
 ADMIN_USER = "almdina.transfer.admin@example.com"
 UNAUTHORIZED_USER = "almdina.transfer.unauthorized@example.com"
+
+
+def manual_state(*capabilities: str) -> dict[str, bool]:
+    return normalize_capability_state(
+        {capability: True for capability in capabilities}
+    )
 
 
 class TestPermissionTransferIntegration(FrappeTestCase):
@@ -45,16 +54,14 @@ class TestPermissionTransferIntegration(FrappeTestCase):
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
-        frappe.db.delete(
-            "Almdina Permission Audit",
-            {"role": ["in", [ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE]]},
-        )
-        for role in (ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE):
+        roles = [ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE]
+        frappe.db.delete("Almdina Permission Audit", {"role": ["in", roles]})
+        for role in roles:
             frappe.db.delete("Custom DocPerm", {"role": role})
         for user in (ADMIN_USER, UNAUTHORIZED_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
-        for role in (ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE):
+        for role in roles:
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
@@ -120,49 +127,58 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         frappe.clear_cache()
         super().tearDown()
 
-    def test_console_exposes_templates_without_granting_them(self) -> None:
+    def test_console_is_manual_only_and_does_not_persist_on_open(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
             get_permission_console,
         )
 
         frappe.set_user(ADMIN_USER)
         before_rows = frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE})
-        before_audit = frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE})
+        before_audit = frappe.db.count(
+            "Almdina Permission Audit",
+            {"role": TARGET_ROLE},
+        )
         console = get_permission_console(TARGET_ROLE)
 
-        self.assertTrue(console["templates"])
-        self.assertEqual(console["transfer"]["schema"], PERMISSION_TRANSFER_SCHEMA)
-        self.assertEqual(console["transfer"]["version"], PERMISSION_TRANSFER_VERSION)
-        self.assertEqual(console["selected"]["role"], TARGET_ROLE)
-        self.assertEqual(frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE}), before_rows)
-        self.assertEqual(frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}), before_audit)
-
-    def test_template_preview_is_least_privilege_and_does_not_persist(self) -> None:
-        from almdina_erp.almdina_erp.services.permission_management_service import (
-            preview_permission_template,
+        self.assertNotIn("templates", console)
+        self.assertTrue(console["catalog"])
+        self.assertEqual(
+            console["transfer"]["schema"],
+            PERMISSION_TRANSFER_SCHEMA,
         )
-
-        frappe.set_user(ADMIN_USER)
-        preview = preview_permission_template(TARGET_ROLE, "production_operator")
-        self.assertEqual(preview["source"]["kind"], "template")
-        self.assertTrue(preview["capabilities"][Capability.START_ASSIGNED_STAGE])
-        self.assertTrue(preview["capabilities"][Capability.HANDOFF_ASSIGNED_STAGE])
-        self.assertFalse(preview["capabilities"][Capability.DISPATCH_ORDER])
-        self.assertFalse(preview["capabilities"][Capability.VIEW_FINANCIAL_REPORTS])
-        self.assertEqual(frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE}), 0)
-        self.assertEqual(frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}), 0)
+        self.assertEqual(
+            console["transfer"]["version"],
+            PERMISSION_TRANSFER_VERSION,
+        )
+        self.assertEqual(console["selected"]["role"], TARGET_ROLE)
+        self.assertEqual(
+            frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE}),
+            before_rows,
+        )
+        self.assertEqual(
+            frappe.db.count(
+                "Almdina Permission Audit",
+                {"role": TARGET_ROLE},
+            ),
+            before_audit,
+        )
 
     def test_export_import_preview_and_explicit_save_round_trip(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
             export_role_permissions,
             preview_permission_import,
-            preview_permission_template,
             update_role_permissions,
         )
 
         frappe.set_user(ADMIN_USER)
-        source_preview = preview_permission_template(SOURCE_ROLE, "planner_designer")
-        update_role_permissions(SOURCE_ROLE, source_preview["capabilities"])
+        source_state = manual_state(
+            Capability.VIEW_ORDERS,
+            Capability.VIEW_CUTTING_PLAN,
+            Capability.VIEW_DRAWING_WORKSPACE,
+            Capability.UPLOAD_DXF,
+            Capability.APPROVE_DXF,
+        )
+        update_role_permissions(SOURCE_ROLE, source_state)
         exported = export_role_permissions(SOURCE_ROLE)
 
         self.assertEqual(exported["schema"], PERMISSION_TRANSFER_SCHEMA)
@@ -179,18 +195,29 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         self.assertEqual(imported["source"]["role"], SOURCE_ROLE)
         self.assertTrue(imported["capabilities"][Capability.APPROVE_DXF])
         self.assertFalse(imported["capabilities"][Capability.VIEW_COSTS])
-        self.assertEqual(frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE}), 0)
+        self.assertEqual(
+            frappe.db.count("Custom DocPerm", {"role": TARGET_ROLE}),
+            0,
+        )
 
-        saved = update_role_permissions(TARGET_ROLE, imported["capabilities"])
+        saved = update_role_permissions(
+            TARGET_ROLE,
+            imported["capabilities"],
+        )
         self.assertTrue(saved["changed"])
         self.assertTrue(saved["capabilities"][Capability.APPROVE_DXF])
-        self.assertEqual(frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}), 1)
+        self.assertEqual(
+            frappe.db.count(
+                "Almdina Permission Audit",
+                {"role": TARGET_ROLE},
+            ),
+            1,
+        )
 
     def test_tampered_and_unauthorized_transfers_are_rejected(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
             export_role_permissions,
             preview_permission_import,
-            preview_permission_template,
         )
 
         frappe.set_user(ADMIN_USER)
@@ -202,7 +229,6 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         frappe.set_user(UNAUTHORIZED_USER)
         for call in (
             lambda: export_role_permissions(SOURCE_ROLE),
-            lambda: preview_permission_template(TARGET_ROLE, "order_entry"),
             lambda: preview_permission_import(TARGET_ROLE, document),
         ):
             with self.assertRaises(frappe.PermissionError):
