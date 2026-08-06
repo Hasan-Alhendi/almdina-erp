@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
 from almdina_erp.almdina_erp.application.security.workforce_management import (
     audit_snapshot,
     normalize_identity,
+    normalize_role_selection,
     validate_temporary_password,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -74,17 +75,17 @@ class TestWorkforceAuthorization(unittest.TestCase):
         self.assertFalse(active.allowed)
         self.assertEqual(active.code, "active_assignments")
 
-        profile_change = decide_workforce_action(
+        role_change = decide_workforce_action(
             {Capability.ASSIGN_WORKFORCE_PROFILE},
-            action=WorkforceAction.ASSIGN_PROFILE,
+            action=WorkforceAction.ASSIGN_ROLES,
             facts=WorkforceFacts(
                 actor="manager@example.com",
                 target_user="worker@example.com",
                 active_assignments=1,
             ),
         )
-        self.assertFalse(profile_change.allowed)
-        self.assertEqual(profile_change.code, "active_assignments")
+        self.assertFalse(role_change.allowed)
+        self.assertEqual(role_change.code, "active_assignments")
 
     def test_protected_and_external_users_are_blocked(self) -> None:
         protected = decide_workforce_action(
@@ -105,7 +106,21 @@ class TestWorkforceAuthorization(unittest.TestCase):
         )
         self.assertEqual(external.code, "outside_scope")
 
-    def test_profiles_are_operational_and_inferred_without_unrelated_roles(self) -> None:
+    def test_explicit_role_selection_is_deduplicated_and_protected(self) -> None:
+        self.assertEqual(
+            normalize_role_selection(["عامل CNC", "عامل رسم", "عامل CNC"]),
+            ("عامل CNC", "عامل رسم"),
+        )
+        self.assertEqual(
+            normalize_role_selection('["عامل رسم", "عامل CNC"]'),
+            ("عامل رسم", "عامل CNC"),
+        )
+        with self.assertRaisesRegex(ValueError, "Protected role"):
+            normalize_role_selection(["System Manager"])
+        with self.assertRaisesRegex(ValueError, "at least one role"):
+            normalize_role_selection([])
+
+    def test_profiles_remain_legacy_input_only_and_are_still_inferred(self) -> None:
         drawing = PROFILES["drawing_operator"]
         self.assertEqual(infer_profile((*drawing.roles, "Some Unrelated Role")), "drawing_operator")
         self.assertEqual(
@@ -139,10 +154,12 @@ class TestWorkforceAuthorization(unittest.TestCase):
                 "email": "worker@example.com",
                 "first_name": "Worker",
                 "enabled": True,
+                "roles": ["عامل رسم", "عامل CNC", "عامل رسم"],
                 "temporary_password": "NeverLog123",
                 "new_password": "NeverLog456",
             }
         )
+        self.assertEqual(snapshot["roles"], ["عامل CNC", "عامل رسم"])
         self.assertNotIn("temporary_password", snapshot)
         self.assertNotIn("new_password", snapshot)
         self.assertNotIn("NeverLog", repr(snapshot))
