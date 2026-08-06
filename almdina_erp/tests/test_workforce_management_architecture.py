@@ -60,7 +60,7 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertNotIn("update_password", source)
         self.assertNotIn("frappe.get_doc", source)
 
-    def test_workforce_page_is_role_free_responsive_and_race_safe(self) -> None:
+    def test_workforce_page_uses_dynamic_multi_role_selection(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
         metadata = json.loads(PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(metadata["roles"], [])
@@ -72,18 +72,32 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn("requestId", source)
         self.assertIn("@media(max-width:600px)", source)
         self.assertIn('fieldtype:"Password"', source)
+        self.assertIn('fieldtype:"MultiSelectList"', source)
+        self.assertIn('fieldname:"roles"', source)
+        self.assertIn("workforce_roles", source)
+        self.assertNotIn('fieldname:"profile"', source)
         self.assertNotIn("frappe.user_roles", source)
         self.assertNotIn("frappe.get_roles", source)
         self.assertNotIn('set_route("Form", "User"', source)
+
+    def test_role_replacement_preserves_unmanaged_technical_roles(self) -> None:
+        repository = REPOSITORY.read_text(encoding="utf-8")
+        self.assertIn("managed_role_names", repository)
+        self.assertIn("Almdina Role Metadata", repository)
+        self.assertIn("if row.role not in managed_roles", repository)
+        self.assertIn("required = list(dict.fromkeys", repository)
+        self.assertNotIn('user.set("roles", roles)', repository)
 
     def test_audit_is_append_only_private_and_password_free(self) -> None:
         metadata = json.loads(AUDIT_JSON.read_text(encoding="utf-8"))
         controller = AUDIT_JSON.with_suffix(".py").read_text(encoding="utf-8")
         repository = REPOSITORY.read_text(encoding="utf-8")
+        application = APPLICATION.read_text(encoding="utf-8")
         self.assertEqual(metadata["permissions"], [])
         self.assertEqual(metadata["allow_rename"], 0)
         self.assertIn("User audit records are immutable", controller)
         self.assertIn("audit_snapshot", repository)
+        self.assertIn('"roles": roles', application)
         self.assertNotIn('"temporary_password":', repository)
         self.assertNotIn('"new_password":', repository)
 
@@ -94,12 +108,6 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn("factory-workforce", shell)
         self.assertIn('any: ["view_users", "manage_users"]', shell)
         self.assertNotIn("frappe.user_roles", shell)
-
-    def test_profile_changes_preserve_unrelated_roles_by_construction(self) -> None:
-        repository = REPOSITORY.read_text(encoding="utf-8")
-        self.assertIn("role not in MANAGED_OPERATIONAL_ROLES", repository)
-        self.assertIn("required = list(dict.fromkeys", repository)
-        self.assertNotIn("user.set(\"roles\", profile.roles)", repository)
 
 
 if __name__ == "__main__":
