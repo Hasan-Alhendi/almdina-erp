@@ -43,7 +43,15 @@ class RoleDefinition:
 
 @dataclass(frozen=True, slots=True)
 class RoleFacts:
-    actor: str
+    """State needed to decide one role action.
+
+    Actor is optional at this pure domain boundary because current rules are
+    based on the target role and its references. Application services may pass
+    it for audit and future actor-aware policies without coupling this module to
+    Frappe sessions.
+    """
+
+    actor: str = ""
     role_name: str = ""
     role_exists: bool = True
     role_enabled: bool = True
