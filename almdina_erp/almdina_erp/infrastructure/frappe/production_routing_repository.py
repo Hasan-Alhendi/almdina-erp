@@ -43,10 +43,11 @@ def get_route(name: str, *, require_enabled: bool = True) -> ProductionRoute:
     if require_enabled and cint(document.disabled):
         raise ValueError(f"Production route {resolved} is disabled.")
 
+    # Every persisted row is an executable stage. Historical ``required`` flags
+    # are normalized by a patch but never used to hide route work at runtime.
     stages = tuple(
         _stage_definition(row)
         for row in sorted(document.stages or (), key=lambda item: cint(item.sequence))
-        if cint(row.required)
     )
     return ProductionRoute(
         name=str(document.name),
