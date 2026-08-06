@@ -7,6 +7,7 @@ import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
 from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
+    decode_eligible_roles,
     eligible_roles_display,
     encode_eligible_roles,
 )
@@ -58,14 +59,20 @@ def create_stage(
     operational_role: str | None = None,
     eligible_roles: Iterable[str] | str = (),
 ) -> Any:
+    roles = decode_eligible_roles(
+        eligible_roles,
+        legacy_role=operational_role,
+    )
     stage = frappe.new_doc("Production Stage")
     stage.door_cutting_order = order_name
     stage.sequence = sequence
     stage.stage_type = stage_type
     stage.department_label = department_label or stage_type
-    stage.eligible_roles_json = encode_eligible_roles(eligible_roles)
-    stage.eligible_roles_display = eligible_roles_display(eligible_roles)
-    stage.operational_role = operational_role or ""
+    stage.eligible_roles_json = encode_eligible_roles(roles)
+    stage.eligible_roles_display = eligible_roles_display(roles)
+    # The legacy Link is a compatibility snapshot only. Derive it from the
+    # canonical role set so the three persisted fields can never disagree.
+    stage.operational_role = roles[0] if roles else ""
     stage.status = "Pending"
     stage.assigned_to = assignee
     stage.insert(ignore_permissions=True)
