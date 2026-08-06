@@ -46,6 +46,28 @@ def _has_permission_audit(role: str) -> bool:
     )
 
 
+def _has_assigned_legacy_user(role: str) -> bool:
+    """Return whether a real user still depends on one historical role.
+
+    Fresh installations create the historical Role records for compatibility,
+    but an unassigned role must remain empty.  The bootstrap is an upgrade aid
+    for existing users, not a hidden permission template for future users.
+    """
+
+    if not frappe.db.exists("DocType", "Has Role"):
+        return False
+    return bool(
+        frappe.db.exists(
+            "Has Role",
+            {
+                "parenttype": "User",
+                "role": role,
+                "parent": ["not in", ["Administrator", "Guest"]],
+            },
+        )
+    )
+
+
 def _has_explicit_capability_grant(
     role: str,
     doctypes: list[str],
@@ -88,7 +110,7 @@ def _has_explicit_matrix(role: str, doctypes: list[str]) -> bool:
 
 
 def bootstrap_legacy_role_permissions() -> list[str]:
-    """Restore historical Almdina roles without overwriting configured matrices."""
+    """Upgrade assigned historical roles without seeding fresh role records."""
 
     if not frappe.db.exists("DocType", "Custom DocPerm"):
         return []
@@ -99,6 +121,8 @@ def bootstrap_legacy_role_permissions() -> list[str]:
 
     for role in legacy_roles():
         if not frappe.db.exists("Role", role):
+            continue
+        if not _has_assigned_legacy_user(role):
             continue
         if _has_explicit_matrix(role, doctypes):
             continue
