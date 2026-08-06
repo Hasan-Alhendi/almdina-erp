@@ -15,7 +15,7 @@ class AlmdinaWorkforceConsole {
         this.$main = $(wrapper).find(".layout-main-section");
         this.state = {
             users: [],
-            profiles: [],
+            roles: [],
             permissions: {},
             summary: {},
             search: "",
@@ -37,7 +37,7 @@ class AlmdinaWorkforceConsole {
             .aw-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 180px auto;gap:10px;align-items:end;padding:14px;background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;position:sticky;top:58px;z-index:12;box-shadow:0 4px 16px rgba(0,0,0,.04)}
             .aw-field label{display:block;font-weight:700;font-size:12px;color:var(--text-muted,#6b7280);margin-bottom:6px}.aw-field input,.aw-field select{width:100%;min-height:42px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px;padding:8px 12px;background:var(--control-bg,#fff)}
             .aw-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.aw-stat{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:14px}.aw-stat span{display:block;color:var(--text-muted,#6b7280);font-size:12px;font-weight:700}.aw-stat b{display:block;font-size:25px;margin-top:5px}
-            .aw-list{display:grid;gap:12px}.aw-card{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.035)}.aw-card-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.aw-name{font-size:17px;font-weight:800;margin:0}.aw-email{direction:ltr;text-align:right;color:var(--text-muted,#6b7280);font-size:13px;margin-top:3px}.aw-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.aw-badge{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--subtle-fg,#f4f5f6)}.aw-badge.is-enabled{background:#e8f7ee;color:#18794e}.aw-badge.is-disabled{background:#fdecec;color:#b42318}.aw-badge.is-warning{background:#fff4d6;color:#8a5b00}
+            .aw-list{display:grid;gap:12px}.aw-card{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.035)}.aw-card-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.aw-name{font-size:17px;font-weight:800;margin:0}.aw-email{direction:ltr;text-align:right;color:var(--text-muted,#6b7280);font-size:13px;margin-top:3px}.aw-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.aw-badge{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--subtle-fg,#f4f5f6)}.aw-badge.is-enabled{background:#e8f7ee;color:#18794e}.aw-badge.is-disabled{background:#fdecec;color:#b42318}.aw-badge.is-warning{background:#fff4d6;color:#8a5b00}.aw-badge.is-role{background:#edf4ff;color:#245ea8}
             .aw-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aw-detail span{display:block;color:var(--text-muted,#6b7280);font-size:11px;font-weight:700}.aw-detail b{display:block;margin-top:4px;font-size:13px;overflow-wrap:anywhere}.aw-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.aw-actions .btn{min-height:38px;border-radius:9px;font-weight:700}.aw-empty{padding:42px 18px;text-align:center;border:1px dashed var(--border-color,#d7dde3);border-radius:16px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}
             .aw-loading{padding:46px;text-align:center;color:var(--text-muted,#6b7280)}.aw-error{padding:22px;border:1px solid #f5b7b1;background:#fff5f4;color:#9f2d20;border-radius:14px}.aw-audit{display:grid;gap:8px;max-height:430px;overflow:auto}.aw-audit-item{border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:11px}.aw-audit-title{display:flex;justify-content:space-between;gap:10px;font-weight:800}.aw-audit-meta{font-size:12px;color:var(--text-muted,#6b7280);margin-top:5px}.aw-audit-summary{margin-top:7px;font-size:13px}
             @media(max-width:900px){.aw-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.aw-details{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -72,13 +72,22 @@ class AlmdinaWorkforceConsole {
         );
     }
 
-    profileOptions() {
-        return this.state.profiles.map(profile => profile.key).join("\n");
+    canAssignRoles(user) {
+        return this.actionAllowed(user, "assign_roles") || this.actionAllowed(user, "assign_profile");
     }
 
-    profileLabel(key) {
-        const profile = this.state.profiles.find(item => item.key === key);
-        return profile ? profile.label : key || __("غير محدد");
+    roleOptions(txt = "") {
+        const query = String(txt || "").trim().toLowerCase();
+        return this.state.roles
+            .filter(role => {
+                if (!query) return true;
+                return [role.name, role.label, role.description]
+                    .some(value => String(value || "").toLowerCase().includes(query));
+            })
+            .map(role => ({
+                value: role.name,
+                description: role.description || role.label || role.name,
+            }));
     }
 
     call(method, args = {}, freezeMessage = "") {
@@ -113,7 +122,7 @@ class AlmdinaWorkforceConsole {
         }).then(data => {
             if (requestId !== this.requestId) return;
             this.state.users = Array.isArray(data.users) ? data.users : [];
-            this.state.profiles = Array.isArray(data.profiles) ? data.profiles : [];
+            this.state.roles = Array.isArray(data.roles) ? data.roles : [];
             this.state.permissions = data.permissions || {};
             this.state.summary = data.summary || {};
             this.page.btn_primary && this.page.btn_primary.toggle(this.can("create_users") || this.can("manage_users"));
@@ -176,9 +185,17 @@ class AlmdinaWorkforceConsole {
         return this.state.users.map(user => this.userCardHtml(user)).join("");
     }
 
+    roleBadges(user) {
+        const roles = Array.isArray(user.workforce_roles) ? user.workforce_roles : [];
+        if (!roles.length) {
+            return `<span class="aw-badge is-warning">${__("دون دور تشغيلي")}</span>`;
+        }
+        return roles.map(role => `<span class="aw-badge is-role">${this.escape(role)}</span>`).join("");
+    }
+
     userCardHtml(user) {
         const active = Number(user.active_assignments || 0);
-        const canEdit = this.actionAllowed(user, "edit") || this.actionAllowed(user, "assign_profile");
+        const canEdit = this.actionAllowed(user, "edit") || this.canAssignRoles(user);
         const buttons = [];
         if (canEdit) buttons.push(`<button class="btn btn-default aw-edit" data-user="${this.escape(user.email)}">${__("تعديل")}</button>`);
         if (this.actionAllowed(user, "reset_password")) buttons.push(`<button class="btn btn-default aw-password" data-user="${this.escape(user.email)}">${__("كلمة مرور مؤقتة")}</button>`);
@@ -194,7 +211,7 @@ class AlmdinaWorkforceConsole {
                         <div class="aw-email">${this.escape(user.email)}</div>
                         <div class="aw-badges">
                             <span class="aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}">${user.enabled ? __("مفعّل") : __("معطّل")}</span>
-                            <span class="aw-badge">${this.escape(user.profile_label)}</span>
+                            ${this.roleBadges(user)}
                             ${active ? `<span class="aw-badge is-warning">${__("مراحل نشطة")}: ${active}</span>` : ""}
                         </div>
                     </div>
@@ -204,7 +221,7 @@ class AlmdinaWorkforceConsole {
                     <div class="aw-detail"><span>${__("مساحة العمل")}</span><b>${this.escape(user.default_workspace || "—")}</b></div>
                     <div class="aw-detail"><span>${__("آخر نشاط")}</span><b>${this.escape(user.last_active || "—")}</b></div>
                 </div>
-                ${active && this.can("disable_users") ? `<div class="text-muted" style="margin-top:10px;font-size:12px">${__("يجب إعادة إسناد المراحل النشطة قبل تعطيل هذا المستخدم.")}</div>` : ""}
+                ${active && this.can("disable_users") ? `<div class="text-muted" style="margin-top:10px;font-size:12px">${__("يجب إعادة إسناد المراحل النشطة قبل تغيير أدوار هذا المستخدم أو تعطيله.")}</div>` : ""}
                 <div class="aw-actions">${buttons.join("")}</div>
             </article>
         `;
@@ -240,6 +257,17 @@ class AlmdinaWorkforceConsole {
         this.$main.find(".aw-audit-open").on("click", event => this.openAudit(this.findUser(event.currentTarget.dataset.user)));
     }
 
+    rolesField({required = false} = {}) {
+        return {
+            fieldname:"roles",
+            fieldtype:"MultiSelectList",
+            label:__("الأدوار"),
+            reqd:required ? 1 : 0,
+            get_data:txt => this.roleOptions(txt),
+            description:__("اختر دورًا واحدًا أو عدة أدوار. الأدوار التقنية الأخرى الموجودة على الحساب ستبقى محفوظة."),
+        };
+    }
+
     openCreateDialog() {
         if (!(this.can("create_users") || this.can("manage_users"))) return;
         const dialog = new frappe.ui.Dialog({
@@ -248,7 +276,7 @@ class AlmdinaWorkforceConsole {
                 {fieldname:"first_name",fieldtype:"Data",label:__("الاسم الأول"),reqd:1},
                 {fieldname:"last_name",fieldtype:"Data",label:__("الاسم الأخير")},
                 {fieldname:"email",fieldtype:"Data",label:__("البريد الإلكتروني"),options:"Email",reqd:1},
-                {fieldname:"profile",fieldtype:"Select",label:__("الملف التشغيلي"),options:this.profileOptions(),reqd:1},
+                this.rolesField({required:true}),
                 {fieldname:"language",fieldtype:"Select",label:__("اللغة"),options:"ar\nen",default:"ar",reqd:1},
                 {fieldname:"temporary_password",fieldtype:"Password",label:__("كلمة المرور المؤقتة"),description:__("10 محارف على الأقل، وتحتوي حرفًا ورقمًا."),reqd:1},
             ],
@@ -268,7 +296,7 @@ class AlmdinaWorkforceConsole {
     openEditDialog(user) {
         if (!user) return;
         const canIdentity = this.actionAllowed(user, "edit");
-        const canProfile = this.actionAllowed(user, "assign_profile");
+        const canRoles = this.canAssignRoles(user);
         const fields = [
             {fieldname:"email",fieldtype:"Data",label:__("البريد الإلكتروني"),default:user.email,read_only:1},
         ];
@@ -279,16 +307,7 @@ class AlmdinaWorkforceConsole {
                 {fieldname:"language",fieldtype:"Select",label:__("اللغة"),options:"ar\nen",default:user.language || "ar",reqd:1}
             );
         }
-        if (canProfile) {
-            fields.push({
-                fieldname:"profile",
-                fieldtype:"Select",
-                label:__("الملف التشغيلي"),
-                options:this.profileOptions(),
-                default:this.state.profiles.some(profile => profile.key === user.profile) ? user.profile : "",
-                description:user.profile === "custom" ? __("الحساب يملك حاليًا ملفًا مخصصًا. اختيار قيمة سيستبدل الأدوار التشغيلية المدارة فقط.") : "",
-            });
-        }
+        if (canRoles) fields.push(this.rolesField({required:true}));
         const dialog = new frappe.ui.Dialog({
             title: `${__("تعديل المستخدم")}: ${user.full_name || user.email}`,
             fields,
@@ -300,7 +319,7 @@ class AlmdinaWorkforceConsole {
                     data.last_name = values.last_name;
                     data.language = values.language;
                 }
-                if (canProfile && values.profile) data.profile = values.profile;
+                if (canRoles) data.roles = values.roles;
                 dialog.get_primary_btn().prop("disabled", true);
                 this.call("update_workforce_user", {user:user.email,data}, __("جاري حفظ المستخدم...")).then(() => {
                     dialog.hide();
@@ -310,6 +329,9 @@ class AlmdinaWorkforceConsole {
             },
         });
         dialog.show();
+        if (canRoles) {
+            dialog.set_value("roles", Array.isArray(user.workforce_roles) ? user.workforce_roles : []);
+        }
     }
 
     openPasswordDialog(user) {
