@@ -272,21 +272,23 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         combined = INSTALL_PATH.read_text(encoding="utf-8") + PROVISION_PATH.read_text(encoding="utf-8")
         self.assertNotIn("DEFAULT_OPERATOR_PASSWORD", combined)
         self.assertNotIn("Almdina@123", combined)
-        self.assertIn("temporary_password", combined)
-        self.assertIn("Pass password explicitly", combined)
+        self.assertNotIn("update_password", INSTALL_PATH.read_text(encoding="utf-8"))
 
-    def test_order_entry_seed_uses_least_privilege_profile(self) -> None:
+    def test_install_does_not_seed_fixed_roles_users_or_routes(self) -> None:
         source = INSTALL_PATH.read_text(encoding="utf-8")
-        self.assertIn('"profile": "order_entry"', source)
-        order_entry_block = source.split("ORDER_ENTRY_USERS =", 1)[1].split("DEFAULT_ROUTING_NAME =", 1)[0]
-        for broad_role in (
-            "Production Manager",
-            "Stock Manager",
-            "Accounts Management",
-            "Cutting Operator",
-            "Edge Operator",
+        for token in (
+            "ROLES =",
+            "OPERATOR_USERS =",
+            "ORDER_ENTRY_USERS =",
+            "DEFAULT_ROUTING_NAME",
+            "def seed_roles",
+            "def seed_operator_users",
+            "def seed_order_entry_users",
+            "def seed_default_routing",
         ):
-            self.assertNotIn(broad_role, order_entry_block)
+            self.assertNotIn(token, source)
+        self.assertIn("without inventing roles, users, or routes", source)
+        self.assertNotIn('"default_production_routing":', source)
 
 
 if __name__ == "__main__":
