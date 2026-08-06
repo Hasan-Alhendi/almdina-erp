@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.security.role_management import (
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_references import (
     configured_role_counts,
+    rename_configured_role_references,
 )
 
 
@@ -297,6 +298,11 @@ class FrappeRoleRepository:
             "name",
         )
         if target != current:
+            # JSON role sets are not Link fields, so Frappe cannot rename them.
+            # Update them in the same transaction before the canonical Role is
+            # renamed; any later failure rolls the whole request back safely.
+            for doctype in ("Production Routing Stage", "Production Stage"):
+                rename_configured_role_references(doctype, current, target)
             frappe.rename_doc("Role", current, target, force=False)
         role_document = frappe.get_doc("Role", target)
         if role_document.role_name != target:
