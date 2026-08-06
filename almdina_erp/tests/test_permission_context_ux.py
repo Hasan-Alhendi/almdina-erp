@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
@@ -67,7 +68,7 @@ def test_shared_shell_keeps_desk_and_uses_navigation_context() -> None:
     assert "shared_shell" in source
     assert "!nav.shared_shell || !nav.home_page || !routeIsRoot()" in source
     assert "frappe.user_roles" not in source
-    assert "frappe.set_route =" not in source
+    assert re.search(r"frappe\.set_route\s*=(?!=)", source) is None
     assert "MutationObserver" not in source
     for hidden_chrome in (".awesomebar", ".body-sidebar", ".notifications-icon"):
         assert hidden_chrome not in source
