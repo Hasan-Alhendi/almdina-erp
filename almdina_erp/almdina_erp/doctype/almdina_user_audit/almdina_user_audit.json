@@ -29,7 +29,7 @@
       "fieldtype": "Select",
       "in_list_view": 1,
       "label": "Action",
-      "options": "Created\nIdentity Updated\nProfile Changed\nEnabled\nDisabled\nPassword Reset",
+      "options": "Created\nIdentity Updated\nRoles Changed\nProfile Changed\nEnabled\nDisabled\nPassword Reset",
       "read_only": 1,
       "reqd": 1
     },
