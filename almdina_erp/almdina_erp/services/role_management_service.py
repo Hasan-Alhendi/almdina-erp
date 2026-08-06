@@ -5,7 +5,6 @@ from typing import Any, Callable, TypeVar
 
 import frappe
 from frappe import _
-from frappe.utils import cint
 
 from almdina_erp.almdina_erp.application.security.role_administration import (
     RoleAdministration,
