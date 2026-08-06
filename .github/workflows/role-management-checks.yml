@@ -47,6 +47,7 @@ jobs:
             almdina_erp.tests.test_role_administration_application \
             almdina_erp.tests.test_role_administration_architecture \
             almdina_erp.tests.test_routing_role_references \
+            almdina_erp.tests.test_routing_role_migration \
             almdina_erp.tests.test_role_console_ui
 
       - name: Validate role console JavaScript
