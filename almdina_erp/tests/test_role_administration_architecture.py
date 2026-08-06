@@ -22,6 +22,13 @@ REPOSITORY = (
     / "frappe"
     / "role_repository.py"
 )
+ROUTING_REFERENCES = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "routing_role_references.py"
+)
 SERVICE = ROOT / "almdina_erp" / "services" / "role_management_service.py"
 METADATA = (
     ROOT
@@ -92,6 +99,20 @@ class TestRoleAdministrationArchitecture(unittest.TestCase):
         self.assertNotIn('frappe.get_doc("Role"', service)
         self.assertNotIn("frappe.db.sql", service)
         self.assertIn("RoleAdministration(_repository)", service)
+
+    def test_role_rename_updates_non_link_routing_snapshots(self) -> None:
+        repository = REPOSITORY.read_text(encoding="utf-8")
+        references = ROUTING_REFERENCES.read_text(encoding="utf-8")
+        update_block = repository.split("def update_role", 1)[1].split(
+            "def set_role_enabled", 1
+        )[0]
+        self.assertIn("rename_configured_role_references", update_block)
+        self.assertIn('"Production Routing Stage"', update_block)
+        self.assertIn('"Production Stage"', update_block)
+        self.assertIn("def rename_configured_role_references", references)
+        self.assertIn('values["eligible_roles_json"]', references)
+        self.assertIn('values["eligible_roles_display"]', references)
+        self.assertIn('values["operational_role"]', references)
 
     def test_every_role_endpoint_is_server_authorized(self) -> None:
         source = SERVICE.read_text(encoding="utf-8")
