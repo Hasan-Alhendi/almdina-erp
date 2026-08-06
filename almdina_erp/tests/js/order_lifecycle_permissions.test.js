@@ -16,6 +16,7 @@ function makeForm(name = "DCO-TEST-001") {
     return {
         doc: { name, status: "Pending Review", docstatus: 0 },
         __almdina_lifecycle_context: null,
+        __almdina_edit_session: null,
         added,
         removed,
         is_new() {
@@ -138,6 +139,8 @@ function load(capabilities, responseFactory) {
     });
 
     const frm = makeForm();
+    assert.equal(loaded.api.orderCanEdit(frm), false);
+    frm.__almdina_edit_session = { active: true };
     assert.equal(loaded.api.orderCanEdit(frm), true);
     await loaded.api.loadContext(frm);
     assert.equal(frm.__almdina_lifecycle_context.order_name, "DCO-TEST-001");
@@ -172,6 +175,7 @@ function load(capabilities, responseFactory) {
     const denied = load(new Set(), () => lifecycle);
     const deniedForm = makeForm();
     deniedForm.__almdina_lifecycle_context = lifecycle;
+    deniedForm.__almdina_edit_session = { active: true };
     assert.equal(denied.api.orderCanEdit(deniedForm), true);
     deniedForm.__almdina_lifecycle_context = null;
     assert.equal(denied.api.orderCanEdit(deniedForm), false);
