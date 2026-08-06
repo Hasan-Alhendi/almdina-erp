@@ -14,6 +14,9 @@ from almdina_erp.almdina_erp.domain.security.role_management import (
     RoleDefinition,
     normalize_role_name,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_references import (
+    configured_role_counts,
+)
 
 
 _METADATA_DOCTYPE = "Almdina Role Metadata"
@@ -83,9 +86,6 @@ class FrappeRoleRepository:
             role_field: ["in", roles],
             **dict(filters or {}),
         }
-        # Frappe v16 rejects SQL aggregate expressions supplied as strings in
-        # get_all(fields=...).  Counting the narrow role projection in Python
-        # keeps this adapter version-safe and avoids raw dynamic SQL identifiers.
         rows = frappe.get_all(
             doctype,
             filters=conditions,
@@ -118,23 +118,20 @@ class FrappeRoleRepository:
             self._group_count("DocPerm", "role", roles),
             self._group_count("Custom DocPerm", "role", roles),
         )
-        production_routing_references = self._group_count(
+        production_routing_references = configured_role_counts(
             "Production Routing Stage",
-            "operational_role",
             roles,
         )
         workflow_references = self._sum_counts(
             self._group_count("Workflow Transition", "allowed", roles),
             self._group_count("Workflow Document State", "allow_edit", roles),
         )
-        production_stage_references = self._group_count(
+        production_stage_references = configured_role_counts(
             "Production Stage",
-            "operational_role",
             roles,
         )
-        active_stage_references = self._group_count(
+        active_stage_references = configured_role_counts(
             "Production Stage",
-            "operational_role",
             roles,
             filters={"status": ["not in", ["Completed", "Cancelled"]]},
         )
@@ -242,12 +239,7 @@ class FrappeRoleRepository:
             raise ValueError("Role does not exist.")
         return self._snapshots(list(rows))[0]
 
-    def _ensure_metadata(
-        self,
-        role: str,
-        *,
-        description: str,
-    ) -> Any:
+    def _ensure_metadata(self, role: str, *, description: str) -> Any:
         existing = frappe.db.get_value(
             _METADATA_DOCTYPE,
             {"role": role},
@@ -281,10 +273,7 @@ class FrappeRoleRepository:
                 "is_custom": 1,
             }
         ).insert(ignore_permissions=True)
-        self._ensure_metadata(
-            str(document.name),
-            description=definition.description,
-        )
+        self._ensure_metadata(str(document.name), description=definition.description)
         frappe.clear_cache()
         return self.get_role(str(document.name))
 
@@ -407,16 +396,8 @@ class FrappeRoleRepository:
                 "changed_on": frappe.utils.now(),
                 "summary": summary,
                 "changed_fields": ", ".join(changed_fields),
-                "before_json": json.dumps(
-                    before_safe,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ),
-                "after_json": json.dumps(
-                    after_safe,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ),
+                "before_json": json.dumps(before_safe, ensure_ascii=False, sort_keys=True),
+                "after_json": json.dumps(after_safe, ensure_ascii=False, sort_keys=True),
             }
         ).insert(ignore_permissions=True)
         return str(document.name)
