@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 import frappe
 from frappe import _
@@ -97,7 +98,7 @@ def assert_enabled_user_has_stage_role(user: str, stage_type: str) -> None:
     )
 
 
-def get_users_for_stage(stage_type: str) -> list[dict[str, str]]:
+def get_users_for_stage(stage_type: str) -> list[dict[str, Any]]:
     """Compatibility endpoint cannot infer roles from a stage code anymore."""
 
     del stage_type
@@ -108,7 +109,7 @@ def get_users_for_roles(
     roles: Iterable[str] | str,
     *,
     required_capabilities: Iterable[str] = WORKER_EXECUTION_CAPABILITIES,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     eligible_roles = normalize_eligible_roles(roles)
     if not eligible_roles:
         return []
@@ -128,12 +129,14 @@ def get_users_for_roles(
         as_dict=True,
     )
     required = frozenset(required_capabilities)
-    result: list[dict[str, str]] = []
+    result: list[dict[str, Any]] = []
     for row in rows:
         capabilities = granted_capabilities(str(row.name))
         if required.difference(capabilities):
             continue
-        user_roles = sorted(set(frappe.get_roles(str(row.name))).intersection(eligible_roles))
+        user_roles = sorted(
+            set(frappe.get_roles(str(row.name))).intersection(eligible_roles)
+        )
         result.append(
             {
                 "name": str(row.name),
@@ -144,7 +147,7 @@ def get_users_for_roles(
     return result
 
 
-def get_users_for_role(role: str) -> list[dict[str, str]]:
+def get_users_for_role(role: str) -> list[dict[str, Any]]:
     return get_users_for_roles((role,))
 
 
