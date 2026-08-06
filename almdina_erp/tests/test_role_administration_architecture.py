@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import unittest
 from pathlib import Path
@@ -37,6 +38,17 @@ AUDIT = (
     / "almdina_role_audit.json"
 )
 AUDIT_CONTROLLER = AUDIT.with_suffix(".py")
+
+
+def _function_source(source: str, function_name: str) -> str:
+    tree = ast.parse(source)
+    node = next(
+        item
+        for item in tree.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and item.name == function_name
+    )
+    return ast.get_source_segment(source, node) or ""
 
 
 class TestRoleAdministrationArchitecture(unittest.TestCase):
@@ -92,7 +104,7 @@ class TestRoleAdministrationArchitecture(unittest.TestCase):
             "delete_factory_role",
             "get_factory_role_audit",
         ):
-            block = source.split(f"def {endpoint}", 1)[1].split("\n\n", 1)[0]
+            block = _function_source(source, endpoint)
             self.assertIn("_require_role_management()", block, endpoint)
         self.assertIn("Capability.MANAGE_PERMISSIONS", source)
         self.assertIn("confirm_delete", source)
