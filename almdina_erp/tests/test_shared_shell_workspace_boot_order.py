@@ -44,7 +44,7 @@ class TestSharedShellWorkspaceBootOrder(unittest.TestCase):
     def test_main_profiles_use_real_workspace_slug(self) -> None:
         source = NAVIGATION.read_text(encoding="utf-8")
 
-        self.assertIn('WORKSPACE_MAIN_ROUTE = "almadina-erp"', source)
+        self.assertIn('WORKSPACE_MAIN_ROUTE = "almdina-erp"', source)
         self.assertIn('default_route = f"/desk/{WORKSPACE_MAIN_ROUTE}"', source)
         self.assertIn("home_page = WORKSPACE_MAIN_ROUTE", source)
 
