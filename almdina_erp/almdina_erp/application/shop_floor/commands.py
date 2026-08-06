@@ -5,9 +5,7 @@ from datetime import datetime
 from typing import Any, Protocol, Sequence
 
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
-    next_stage_type,
     order_status_for_stage_type,
-    production_path_sequence,
     resolve_shop_floor_stage_type,
     transition_stage,
 )
@@ -155,22 +153,6 @@ def _transition(current_status: str, event: str, message: str) -> str:
         return transition_stage(current_status, event)
     except ValueError as error:
         raise ShopFloorCommandError(message) from error
-
-
-def _next_stage(path: str, stage_type: str) -> str | None:
-    try:
-        return next_stage_type(path, stage_type)
-    except ValueError as error:
-        raise ShopFloorCommandError(
-            f"Stage {stage_type} is not part of path {path}."
-        ) from error
-
-
-def _validate_path(path: str) -> None:
-    try:
-        production_path_sequence(path)
-    except ValueError as error:
-        raise ShopFloorCommandError(f"Invalid production path: {path}") from error
 
 
 def _production_route(
