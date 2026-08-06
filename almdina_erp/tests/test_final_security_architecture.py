@@ -17,7 +17,7 @@ PERMISSION_PAGE = PAGES / "factory_permissions" / "factory_permissions.js"
 CUTTING_PLAN_SERVICE = SERVICES / "cutting_plan_service.py"
 SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
-TEMPLATE_POLICY = APP / "application" / "security" / "permission_templates.py"
+TRANSFER_POLICY = APP / "application" / "security" / "permission_transfer.py"
 HOOKS = ROOT / "hooks.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
@@ -290,13 +290,15 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         page = PERMISSION_PAGE.read_text(encoding="utf-8")
         for endpoint in (
             "get_permission_console",
-            "preview_permission_template",
+            "get_role_permissions",
+            "preview_role_permissions",
             "export_role_permissions",
             "export_permission_bundle",
             "preview_permission_import",
             "preview_permission_bundle_import",
             "import_permission_bundle",
             "update_role_permissions",
+            "get_permission_audit",
         ):
             self.assertIn(
                 "_require_permission_management",
@@ -305,14 +307,18 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("confirm_sensitive", service)
         self.assertIn("confirm_self_lockout", service)
         self.assertIn("save_role_states", service)
-        self.assertIn("preview_permission_template", page)
+        self.assertNotIn("preview_permission_template", service)
+        self.assertNotIn("preview_permission_template", page)
+        self.assertNotIn("permission_template_catalog", service)
         self.assertIn("preview_permission_import", page)
         self.assertIn("export_role_permissions", page)
-        self.assertIn("لن يتم الحفظ تلقائيًا", page)
-        policy = TEMPLATE_POLICY.read_text(encoding="utf-8")
+        self.assertIn("الاستيراد لا يحفظ تلقائيًا", page)
+        self.assertIn("حدد صلاحياته يدويًا", page)
+        policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)
         self.assertIn("checksum", policy)
+        self.assertNotIn("PermissionTemplate", policy)
         self.assertNotIn("frappe.user_roles", page)
 
     def test_hooks_keep_old_api_paths_on_protected_services(self) -> None:
