@@ -7,41 +7,52 @@ from pathlib import Path
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
+    normalize_eligible_roles,
 )
 
 
 class TestConfigurableProductionRoutingDomain(unittest.TestCase):
-    def test_arbitrary_route_resolves_first_and_next_stage_with_role(self) -> None:
+    def test_arbitrary_route_resolves_multiple_eligible_roles(self) -> None:
         route = ProductionRoute(
             name="PVC Route",
             label="مسار PVC",
             stages=(
-                RoutingStage(10, "Cutting", "قص", "عامل قص مخصص"),
-                RoutingStage(20, "PVC", "تلبيس PVC", "عامل PVC"),
-                RoutingStage(30, "Packing", "تغليف", "عامل تغليف"),
+                RoutingStage(10, "Cutting", "قص", ("عامل قص", "مشرف قص")),
+                RoutingStage(20, "PVC", "تلبيس PVC", ("عامل PVC",)),
+                RoutingStage(30, "Packing", "تغليف", ("عامل تغليف",)),
             ),
         )
 
-        self.assertEqual(route.first_stage.operational_role, "عامل قص مخصص")
+        self.assertEqual(route.first_stage.eligible_roles, ("عامل قص", "مشرف قص"))
+        self.assertEqual(route.first_stage.operational_role, "عامل قص")
+        self.assertTrue(route.first_stage.accepts_any_role(("مشرف قص",)))
+        self.assertFalse(route.first_stage.accepts_any_role(("عامل CNC",)))
         self.assertEqual(route.next_stage("Cutting").stage_type, "PVC")
         self.assertEqual(route.next_stage("PVC").department_label, "تغليف")
         self.assertIsNone(route.next_stage("Packing"))
         self.assertTrue(route.contains("PVC"))
 
-    def test_route_rejects_missing_role_and_duplicate_sequences(self) -> None:
-        with self.assertRaisesRegex(ValueError, "operational role"):
+    def test_role_normalization_is_stable_and_deduplicated(self) -> None:
+        self.assertEqual(
+            normalize_eligible_roles((" عامل قص ", "مشرف قص", "عامل قص", "")),
+            ("عامل قص", "مشرف قص"),
+        )
+        self.assertEqual(normalize_eligible_roles("عامل PVC"), ("عامل PVC",))
+
+    def test_route_rejects_missing_roles_and_duplicate_sequences(self) -> None:
+        with self.assertRaisesRegex(ValueError, "eligible role"):
             ProductionRoute(
                 "Invalid",
                 "غير صالح",
-                (RoutingStage(10, "CNC", "CNC", ""),),
+                (RoutingStage(10, "CNC", "CNC", ()),),
             )
         with self.assertRaisesRegex(ValueError, "sequences must be unique"):
             ProductionRoute(
                 "Invalid",
                 "غير صالح",
                 (
-                    RoutingStage(10, "Cutting", "قص", "عامل قص"),
-                    RoutingStage(10, "PVC", "PVC", "عامل PVC"),
+                    RoutingStage(10, "Cutting", "قص", ("عامل قص",)),
+                    RoutingStage(10, "PVC", "PVC", ("عامل PVC",)),
                 ),
             )
 
@@ -70,13 +81,29 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertEqual(order_fields["production_path"]["fieldtype"], "Link")
         self.assertEqual(order_fields["production_path"]["options"], "Production Routing")
         self.assertEqual(route_fields["stage_type"]["fieldtype"], "Data")
-        self.assertEqual(route_fields["operational_role"]["options"], "Role")
+        self.assertEqual(route_fields["eligible_roles_json"]["options"], "JSON")
+        self.assertEqual(route_fields["configure_roles"]["fieldtype"], "Button")
+        self.assertTrue(route_fields["operational_role"]["hidden"])
 
         commands = (
             root / "almdina_erp" / "application" / "shop_floor" / "commands.py"
         ).read_text(encoding="utf-8")
         queries = (
             root / "almdina_erp" / "application" / "shop_floor" / "queries.py"
+        ).read_text(encoding="utf-8")
+        routing_repository = (
+            root
+            / "almdina_erp"
+            / "infrastructure"
+            / "frappe"
+            / "production_routing_repository.py"
+        ).read_text(encoding="utf-8")
+        authorization = (
+            root
+            / "almdina_erp"
+            / "infrastructure"
+            / "frappe"
+            / "shop_floor_authorization.py"
         ).read_text(encoding="utf-8")
         order_ux = (root / "public" / "js" / "shop_floor_order_ux.js").read_text(
             encoding="utf-8"
@@ -88,25 +115,37 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
             root / "almdina_erp" / "services" / "master_data_service.py"
         ).read_text(encoding="utf-8")
         self.assertIn("get_production_route", commands)
+        self.assertIn("get_users_for_roles", commands)
         self.assertIn("list_active_routes", queries)
+        self.assertIn("eligible_roles", queries)
         self.assertNotIn('options: "Sharyoun\\nDrawing"', order_ux)
         self.assertNotIn('frappe.db.get_value("Production Stage"', order_ux)
         self.assertNotIn("Production Manager", routing_ux)
-        self.assertIn("search_operational_roles", routing_ux)
-        self.assertIn("Capability.VIEW_PRODUCTION_ROUTINGS", master_data)
+        self.assertIn("get_eligible_routing_roles", routing_ux)
+        self.assertIn('fieldtype: "MultiSelectList"', routing_ux)
+        self.assertIn("search_eligible_roles", master_data)
+        self.assertNotIn("STAGE_ROLE_BY_TYPE", routing_repository)
+        self.assertIn("STAGE_ROLE_BY_TYPE: dict[str, str] = {}", authorization)
 
-    def test_migration_preserves_legacy_routes_and_backfills_stage_snapshots(self) -> None:
+    def test_migration_preserves_legacy_role_snapshots_without_seeding(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        patch_name = "almdina_erp.patches.v1_0.activate_configurable_production_routings"
+        patch_name = "almdina_erp.patches.v1_0.migrate_routing_stage_eligible_roles"
         patches = (root / "patches.txt").read_text(encoding="utf-8")
         migration = (
+            root / "patches" / "v1_0" / "migrate_routing_stage_eligible_roles.py"
+        ).read_text(encoding="utf-8")
+        historical = (
             root / "patches" / "v1_0" / "activate_configurable_production_routings.py"
         ).read_text(encoding="utf-8")
         self.assertIn(patch_name, patches)
-        self.assertIn('"Sharyoun": ("Sharyoun", "Sanding")', migration)
-        self.assertIn('"Drawing": ("Drawing", "CNC", "Sanding")', migration)
-        self.assertIn("_backfill_production_stages", migration)
+        self.assertIn("eligible_roles_json", migration)
+        self.assertIn("eligible_roles_display", migration)
         self.assertIn("operational_role", migration)
+        self.assertIn("Production Routing Stage", migration)
+        self.assertIn("Production Stage", migration)
+        self.assertNotIn("STAGE_DEFAULTS", historical)
+        self.assertNotIn("LEGACY_ROUTES", historical)
+        self.assertNotIn("_ensure_role", historical)
 
 
 if __name__ == "__main__":
