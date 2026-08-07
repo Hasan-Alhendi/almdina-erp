@@ -71,14 +71,12 @@ class Capability:
     ENABLE_USERS = "enable_users"
     DISABLE_USERS = "disable_users"
     RESET_USER_PASSWORD = "reset_user_password"
-    MANAGE_USERS = "manage_users"
 
     # Factory settings sections
     VIEW_FACTORY_SETTINGS = "view_factory_settings"
     EDIT_FACTORY_CUTTING_DEFAULTS = "edit_factory_cutting_defaults"
     EDIT_FACTORY_COST_DEFAULTS = "edit_factory_cost_defaults"
     EDIT_FACTORY_PRODUCTION_CONTROLS = "edit_factory_production_controls"
-    MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
 
     # Master data
     VIEW_PRODUCTION_ROUTINGS = "view_production_routings"
@@ -164,12 +162,10 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.ENABLE_USERS, Capability.ENABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.DISABLE_USERS, Capability.DISABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.RESET_USER_PASSWORD, Capability.RESET_USER_PASSWORD, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.VIEW_FACTORY_SETTINGS, "read", _SETTINGS_DOCTYPE, "factory_settings", False),
     CapabilityDefinition(Capability.EDIT_FACTORY_CUTTING_DEFAULTS, Capability.EDIT_FACTORY_CUTTING_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_FACTORY_COST_DEFAULTS, Capability.EDIT_FACTORY_COST_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, _SETTINGS_DOCTYPE, "factory_settings"),
-    CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),
