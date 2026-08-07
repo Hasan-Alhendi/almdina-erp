@@ -119,7 +119,7 @@ class TestAuthorizationDomain(unittest.TestCase):
             {
                 Capability.VIEW_ORDERS,
                 Capability.REASSIGN_WORKER,
-                Capability.MANAGE_FACTORY_SETTINGS,
+                Capability.VIEW_FACTORY_SETTINGS,
             }
         )
         self.assertEqual(navigation["profile"], "full")
