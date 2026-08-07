@@ -146,6 +146,17 @@ def cutting_plan_query(user: str | None = None) -> str:
     )
 
 
+def production_incident_query(user: str | None = None) -> str:
+    user = user or frappe.session.user
+    if not _requires_assigned_scope(user):
+        return ""
+    return (
+        "`tabProduction Incident`.door_cutting_order in ("
+        + _assigned_order_subquery(user)
+        + ")"
+    )
+
+
 def replacement_piece_query(user: str | None = None) -> str:
     user = user or frappe.session.user
     if not _requires_assigned_scope(user):
@@ -202,6 +213,20 @@ def cutting_plan_has_permission(
     )
 
 
+def production_incident_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    resolved_user = user or frappe.session.user
+    return _assigned_read_decision(
+        user=resolved_user,
+        permission_type=_resolved_permission_type(ptype, permission_type),
+        order_name=getattr(doc, "door_cutting_order", None),
+    )
+
+
 def replacement_piece_has_permission(
     doc: Any,
     user: str | None = None,
@@ -221,6 +246,8 @@ __all__ = [
     "cutting_plan_query",
     "door_cutting_order_has_permission",
     "door_cutting_order_query",
+    "production_incident_has_permission",
+    "production_incident_query",
     "production_stage_has_permission",
     "production_stage_query",
     "replacement_piece_has_permission",
