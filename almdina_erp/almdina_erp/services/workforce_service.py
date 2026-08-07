@@ -8,8 +8,6 @@ from frappe import _
 from almdina_erp.almdina_erp.application.security.workforce_management import (
     normalize_identity,
     normalize_role_selection,
-    profile_catalog_payload,
-    validate_profile,
     validate_temporary_password,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
@@ -17,13 +15,11 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 )
 from almdina_erp.almdina_erp.domain.security.workforce import (
     ACTION_CAPABILITIES,
-    PROFILES,
     WorkforceAction,
     WorkforceFacts,
     action_context,
     decide_workforce_action,
     expand_workforce_capabilities,
-    profile_for_key,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
@@ -101,14 +97,11 @@ def _facts(snapshot: dict[str, Any]) -> WorkforceFacts:
     )
 
 
-def _selection(values: dict[str, Any], *, required: bool) -> tuple[tuple[str, ...], str] | None:
-    """Resolve explicit roles first, with legacy profile input as a safe fallback."""
+def _selection(values: dict[str, Any], *, required: bool) -> tuple[str, ...] | None:
+    """Resolve explicit role assignments only; no bundles or hidden defaults."""
 
     if "roles" in values:
-        return normalize_role_selection(values.get("roles")), "roles"
-    if values.get("profile") not in (None, ""):
-        profile_key = validate_profile(values.get("profile"))
-        return tuple(profile_for_key(profile_key).roles), "profile"
+        return normalize_role_selection(values.get("roles"))
     if required:
         raise ValueError("Select at least one role for the workforce user.")
     return None
@@ -116,14 +109,6 @@ def _selection(values: dict[str, Any], *, required: bool) -> tuple[tuple[str, ..
 
 def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
     row = dict(snapshot)
-    profile_key = str(row.get("profile") or "")
-    profile = PROFILES.get(profile_key)
-    if profile:
-        row["profile_label"] = profile.label
-    elif profile_key == "custom":
-        row["profile_label"] = _("تعيين أدوار مخصص")
-    else:
-        row["profile_label"] = _("غير محدد")
     row["actions"] = action_context(_granted(), facts=_facts(row))
     row.pop("is_almdina", None)
     return row
@@ -151,7 +136,6 @@ def get_workforce_console(
     granted = _granted()
     return {
         "roles": _repository.list_assignable_roles(),
-        "profiles": profile_catalog_payload(),  # older clients only
         "users": [_present_user(user) for user in users],
         "permissions": {
             capability: capability in granted
@@ -179,9 +163,8 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
             last_name=values.get("last_name"),
             language=values.get("language") or "ar",
         )
-        selection = _selection(values, required=True)
-        assert selection is not None
-        roles, mode = selection
+        roles = _selection(values, required=True)
+        assert roles is not None
         password = validate_temporary_password(
             values.get("temporary_password"),
             email=identity.email,
@@ -195,21 +178,14 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
 
-    summary = (
-        _("Created Almdina workforce account with roles: {0}.").format(
-            ", ".join(roles)
-        )
-        if mode == "roles"
-        else _("Created Almdina workforce account with legacy operational profile {0}.").format(
-            values.get("profile")
-        )
-    )
     audit_name = _repository.record_audit(
         user_name=identity.email,
         action="Created",
         before=None,
         after=created,
-        summary=summary,
+        summary=_("Created Almdina workforce account with roles: {0}.").format(
+            ", ".join(roles)
+        ),
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(created), "audit": audit_name}
@@ -220,7 +196,6 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
     _require_any_action_capability(
         WorkforceAction.EDIT,
         WorkforceAction.ASSIGN_ROLES,
-        WorkforceAction.ASSIGN_PROFILE,
     )
     user_name = str(user or "").strip().lower()
     values = _payload(data)
@@ -233,7 +208,7 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             last_name=values.get("last_name", before["last_name"]),
             language=values.get("language", before["language"]),
         )
-        selection = _selection(values, required=False)
+        selected_roles = _selection(values, required=False)
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -245,11 +220,8 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             identity.language != before["language"],
         )
     )
-    selected_roles: tuple[str, ...] = ()
-    selection_mode = ""
     roles_changed = False
-    if selection is not None:
-        selected_roles, selection_mode = selection
+    if selected_roles is not None:
         current_roles = tuple(before.get("workforce_roles") or ())
         roles_changed = set(selected_roles) != set(current_roles)
 
@@ -257,12 +229,7 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
     if identity_changed:
         _require_action(WorkforceAction.EDIT, facts=facts)
     if roles_changed:
-        action = (
-            WorkforceAction.ASSIGN_ROLES
-            if selection_mode == "roles"
-            else WorkforceAction.ASSIGN_PROFILE
-        )
-        _require_action(action, facts=facts)
+        _require_action(WorkforceAction.ASSIGN_ROLES, facts=facts)
     if not identity_changed and not roles_changed:
         return {"user": _present_user(before), "audits": []}
 
@@ -282,27 +249,18 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
                 )
             )
         if roles_changed:
+            assert selected_roles is not None
             roles_before = current
             current = _repository.assign_roles(user_name, selected_roles)
-            audit_action = (
-                "Roles Changed" if selection_mode == "roles" else "Profile Changed"
-            )
-            audit_summary = (
-                _("Changed assigned workforce roles to: {0}.").format(
-                    ", ".join(selected_roles)
-                )
-                if selection_mode == "roles"
-                else _("Changed legacy operational profile to {0}.").format(
-                    values.get("profile")
-                )
-            )
             audits.append(
                 _repository.record_audit(
                     user_name=user_name,
-                    action=audit_action,
+                    action="Roles Changed",
                     before=roles_before,
                     after=current,
-                    summary=audit_summary,
+                    summary=_("Changed assigned workforce roles to: {0}.").format(
+                        ", ".join(selected_roles)
+                    ),
                     changed_by=str(frappe.session.user),
                 )
             )
