@@ -15,6 +15,7 @@ REPOSITORY_PATH = (
     / "frappe"
     / "permission_matrix_repository.py"
 )
+REGISTRY_MODULE = "almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry"
 
 
 class Row(dict):
@@ -129,11 +130,19 @@ class RepositoryHarness:
 
         permissions = types.ModuleType("frappe.permissions")
         permissions.setup_custom_perms = self.setup_calls.append
+        utils = types.ModuleType("frappe.utils")
+        utils.cint = lambda value: int(value or 0)
+        registry = types.ModuleType(REGISTRY_MODULE)
+        registry.managed_role_names = lambda: frozenset({"Order Entry", "Review Role"})
 
-        previous_frappe = sys.modules.get("frappe")
-        previous_permissions = sys.modules.get("frappe.permissions")
-        sys.modules["frappe"] = fake_frappe
-        sys.modules["frappe.permissions"] = permissions
+        replacements = {
+            "frappe": fake_frappe,
+            "frappe.permissions": permissions,
+            "frappe.utils": utils,
+            REGISTRY_MODULE: registry,
+        }
+        previous = {name: sys.modules.get(name) for name in replacements}
+        sys.modules.update(replacements)
         try:
             spec = importlib.util.spec_from_file_location(
                 "_almdina_permission_baseline_test_repository",
@@ -145,14 +154,11 @@ class RepositoryHarness:
             spec.loader.exec_module(module)
             return module.FrappePermissionMatrixRepository()
         finally:
-            if previous_frappe is None:
-                sys.modules.pop("frappe", None)
-            else:
-                sys.modules["frappe"] = previous_frappe
-            if previous_permissions is None:
-                sys.modules.pop("frappe.permissions", None)
-            else:
-                sys.modules["frappe.permissions"] = previous_permissions
+            for name, original in previous.items():
+                if original is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = original
 
 
 def standard_row(name: str, role: str) -> dict[str, Any]:
