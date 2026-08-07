@@ -29,10 +29,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 class TestAuthorizationDomain(unittest.TestCase):
     def test_catalog_contains_every_capability_once(self) -> None:
         self.assertEqual(set(CAPABILITY_CATALOG), ALL_CAPABILITIES)
-        self.assertEqual(
-            len({definition.permission_type for definition in CUSTOM_PERMISSION_DEFINITIONS}),
-            len(CUSTOM_PERMISSION_DEFINITIONS),
-        )
+        self.assertEqual(len({definition.permission_type for definition in CUSTOM_PERMISSION_DEFINITIONS}), len(CUSTOM_PERMISSION_DEFINITIONS))
 
     def test_standard_rights_reuse_frappe_permissions(self) -> None:
         view = capability_definition(Capability.VIEW_ORDERS)
@@ -46,13 +43,7 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertFalse(edit.custom)
 
     def test_drawing_capabilities_are_custom_and_order_scoped(self) -> None:
-        for capability in (
-            Capability.RECALCULATE_PLAN,
-            Capability.EXPORT_DXF,
-            Capability.UPLOAD_DXF,
-            Capability.REPLACE_DXF,
-            Capability.APPROVE_DXF,
-        ):
+        for capability in (Capability.RECALCULATE_PLAN, Capability.EXPORT_DXF, Capability.UPLOAD_DXF, Capability.REPLACE_DXF, Capability.APPROVE_DXF):
             with self.subTest(capability=capability):
                 definition = capability_definition(capability)
                 self.assertTrue(definition.custom)
@@ -74,14 +65,8 @@ class TestAuthorizationDomain(unittest.TestCase):
             normalize_capabilities({"عامل رسم"})
 
     def test_permission_context_ignores_roles_and_uses_grants(self) -> None:
-        first = build_permission_context(
-            {"Role A"},
-            {Capability.UPLOAD_DXF, Capability.APPROVE_DXF},
-        )
-        second = build_permission_context(
-            {"Completely Different Role"},
-            {Capability.UPLOAD_DXF, Capability.APPROVE_DXF},
-        )
+        first = build_permission_context({"Role A"}, {Capability.UPLOAD_DXF, Capability.APPROVE_DXF})
+        second = build_permission_context({"Completely Different Role"}, {Capability.UPLOAD_DXF, Capability.APPROVE_DXF})
         self.assertEqual(first, second)
         self.assertEqual(first["version"], PERMISSION_CONTEXT_VERSION)
         self.assertEqual(first["profile"], "shop_floor")
@@ -90,14 +75,7 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertNotIn("roles", first)
 
     def test_operator_navigation_preserves_shared_shell_with_read_grant(self) -> None:
-        navigation = build_navigation_context(
-            {
-                Capability.VIEW_ORDERS,
-                Capability.START_ASSIGNED_STAGE,
-                Capability.HANDOFF_ASSIGNED_STAGE,
-                Capability.VIEW_CUTTING_PLAN,
-            }
-        )
+        navigation = build_navigation_context({Capability.VIEW_ORDERS, Capability.START_ASSIGNED_STAGE, Capability.HANDOFF_ASSIGNED_STAGE, Capability.VIEW_CUTTING_PLAN})
         self.assertEqual(navigation["profile"], "shop_floor")
         self.assertEqual(navigation["home_page"], "shop-floor-inbox")
         self.assertEqual(navigation["workspaces"], [WORKSPACE_SHOP_FLOOR])
@@ -114,13 +92,7 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertEqual(navigation["workspaces"], [])
 
     def test_capabilities_expand_workspaces_without_changing_application(self) -> None:
-        navigation = build_navigation_context(
-            {
-                Capability.VIEW_ORDERS,
-                Capability.REASSIGN_WORKER,
-                Capability.MANAGE_FACTORY_SETTINGS,
-            }
-        )
+        navigation = build_navigation_context({Capability.VIEW_ORDERS, Capability.REASSIGN_WORKER, Capability.EDIT_FACTORY_PRODUCTION_CONTROLS})
         self.assertEqual(navigation["profile"], "full")
         self.assertEqual(navigation["home_page"], "")
         self.assertEqual(navigation["default_route"], "/desk")
