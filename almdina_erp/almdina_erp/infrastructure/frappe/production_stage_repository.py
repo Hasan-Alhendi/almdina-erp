@@ -16,6 +16,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
 )
 
 
+_STAGE_LOCK_SQL = "select name from `tabProduction Stage` where name = %s for update"
+
+
 def get_stage(stage_name: str) -> Any:
     return frappe.get_doc("Production Stage", stage_name)
 
@@ -25,10 +28,7 @@ def stage_exists(stage_name: str | None) -> bool:
 
 
 def _lock_stage(stage_name: str) -> None:
-    frappe.db.sql(
-        "select name from `tabProduction Stage` where name = %s for update",
-        (stage_name,),
-    )
+    frappe.db.sql(_STAGE_LOCK_SQL, (stage_name,))
 
 
 def _save_stage(stage: Any) -> Any:
