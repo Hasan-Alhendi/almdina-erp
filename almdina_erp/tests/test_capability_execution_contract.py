@@ -98,12 +98,14 @@ class TestCapabilityExecutionContract(unittest.TestCase):
     def test_dxf_upload_and_replacement_are_separate_server_permissions(self) -> None:
         source = DXF_SERVICE.read_text(encoding="utf-8")
         policy = DRAWING_POLICY.read_text(encoding="utf-8")
-        self.assertIn("Capability.UPLOAD_DXF", source)
-        self.assertIn("Capability.REPLACE_DXF", source)
-        self.assertIn("DrawingAction.UPLOAD_DXF", source)
-        self.assertIn("DrawingAction.REPLACE_DXF", source)
-        self.assertIn("UPLOAD_DXF", policy)
-        self.assertIn("REPLACE_DXF", policy)
+        self.assertIn("required_upload_capability", source)
+        self.assertIn("require_document_capability(order, capability)", source)
+        self.assertIn("Capability.UPLOAD_DXF", policy)
+        self.assertIn("Capability.REPLACE_DXF", policy)
+        self.assertIn(
+            "return Capability.REPLACE_DXF if state.production_dxf else Capability.UPLOAD_DXF",
+            policy,
+        )
 
     def test_shop_floor_dxf_link_uses_dxf_permissions_not_plan_permission(self) -> None:
         source = DXF_VISIBILITY.read_text(encoding="utf-8")
