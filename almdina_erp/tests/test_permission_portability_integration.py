@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -16,9 +18,7 @@ MISSING_ROLE = "Almdina Portability Missing Test"
 
 
 def manual_state(*capabilities: str) -> dict[str, bool]:
-    return validate_capability_dependencies(
-        {capability: True for capability in capabilities}
-    )
+    return validate_capability_dependencies({capability: True for capability in capabilities})
 
 
 class TestPermissionPortabilityIntegration(FrappeTestCase):
@@ -31,12 +31,24 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
         for role in (ROLE_ENTRY, ROLE_OPERATOR):
             if not frappe.db.exists("Role", role):
                 frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1}).insert(ignore_permissions=True)
+            if not frappe.db.exists("Almdina Role Metadata", {"role": role}):
+                frappe.get_doc(
+                    {
+                        "doctype": "Almdina Role Metadata",
+                        "role": role,
+                        "role_uid": str(uuid.uuid4()),
+                        "description": "Portability integration role",
+                        "managed_by_almdina": 1,
+                    }
+                ).insert(ignore_permissions=True)
 
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
-        frappe.db.delete("Almdina Permission Audit", {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]]})
-        frappe.db.delete("Custom DocPerm", {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]]})
+        roles = [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]
+        frappe.db.delete("Almdina Permission Audit", {"role": ["in", roles]})
+        frappe.db.delete("Custom DocPerm", {"role": ["in", roles]})
+        frappe.db.delete("Almdina Role Metadata", {"role": ["in", roles]})
         for role in (ROLE_ENTRY, ROLE_OPERATOR):
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
