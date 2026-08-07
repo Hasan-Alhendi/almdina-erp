@@ -6,51 +6,32 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import managed_role_names
 
 
 def _managed_doctypes() -> tuple[str, ...]:
-    return tuple(
-        sorted({definition.applies_to for definition in CAPABILITY_CATALOG.values()})
-    )
+    return tuple(sorted({definition.applies_to for definition in CAPABILITY_CATALOG.values()}))
 
 
 def reconcile_custom_permission_projections() -> None:
-    """Re-save existing Almdina role states through the current granular model."""
-
-    if not frappe.db.exists("DocType", "Custom DocPerm"):
-        return
-    doctypes = [
-        doctype for doctype in _managed_doctypes() if frappe.db.exists("DocType", doctype)
-    ]
-    if not doctypes:
-        return
+    """Re-save only Almdina-owned role states through the granular model."""
 
     roles = sorted(
-        {
-            str(role)
-            for role in frappe.get_all(
-                "Custom DocPerm",
-                filters={"parent": ["in", doctypes], "permlevel": 0},
-                pluck="role",
-                order_by="role asc",
-            )
-            if role
-        }
+        role
+        for role in managed_role_names()
+        if frappe.db.exists("Role", role)
     )
     if not roles:
         return
 
     from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
         FrappePermissionMatrixRepository,
-        PROTECTED_ROLES,
     )
 
     repository = FrappePermissionMatrixRepository()
-    for resolved in roles:
-        if resolved in PROTECTED_ROLES or not frappe.db.exists("Role", resolved):
-            continue
-        effective = repository.role_state(resolved)["capabilities"]
-        repository.save_role_state(resolved, effective)
+    for role in roles:
+        effective = repository.role_state(role)["capabilities"]
+        repository.save_role_state(role, effective)
 
 
 def sync_permission_types() -> None:
@@ -78,14 +59,10 @@ def sync_permission_types() -> None:
             }
         ).insert(ignore_permissions=True)
 
-    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-        FrappePermissionMatrixRepository,
-    )
+    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import FrappePermissionMatrixRepository
 
     reconcile_custom_permission_projections()
-    FrappePermissionMatrixRepository().ensure_custom_permission_baseline(
-        _managed_doctypes()
-    )
+    FrappePermissionMatrixRepository().ensure_custom_permission_baseline(_managed_doctypes())
 
 
 __all__ = ["reconcile_custom_permission_projections", "sync_permission_types"]
