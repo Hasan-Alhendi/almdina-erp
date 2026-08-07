@@ -7,16 +7,13 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
-    CONTROL_CENTER_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
-    REPORTING_CAPABILITIES,
     Capability,
 )
 
 
 SUPPORTING_DOCTYPES = (
     "Cutting Plan",
-    "Production Incident",
     "Production Stage",
 )
 
@@ -27,9 +24,6 @@ _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
         Capability.VIEW_OPERATIONAL_REPORTS,
         Capability.VIEW_FINANCIAL_REPORTS,
     }
-)
-_INCIDENT_READ_CAPABILITIES = frozenset(CONTROL_CENTER_CAPABILITIES) | frozenset(
-    REPORTING_CAPABILITIES
 )
 
 
@@ -45,7 +39,8 @@ def supporting_standard_permission_projection(
 
     Frappe controller permission hooks can only deny an existing native grant;
     they cannot create a missing one. These projections provide the minimum
-    DocPerm grant while query/has-permission hooks keep shop-floor scope narrow.
+    DocPerm grant while the existing query/has-permission hooks keep operator
+    visibility restricted to assigned work.
     """
 
     normalized = normalize_capability_state(state)
@@ -53,8 +48,6 @@ def supporting_standard_permission_projection(
         can_read = normalized[Capability.VIEW_CUTTING_PLAN]
     elif doctype == "Production Stage":
         can_read = _any_enabled(normalized, _STAGE_READ_CAPABILITIES)
-    elif doctype == "Production Incident":
-        can_read = _any_enabled(normalized, _INCIDENT_READ_CAPABILITIES)
     else:
         return {}
 
