@@ -8,16 +8,14 @@ import frappe
 from frappe.utils import cint
 from frappe.utils.password import update_password
 
-from almdina_erp.almdina_erp.application.security.workforce_management import (
-    WorkforceIdentity,
-    audit_snapshot,
-)
-from almdina_erp.almdina_erp.domain.security.role_management import (
-    PROTECTED_ROLE_NAMES,
+from almdina_erp.almdina_erp.application.security.workforce_management import WorkforceIdentity, audit_snapshot
+from almdina_erp.almdina_erp.domain.security.role_management import PROTECTED_ROLE_NAMES
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import (
+    managed_role_metadata,
+    managed_role_names,
 )
 
 
-_ROLE_METADATA_DOCTYPE = "Almdina Role Metadata"
 _DEFAULT_WORKSPACE = "Almdina ERP"
 
 
@@ -35,46 +33,18 @@ class FrappeWorkforceRepository:
             )
         )
 
+    @staticmethod
+    def managed_role_names() -> frozenset[str]:
+        return managed_role_names()
+
     def _is_almdina_user(self, *, default_app: str, roles: tuple[str, ...]) -> bool:
         return default_app == "almdina_erp" or bool(
             set(roles).intersection(self.managed_role_names())
         )
 
-    @staticmethod
-    def _doctype_exists(doctype: str) -> bool:
-        return bool(frappe.db.exists("DocType", doctype))
-
-    def _metadata_map(self) -> dict[str, dict[str, Any]]:
-        if not self._doctype_exists(_ROLE_METADATA_DOCTYPE):
-            return {}
-        rows = frappe.get_all(
-            _ROLE_METADATA_DOCTYPE,
-            filters={"managed_by_almdina": 1},
-            fields=["role", "description", "managed_by_almdina"],
-            limit_page_length=0,
-        )
-        return {
-            str(row.role): {
-                "description": str(row.description or ""),
-                "managed_by_almdina": bool(cint(row.managed_by_almdina)),
-            }
-            for row in rows
-            if str(row.role or "").strip()
-        }
-
-    def managed_role_names(self) -> frozenset[str]:
-        """Roles explicitly owned by Almdina metadata.
-
-        Historical role-name catalogues are deliberately excluded from runtime.
-        A migration adopts existing Almdina roles into metadata before this
-        repository becomes authoritative.
-        """
-
-        return frozenset(self._metadata_map())
-
     def list_assignable_roles(self) -> list[dict[str, Any]]:
-        metadata = self._metadata_map()
-        managed = self.managed_role_names()
+        metadata = managed_role_metadata()
+        managed = frozenset(metadata)
         if not managed:
             return []
         rows = frappe.get_all(
@@ -108,15 +78,14 @@ class FrappeWorkforceRepository:
             )
 
     def lock_user(self, user: str) -> None:
-        frappe.db.sql(
-            "select name from `tabUser` where name = %s for update",
-            (user,),
-        )
+        frappe.db.sql("select name from `tabUser` where name = %s for update", (user,))
 
-    def user_exists(self, user: str) -> bool:
+    @staticmethod
+    def user_exists(user: str) -> bool:
         return bool(frappe.db.exists("User", user))
 
-    def active_assignment_count(self, user: str) -> int:
+    @staticmethod
+    def active_assignment_count(user: str) -> int:
         return int(
             frappe.db.count(
                 "Production Stage",
@@ -130,8 +99,8 @@ class FrappeWorkforceRepository:
 
     def _snapshot_from_doc(self, user: Any) -> dict[str, Any]:
         roles = self._roles_for_user(user.name)
-        managed_roles = self.managed_role_names()
-        workforce_roles = tuple(role for role in roles if role in managed_roles)
+        managed = self.managed_role_names()
+        workforce_roles = tuple(role for role in roles if role in managed)
         return {
             "email": str(user.name),
             "first_name": str(user.first_name or ""),
@@ -166,29 +135,28 @@ class FrappeWorkforceRepository:
         enabled: bool | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        managed_roles = tuple(sorted(self.managed_role_names()))
+        managed = tuple(sorted(self.managed_role_names()))
         conditions = [
             "u.user_type = 'System User'",
             "u.name not in ('Guest', 'Administrator')",
         ]
         values: list[Any] = []
         scope_conditions = ["coalesce(u.default_app, '') = 'almdina_erp'"]
-        if managed_roles:
-            role_placeholders = ", ".join(["%s"] * len(managed_roles))
+        if managed:
+            placeholders = ", ".join(["%s"] * len(managed))
             scope_conditions.append(
                 "exists (select 1 from `tabHas Role` hr "
                 "where hr.parent = u.name and hr.parenttype = 'User' "
-                f"and hr.role in ({role_placeholders}))"
+                f"and hr.role in ({placeholders}))"
             )
-            values.extend(managed_roles)
+            values.extend(managed)
         conditions.append(f"({' or '.join(scope_conditions)})")
 
         normalized_search = str(search or "").strip()
         if normalized_search:
             pattern = f"%{normalized_search}%"
             conditions.append(
-                "(u.name like %s or u.full_name like %s "
-                "or u.first_name like %s or u.last_name like %s)"
+                "(u.name like %s or u.full_name like %s or u.first_name like %s or u.last_name like %s)"
             )
             values.extend([pattern, pattern, pattern, pattern])
         if enabled is not None:
@@ -242,11 +210,7 @@ class FrappeWorkforceRepository:
         frappe.clear_cache(user=identity.email)
         return self.get_user(identity.email)
 
-    def update_identity(
-        self,
-        user_name: str,
-        identity: WorkforceIdentity,
-    ) -> dict[str, Any]:
+    def update_identity(self, user_name: str, identity: WorkforceIdentity) -> dict[str, Any]:
         if identity.email != user_name:
             raise ValueError("User email cannot be changed from this console.")
         user = frappe.get_doc("User", user_name)
@@ -257,19 +221,11 @@ class FrappeWorkforceRepository:
         frappe.clear_cache(user=user_name)
         return self.get_user(user_name)
 
-    def assign_roles(
-        self,
-        user_name: str,
-        roles: tuple[str, ...],
-    ) -> dict[str, Any]:
+    def assign_roles(self, user_name: str, roles: tuple[str, ...]) -> dict[str, Any]:
         self.ensure_assignable_roles(roles)
-        managed_roles = self.managed_role_names()
+        managed = self.managed_role_names()
         user = frappe.get_doc("User", user_name)
-        retained = [
-            row.role
-            for row in (user.roles or [])
-            if row.role not in managed_roles
-        ]
+        retained = [row.role for row in (user.roles or []) if row.role not in managed]
         required = list(dict.fromkeys([*retained, "Desk User", *roles]))
         user.set("roles", [])
         for role in required:
@@ -283,13 +239,7 @@ class FrappeWorkforceRepository:
         return self.get_user(user_name)
 
     def set_enabled(self, user_name: str, enabled: bool) -> dict[str, Any]:
-        frappe.db.set_value(
-            "User",
-            user_name,
-            "enabled",
-            1 if enabled else 0,
-            update_modified=True,
-        )
+        frappe.db.set_value("User", user_name, "enabled", 1 if enabled else 0, update_modified=True)
         frappe.clear_cache(user=user_name)
         return self.get_user(user_name)
 
@@ -323,16 +273,8 @@ class FrappeWorkforceRepository:
                 "changed_on": frappe.utils.now(),
                 "summary": summary,
                 "changed_fields": ", ".join(changed_fields),
-                "before_json": json.dumps(
-                    before_safe,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ),
-                "after_json": json.dumps(
-                    after_safe,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ),
+                "before_json": json.dumps(before_safe, ensure_ascii=False, sort_keys=True),
+                "after_json": json.dumps(after_safe, ensure_ascii=False, sort_keys=True),
             }
         ).insert(ignore_permissions=True)
         return str(audit.name)
