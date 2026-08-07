@@ -73,7 +73,7 @@ class AlmdinaWorkforceConsole {
     }
 
     canAssignRoles(user) {
-        return this.actionAllowed(user, "assign_roles") || this.actionAllowed(user, "assign_profile");
+        return this.actionAllowed(user, "assign_roles");
     }
 
     roleOptions(txt = "") {
@@ -125,7 +125,7 @@ class AlmdinaWorkforceConsole {
             this.state.roles = Array.isArray(data.roles) ? data.roles : [];
             this.state.permissions = data.permissions || {};
             this.state.summary = data.summary || {};
-            this.page.btn_primary && this.page.btn_primary.toggle(this.can("create_users") || this.can("manage_users"));
+            this.page.btn_primary && this.page.btn_primary.toggle(this.can("create_users"));
             this.render();
         }).catch(error => {
             if (requestId !== this.requestId) return;
@@ -269,7 +269,7 @@ class AlmdinaWorkforceConsole {
     }
 
     openCreateDialog() {
-        if (!(this.can("create_users") || this.can("manage_users"))) return;
+        if (!this.can("create_users")) return;
         const dialog = new frappe.ui.Dialog({
             title: __("إضافة مستخدم للمعمل"),
             fields: [
