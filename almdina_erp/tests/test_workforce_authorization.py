@@ -12,16 +12,15 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
 from almdina_erp.almdina_erp.application.security.workforce_management import (
     audit_snapshot,
     normalize_identity,
+    normalize_role_selection,
     validate_temporary_password,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.workforce import (
-    PROFILES,
     WorkforceAction,
     WorkforceFacts,
     decide_workforce_action,
     expand_workforce_capabilities,
-    infer_profile,
 )
 
 
@@ -74,17 +73,17 @@ class TestWorkforceAuthorization(unittest.TestCase):
         self.assertFalse(active.allowed)
         self.assertEqual(active.code, "active_assignments")
 
-        profile_change = decide_workforce_action(
+        role_change = decide_workforce_action(
             {Capability.ASSIGN_WORKFORCE_PROFILE},
-            action=WorkforceAction.ASSIGN_PROFILE,
+            action=WorkforceAction.ASSIGN_ROLES,
             facts=WorkforceFacts(
                 actor="manager@example.com",
                 target_user="worker@example.com",
                 active_assignments=1,
             ),
         )
-        self.assertFalse(profile_change.allowed)
-        self.assertEqual(profile_change.code, "active_assignments")
+        self.assertFalse(role_change.allowed)
+        self.assertEqual(role_change.code, "active_assignments")
 
     def test_protected_and_external_users_are_blocked(self) -> None:
         protected = decide_workforce_action(
@@ -105,14 +104,13 @@ class TestWorkforceAuthorization(unittest.TestCase):
         )
         self.assertEqual(external.code, "outside_scope")
 
-    def test_profiles_are_operational_and_inferred_without_unrelated_roles(self) -> None:
-        drawing = PROFILES["drawing_operator"]
-        self.assertEqual(infer_profile((*drawing.roles, "Some Unrelated Role")), "drawing_operator")
-        self.assertEqual(
-            infer_profile(("عامل رسم", "عامل CNC")),
-            "custom",
+    def test_role_selection_is_direct_deduplicated_and_ordered(self) -> None:
+        roles = normalize_role_selection(
+            [" عامل رسم ", "عامل CNC", "عامل رسم", " "]
         )
-        self.assertNotIn("approve_order", drawing.roles)
+        self.assertEqual(roles, ("عامل رسم", "عامل CNC"))
+        with self.assertRaisesRegex(ValueError, "list"):
+            normalize_role_selection("عامل رسم")
 
     def test_identity_and_password_validation_are_deterministic(self) -> None:
         identity = normalize_identity(
@@ -139,10 +137,12 @@ class TestWorkforceAuthorization(unittest.TestCase):
                 "email": "worker@example.com",
                 "first_name": "Worker",
                 "enabled": True,
+                "roles": ["عامل رسم", "عامل CNC"],
                 "temporary_password": "NeverLog123",
                 "new_password": "NeverLog456",
             }
         )
+        self.assertEqual(snapshot["roles"], ["عامل رسم", "عامل CNC"])
         self.assertNotIn("temporary_password", snapshot)
         self.assertNotIn("new_password", snapshot)
         self.assertNotIn("NeverLog", repr(snapshot))
