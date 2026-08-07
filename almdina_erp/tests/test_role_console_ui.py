@@ -74,6 +74,16 @@ class TestRoleConsoleUI(unittest.TestCase):
         self.assertIn("confirm_delete: 1", source)
         self.assertNotIn("frappe.user_roles", source)
 
+    def test_console_hides_actions_without_their_granular_capabilities(self) -> None:
+        source = PAGE.read_text(encoding="utf-8")
+        self.assertIn("window.AlmdinaPermissions", source)
+        self.assertIn('this.can("create_roles")', source)
+        self.assertIn('this.can("edit_roles")', source)
+        self.assertIn('this.can("delete_roles")', source)
+        self.assertIn('this.can("view_roles")', source)
+        self.assertIn('this.can("manage_permissions")', source)
+        self.assertIn("عرض فقط", source)
+
     def test_console_contains_no_fixed_factory_role_catalog_or_templates(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
         for role in (
@@ -96,7 +106,8 @@ class TestRoleConsoleUI(unittest.TestCase):
         self.assertNotIn('frappe.client.delete', source)
         self.assertIn("role_management_service", source)
         service = SERVICE.read_text(encoding="utf-8")
-        self.assertIn("_require_role_management()", service)
+        self.assertIn("_require_role_capability(", service)
+        self.assertNotIn("_require_role_management()", service)
 
 
 if __name__ == "__main__":
