@@ -56,7 +56,11 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
         order = SimpleNamespace(name="DCO-TEST")
         stage = SimpleNamespace(assigned_to="other@example.com")
 
-        with patch.object(permissions, "_requires_assigned_scope", return_value=False):
+        with (
+            patch.object(permissions, "_has", return_value=True),
+            patch.object(permissions, "_has_any", return_value=True),
+            patch.object(permissions, "_requires_assigned_scope", return_value=False),
+        ):
             self.assertIs(
                 permissions.door_cutting_order_has_permission(
                     order,
@@ -82,10 +86,78 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 True,
             )
 
+    def test_empty_role_fails_closed_for_all_protected_surfaces(self) -> None:
+        order = SimpleNamespace(name="DCO-TEST")
+        plan = SimpleNamespace(door_cutting_order="DCO-TEST")
+        stage = SimpleNamespace(assigned_to="empty@example.com")
+        replacement = SimpleNamespace(door_cutting_order="DCO-TEST")
+
+        with (
+            patch.object(permissions, "_has", return_value=False),
+            patch.object(permissions, "_has_any", return_value=False),
+        ):
+            for ptype in ("read", "create", "write", "delete", "view_costs"):
+                with self.subTest(ptype=ptype):
+                    self.assertFalse(
+                        permissions.door_cutting_order_has_permission(
+                            order,
+                            user="empty@example.com",
+                            ptype=ptype,
+                        )
+                    )
+            self.assertFalse(
+                permissions.cutting_plan_has_permission(
+                    plan,
+                    user="empty@example.com",
+                    ptype="read",
+                )
+            )
+            self.assertFalse(
+                permissions.production_stage_has_permission(
+                    stage,
+                    user="empty@example.com",
+                    ptype="read",
+                )
+            )
+            self.assertFalse(
+                permissions.replacement_piece_has_permission(
+                    replacement,
+                    user="empty@example.com",
+                    ptype="read",
+                )
+            )
+            self.assertEqual(
+                permissions.door_cutting_order_query("empty@example.com"),
+                "1=0",
+            )
+            self.assertEqual(
+                permissions.cutting_plan_query("empty@example.com"),
+                "1=0",
+            )
+            self.assertEqual(
+                permissions.production_stage_query("empty@example.com"),
+                "1=0",
+            )
+            self.assertEqual(
+                permissions.replacement_piece_query("empty@example.com"),
+                "1=0",
+            )
+
+    def test_order_delete_is_denied_even_when_other_capabilities_exist(self) -> None:
+        with patch.object(permissions, "_has", return_value=True):
+            self.assertFalse(
+                permissions.door_cutting_order_has_permission(
+                    SimpleNamespace(name="DCO-TEST"),
+                    user="manager@example.com",
+                    ptype="delete",
+                )
+            )
+
     def test_assigned_scope_still_denies_unassigned_documents(self) -> None:
         order = SimpleNamespace(name="DCO-TEST")
 
         with (
+            patch.object(permissions, "_has", return_value=True),
             patch.object(permissions, "_requires_assigned_scope", return_value=True),
             patch.object(permissions, "_assigned_order_exists", return_value=False),
         ):
@@ -98,27 +170,36 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 False,
             )
 
-    def test_frappe_ptype_keeps_custom_actions_outside_read_scope(self) -> None:
+    def test_custom_actions_require_their_explicit_capability(self) -> None:
         order = SimpleNamespace(name="DCO-TEST")
 
-        with (
-            patch.object(permissions, "_requires_assigned_scope", return_value=True),
-            patch.object(permissions, "_assigned_order_exists") as assigned,
+        with patch.object(
+            permissions,
+            "_has",
+            side_effect=lambda _user, capability: capability == "recalculate_plan",
         ):
-            self.assertIs(
+            self.assertTrue(
                 permissions.door_cutting_order_has_permission(
                     order,
                     user="worker@example.com",
                     ptype="recalculate_plan",
-                ),
-                True,
+                )
             )
-            assigned.assert_not_called()
+            self.assertFalse(
+                permissions.door_cutting_order_has_permission(
+                    order,
+                    user="worker@example.com",
+                    ptype="view_costs",
+                )
+            )
 
     def test_legacy_permission_type_keyword_remains_compatible(self) -> None:
         order = SimpleNamespace(name="DCO-TEST")
 
-        with patch.object(permissions, "_requires_assigned_scope", return_value=False):
+        with (
+            patch.object(permissions, "_has", return_value=True),
+            patch.object(permissions, "_requires_assigned_scope", return_value=False),
+        ):
             self.assertIs(
                 permissions.door_cutting_order_has_permission(
                     order,

@@ -120,10 +120,12 @@ class TestControlCenterArchitecture(unittest.TestCase):
         self.assertIn("cutting_plan_has_permission", hooks)
         self.assertIn("production_stage_has_permission", hooks)
 
-    def test_direct_document_access_is_assignment_scoped(self) -> None:
+    def test_direct_document_access_is_capability_and_assignment_scoped(self) -> None:
         source = (ROOT / "permissions.py").read_text(encoding="utf-8")
-        self.assertIn("_assigned_read_decision", source)
+        self.assertIn("_scoped_read_decision", source)
+        self.assertIn("required_capability", source)
         self.assertIn("_assigned_order_exists", source)
+        self.assertIn('return "1=0"', source)
         self.assertIn("replacement_piece_has_permission", source)
         self.assertIn("door_cutting_order_has_permission", source)
         self.assertIn("production_stage_has_permission", source)
