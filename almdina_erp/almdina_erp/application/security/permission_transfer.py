@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
     normalize_capability_state,
     permission_impact,
+    validate_capability_dependencies,
 )
 
 
@@ -19,28 +20,15 @@ MAX_TRANSFER_ROLES = 500
 
 def _enabled_capabilities(state: Mapping[str, Any] | None) -> list[str]:
     normalized = normalize_capability_state(state)
-    return sorted(
-        capability
-        for capability, granted in normalized.items()
-        if granted is True
-    )
+    return sorted(capability for capability, granted in normalized.items() if granted is True)
 
 
 def _checksum(payload: Mapping[str, Any]) -> str:
-    encoded = json.dumps(
-        dict(payload),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    encoded = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _canonical_transfer_payload(
-    *,
-    role: str,
-    capabilities: Sequence[str],
-) -> dict[str, Any]:
+def _canonical_transfer_payload(*, role: str, capabilities: Sequence[str]) -> dict[str, Any]:
     return {
         "schema": PERMISSION_TRANSFER_SCHEMA,
         "version": PERMISSION_TRANSFER_VERSION,
@@ -49,52 +37,31 @@ def _canonical_transfer_payload(
     }
 
 
-def build_permission_export(
-    *,
-    role: str,
-    state: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    """Build a checksummed backup document for one existing role."""
-
-    canonical = _canonical_transfer_payload(
-        role=role,
-        capabilities=_enabled_capabilities(state),
-    )
+def build_permission_export(*, role: str, state: Mapping[str, Any] | None) -> dict[str, Any]:
+    canonical = _canonical_transfer_payload(role=role, capabilities=_enabled_capabilities(state))
     return {**canonical, "checksum": _checksum(canonical)}
 
 
 def parse_permission_export(payload: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Validate a one-role backup without persisting or granting anything."""
-
     document = dict(payload or {})
     if document.get("schema") != PERMISSION_TRANSFER_SCHEMA:
         raise ValueError("Unsupported permission export schema.")
     if document.get("version") != PERMISSION_TRANSFER_VERSION:
         raise ValueError("Unsupported permission export version.")
-
     source_role = str(document.get("role") or "").strip()
     if not source_role:
         raise ValueError("Permission export role is required.")
     capabilities = document.get("capabilities")
-    if isinstance(capabilities, (str, bytes)) or not isinstance(
-        capabilities, Sequence
-    ):
+    if isinstance(capabilities, (str, bytes)) or not isinstance(capabilities, Sequence):
         raise ValueError("Permission export capabilities must be a list.")
-    if any(
-        not isinstance(value, str) or not value.strip()
-        for value in capabilities
-    ):
+    if any(not isinstance(value, str) or not value.strip() for value in capabilities):
         raise ValueError("Permission export contains an invalid capability key.")
 
-    canonical = _canonical_transfer_payload(
-        role=source_role,
-        capabilities=list(capabilities),
-    )
+    canonical = _canonical_transfer_payload(role=source_role, capabilities=list(capabilities))
     checksum = str(document.get("checksum") or "").strip()
     if not checksum or checksum != _checksum(canonical):
         raise ValueError("Permission export checksum is invalid.")
-
-    state = normalize_capability_state(
+    state = validate_capability_dependencies(
         {capability: True for capability in canonical["capabilities"]}
     )
     return {
@@ -105,32 +72,21 @@ def parse_permission_export(payload: Mapping[str, Any] | None) -> dict[str, Any]
     }
 
 
-def _canonical_bundle_roles(
-    role_states: Mapping[str, Mapping[str, Any]],
-) -> list[dict[str, Any]]:
+def _canonical_bundle_roles(role_states: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
     roles: list[dict[str, Any]] = []
     for raw_role, state in sorted(role_states.items()):
         role = str(raw_role or "").strip()
         if not role:
             raise ValueError("Permission bundle roles must have a name.")
-        roles.append(
-            {
-                "role": role,
-                "capabilities": _enabled_capabilities(state),
-            }
-        )
+        roles.append({"role": role, "capabilities": _enabled_capabilities(state)})
     if not roles:
         raise ValueError("Permission bundle must contain at least one role.")
     if len(roles) > MAX_TRANSFER_ROLES:
-        raise ValueError(
-            f"Permission bundle cannot contain more than {MAX_TRANSFER_ROLES} roles."
-        )
+        raise ValueError(f"Permission bundle cannot contain more than {MAX_TRANSFER_ROLES} roles.")
     return roles
 
 
-def _canonical_bundle_payload(
-    role_states: Mapping[str, Mapping[str, Any]],
-) -> dict[str, Any]:
+def _canonical_bundle_payload(role_states: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "schema": PERMISSION_TRANSFER_SCHEMA,
         "version": PERMISSION_TRANSFER_VERSION,
@@ -146,8 +102,6 @@ def build_permission_bundle(
     exported_at: str,
     app_version: str,
 ) -> dict[str, Any]:
-    """Build a checksummed multi-role backup without users or audit records."""
-
     canonical = _canonical_bundle_payload(role_states)
     return {
         **canonical,
@@ -158,11 +112,7 @@ def build_permission_bundle(
     }
 
 
-def parse_permission_bundle(
-    payload: Mapping[str, Any] | None,
-) -> dict[str, dict[str, bool]]:
-    """Validate a multi-role backup before any database write occurs."""
-
+def parse_permission_bundle(payload: Mapping[str, Any] | None) -> dict[str, dict[str, bool]]:
     document = dict(payload or {})
     if document.get("schema") != PERMISSION_TRANSFER_SCHEMA:
         raise ValueError("Unsupported permission bundle schema.")
@@ -175,54 +125,44 @@ def parse_permission_bundle(
     if not isinstance(raw_roles, list) or not raw_roles:
         raise ValueError("Permission bundle must contain a non-empty roles list.")
     if len(raw_roles) > MAX_TRANSFER_ROLES:
-        raise ValueError(
-            f"Permission bundle cannot contain more than {MAX_TRANSFER_ROLES} roles."
-        )
+        raise ValueError(f"Permission bundle cannot contain more than {MAX_TRANSFER_ROLES} roles.")
 
-    role_states: dict[str, dict[str, bool]] = {}
+    raw_states: dict[str, dict[str, bool]] = {}
     for row in raw_roles:
         if not isinstance(row, dict):
             raise ValueError("Every permission bundle role must be an object.")
         role = str(row.get("role") or "").strip()
         if not role:
             raise ValueError("Permission bundle roles must have a name.")
-        if role in role_states:
+        if role in raw_states:
             raise ValueError(f"Permission bundle contains duplicate role: {role}")
         capabilities = row.get("capabilities")
-        if isinstance(capabilities, (str, bytes)) or not isinstance(
-            capabilities, Sequence
-        ):
-            raise ValueError(
-                f"Permission bundle role {role} must contain a capabilities list."
-            )
-        if any(
-            not isinstance(value, str) or not value.strip()
-            for value in capabilities
-        ):
-            raise ValueError(
-                f"Permission bundle role {role} contains an invalid capability key."
-            )
-        role_states[role] = normalize_capability_state(
+        if isinstance(capabilities, (str, bytes)) or not isinstance(capabilities, Sequence):
+            raise ValueError(f"Permission bundle role {role} must contain a capabilities list.")
+        if any(not isinstance(value, str) or not value.strip() for value in capabilities):
+            raise ValueError(f"Permission bundle role {role} contains an invalid capability key.")
+        raw_states[role] = normalize_capability_state(
             {capability: True for capability in capabilities}
         )
 
-    canonical = _canonical_bundle_payload(role_states)
+    canonical = _canonical_bundle_payload(raw_states)
     checksum = str(document.get("checksum") or "").strip()
     if not checksum or checksum != _checksum(canonical):
         raise ValueError("Permission bundle checksum is invalid.")
-    return role_states
+    return {
+        role: validate_capability_dependencies(state)
+        for role, state in raw_states.items()
+    }
 
 
 def preview_permission_bundle(
     current_states: Mapping[str, Mapping[str, Any]],
     imported_states: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """Describe a bundle's exact changes without modifying stored permissions."""
-
     role_previews: list[dict[str, Any]] = []
     for role in sorted(imported_states):
         before = normalize_capability_state(current_states.get(role))
-        after = normalize_capability_state(imported_states[role])
+        after = validate_capability_dependencies(imported_states[role])
         changes = changed_capabilities(before, after)
         role_previews.append(
             {
@@ -233,23 +173,14 @@ def preview_permission_bundle(
                 "impact": permission_impact(after),
             }
         )
-
-    all_changes = [
-        change
-        for row in role_previews
-        for change in row["changes"]
-    ]
+    all_changes = [change for row in role_previews for change in row["changes"]]
     return {
         "roles": role_previews,
         "summary": {
             "role_count": len(role_previews),
-            "changed_role_count": sum(
-                1 for row in role_previews if row["changed"]
-            ),
+            "changed_role_count": sum(1 for row in role_previews if row["changed"]),
             "change_count": len(all_changes),
-            "critical_change_count": sum(
-                1 for change in all_changes if change["risk"] == "critical"
-            ),
+            "critical_change_count": sum(1 for change in all_changes if change["risk"] == "critical"),
         },
     }
 
