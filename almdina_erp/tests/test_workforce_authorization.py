@@ -17,12 +17,10 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.workforce import (
-    PROFILES,
     WorkforceAction,
     WorkforceFacts,
     decide_workforce_action,
     expand_workforce_capabilities,
-    infer_profile,
 )
 
 
@@ -33,7 +31,7 @@ class TestWorkforceAuthorization(unittest.TestCase):
             Capability.VIEW_USERS,
             Capability.CREATE_USERS,
             Capability.EDIT_USERS,
-            Capability.ASSIGN_WORKFORCE_PROFILE,
+            Capability.ASSIGN_USER_ROLES,
             Capability.ENABLE_USERS,
             Capability.DISABLE_USERS,
             Capability.RESET_USER_PASSWORD,
@@ -49,6 +47,7 @@ class TestWorkforceAuthorization(unittest.TestCase):
         legacy = normalize_capability_state({Capability.MANAGE_USERS: True})
         self.assertTrue(legacy[Capability.VIEW_USERS])
         self.assertTrue(legacy[Capability.CREATE_USERS])
+        self.assertTrue(legacy[Capability.ASSIGN_USER_ROLES])
         self.assertTrue(legacy[Capability.RESET_USER_PASSWORD])
 
     def test_self_disable_and_active_assignments_are_blocked(self) -> None:
@@ -76,7 +75,7 @@ class TestWorkforceAuthorization(unittest.TestCase):
         self.assertEqual(active.code, "active_assignments")
 
         role_change = decide_workforce_action(
-            {Capability.ASSIGN_WORKFORCE_PROFILE},
+            {Capability.ASSIGN_USER_ROLES},
             action=WorkforceAction.ASSIGN_ROLES,
             facts=WorkforceFacts(
                 actor="manager@example.com",
@@ -120,15 +119,6 @@ class TestWorkforceAuthorization(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "at least one role"):
             normalize_role_selection([])
 
-    def test_profiles_remain_legacy_input_only_and_are_still_inferred(self) -> None:
-        drawing = PROFILES["drawing_operator"]
-        self.assertEqual(infer_profile((*drawing.roles, "Some Unrelated Role")), "drawing_operator")
-        self.assertEqual(
-            infer_profile(("عامل رسم", "عامل CNC")),
-            "custom",
-        )
-        self.assertNotIn("approve_order", drawing.roles)
-
     def test_identity_and_password_validation_are_deterministic(self) -> None:
         identity = normalize_identity(
             email="  Worker@Example.COM ",
@@ -148,7 +138,7 @@ class TestWorkforceAuthorization(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "email name"):
             validate_temporary_password("WorkerSecure123", email=identity.email)
 
-    def test_audit_snapshot_never_contains_password_material(self) -> None:
+    def test_audit_snapshot_never_contains_password_or_bundle_material(self) -> None:
         snapshot = audit_snapshot(
             {
                 "email": "worker@example.com",
