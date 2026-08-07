@@ -15,7 +15,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
 MANAGER_ROLE = "Almdina Workforce Manager Test"
 VIEWER_ROLE = "Almdina Workforce Viewer Test"
 LEGACY_ROLE = "Almdina Workforce Legacy Test"
-UNRELATED_ROLE = "Almdina Workforce Unrelated Test"
+SECOND_ROLE = "Almdina Workforce Second Test"
 MANAGER_USER = "almdina.workforce.manager@example.com"
 VIEWER_USER = "almdina.workforce.viewer@example.com"
 LEGACY_USER = "almdina.workforce.legacy@example.com"
@@ -28,7 +28,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         super().setUpClass()
         frappe.set_user("Administrator")
         sync_permission_types()
-        for role in (MANAGER_ROLE, VIEWER_ROLE, LEGACY_ROLE, UNRELATED_ROLE):
+        for role in (MANAGER_ROLE, VIEWER_ROLE, LEGACY_ROLE, SECOND_ROLE):
             cls._ensure_role(role)
         cls._ensure_user(MANAGER_USER, MANAGER_ROLE, almdina=True)
         cls._ensure_user(VIEWER_USER, VIEWER_ROLE)
@@ -68,7 +68,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         for user in (MANAGER_USER, VIEWER_USER, LEGACY_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
-        for role in (MANAGER_ROLE, VIEWER_ROLE, LEGACY_ROLE, UNRELATED_ROLE):
+        for role in (MANAGER_ROLE, VIEWER_ROLE, LEGACY_ROLE, SECOND_ROLE):
             frappe.db.delete("Custom DocPerm", {"role": role})
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
@@ -101,7 +101,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             user.append("roles", {"role": role})
         if almdina:
             user.default_app = "almdina_erp"
-            user.default_workspace = "Almdina Settings"
+            user.default_workspace = "Almdina ERP"
         user.save(ignore_permissions=True)
 
     @classmethod
@@ -145,10 +145,11 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         frappe.clear_cache()
         super().tearDown()
 
-    def test_manager_can_run_full_workforce_lifecycle(self) -> None:
+    def test_manager_can_run_full_direct_role_lifecycle(self) -> None:
         from almdina_erp.almdina_erp.services.workforce_service import (
             create_workforce_user,
             get_workforce_console,
+            get_workforce_user_access,
             reset_workforce_password,
             set_workforce_user_enabled,
             update_workforce_user,
@@ -161,12 +162,12 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 "first_name": "عامل",
                 "last_name": "اختبار",
                 "language": "ar",
-                "profile": "drawing_operator",
+                "roles": [SECOND_ROLE],
                 "temporary_password": "SecureTemp123!",
             }
         )
         self.assertEqual(result["user"]["email"], WORKER_USER)
-        self.assertEqual(result["user"]["profile"], "drawing_operator")
+        self.assertEqual(result["user"]["roles"], [SECOND_ROLE])
         self.assertTrue(result["user"]["enabled"])
 
         roles = set(
@@ -176,26 +177,19 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 pluck="role",
             )
         )
-        self.assertIn("عامل رسم", roles)
-        self.assertNotIn("Production Manager", roles)
-        self.assertNotIn("Accounts Management", roles)
+        self.assertIn("Desk User", roles)
+        self.assertIn(SECOND_ROLE, roles)
+        self.assertNotIn(VIEWER_ROLE, roles)
 
-        frappe.set_user("Administrator")
-        worker = frappe.get_doc("User", WORKER_USER)
-        worker.append("roles", {"role": UNRELATED_ROLE})
-        worker.save(ignore_permissions=True)
-        frappe.clear_cache(user=WORKER_USER)
-
-        frappe.set_user(MANAGER_USER)
         updated = update_workforce_user(
             WORKER_USER,
             {
-                "first_name": "عامل CNC",
-                "profile": "cnc_operator",
+                "first_name": "عامل محدث",
+                "roles": [SECOND_ROLE, VIEWER_ROLE],
                 "language": "ar",
             },
         )["user"]
-        self.assertEqual(updated["profile"], "cnc_operator")
+        self.assertEqual(set(updated["roles"]), {SECOND_ROLE, VIEWER_ROLE})
         roles = set(
             frappe.get_all(
                 "Has Role",
@@ -203,9 +197,16 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 pluck="role",
             )
         )
-        self.assertIn("عامل CNC", roles)
-        self.assertIn(UNRELATED_ROLE, roles)
-        self.assertNotIn("عامل رسم", roles)
+        self.assertIn(SECOND_ROLE, roles)
+        self.assertIn(VIEWER_ROLE, roles)
+
+        access = get_workforce_user_access(WORKER_USER)
+        self.assertEqual(set(access["roles"]), {SECOND_ROLE, VIEWER_ROLE})
+        self.assertGreaterEqual(access["capability_count"], 1)
+        self.assertIn(
+            Capability.VIEW_USERS,
+            {item["key"] for item in access["capabilities"]},
+        )
 
         reset = reset_workforce_password(WORKER_USER, "AnotherSecure123!")
         self.assertFalse(reset["password_logged"])
@@ -219,6 +220,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         console = get_workforce_console(search=WORKER_USER)
         self.assertEqual(len(console["users"]), 1)
         self.assertEqual(console["users"][0]["email"], WORKER_USER)
+        self.assertTrue(any(role["name"] == SECOND_ROLE for role in console["roles"]))
 
         audits = frappe.get_all(
             "Almdina User Audit",
@@ -227,12 +229,33 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         )
         actions = {row.action for row in audits}
         self.assertTrue(
-            {"Created", "Identity Updated", "Profile Changed", "Password Reset", "Disabled", "Enabled"}.issubset(actions)
+            {"Created", "Identity Updated", "Roles Changed", "Password Reset", "Disabled", "Enabled"}.issubset(actions)
         )
         for row in audits:
             serialized = f"{row.before_json}\n{row.after_json}"
             self.assertNotIn("SecureTemp123", serialized)
             self.assertNotIn("AnotherSecure123", serialized)
+
+    def test_explicit_role_update_replaces_editable_roles(self) -> None:
+        from almdina_erp.almdina_erp.services.workforce_service import (
+            create_workforce_user,
+            update_workforce_user,
+        )
+
+        frappe.set_user(MANAGER_USER)
+        create_workforce_user(
+            {
+                "email": WORKER_USER,
+                "first_name": "Role Test",
+                "roles": [SECOND_ROLE, VIEWER_ROLE],
+                "temporary_password": "SecureTemp123!",
+            }
+        )
+        updated = update_workforce_user(
+            WORKER_USER,
+            {"roles": [SECOND_ROLE]},
+        )["user"]
+        self.assertEqual(updated["roles"], [SECOND_ROLE])
 
     def test_viewer_can_list_but_cannot_create(self) -> None:
         from almdina_erp.almdina_erp.services.workforce_service import (
@@ -247,7 +270,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 {
                     "email": WORKER_USER,
                     "first_name": "Denied",
-                    "profile": "drawing_operator",
+                    "roles": [SECOND_ROLE],
                     "temporary_password": "DeniedSecure123!",
                 }
             )
