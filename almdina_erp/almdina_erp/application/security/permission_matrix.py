@@ -40,7 +40,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإسناد أدوارها.", "icon": "users"},
     "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة وضوابط الإنتاج كل قسم بصورة مستقلة.", "icon": "setting-gear"},
     "master_data": {"label": "البيانات الأساسية", "description": "إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.", "icon": "database"},
-    "administration": {"label": "إدارة الصلاحيات", "description": "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "icon": "lock"},
+    "administration": {"label": "الأدوار والصلاحيات", "description": "فصل عرض الأدوار وإنشائها وتعديلها وحذفها عن تعديل مصفوفة الصلاحيات.", "icon": "lock"},
 }
 
 
@@ -112,7 +112,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.CREATE_EDGE_BANDING_TYPES: _presentation("إنشاء نوع قشاط", "إضافة نوع قشاط جديد.", "sensitive"),
     Capability.EDIT_EDGE_BANDING_TYPES: _presentation("تعديل أنواع القشاط", "تعديل السماكة والسعر والخصائص أو تعطيل النوع.", "critical"),
     Capability.DELETE_EDGE_BANDING_TYPES: _presentation("حذف نوع قشاط", "حذف نوع غير مستخدم في أي طلب أو قطعة.", "critical"),
-    Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
+    Capability.VIEW_ROLES: _presentation("عرض الأدوار", "عرض أدوار Almdina وتفاصيل استخدامها دون تعديل."),
+    Capability.CREATE_ROLES: _presentation("إنشاء الأدوار", "إنشاء دور Almdina جديد فارغ دون أي صلاحيات تلقائية.", "critical"),
+    Capability.EDIT_ROLES: _presentation("تعديل الأدوار", "تعديل اسم الدور ووصفه وتفعيله أو تعطيله وفق قيود الاستخدام.", "critical"),
+    Capability.DELETE_ROLES: _presentation("حذف الأدوار", "حذف دور Almdina غير مستخدم بعد فحص جميع المراجع.", "critical"),
+    Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات يدويًا للأدوار.", "critical"),
 }
 
 
@@ -162,6 +166,14 @@ def _build_prerequisites() -> MappingProxyType:
         Capability.RESET_USER_PASSWORD,
     ):
         direct[capability].add(Capability.VIEW_USERS)
+    direct[Capability.ASSIGN_USER_ROLES].add(Capability.VIEW_ROLES)
+    for capability in (
+        Capability.CREATE_ROLES,
+        Capability.EDIT_ROLES,
+        Capability.DELETE_ROLES,
+        Capability.MANAGE_PERMISSIONS,
+    ):
+        direct[capability].add(Capability.VIEW_ROLES)
     for capability in (
         Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
         Capability.EDIT_FACTORY_COST_DEFAULTS,
