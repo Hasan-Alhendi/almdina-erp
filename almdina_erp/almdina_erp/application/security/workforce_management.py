@@ -10,7 +10,6 @@ from almdina_erp.almdina_erp.domain.security.role_management import (
     PROTECTED_ROLE_NAMES,
     normalize_role_name,
 )
-from almdina_erp.almdina_erp.domain.security.workforce import PROFILES, profile_for_key
 
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -112,24 +111,6 @@ def normalize_role_selection(raw: Any) -> tuple[str, ...]:
     return tuple(roles)
 
 
-def profile_catalog_payload() -> list[dict[str, Any]]:
-    """Legacy profile catalogue retained for older API clients."""
-
-    return [
-        {
-            "key": profile.key,
-            "label": profile.label,
-            "description": profile.description,
-            "default_workspace": profile.default_workspace,
-        }
-        for profile in PROFILES.values()
-    ]
-
-
-def validate_profile(profile_key: str) -> str:
-    return profile_for_key(profile_key).key
-
-
 def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
     source = dict(user or {})
     roles = sorted(
@@ -147,7 +128,6 @@ def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
         "enabled": bool(source.get("enabled")),
         "language": str(source.get("language") or ""),
         "roles": roles,
-        "profile": str(source.get("profile") or ""),
         "default_workspace": str(source.get("default_workspace") or ""),
         "default_app": str(source.get("default_app") or ""),
     }
@@ -160,7 +140,5 @@ __all__ = [
     "audit_snapshot",
     "normalize_identity",
     "normalize_role_selection",
-    "profile_catalog_payload",
-    "validate_profile",
     "validate_temporary_password",
 ]
