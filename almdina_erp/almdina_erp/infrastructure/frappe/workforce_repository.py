@@ -15,15 +15,10 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
 from almdina_erp.almdina_erp.domain.security.role_management import (
     PROTECTED_ROLE_NAMES,
 )
-from almdina_erp.almdina_erp.domain.security.workforce import (
-    MANAGED_OPERATIONAL_ROLES,
-    OperationalProfile,
-    PROFILES,
-    infer_profile,
-)
 
 
 _ROLE_METADATA_DOCTYPE = "Almdina Role Metadata"
+_DEFAULT_WORKSPACE = "Almdina ERP"
 
 
 class FrappeWorkforceRepository:
@@ -68,15 +63,14 @@ class FrappeWorkforceRepository:
         }
 
     def managed_role_names(self) -> frozenset[str]:
-        """Roles that this console owns; standard/technical roles remain untouched."""
+        """Roles explicitly owned by Almdina metadata.
 
-        metadata_roles = set(self._metadata_map())
-        existing_legacy = {
-            str(role)
-            for role in MANAGED_OPERATIONAL_ROLES
-            if frappe.db.exists("Role", role)
-        }
-        return frozenset(metadata_roles | existing_legacy)
+        Historical role-name catalogues are deliberately excluded from runtime.
+        A migration adopts existing Almdina roles into metadata before this
+        repository becomes authoritative.
+        """
+
+        return frozenset(self._metadata_map())
 
     def list_assignable_roles(self) -> list[dict[str, Any]]:
         metadata = self._metadata_map()
@@ -122,9 +116,6 @@ class FrappeWorkforceRepository:
     def user_exists(self, user: str) -> bool:
         return bool(frappe.db.exists("User", user))
 
-    def ensure_profile_roles(self, profile: OperationalProfile) -> None:
-        self.ensure_assignable_roles(tuple(profile.roles))
-
     def active_assignment_count(self, user: str) -> int:
         return int(
             frappe.db.count(
@@ -137,24 +128,10 @@ class FrappeWorkforceRepository:
             or 0
         )
 
-    @staticmethod
-    def _default_workspace_for_roles(roles: tuple[str, ...]) -> str:
-        operator_roles = {
-            role
-            for profile in PROFILES.values()
-            if profile.default_workspace == "Shop Floor"
-            for role in profile.roles
-        }
-        selected = set(roles)
-        if selected and selected.issubset(operator_roles):
-            return "Shop Floor"
-        return "Almdina ERP"
-
     def _snapshot_from_doc(self, user: Any) -> dict[str, Any]:
         roles = self._roles_for_user(user.name)
         managed_roles = self.managed_role_names()
         workforce_roles = tuple(role for role in roles if role in managed_roles)
-        profile = infer_profile(roles)
         return {
             "email": str(user.name),
             "first_name": str(user.first_name or ""),
@@ -164,7 +141,6 @@ class FrappeWorkforceRepository:
             "language": str(user.language or "ar"),
             "roles": list(roles),
             "workforce_roles": list(workforce_roles),
-            "profile": profile,
             "default_workspace": str(user.default_workspace or ""),
             "default_app": str(user.default_app or ""),
             "last_active": str(user.last_active or ""),
@@ -243,7 +219,6 @@ class FrappeWorkforceRepository:
         if self.user_exists(identity.email):
             raise ValueError("A user with this email already exists.")
         self.ensure_assignable_roles(roles)
-        workspace = self._default_workspace_for_roles(roles)
         user = frappe.get_doc(
             {
                 "doctype": "User",
@@ -255,7 +230,7 @@ class FrappeWorkforceRepository:
                 "language": identity.language,
                 "enabled": 1,
                 "default_app": "almdina_erp",
-                "default_workspace": workspace,
+                "default_workspace": _DEFAULT_WORKSPACE,
             }
         )
         for role in dict.fromkeys(("Desk User", *roles)):
@@ -301,21 +276,11 @@ class FrappeWorkforceRepository:
             if frappe.db.exists("Role", role):
                 user.append("roles", {"role": role})
         user.default_app = "almdina_erp"
-        workspace = self._default_workspace_for_roles(roles)
-        if frappe.db.exists("Workspace", workspace):
-            user.default_workspace = workspace
+        if frappe.db.exists("Workspace", _DEFAULT_WORKSPACE):
+            user.default_workspace = _DEFAULT_WORKSPACE
         user.save(ignore_permissions=True)
         frappe.clear_cache(user=user_name)
         return self.get_user(user_name)
-
-    def assign_profile(
-        self,
-        user_name: str,
-        profile: OperationalProfile,
-    ) -> dict[str, Any]:
-        """Backwards-compatible adapter for callers that still send a profile."""
-
-        return self.assign_roles(user_name, tuple(profile.roles))
 
     def set_enabled(self, user_name: str, enabled: bool) -> dict[str, Any]:
         frappe.db.set_value(
