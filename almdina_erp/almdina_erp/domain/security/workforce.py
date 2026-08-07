@@ -8,90 +8,16 @@ from types import MappingProxyType
 from .authorization import Capability, WORKFORCE_CAPABILITIES, normalize_capabilities
 
 
-@dataclass(frozen=True, slots=True)
-class OperationalProfile:
-    """Legacy operational bundle kept only for backwards-compatible API input."""
-
-    key: str
-    label: str
-    description: str
-    roles: tuple[str, ...]
-    default_workspace: str
-    default_app: str = "almdina_erp"
-
-
-_PROFILES = (
-    OperationalProfile(
-        "order_entry",
-        "إدخال الطلبات",
-        "إدخال الطلبات ومتابعتها من مساحة عمل المدينة.",
-        ("Order Entry",),
-        "Almdina ERP",
-    ),
-    OperationalProfile(
-        "factory_manager",
-        "مدير المعمل",
-        "أهلية تشغيلية للإدارة والإنتاج والتكلفة دون منح صلاحيات أعمال تلقائيًا.",
-        ("Order Entry", "Production Manager", "Accounts Management"),
-        "Almdina ERP",
-    ),
-    OperationalProfile(
-        "production_manager",
-        "مشرف الإنتاج",
-        "أهلية الإشراف على أقسام الإنتاج دون منح إجراءات إدارية تلقائيًا.",
-        ("Production Manager",),
-        "Almdina ERP",
-    ),
-    OperationalProfile(
-        "accounts",
-        "التكلفة والحسابات",
-        "أهلية تشغيلية لقسم التكلفة؛ عرض البيانات المالية تحدده المصفوفة.",
-        ("Accounts Management",),
-        "Almdina ERP",
-    ),
-    OperationalProfile(
-        "drawing_operator",
-        "عامل الرسم",
-        "مؤهل للإسناد إلى مرحلة الرسم.",
-        ("عامل رسم",),
-        "Shop Floor",
-    ),
-    OperationalProfile(
-        "sharyoun_operator",
-        "عامل الشريون",
-        "مؤهل للإسناد إلى مرحلة الشريون.",
-        ("عامل شريون",),
-        "Shop Floor",
-    ),
-    OperationalProfile(
-        "cnc_operator",
-        "عامل CNC",
-        "مؤهل للإسناد إلى مرحلة CNC.",
-        ("عامل CNC",),
-        "Shop Floor",
-    ),
-    OperationalProfile(
-        "sanding_operator",
-        "عامل التقشيط",
-        "مؤهل للإسناد إلى مرحلة التقشيط.",
-        ("عامل تقشيط",),
-        "Shop Floor",
-    ),
-)
-
-PROFILES = MappingProxyType({profile.key: profile for profile in _PROFILES})
-MANAGED_OPERATIONAL_ROLES = frozenset(
-    role for profile in _PROFILES for role in profile.roles
-)
 PROTECTED_USERS = frozenset({"Administrator", "Guest"})
 
 
 class WorkforceAction(str, Enum):
+    """Actions exposed by the Almdina workforce console."""
+
     VIEW = "view"
     CREATE = "create"
     EDIT = "edit"
     ASSIGN_ROLES = "assign_roles"
-    ASSIGN_PROFILE = "assign_profile"  # legacy clients only
     ENABLE = "enable"
     DISABLE = "disable"
     RESET_PASSWORD = "reset_password"
@@ -102,8 +28,7 @@ ACTION_CAPABILITIES = MappingProxyType(
         WorkforceAction.VIEW: Capability.VIEW_USERS,
         WorkforceAction.CREATE: Capability.CREATE_USERS,
         WorkforceAction.EDIT: Capability.EDIT_USERS,
-        WorkforceAction.ASSIGN_ROLES: Capability.ASSIGN_WORKFORCE_PROFILE,
-        WorkforceAction.ASSIGN_PROFILE: Capability.ASSIGN_WORKFORCE_PROFILE,
+        WorkforceAction.ASSIGN_ROLES: Capability.ASSIGN_USER_ROLES,
         WorkforceAction.ENABLE: Capability.ENABLE_USERS,
         WorkforceAction.DISABLE: Capability.DISABLE_USERS,
         WorkforceAction.RESET_PASSWORD: Capability.RESET_USER_PASSWORD,
@@ -130,28 +55,18 @@ class WorkforceDecision:
 def expand_workforce_capabilities(
     capabilities: Iterable[str] | None,
 ) -> frozenset[str]:
+    """Expand only the explicitly documented legacy manage-users umbrella.
+
+    New roles should use the granular workforce capabilities. The umbrella is
+    retained temporarily for existing installations until its grants are
+    migrated to their granular equivalents; it is not used for role assignment
+    or operational routing.
+    """
+
     granted = set(normalize_capabilities(capabilities))
     if Capability.MANAGE_USERS in granted:
         granted.update(WORKFORCE_CAPABILITIES)
     return frozenset(granted)
-
-
-def profile_for_key(profile_key: str) -> OperationalProfile:
-    key = str(profile_key or "").strip()
-    try:
-        return PROFILES[key]
-    except KeyError as exc:
-        raise ValueError(f"Unknown workforce profile: {key}") from exc
-
-
-def infer_profile(roles: Iterable[str] | None) -> str:
-    managed = frozenset(str(role) for role in (roles or ()) if role).intersection(
-        MANAGED_OPERATIONAL_ROLES
-    )
-    for profile in _PROFILES:
-        if managed == frozenset(profile.roles):
-            return profile.key
-    return "custom" if managed else ""
 
 
 def decide_workforce_action(
@@ -184,10 +99,7 @@ def decide_workforce_action(
             "outside_scope",
             "This account is outside the Almdina workforce scope.",
         )
-    if action in {
-        WorkforceAction.ASSIGN_ROLES,
-        WorkforceAction.ASSIGN_PROFILE,
-    } and facts.active_assignments > 0:
+    if action == WorkforceAction.ASSIGN_ROLES and facts.active_assignments > 0:
         return WorkforceDecision(
             False,
             "active_assignments",
@@ -234,16 +146,11 @@ def action_context(
 
 __all__ = [
     "ACTION_CAPABILITIES",
-    "MANAGED_OPERATIONAL_ROLES",
-    "PROFILES",
     "PROTECTED_USERS",
-    "OperationalProfile",
     "WorkforceAction",
     "WorkforceDecision",
     "WorkforceFacts",
     "action_context",
     "decide_workforce_action",
     "expand_workforce_capabilities",
-    "infer_profile",
-    "profile_for_key",
 ]
