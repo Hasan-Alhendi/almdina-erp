@@ -16,24 +16,15 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     validate_capability_dependencies,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
+from almdina_erp.almdina_erp.domain.security.role_management import PROTECTED_ROLE_NAMES
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import managed_role_names
 
 
-PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})
+PROTECTED_ROLES = PROTECTED_ROLE_NAMES
 _IDENTITY_FIELDS = frozenset(
     {
-        "name",
-        "doctype",
-        "parent",
-        "parenttype",
-        "parentfield",
-        "idx",
-        "owner",
-        "creation",
-        "modified",
-        "modified_by",
-        "docstatus",
-        "role",
-        "permlevel",
+        "name", "doctype", "parent", "parenttype", "parentfield", "idx", "owner",
+        "creation", "modified", "modified_by", "docstatus", "role", "permlevel",
     }
 )
 
@@ -51,32 +42,40 @@ _DEFINITIONS_BY_DOCTYPE = _definitions_by_doctype()
 class FrappePermissionMatrixRepository:
     """Read and write explicit Almdina capability fields through Custom DocPerm."""
 
-    def ensure_custom_permission_baseline(
-        self,
-        doctypes: Sequence[str] | None = None,
-    ) -> None:
+    def ensure_custom_permission_baseline(self, doctypes: Sequence[str] | None = None) -> None:
         selected = tuple(doctypes or _DEFINITIONS_BY_DOCTYPE)
         for doctype in selected:
             self._ensure_doctype_custom_permission_baseline(str(doctype))
 
     def list_roles(self) -> list[dict[str, Any]]:
+        managed = sorted(managed_role_names().difference(PROTECTED_ROLES))
+        if not managed:
+            return []
         role_meta = frappe.get_meta("Role")
         fields = ["name", "desk_access"]
         if role_meta.has_field("disabled"):
             fields.append("disabled")
-        rows = frappe.get_all("Role", fields=fields, order_by="name asc")
+        rows = frappe.get_all(
+            "Role",
+            filters={"name": ["in", managed]},
+            fields=fields,
+            order_by="name asc",
+            limit_page_length=0,
+        )
         return [
             {"name": str(row.name), "desk_access": bool(row.get("desk_access"))}
             for row in rows
-            if row.name not in PROTECTED_ROLES and not bool(row.get("disabled"))
+            if not bool(row.get("disabled"))
         ]
 
     def validate_role(self, role: str) -> str:
         resolved = str(role or "").strip()
         if not resolved or resolved in PROTECTED_ROLES:
-            raise ValueError("Select an editable system role.")
+            raise ValueError("Select an editable Almdina role.")
         if not frappe.db.exists("Role", resolved):
             raise ValueError(f"Role {resolved} does not exist.")
+        if resolved not in managed_role_names():
+            raise ValueError("This role is outside the Almdina managed-role registry.")
         return resolved
 
     def role_state(self, role: str) -> dict[str, Any]:
@@ -87,34 +86,22 @@ class FrappePermissionMatrixRepository:
             rows, source = self._effective_rows(doctype, resolved, definitions)
             source_by_doctype[doctype] = source
             for capability, definition in definitions:
-                state[capability] = any(
-                    bool(row.get(definition.permission_type)) for row in rows
-                )
+                state[capability] = any(bool(row.get(definition.permission_type)) for row in rows)
         return {
             "role": resolved,
             "capabilities": normalize_capability_state(state),
             "source_by_doctype": source_by_doctype,
         }
 
-    def role_states(
-        self,
-        roles: Sequence[str] | None = None,
-    ) -> dict[str, dict[str, bool]]:
+    def role_states(self, roles: Sequence[str] | None = None) -> dict[str, dict[str, bool]]:
         selected = (
             [self.validate_role(role) for role in roles]
             if roles is not None
             else [str(row["name"]) for row in self.list_roles()]
         )
-        return {
-            role: self.role_state(role)["capabilities"]
-            for role in sorted(dict.fromkeys(selected))
-        }
+        return {role: self.role_state(role)["capabilities"] for role in sorted(dict.fromkeys(selected))}
 
-    def save_role_state(
-        self,
-        role: str,
-        capabilities: Mapping[str, Any],
-    ) -> dict[str, Any]:
+    def save_role_state(self, role: str, capabilities: Mapping[str, Any]) -> dict[str, Any]:
         resolved = self.validate_role(role)
         return self.save_role_states({resolved: capabilities})[resolved]
 
@@ -134,10 +121,7 @@ class FrappePermissionMatrixRepository:
             raise ValueError("At least one role state is required.")
 
         for role in sorted(prepared):
-            frappe.db.sql(
-                "select name from `tabRole` where name = %s for update",
-                (role,),
-            )
+            frappe.db.sql("select name from `tabRole` where name = %s for update", (role,))
         self.ensure_custom_permission_baseline(tuple(_DEFINITIONS_BY_DOCTYPE))
         for role in sorted(prepared):
             desired = prepared[role]
@@ -175,11 +159,7 @@ class FrappePermissionMatrixRepository:
         ).insert(ignore_permissions=True)
         return str(document.name)
 
-    def list_audit(
-        self,
-        role: str | None = None,
-        limit: int = 20,
-    ) -> list[dict[str, Any]]:
+    def list_audit(self, role: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         filters = {"role": self.validate_role(role)} if role else None
         rows = frappe.get_all(
             "Almdina Permission Audit",
@@ -190,7 +170,8 @@ class FrappePermissionMatrixRepository:
         )
         return [dict(row) for row in rows]
 
-    def user_roles(self, user: str) -> frozenset[str]:
+    @staticmethod
+    def user_roles(user: str) -> frozenset[str]:
         if user == "Administrator":
             return frozenset()
         return frozenset(frappe.get_roles(user))
@@ -251,8 +232,8 @@ class FrappePermissionMatrixRepository:
         )
         return [dict(row) for row in standard], "standard" if standard else "none"
 
+    @staticmethod
     def _available_fields(
-        self,
         permission_doctype: str,
         definitions: list[tuple[str, Any]],
     ) -> list[str]:
@@ -311,7 +292,8 @@ class FrappePermissionMatrixRepository:
             int(bool(row.get("if_owner"))),
         )
 
-    def _override_from_standard(self, doctype: str, name: str) -> Any:
+    @staticmethod
+    def _override_from_standard(doctype: str, name: str) -> Any:
         standard = frappe.get_doc("DocPerm", name)
         custom_meta = frappe.get_meta("Custom DocPerm")
         payload: dict[str, Any] = {
