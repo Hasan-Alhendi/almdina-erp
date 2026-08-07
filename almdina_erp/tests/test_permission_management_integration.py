@@ -35,7 +35,6 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             {
                 "read": 1,
                 Capability.MANAGE_PERMISSIONS: 1,
-                Capability.MANAGE_FACTORY_SETTINGS: 1,
             },
         )
         frappe.clear_cache(user=ADMIN_USER)
@@ -141,13 +140,14 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             TARGET_ROLE,
             {
                 Capability.APPROVE_DXF: True,
-                Capability.MANAGE_FACTORY_SETTINGS: True,
+                Capability.EDIT_FACTORY_CUTTING_DEFAULTS: True,
+                Capability.EDIT_FACTORY_COST_DEFAULTS: True,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True,
             },
         )
         self.assertTrue(result["changed"])
         self.assertTrue(result["capabilities"][Capability.VIEW_ORDERS])
         self.assertTrue(result["capabilities"][Capability.APPROVE_DXF])
-        self.assertTrue(result["capabilities"][Capability.MANAGE_FACTORY_SETTINGS])
         self.assertTrue(result["capabilities"][Capability.VIEW_FACTORY_SETTINGS])
         self.assertTrue(
             result["capabilities"][Capability.EDIT_FACTORY_CUTTING_DEFAULTS]
@@ -179,7 +179,6 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             [
                 "read",
                 "write",
-                Capability.MANAGE_FACTORY_SETTINGS,
                 Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
                 Capability.EDIT_FACTORY_COST_DEFAULTS,
                 Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
@@ -195,7 +194,6 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             "Factory settings must be written only through the field-aware service.",
         )
         for capability in (
-            Capability.MANAGE_FACTORY_SETTINGS,
             Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
             Capability.EDIT_FACTORY_COST_DEFAULTS,
             Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
@@ -212,13 +210,19 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 user=TARGET_USER,
             )
         )
-        self.assertTrue(
-            frappe.has_permission(
-                "Almdina ERP Settings",
-                ptype=Capability.MANAGE_FACTORY_SETTINGS,
-                user=TARGET_USER,
+        for capability in (
+            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+            Capability.EDIT_FACTORY_COST_DEFAULTS,
+            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        ):
+            self.assertTrue(
+                frappe.has_permission(
+                    "Almdina ERP Settings",
+                    ptype=capability,
+                    user=TARGET_USER,
+                ),
+                capability,
             )
-        )
         self.assertFalse(
             frappe.has_permission(
                 "Almdina ERP Settings",
@@ -502,16 +506,13 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         )
 
         frappe.set_user(ADMIN_USER)
-        preview = preview_role_permissions(
-            ADMIN_ROLE,
-            {Capability.MANAGE_FACTORY_SETTINGS: True},
-        )
+        replacement_state = {
+            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True,
+        }
+        preview = preview_role_permissions(ADMIN_ROLE, replacement_state)
         self.assertTrue(preview["requires_self_lockout_confirmation"])
         with self.assertRaises(frappe.PermissionError):
-            update_role_permissions(
-                ADMIN_ROLE,
-                {Capability.MANAGE_FACTORY_SETTINGS: True},
-            )
+            update_role_permissions(ADMIN_ROLE, replacement_state)
 
     def test_factory_settings_are_capability_managed(self) -> None:
         from almdina_erp.almdina_erp.services.production_settings_service import (
