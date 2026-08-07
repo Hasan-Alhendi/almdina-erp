@@ -15,7 +15,10 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
 )
 
 
-PROTECTED_ASSIGNMENT_ROLES = frozenset({"All", "Guest", "Desk User"})
+PROTECTED_ASSIGNMENT_ROLES = frozenset(
+    {"All", "Guest", "Desk User", "System Manager"}
+)
+RETAINED_SYSTEM_ROLES = frozenset({"System Manager"})
 
 
 class FrappeWorkforceRepository:
@@ -212,9 +215,17 @@ class FrappeWorkforceRepository:
         roles: Sequence[str],
     ) -> dict[str, Any]:
         selected_roles = self.validate_roles(roles)
+        current_roles = self._roles_for_user(user_name)
+        retained_system_roles = tuple(
+            role for role in current_roles if role in RETAINED_SYSTEM_ROLES
+        )
+        required_roles = tuple(
+            dict.fromkeys(("Desk User", *retained_system_roles, *selected_roles))
+        )
+
         user = frappe.get_doc("User", user_name)
         user.set("roles", [])
-        for role in ("Desk User", *selected_roles):
+        for role in required_roles:
             if frappe.db.exists("Role", role):
                 user.append("roles", {"role": role})
         user.default_app = "almdina_erp"
@@ -283,4 +294,8 @@ class FrappeWorkforceRepository:
         return [dict(row) for row in rows]
 
 
-__all__ = ["FrappeWorkforceRepository", "PROTECTED_ASSIGNMENT_ROLES"]
+__all__ = [
+    "FrappeWorkforceRepository",
+    "PROTECTED_ASSIGNMENT_ROLES",
+    "RETAINED_SYSTEM_ROLES",
+]
