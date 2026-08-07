@@ -30,13 +30,15 @@ def _materialized_state(state: dict[str, bool]) -> dict[str, bool]:
 
 
 def execute() -> None:
-    """Preserve historical effective access before strict validation is enabled."""
+    """Materialize historical dependencies and reconcile every managed role once."""
 
     ensure_permission_types(ALL_CAPABILITIES)
     repository = FrappePermissionMatrixRepository()
     for role in _candidate_roles():
         current = repository.role_state(role)["capabilities"]
         explicit = _materialized_state(current)
-        if explicit != current:
-            repository.save_role_state(role, explicit)
+        # Always save once after migration, even when no dependency changed, so
+        # native read/create/write/select and field-level projections are
+        # reconciled only after the matrix is guaranteed to be valid.
+        repository.save_role_state(role, explicit)
     frappe.clear_cache()
