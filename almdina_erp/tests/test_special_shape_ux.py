@@ -262,7 +262,8 @@ def test_cutting_plan_visually_audits_every_special_raw_piece():
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
     assert "✦ درفة خاصة · خام CNC" in order_js
-    assert "قشاط مبدئي:" in order_js
+    assert "render_piece_edge_lines(piece)" in order_js
+    assert '{ label: "لون القشاط", value: frm.doc.edge_color || "—" }' in order_js
     assert '"special_shape_raw_summary": self._special_shape_raw_summary(' in order_py
     assert '"complete": requested_ids.issubset(placed_ids) and not unplaced_ids' in order_py
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning
