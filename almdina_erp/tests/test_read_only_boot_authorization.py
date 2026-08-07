@@ -131,7 +131,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         boot.boot_session(bootinfo)
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "order_entry")
-        self.assertEqual(bootinfo["home_page"], "almadina-erp")
+        self.assertEqual(bootinfo["home_page"], "almdina-erp")
         self.assertEqual(bootinfo["default_route"], "/desk/almdina-erp")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
@@ -193,7 +193,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
                 Capability.VIEW_ORDERS,
                 Capability.REASSIGN_WORKER,
                 Capability.VIEW_COSTS,
-                Capability.MANAGE_FACTORY_SETTINGS,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
             }
         ).load()
         bootinfo = {
@@ -210,7 +210,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         boot.boot_session(bootinfo)
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "full")
-        self.assertEqual(bootinfo["home_page"], "almadina-erp")
+        self.assertEqual(bootinfo["home_page"], "almdina-erp")
         self.assertEqual(bootinfo["default_route"], "/desk/almdina-erp")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
