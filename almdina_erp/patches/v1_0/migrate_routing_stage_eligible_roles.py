@@ -32,8 +32,8 @@ def _migrate(doctype: str) -> None:
         limit_page_length=0,
     )
     for row in rows:
-        raw = str(row.eligible_roles_json or "").strip()
-        legacy_role = str(row.operational_role or "").strip()
+        raw = str(row.get("eligible_roles_json") or "").strip()
+        legacy_role = str(row.get("operational_role") or "").strip()
         try:
             roles = decode_eligible_roles(
                 raw,
@@ -48,11 +48,11 @@ def _migrate(doctype: str) -> None:
 
         encoded = encode_eligible_roles(roles)
         display = eligible_roles_display(roles)
-        if raw == encoded and str(row.eligible_roles_display or "") == display:
+        if raw == encoded and str(row.get("eligible_roles_display") or "") == display:
             continue
         frappe.db.set_value(
             doctype,
-            row.name,
+            row.get("name"),
             {
                 "eligible_roles_json": encoded,
                 "eligible_roles_display": display,
