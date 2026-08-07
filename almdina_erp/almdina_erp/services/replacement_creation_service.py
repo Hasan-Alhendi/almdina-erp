@@ -8,6 +8,7 @@ from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
     require_doctype_capability,
     require_document_capability,
 )
@@ -18,14 +19,8 @@ def _source_row_for_label(order: Any, piece_label: str) -> Any:
         group_no = int(str(piece_label).split(".", 1)[0])
     except (TypeError, ValueError):
         frappe.throw(_("Invalid original piece label {0}.").format(piece_label))
-
     if group_no < 1 or group_no > len(order.pieces or []):
-        frappe.throw(
-            _("Piece label {0} does not exist in order {1}.").format(
-                piece_label,
-                order.name,
-            )
-        )
+        frappe.throw(_("Piece label {0} does not exist in order {1}.").format(piece_label, order.name))
     return order.pieces[group_no - 1]
 
 
@@ -33,13 +28,7 @@ def _validate_incident_stage(
     order_name: str,
     production_stage: str | None,
 ) -> str | None:
-    """Return a normalized stage link after enforcing the order boundary.
-
-    The stage name is supplied by the client, so Link-field validation alone is
-    not enough: a valid stage from another order must never be attached to this
-    incident. An omitted stage remains valid for incidents recorded outside a
-    specific shop-floor action.
-    """
+    """Validate stage ownership, order scope, lifecycle and supervisor override."""
 
     stage_name = str(production_stage or "").strip()
     if not stage_name:
@@ -48,18 +37,32 @@ def _validate_incident_stage(
     stage = frappe.db.get_value(
         "Production Stage",
         stage_name,
-        ["name", "door_cutting_order"],
+        ["name", "door_cutting_order", "assigned_to", "status"],
         as_dict=True,
     )
     if not stage:
         frappe.throw(_("Selected production stage does not exist."))
     if str(stage.door_cutting_order or "").strip() != str(order_name or "").strip():
-        frappe.throw(
-            _("Selected production stage does not belong to order {0}.").format(
-                order_name,
-            )
-        )
-    return str(stage.name)
+        frappe.throw(_("Selected production stage does not belong to order {0}.").format(order_name))
+    if str(stage.status or "").strip() == "Cancelled":
+        frappe.throw(_("Incidents cannot be recorded against a cancelled production stage."))
+
+    assigned_to = str(stage.assigned_to or "").strip()
+    actor = str(frappe.session.user or "").strip()
+    if assigned_to == actor:
+        return str(stage.name)
+
+    if doctype_has_capability(Capability.REASSIGN_WORKER, user=actor):
+        return str(stage.name)
+
+    frappe.throw(
+        _(
+            "You can record an incident only on a production stage assigned to you. "
+            "A production supervisor with worker-reassignment permission can record it for another worker."
+        ),
+        frappe.PermissionError,
+    )
+    raise AssertionError("frappe.throw must interrupt execution")
 
 
 def _create_replacement(incident: Any, order: Any) -> Any:
@@ -89,10 +92,7 @@ def _create_replacement(incident: Any, order: Any) -> Any:
     frappe.db.set_value(
         "Production Incident",
         incident.name,
-        {
-            "status": "Replacement Created",
-            "replacement_piece": replacement.name,
-        },
+        {"status": "Replacement Created", "replacement_piece": replacement.name},
         update_modified=True,
     )
     frappe.db.set_value(
@@ -165,18 +165,12 @@ def record_incident(
         "incident": incident.name,
         "status": incident.status,
         "replacement_piece": replacement_name,
-        "order_status": frappe.db.get_value(
-            "Door Cutting Order",
-            order.name,
-            "status",
-        ),
+        "order_status": frappe.db.get_value("Door Cutting Order", order.name, "status"),
     }
 
 
 @frappe.whitelist()
-def create_replacement_from_incident(
-    incident_name: str,
-) -> dict[str, Any]:
+def create_replacement_from_incident(incident_name: str) -> dict[str, Any]:
     require_doctype_capability(
         Capability.CREATE_REPLACEMENT,
         message=_("You do not have permission to create replacement pieces."),
@@ -188,7 +182,4 @@ def create_replacement_from_incident(
     order.check_permission("read")
     require_document_capability(order, Capability.CREATE_REPLACEMENT)
     replacement = _create_replacement(incident, order)
-    return {
-        "replacement_piece": replacement.name,
-        "status": replacement.status,
-    }
+    return {"replacement_piece": replacement.name, "status": replacement.status}
