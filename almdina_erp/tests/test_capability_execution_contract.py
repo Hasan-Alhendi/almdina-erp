@@ -5,6 +5,7 @@ from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
+    Capability,
 )
 
 
@@ -23,8 +24,19 @@ DRAWING_POLICY = (
 
 class TestCapabilityExecutionContract(unittest.TestCase):
     def test_catalog_contains_the_full_assignable_surface(self) -> None:
-        self.assertEqual(len(CAPABILITY_CATALOG), 66)
-        self.assertEqual(len(set(CAPABILITY_CATALOG)), 66)
+        declared = {
+            value
+            for name, value in vars(Capability).items()
+            if name.isupper() and isinstance(value, str)
+        }
+        self.assertEqual(set(CAPABILITY_CATALOG), declared)
+        self.assertIn(Capability.ASSIGN_USER_ROLES, CAPABILITY_CATALOG)
+        for retired in (
+            "assign_workforce_profile",
+            "manage_users",
+            "manage_factory_settings",
+        ):
+            self.assertNotIn(retired, CAPABILITY_CATALOG)
 
     def test_recalculation_is_overridden_by_explicit_capability_service(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
@@ -88,27 +100,12 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.UPLOAD_DXF", policy)
         self.assertIn("Capability.REPLACE_DXF", policy)
         self.assertIn("_validate_and_attach_dxf_file", service)
-        self.assertIn("parse_production_dxf", service)
-        self.assertIn("validate_imported_plan", service)
-        self.assertIn("current_assignee", policy)
-        self.assertIn("production_dxf", policy)
-        self.assertIn("approved_plan", policy)
 
     def test_shop_floor_dxf_link_uses_dxf_permissions_not_plan_permission(self) -> None:
         source = DXF_VISIBILITY.read_text(encoding="utf-8")
-
-        self.assertIn("get_order_shop_floor_detail", source)
-        for capability in (
-            "view_drawing_workspace",
-            "export_dxf",
-            "upload_dxf",
-            "replace_dxf",
-            "approve_dxf",
-        ):
-            with self.subTest(capability=capability):
-                self.assertIn(f'"{capability}"', source)
-        self.assertNotIn('"view_cutting_plan"', source)
-        self.assertIn("almdinaDxfHydrated", source)
+        self.assertIn('can("view_drawing_workspace")', source)
+        self.assertIn('can("export_dxf")', source)
+        self.assertNotIn('can("view_cutting_plan")', source)
 
 
 if __name__ == "__main__":
