@@ -35,17 +35,15 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertFalse(denied.allowed)
         self.assertEqual(denied.code, "missing_capability")
 
-    def test_manage_factory_settings_expands_to_all_sections(self) -> None:
+    def test_all_granular_settings_grants_make_every_section_editable(self) -> None:
         expanded = expand_factory_settings_capabilities(
-            {Capability.MANAGE_FACTORY_SETTINGS}
+            {
+                Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+                Capability.EDIT_FACTORY_COST_DEFAULTS,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+            }
         )
-        for capability in (
-            Capability.VIEW_FACTORY_SETTINGS,
-            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
-            Capability.EDIT_FACTORY_COST_DEFAULTS,
-            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
-        ):
-            self.assertIn(capability, expanded)
+        self.assertIn(Capability.VIEW_FACTORY_SETTINGS, expanded)
         context = settings_context(expanded)
         self.assertTrue(context["can_view"])
         self.assertTrue(all(section["editable"] for section in context["sections"].values()))
@@ -111,13 +109,13 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
 
     def test_unknown_and_empty_settings_updates_fail_closed(self) -> None:
         unknown = decide_settings_update(
-            {Capability.MANAGE_FACTORY_SETTINGS},
+            {Capability.EDIT_FACTORY_CUTTING_DEFAULTS},
             {"unknown_setting": 1},
         )
         self.assertFalse(unknown.allowed)
         self.assertEqual(unknown.code, "unknown_fields")
         empty = decide_settings_update(
-            {Capability.MANAGE_FACTORY_SETTINGS},
+            {Capability.EDIT_FACTORY_CUTTING_DEFAULTS},
             {},
         )
         self.assertFalse(empty.allowed)
