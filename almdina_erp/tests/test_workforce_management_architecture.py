@@ -33,6 +33,25 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertNotIn("from frappe", source)
         self.assertNotIn("frappe.db", source)
 
+    def test_runtime_uses_roles_only_and_has_no_operational_profile_model(self) -> None:
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (DOMAIN, APPLICATION, REPOSITORY, SERVICE, PAGE)
+        )
+        for token in (
+            "OperationalProfile",
+            "PROFILES",
+            "profile_for_key",
+            "infer_profile",
+            "assign_profile",
+            "ASSIGN_PROFILE",
+            "assign_workforce_profile",
+            'fieldname:"profile"',
+        ):
+            self.assertNotIn(token, source)
+        self.assertIn("ASSIGN_USER_ROLES", DOMAIN.read_text(encoding="utf-8"))
+        self.assertIn('fieldname:"roles"', PAGE.read_text(encoding="utf-8"))
+
     def test_frappe_user_writes_and_password_updates_are_isolated(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
         service = SERVICE.read_text(encoding="utf-8")
@@ -75,7 +94,6 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn('fieldtype:"MultiSelectList"', source)
         self.assertIn('fieldname:"roles"', source)
         self.assertIn("workforce_roles", source)
-        self.assertNotIn('fieldname:"profile"', source)
         self.assertNotIn("frappe.user_roles", source)
         self.assertNotIn("frappe.get_roles", source)
         self.assertNotIn('set_route("Form", "User"', source)
@@ -100,6 +118,7 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn('"roles": roles', application)
         self.assertNotIn('"temporary_password":', repository)
         self.assertNotIn('"new_password":', repository)
+        self.assertNotIn("Profile Changed", metadata["fields"][1]["options"])
 
     def test_workspace_and_shared_shell_use_workforce_capability(self) -> None:
         workspace = WORKSPACE.read_text(encoding="utf-8")
