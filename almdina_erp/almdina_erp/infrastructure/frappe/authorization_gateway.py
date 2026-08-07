@@ -10,6 +10,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     capability_definition,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
+)
 
 
 _TRANSACTIONAL_SCOPE_DOCTYPES = frozenset(
@@ -22,18 +25,17 @@ def _matrix_repository() -> tuple[Any, frozenset[str]]:
 
     from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
         FrappePermissionMatrixRepository,
-        PROTECTED_ROLES,
     )
 
-    return FrappePermissionMatrixRepository(), PROTECTED_ROLES
+    return FrappePermissionMatrixRepository(), PROTECTED_SYSTEM_ROLES
 
 
 def _matrix_granted_capabilities(user: str) -> frozenset[str]:
     """Resolve capabilities only from editable roles in the factory matrix.
 
-    Frappe automatically attaches roles such as ``Desk User`` and ``All`` to a
-    session. Those roles are intentionally excluded by ``PROTECTED_ROLES`` and
-    must never become an implicit source of Almdina business authority.
+    Frappe attaches roles such as ``Desk User`` and ``All`` automatically, while
+    ``System Manager`` represents platform administration. Protected system
+    roles must never become implicit sources of Almdina business authority.
     """
 
     cache = getattr(frappe.local, "almdina_matrix_capabilities", None)
@@ -137,9 +139,9 @@ def document_has_capability(
     """Require explicit capability first, then preserve native document scope.
 
     The old implementation checked Frappe native permission first. A stale grant
-    on the automatic ``Desk User`` role could therefore bypass an empty factory
-    role. The matrix is now the authority; native permissions are used only as a
-    second, narrowing check for the concrete document.
+    on a protected system role could therefore bypass an empty factory role. The
+    matrix is now the authority; native permissions are used only as a second,
+    narrowing check for the concrete document.
     """
 
     definition = capability_definition(capability)

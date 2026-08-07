@@ -11,10 +11,14 @@ LEGACY_PATCH = "almdina_erp.patches.v1_0.bootstrap_legacy_role_capabilities"
 
 
 class TestSecurityLifecycleMigration(unittest.TestCase):
-    def test_runtime_lifecycle_never_seeds_role_permissions(self) -> None:
+    def test_runtime_lifecycle_repairs_security_without_seeding_role_permissions(self) -> None:
         source = LIFECYCLE.read_text(encoding="utf-8")
 
         self.assertIn("sync_permission_types()", source)
+        self.assertIn(
+            "revoke_hidden_system_manager_from_almdina_workforce()",
+            source,
+        )
         self.assertNotIn("bootstrap_legacy_role_permissions", source)
         self.assertNotIn("legacy_permission_bootstrap", source)
 

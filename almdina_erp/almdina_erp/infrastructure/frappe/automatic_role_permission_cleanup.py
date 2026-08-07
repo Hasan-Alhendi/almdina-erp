@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import frappe
 
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-    PROTECTED_ROLES,
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
 )
 
 
@@ -30,13 +30,11 @@ def _almdina_business_doctypes() -> tuple[str, ...]:
 
 
 def revoke_automatic_role_business_grants() -> None:
-    """Remove legacy Almdina grants inherited from Frappe automatic roles.
+    """Remove legacy Almdina grants inherited from protected system roles.
 
-    ``All`` and ``Desk User`` are attached automatically to users by Frappe and
-    therefore must never carry factory business permissions. Older releases
-    could leave DocPerm/Custom DocPerm rows for those roles after the role-based
-    bootstrap was retired. If such a row survives, a user with an otherwise
-    empty factory role can inherit create/write/delete or protected field access.
+    ``All`` and ``Desk User`` are attached automatically to users by Frappe,
+    while ``System Manager`` is a platform-wide administration role. None of
+    them may become an implicit source of factory business capabilities.
 
     Only app-owned Almdina DocTypes are touched. Core ERPNext DocTypes such as
     Customer are deliberately excluded so this cleanup cannot change unrelated
@@ -47,7 +45,7 @@ def revoke_automatic_role_business_grants() -> None:
     if not doctypes:
         return
 
-    automatic_roles = tuple(sorted(PROTECTED_ROLES))
+    protected_roles = tuple(sorted(PROTECTED_SYSTEM_ROLES))
     for permission_doctype in ("DocPerm", "Custom DocPerm"):
         if not frappe.db.exists("DocType", permission_doctype):
             continue
@@ -56,15 +54,15 @@ def revoke_automatic_role_business_grants() -> None:
                 permission_doctype,
                 {
                     "parent": doctype,
-                    "role": ["in", automatic_roles],
+                    "role": ["in", protected_roles],
                 },
             )
 
     for doctype in doctypes:
         frappe.clear_cache(doctype=doctype)
 
-    # Automatic roles affect every System User, so clear the global permission
-    # metadata after the database cleanup rather than trying to enumerate users.
+    # Protected roles may affect many System Users, so clear global permission
+    # metadata after cleanup rather than relying on one user's cache only.
     for permission_doctype in ("DocPerm", "Custom DocPerm"):
         frappe.clear_cache(doctype=permission_doctype)
 

@@ -39,7 +39,14 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
         class FakeRepository:
             @staticmethod
             def user_roles(_user):
-                return frozenset({"Arbitrary Operational Role", "Desk User", "All"})
+                return frozenset(
+                    {
+                        "Arbitrary Operational Role",
+                        "Desk User",
+                        "All",
+                        "System Manager",
+                    }
+                )
 
             @staticmethod
             def role_state(_role):
@@ -72,7 +79,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
             spec.loader.exec_module(module)
             module._matrix_repository = lambda: (
                 FakeRepository(),
-                repository_module.PROTECTED_ROLES,
+                frozenset({"All", "Guest", "Desk User", "System Manager"}),
             )
             return module
         finally:
@@ -137,6 +144,51 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 user="empty@example.com",
             )
         )
+
+    def test_system_manager_is_never_factory_business_authority(self) -> None:
+        gateway = self._load_gateway()
+        gateway.frappe.local = types.SimpleNamespace()
+
+        class SystemManagerOnlyRepository:
+            @staticmethod
+            def user_roles(_user):
+                return frozenset({"System Manager", "Desk User", "All"})
+
+            @staticmethod
+            def role_state(_role):
+                return {
+                    "capabilities": {
+                        Capability.VIEW_ORDERS: True,
+                        Capability.CREATE_ORDER: True,
+                        Capability.EDIT_ORDER: True,
+                        Capability.VIEW_COSTS: True,
+                        Capability.VIEW_CUTTING_PLAN: True,
+                    }
+                }
+
+        gateway._matrix_repository = lambda: (
+            SystemManagerOnlyRepository(),
+            frozenset({"All", "Guest", "Desk User", "System Manager"}),
+        )
+
+        self.assertEqual(
+            gateway.granted_capabilities("system.manager@example.com"),
+            frozenset(),
+        )
+        for capability in (
+            Capability.VIEW_ORDERS,
+            Capability.CREATE_ORDER,
+            Capability.EDIT_ORDER,
+            Capability.VIEW_COSTS,
+            Capability.VIEW_CUTTING_PLAN,
+        ):
+            self.assertFalse(
+                gateway.doctype_has_capability(
+                    capability,
+                    user="system.manager@example.com",
+                ),
+                capability,
+            )
 
 
 if __name__ == "__main__":

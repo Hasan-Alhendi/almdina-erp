@@ -3,6 +3,9 @@ from __future__ import annotations
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.workforce_security_cleanup import (
+    revoke_hidden_system_manager_from_almdina_workforce,
+)
 from almdina_erp.install import (
     after_install as run_existing_after_install,
     after_migrate as run_existing_after_migrate,
@@ -10,14 +13,14 @@ from almdina_erp.install import (
 
 
 def _sync_security_foundation() -> None:
-    """Keep permission-type metadata in sync without assigning role grants.
+    """Repair security metadata and legacy hidden workforce authority.
 
-    Historical role grants belong to one-time migration patches. Re-running that
-    bootstrap after every install/migrate would make role names implicit policy
-    and could repopulate an intentionally empty role.
+    Role names never seed business policy here. The migration only removes
+    platform roles that must not act as Almdina authority sources.
     """
 
     sync_permission_types()
+    revoke_hidden_system_manager_from_almdina_workforce()
 
 
 def after_install() -> None:
