@@ -30,6 +30,15 @@ class AlmdinaRoleConsole {
         this.load();
     }
 
+    can(capability) {
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions
+            && typeof permissions.can === "function"
+            && permissions.can(capability)
+        );
+    }
+
     installStyles() {
         if (document.getElementById("almdina-role-console-style")) return;
         const style = document.createElement("style");
@@ -44,7 +53,7 @@ class AlmdinaRoleConsole {
             .arc-table-wrap{overflow:auto;border:1px solid var(--border-color,#e5e7eb);border-radius:16px;background:var(--fg-color,#fff)}.arc-table{width:100%;min-width:1060px;border-collapse:separate;border-spacing:0}.arc-table th{position:sticky;top:0;z-index:2;padding:11px 12px;background:var(--subtle-fg,#f7f9fb);border-bottom:1px solid var(--border-color,#e5e7eb);color:var(--text-muted,#667085);font-size:11px;font-weight:850;text-align:right;white-space:nowrap}.arc-table td{padding:13px 12px;border-bottom:1px solid var(--border-color,#edf0f2);vertical-align:middle;font-size:12px}.arc-table tbody tr:last-child td{border-bottom:0}.arc-table tbody tr:hover{background:var(--subtle-fg,#fafbfc)}
             .arc-role-name{font-size:14px;font-weight:850;overflow-wrap:anywhere}.arc-description{max-width:300px;color:var(--text-muted,#667085);line-height:1.55}.arc-count{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:28px;padding:3px 8px;border-radius:9px;background:var(--subtle-fg,#f2f4f7);font-weight:800}.arc-count.has-value{background:#fff3d6;color:#8a5b00}
             .arc-badges{display:flex;flex-wrap:wrap;gap:5px}.arc-badge{display:inline-flex;align-items:center;min-height:26px;padding:3px 8px;border-radius:999px;font-size:10px;font-weight:850;background:var(--subtle-fg,#f2f4f7)}.arc-badge.enabled{background:#e8f7ee;color:#18794e}.arc-badge.disabled{background:#fdecec;color:#b42318}.arc-badge.custom{background:#edf5ff;color:#175cd3}.arc-badge.standard{background:#f2f4f7;color:#475467}
-            .arc-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:255px}.arc-actions .btn{min-height:34px;padding:6px 9px;border-radius:8px;font-size:11px;font-weight:750}.arc-actions .btn-danger{background:#fff5f4;color:#b42318;border-color:#f6c8c4}.arc-actions .btn-danger:hover{background:#fee4e2}
+            .arc-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:255px}.arc-actions .btn{min-height:34px;padding:6px 9px;border-radius:8px;font-size:11px;font-weight:750}.arc-actions .btn-danger{background:#fff5f4;color:#b42318;border-color:#f6c8c4}.arc-actions .btn-danger:hover{background:#fee4e2}.arc-read-only{display:inline-flex;align-items:center;min-height:32px;padding:5px 9px;border-radius:8px;background:var(--subtle-fg,#f2f4f7);color:var(--text-muted,#667085);font-size:11px;font-weight:750}
             .arc-mobile-list{display:none;gap:10px}.arc-card{padding:14px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:var(--fg-color,#fff)}.arc-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.arc-card-description{margin-top:7px;color:var(--text-muted,#667085);font-size:12px;line-height:1.65}.arc-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border-color,#edf0f2)}.arc-card-metric{padding:8px;border-radius:9px;background:var(--subtle-fg,#f7f9fb)}.arc-card-metric span{display:block;color:var(--text-muted,#667085);font-size:10px;font-weight:750}.arc-card-metric b{display:block;margin-top:3px;font-size:14px}.arc-card .arc-actions{margin-top:12px;min-width:0}
             .arc-empty,.arc-loading{padding:44px 18px;text-align:center;border:1px dashed var(--border-color,#d7dde3);border-radius:16px;color:var(--text-muted,#667085);background:var(--subtle-fg,#fafafa)}.arc-error{padding:18px;border:1px solid #f3b7b2;border-radius:14px;background:#fff5f4;color:#9f2d20;line-height:1.7}
             .arc-usage-warning{margin-top:10px;padding:9px 10px;border-radius:10px;background:#fff8e7;color:#7a4b00;font-size:11px;line-height:1.6}.arc-audit{display:grid;gap:8px;max-height:450px;overflow:auto}.arc-audit-item{padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:11px}.arc-audit-head{display:flex;justify-content:space-between;gap:10px;font-weight:850}.arc-audit-meta{margin-top:4px;color:var(--text-muted,#667085);font-size:11px}.arc-audit-summary{margin-top:7px;font-size:12px;line-height:1.6}
@@ -56,8 +65,17 @@ class AlmdinaRoleConsole {
     }
 
     buildPageActions() {
-        this.page.set_primary_action(__("إنشاء دور"), () => this.openCreateDialog(), "add");
-        this.page.add_inner_button(__("إدارة الصلاحيات"), () => frappe.set_route("factory-permissions"), null, "lock");
+        if (this.can("create_roles")) {
+            this.page.set_primary_action(__("إنشاء دور"), () => this.openCreateDialog(), "add");
+        }
+        if (this.can("manage_permissions")) {
+            this.page.add_inner_button(
+                __("إدارة الصلاحيات"),
+                () => frappe.set_route("factory-permissions"),
+                null,
+                "lock"
+            );
+        }
         this.page.add_inner_button(__("تحديث"), () => this.load(), null, "refresh");
     }
 
@@ -264,25 +282,28 @@ class AlmdinaRoleConsole {
     }
 
     actionsHtml(role) {
-        const buttons = [
-            `<button type="button" class="btn btn-default arc-permissions" data-role="${this.escape(role.name)}">${__("الصلاحيات")}</button>`,
-        ];
-        if (this.actionAllowed(role, "edit")) {
+        const buttons = [];
+        if (this.can("manage_permissions")) {
+            buttons.push(`<button type="button" class="btn btn-default arc-permissions" data-role="${this.escape(role.name)}">${__("الصلاحيات")}</button>`);
+        }
+        if (this.can("edit_roles") && this.actionAllowed(role, "edit")) {
             buttons.push(`<button type="button" class="btn btn-default arc-edit" data-role="${this.escape(role.name)}">${__("تعديل")}</button>`);
         }
-        if (this.actionAllowed(role, "disable")) {
+        if (this.can("edit_roles") && this.actionAllowed(role, "disable")) {
             buttons.push(`<button type="button" class="btn btn-default arc-toggle" data-enabled="0" data-role="${this.escape(role.name)}">${__("تعطيل")}</button>`);
         }
-        if (this.actionAllowed(role, "enable")) {
+        if (this.can("edit_roles") && this.actionAllowed(role, "enable")) {
             buttons.push(`<button type="button" class="btn btn-primary arc-toggle" data-enabled="1" data-role="${this.escape(role.name)}">${__("تفعيل")}</button>`);
         }
-        if (this.actionAllowed(role, "delete")) {
+        if (this.can("delete_roles") && this.actionAllowed(role, "delete")) {
             buttons.push(`<button type="button" class="btn btn-danger arc-delete" data-role="${this.escape(role.name)}">${__("حذف")}</button>`);
         }
-        if (role.role_uid) {
+        if (this.can("view_roles") && role.role_uid) {
             buttons.push(`<button type="button" class="btn btn-default arc-audit-open" data-role="${this.escape(role.name)}">${__("السجل")}</button>`);
         }
-        return `<div class="arc-actions">${buttons.join("")}</div>`;
+        return buttons.length
+            ? `<div class="arc-actions">${buttons.join("")}</div>`
+            : `<span class="arc-read-only">${__("عرض فقط")}</span>`;
     }
 
     bindToolbar() {
@@ -316,7 +337,7 @@ class AlmdinaRoleConsole {
     }
 
     openCreateDialog() {
-        if (this.busy) return;
+        if (!this.can("create_roles") || this.busy) return;
         const dialog = new frappe.ui.Dialog({
             title: __("إنشاء دور جديد"),
             fields: [
@@ -342,7 +363,7 @@ class AlmdinaRoleConsole {
     }
 
     offerPermissionSetup(role) {
-        if (!role) return;
+        if (!role || !this.can("manage_permissions")) return;
         frappe.confirm(
             __("تم إنشاء الدور {0}. هل تريد الانتقال الآن لتحديد صلاحياته يدويًا؟", [this.escape(role.name)]),
             () => this.openPermissions(role),
@@ -350,7 +371,7 @@ class AlmdinaRoleConsole {
     }
 
     openEditDialog(role) {
-        if (!role || !this.actionAllowed(role, "edit") || this.busy) return;
+        if (!this.can("edit_roles") || !role || !this.actionAllowed(role, "edit") || this.busy) return;
         const dialog = new frappe.ui.Dialog({
             title: __("تعديل الدور"),
             fields: [
@@ -391,7 +412,7 @@ class AlmdinaRoleConsole {
     }
 
     toggleRole(role, enabled) {
-        if (!role || !this.actionAllowed(role, enabled ? "enable" : "disable") || this.busy) return;
+        if (!this.can("edit_roles") || !role || !this.actionAllowed(role, enabled ? "enable" : "disable") || this.busy) return;
         const actionLabel = enabled ? __("تفعيل") : __("تعطيل");
         const message = enabled
             ? __("هل تريد تفعيل الدور {0}؟", [this.escape(role.name)])
@@ -410,7 +431,7 @@ class AlmdinaRoleConsole {
     }
 
     openDeleteDialog(role) {
-        if (!role || !this.actionAllowed(role, "delete") || this.busy) return;
+        if (!this.can("delete_roles") || !role || !this.actionAllowed(role, "delete") || this.busy) return;
         const dialog = new frappe.ui.Dialog({
             title: __("حذف الدور نهائيًا"),
             fields: [
@@ -442,7 +463,7 @@ class AlmdinaRoleConsole {
     }
 
     openAudit(role) {
-        if (!role || !role.role_uid) return;
+        if (!this.can("view_roles") || !role || !role.role_uid) return;
         this.call("get_factory_role_audit", { role: role.name, limit: 50 }, __("جاري تحميل سجل الدور...")).then(data => {
             const events = Array.isArray(data.events) ? data.events : [];
             const html = events.length
@@ -475,6 +496,7 @@ class AlmdinaRoleConsole {
     }
 
     openPermissions(role) {
+        if (!this.can("manage_permissions")) return;
         if (role && role.name) {
             try {
                 window.sessionStorage.setItem("almdina.permission-role", role.name);
