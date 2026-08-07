@@ -7,7 +7,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
+SUPPORT_POLICY = ROOT / "almdina_erp" / "application" / "security" / "supporting_doctype_permissions.py"
 REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_matrix_repository.py"
+PROJECTED_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "projected_permission_matrix_repository.py"
+SUPPORT_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "supporting_doctype_permission_repository.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "permission_management_service.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 WORKFORCE_SERVICE = ROOT / "almdina_erp" / "services" / "workforce_service.py"
@@ -23,19 +26,30 @@ SETTINGS_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "
 
 class TestPermissionManagementArchitecture(unittest.TestCase):
     def test_pure_matrix_policy_has_no_framework_dependency(self) -> None:
-        source = POLICY.read_text(encoding="utf-8")
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (POLICY, SUPPORT_POLICY)
+        )
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
         self.assertNotIn("Custom DocPerm", source)
 
     def test_frappe_persistence_is_isolated_in_repository(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
+        projected = PROJECTED_REPOSITORY.read_text(encoding="utf-8")
+        support = SUPPORT_REPOSITORY.read_text(encoding="utf-8")
         service = SERVICE.read_text(encoding="utf-8")
+
         self.assertIn('"Custom DocPerm"', repository)
         self.assertIn('"Almdina Permission Audit"', repository)
+        self.assertIn("FrappePermissionMatrixRepository", projected)
+        self.assertIn("SupportingDoctypePermissionRepository", projected)
+        self.assertIn('"Custom DocPerm"', support)
+        self.assertIn("setup_custom_perms", support)
+
         self.assertNotIn('frappe.get_doc("Custom DocPerm"', service)
         self.assertNotIn("frappe.db.sql", service)
-        self.assertIn("FrappePermissionMatrixRepository", service)
+        self.assertIn("ProjectedPermissionMatrixRepository", service)
 
     def test_custom_permission_baseline_preserves_unedited_roles(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
@@ -88,7 +102,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         source = SHARED_SHELL.read_text(encoding="utf-8")
         self.assertIn("CAPABILITY_ROUTE_RULES", source)
         self.assertIn('any: ["manage_permissions"]', source)
-        self.assertIn('any: ["view_users", "manage_users"]', source)
+        self.assertIn('any: ["view_users"]', source)
         self.assertIn("view_factory_settings", source)
         self.assertIn("edit_factory_production_controls", source)
         self.assertIn("view_production_routings", source)
@@ -98,6 +112,8 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("ruleAllowed", source)
         self.assertIn("hideUnauthorizedShortcuts", source)
         self.assertNotIn("frappe.user_roles", source)
+        self.assertNotIn("manage_users", source)
+        self.assertNotIn("manage_factory_settings", source)
 
     def test_settings_workspace_has_direct_administration_entries(self) -> None:
         workspace = json.loads(SETTINGS_WORKSPACE.read_text(encoding="utf-8"))
