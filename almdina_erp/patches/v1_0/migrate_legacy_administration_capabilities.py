@@ -31,10 +31,13 @@ _LEGACY_GRANTS: dict[str, frozenset[str]] = {
         }
     ),
 }
+_WORKFORCE_LEGACY_FIELDS = frozenset(
+    {"manage_users", "assign_workforce_profile"}
+)
 
 
-def _legacy_role_grants(permission_doctype: str) -> dict[str, set[str]]:
-    """Capture legacy grants before the current permission catalog is reconciled."""
+def _legacy_role_fields(permission_doctype: str) -> dict[str, set[str]]:
+    """Capture exactly which legacy grants each role owned before reconciliation."""
 
     if not frappe.db.exists("DocType", permission_doctype):
         return {}
@@ -55,36 +58,44 @@ def _legacy_role_grants(permission_doctype: str) -> dict[str, set[str]]:
             continue
         for legacy_field in available:
             if bool(row.get(legacy_field)):
-                grants[role].update(_LEGACY_GRANTS[legacy_field])
+                grants[role].add(legacy_field)
     return dict(grants)
 
 
-def _collect_legacy_grants() -> dict[str, set[str]]:
+def _collect_legacy_fields() -> dict[str, set[str]]:
     collected: dict[str, set[str]] = defaultdict(set)
     for permission_doctype in ("DocPerm", "Custom DocPerm"):
-        for role, capabilities in _legacy_role_grants(permission_doctype).items():
-            collected[role].update(capabilities)
+        for role, fields in _legacy_role_fields(permission_doctype).items():
+            collected[role].update(fields)
     return dict(collected)
+
+
+def _migrated_capabilities(legacy_fields: set[str]) -> set[str]:
+    capabilities: set[str] = set()
+    for legacy_field in legacy_fields:
+        capabilities.update(_LEGACY_GRANTS[legacy_field])
+    return capabilities
 
 
 def execute() -> None:
     """Migrate broad/profile-era grants to the granular capability model.
 
-    The old Permission Type columns are intentionally read before synchronization.
-    They can remain as inert historical metadata; current runtime authorization no
-    longer references them. The patch is idempotent because target grants are only
-    switched on and the canonical matrix normalizer preserves all existing grants.
+    Legacy Permission Type columns are read before synchronization. Runtime code
+    never references those old keys. A historical workforce grant also used to
+    project ``read`` onto the Settings singleton; fail closed by removing that
+    stale read unless the same role explicitly owned the old factory-settings
+    grant. Granular settings edit grants, when already present, still restore the
+    required view dependency through the canonical matrix normalizer.
     """
 
-    legacy_grants = _collect_legacy_grants()
+    legacy_fields_by_role = _collect_legacy_fields()
 
     from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
         sync_permission_types,
     )
 
-    # Ensure the new assign_user_roles Permission Type exists before persisting it.
     sync_permission_types()
-    if not legacy_grants:
+    if not legacy_fields_by_role:
         return
 
     from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
@@ -93,15 +104,22 @@ def execute() -> None:
     )
 
     repository = FrappePermissionMatrixRepository()
-    for role in sorted(legacy_grants):
+    for role in sorted(legacy_fields_by_role):
         if role in PROTECTED_ROLES or not frappe.db.exists("Role", role):
             continue
         try:
             current = repository.role_state(role)["capabilities"]
         except ValueError:
             continue
+
+        legacy_fields = legacy_fields_by_role[role]
         migrated: dict[str, Any] = dict(current)
-        for capability in legacy_grants[role]:
+        if (
+            legacy_fields.intersection(_WORKFORCE_LEGACY_FIELDS)
+            and "manage_factory_settings" not in legacy_fields
+        ):
+            migrated[Capability.VIEW_FACTORY_SETTINGS] = False
+        for capability in _migrated_capabilities(legacy_fields):
             migrated[capability] = True
         repository.save_role_state(role, migrated)
 
