@@ -67,18 +67,16 @@ class Capability:
     VIEW_USERS = "view_users"
     CREATE_USERS = "create_users"
     EDIT_USERS = "edit_users"
-    ASSIGN_WORKFORCE_PROFILE = "assign_workforce_profile"
+    ASSIGN_USER_ROLES = "assign_user_roles"
     ENABLE_USERS = "enable_users"
     DISABLE_USERS = "disable_users"
     RESET_USER_PASSWORD = "reset_user_password"
-    MANAGE_USERS = "manage_users"
 
     # Factory settings sections
     VIEW_FACTORY_SETTINGS = "view_factory_settings"
     EDIT_FACTORY_CUTTING_DEFAULTS = "edit_factory_cutting_defaults"
     EDIT_FACTORY_COST_DEFAULTS = "edit_factory_cost_defaults"
     EDIT_FACTORY_PRODUCTION_CONTROLS = "edit_factory_production_controls"
-    MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
 
     # Master data
     VIEW_PRODUCTION_ROUTINGS = "view_production_routings"
@@ -160,16 +158,14 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_USERS, Capability.VIEW_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.CREATE_USERS, Capability.CREATE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.EDIT_USERS, Capability.EDIT_USERS, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.ASSIGN_WORKFORCE_PROFILE, Capability.ASSIGN_WORKFORCE_PROFILE, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.ASSIGN_USER_ROLES, Capability.ASSIGN_USER_ROLES, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.ENABLE_USERS, Capability.ENABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.DISABLE_USERS, Capability.DISABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.RESET_USER_PASSWORD, Capability.RESET_USER_PASSWORD, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.VIEW_FACTORY_SETTINGS, "read", _SETTINGS_DOCTYPE, "factory_settings", False),
     CapabilityDefinition(Capability.EDIT_FACTORY_CUTTING_DEFAULTS, Capability.EDIT_FACTORY_CUTTING_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_FACTORY_COST_DEFAULTS, Capability.EDIT_FACTORY_COST_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, _SETTINGS_DOCTYPE, "factory_settings"),
-    CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),
@@ -182,9 +178,13 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
 )
 
-CAPABILITY_CATALOG = MappingProxyType({definition.key: definition for definition in _CAPABILITY_DEFINITIONS})
+CAPABILITY_CATALOG = MappingProxyType(
+    {definition.key: definition for definition in _CAPABILITY_DEFINITIONS}
+)
 ALL_CAPABILITIES = frozenset(CAPABILITY_CATALOG)
-CUSTOM_PERMISSION_DEFINITIONS = tuple(definition for definition in _CAPABILITY_DEFINITIONS if definition.custom)
+CUSTOM_PERMISSION_DEFINITIONS = tuple(
+    definition for definition in _CAPABILITY_DEFINITIONS if definition.custom
+)
 
 
 def _category_capabilities(*categories: str) -> frozenset[str]:
@@ -201,12 +201,18 @@ COSTING_CAPABILITIES = _category_capabilities("costing", "documents")
 PLANNING_CAPABILITIES = _category_capabilities("cutting_plan")
 DRAWING_CAPABILITIES = _category_capabilities("drawing")
 PRODUCTION_CAPABILITIES = _category_capabilities("production")
-CONTROL_CENTER_CAPABILITIES = _category_capabilities("control_center") | frozenset({Capability.APPROVE_ORDER, Capability.REJECT_ORDER})
+CONTROL_CENTER_CAPABILITIES = _category_capabilities("control_center") | frozenset(
+    {Capability.APPROVE_ORDER, Capability.REJECT_ORDER}
+)
 REPORTING_CAPABILITIES = _category_capabilities("reports")
 WORKFORCE_CAPABILITIES = _category_capabilities("workforce")
 FACTORY_SETTINGS_CAPABILITIES = _category_capabilities("factory_settings")
 MASTER_DATA_CAPABILITIES = _category_capabilities("master_data")
-ADMINISTRATION_CAPABILITIES = _category_capabilities("administration") | FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
+ADMINISTRATION_CAPABILITIES = (
+    _category_capabilities("administration")
+    | FACTORY_SETTINGS_CAPABILITIES
+    | MASTER_DATA_CAPABILITIES
+)
 
 PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
     {
@@ -238,7 +244,9 @@ PRODUCTION_SUPERVISOR_CAPABILITIES = frozenset(
         Capability.CANCEL_REPLACEMENT,
     }
 )
-SHOP_FLOOR_ACCESS_CAPABILITIES = frozenset(PRODUCTION_OPERATOR_CAPABILITIES | PRODUCTION_SUPERVISOR_CAPABILITIES)
+SHOP_FLOOR_ACCESS_CAPABILITIES = frozenset(
+    PRODUCTION_OPERATOR_CAPABILITIES | PRODUCTION_SUPERVISOR_CAPABILITIES
+)
 
 
 def capability_definition(capability: str) -> CapabilityDefinition:
@@ -258,7 +266,9 @@ def normalize_capabilities(capabilities: Iterable[str] | None) -> frozenset[str]
 
 def capability_flags(capabilities: Iterable[str] | None) -> dict[str, bool]:
     granted = normalize_capabilities(capabilities)
-    return {capability: capability in granted for capability in sorted(ALL_CAPABILITIES)}
+    return {
+        capability: capability in granted for capability in sorted(ALL_CAPABILITIES)
+    }
 
 
 def has_capability(capabilities: Iterable[str] | None, capability: str) -> bool:
