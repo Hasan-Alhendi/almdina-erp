@@ -120,6 +120,21 @@ def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _capability_catalog_by_key() -> dict[str, dict[str, Any]]:
+    catalog: dict[str, dict[str, Any]] = {}
+    for group in capability_catalog_payload():
+        for item in group.get("capabilities") or ():
+            key = str(item.get("key") or "")
+            if not key:
+                continue
+            catalog[key] = {
+                **dict(item),
+                "category": str(group.get("key") or ""),
+                "category_label": str(group.get("label") or ""),
+            }
+    return catalog
+
+
 def _effective_access(snapshot: dict[str, Any]) -> dict[str, Any]:
     roles = list(normalize_role_selection(snapshot.get("roles") or ()))
     states = _repository.role_states(roles)
@@ -131,10 +146,7 @@ def _effective_access(snapshot: dict[str, Any]) -> dict[str, Any]:
             if enabled is True
         }
     )
-    catalog = {
-        str(item["key"]): item
-        for item in capability_catalog_payload()
-    }
+    catalog = _capability_catalog_by_key()
     return {
         "user": str(snapshot.get("email") or ""),
         "roles": roles,
