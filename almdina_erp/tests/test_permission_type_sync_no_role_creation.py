@@ -17,6 +17,14 @@ SYNC_PATH = (
     / "permission_type_sync.py"
 )
 REGISTRY_MODULE = "almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry"
+_MANAGED_DOCTYPES = {
+    "Door Cutting Order",
+    "Replacement Piece",
+    "Almdina ERP Settings",
+    "Production Routing",
+    "Customer",
+    "Edge Banding Type",
+}
 
 
 class _FakeDocument:
@@ -31,19 +39,11 @@ class _FakeDocument:
 
 class _FakeDB:
     def exists(self, doctype: str, filters=None):
+        if doctype == "DocType":
+            return str(filters or "") in _MANAGED_DOCTYPES or filters == "Permission Type"
         if doctype == "Permission Type":
-            # Permission Type DocType exists, but no individual capability rows
-            # exist yet in this isolated test harness.
-            return not isinstance(filters, dict)
-        if doctype in {
-            "Door Cutting Order",
-            "Replacement Piece",
-            "Almdina ERP Settings",
-            "Production Routing",
-            "Customer",
-            "Edge Banding Type",
-        }:
-            return True
+            # No individual capability rows exist yet in this isolated harness.
+            return False
         if isinstance(filters, dict):
             return False
         return False
