@@ -14,13 +14,14 @@ def _managed_doctypes() -> tuple[str, ...]:
 
 
 def reconcile_custom_permission_projections() -> None:
-    """Re-save only Almdina-owned role states through the granular model."""
+    """Explicitly re-save only Almdina-owned role states through the current model.
 
-    roles = sorted(
-        role
-        for role in managed_role_names()
-        if frappe.db.exists("Role", role)
-    )
+    This is intentionally separate from ``sync_permission_types`` so schema
+    synchronization can safely run before migration patches materialize old
+    implicit grants as explicit permissions.
+    """
+
+    roles = sorted(role for role in managed_role_names() if frappe.db.exists("Role", role))
     if not roles:
         return
 
@@ -35,7 +36,7 @@ def reconcile_custom_permission_projections() -> None:
 
 
 def sync_permission_types() -> None:
-    """Install granular capability columns without creating or assigning roles."""
+    """Install capability fields and native baselines without rewriting roles."""
 
     if not frappe.db.exists("DocType", "Permission Type"):
         return
@@ -59,10 +60,13 @@ def sync_permission_types() -> None:
             }
         ).insert(ignore_permissions=True)
 
-    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import FrappePermissionMatrixRepository
+    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+        FrappePermissionMatrixRepository,
+    )
 
-    reconcile_custom_permission_projections()
-    FrappePermissionMatrixRepository().ensure_custom_permission_baseline(_managed_doctypes())
+    FrappePermissionMatrixRepository().ensure_custom_permission_baseline(
+        _managed_doctypes()
+    )
 
 
 __all__ = ["reconcile_custom_permission_projections", "sync_permission_types"]
