@@ -14,18 +14,22 @@ from almdina_erp.almdina_erp.domain.security.role_management import (
     RoleDefinition,
     normalize_role_name,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import (
+    ROLE_METADATA_DOCTYPE,
+    managed_role_metadata,
+    managed_role_names,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_references import (
     configured_role_counts,
     rename_configured_role_references,
 )
 
 
-_METADATA_DOCTYPE = "Almdina Role Metadata"
 _AUDIT_DOCTYPE = "Almdina Role Audit"
 
 
 class FrappeRoleRepository:
-    """Focused persistence adapter for dynamic Frappe roles."""
+    """Persistence adapter for roles explicitly owned by the Almdina registry."""
 
     @staticmethod
     def _doctype_exists(doctype: str) -> bool:
@@ -35,22 +39,20 @@ class FrappeRoleRepository:
     def _validate_role_name(role: str) -> str:
         resolved = normalize_role_name(role)
         if resolved in PROTECTED_ROLE_NAMES:
-            raise ValueError(
-                "This framework role is protected from the Almdina role console."
-            )
+            raise ValueError("This framework role is protected from the Almdina role console.")
         if not frappe.db.exists("Role", resolved):
             raise ValueError("Role does not exist.")
+        if resolved not in managed_role_names():
+            raise ValueError("This role is outside the Almdina managed-role registry.")
         return resolved
 
-    def role_exists(self, role: str) -> bool:
+    @staticmethod
+    def role_exists(role: str) -> bool:
         return bool(frappe.db.exists("Role", normalize_role_name(role)))
 
     def lock_role(self, role: str) -> None:
-        resolved = normalize_role_name(role)
-        frappe.db.sql(
-            "select name from `tabRole` where name = %s for update",
-            (resolved,),
-        )
+        resolved = self._validate_role_name(role)
+        frappe.db.sql("select name from `tabRole` where name = %s for update", (resolved,))
 
     @staticmethod
     def _safe_limit(limit: int, default: int = 100) -> int:
@@ -60,15 +62,10 @@ class FrappeRoleRepository:
             parsed = default
         return max(1, min(parsed, 200))
 
-    def _metadata_map(self, roles: list[str]) -> dict[str, dict[str, Any]]:
-        if not roles or not self._doctype_exists(_METADATA_DOCTYPE):
-            return {}
-        rows = frappe.get_all(
-            _METADATA_DOCTYPE,
-            filters={"role": ["in", roles]},
-            fields=["name", "role", "role_uid", "description", "managed_by_almdina"],
-        )
-        return {str(row.role): dict(row) for row in rows}
+    @staticmethod
+    def _metadata_map(roles: list[str]) -> dict[str, dict[str, Any]]:
+        metadata = managed_role_metadata()
+        return {role: metadata[role] for role in roles if role in metadata}
 
     def _group_count(
         self,
@@ -83,21 +80,13 @@ class FrappeRoleRepository:
         meta = frappe.get_meta(doctype)
         if not meta.has_field(role_field):
             return {}
-        conditions: dict[str, Any] = {
-            role_field: ["in", roles],
-            **dict(filters or {}),
-        }
-        rows = frappe.get_all(
-            doctype,
-            filters=conditions,
-            fields=[role_field],
-            limit_page_length=0,
-        )
+        conditions: dict[str, Any] = {role_field: ["in", roles], **dict(filters or {})}
+        rows = frappe.get_all(doctype, filters=conditions, fields=[role_field], limit_page_length=0)
         counts: defaultdict[str, int] = defaultdict(int)
         for row in rows:
-            role = str(row.get(role_field) or "").strip()
-            if role:
-                counts[role] += 1
+            resolved = str(row.get(role_field) or "").strip()
+            if resolved:
+                counts[resolved] += 1
         return dict(counts)
 
     @staticmethod
@@ -109,28 +98,17 @@ class FrappeRoleRepository:
         return dict(totals)
 
     def _reference_maps(self, roles: list[str]) -> dict[str, dict[str, int]]:
-        assigned_users = self._group_count(
-            "Has Role",
-            "role",
-            roles,
-            filters={"parenttype": "User"},
-        )
+        assigned_users = self._group_count("Has Role", "role", roles, filters={"parenttype": "User"})
         permission_count = self._sum_counts(
             self._group_count("DocPerm", "role", roles),
             self._group_count("Custom DocPerm", "role", roles),
         )
-        production_routing_references = configured_role_counts(
-            "Production Routing Stage",
-            roles,
-        )
+        production_routing_references = configured_role_counts("Production Routing Stage", roles)
         workflow_references = self._sum_counts(
             self._group_count("Workflow Transition", "allowed", roles),
             self._group_count("Workflow Document State", "allow_edit", roles),
         )
-        production_stage_references = configured_role_counts(
-            "Production Stage",
-            roles,
-        )
+        production_stage_references = configured_role_counts("Production Stage", roles)
         active_stage_references = configured_role_counts(
             "Production Stage",
             roles,
@@ -160,10 +138,7 @@ class FrappeRoleRepository:
                 "enabled": not bool(cint(row.get("disabled"))),
                 "desk_access": bool(cint(row.get("desk_access"))),
                 "is_custom": bool(cint(row.get("is_custom"))),
-                "is_almdina_role": bool(
-                    cint(role_metadata.get("managed_by_almdina"))
-                    or cint(row.get("is_custom"))
-                ),
+                "is_almdina_role": role in metadata,
                 "created_on": str(row.get("creation") or ""),
                 "modified_on": str(row.get("modified") or ""),
             }
@@ -189,32 +164,22 @@ class FrappeRoleRepository:
         enabled: bool | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        filters: dict[str, Any] = {
-            "name": ["not in", sorted(PROTECTED_ROLE_NAMES)],
-        }
+        managed = sorted(managed_role_names().difference(PROTECTED_ROLE_NAMES))
+        if not managed:
+            return []
+        filters: dict[str, Any] = {"name": ["in", managed]}
         if enabled is not None:
             filters["disabled"] = 0 if enabled else 1
         normalized_search = str(search or "").strip()
         or_filters = None
         if normalized_search:
             pattern = f"%{normalized_search}%"
-            or_filters = {
-                "name": ["like", pattern],
-                "role_name": ["like", pattern],
-            }
+            or_filters = {"name": ["like", pattern], "role_name": ["like", pattern]}
         rows = frappe.get_all(
             "Role",
             filters=filters,
             or_filters=or_filters,
-            fields=[
-                "name",
-                "role_name",
-                "disabled",
-                "desk_access",
-                "is_custom",
-                "creation",
-                "modified",
-            ],
+            fields=["name", "role_name", "disabled", "desk_access", "is_custom", "creation", "modified"],
             order_by="disabled asc, role_name asc",
             limit_page_length=self._safe_limit(limit),
         )
@@ -225,15 +190,7 @@ class FrappeRoleRepository:
         rows = frappe.get_all(
             "Role",
             filters={"name": resolved},
-            fields=[
-                "name",
-                "role_name",
-                "disabled",
-                "desk_access",
-                "is_custom",
-                "creation",
-                "modified",
-            ],
+            fields=["name", "role_name", "disabled", "desk_access", "is_custom", "creation", "modified"],
             limit_page_length=1,
         )
         if not rows:
@@ -241,20 +198,16 @@ class FrappeRoleRepository:
         return self._snapshots(list(rows))[0]
 
     def _ensure_metadata(self, role: str, *, description: str) -> Any:
-        existing = frappe.db.get_value(
-            _METADATA_DOCTYPE,
-            {"role": role},
-            "name",
-        )
+        existing = frappe.db.get_value(ROLE_METADATA_DOCTYPE, {"role": role}, "name")
         if existing:
-            document = frappe.get_doc(_METADATA_DOCTYPE, existing)
+            document = frappe.get_doc(ROLE_METADATA_DOCTYPE, existing)
             document.description = description
             document.managed_by_almdina = 1
             document.save(ignore_permissions=True)
             return document
         return frappe.get_doc(
             {
-                "doctype": _METADATA_DOCTYPE,
+                "doctype": ROLE_METADATA_DOCTYPE,
                 "role": role,
                 "role_uid": str(uuid.uuid4()),
                 "description": description,
@@ -263,6 +216,8 @@ class FrappeRoleRepository:
         ).insert(ignore_permissions=True)
 
     def create_role(self, definition: RoleDefinition) -> dict[str, Any]:
+        if definition.name in PROTECTED_ROLE_NAMES:
+            raise ValueError("This framework role name is protected.")
         if self.role_exists(definition.name):
             raise ValueError("Role already exists.")
         document = frappe.get_doc(
@@ -278,13 +233,7 @@ class FrappeRoleRepository:
         frappe.clear_cache()
         return self.get_role(str(document.name))
 
-    def update_role(
-        self,
-        role: str,
-        *,
-        name: str,
-        description: str,
-    ) -> dict[str, Any]:
+    def update_role(self, role: str, *, name: str, description: str) -> dict[str, Any]:
         current = self._validate_role_name(role)
         target = normalize_role_name(name)
         if target in PROTECTED_ROLE_NAMES:
@@ -292,15 +241,8 @@ class FrappeRoleRepository:
         if target != current and self.role_exists(target):
             raise ValueError("Role already exists.")
 
-        metadata_name = frappe.db.get_value(
-            _METADATA_DOCTYPE,
-            {"role": current},
-            "name",
-        )
+        metadata_name = frappe.db.get_value(ROLE_METADATA_DOCTYPE, {"role": current}, "name")
         if target != current:
-            # JSON role sets are not Link fields, so Frappe cannot rename them.
-            # Update them in the same transaction before the canonical Role is
-            # renamed; any later failure rolls the whole request back safely.
             for doctype in ("Production Routing Stage", "Production Stage"):
                 rename_configured_role_references(doctype, current, target)
             frappe.rename_doc("Role", current, target, force=False)
@@ -310,7 +252,7 @@ class FrappeRoleRepository:
             role_document.save(ignore_permissions=True)
 
         if metadata_name:
-            metadata = frappe.get_doc(_METADATA_DOCTYPE, metadata_name)
+            metadata = frappe.get_doc(ROLE_METADATA_DOCTYPE, metadata_name)
             metadata.role = target
             metadata.description = description
             metadata.managed_by_almdina = 1
@@ -330,42 +272,19 @@ class FrappeRoleRepository:
 
     def delete_role(self, role: str) -> None:
         resolved = self._validate_role_name(role)
-        metadata_name = frappe.db.get_value(
-            _METADATA_DOCTYPE,
-            {"role": resolved},
-            "name",
-        )
+        metadata_name = frappe.db.get_value(ROLE_METADATA_DOCTYPE, {"role": resolved}, "name")
         if metadata_name:
-            frappe.delete_doc(
-                _METADATA_DOCTYPE,
-                metadata_name,
-                force=True,
-                ignore_permissions=True,
-            )
-        frappe.delete_doc(
-            "Role",
-            resolved,
-            force=False,
-            ignore_permissions=True,
-        )
+            frappe.delete_doc(ROLE_METADATA_DOCTYPE, metadata_name, force=True, ignore_permissions=True)
+        frappe.delete_doc("Role", resolved, force=False, ignore_permissions=True)
         frappe.clear_cache()
 
     @staticmethod
     def _audit_snapshot(values: Mapping[str, Any] | None) -> dict[str, Any]:
         allowed = (
-            "name",
-            "description",
-            "role_uid",
-            "enabled",
-            "desk_access",
-            "is_custom",
-            "is_almdina_role",
-            "assigned_users",
-            "permission_count",
-            "production_routing_references",
-            "workflow_references",
-            "production_stage_references",
-            "active_stage_references",
+            "name", "description", "role_uid", "enabled", "desk_access", "is_custom",
+            "is_almdina_role", "assigned_users", "permission_count",
+            "production_routing_references", "workflow_references",
+            "production_stage_references", "active_stage_references",
         )
         source = dict(values or {})
         return {key: source.get(key) for key in allowed if key in source}
@@ -382,16 +301,8 @@ class FrappeRoleRepository:
     ) -> str:
         before_safe = self._audit_snapshot(before)
         after_safe = self._audit_snapshot(after)
-        changed_fields = sorted(
-            key
-            for key in set(before_safe) | set(after_safe)
-            if before_safe.get(key) != after_safe.get(key)
-        )
-        role_uid = str(
-            after_safe.get("role_uid")
-            or before_safe.get("role_uid")
-            or ""
-        )
+        changed_fields = sorted(key for key in set(before_safe) | set(after_safe) if before_safe.get(key) != after_safe.get(key))
+        role_uid = str(after_safe.get("role_uid") or before_safe.get("role_uid") or "")
         document = frappe.get_doc(
             {
                 "doctype": _AUDIT_DOCTYPE,
@@ -408,30 +319,12 @@ class FrappeRoleRepository:
         ).insert(ignore_permissions=True)
         return str(document.name)
 
-    def list_audit(
-        self,
-        *,
-        role_name: str,
-        role_uid: str = "",
-        limit: int = 30,
-    ) -> list[dict[str, Any]]:
-        filters = (
-            {"role_uid": role_uid}
-            if role_uid
-            else {"role_name": normalize_role_name(role_name)}
-        )
+    def list_audit(self, *, role_name: str, role_uid: str = "", limit: int = 30) -> list[dict[str, Any]]:
+        filters = {"role_uid": role_uid} if role_uid else {"role_name": normalize_role_name(role_name)}
         rows = frappe.get_all(
             _AUDIT_DOCTYPE,
             filters=filters,
-            fields=[
-                "name",
-                "role_name",
-                "action",
-                "changed_by",
-                "changed_on",
-                "summary",
-                "changed_fields",
-            ],
+            fields=["name", "role_name", "action", "changed_by", "changed_on", "summary", "changed_fields"],
             order_by="changed_on desc",
             limit_page_length=self._safe_limit(limit, default=30),
         )
