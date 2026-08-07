@@ -121,6 +121,14 @@
         }
     }
 
+    function nativeDocumentNarrowingAllows(frm, capability) {
+        const key = String(capability || "");
+        if (!Object.prototype.hasOwnProperty.call(STANDARD_CAPABILITY_PERMISSION_TYPES, key)) {
+            return true;
+        }
+        return nativeDocumentPermission(frm, key);
+    }
+
     let context = normalize(frappe.boot && frappe.boot.almdina_permissions);
     let refreshPromise = null;
     let modulesPromise = null;
@@ -233,8 +241,11 @@
         },
         canDocument(frm, capability) {
             const key = String(capability || "");
-            return context.capabilities[key] === true
-                || nativeDocumentPermission(frm, key);
+            // The factory matrix is the sole authority source. Native Frappe
+            // permissions may only narrow standard document rights; they can
+            // never widen an absent Almdina business capability.
+            if (context.capabilities[key] !== true) return false;
+            return nativeDocumentNarrowingAllows(frm, key);
         },
         permissionType(capability) {
             return permissionTypeFor(capability);
