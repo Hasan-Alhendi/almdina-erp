@@ -138,9 +138,12 @@ function load(capabilities, responseFactory) {
     });
 
     const frm = makeForm();
+    assert.equal(loaded.api.orderCanEdit(frm), false);
+    frm.__almdina_edit_session = { active: true };
     assert.equal(loaded.api.orderCanEdit(frm), true);
     await loaded.api.loadContext(frm);
     assert.equal(frm.__almdina_lifecycle_context.order_name, "DCO-TEST-001");
+    assert.equal(loaded.api.orderCanEdit(frm), true);
     assert.deepEqual(
         frm.added.map(item => item.label).sort(),
         ["اعتماد الطلب", "إعادة للمسودة"].sort()
@@ -171,6 +174,7 @@ function load(capabilities, responseFactory) {
 
     const denied = load(new Set(), () => lifecycle);
     const deniedForm = makeForm();
+    deniedForm.__almdina_edit_session = { active: true };
     deniedForm.__almdina_lifecycle_context = lifecycle;
     assert.equal(denied.api.orderCanEdit(deniedForm), true);
     deniedForm.__almdina_lifecycle_context = null;
