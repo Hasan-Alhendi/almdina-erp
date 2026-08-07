@@ -42,6 +42,12 @@ RETIRED_RUNTIME_TOKENS = (
     "ASSIGN_WORKFORCE_PROFILE",
     "MANAGE_USERS",
     "MANAGE_FACTORY_SETTINGS",
+    "permission_transfer",
+    "export_role_permissions",
+    "export_permission_bundle",
+    "preview_permission_import",
+    "preview_permission_bundle_import",
+    "import_permission_bundle",
 )
 RETIRED_RUNTIME_STRING_GRANTS = (
     '"manage_users"',
