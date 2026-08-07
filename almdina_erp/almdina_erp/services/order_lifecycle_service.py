@@ -28,27 +28,28 @@ def _cutting_stage(order_name: str) -> Any | None:
 
 
 def _cancel_stages(order_name: str, reason: str) -> list[str]:
+    from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_repository import (
+        cancel_stage,
+    )
     from almdina_erp.almdina_erp.services.production_service import _log_event
 
     stages = frappe.get_all(
         "Production Stage",
         filters={"door_cutting_order": order_name},
-        pluck="name",
+        fields=["name", "status"],
     )
     cancelled: list[str] = []
-    for name in stages:
-        stage = frappe.get_doc("Production Stage", name)
-        if stage.status in {"Completed", "Cancelled"}:
+    for row in stages:
+        if row.status in {"Completed", "Cancelled"}:
             continue
-        stage.status = "Cancelled"
-        stage.notes = (
-            (stage.notes or "")
-            + "\n"
-            + _("Cancelled with order: {0}").format(reason)
-        ).strip()
-        stage.save(ignore_permissions=True)
+        note = _("Cancelled with order: {0}").format(reason)
+        stage = cancel_stage(
+            str(row.name),
+            target_status="Cancelled",
+            note=note,
+        )
         _log_event(stage, "Cancel", {"reason": reason})
-        cancelled.append(name)
+        cancelled.append(str(row.name))
     return cancelled
 
 
