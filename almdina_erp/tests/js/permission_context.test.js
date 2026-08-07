@@ -41,7 +41,11 @@ const loaded = load({
     version: 3,
     profile: "shop_floor",
     capabilities: {
+        view_orders: true,
+        create_order: true,
+        edit_order: true,
         view_cutting_plan: true,
+        view_costs: true,
         upload_dxf: false,
         print_cutting_plan: 1,
     },
@@ -61,7 +65,11 @@ const loaded = load({
 
 assert.equal(loaded.permissions.version(), 3);
 assert.equal(loaded.permissions.profile(), "shop_floor");
+assert.equal(loaded.permissions.can("view_orders"), true);
+assert.equal(loaded.permissions.can("create_order"), true);
+assert.equal(loaded.permissions.can("edit_order"), true);
 assert.equal(loaded.permissions.can("view_cutting_plan"), true);
+assert.equal(loaded.permissions.can("view_costs"), true);
 assert.equal(loaded.permissions.permissionType("create_order"), "create");
 assert.equal(loaded.permissions.permissionType("edit_order"), "write");
 assert.equal(loaded.permissions.permissionType("view_costs"), "view_costs");
@@ -83,25 +91,70 @@ assert.equal(Object.isFrozen(loaded.permissions.snapshot().capabilities), true);
 assert.equal(Object.isFrozen(loaded.permissions.snapshot().navigation), true);
 assert.equal(Object.isFrozen(loaded.permissions.snapshot().navigation.sections), true);
 
+const nativeOrderForm = {
+    has_perm(permissionType) {
+        return ["read", "create", "write", "view_costs", "view_cutting_plan"].includes(permissionType);
+    },
+};
+
+assert.equal(loaded.permissions.canDocument(nativeOrderForm, "view_orders"), true);
+assert.equal(loaded.permissions.canDocument(nativeOrderForm, "create_order"), true);
+assert.equal(loaded.permissions.canDocument(nativeOrderForm, "edit_order"), true);
+assert.equal(loaded.permissions.canDocument(nativeOrderForm, "view_costs"), true);
+assert.equal(loaded.permissions.canDocument(nativeOrderForm, "view_cutting_plan"), true);
+
+const nativeDeniedForm = { has_perm: () => false };
+assert.equal(
+    loaded.permissions.canDocument(nativeDeniedForm, "view_orders"),
+    false,
+    "Native read may narrow a granted standard matrix capability"
+);
+assert.equal(
+    loaded.permissions.canDocument(nativeDeniedForm, "create_order"),
+    false,
+    "Native create may narrow a granted standard matrix capability"
+);
+assert.equal(
+    loaded.permissions.canDocument(nativeDeniedForm, "edit_order"),
+    false,
+    "Native write may narrow a granted standard matrix capability"
+);
+assert.equal(
+    loaded.permissions.canDocument(nativeDeniedForm, "view_cutting_plan"),
+    true,
+    "Custom business capabilities remain matrix-authoritative in the UI"
+);
+assert.equal(
+    loaded.permissions.canDocument(nativeDeniedForm, "view_costs"),
+    true,
+    "Custom business capabilities remain matrix-authoritative in the UI"
+);
+
 const missing = load(undefined).permissions;
 assert.equal(missing.version(), 0);
 assert.equal(missing.profile(), "shared");
 assert.equal(missing.can("view_cutting_plan"), false);
-const nativeOrderForm = {
-    has_perm(permissionType) {
-        return ["create", "write", "view_costs", "view_cutting_plan"].includes(permissionType);
-    },
-};
-assert.equal(missing.canDocument(nativeOrderForm, "create_order"), true);
-assert.equal(missing.canDocument(nativeOrderForm, "edit_order"), true);
-assert.equal(missing.canDocument(nativeOrderForm, "view_costs"), true);
-assert.equal(missing.canDocument(nativeOrderForm, "view_cutting_plan"), true);
-assert.equal(missing.canDocument(nativeOrderForm, "approve_dxf"), false);
 assert.equal(
-    loaded.permissions.canDocument({ has_perm: () => false }, "view_cutting_plan"),
-    true,
-    "A refreshed server capability remains valid for Administrator and expanded grants"
+    missing.canDocument(nativeOrderForm, "create_order"),
+    false,
+    "Native Frappe create permission must never widen an absent matrix capability"
 );
+assert.equal(
+    missing.canDocument(nativeOrderForm, "edit_order"),
+    false,
+    "Native Frappe write permission must never widen an absent matrix capability"
+);
+assert.equal(
+    missing.canDocument(nativeOrderForm, "view_costs"),
+    false,
+    "Native custom permission must never widen an absent matrix capability"
+);
+assert.equal(
+    missing.canDocument(nativeOrderForm, "view_cutting_plan"),
+    false,
+    "Native custom permission must never widen an absent matrix capability"
+);
+assert.equal(missing.canDocument(nativeOrderForm, "approve_dxf"), false);
 assert.equal(missing.section("production"), false);
 assert.equal(missing.home(), "");
 assert.equal(missing.navigation().shared_shell, false);
