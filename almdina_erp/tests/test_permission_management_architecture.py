@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
+TRANSFER = ROOT / "almdina_erp" / "application" / "security" / "permission_transfer.py"
 REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_matrix_repository.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "permission_management_service.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
@@ -27,6 +28,15 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
         self.assertNotIn("Custom DocPerm", source)
+
+    def test_transfer_policy_is_framework_independent_and_has_no_templates(self) -> None:
+        source = TRANSFER.read_text(encoding="utf-8")
+        self.assertNotIn("import frappe", source)
+        self.assertNotIn("from frappe", source)
+        self.assertNotIn("PermissionTemplate", source)
+        self.assertNotIn("template_state", source)
+        self.assertIn("build_permission_export", source)
+        self.assertIn("build_permission_bundle", source)
 
     def test_frappe_persistence_is_isolated_in_repository(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
@@ -71,15 +81,20 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertEqual(metadata["allow_rename"], 0)
         self.assertIn("Permission audit records are immutable", controller)
 
-    def test_permission_console_has_preview_audit_and_race_guards(self) -> None:
+    def test_permission_console_has_preview_audit_race_guards_and_no_templates(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
+        service = SERVICE.read_text(encoding="utf-8")
         self.assertIn("preview_role_permissions", source)
         self.assertIn("update_role_permissions", source)
         self.assertIn("requires_self_lockout_confirmation", source)
         self.assertIn("roleRequest", source)
         self.assertIn("previewRequest", source)
+        self.assertIn("schedulePreview", source)
         self.assertIn("apc-savebar", source)
-        self.assertIn("loadPreview().then", source)
+        self.assertIn("تصدير JSON", source)
+        self.assertNotIn("preview_permission_template", source)
+        self.assertNotIn("apc-template", source)
+        self.assertNotIn("templates", service)
         self.assertNotIn("frappe.user_roles", source)
         for role in ("Production Manager", "System Manager", "Order Entry"):
             self.assertNotIn(role, source)
