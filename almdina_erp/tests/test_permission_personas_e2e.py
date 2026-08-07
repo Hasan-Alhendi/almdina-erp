@@ -123,6 +123,10 @@ PERSONA_STATES = {
         Capability.CREATE_EDGE_BANDING_TYPES,
         Capability.EDIT_EDGE_BANDING_TYPES,
         Capability.DELETE_EDGE_BANDING_TYPES,
+        Capability.VIEW_ROLES,
+        Capability.CREATE_ROLES,
+        Capability.EDIT_ROLES,
+        Capability.DELETE_ROLES,
         Capability.MANAGE_PERMISSIONS,
     ),
 }
@@ -189,6 +193,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertFalse(state[Capability.VIEW_COSTS])
         self.assertFalse(state[Capability.VIEW_FINANCIAL_REPORTS])
         self.assertFalse(state[Capability.MANAGE_PERMISSIONS])
+        self.assertFalse(state[Capability.VIEW_ROLES])
         self.assertNotIn(WORKSPACE_SETTINGS, navigation["workspaces"])
         self.assertNotIn(WORKSPACE_GO_LIVE, navigation["workspaces"])
 
@@ -218,6 +223,11 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertTrue(navigation["sections"]["factory_settings"])
         self.assertTrue(navigation["sections"]["master_data"])
         self.assertTrue(navigation["sections"]["administration"])
+        self.assertTrue(state[Capability.VIEW_ROLES])
+        self.assertTrue(state[Capability.CREATE_ROLES])
+        self.assertTrue(state[Capability.EDIT_ROLES])
+        self.assertTrue(state[Capability.DELETE_ROLES])
+        self.assertTrue(state[Capability.MANAGE_PERMISSIONS])
         self.assertFalse(navigation["sections"]["orders"])
         self.assertFalse(navigation["sections"]["production"])
         self.assertFalse(navigation["sections"]["quality"])
