@@ -9,9 +9,7 @@ from almdina_erp.almdina_erp.application.security.legacy_permission_bootstrap im
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.role_management import PROTECTED_ROLE_NAMES
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
-    sync_permission_types,
-)
+from almdina_erp.patches.v1_0.permission_migration_helpers import ensure_permission_types
 
 
 _METADATA_DOCTYPE = "Almdina Role Metadata"
@@ -24,18 +22,12 @@ def _doctype_exists(doctype: str) -> bool:
 
 
 def _adopt_existing_workforce_roles() -> None:
-    """Mark historical Almdina business roles as dynamically managed roles."""
-
     if not _doctype_exists(_METADATA_DOCTYPE):
         return
     for role in sorted(LEGACY_ROLE_CAPABILITIES):
         if role in PROTECTED_ROLE_NAMES or not frappe.db.exists("Role", role):
             continue
-        existing = frappe.db.get_value(
-            _METADATA_DOCTYPE,
-            {"role": role},
-            "name",
-        )
+        existing = frappe.db.get_value(_METADATA_DOCTYPE, {"role": role}, "name")
         if existing:
             frappe.db.set_value(
                 _METADATA_DOCTYPE,
@@ -57,14 +49,8 @@ def _adopt_existing_workforce_roles() -> None:
 
 
 def _copy_role_assignment_grants() -> None:
-    """Copy the retired assignment grant to the direct role-assignment grant.
-
-    The old Permission Type may remain in the schema as historical metadata, but
-    active authorization no longer reads it after this patch.
-    """
-
-    sync_permission_types()
     new_permission = Capability.ASSIGN_USER_ROLES
+    ensure_permission_types((new_permission,))
     for permission_doctype in ("DocPerm", "Custom DocPerm"):
         if not _doctype_exists(permission_doctype):
             continue
