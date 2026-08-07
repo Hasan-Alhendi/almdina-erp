@@ -36,15 +36,10 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
             permission_type == "read" and not isinstance(target, str)
         )
 
-        permission_type_module = types.ModuleType(
-            "frappe.core.doctype.permission_type.permission_type"
-        )
-        permission_type_module.get_doctype_ptype_map = lambda: {}
-
         class FakeRepository:
             @staticmethod
             def user_roles(_user):
-                return frozenset({"Arbitrary Operational Role"})
+                return frozenset({"Arbitrary Operational Role", "Desk User", "All"})
 
             @staticmethod
             def role_state(_role):
@@ -62,14 +57,6 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
 
         replacements = {
             "frappe": fake_frappe,
-            "frappe.core": types.ModuleType("frappe.core"),
-            "frappe.core.doctype": types.ModuleType("frappe.core.doctype"),
-            "frappe.core.doctype.permission_type": types.ModuleType(
-                "frappe.core.doctype.permission_type"
-            ),
-            "frappe.core.doctype.permission_type.permission_type": (
-                permission_type_module
-            ),
             REPOSITORY_MODULE: repository_module,
         }
         previous = {name: sys.modules.get(name) for name in replacements}
@@ -83,7 +70,6 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 raise RuntimeError("Could not load authorization gateway")
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            module._registered_permission_types = lambda: {}
             module._matrix_repository = lambda: (
                 FakeRepository(),
                 repository_module.PROTECTED_ROLES,
@@ -96,7 +82,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 else:
                     sys.modules[name] = original
 
-    def test_console_matrix_is_runtime_fallback_for_any_role(self) -> None:
+    def test_console_matrix_is_runtime_authority_for_any_editable_role(self) -> None:
         gateway = self._load_gateway()
 
         granted = gateway.granted_capabilities("role.user@example.com")
@@ -110,7 +96,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
             )
         )
 
-    def test_document_fallback_keeps_native_read_scope(self) -> None:
+    def test_document_capability_keeps_native_read_as_narrowing_scope(self) -> None:
         gateway = self._load_gateway()
         order = types.SimpleNamespace(doctype="Door Cutting Order")
 
@@ -126,6 +112,29 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 types.SimpleNamespace(doctype="Replacement Piece"),
                 Capability.VIEW_COSTS,
                 user="role.user@example.com",
+            )
+        )
+
+    def test_stale_native_permission_cannot_authorize_an_empty_matrix(self) -> None:
+        gateway = self._load_gateway()
+        gateway.frappe.has_permission = lambda *_args, **_kwargs: True
+        gateway._matrix_granted_capabilities = lambda _user: frozenset()
+
+        self.assertEqual(
+            gateway.granted_capabilities("empty@example.com"),
+            frozenset(),
+        )
+        self.assertFalse(
+            gateway.doctype_has_capability(
+                Capability.VIEW_ORDERS,
+                user="empty@example.com",
+            )
+        )
+        self.assertFalse(
+            gateway.document_has_capability(
+                types.SimpleNamespace(doctype="Door Cutting Order"),
+                Capability.VIEW_COSTS,
+                user="empty@example.com",
             )
         )
 
