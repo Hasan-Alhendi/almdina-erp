@@ -1,0 +1,53 @@
+name: RBAC Contracts
+
+on:
+  push:
+    branches: [Develop, develop, "agent/**"]
+  pull_request:
+    branches: [Develop, develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  rbac-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: python -m compileall -q almdina_erp
+
+      - name: Run RBAC domain and architecture contracts
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_role_management_domain \
+            almdina_erp.tests.test_role_management_application \
+            almdina_erp.tests.test_permission_matrix_application \
+            almdina_erp.tests.test_permission_transfer \
+            almdina_erp.tests.test_permission_management_architecture \
+            almdina_erp.tests.test_workforce_authorization \
+            almdina_erp.tests.test_workforce_management_architecture \
+            almdina_erp.tests.test_managed_role_registry_architecture \
+            almdina_erp.tests.test_permission_type_sync_no_role_creation \
+            almdina_erp.tests.test_rbac_migrations \
+            almdina_erp.tests.test_rbac_runtime_cleanup \
+            almdina_erp.tests.test_incident_stage_scope
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate RBAC JavaScript syntax
+        run: |
+          node --check almdina_erp/almdina_erp/page/factory_roles/factory_roles.js
+          node --check almdina_erp/almdina_erp/page/factory_permissions/factory_permissions.js
+          node --check almdina_erp/almdina_erp/page/factory_workforce/factory_workforce.js
+          node --check almdina_erp/public/js/shared_shell.js
