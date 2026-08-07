@@ -17,7 +17,7 @@ PERMISSION_PAGE = PAGES / "factory_permissions" / "factory_permissions.js"
 CUTTING_PLAN_SERVICE = SERVICES / "cutting_plan_service.py"
 SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
-TRANSFER_POLICY = APP / "application" / "security" / "permission_transfer.py"
+PERMISSION_TRANSFER_POLICY = APP / "application" / "security" / "permission_transfer.py"
 HOOKS = ROOT / "hooks.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
@@ -285,18 +285,15 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         ):
             self.assertIn(service, source)
 
-    def test_permission_transfer_is_preview_first_and_server_authorized(self) -> None:
+    def test_permission_console_is_manual_only_and_server_authorized(self) -> None:
         service = PERMISSION_SERVICE.read_text(encoding="utf-8")
         page = PERMISSION_PAGE.read_text(encoding="utf-8")
+        self.assertFalse(PERMISSION_TRANSFER_POLICY.exists())
+
         for endpoint in (
             "get_permission_console",
             "get_role_permissions",
             "preview_role_permissions",
-            "export_role_permissions",
-            "export_permission_bundle",
-            "preview_permission_import",
-            "preview_permission_bundle_import",
-            "import_permission_bundle",
             "update_role_permissions",
             "get_permission_audit",
         ):
@@ -304,21 +301,26 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
                 "_require_permission_management",
                 _function_calls(service, endpoint),
             )
-        self.assertIn("confirm_sensitive", service)
+
+        for retired in (
+            "export_role_permissions",
+            "export_permission_bundle",
+            "preview_permission_import",
+            "preview_permission_bundle_import",
+            "import_permission_bundle",
+            "permission_transfer",
+            "preview_permission_template",
+            "permission_template_catalog",
+        ):
+            self.assertNotIn(retired, service)
+            self.assertNotIn(retired, page)
+
         self.assertIn("confirm_self_lockout", service)
-        self.assertIn("save_role_states", service)
-        self.assertNotIn("preview_permission_template", service)
-        self.assertNotIn("preview_permission_template", page)
-        self.assertNotIn("permission_template_catalog", service)
-        self.assertIn("preview_permission_import", page)
-        self.assertIn("export_role_permissions", page)
-        self.assertIn("الاستيراد لا يحفظ تلقائيًا", page)
+        self.assertIn("validate_capability_dependencies", service)
         self.assertIn("حدد صلاحياته يدويًا", page)
-        policy = TRANSFER_POLICY.read_text(encoding="utf-8")
-        self.assertIn("build_permission_bundle", policy)
-        self.assertIn("parse_permission_bundle", policy)
-        self.assertIn("checksum", policy)
-        self.assertNotIn("PermissionTemplate", policy)
+        self.assertIn("لن يضيف النظام هذه الصلاحيات تلقائيًا", page)
+        self.assertNotIn("تصدير JSON", page)
+        self.assertNotIn("استيراد للمعاينة", page)
         self.assertNotIn("frappe.user_roles", page)
 
     def test_hooks_keep_old_api_paths_on_protected_services(self) -> None:
@@ -342,16 +344,19 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "بيئة Develop",
             "اختبارات الشخصيات",
             "فحص تسريب البيانات",
+            "اختبار الصلاحيات اليدوي",
             "خطة الرجوع",
             "قرار الإطلاق",
         ):
             self.assertIn(heading, source)
         self.assertIn("update-almdina", source)
         self.assertIn("لا يتم الدمج", source)
-        self.assertIn("Checksum", source)
         self.assertIn("API", source)
-        self.assertIn("preview_permission_bundle_import", source)
-        self.assertIn("Role واحد غير موجود", source)
+        self.assertIn("دور جديد يبدأ دون صلاحيات", source)
+        self.assertIn("لا يوجد استيراد", source)
+        self.assertNotIn("preview_permission_bundle_import", source)
+        self.assertNotIn("import_permission_bundle", source)
+        self.assertNotIn("export_permission_bundle", source)
 
 
 if __name__ == "__main__":
