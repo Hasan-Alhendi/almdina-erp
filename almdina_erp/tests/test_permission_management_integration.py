@@ -32,10 +32,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         cls._replace_role_permissions(
             ADMIN_ROLE,
             "Almdina ERP Settings",
-            {
-                "read": 1,
-                Capability.MANAGE_PERMISSIONS: 1,
-            },
+            {"read": 1, Capability.MANAGE_PERMISSIONS: 1},
         )
         frappe.clear_cache(user=ADMIN_USER)
         frappe.clear_cache(doctype="Almdina ERP Settings")
@@ -61,11 +58,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
     def _ensure_role(cls, role: str) -> None:
         if not frappe.db.exists("Role", role):
             frappe.get_doc(
-                {
-                    "doctype": "Role",
-                    "role_name": role,
-                    "desk_access": 1,
-                }
+                {"doctype": "Role", "role_name": role, "desk_access": 1}
             ).insert(ignore_permissions=True)
 
     @classmethod
@@ -98,16 +91,17 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             "Custom DocPerm",
             {"parent": doctype, "role": role, "permlevel": 0},
         )
-        payload = {
-            "doctype": "Custom DocPerm",
-            "parent": doctype,
-            "parenttype": "DocType",
-            "parentfield": "permissions",
-            "role": role,
-            "permlevel": 0,
-            **values,
-        }
-        frappe.get_doc(payload).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "Custom DocPerm",
+                "parent": doctype,
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": 0,
+                **values,
+            }
+        ).insert(ignore_permissions=True)
 
     def tearDown(self):
         frappe.set_user("Administrator")
@@ -149,33 +143,22 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         self.assertTrue(result["capabilities"][Capability.VIEW_ORDERS])
         self.assertTrue(result["capabilities"][Capability.APPROVE_DXF])
         self.assertTrue(result["capabilities"][Capability.VIEW_FACTORY_SETTINGS])
-        self.assertTrue(
-            result["capabilities"][Capability.EDIT_FACTORY_CUTTING_DEFAULTS]
-        )
-        self.assertTrue(
-            result["capabilities"][Capability.EDIT_FACTORY_COST_DEFAULTS]
-        )
-        self.assertTrue(
-            result["capabilities"][Capability.EDIT_FACTORY_PRODUCTION_CONTROLS]
-        )
+        for capability in (
+            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+            Capability.EDIT_FACTORY_COST_DEFAULTS,
+            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        ):
+            self.assertTrue(result["capabilities"][capability])
 
         order_permission = frappe.db.get_value(
             "Custom DocPerm",
-            {
-                "parent": "Door Cutting Order",
-                "role": TARGET_ROLE,
-                "permlevel": 0,
-            },
+            {"parent": "Door Cutting Order", "role": TARGET_ROLE, "permlevel": 0},
             ["read", Capability.APPROVE_DXF],
             as_dict=True,
         )
         settings_permission = frappe.db.get_value(
             "Custom DocPerm",
-            {
-                "parent": "Almdina ERP Settings",
-                "role": TARGET_ROLE,
-                "permlevel": 0,
-            },
+            {"parent": "Almdina ERP Settings", "role": TARGET_ROLE, "permlevel": 0},
             [
                 "read",
                 "write",
@@ -188,11 +171,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         self.assertEqual(int(order_permission.read), 1)
         self.assertEqual(int(order_permission.get(Capability.APPROVE_DXF)), 1)
         self.assertEqual(int(settings_permission.read), 1)
-        self.assertEqual(
-            int(settings_permission.write),
-            0,
-            "Factory settings must be written only through the field-aware service.",
-        )
+        self.assertEqual(int(settings_permission.write), 0)
         for capability in (
             Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
             Capability.EDIT_FACTORY_COST_DEFAULTS,
@@ -225,14 +204,11 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             )
         self.assertFalse(
             frappe.has_permission(
-                "Almdina ERP Settings",
-                ptype="write",
-                user=TARGET_USER,
+                "Almdina ERP Settings", ptype="write", user=TARGET_USER
             )
         )
         self.assertEqual(
-            frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}),
-            1,
+            frappe.db.count("Almdina Permission Audit", {"role": TARGET_ROLE}), 1
         )
 
     def test_arbitrary_role_receives_complete_order_surface_permissions(self) -> None:
@@ -251,7 +227,6 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 Capability.RECALCULATE_PLAN: True,
             },
         )
-
         for capability in (
             Capability.CREATE_ORDER,
             Capability.EDIT_ORDER,
@@ -266,11 +241,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         for doctype in ("Customer", "Edge Banding Type"):
             permission = frappe.db.get_value(
                 "Custom DocPerm",
-                {
-                    "parent": doctype,
-                    "role": TARGET_ROLE,
-                    "permlevel": 0,
-                },
+                {"parent": doctype, "role": TARGET_ROLE, "permlevel": 0},
                 ["read", "select"],
                 as_dict=True,
             )
@@ -279,11 +250,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
 
         field_permission = frappe.db.get_value(
             "Custom DocPerm",
-            {
-                "parent": "Door Cutting Order",
-                "role": TARGET_ROLE,
-                "permlevel": 1,
-            },
+            {"parent": "Door Cutting Order", "role": TARGET_ROLE, "permlevel": 1},
             ["read", "write"],
             as_dict=True,
         )
@@ -291,9 +258,8 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         self.assertEqual(int(field_permission.write), 0)
 
         frappe.clear_cache(user=TARGET_USER)
-        frappe.clear_cache(doctype="Door Cutting Order")
-        frappe.clear_cache(doctype="Customer")
-        frappe.clear_cache(doctype="Edge Banding Type")
+        for doctype in ("Door Cutting Order", "Customer", "Edge Banding Type"):
+            frappe.clear_cache(doctype=doctype)
         for permission_type in (
             "read",
             "create",
@@ -304,26 +270,18 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         ):
             self.assertTrue(
                 frappe.has_permission(
-                    "Door Cutting Order",
-                    ptype=permission_type,
-                    user=TARGET_USER,
+                    "Door Cutting Order", ptype=permission_type, user=TARGET_USER
                 ),
                 permission_type,
             )
-
         for doctype in ("Customer", "Edge Banding Type"):
             self.assertTrue(
-                frappe.has_permission(
-                    doctype,
-                    ptype="read",
-                    user=TARGET_USER,
-                ),
+                frappe.has_permission(doctype, ptype="read", user=TARGET_USER),
                 doctype,
             )
-
-        permitted_fields = frappe.get_meta(
-            "Door Cutting Order"
-        ).get_permitted_fieldnames(user=TARGET_USER)
+        permitted_fields = frappe.get_meta("Door Cutting Order").get_permitted_fieldnames(
+            user=TARGET_USER
+        )
         self.assertIn("board_rate_usd", permitted_fields)
         self.assertIn("total_cost_usd", permitted_fields)
 
@@ -352,17 +310,10 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         frappe.db.set_value("Custom DocPerm", permission_name, "write", 0)
         frappe.clear_cache(doctype="Door Cutting Order")
 
-        repaired = update_role_permissions(
-            TARGET_ROLE,
-            result["capabilities"],
-        )
-
+        repaired = update_role_permissions(TARGET_ROLE, result["capabilities"])
         self.assertFalse(repaired["changed"])
         field_permission = frappe.db.get_value(
-            "Custom DocPerm",
-            filters,
-            ["read", "write"],
-            as_dict=True,
+            "Custom DocPerm", filters, ["read", "write"], as_dict=True
         )
         self.assertEqual(int(field_permission.read), 1)
         self.assertEqual(int(field_permission.write), 1)
@@ -371,6 +322,8 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         frappe.set_user("Administrator")
         frappe.db.delete("Custom DocPerm", {"role": PRESERVED_ROLE})
         frappe.db.delete("DocPerm", {"role": PRESERVED_ROLE})
+        frappe.db.delete("Custom DocPerm", {"role": TARGET_ROLE})
+
         frappe.get_doc(
             {
                 "doctype": "DocPerm",
@@ -384,12 +337,20 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 "print": 1,
             }
         ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "Custom DocPerm",
+                "parent": "Door Cutting Order",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": TARGET_ROLE,
+                "permlevel": 0,
+                "read": 1,
+            }
+        ).insert(ignore_permissions=True)
 
         self.assertTrue(
-            frappe.db.exists(
-                "Custom DocPerm",
-                {"parent": "Door Cutting Order"},
-            )
+            frappe.db.exists("Custom DocPerm", {"parent": "Door Cutting Order"})
         )
         self.assertFalse(
             frappe.db.exists(
@@ -408,14 +369,13 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             ["read", "report", "print"],
             as_dict=True,
         )
+        self.assertIsNotNone(copied)
         self.assertEqual(int(copied.read), 1)
         self.assertEqual(int(copied.report), 1)
         self.assertEqual(int(copied.print), 1)
         self.assertTrue(
             frappe.has_permission(
-                "Door Cutting Order",
-                ptype="read",
-                user=PRESERVED_USER,
+                "Door Cutting Order", ptype="read", user=PRESERVED_USER
             )
         )
 
@@ -437,21 +397,20 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             },
         )
         capabilities = result["capabilities"]
-        self.assertTrue(capabilities[Capability.VIEW_REPLACEMENTS])
-        self.assertTrue(capabilities[Capability.APPROVE_REPLACEMENT])
-        self.assertTrue(capabilities[Capability.EDIT_REPLACEMENT_COST])
-        self.assertTrue(capabilities[Capability.VIEW_FINANCIAL_REPORTS])
-        self.assertTrue(capabilities[Capability.VIEW_OPERATIONAL_REPORTS])
-        self.assertTrue(capabilities[Capability.VIEW_COSTS])
-        self.assertTrue(capabilities[Capability.VIEW_ORDERS])
+        for capability in (
+            Capability.VIEW_REPLACEMENTS,
+            Capability.APPROVE_REPLACEMENT,
+            Capability.EDIT_REPLACEMENT_COST,
+            Capability.VIEW_FINANCIAL_REPORTS,
+            Capability.VIEW_OPERATIONAL_REPORTS,
+            Capability.VIEW_COSTS,
+            Capability.VIEW_ORDERS,
+        ):
+            self.assertTrue(capabilities[capability], capability)
 
         replacement_permission = frappe.db.get_value(
             "Custom DocPerm",
-            {
-                "parent": "Replacement Piece",
-                "role": TARGET_ROLE,
-                "permlevel": 0,
-            },
+            {"parent": "Replacement Piece", "role": TARGET_ROLE, "permlevel": 0},
             [
                 "read",
                 "write",
@@ -463,18 +422,9 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         )
         self.assertEqual(int(replacement_permission.read), 1)
         self.assertEqual(int(replacement_permission.write), 0)
-        self.assertEqual(
-            int(replacement_permission.get(Capability.VIEW_REPLACEMENTS)),
-            1,
-        )
-        self.assertEqual(
-            int(replacement_permission.get(Capability.APPROVE_REPLACEMENT)),
-            1,
-        )
-        self.assertEqual(
-            int(replacement_permission.get(Capability.EDIT_REPLACEMENT_COST)),
-            1,
-        )
+        self.assertEqual(int(replacement_permission.get(Capability.VIEW_REPLACEMENTS)), 1)
+        self.assertEqual(int(replacement_permission.get(Capability.APPROVE_REPLACEMENT)), 1)
+        self.assertEqual(int(replacement_permission.get(Capability.EDIT_REPLACEMENT_COST)), 1)
 
         frappe.clear_cache(user=TARGET_USER)
         frappe.clear_cache(doctype="Replacement Piece")
@@ -506,9 +456,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         )
 
         frappe.set_user(ADMIN_USER)
-        replacement_state = {
-            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True,
-        }
+        replacement_state = {Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True}
         preview = preview_role_permissions(ADMIN_ROLE, replacement_state)
         self.assertTrue(preview["requires_self_lockout_confirmation"])
         with self.assertRaises(frappe.PermissionError):
