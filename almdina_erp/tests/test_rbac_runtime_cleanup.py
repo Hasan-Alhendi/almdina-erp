@@ -16,6 +16,23 @@ RUNTIME_ROOTS = (
 MIGRATION_COMPATIBILITY_FILES = {
     "legacy_permission_bootstrap.py",
 }
+# These sources are intentionally retained only to make historical endpoints
+# fail closed or to preserve old browser assets for rollback. They are not
+# loaded by the current hooks/UI; test_final_security_architecture.py verifies
+# that boundary independently. Historical role-name scanning must therefore
+# target active runtime, not these retired files.
+RETIRED_ROLE_NAME_SOURCES = frozenset(
+    {
+        "almdina_erp/services/export_validation_service.py",
+        "almdina_erp/services/preflight_service.py",
+        "almdina_erp/services/remnant_service.py",
+        "almdina_erp/services/actual_consumption_service.py",
+        "public/js/production_stage.js",
+        "public/js/door_cutting_order_cost_invoice_ux.js",
+        "public/js/material_consumption_log.js",
+        "public/js/door_cutting_order_workflow.js",
+    }
+)
 RETIRED_RUNTIME_TOKENS = (
     "OperationalProfile",
     "PermissionTemplate",
@@ -53,7 +70,7 @@ class TestRbacRuntimeCleanup(unittest.TestCase):
                     offenders.append(f"{path.relative_to(ROOT)} -> {token}")
         self.assertEqual(offenders, [], "\n".join(offenders))
 
-    def test_historical_business_role_names_exist_only_in_migration_compatibility(self) -> None:
+    def test_historical_business_role_names_exist_only_in_migration_or_retired_sources(self) -> None:
         role_names = (
             "Production Manager",
             "Cutting Operator",
@@ -67,11 +84,22 @@ class TestRbacRuntimeCleanup(unittest.TestCase):
         )
         offenders: list[str] = []
         for path in self._runtime_files():
+            relative = path.relative_to(ROOT).as_posix()
+            if relative in RETIRED_ROLE_NAME_SOURCES:
+                continue
             source = path.read_text(encoding="utf-8")
             for role in role_names:
                 if role in source:
-                    offenders.append(f"{path.relative_to(ROOT)} -> {role}")
+                    offenders.append(f"{relative} -> {role}")
         self.assertEqual(offenders, [], "\n".join(offenders))
+
+    def test_retired_role_name_sources_are_explicit_and_still_present(self) -> None:
+        missing = [
+            relative
+            for relative in sorted(RETIRED_ROLE_NAME_SOURCES)
+            if not (ROOT / relative).exists()
+        ]
+        self.assertEqual(missing, [])
 
     def test_permission_ui_never_auto_enables_prerequisites(self) -> None:
         page = (
