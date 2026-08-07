@@ -9,56 +9,37 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         import: "almdina_erp.almdina_erp.services.permission_management_service.preview_permission_import",
         update: "almdina_erp.almdina_erp.services.permission_management_service.update_role_permissions",
     });
+    const LEGACY_ROLE_ASSIGNMENT_KEY = "assign_workforce_profile";
 
     const state = {
-        catalog: [],
-        roles: [],
-        transfer: {},
-        selectedRole: "",
-        baseline: {},
-        working: {},
-        rolePayload: null,
-        preview: null,
-        roleRequest: 0,
-        previewRequest: 0,
-        previewTimer: null,
-        saving: false,
-        roleFilter: "",
+        catalog: [], roles: [], transfer: {}, selectedRole: "", baseline: {}, working: {},
+        rolePayload: null, preview: null, roleRequest: 0, previewRequest: 0,
+        previewTimer: null, saving: false, roleFilter: "",
     };
 
-    frappe.ui.make_app_page({
-        parent: wrapper,
-        title: __("إدارة الصلاحيات"),
-        single_column: true,
-    });
+    frappe.ui.make_app_page({parent: wrapper, title: __("إدارة الصلاحيات"), single_column: true});
     const $main = $(wrapper).find(".layout-main-section");
-
     injectStyles();
     renderShell();
     bindEvents();
     loadConsole();
 
-    function esc(value) {
-        return frappe.utils.escape_html(String(value ?? ""));
-    }
-
-    function clone(value) {
-        return JSON.parse(JSON.stringify(value || {}));
-    }
-
+    function esc(value) { return frappe.utils.escape_html(String(value ?? "")); }
+    function clone(value) { return JSON.parse(JSON.stringify(value || {})); }
     function normalizedFingerprint(value) {
-        return JSON.stringify(
-            Object.keys(value || {})
-                .sort()
-                .reduce((result, key) => {
-                    result[key] = value[key] === true;
-                    return result;
-                }, {})
-        );
+        return JSON.stringify(Object.keys(value || {}).sort().reduce((result, key) => {
+            result[key] = value[key] === true;
+            return result;
+        }, {}));
     }
-
-    function isDirty() {
-        return normalizedFingerprint(state.baseline) !== normalizedFingerprint(state.working);
+    function isDirty() { return normalizedFingerprint(state.baseline) !== normalizedFingerprint(state.working); }
+    function capabilityPresentation(item = {}) {
+        if (item.key !== LEGACY_ROLE_ASSIGNMENT_KEY) return item;
+        return {
+            ...item,
+            label: __("إسناد أدوار المستخدم"),
+            description: __("تغيير الدور أو الأدوار المعيّنة مباشرةً لمستخدمي المعمل."),
+        };
     }
 
     function injectStyles() {
@@ -79,56 +60,16 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
     function renderShell() {
         $main.html(`
             <div class="apc-shell">
-                <section class="apc-hero">
-                    <div>
-                        <h2>${__("الصلاحيات تُبنى من الصفر لكل دور")}</h2>
-                        <p>${__("اختر الدور ثم فعّل فقط ما يحتاجه. لا توجد قوالب صلاحيات ولا صلاحيات مخفية تُنسخ تلقائيًا؛ الصلاحيات الفعلية للمستخدم هي اتحاد صلاحيات أدواره.")}</p>
-                    </div>
-                    <div class="apc-actor"></div>
-                </section>
+                <section class="apc-hero"><div><h2>${__("الصلاحيات تُبنى من الصفر لكل دور")}</h2><p>${__("اختر الدور ثم فعّل فقط ما يحتاجه. لا توجد قوالب صلاحيات ولا صلاحيات مخفية تُنسخ تلقائيًا؛ الصلاحيات الفعلية للمستخدم هي اتحاد صلاحيات أدواره.")}</p></div><div class="apc-actor"></div></section>
                 <div class="apc-toolbar">
-                    <div class="apc-panel">
-                        <div class="apc-panel-title">${__("الدور الذي ستعدّل صلاحياته")}</div>
-                        <div class="apc-role-tools">
-                            <input type="search" class="apc-input apc-role-search" placeholder="${__("ابحث عن دور...")}">
-                            <select class="apc-select apc-role-select" aria-label="${__("الدور")}"></select>
-                        </div>
-                    </div>
-                    <div class="apc-panel">
-                        <div class="apc-panel-title">${__("نسخة احتياطية / نقل الإعداد")}</div>
-                        <div class="apc-transfer-tools">
-                            <button type="button" class="btn btn-default apc-export">${__("تصدير JSON")}</button>
-                            <button type="button" class="btn btn-default apc-import">${__("استيراد JSON")}</button>
-                        </div>
-                        <input type="file" class="apc-import-file" accept="application/json,.json" hidden>
-                    </div>
-                    <div class="apc-panel apc-summary-panel">
-                        <div class="apc-panel-title">${__("ملخص الدور")}</div>
-                        <div class="apc-stats">
-                            <div class="apc-stat"><strong class="apc-enabled-count">0</strong><span>${__("مفعلة")}</span></div>
-                            <div class="apc-stat"><strong class="apc-critical-count">0</strong><span>${__("حرجة")}</span></div>
-                            <div class="apc-stat"><strong class="apc-change-count">0</strong><span>${__("تغييرات")}</span></div>
-                        </div>
-                    </div>
+                    <div class="apc-panel"><div class="apc-panel-title">${__("الدور الذي ستعدّل صلاحياته")}</div><div class="apc-role-tools"><input type="search" class="apc-input apc-role-search" placeholder="${__("ابحث عن دور...")}"><select class="apc-select apc-role-select" aria-label="${__("الدور")}"></select></div></div>
+                    <div class="apc-panel"><div class="apc-panel-title">${__("نسخة احتياطية / نقل الإعداد")}</div><div class="apc-transfer-tools"><button type="button" class="btn btn-default apc-export">${__("تصدير JSON")}</button><button type="button" class="btn btn-default apc-import">${__("استيراد JSON")}</button></div><input type="file" class="apc-import-file" accept="application/json,.json" hidden></div>
+                    <div class="apc-panel apc-summary-panel"><div class="apc-panel-title">${__("ملخص الدور")}</div><div class="apc-stats"><div class="apc-stat"><strong class="apc-enabled-count">0</strong><span>${__("مفعلة")}</span></div><div class="apc-stat"><strong class="apc-critical-count">0</strong><span>${__("حرجة")}</span></div><div class="apc-stat"><strong class="apc-change-count">0</strong><span>${__("تغييرات")}</span></div></div></div>
                 </div>
                 <div class="apc-loading apc-empty">${__("جاري تحميل مصفوفة الصلاحيات...")}</div>
-                <div class="apc-content" style="display:none">
-                    <div class="apc-groups"></div>
-                    <aside class="apc-side">
-                        <div class="apc-panel apc-impact-panel"></div>
-                        <div class="apc-panel apc-audit-panel"></div>
-                    </aside>
-                </div>
+                <div class="apc-content" style="display:none"><div class="apc-groups"></div><aside class="apc-side"><div class="apc-panel apc-impact-panel"></div><div class="apc-panel apc-audit-panel"></div></aside></div>
             </div>
-            <div class="apc-savebar" style="display:none">
-                <div class="apc-savebar-inner">
-                    <div class="apc-dirty">${__("لا توجد تغييرات غير محفوظة")}</div>
-                    <div class="apc-save-actions">
-                        <button type="button" class="btn btn-default apc-reset">${__("تراجع")}</button>
-                        <button type="button" class="btn btn-primary apc-save">${__("حفظ الصلاحيات")}</button>
-                    </div>
-                </div>
-            </div>
+            <div class="apc-savebar" style="display:none"><div class="apc-savebar-inner"><div class="apc-dirty">${__("لا توجد تغييرات غير محفوظة")}</div><div class="apc-save-actions"><button type="button" class="btn btn-default apc-reset">${__("تراجع")}</button><button type="button" class="btn btn-primary apc-save">${__("حفظ الصلاحيات")}</button></div></div></div>
         `);
     }
 
@@ -167,7 +108,10 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
 
     function filteredRoles() {
         if (!state.roleFilter) return state.roles;
-        return state.roles.filter(role => String(role.name || "").toLowerCase().includes(state.roleFilter));
+        const matches = state.roles.filter(role => String(role.name || "").toLowerCase().includes(state.roleFilter));
+        const current = state.roles.find(role => String(role.name || "") === state.selectedRole);
+        if (current && !matches.some(role => String(role.name || "") === state.selectedRole)) matches.unshift(current);
+        return matches;
     }
 
     function renderRoleOptions() {
@@ -179,52 +123,45 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         }
         items.forEach(role => {
             const name = String(role.name || "");
-            const suffix = role.desk_access ? ` · ${__("Desk")}` : "";
-            $select.append(`<option value="${esc(name)}">${esc(name + suffix)}</option>`);
+            const current = name === state.selectedRole ? ` · ${__("الحالي")}` : "";
+            const desk = role.desk_access ? ` · ${__("Desk")}` : "";
+            $select.append(`<option value="${esc(name)}">${esc(name + current + desk)}</option>`);
         });
-        const selectedVisible = items.some(role => String(role.name || "") === state.selectedRole);
-        $select.val(selectedVisible ? state.selectedRole : String(items[0].name || ""));
+        $select.val(state.selectedRole && items.some(role => String(role.name || "") === state.selectedRole) ? state.selectedRole : String(items[0].name || ""));
     }
 
     function requestRoleChange(role) {
         if (!isDirty()) return loadRole(role);
-        frappe.confirm(
-            __("لديك تغييرات غير محفوظة على الدور الحالي. هل تريد تجاهلها وفتح الدور الآخر؟"),
-            () => loadRole(role),
-            () => renderRoleOptions()
-        );
+        frappe.confirm(__("لديك تغييرات غير محفوظة على الدور الحالي. هل تريد تجاهلها وفتح الدور الآخر؟"), () => loadRole(role), () => renderRoleOptions());
+    }
+
+    function invalidatePendingPreview() {
+        clearTimeout(state.previewTimer);
+        state.previewTimer = null;
+        state.previewRequest += 1;
     }
 
     function loadRole(role) {
+        invalidatePendingPreview();
         const request = ++state.roleRequest;
         $main.find(".apc-content").hide();
-        $main.find(".apc-loading").show().text(__("جاري تحميل صلاحيات الدور...") );
-        return frappe.call({method: METHODS.role, args:{role}}).then(response => {
+        $main.find(".apc-loading").show().text(__("جاري تحميل صلاحيات الدور..."));
+        return frappe.call({method: METHODS.role, args: {role}}).then(response => {
             if (request !== state.roleRequest) return;
             applyRolePayload(response.message || {});
         }).catch(error => {
-            if (request !== state.roleRequest) return;
-            showError(error, __("تعذر تحميل صلاحيات الدور."));
+            if (request === state.roleRequest) showError(error, __("تعذر تحميل صلاحيات الدور."));
         });
     }
 
     function applyRolePayload(payload) {
+        invalidatePendingPreview();
         state.selectedRole = String(payload.role || "");
         state.rolePayload = payload;
         state.baseline = clone(payload.capabilities || {});
         state.working = clone(payload.capabilities || {});
-        state.preview = {
-            role: state.selectedRole,
-            capabilities: clone(state.working),
-            changes: [],
-            impact: payload.impact || {},
-            requires_self_lockout_confirmation: false,
-            has_sensitive_changes: false,
-        };
-        renderRoleOptions();
-        renderCapabilities();
-        renderSide();
-        updateSaveBar();
+        state.preview = {role: state.selectedRole, capabilities: clone(state.working), changes: [], impact: payload.impact || {}, requires_self_lockout_confirmation: false, has_sensitive_changes: false};
+        renderRoleOptions(); renderCapabilities(); renderSide(); updateSaveBar();
         $main.find(".apc-loading").hide();
         $main.find(".apc-content").show();
     }
@@ -232,172 +169,124 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
     function renderCapabilities() {
         const groups = state.catalog.map(group => {
             const capabilities = Array.isArray(group.capabilities) ? group.capabilities : [];
-            const enabledInGroup = capabilities.filter(item => state.working[item.key] === true).length;
-            return `
-                <section class="apc-group">
-                    <header class="apc-group-head">
-                        <div><h4>${esc(group.label || group.key)}</h4><p>${esc(group.description || "")}</p></div>
-                        <div class="apc-group-count">${enabledInGroup}/${capabilities.length}</div>
-                    </header>
-                    <div>${capabilities.map(capabilityHtml).join("")}</div>
-                </section>
-            `;
+            const enabled = capabilities.filter(item => state.working[item.key] === true).length;
+            return `<section class="apc-group"><header class="apc-group-head"><div><h4>${esc(group.label || group.key)}</h4><p>${esc(group.description || "")}</p></div><div class="apc-group-count">${enabled}/${capabilities.length}</div></header><div>${capabilities.map(capabilityHtml).join("")}</div></section>`;
         }).join("");
         $main.find(".apc-groups").html(groups || `<div class="apc-empty">${__("لا توجد صلاحيات معرفة في النظام.")}</div>`);
     }
 
-    function capabilityHtml(item) {
+    function capabilityHtml(rawItem) {
+        const item = capabilityPresentation(rawItem);
         const checked = state.working[item.key] === true ? "checked" : "";
         const badges = [];
         if (item.standard) badges.push(`<span class="apc-badge standard">${__("Frappe")}</span>`);
         if (item.risk === "critical") badges.push(`<span class="apc-badge critical">${__("حرجة")}</span>`);
         else if (item.risk === "sensitive") badges.push(`<span class="apc-badge sensitive">${__("حساسة")}</span>`);
-        return `
-            <div class="apc-capability" data-capability="${esc(item.key)}">
-                <label class="apc-switch" title="${esc(item.label || item.key)}">
-                    <input class="apc-capability-input" type="checkbox" data-key="${esc(item.key)}" ${checked}>
-                    <span class="apc-slider"></span>
-                </label>
-                <div><span class="apc-capability-title">${esc(item.label || item.key)}</span><span class="apc-capability-description">${esc(item.description || "")}</span></div>
-                <div class="apc-badges">${badges.join("")}</div>
-            </div>
-        `;
+        return `<div class="apc-capability" data-capability="${esc(item.key)}"><label class="apc-switch" title="${esc(item.label || item.key)}"><input class="apc-capability-input" type="checkbox" data-key="${esc(item.key)}" ${checked}><span class="apc-slider"></span></label><div><span class="apc-capability-title">${esc(item.label || item.key)}</span><span class="apc-capability-description">${esc(item.description || "")}</span></div><div class="apc-badges">${badges.join("")}</div></div>`;
     }
 
     function onCapabilityChange(event) {
         const key = String(event.currentTarget.dataset.key || "");
         if (!key) return;
         state.working[key] = event.currentTarget.checked === true;
-        renderCapabilities();
-        updateSaveBar();
-        schedulePreview();
+        renderCapabilities(); updateSaveBar(); schedulePreview();
     }
 
     function schedulePreview() {
         clearTimeout(state.previewTimer);
-        state.previewTimer = setTimeout(previewWorkingState, 220);
+        state.previewTimer = setTimeout(() => previewWorkingState(), 220);
     }
 
     function previewWorkingState() {
-        if (!state.selectedRole) return;
+        if (!state.selectedRole) return Promise.resolve(null);
         const request = ++state.previewRequest;
-        return frappe.call({
-            method: METHODS.preview,
-            args: {role:state.selectedRole, capabilities:state.working},
-        }).then(response => {
-            if (request !== state.previewRequest) return;
+        const requestedRole = state.selectedRole;
+        const requestedState = clone(state.working);
+        const requestedFingerprint = normalizedFingerprint(requestedState);
+        return frappe.call({method: METHODS.preview, args: {role: requestedRole, capabilities: requestedState}}).then(response => {
+            if (request !== state.previewRequest || requestedRole !== state.selectedRole || requestedFingerprint !== normalizedFingerprint(state.working)) return null;
             state.preview = response.message || null;
             if (state.preview && state.preview.capabilities) state.working = clone(state.preview.capabilities);
-            renderCapabilities();
-            renderSide();
-            updateSaveBar();
-        }).catch(error => showError(error, __("تعذر معاينة أثر الصلاحيات."), false));
+            renderCapabilities(); renderSide(); updateSaveBar();
+            return state.preview;
+        }).catch(error => {
+            if (request === state.previewRequest && requestedRole === state.selectedRole) showError(error, __("تعذر معاينة أثر الصلاحيات."), false);
+            return null;
+        });
     }
 
     function renderSide() {
         const preview = state.preview || {};
         const impact = preview.impact || state.rolePayload?.impact || {};
+        const navigation = impact.navigation || {};
         const changes = Array.isArray(preview.changes) ? preview.changes : [];
         $main.find(".apc-enabled-count").text(Number(impact.enabled_count || 0));
         $main.find(".apc-critical-count").text(Number(impact.critical_count || 0));
         $main.find(".apc-change-count").text(changes.length);
-
         const warnings = [];
         if (preview.requires_self_lockout_confirmation) warnings.push(`<div class="apc-warning">${__("هذا التغيير سيزيل آخر صلاحية لديك لإدارة الصلاحيات. سيطلب النظام تأكيدًا صريحًا قبل الحفظ.")}</div>`);
         if (preview.has_sensitive_changes) warnings.push(`<div class="apc-warning">${__("توجد تغييرات حساسة أو حرجة. راجعها قبل الحفظ.")}</div>`);
-        const changeHtml = changes.length ? changes.map(change => `
-            <div class="apc-change"><span>${esc(change.label || change.key)}</span><span class="${change.after ? "on" : "off"}">${change.after ? __("تفعيل") : __("إلغاء")}</span></div>
-        `).join("") : `<div class="apc-success">${__("لا توجد تغييرات غير محفوظة على هذا الدور.")}</div>`;
-        const source = preview.source && preview.source.kind === "import"
-            ? `<div class="apc-source">${__("المعاينة الحالية جاءت من ملف JSON للدور")}: ${esc(preview.source.role || "")}</div>`
-            : "";
-        $main.find(".apc-impact-panel").html(`
-            <h4>${__("أثر التعديل")}</h4>
-            ${warnings.join("")}${source}
-            <div style="margin-top:9px">${changeHtml}</div>
-        `);
-
+        const changeHtml = changes.length ? changes.map(rawChange => {
+            const change = capabilityPresentation(rawChange);
+            return `<div class="apc-change"><span>${esc(change.label || change.key)}</span><span class="${change.after ? "on" : "off"}">${change.after ? __("تفعيل") : __("إلغاء")}</span></div>`;
+        }).join("") : `<div class="apc-success">${__("لا توجد تغييرات غير محفوظة على هذا الدور.")}</div>`;
+        const source = preview.source && preview.source.kind === "import" ? `<div class="apc-source">${__("المعاينة الحالية جاءت من ملف JSON للدور")}: ${esc(preview.source.role || "")}</div>` : "";
+        const workspaces = Array.isArray(navigation.workspaces) ? navigation.workspaces : [];
+        const workspaceHtml = workspaces.length ? `<div style="margin-top:10px"><div class="apc-panel-title">${__("مساحات العمل الناتجة")}</div><div class="apc-chip-row">${workspaces.map(item => `<span class="apc-chip">${esc(item)}</span>`).join("")}</div></div>` : "";
+        $main.find(".apc-impact-panel").html(`<h4>${__("أثر التعديل")}</h4>${warnings.join("")}${source}${workspaceHtml}<div style="margin-top:9px">${changeHtml}</div>`);
         const audits = Array.isArray(state.rolePayload?.audit) ? state.rolePayload.audit : [];
-        $main.find(".apc-audit-panel").html(`
-            <h4>${__("آخر تغييرات الدور")}</h4>
-            <div class="apc-audit-list">${audits.length ? audits.map(item => `
-                <div class="apc-audit-item"><b>${esc(item.changed_on || "")}</b><div>${esc(item.changed_by || "")}</div><div>${esc(item.changed_capabilities || "")}</div></div>
-            `).join("") : `<div class="text-muted">${__("لا يوجد سجل تغييرات بعد.")}</div>`}</div>
-        `);
+        $main.find(".apc-audit-panel").html(`<h4>${__("آخر تغييرات الدور")}</h4><div class="apc-audit-list">${audits.length ? audits.map(item => `<div class="apc-audit-item"><b>${esc(item.changed_on || "")}</b><div>${esc(item.changed_by || "")}</div><div>${esc(item.changed_capabilities || "")}</div></div>`).join("") : `<div class="text-muted">${__("لا يوجد سجل تغييرات بعد.")}</div>`}</div>`);
     }
 
     function updateSaveBar() {
         const dirty = isDirty();
         const $bar = $(wrapper).find(".apc-savebar");
         $bar.toggle(Boolean(state.selectedRole));
-        const $dirty = $bar.find(".apc-dirty");
-        $dirty.toggleClass("is-dirty", dirty).text(dirty ? __("لديك تغييرات غير محفوظة") : __("لا توجد تغييرات غير محفوظة"));
+        $bar.find(".apc-dirty").toggleClass("is-dirty", dirty).text(dirty ? __("لديك تغييرات غير محفوظة") : __("لا توجد تغييرات غير محفوظة"));
         $bar.find(".apc-reset,.apc-save").prop("disabled", !dirty || state.saving);
     }
 
     function resetWorkingState() {
+        invalidatePendingPreview();
         state.working = clone(state.baseline);
-        state.preview = {
-            role: state.selectedRole,
-            capabilities: clone(state.working),
-            changes: [],
-            impact: state.rolePayload?.impact || {},
-            requires_self_lockout_confirmation: false,
-            has_sensitive_changes: false,
-        };
-        renderCapabilities();
-        renderSide();
-        updateSaveBar();
+        state.preview = {role: state.selectedRole, capabilities: clone(state.working), changes: [], impact: state.rolePayload?.impact || {}, requires_self_lockout_confirmation: false, has_sensitive_changes: false};
+        renderCapabilities(); renderSide(); updateSaveBar();
     }
 
     function savePermissions() {
         if (!state.selectedRole || !isDirty() || state.saving) return;
-        const preview = state.preview || {};
-        const proceed = () => persistPermissions(Boolean(preview.requires_self_lockout_confirmation));
-        if (preview.has_sensitive_changes || preview.requires_self_lockout_confirmation) {
-            frappe.confirm(
-                preview.requires_self_lockout_confirmation
-                    ? __("هذا الحفظ قد يمنعك من فتح إدارة الصلاحيات مرة أخرى. هل تؤكد المتابعة؟")
-                    : __("توجد تغييرات حساسة أو حرجة. هل تؤكد حفظها؟"),
-                proceed
-            );
-        } else proceed();
+        clearTimeout(state.previewTimer);
+        state.previewTimer = null;
+        previewWorkingState().then(preview => {
+            if (!preview || !isDirty() || state.saving) return;
+            const proceed = () => persistPermissions(Boolean(preview.requires_self_lockout_confirmation));
+            if (preview.has_sensitive_changes || preview.requires_self_lockout_confirmation) {
+                frappe.confirm(preview.requires_self_lockout_confirmation ? __("هذا الحفظ قد يمنعك من فتح إدارة الصلاحيات مرة أخرى. هل تؤكد المتابعة؟") : __("توجد تغييرات حساسة أو حرجة. هل تؤكد حفظها؟"), proceed);
+            } else proceed();
+        });
     }
 
     function persistPermissions(confirmSelfLockout) {
-        state.saving = true;
-        updateSaveBar();
-        frappe.call({
-            method: METHODS.update,
-            args: {
-                role: state.selectedRole,
-                capabilities: state.working,
-                confirm_self_lockout: confirmSelfLockout ? 1 : 0,
-            },
-            freeze: true,
-            freeze_message: __("جاري حفظ الصلاحيات...")
-        }).then(response => {
+        const requestedRole = state.selectedRole;
+        const requestedState = clone(state.working);
+        state.saving = true; updateSaveBar();
+        frappe.call({method: METHODS.update, args: {role: requestedRole, capabilities: requestedState, confirm_self_lockout: confirmSelfLockout ? 1 : 0}, freeze: true, freeze_message: __("جاري حفظ الصلاحيات...")}).then(response => {
+            if (requestedRole !== state.selectedRole) return;
             applyRolePayload(response.message || {});
-            frappe.show_alert({message:__("تم حفظ صلاحيات الدور."),indicator:"green"});
-        }).catch(error => showError(error, __("تعذر حفظ الصلاحيات."), false)).finally(() => {
-            state.saving = false;
-            updateSaveBar();
-        });
+            frappe.show_alert({message: __("تم حفظ صلاحيات الدور."), indicator: "green"});
+        }).catch(error => showError(error, __("تعذر حفظ الصلاحيات."), false)).finally(() => { state.saving = false; updateSaveBar(); });
     }
 
     function exportSelectedRole() {
         if (!state.selectedRole) return;
-        frappe.call({method:METHODS.export,args:{role:state.selectedRole},freeze:true,freeze_message:__("جاري تجهيز ملف الصلاحيات...")}).then(response => {
-            const documentData = response.message || {};
-            const blob = new Blob([JSON.stringify(documentData, null, 2)], {type:"application/json;charset=utf-8"});
+        const requestedRole = state.selectedRole;
+        frappe.call({method: METHODS.export, args: {role: requestedRole}, freeze: true, freeze_message: __("جاري تجهيز ملف الصلاحيات...")}).then(response => {
+            if (requestedRole !== state.selectedRole) return;
+            const blob = new Blob([JSON.stringify(response.message || {}, null, 2)], {type: "application/json;charset=utf-8"});
             const url = URL.createObjectURL(blob);
             const anchor = document.createElement("a");
-            anchor.href = url;
-            anchor.download = `almdina-permissions-${state.selectedRole.replace(/[^\w\u0600-\u06FF-]+/g,"-")}.json`;
-            document.body.appendChild(anchor);
-            anchor.click();
-            anchor.remove();
-            URL.revokeObjectURL(url);
+            anchor.href = url; anchor.download = `almdina-permissions-${requestedRole.replace(/[^\w\u0600-\u06FF-]+/g, "-")}.json`;
+            document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
         }).catch(error => showError(error, __("تعذر تصدير الصلاحيات."), false));
     }
 
@@ -406,30 +295,25 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         const file = input.files && input.files[0];
         input.value = "";
         if (!file || !state.selectedRole) return;
+        const requestedRole = state.selectedRole;
+        const requestedRoleVersion = state.roleRequest;
         const maxBytes = Number(state.transfer.max_bytes || 131072);
-        if (file.size > maxBytes) {
-            frappe.msgprint(__("ملف الصلاحيات أكبر من الحد المسموح."));
-            return;
-        }
+        if (file.size > maxBytes) { frappe.msgprint(__("ملف الصلاحيات أكبر من الحد المسموح.")); return; }
         const reader = new FileReader();
         reader.onload = () => {
+            if (requestedRole !== state.selectedRole || requestedRoleVersion !== state.roleRequest) return;
             let payload;
             try { payload = JSON.parse(String(reader.result || "")); }
             catch (_) { frappe.msgprint(__("ملف JSON غير صالح.")); return; }
-            frappe.call({
-                method: METHODS.import,
-                args:{role:state.selectedRole,payload},
-                freeze:true,
-                freeze_message:__("جاري التحقق من ملف الصلاحيات...")
-            }).then(response => {
+            frappe.call({method: METHODS.import, args: {role: requestedRole, payload}, freeze: true, freeze_message: __("جاري التحقق من ملف الصلاحيات...")}).then(response => {
+                if (requestedRole !== state.selectedRole || requestedRoleVersion !== state.roleRequest) return;
                 state.preview = response.message || null;
                 state.working = clone(state.preview?.capabilities || {});
-                renderCapabilities();
-                renderSide();
-                updateSaveBar();
-                frappe.show_alert({message:__("تم تحميل الملف للمعاينة فقط. اضغط حفظ لتطبيقه."),indicator:"blue"});
+                renderCapabilities(); renderSide(); updateSaveBar();
+                frappe.show_alert({message: __("تم تحميل الملف للمعاينة فقط. اضغط حفظ لتطبيقه."), indicator: "blue"});
             }).catch(error => showError(error, __("تعذر استيراد ملف الصلاحيات."), false));
         };
+        reader.onerror = () => frappe.msgprint(__("تعذر قراءة ملف الصلاحيات."));
         reader.readAsText(file, "utf-8");
     }
 
@@ -438,10 +322,9 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         $main.find(".apc-content").hide();
         $(wrapper).find(".apc-savebar").hide();
     }
-
     function showError(error, fallback, replacePage = true) {
         const message = error && error.message ? error.message : fallback;
         if (replacePage) showEmpty(message);
-        else frappe.msgprint({title:__("إدارة الصلاحيات"),message:esc(message),indicator:"red"});
+        else frappe.msgprint({title: __("إدارة الصلاحيات"), message: esc(message), indicator: "red"});
     }
 }
