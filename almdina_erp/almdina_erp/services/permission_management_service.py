@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
     normalize_capability_state,
     permission_impact,
+    validate_capability_dependencies,
 )
 from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_SCHEMA,
@@ -51,14 +52,14 @@ def _parse_json_object(
 ) -> dict[str, Any]:
     if isinstance(values, str):
         if len(values.encode("utf-8")) > _MAX_TRANSFER_BYTES:
-            frappe.throw(_("Permission payload is too large."))
+            frappe.throw(_("Permission payload is too large."), frappe.ValidationError)
         parsed = frappe.parse_json(values)
     elif isinstance(values, Mapping):
         parsed = dict(values)
     else:
         parsed = None
     if not isinstance(parsed, dict):
-        frappe.throw(_(error_message))
+        frappe.throw(_(error_message), frappe.ValidationError)
     return parsed
 
 
@@ -70,9 +71,9 @@ def _parse_capabilities(
         error_message="Permission values must be an object.",
     )
     try:
-        return normalize_capability_state(parsed)
+        return validate_capability_dependencies(parsed)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -82,9 +83,13 @@ def _parse_transfer(values: str | Mapping[str, Any] | None) -> dict[str, Any]:
         error_message="Permission import must be a JSON object.",
     )
     try:
-        return parse_permission_export(parsed)
+        document = parse_permission_export(parsed)
+        document["capabilities"] = validate_capability_dependencies(
+            document["capabilities"]
+        )
+        return document
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -96,9 +101,13 @@ def _parse_bundle(
         error_message="Permission bundle must be a JSON object.",
     )
     try:
-        return parse_permission_bundle(parsed)
+        states = parse_permission_bundle(parsed)
+        return {
+            role: validate_capability_dependencies(state)
+            for role, state in states.items()
+        }
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -170,7 +179,10 @@ def _preview_payload(
     after: Mapping[str, Any],
     source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    normalized = normalize_capability_state(after)
+    try:
+        normalized = validate_capability_dependencies(after)
+    except ValueError as error:
+        frappe.throw(_(str(error)), frappe.ValidationError)
     changes = changed_capabilities(before, normalized)
     result: dict[str, Any] = {
         "role": role,
@@ -199,7 +211,7 @@ def _bundle_preview(
     try:
         current = _repository.role_states(list(imported))
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     preview = preview_permission_bundle(current, imported)
     preview.update(
         {
@@ -225,7 +237,10 @@ def get_permission_console(role: str | None = None) -> dict[str, Any]:
     _require_permission_management()
     roles = _repository.list_roles()
     selected_role = str(role or "").strip()
-    selected = _role_payload(selected_role) if selected_role else None
+    try:
+        selected = _role_payload(selected_role) if selected_role else None
+    except ValueError as error:
+        frappe.throw(_(str(error)), frappe.ValidationError)
     return {
         "catalog": capability_catalog_payload(),
         "transfer": {
@@ -248,7 +263,7 @@ def get_role_permissions(role: str) -> dict[str, Any]:
     try:
         return _role_payload(role)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -260,9 +275,9 @@ def preview_role_permissions(
     _require_permission_management()
     try:
         before = _repository.role_state(role)["capabilities"]
-        after = _parse_capabilities(capabilities)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
+    after = _parse_capabilities(capabilities)
     return _preview_payload(role=role, before=before, after=after)
 
 
@@ -274,7 +289,7 @@ def export_role_permissions(role: str) -> dict[str, Any]:
     try:
         state = _repository.role_state(role)["capabilities"]
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     document = build_permission_export(role=role, state=state)
     document.update(
         {
@@ -300,7 +315,7 @@ def export_permission_bundle(role: str | None = None) -> dict[str, Any]:
             app_version=__version__,
         )
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -314,9 +329,9 @@ def preview_permission_import(
     _require_permission_management()
     try:
         before = _repository.role_state(role)["capabilities"]
-        imported = _parse_transfer(payload)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
+    imported = _parse_transfer(payload)
     return _preview_payload(
         role=role,
         before=before,
@@ -350,20 +365,16 @@ def update_role_permissions(
     _require_permission_management()
     try:
         before = _repository.role_state(role)["capabilities"]
-        after = _parse_capabilities(capabilities)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
+    after = _parse_capabilities(capabilities)
 
     changes = changed_capabilities(before, after)
     if not changes:
-        # A no-op console save is also a safe repair operation. Older releases
-        # could persist capability columns without their native create/write or
-        # higher field-level projection, leaving the switches enabled while the
-        # form stayed read-only or empty.
         try:
             _repository.save_role_state(role, after)
         except ValueError as error:
-            frappe.throw(_(str(error)))
+            frappe.throw(_(str(error)), frappe.ValidationError)
         return {
             **_role_payload(role),
             "changed": False,
@@ -384,7 +395,7 @@ def update_role_permissions(
     try:
         saved = _repository.save_role_state(role, after)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     audit_name = _repository.record_audit(
         role=role,
         before=before,
@@ -434,7 +445,7 @@ def import_permission_bundle(
     try:
         saved = _repository.save_role_states(imported)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
 
     audit_names: list[str] = []
     for role in sorted(imported):
@@ -471,7 +482,7 @@ def get_permission_audit(
     try:
         return _repository.list_audit(role or None, limit=limit)
     except ValueError as error:
-        frappe.throw(_(str(error)))
+        frappe.throw(_(str(error)), frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
