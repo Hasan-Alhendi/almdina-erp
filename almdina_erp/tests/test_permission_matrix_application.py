@@ -60,6 +60,30 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertIn(Capability.VIEW_CUSTOMERS, required)
         self.assertIn(Capability.VIEW_EDGE_BANDING_TYPES, required)
 
+    def test_role_administration_actions_require_role_visibility_explicitly(self) -> None:
+        for capability in (
+            Capability.CREATE_ROLES,
+            Capability.EDIT_ROLES,
+            Capability.DELETE_ROLES,
+            Capability.MANAGE_PERMISSIONS,
+        ):
+            with self.subTest(capability=capability):
+                self.assertIn(
+                    Capability.VIEW_ROLES,
+                    required_capabilities(capability),
+                )
+        self.assertIn(
+            Capability.VIEW_ROLES,
+            required_capabilities(Capability.ASSIGN_USER_ROLES),
+        )
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies({Capability.CREATE_ROLES: True})
+        validated = validate_capability_dependencies(
+            {Capability.VIEW_ROLES: True, Capability.CREATE_ROLES: True}
+        )
+        self.assertTrue(validated[Capability.CREATE_ROLES])
+        self.assertTrue(validated[Capability.VIEW_ROLES])
+
     def test_financial_reporting_has_transitive_explicit_dependencies(self) -> None:
         required = required_capabilities(Capability.VIEW_FINANCIAL_REPORTS)
         self.assertIn(Capability.VIEW_OPERATIONAL_REPORTS, required)
