@@ -13,6 +13,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     WORKFORCE_CAPABILITIES,
     Capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.automatic_role_permission_cleanup import (
+    revoke_automatic_role_business_grants,
+)
 
 
 def _managed_doctypes() -> tuple[str, ...]:
@@ -117,12 +120,13 @@ def _ensure_permission_type_schema(permission_type_name: str) -> None:
 
 
 def sync_permission_types() -> None:
-    """Install and repair capability columns, then normalize role projections.
+    """Install/repair capability columns and fail closed on automatic roles.
 
     Permission Type creates the required DocPerm and Custom DocPerm fields in
     Frappe v16. Existing records are repaired as well as new ones so upgrades are
-    self-healing. No role assignment is seeded here: administrators remain the
-    sole owners of which roles receive each business capability.
+    self-healing. Frappe automatic roles (All/Guest/Desk User) are explicitly
+    stripped of Almdina business grants because they are inherited by users and
+    must never become an implicit factory role.
     """
 
     if not frappe.db.exists("DocType", "Permission Type"):
@@ -149,6 +153,11 @@ def sync_permission_types() -> None:
             }
         ).insert(ignore_permissions=True)
 
+    # Remove historical grants before any projection/baseline work. Otherwise a
+    # stale Desk User row can survive forever because protected roles are never
+    # editable in the factory permission console.
+    revoke_automatic_role_business_grants()
+
     # Frappe v16 caches the permission-type map per worker process with
     # @site_cache. Invalidate it explicitly after schema repair so a long-lived
     # process cannot keep authorizing against the pre-migration map.
@@ -160,14 +169,16 @@ def sync_permission_types() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    # Reconcile only roles that already had custom rows. Baseline creation adds
-    # standard roles to Custom DocPerm, so doing it first would make untouched
-    # roles look like permission-console roles and could normalize rights this
-    # app does not own.
+    # Reconcile only editable roles that already had custom rows. Automatic roles
+    # were purged above and cannot be reintroduced as factory policy.
     reconcile_custom_permission_projections()
     ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()
     )
+
+    # Defense in depth: baseline helpers must not be able to resurrect automatic
+    # role grants if a stale standard row existed during an unusual upgrade.
+    revoke_automatic_role_business_grants()
 
 
 __all__ = ["reconcile_custom_permission_projections", "sync_permission_types"]
