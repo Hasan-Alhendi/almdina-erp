@@ -193,7 +193,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
                 Capability.VIEW_ORDERS,
                 Capability.REASSIGN_WORKER,
                 Capability.VIEW_COSTS,
-                Capability.MANAGE_FACTORY_SETTINGS,
+                Capability.VIEW_FACTORY_SETTINGS,
             }
         ).load()
         bootinfo = {
