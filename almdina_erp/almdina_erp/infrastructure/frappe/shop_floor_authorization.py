@@ -5,20 +5,12 @@ from frappe import _
 from frappe.utils import cint
 
 
-STAGE_ROLE_BY_TYPE: dict[str, str] = {
-    "Sharyoun": "عامل شريون",
-    "Drawing": "عامل رسم",
-    "CNC": "عامل CNC",
-    "Sanding": "عامل تقشيط",
-}
-
-
 def current_user() -> str:
     return str(frappe.session.user)
 
 
 def assert_enabled_user_has_role(user: str, role: str) -> None:
-    """Ensure an assignee is active and belongs to the configured route role."""
+    """Ensure an assignee is active and belongs to the route's configured role."""
 
     resolved_user = str(user or "").strip()
     resolved_role = str(role or "").strip()
@@ -42,28 +34,10 @@ def assert_enabled_user_has_role(user: str, role: str) -> None:
         )
 
 
-def assert_enabled_user_has_stage_role(user: str, stage_type: str) -> None:
-    """Validate operational eligibility for an assignment.
-
-    Business action authorization is resolved separately through configurable
-    Permission Types. This mapping only answers whether a selected worker is a
-    member of the operational department represented by the stage type.
-    """
-
-    role = STAGE_ROLE_BY_TYPE.get(stage_type)
-    if not role:
-        frappe.throw(_("Unsupported shop-floor stage: {0}").format(stage_type))
-    assert_enabled_user_has_role(user, role)
-
-
-def get_users_for_stage(stage_type: str) -> list[dict[str, str]]:
-    role = STAGE_ROLE_BY_TYPE.get(stage_type)
-    if not role:
-        return []
-    return get_users_for_role(role)
-
-
 def get_users_for_role(role: str) -> list[dict[str, str]]:
+    resolved_role = str(role or "").strip()
+    if not resolved_role or not frappe.db.exists("Role", resolved_role):
+        return []
     rows = frappe.db.sql(
         """
         select u.name, u.full_name
@@ -75,7 +49,7 @@ def get_users_for_role(role: str) -> list[dict[str, str]]:
            and u.name not in ('Guest', 'Administrator')
          order by u.full_name asc
         """,
-        (role,),
+        (resolved_role,),
         as_dict=True,
     )
     return [
@@ -85,10 +59,7 @@ def get_users_for_role(role: str) -> list[dict[str, str]]:
 
 
 __all__ = [
-    "STAGE_ROLE_BY_TYPE",
     "assert_enabled_user_has_role",
-    "assert_enabled_user_has_stage_role",
     "current_user",
     "get_users_for_role",
-    "get_users_for_stage",
 ]
