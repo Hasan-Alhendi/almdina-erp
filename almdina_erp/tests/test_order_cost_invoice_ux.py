@@ -23,6 +23,9 @@ def test_primary_tabs_are_order_cutting_plan_then_order_cost():
     fields = {row["fieldname"]: row for row in doc["fields"]}
     assert fields["cost_tab"]["fieldtype"] == "Tab Break"
     assert fields["order_cost_invoice_html"]["fieldtype"] == "HTML"
+    assert doc["field_order"].index("board_rate_usd") > cost
+    assert doc["field_order"].index("cutting_cost_per_board_usd") > cost
+    assert doc["field_order"].index("board_rate_usd") < doc["field_order"].index("order_cost_invoice_html")
 
 
 def test_primary_tab_bar_is_fixed_on_scroll_and_labels_are_arabic():

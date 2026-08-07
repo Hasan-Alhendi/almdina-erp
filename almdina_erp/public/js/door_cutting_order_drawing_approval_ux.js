@@ -116,19 +116,7 @@
 	function installButton(frm) {
 		frm.remove_custom_button(APPROVE_LABEL, ACTION_GROUP);
 		frm.remove_custom_button(REAPPROVE_LABEL, ACTION_GROUP);
-		if (
-			frm.is_new() ||
-			!canApprove(frm) ||
-			!isAtDrawing(frm) ||
-			!approvalSources(frm).length
-		) {
-			return;
-		}
-		frm.add_custom_button(
-			frm.doc.approved_plan ? REAPPROVE_LABEL : APPROVE_LABEL,
-			() => approve(frm),
-			ACTION_GROUP
-		);
+		// Drawing approval actions stay in the form sections, not the page toolbar.
 	}
 
 	frappe.ui.form.on("Door Cutting Order", {

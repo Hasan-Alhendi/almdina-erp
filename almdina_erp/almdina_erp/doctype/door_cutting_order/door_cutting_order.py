@@ -851,17 +851,26 @@ class DoorCuttingOrder(Document):
 
     def ensure_special_prices_approved(self) -> None:
         pending = [
-            str(row.piece_no or row.idx)
-            for row in (self.pieces or [])
-            if (row.piece_type or "Regular") == "Special"
-            and row.special_shape_price_status != "Approved"
+            (
+                f"درفة خاصة رقم {index}"
+                if (row.piece_type or "Regular") == "Special"
+                else f"درفة زاوية مقصوصة {index}"
+            )
+            for index, row in enumerate(self.pieces or [], start=1)
+            if (
+                (row.piece_type or "Regular") == "Special"
+                and row.special_shape_price_status != "Approved"
+            )
+            or (
+                (row.piece_type or "Regular") == "Clipped Corner"
+                and (row.clipped_corner_edge_price_status or "Unpriced") != "Priced"
+            )
         ]
         if pending:
             frappe.throw(
                 _(
-                    "Every special door price must be approved before "
-                    "production approval. Pending rows: {0}."
-                ).format(", ".join(pending))
+                    "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل اعتماد الإنتاج. المتبقي: {0}."
+                ).format("، ".join(pending))
             )
 
     @staticmethod

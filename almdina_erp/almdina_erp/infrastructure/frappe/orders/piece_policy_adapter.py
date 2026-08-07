@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     SpecialPrice,
     drawing_token,
     evaluate_special_shape,
+    pending_custom_edge_price_labels,
     reset_price_values,
     resolve_clipped_corner,
 )
@@ -206,6 +207,9 @@ class FrappeOrderPiecePolicyAdapter:
                 ).items():
                     setattr(row, fieldname, value)
 
+        if not self.document.is_new():
+            self.ensure_custom_edge_prices()
+
     def ensure_documented(self) -> None:
         missing = [
             str(row.piece_no or row.idx)
@@ -221,20 +225,17 @@ class FrappeOrderPiecePolicyAdapter:
                 ).format(", ".join(missing))
             )
 
-    def ensure_prices_approved(self) -> None:
-        pending = [
-            str(row.piece_no or row.idx)
-            for row in (self.document.pieces or [])
-            if (row.piece_type or "Regular") == "Special"
-            and row.special_shape_price_status != "Approved"
-        ]
+    def ensure_custom_edge_prices(self) -> None:
+        pending = pending_custom_edge_price_labels(self.document.pieces or [])
         if pending:
             frappe.throw(
                 _(
-                    "Every special door price must be approved before production "
-                    "approval. Pending rows: {0}."
-                ).format(", ".join(pending))
+                    "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ أو طباعة الفاتورة. المتبقي: {0}."
+                ).format("، ".join(pending))
             )
+
+    def ensure_prices_approved(self) -> None:
+        self.ensure_custom_edge_prices()
 
 
 __all__ = ["FrappeOrderPiecePolicyAdapter"]

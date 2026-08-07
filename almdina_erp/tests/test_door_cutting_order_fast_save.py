@@ -79,11 +79,12 @@ def test_plan_button_uses_dedicated_recalculation_endpoint():
     assert "تم حفظ التعديلات دون تشغيل محرك القص الثقيل" in source
 
 
-def test_invoice_print_is_blocked_while_plan_is_stale():
+def test_invoice_print_stays_available_while_plan_is_stale():
     source = _text(FAST_SAVE_JS)
-    assert 'event.target.closest(".dco-print-customer-invoice")' in source
-    assert "planIsStale(frm)" in source
-    assert "أعد حساب خطة القص أولًا" in source
+    assert 'event.target.closest(".dco-print-customer-invoice")' not in source
+    assert "dco-cost-plan-stale" not in source
+    assert "is-plan-stale" not in source
+    assert "أعد حساب خطة القص أولًا" not in source
 
 
 def test_review_workflow_recalculates_only_when_required():

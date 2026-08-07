@@ -48,7 +48,7 @@
             if (!wrapper || !wrapper.find(".dco-cost-shell").length) return true;
         }
 
-        if (can("view_cutting_plan") && !frm.is_new()) {
+        if (can("view_cutting_plan")) {
             const field = frm.fields_dict.cutting_plan_html;
             const wrapper = field && field.$wrapper;
             if (!wrapper || !wrapper.children().length) return true;

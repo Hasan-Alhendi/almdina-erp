@@ -33,6 +33,12 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
         self.assertIn("get_customer_invoice_document", source)
         self.assertIn("AlmdinaFinancialDocuments", source)
 
+    def test_toolbar_keeps_secure_print_api_without_page_action_button(self) -> None:
+        source = TOOLBAR.read_text(encoding="utf-8")
+        self.assertIn("printCustomerInvoice", source)
+        self.assertIn("removeButton(frm)", source)
+        self.assertNotIn("frm.add_custom_button", source)
+
     def test_order_form_loads_customer_invoice_toolbar_from_source(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
         hooks = HOOKS.read_text(encoding="utf-8")

@@ -120,12 +120,14 @@
             : [];
         const nonEdge = original.filter(line => line.type !== "edge");
         const detailedEdges = edgeInvoiceLines(frm);
-        const firstSpecial = nonEdge.findIndex(line => line.type === "special");
-        if (firstSpecial < 0) return [...nonEdge, ...detailedEdges];
+        const firstCustom = nonEdge.findIndex(line =>
+            line.type === "special" || line.type === "cut_corner"
+        );
+        if (firstCustom < 0) return [...nonEdge, ...detailedEdges];
         return [
-            ...nonEdge.slice(0, firstSpecial),
+            ...nonEdge.slice(0, firstCustom),
             ...detailedEdges,
-            ...nonEdge.slice(firstSpecial),
+            ...nonEdge.slice(firstCustom),
         ];
     }
 

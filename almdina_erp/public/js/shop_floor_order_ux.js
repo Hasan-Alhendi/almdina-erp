@@ -408,7 +408,16 @@
 	}
 
 	function uploadDrawingDxf(frm) {
+		if (frm.is_new()) {
+			frappe.msgprint(__("احفظ الطلب قبل رفع ملف DXF."));
+			return;
+		}
 		const replacing = Boolean(frm.doc.production_dxf);
+		const capability = replacing ? "replace_dxf" : "upload_dxf";
+		if (!can(frm, capability)) {
+			frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF."));
+			return;
+		}
 		new frappe.ui.FileUploader({
 			doctype: "Door Cutting Order",
 			docname: frm.doc.name,
@@ -426,40 +435,24 @@
 		});
 	}
 
-	function addDrawingDxfButtons(frm) {
+	function removeDrawingDxfToolbarButtons(frm) {
 		if (frm.is_new()) return;
 
-		if (frm.doc.production_dxf && can(frm, "export_dxf")) {
-			frm.add_custom_button(__("تنزيل DXF للإنتاج"), () => window.open(frm.doc.production_dxf, "_blank"), DRAWING_ACTION_GROUP);
-		}
-		if (!isAtDrawing(frm) || !isAssignedToCurrentUser(frm) || frm.doc.approved_plan) return;
-
-		if (can(frm, "export_dxf")) {
-			frm.add_custom_button(__("تصدير DXF للرسم"), () => {
-				const exporter = frappe.almdina && frappe.almdina.export_order_dxf;
-				const markExported = () => frappe.call({
-					method: "almdina_erp.almdina_erp.services.shop_floor_service.mark_dxf_exported",
-					args: { order_name: frm.doc.name },
-				}).then(() => frm.reload_doc());
-				if (exporter) return exporter(frm.doc.name).then(markExported);
-				frappe.msgprint(__("تعذر تشغيل مصدر DXF الآمن."));
-				return null;
-			}, DRAWING_ACTION_GROUP);
-		}
-
-		const uploadCapability = frm.doc.production_dxf ? "replace_dxf" : "upload_dxf";
-		if (can(frm, uploadCapability)) {
-			frm.add_custom_button(
-				frm.doc.production_dxf ? __("استبدال ملف DXF") : __("رفع ملف DXF"),
-				() => uploadDrawingDxf(frm),
-				DRAWING_ACTION_GROUP
-			);
-		}
-
-		if (can(frm, "approve_dxf") && availableApprovalSources(frm).length) {
-			frm.add_custom_button(__("اعتماد الرسم"), () => approveDrawing(frm), DRAWING_ACTION_GROUP);
-		}
-		// Print and AutoCAD DXF export live in the cutting-plan section.
+		[
+			__("تصدير DXF للرسم"),
+			__("تصدير DXF لأوتوكاد"),
+			__("تصدير DXF"),
+			__("طباعة خطة القص"),
+			__("تنزيل DXF للإنتاج"),
+			__("رفع ملف DXF"),
+			__("استبدال ملف DXF"),
+			__("اعتماد الرسم"),
+			__("إعادة اعتماد الرسم"),
+		].forEach(label => {
+			frm.remove_custom_button(label);
+			frm.remove_custom_button(label, DRAWING_ACTION_GROUP);
+		});
+		// Drawing/DXF actions belong in the form sections, not the page toolbar.
 	}
 
 	function openHandoffDialog(frm, stageName) {
@@ -609,7 +602,7 @@
 			removeProductionButtons(frm);
 			addDispatchButton(frm);
 			addDeliveryButtons(frm);
-			addDrawingDxfButtons(frm);
+			removeDrawingDxfToolbarButtons(frm);
 			addWorkerStageButtons(frm);
 		},
 	});
@@ -620,4 +613,7 @@
 			applyShopFloorPresentation(frm);
 		}
 	});
+
+	frappe.almdina = frappe.almdina || {};
+	frappe.almdina.upload_production_dxf = uploadDrawingDxf;
 })();

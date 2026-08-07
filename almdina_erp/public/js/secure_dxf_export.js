@@ -256,6 +256,11 @@
         "تصدير DXF للتعديل",
         "تصدير DXF لأوتوكاد",
         "Export DXF for AutoCAD",
+        "تنزيل DXF للإنتاج",
+        "رفع ملف DXF",
+        "استبدال ملف DXF",
+        "اعتماد الرسم",
+        "إعادة اعتماد الرسم",
     ];
 
     function isExportButtonLabel(text) {
@@ -267,16 +272,8 @@
     function stripUnauthorizedExportButtons(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
 
-        // Keep drawing-stage export ("تصدير DXF للرسم") when permitted; remove
-        // legacy AutoCAD toolbar exporters so the plan-section button owns that job.
-        const toolbarLegacy = [
-            "تصدير DXF",
-            "Export DXF",
-            "تصدير DXF للتعديل",
-            "تصدير DXF لأوتوكاد",
-            "Export DXF for AutoCAD",
-        ];
-        toolbarLegacy.forEach(label => {
+        // All DXF export actions live in the cutting-plan section only.
+        STRIP_EXPORT_LABELS.forEach(label => {
             try {
                 frm.remove_custom_button(label);
                 frm.remove_custom_button(label, __("الرسم / DXF"));
@@ -286,25 +283,13 @@
             }
         });
 
-        if (!canExportDxf(frm)) {
-            ["تصدير DXF للرسم", ...toolbarLegacy].forEach(label => {
-                try {
-                    frm.remove_custom_button(label);
-                    frm.remove_custom_button(label, __("الرسم / DXF"));
-                } catch (error) {
-                    void error;
-                }
-            });
-        }
-
         const root = frm.page && frm.page.wrapper ? frm.page.wrapper : frm.wrapper;
         if (!root) return;
         $(root).find("button, a.btn").filter(function () {
             if ($(this).closest("[data-fieldname='plan_control_actions']").length) return false;
             if ($(this).hasClass("dco-export-dxf")) return false;
+            if ($(this).hasClass("dco-print-cutting-plan")) return false;
             const label = String($(this).text() || "").trim();
-            // Drawing workflow button stays when export_dxf is granted.
-            if (canExportDxf(frm) && label === "تصدير DXF للرسم") return false;
             return isExportButtonLabel(label);
         }).each(function () {
             $(this).remove();
@@ -326,12 +311,19 @@
         if (frm.doctype !== "Door Cutting Order") return;
         stripUnauthorizedExportButtons(frm);
         ensureExportStripObserver(frm);
-        // DXF export lives in the cutting-plan section, not the page toolbar.
-        try {
-            frm.remove_custom_button(buttonLabel());
-        } catch (error) {
-            void error;
-        }
+        [
+            buttonLabel(),
+            "طباعة خطة القص",
+            "Print Cutting Plan",
+        ].forEach(label => {
+            try {
+                frm.remove_custom_button(label);
+                frm.remove_custom_button(label, __("الرسم / DXF"));
+                frm.remove_custom_button(label, __("دورة الطلب"));
+            } catch (error) {
+                void error;
+            }
+        });
     }
 
     frappe.ui.form.on("Door Cutting Order", {

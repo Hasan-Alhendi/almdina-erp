@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 
 PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "Special"})
@@ -230,7 +230,36 @@ def reset_price_values(piece_type: str) -> dict[str, Any]:
         "special_shape_price_note": "",
         "special_shape_price_approved_by": "",
         "special_shape_price_approved_on": None,
+        "clipped_corner_edge_price_usd": 0,
+        "clipped_corner_edge_price_status": (
+            "Unpriced" if piece_type == "Clipped Corner" else "Unpriced"
+        ),
+        "clipped_corner_edge_price_note": "",
+        "clipped_corner_edge_price_set_by": "",
+        "clipped_corner_edge_price_set_on": None,
     }
+
+
+def pending_custom_edge_price_labels(pieces: Any) -> tuple[str, ...]:
+    """Return Arabic labels for special/cut-corner rows still missing edge prices."""
+
+    pending: list[str] = []
+    for index, piece in enumerate(pieces or [], start=1):
+        if isinstance(piece, Mapping):
+            piece_type = str(piece.get("piece_type") or "Regular")
+            special_status = str(piece.get("special_shape_price_status") or "")
+            clipped_status = str(piece.get("clipped_corner_edge_price_status") or "Unpriced")
+        else:
+            piece_type = str(getattr(piece, "piece_type", None) or "Regular")
+            special_status = str(getattr(piece, "special_shape_price_status", None) or "")
+            clipped_status = str(
+                getattr(piece, "clipped_corner_edge_price_status", None) or "Unpriced"
+            )
+        if piece_type == "Special" and special_status != "Approved":
+            pending.append(f"درفة خاصة رقم {index}")
+        elif piece_type == "Clipped Corner" and clipped_status != "Priced":
+            pending.append(f"درفة زاوية مقصوصة {index}")
+    return tuple(pending)
 
 
 def _same_number(first: float, second: float) -> bool:
@@ -254,6 +283,7 @@ __all__ = [
     "evaluate_special_shape",
     "geometry_changed",
     "protected_price_changed",
+    "pending_custom_edge_price_labels",
     "reset_price_values",
     "resolve_clipped_corner",
 ]

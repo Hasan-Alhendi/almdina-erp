@@ -11,12 +11,14 @@ HOOKS = ROOT / "hooks.py"
 
 
 class TestOrderTabPermissionsUX(unittest.TestCase):
-    def test_plan_and_cost_tabs_follow_capabilities_and_saved_state(self) -> None:
+    def test_plan_and_cost_tabs_follow_capabilities_on_new_and_saved_orders(self) -> None:
         source = TAB_PERMISSIONS.read_text(encoding="utf-8")
 
         self.assertIn('results_tab: "view_cutting_plan"', source)
         self.assertIn('cost_tab: "view_costs"', source)
-        self.assertIn("const saved = !frm.is_new()", source)
+        self.assertNotIn("const saved = !frm.is_new()", source)
+        self.assertIn('results_tab: can(frm, TAB_RULES.results_tab)', source)
+        self.assertIn('can(frm, "print_customer_invoice")', source)
         self.assertIn('frm.set_df_property(fieldname, "hidden"', source)
         self.assertIn('window.addEventListener("almdina:permissions-updated"', source)
         self.assertIn('activateOrderTab(frm)', source)

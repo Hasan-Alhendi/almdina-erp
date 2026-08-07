@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
 
 
 EDITABLE_ORDER_STATUSES = {"Draft", "Pending Review", "Rejected"}
@@ -44,6 +45,11 @@ PIECE_COST_FIELDS = (
     "special_shape_price_note",
     "special_shape_price_approved_by",
     "special_shape_price_approved_on",
+    "clipped_corner_edge_price_usd",
+    "clipped_corner_edge_price_status",
+    "clipped_corner_edge_price_note",
+    "clipped_corner_edge_price_set_by",
+    "clipped_corner_edge_price_set_on",
 )
 
 
@@ -145,9 +151,8 @@ def approve_special_piece_price(
         else Capability.APPROVE_SPECIAL_PRICE
     )
     require_document_capability(order, required_capability)
+    assert_order_editable(order)
 
-    if order.status not in EDITABLE_ORDER_STATUSES:
-        frappe.throw(_("Special pricing can only be changed while the order is editable."))
     if (piece.piece_type or "Regular") != "Special":
         frappe.throw(_("Only a special door can receive a custom inclusive price."))
     if piece.special_shape_status != "Documented":
@@ -179,8 +184,57 @@ def approve_special_piece_price(
     }
 
 
+@frappe.whitelist()
+def update_clipped_corner_edge_price(
+    order_name: str,
+    piece_name: str,
+    edge_price_usd: float,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Set or update cut-corner edge banding processing cost via pricing capabilities."""
+
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    order.check_permission("read")
+    _require_cost_visibility(order)
+    piece = _special_piece(order, piece_name)
+    required_capability = (
+        Capability.EDIT_SPECIAL_PRICE
+        if piece.clipped_corner_edge_price_status == "Priced"
+        else Capability.APPROVE_SPECIAL_PRICE
+    )
+    require_document_capability(order, required_capability)
+    assert_order_editable(order)
+
+    if (piece.piece_type or "Regular") != "Clipped Corner":
+        frappe.throw(_("Only a cut-corner door can receive a custom edge banding price."))
+
+    price = _finite_non_negative(edge_price_usd, _("Cut-Corner Edge Banding Price USD"))
+    approval_note = str(note or "").strip()
+    if len(approval_note) > 500:
+        frappe.throw(_("Pricing note cannot exceed 500 characters."))
+
+    piece.clipped_corner_edge_price_usd = price
+    piece.clipped_corner_edge_price_status = "Priced"
+    piece.clipped_corner_edge_price_note = approval_note
+    piece.clipped_corner_edge_price_set_by = frappe.session.user
+    piece.clipped_corner_edge_price_set_on = now_datetime()
+    order.flags.special_price_approval_action = True
+    order.save(ignore_permissions=True)
+
+    return {
+        "order_name": order.name,
+        "piece_name": piece.name,
+        "edge_price_usd": flt(piece.clipped_corner_edge_price_usd),
+        "price_status": piece.clipped_corner_edge_price_status,
+        "set_by": piece.clipped_corner_edge_price_set_by,
+        "set_on": piece.clipped_corner_edge_price_set_on,
+        "required_capability": required_capability,
+    }
+
+
 __all__ = [
     "approve_special_piece_price",
     "get_order_cost_snapshot",
+    "update_clipped_corner_edge_price",
     "update_order_cost_settings",
 ]

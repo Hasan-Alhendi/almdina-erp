@@ -37,7 +37,8 @@
                     border-radius:10px !important;
                 }
                 [data-fieldname="plan_control_actions"] .dco-print-cutting-plan,
-                [data-fieldname="plan_control_actions"] .dco-export-dxf {
+                [data-fieldname="plan_control_actions"] .dco-export-dxf,
+                [data-fieldname="plan_control_actions"] .dco-upload-dxf-plan {
                     min-height:36px !important;
                     border-radius:10px !important;
                     font-weight:800 !important;
@@ -51,7 +52,8 @@
                         min-width:0;
                     }
                     [data-fieldname="plan_control_actions"] .dco-print-cutting-plan,
-                    [data-fieldname="plan_control_actions"] .dco-export-dxf {
+                    [data-fieldname="plan_control_actions"] .dco-export-dxf,
+                    [data-fieldname="plan_control_actions"] .dco-upload-dxf-plan {
                         width:100%;
                     }
                 }

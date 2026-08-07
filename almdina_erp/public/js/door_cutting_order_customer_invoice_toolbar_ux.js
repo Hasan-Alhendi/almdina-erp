@@ -112,12 +112,7 @@
 
     function install(frm) {
         removeButton(frm);
-        if (!canPrint(frm) || frm.is_new()) return;
-        frm.add_custom_button(
-            __(LABEL),
-            () => printCustomerInvoice(frm),
-            __(GROUP)
-        );
+        // Customer invoice print lives in the cost tab (dco-secure-print-customer-invoice).
     }
 
     frappe.ui.form.on("Door Cutting Order", {
