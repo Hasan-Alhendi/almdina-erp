@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
     REPORTING_CAPABILITIES,
+    ROLE_ADMINISTRATION_CAPABILITIES,
     SHOP_FLOOR_ACCESS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
     Capability,
@@ -96,8 +97,8 @@ def _profile(granted: frozenset[str]) -> str:
         | REPORTING_CAPABILITIES
         | PRODUCTION_SUPERVISOR_CAPABILITIES
         | WORKFORCE_CAPABILITIES
+        | ROLE_ADMINISTRATION_CAPABILITIES
         | visible_configuration
-        | frozenset({Capability.MANAGE_PERMISSIONS})
     )
     if _intersects(granted, PRODUCTION_OPERATOR_CAPABILITIES) and not _intersects(
         granted, broad
@@ -122,8 +123,8 @@ def _profile(granted: frozenset[str]) -> str:
         | CONTROL_CENTER_CAPABILITIES
         | REPORTING_CAPABILITIES
         | WORKFORCE_CAPABILITIES
-        | visible_configuration
-        | frozenset({Capability.MANAGE_PERMISSIONS}),
+        | ROLE_ADMINISTRATION_CAPABILITIES
+        | visible_configuration,
     ):
         return "order_entry"
     return "full"
@@ -147,6 +148,7 @@ def build_navigation_context(
     has_factory_settings = _intersects(granted, FACTORY_SETTINGS_CAPABILITIES)
     visible_configuration = _visible_configuration_capabilities(granted)
     has_master_data = _intersects(visible_configuration, MASTER_DATA_CAPABILITIES)
+    has_role_administration = _intersects(granted, ROLE_ADMINISTRATION_CAPABILITIES)
     has_permissions_admin = Capability.MANAGE_PERMISSIONS in granted
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
@@ -169,8 +171,8 @@ def build_navigation_context(
             | REPORTING_CAPABILITIES
             | PRODUCTION_SUPERVISOR_CAPABILITIES
             | WORKFORCE_CAPABILITIES
-            | visible_configuration
-            | frozenset({Capability.MANAGE_PERMISSIONS}),
+            | ROLE_ADMINISTRATION_CAPABILITIES
+            | visible_configuration,
         )
     )
 
@@ -190,7 +192,7 @@ def build_navigation_context(
             or has_workforce
             or has_factory_settings
             or has_master_data
-            or has_permissions_admin
+            or has_role_administration
         ):
             workspaces.append(WORKSPACE_SETTINGS)
         if has_permissions_admin:
@@ -225,7 +227,7 @@ def build_navigation_context(
             "workforce": has_workforce,
             "factory_settings": has_factory_settings,
             "master_data": has_master_data,
-            "administration": has_permissions_admin,
+            "administration": has_role_administration,
             "reports": has_reports,
         },
     }
