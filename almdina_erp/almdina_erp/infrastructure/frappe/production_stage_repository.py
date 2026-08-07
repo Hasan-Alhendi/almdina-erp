@@ -204,10 +204,17 @@ def list_later_stages(order_name: str, sequence: int) -> list[Any]:
     )
 
 
-def cancel_stage(stage_name: str, *, target_status: str) -> Any:
+def cancel_stage(
+    stage_name: str,
+    *,
+    target_status: str,
+    note: str | None = None,
+) -> Any:
     _lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.status = target_status
+    if note:
+        stage.notes = ((stage.notes or "") + "\n" + str(note)).strip()
     return _save_stage(stage)
 
 
