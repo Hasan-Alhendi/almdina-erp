@@ -3,9 +3,7 @@ from __future__ import annotations
 import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
-    sync_permission_types,
-)
+from almdina_erp.patches.v1_0.permission_migration_helpers import ensure_permission_types
 
 
 _SETTINGS_DOCTYPE = "Almdina ERP Settings"
@@ -28,6 +26,7 @@ _FACTORY_GRANTS = (
     Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
     Capability.VIEW_PRODUCTION_ROUTINGS,
 )
+_ALL_MATERIALIZED_GRANTS = tuple(dict.fromkeys((*_WORKFORCE_GRANTS, *_FACTORY_GRANTS)))
 
 
 def _doctype_exists(doctype: str) -> bool:
@@ -50,10 +49,7 @@ def _materialize(
         return
     rows = frappe.get_all(
         permission_doctype,
-        filters={
-            "parent": _SETTINGS_DOCTYPE,
-            legacy_field: 1,
-        },
+        filters={"parent": _SETTINGS_DOCTYPE, legacy_field: 1},
         pluck="name",
         limit_page_length=0,
     )
@@ -69,7 +65,7 @@ def _materialize(
 def execute() -> None:
     """Preserve effective access before retiring broad umbrella capabilities."""
 
-    sync_permission_types()
+    ensure_permission_types(_ALL_MATERIALIZED_GRANTS)
     for permission_doctype in ("DocPerm", "Custom DocPerm"):
         _materialize(
             permission_doctype,
