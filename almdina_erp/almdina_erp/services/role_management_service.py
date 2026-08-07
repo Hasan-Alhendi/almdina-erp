@@ -24,10 +24,10 @@ _administration = RoleAdministration(_repository)
 T = TypeVar("T")
 
 
-def _require_role_management() -> None:
+def _require_role_capability(capability: str, message: str) -> None:
     require_doctype_capability(
-        Capability.MANAGE_PERMISSIONS,
-        message=_("You do not have permission to manage Almdina roles."),
+        capability,
+        message=_(message),
     )
 
 
@@ -76,7 +76,10 @@ def get_role_console(
 ) -> dict[str, Any]:
     """List editable roles with permission, user and production references."""
 
-    _require_role_management()
+    _require_role_capability(
+        Capability.VIEW_ROLES,
+        "You do not have permission to view Almdina roles.",
+    )
     try:
         enabled_filter = (
             None if enabled in (None, "", "all") else _bool_value(enabled)
@@ -95,7 +98,10 @@ def get_role_console(
 
 @frappe.whitelist()
 def get_role_details(role: str) -> dict[str, Any]:
-    _require_role_management()
+    _require_role_capability(
+        Capability.VIEW_ROLES,
+        "You do not have permission to view Almdina roles.",
+    )
     return _execute(
         lambda: _administration.get(actor=_actor(), role=role)
     )
@@ -105,7 +111,10 @@ def get_role_details(role: str) -> dict[str, Any]:
 def create_factory_role(data: str | Mapping[str, Any]) -> dict[str, Any]:
     """Create an enabled Desk role with zero implicit permissions."""
 
-    _require_role_management()
+    _require_role_capability(
+        Capability.CREATE_ROLES,
+        "You do not have permission to create Almdina roles.",
+    )
     values = _payload(data)
     return _execute(
         lambda: _administration.create(
@@ -123,7 +132,10 @@ def update_factory_role(
 ) -> dict[str, Any]:
     """Rename a role or update its private Almdina description."""
 
-    _require_role_management()
+    _require_role_capability(
+        Capability.EDIT_ROLES,
+        "You do not have permission to edit Almdina roles.",
+    )
     values = _payload(data)
     return _execute(
         lambda: _administration.update(
@@ -148,7 +160,10 @@ def set_factory_role_enabled(
     role: str,
     enabled: int | bool | str,
 ) -> dict[str, Any]:
-    _require_role_management()
+    _require_role_capability(
+        Capability.EDIT_ROLES,
+        "You do not have permission to enable or disable Almdina roles.",
+    )
     try:
         resolved = _bool_value(enabled)
     except ValueError as error:
@@ -169,7 +184,10 @@ def delete_factory_role(
 ) -> dict[str, Any]:
     """Delete only an empty role after explicit confirmation and reference checks."""
 
-    _require_role_management()
+    _require_role_capability(
+        Capability.DELETE_ROLES,
+        "You do not have permission to delete Almdina roles.",
+    )
     try:
         confirmed = _bool_value(confirm_delete)
     except ValueError as error:
@@ -186,7 +204,10 @@ def delete_factory_role(
 
 @frappe.whitelist()
 def get_factory_role_audit(role: str, limit: int = 30) -> dict[str, Any]:
-    _require_role_management()
+    _require_role_capability(
+        Capability.VIEW_ROLES,
+        "You do not have permission to view Almdina role audit history.",
+    )
     return _execute(
         lambda: _administration.audit(
             actor=_actor(),
