@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -23,9 +24,7 @@ UNAUTHORIZED_USER = "almdina.transfer.unauthorized@example.com"
 
 
 def manual_state(*capabilities: str) -> dict[str, bool]:
-    return validate_capability_dependencies(
-        {capability: True for capability in capabilities}
-    )
+    return validate_capability_dependencies({capability: True for capability in capabilities})
 
 
 class TestPermissionTransferIntegration(FrappeTestCase):
@@ -36,6 +35,7 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         sync_permission_types()
         for role in (ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE):
             cls._ensure_role(role)
+            cls._ensure_managed_role(role)
         cls._ensure_user(ADMIN_USER, ADMIN_ROLE)
         cls._ensure_user(UNAUTHORIZED_USER, UNAUTHORIZED_ROLE)
         cls._replace_role_permissions(
@@ -52,6 +52,7 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         frappe.set_user("Administrator")
         roles = [ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE]
         frappe.db.delete("Almdina Permission Audit", {"role": ["in", roles]})
+        frappe.db.delete("Almdina Role Metadata", {"role": ["in", roles]})
         for role in roles:
             frappe.db.delete("Custom DocPerm", {"role": role})
         for user in (ADMIN_USER, UNAUTHORIZED_USER):
@@ -67,6 +68,20 @@ class TestPermissionTransferIntegration(FrappeTestCase):
     def _ensure_role(cls, role: str) -> None:
         if not frappe.db.exists("Role", role):
             frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1}).insert(ignore_permissions=True)
+
+    @classmethod
+    def _ensure_managed_role(cls, role: str) -> None:
+        if frappe.db.exists("Almdina Role Metadata", {"role": role}):
+            return
+        frappe.get_doc(
+            {
+                "doctype": "Almdina Role Metadata",
+                "role": role,
+                "role_uid": str(uuid.uuid4()),
+                "description": "Permission transfer integration role",
+                "managed_by_almdina": 1,
+            }
+        ).insert(ignore_permissions=True)
 
     @classmethod
     def _ensure_user(cls, email: str, role: str) -> None:
