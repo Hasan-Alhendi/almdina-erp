@@ -16,6 +16,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 from almdina_erp.almdina_erp.infrastructure.frappe.automatic_role_permission_cleanup import (
     revoke_automatic_role_business_grants,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
+)
 
 
 def _managed_doctypes() -> tuple[str, ...]:
@@ -58,7 +61,7 @@ def reconcile_custom_permission_projections() -> None:
     ``read``/``write`` rights. Re-saving each existing Almdina role state through
     the current projected repository removes stale rights and also repairs the
     native permissions of related resources such as Cutting Plan and Production
-    Stage. No role is created and no absent business capability is granted.
+    Stage. Protected platform roles are never treated as editable factory roles.
     """
 
     if not frappe.db.exists("DocType", "Custom DocPerm"):
@@ -86,16 +89,13 @@ def reconcile_custom_permission_projections() -> None:
     if not roles:
         return
 
-    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-        PROTECTED_ROLES,
-    )
     from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
         ProjectedPermissionMatrixRepository,
     )
 
     repository = ProjectedPermissionMatrixRepository()
     for resolved in roles:
-        if resolved in PROTECTED_ROLES or not frappe.db.exists("Role", resolved):
+        if resolved in PROTECTED_SYSTEM_ROLES or not frappe.db.exists("Role", resolved):
             continue
         effective = repository.role_state(resolved)["capabilities"]
         repository.save_role_state(
@@ -120,13 +120,12 @@ def _ensure_permission_type_schema(permission_type_name: str) -> None:
 
 
 def sync_permission_types() -> None:
-    """Install/repair capability columns and fail closed on automatic roles.
+    """Install/repair capability columns and fail closed on platform roles.
 
     Permission Type creates the required DocPerm and Custom DocPerm fields in
     Frappe v16. Existing records are repaired as well as new ones so upgrades are
-    self-healing. Frappe automatic roles (All/Guest/Desk User) are explicitly
-    stripped of Almdina business grants because they are inherited by users and
-    must never become an implicit factory role.
+    self-healing. Protected platform roles are excluded from Almdina business
+    authority and must never become implicit factory roles.
     """
 
     if not frappe.db.exists("DocType", "Permission Type"):
@@ -154,8 +153,8 @@ def sync_permission_types() -> None:
         ).insert(ignore_permissions=True)
 
     # Remove historical grants before any projection/baseline work. Otherwise a
-    # stale Desk User row can survive forever because protected roles are never
-    # editable in the factory permission console.
+    # stale automatic-role row can survive forever because protected roles are
+    # never editable in the factory permission console.
     revoke_automatic_role_business_grants()
 
     # Frappe v16 caches the permission-type map per worker process with
@@ -169,8 +168,8 @@ def sync_permission_types() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    # Reconcile only editable roles that already had custom rows. Automatic roles
-    # were purged above and cannot be reintroduced as factory policy.
+    # Reconcile only editable roles that already had custom rows. Protected
+    # platform roles are skipped and cannot be reintroduced as factory policy.
     reconcile_custom_permission_projections()
     ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()

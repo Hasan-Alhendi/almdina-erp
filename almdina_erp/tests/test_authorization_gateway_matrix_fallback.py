@@ -42,14 +42,16 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 return frozenset(
                     {
                         "Arbitrary Operational Role",
+                        "System Manager",
                         "Desk User",
                         "All",
-                        "System Manager",
                     }
                 )
 
             @staticmethod
-            def role_state(_role):
+            def role_state(role):
+                if role == "System Manager":
+                    raise AssertionError("protected System Manager must never be resolved")
                 return {
                     "capabilities": {
                         Capability.VIEW_ORDERS: True,
@@ -79,7 +81,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
             spec.loader.exec_module(module)
             module._matrix_repository = lambda: (
                 FakeRepository(),
-                frozenset({"All", "Guest", "Desk User", "System Manager"}),
+                module.PROTECTED_SYSTEM_ROLES,
             )
             return module
         finally:
@@ -101,6 +103,29 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 Capability.VIEW_CUTTING_PLAN,
                 user="role.user@example.com",
             )
+        )
+
+    def test_system_manager_is_never_a_factory_authority_source(self) -> None:
+        gateway = self._load_gateway()
+
+        class SystemManagerOnlyRepository:
+            @staticmethod
+            def user_roles(_user):
+                return frozenset({"System Manager", "Desk User", "All"})
+
+            @staticmethod
+            def role_state(_role):
+                raise AssertionError("protected platform roles must be skipped")
+
+        gateway._matrix_repository = lambda: (
+            SystemManagerOnlyRepository(),
+            gateway.PROTECTED_SYSTEM_ROLES,
+        )
+        gateway.frappe.local.almdina_matrix_capabilities = {}
+
+        self.assertEqual(
+            gateway.granted_capabilities("system.manager@example.com"),
+            frozenset(),
         )
 
     def test_document_capability_keeps_native_read_as_narrowing_scope(self) -> None:
@@ -144,51 +169,6 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
                 user="empty@example.com",
             )
         )
-
-    def test_system_manager_is_never_factory_business_authority(self) -> None:
-        gateway = self._load_gateway()
-        gateway.frappe.local = types.SimpleNamespace()
-
-        class SystemManagerOnlyRepository:
-            @staticmethod
-            def user_roles(_user):
-                return frozenset({"System Manager", "Desk User", "All"})
-
-            @staticmethod
-            def role_state(_role):
-                return {
-                    "capabilities": {
-                        Capability.VIEW_ORDERS: True,
-                        Capability.CREATE_ORDER: True,
-                        Capability.EDIT_ORDER: True,
-                        Capability.VIEW_COSTS: True,
-                        Capability.VIEW_CUTTING_PLAN: True,
-                    }
-                }
-
-        gateway._matrix_repository = lambda: (
-            SystemManagerOnlyRepository(),
-            frozenset({"All", "Guest", "Desk User", "System Manager"}),
-        )
-
-        self.assertEqual(
-            gateway.granted_capabilities("system.manager@example.com"),
-            frozenset(),
-        )
-        for capability in (
-            Capability.VIEW_ORDERS,
-            Capability.CREATE_ORDER,
-            Capability.EDIT_ORDER,
-            Capability.VIEW_COSTS,
-            Capability.VIEW_CUTTING_PLAN,
-        ):
-            self.assertFalse(
-                gateway.doctype_has_capability(
-                    capability,
-                    user="system.manager@example.com",
-                ),
-                capability,
-            )
 
 
 if __name__ == "__main__":

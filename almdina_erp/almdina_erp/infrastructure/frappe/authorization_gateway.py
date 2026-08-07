@@ -33,9 +33,10 @@ def _matrix_repository() -> tuple[Any, frozenset[str]]:
 def _matrix_granted_capabilities(user: str) -> frozenset[str]:
     """Resolve capabilities only from editable roles in the factory matrix.
 
-    Frappe attaches roles such as ``Desk User`` and ``All`` automatically, while
-    ``System Manager`` represents platform administration. Protected system
-    roles must never become implicit sources of Almdina business authority.
+    Frappe automatically attaches roles such as ``Desk User`` and ``All`` to a
+    session, while ``System Manager`` is a platform administration role. These
+    roles are intentionally excluded by ``PROTECTED_SYSTEM_ROLES`` and must
+    never become an implicit source of Almdina business authority.
     """
 
     cache = getattr(frappe.local, "almdina_matrix_capabilities", None)
@@ -139,9 +140,9 @@ def document_has_capability(
     """Require explicit capability first, then preserve native document scope.
 
     The old implementation checked Frappe native permission first. A stale grant
-    on a protected system role could therefore bypass an empty factory role. The
-    matrix is now the authority; native permissions are used only as a second,
-    narrowing check for the concrete document.
+    on a protected platform role could therefore bypass an empty factory role.
+    The matrix is now the authority; native permissions are used only as a
+    second, narrowing check for the concrete document.
     """
 
     definition = capability_definition(capability)
