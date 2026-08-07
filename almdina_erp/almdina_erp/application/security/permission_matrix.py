@@ -38,7 +38,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
     "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وتسجيل الحوادث وإدارة قطع التعويض.", "icon": "dashboard"},
     "reports": {"label": "التقارير", "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.", "icon": "chart"},
-    "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة ملفاتها التشغيلية.", "icon": "users"},
+    "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.", "icon": "users"},
     "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة وضوابط الإنتاج كل قسم بصورة مستقلة.", "icon": "setting-gear"},
     "master_data": {"label": "البيانات الأساسية", "description": "إدارة مسارات الإنتاج وأنواع القشاط مع فصل العرض والإنشاء والتعديل والحذف.", "icon": "database"},
     "administration": {"label": "إدارة الصلاحيات", "description": "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "icon": "lock"},
@@ -52,11 +52,7 @@ def _presentation(label: str, description: str, risk: str = "normal") -> dict[st
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
     Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
-    Capability.EDIT_ORDER: _presentation(
-        "تعديل الطلب",
-        "تفعيل وضع التعديل على نفس الطلب قبل الوصول لمرحلة القص (شريون أو CNC).",
-        "sensitive",
-    ),
+    Capability.EDIT_ORDER: _presentation("تعديل الطلب", "تفعيل وضع التعديل على نفس الطلب قبل الوصول لمرحلة القص (شريون أو CNC).", "sensitive"),
     Capability.CREATE_ORDER_REVISION: _presentation("إنشاء نسخة تعديل", "إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.", "sensitive"),
     Capability.SUBMIT_ORDER: _presentation("إرسال للمراجعة", "نقل الطلب من المسودة إلى قائمة المراجعة."),
     Capability.APPROVE_ORDER: _presentation("اعتماد الطلب", "اعتماد الطلب ليصبح جاهزًا للإنتاج.", "critical"),
@@ -77,16 +73,8 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
     Capability.EDIT_SPECIAL_DRAWING: _presentation("تعديل الرسم الخاص", "تحرير هندسة وملاحظات الدرف الخاصة.", "sensitive"),
     Capability.EXPORT_DXF: _presentation("تصدير DXF", "تصدير رسم الإنتاج بصيغة DXF.", "sensitive"),
-    Capability.UPLOAD_DXF: _presentation(
-        "رفع خطة قص DXF",
-        "رفع خطة قص كملف DXF مع التحقق قبل اعتمادها. مخصصة لعامل الرسم.",
-        "sensitive",
-    ),
-    Capability.REPLACE_DXF: _presentation(
-        "استبدال خطة قص DXF",
-        "استبدال ملف DXF المرفوع سابقًا بعد التحقق. مخصصة لعامل الرسم.",
-        "critical",
-    ),
+    Capability.UPLOAD_DXF: _presentation("رفع خطة قص DXF", "رفع خطة قص كملف DXF مع التحقق قبل اعتمادها. مخصصة لعامل الرسم.", "sensitive"),
+    Capability.REPLACE_DXF: _presentation("استبدال خطة قص DXF", "استبدال ملف DXF المرفوع سابقًا بعد التحقق. مخصصة لعامل الرسم.", "critical"),
     Capability.APPROVE_DXF: _presentation("اعتماد الرسم", "اعتماد خطة النظام أو الخطة المرفوعة كمصدر للإنتاج.", "critical"),
     Capability.DISPATCH_ORDER: _presentation("إرسال الطلب للإنتاج", "اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.", "critical"),
     Capability.START_ASSIGNED_STAGE: _presentation("بدء المرحلة المسندة", "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه."),
@@ -105,19 +93,17 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.CANCEL_REPLACEMENT: _presentation("إلغاء قطعة التعويض", "إلغاء قطعة تعويض لم يبدأ تنفيذها بعد.", "critical"),
     Capability.VIEW_OPERATIONAL_REPORTS: _presentation("عرض التقارير التشغيلية", "عرض الأداء والمراحل والحوادث دون التكلفة والخسائر المالية.", "sensitive"),
     Capability.VIEW_FINANCIAL_REPORTS: _presentation("عرض التقارير المالية الداخلية", "عرض التكلفة الفعلية والهدر والخسائر الداخلية داخل التقارير.", "critical"),
-    Capability.VIEW_USERS: _presentation("عرض مستخدمي المعمل", "عرض حسابات Almdina فقط وحالتها وملفها التشغيلي."),
+    Capability.VIEW_USERS: _presentation("عرض مستخدمي المعمل", "عرض حسابات Almdina فقط وحالتها والأدوار المسندة لها."),
     Capability.CREATE_USERS: _presentation("إنشاء مستخدم", "إنشاء حساب نظام جديد للمعمل مع كلمة مرور مؤقتة.", "critical"),
     Capability.EDIT_USERS: _presentation("تعديل بيانات المستخدم", "تعديل الاسم واللغة وبيانات الحساب غير المالية.", "sensitive"),
-    Capability.ASSIGN_WORKFORCE_PROFILE: _presentation("تعيين الملف التشغيلي", "تغيير أهلية القسم ومساحة العمل دون منح صلاحيات أعمال.", "critical"),
+    Capability.ASSIGN_USER_ROLES: _presentation("إسناد الأدوار للمستخدم", "إضافة أو إزالة أدوار النظام من حساب مستخدم Almdina.", "critical"),
     Capability.ENABLE_USERS: _presentation("تفعيل المستخدم", "إعادة تفعيل حساب معمل معطّل.", "critical"),
     Capability.DISABLE_USERS: _presentation("تعطيل المستخدم", "تعطيل حساب بعد التأكد من عدم وجود مراحل إنتاج نشطة.", "critical"),
     Capability.RESET_USER_PASSWORD: _presentation("إعادة كلمة المرور", "تعيين كلمة مرور مؤقتة جديدة دون إظهارها أو تخزينها في السجل.", "critical"),
-    Capability.MANAGE_USERS: _presentation("إدارة المستخدمين كاملة", "صلاحية شاملة متوافقة مع الإعداد السابق وتمنح جميع إجراءات القوى العاملة.", "critical"),
     Capability.VIEW_FACTORY_SETTINGS: _presentation("عرض إعدادات المعمل", "عرض إعدادات القص والتكلفة وضوابط الإنتاج دون تعديل."),
     Capability.EDIT_FACTORY_CUTTING_DEFAULTS: _presentation("تعديل افتراضيات القص", "تعديل Kerf والهامش والخوارزمية ونوع الآلة وحدود البحث.", "sensitive"),
     Capability.EDIT_FACTORY_COST_DEFAULTS: _presentation("تعديل افتراضيات التكلفة", "تعديل أجرة القص ورسوم الدرف الخاصة وهوامشها.", "critical"),
     Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: _presentation("تعديل ضوابط الإنتاج", "تعديل المسار الافتراضي والاستثناءات التشغيلية الحساسة.", "critical"),
-    Capability.MANAGE_FACTORY_SETTINGS: _presentation("إدارة إعدادات المعمل كاملة", "صلاحية شاملة متوافقة تمنح تعديل أقسام الإعدادات الثلاثة.", "critical"),
     Capability.VIEW_PRODUCTION_ROUTINGS: _presentation("عرض مسارات الإنتاج", "عرض مسارات الإنتاج وتسلسل مراحلها."),
     Capability.CREATE_PRODUCTION_ROUTINGS: _presentation("إنشاء مسار إنتاج", "إنشاء مسار إنتاج جديد.", "sensitive"),
     Capability.EDIT_PRODUCTION_ROUTINGS: _presentation("تعديل مسارات الإنتاج", "تعديل ترتيب المراحل أو تعطيل المسار.", "critical"),
@@ -130,70 +116,48 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
-_REPLACEMENT_ACTIONS = frozenset(
-    {
-        Capability.APPROVE_REPLACEMENT,
-        Capability.START_REPLACEMENT,
-        Capability.COMPLETE_REPLACEMENT,
-        Capability.CANCEL_REPLACEMENT,
-        Capability.EDIT_REPLACEMENT_COST,
-    }
-)
-_COST_VIEW_ACTIONS = frozenset(
-    {
-        Capability.EDIT_COST_SETTINGS,
-        Capability.EDIT_SPECIAL_PRICE,
-        Capability.APPROVE_SPECIAL_PRICE,
-        Capability.PRINT_INTERNAL_COST_REPORT,
-    }
-)
-_PLAN_VIEW_ACTIONS = frozenset(
-    {
-        Capability.RECALCULATE_PLAN,
-        Capability.EDIT_OPTIMIZER_SETTINGS,
-        Capability.PRINT_CUTTING_PLAN,
-    }
-)
-_DRAWING_VIEW_ACTIONS = frozenset(
-    {
-        Capability.EDIT_SPECIAL_DRAWING,
-        Capability.EXPORT_DXF,
-        Capability.UPLOAD_DXF,
-        Capability.REPLACE_DXF,
-        Capability.APPROVE_DXF,
-    }
-)
-_WORKFORCE_ACTIONS = frozenset(
-    WORKFORCE_CAPABILITIES.difference(
-        {Capability.VIEW_USERS, Capability.MANAGE_USERS}
-    )
-)
-_FACTORY_SECTION_EDITS = frozenset(
-    FACTORY_SETTINGS_CAPABILITIES.difference(
-        {Capability.VIEW_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS}
-    )
-)
-_ROUTING_ACTIONS = frozenset(
-    {
-        Capability.CREATE_PRODUCTION_ROUTINGS,
-        Capability.EDIT_PRODUCTION_ROUTINGS,
-        Capability.DELETE_PRODUCTION_ROUTINGS,
-    }
-)
-_EDGE_ACTIONS = frozenset(
-    {
-        Capability.CREATE_EDGE_BANDING_TYPES,
-        Capability.EDIT_EDGE_BANDING_TYPES,
-        Capability.DELETE_EDGE_BANDING_TYPES,
-    }
-)
-_ORDER_INPUT_ACTIONS = frozenset(
-    {
-        Capability.CREATE_ORDER,
-        Capability.EDIT_ORDER,
-        Capability.CREATE_ORDER_REVISION,
-    }
-)
+_REPLACEMENT_ACTIONS = frozenset({
+    Capability.APPROVE_REPLACEMENT,
+    Capability.START_REPLACEMENT,
+    Capability.COMPLETE_REPLACEMENT,
+    Capability.CANCEL_REPLACEMENT,
+    Capability.EDIT_REPLACEMENT_COST,
+})
+_COST_VIEW_ACTIONS = frozenset({
+    Capability.EDIT_COST_SETTINGS,
+    Capability.EDIT_SPECIAL_PRICE,
+    Capability.APPROVE_SPECIAL_PRICE,
+    Capability.PRINT_INTERNAL_COST_REPORT,
+})
+_PLAN_VIEW_ACTIONS = frozenset({
+    Capability.RECALCULATE_PLAN,
+    Capability.EDIT_OPTIMIZER_SETTINGS,
+    Capability.PRINT_CUTTING_PLAN,
+})
+_DRAWING_VIEW_ACTIONS = frozenset({
+    Capability.EDIT_SPECIAL_DRAWING,
+    Capability.EXPORT_DXF,
+    Capability.UPLOAD_DXF,
+    Capability.REPLACE_DXF,
+    Capability.APPROVE_DXF,
+})
+_WORKFORCE_ACTIONS = frozenset(WORKFORCE_CAPABILITIES.difference({Capability.VIEW_USERS}))
+_FACTORY_SECTION_EDITS = frozenset(FACTORY_SETTINGS_CAPABILITIES.difference({Capability.VIEW_FACTORY_SETTINGS}))
+_ROUTING_ACTIONS = frozenset({
+    Capability.CREATE_PRODUCTION_ROUTINGS,
+    Capability.EDIT_PRODUCTION_ROUTINGS,
+    Capability.DELETE_PRODUCTION_ROUTINGS,
+})
+_EDGE_ACTIONS = frozenset({
+    Capability.CREATE_EDGE_BANDING_TYPES,
+    Capability.EDIT_EDGE_BANDING_TYPES,
+    Capability.DELETE_EDGE_BANDING_TYPES,
+})
+_ORDER_INPUT_ACTIONS = frozenset({
+    Capability.CREATE_ORDER,
+    Capability.EDIT_ORDER,
+    Capability.CREATE_ORDER_REVISION,
+})
 
 
 def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]:
@@ -231,15 +195,9 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if state[Capability.VIEW_FINANCIAL_REPORTS]:
         state[Capability.VIEW_OPERATIONAL_REPORTS] = True
         state[Capability.VIEW_COSTS] = True
-    if state[Capability.MANAGE_USERS]:
-        for capability in WORKFORCE_CAPABILITIES:
-            state[capability] = True
-    elif any(state[capability] for capability in _WORKFORCE_ACTIONS):
+    if any(state[capability] for capability in _WORKFORCE_ACTIONS):
         state[Capability.VIEW_USERS] = True
-    if state[Capability.MANAGE_FACTORY_SETTINGS]:
-        for capability in FACTORY_SETTINGS_CAPABILITIES:
-            state[capability] = True
-    elif any(state[capability] for capability in _FACTORY_SECTION_EDITS):
+    if any(state[capability] for capability in _FACTORY_SECTION_EDITS):
         state[Capability.VIEW_FACTORY_SETTINGS] = True
     if state[Capability.EDIT_FACTORY_PRODUCTION_CONTROLS]:
         state[Capability.VIEW_PRODUCTION_ROUTINGS] = True
@@ -248,10 +206,6 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if any(state[capability] for capability in _EDGE_ACTIONS):
         state[Capability.VIEW_EDGE_BANDING_TYPES] = True
     if any(state[capability] for capability in _ORDER_INPUT_ACTIONS):
-        # Customer and edge profiles are required inputs of an order.  Keep the
-        # dependency capability-based so any administrator-selected role can
-        # enter orders without inheriting Sales User, Order Entry, or another
-        # hard-coded role.
         state[Capability.VIEW_CUSTOMERS] = True
         state[Capability.VIEW_EDGE_BANDING_TYPES] = True
     return state
@@ -277,7 +231,6 @@ def standard_permission_projection(
         can_read_settings = (
             normalized[Capability.VIEW_FACTORY_SETTINGS]
             or any(normalized[value] for value in _FACTORY_SECTION_EDITS)
-            or normalized[Capability.MANAGE_FACTORY_SETTINGS]
         )
         return {
             "read": can_read_settings,
@@ -292,13 +245,7 @@ def standard_permission_projection(
             for capability, definition in CAPABILITY_CATALOG.items()
             if definition.applies_to == doctype
         )
-        return {
-            "read": enabled,
-            "select": enabled,
-            "create": False,
-            "write": False,
-            "delete": False,
-        }
+        return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
     if doctype == "Production Routing":
         can_read = normalized[Capability.VIEW_PRODUCTION_ROUTINGS]
         return {
@@ -310,13 +257,7 @@ def standard_permission_projection(
         }
     if doctype == "Customer":
         can_read = normalized[Capability.VIEW_CUSTOMERS]
-        return {
-            "read": can_read,
-            "select": can_read,
-            "create": False,
-            "write": False,
-            "delete": False,
-        }
+        return {"read": can_read, "select": can_read, "create": False, "write": False, "delete": False}
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {
@@ -331,26 +272,14 @@ def standard_permission_projection(
         for capability, definition in CAPABILITY_CATALOG.items()
         if definition.applies_to == doctype
     )
-    return {
-        "read": enabled,
-        "select": enabled,
-        "create": False,
-        "write": False,
-        "delete": False,
-    }
+    return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
 
 
 def field_permission_projection(
     doctype: str,
     state: Mapping[str, Any] | None,
 ) -> dict[int, dict[str, bool]]:
-    """Project business capabilities onto Frappe field permission levels.
-
-    Cost fields on Door Cutting Order use permission level 1 so Frappe does not
-    serialize them to an unauthorized browser.  The corresponding role rule
-    must therefore be driven by the configurable matrix as well; otherwise a
-    role can own ``view_costs`` while Frappe silently removes every cost field.
-    """
+    """Project business capabilities onto Frappe field permission levels."""
 
     normalized = normalize_capability_state(state)
     if doctype != "Door Cutting Order":
@@ -450,6 +379,7 @@ __all__ = [
     "capability_catalog_payload",
     "changed_capabilities",
     "enabled_capabilities",
+    "field_permission_projection",
     "normalize_capability_state",
     "permission_impact",
     "standard_permission_projection",
