@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
     standard_permission_projection,
+    validate_capability_dependencies,
 )
 from almdina_erp.almdina_erp.application.security.report_access import (
     build_report_access,
@@ -23,31 +24,66 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 class TestControlCenterAuthorization(unittest.TestCase):
-    def test_replacement_actions_require_replacement_read(self) -> None:
+    def test_replacement_actions_require_explicit_replacement_read(self) -> None:
         state = normalize_capability_state(
             {Capability.APPROVE_REPLACEMENT: True}
         )
         self.assertTrue(state[Capability.APPROVE_REPLACEMENT])
-        self.assertTrue(state[Capability.VIEW_REPLACEMENTS])
+        self.assertFalse(state[Capability.VIEW_REPLACEMENTS])
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies(state)
 
-    def test_archive_requires_plan_view_and_print(self) -> None:
+        valid = validate_capability_dependencies(
+            {
+                Capability.APPROVE_REPLACEMENT: True,
+                Capability.VIEW_REPLACEMENTS: True,
+            }
+        )
+        self.assertTrue(valid[Capability.APPROVE_REPLACEMENT])
+        self.assertTrue(valid[Capability.VIEW_REPLACEMENTS])
+
+    def test_archive_requires_explicit_plan_view_and_print(self) -> None:
         state = normalize_capability_state(
             {Capability.ARCHIVE_APPROVED_PLAN: True}
         )
-        self.assertTrue(state[Capability.VIEW_ORDERS])
-        self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
-        self.assertTrue(state[Capability.PRINT_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_ORDERS])
+        self.assertFalse(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertFalse(state[Capability.PRINT_CUTTING_PLAN])
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies(state)
 
-    def test_financial_reports_require_operations_and_costs(self) -> None:
+        valid = validate_capability_dependencies(
+            {
+                Capability.ARCHIVE_APPROVED_PLAN: True,
+                Capability.VIEW_ORDERS: True,
+                Capability.VIEW_CUTTING_PLAN: True,
+                Capability.PRINT_CUTTING_PLAN: True,
+            }
+        )
+        self.assertTrue(valid[Capability.ARCHIVE_APPROVED_PLAN])
+
+    def test_financial_reports_require_explicit_operations_and_costs(self) -> None:
         state = normalize_capability_state(
             {Capability.VIEW_FINANCIAL_REPORTS: True}
         )
-        self.assertTrue(state[Capability.VIEW_OPERATIONAL_REPORTS])
-        self.assertTrue(state[Capability.VIEW_COSTS])
-        self.assertTrue(state[Capability.VIEW_ORDERS])
+        self.assertFalse(state[Capability.VIEW_OPERATIONAL_REPORTS])
+        self.assertFalse(state[Capability.VIEW_COSTS])
+        self.assertFalse(state[Capability.VIEW_ORDERS])
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies(state)
 
-    def test_replacement_projection_never_grants_direct_write(self) -> None:
-        projection = standard_permission_projection(
+        valid = validate_capability_dependencies(
+            {
+                Capability.VIEW_FINANCIAL_REPORTS: True,
+                Capability.VIEW_OPERATIONAL_REPORTS: True,
+                Capability.VIEW_COSTS: True,
+                Capability.VIEW_ORDERS: True,
+            }
+        )
+        self.assertTrue(valid[Capability.VIEW_FINANCIAL_REPORTS])
+
+    def test_replacement_projection_requires_explicit_read_and_never_grants_write(self) -> None:
+        action_only = standard_permission_projection(
             "Replacement Piece",
             {
                 Capability.APPROVE_REPLACEMENT: True,
@@ -55,7 +91,26 @@ class TestControlCenterAuthorization(unittest.TestCase):
             },
         )
         self.assertEqual(
-            projection,
+            action_only,
+            {
+                "read": False,
+                "select": False,
+                "create": False,
+                "write": False,
+                "delete": False,
+            },
+        )
+
+        explicit = standard_permission_projection(
+            "Replacement Piece",
+            {
+                Capability.VIEW_REPLACEMENTS: True,
+                Capability.APPROVE_REPLACEMENT: True,
+                Capability.EDIT_REPLACEMENT_COST: True,
+            },
+        )
+        self.assertEqual(
+            explicit,
             {
                 "read": True,
                 "select": True,

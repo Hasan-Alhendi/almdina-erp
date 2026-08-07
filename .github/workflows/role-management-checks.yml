@@ -1,0 +1,56 @@
+name: Dynamic Role Management Checks
+
+on:
+  push:
+    branches: [main, Develop, develop, "agent/**"]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  role-management:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: python -m compileall -q almdina_erp
+
+      - name: Validate role metadata JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths = (
+              Path("almdina_erp/almdina_erp/doctype/almdina_role_metadata/almdina_role_metadata.json"),
+              Path("almdina_erp/almdina_erp/doctype/almdina_role_audit/almdina_role_audit.json"),
+              Path("almdina_erp/almdina_erp/page/factory_roles/factory_roles.json"),
+          )
+          for path in paths:
+              json.loads(path.read_text(encoding="utf-8"))
+              print(f"validated {path}")
+          PY
+
+      - name: Run role, routing, stage-boundary, incident-scope, and UI tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_role_management_domain \
+            almdina_erp.tests.test_role_administration_application \
+            almdina_erp.tests.test_role_administration_architecture \
+            almdina_erp.tests.test_routing_role_references \
+            almdina_erp.tests.test_routing_role_migration \
+            almdina_erp.tests.test_production_stage_write_boundary \
+            almdina_erp.tests.test_incident_stage_scope \
+            almdina_erp.tests.test_role_console_ui
+
+      - name: Validate role console JavaScript
+        run: node --check almdina_erp/almdina_erp/page/factory_roles/factory_roles.js

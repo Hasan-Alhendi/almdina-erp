@@ -96,20 +96,12 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
             self.assertTrue(row.finish_type, edge_name)
             self.assertTrue(row.application_method, edge_name)
 
-    def test_default_routing_contains_v1_core_sequence(self):
+    def test_fresh_install_does_not_seed_a_business_routing(self):
         settings = frappe.get_single("Almdina ERP Settings")
-        self.assertTrue(settings.default_production_routing)
-        rows = frappe.get_all(
-            "Production Routing Stage",
-            filters={
-                "parent": settings.default_production_routing,
-                "parenttype": "Production Routing",
-            },
-            fields=["sequence", "stage_type", "required"],
-            order_by="sequence asc",
+        self.assertFalse(
+            settings.default_production_routing,
+            "The administrator must create roles and production routing explicitly.",
         )
-        core = [row.stage_type for row in rows if row.required]
-        self.assertEqual(core[:3], ["Review / Preparation", "Cutting", "Edge Banding"])
 
     def test_order_meta_has_no_stale_factory_defaults(self):
         meta = frappe.get_meta("Door Cutting Order")

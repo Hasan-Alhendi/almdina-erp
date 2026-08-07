@@ -9,9 +9,9 @@ from almdina_erp.almdina_erp.application.shop_floor.queries import (
     SHOP_FLOOR_DETAIL_CAPABILITIES,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
 from almdina_erp.almdina_erp.infrastructure.frappe import (
     production_routing_repository,
+    shop_floor_authorization,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
@@ -24,6 +24,11 @@ _SUPERVISOR_CAPABILITIES = (
     Capability.REASSIGN_WORKER,
     Capability.REVERT_DEPARTMENT,
     Capability.MARK_DELIVERED,
+)
+_STAGE_ROLE_FIELDS = (
+    "eligible_roles_json",
+    "eligible_roles_display",
+    "operational_role",
 )
 
 
@@ -42,7 +47,8 @@ class FrappeShopFloorQueryRepository:
             departments.update(
                 stage.department_label
                 for stage in route.stages
-                if stage.operational_role in roles or user == "Administrator"
+                if user == "Administrator"
+                or roles.intersection(stage.eligible_roles)
             )
         return {
             "user": user,
@@ -87,7 +93,7 @@ class FrappeShopFloorQueryRepository:
                 "door_cutting_order",
                 "stage_type",
                 "department_label",
-                "operational_role",
+                *_STAGE_ROLE_FIELDS,
                 "status",
                 "assigned_to",
                 "sequence",
@@ -111,7 +117,7 @@ class FrappeShopFloorQueryRepository:
                 "door_cutting_order",
                 "stage_type",
                 "department_label",
-                "operational_role",
+                *_STAGE_ROLE_FIELDS,
                 "status",
                 "assigned_to",
                 "sequence",
@@ -183,14 +189,12 @@ class FrappeShopFloorQueryRepository:
     def list_order_stages(self, order_name: str) -> list[Any]:
         return frappe.get_all(
             "Production Stage",
-            filters={
-                "door_cutting_order": order_name,
-            },
+            filters={"door_cutting_order": order_name},
             fields=[
                 "name",
                 "stage_type",
                 "department_label",
-                "operational_role",
+                *_STAGE_ROLE_FIELDS,
                 "status",
                 "assigned_to",
                 "sequence",
@@ -210,7 +214,7 @@ class FrappeShopFloorQueryRepository:
                 "status",
                 "stage_type",
                 "department_label",
-                "operational_role",
+                *_STAGE_ROLE_FIELDS,
                 "assigned_to",
             ],
             as_dict=True,
@@ -244,9 +248,7 @@ class FrappeShopFloorQueryRepository:
                 frappe.db.get_value("Cutting Plan", approved_plan, "snapshot_json")
             )
         if not snapshot:
-            snapshot = self._parse_snapshot(
-                getattr(order, "cutting_plan_json", None)
-            )
+            snapshot = self._parse_snapshot(getattr(order, "cutting_plan_json", None))
         return snapshot
 
     def user_can_view_dual_plans(self) -> bool:
@@ -272,7 +274,7 @@ class FrappeShopFloorQueryRepository:
                 "name",
                 "stage_type",
                 "department_label",
-                "operational_role",
+                *_STAGE_ROLE_FIELDS,
                 "status",
                 "sequence",
                 "assigned_to",
@@ -281,8 +283,13 @@ class FrappeShopFloorQueryRepository:
             order_by="sequence asc",
         )
 
-    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
-        return shop_floor_authorization.get_users_for_role(role)
+    def get_users_for_roles(self, roles: tuple[str, ...]) -> list[dict[str, Any]]:
+        return shop_floor_authorization.get_users_for_roles(roles)
+
+    def get_users_for_role(self, role: str) -> list[dict[str, Any]]:
+        """Compatibility adapter for older query callers."""
+
+        return self.get_users_for_roles((role,))
 
     def default_production_route(self) -> str | None:
         if not frappe.db.exists("DocType", "Almdina ERP Settings"):

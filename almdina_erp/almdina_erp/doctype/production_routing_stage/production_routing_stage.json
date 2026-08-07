@@ -3,14 +3,89 @@
   "doctype": "DocType",
   "editable_grid": 1,
   "engine": "InnoDB",
-  "field_order": ["sequence", "stage_type", "department_label", "operational_role", "required", "auto_complete_if_not_applicable"],
+  "field_order": [
+    "sequence",
+    "stage_type",
+    "department_label",
+    "eligible_roles_display",
+    "configure_roles",
+    "eligible_roles_json",
+    "operational_role",
+    "required",
+    "auto_complete_if_not_applicable"
+  ],
   "fields": [
-    {"fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence","reqd":1},
-    {"description":"معرّف ثابت للمرحلة، مثل CNC أو Sharyoun أو PVC.","fieldname":"stage_type","fieldtype":"Data","in_list_view":1,"label":"Stage Code","reqd":1},
-    {"description":"الاسم الذي يظهر للعامل، مثل CNC أو الشريون.","fieldname":"department_label","fieldtype":"Data","in_list_view":1,"label":"Department Label","reqd":1},
-    {"description":"لا يمنح صلاحيات؛ يحدد المستخدمين المؤهلين لاستلام هذه المرحلة.","fieldname":"operational_role","fieldtype":"Link","in_list_view":1,"label":"Operational Role","options":"Role","reqd":1},
-    {"default":"1","fieldname":"required","fieldtype":"Check","in_list_view":1,"label":"Required"},
-    {"default":"1","fieldname":"auto_complete_if_not_applicable","fieldtype":"Check","label":"Auto Complete If Not Applicable"}
+    {
+      "fieldname": "sequence",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Sequence",
+      "reqd": 1
+    },
+    {
+      "description": "معرّف حر للمرحلة، مثل CNC أو Sharyoun أو PVC أو Laser.",
+      "fieldname": "stage_type",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Stage Code",
+      "reqd": 1
+    },
+    {
+      "description": "الاسم الذي يظهر للعامل في واجهة الإنتاج.",
+      "fieldname": "department_label",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Department Label",
+      "reqd": 1
+    },
+    {
+      "description": "الأدوار التي يمكن إسناد هذه المرحلة إلى أي مستخدم يمتلك أحدها.",
+      "fieldname": "eligible_roles_display",
+      "fieldtype": "Small Text",
+      "in_list_view": 1,
+      "label": "Eligible Roles",
+      "read_only": 1
+    },
+    {
+      "fieldname": "configure_roles",
+      "fieldtype": "Button",
+      "label": "Choose Roles"
+    },
+    {
+      "fieldname": "eligible_roles_json",
+      "fieldtype": "Code",
+      "hidden": 1,
+      "label": "Eligible Roles JSON",
+      "options": "JSON",
+      "read_only": 1
+    },
+    {
+      "description": "حقل تاريخي للترحيل فقط. تستخدم الإصدارات الجديدة Eligible Roles.",
+      "fieldname": "operational_role",
+      "fieldtype": "Link",
+      "hidden": 1,
+      "label": "Legacy Operational Role",
+      "options": "Role",
+      "read_only": 1
+    },
+    {
+      "default": "1",
+      "description": "حقل توافق داخلي. كل مرحلة محفوظة في المسار تُنفذ فعليًا.",
+      "fieldname": "required",
+      "fieldtype": "Check",
+      "hidden": 1,
+      "label": "Required",
+      "read_only": 1
+    },
+    {
+      "default": "0",
+      "description": "محجوب حتى تتوفر قواعد تطبيق صريحة للمرحلة.",
+      "fieldname": "auto_complete_if_not_applicable",
+      "fieldtype": "Check",
+      "hidden": 1,
+      "label": "Auto Complete If Not Applicable",
+      "read_only": 1
+    }
   ],
   "istable": 1,
   "links": [],

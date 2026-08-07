@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import uuid
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -20,18 +25,33 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
             frappe.get_doc(
                 {"doctype": "Role", "role_name": ROLE, "desk_access": 1}
             ).insert(ignore_permissions=True)
+        if not frappe.db.exists("Almdina Role Metadata", {"role": ROLE}):
+            frappe.get_doc(
+                {
+                    "doctype": "Almdina Role Metadata",
+                    "role": ROLE,
+                    "role_uid": str(uuid.uuid4()),
+                    "description": "Permission migration integration role.",
+                    "managed_by_almdina": 1,
+                }
+            ).insert(ignore_permissions=True)
         frappe.db.delete("Custom DocPerm", {"role": ROLE})
         sync_permission_types()
 
     def tearDown(self):
         frappe.set_user("Administrator")
         frappe.db.delete("Custom DocPerm", {"role": ROLE})
+        frappe.db.delete("Almdina Role Metadata", {"role": ROLE})
         if frappe.db.exists("Role", ROLE):
             frappe.delete_doc("Role", ROLE, force=True, ignore_permissions=True)
         frappe.clear_cache()
         super().tearDown()
 
-    def test_migrate_removes_stale_settings_read_write_without_new_business_grants(self) -> None:
+    def test_granular_migration_preserves_legacy_workforce_access_without_factory_grants(self) -> None:
+        legacy_field = "manage_users"
+        if not frappe.get_meta("Custom DocPerm").has_field(legacy_field):
+            self.skipTest("Legacy manage_users field is not present on this fresh schema.")
+
         frappe.get_doc(
             {
                 "doctype": "Custom DocPerm",
@@ -42,11 +62,35 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
                 "permlevel": 0,
                 "read": 1,
                 "write": 1,
-                Capability.MANAGE_USERS: 1,
+                legacy_field: 1,
             }
         ).insert(ignore_permissions=True)
 
-        sync_permission_types()
+        from almdina_erp.patches.v1_0.migrate_granular_administration_permissions import (
+            execute as migrate_granular_administration_permissions,
+        )
+        from almdina_erp.patches.v1_0.materialize_permission_prerequisites import (
+            execute as materialize_permission_prerequisites,
+        )
+
+        migrate_granular_administration_permissions()
+        materialize_permission_prerequisites()
+
+        state = FrappePermissionMatrixRepository().role_state(ROLE)["capabilities"]
+        for capability in (
+            Capability.VIEW_USERS,
+            Capability.CREATE_USERS,
+            Capability.EDIT_USERS,
+            Capability.ASSIGN_USER_ROLES,
+            Capability.ENABLE_USERS,
+            Capability.DISABLE_USERS,
+            Capability.RESET_USER_PASSWORD,
+        ):
+            self.assertTrue(state[capability], capability)
+        self.assertFalse(state[Capability.VIEW_FACTORY_SETTINGS])
+        self.assertFalse(state[Capability.EDIT_FACTORY_CUTTING_DEFAULTS])
+        self.assertFalse(state[Capability.EDIT_FACTORY_COST_DEFAULTS])
+        self.assertFalse(state[Capability.EDIT_FACTORY_PRODUCTION_CONTROLS])
 
         row = frappe.db.get_value(
             "Custom DocPerm",
@@ -55,37 +99,14 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
                 "role": ROLE,
                 "permlevel": 0,
             },
-            [
-                "read",
-                "write",
-                Capability.MANAGE_USERS,
-                Capability.VIEW_USERS,
-                Capability.CREATE_USERS,
-                Capability.MANAGE_PERMISSIONS,
-                Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
-                Capability.EDIT_FACTORY_COST_DEFAULTS,
-                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
-            ],
+            ["read", "write"],
             as_dict=True,
         )
-        self.assertEqual(
-            int(row.read),
-            0,
-            "view_factory_settings reuses the standard read column and must be removed.",
-        )
+        self.assertIsNotNone(row)
+        self.assertEqual(int(row.read), 0)
         self.assertEqual(int(row.write), 0)
-        self.assertEqual(int(row.get(Capability.MANAGE_USERS)), 1)
-        self.assertEqual(int(row.get(Capability.VIEW_USERS)), 1)
-        self.assertEqual(int(row.get(Capability.CREATE_USERS)), 1)
-        self.assertEqual(int(row.get(Capability.MANAGE_PERMISSIONS)), 0)
-        for capability in (
-            Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
-            Capability.EDIT_FACTORY_COST_DEFAULTS,
-            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
-        ):
-            self.assertEqual(int(row.get(capability)), 0)
 
-    def test_migrate_repairs_customer_and_edge_reads_for_order_editors(self) -> None:
+    def test_prerequisite_migration_materializes_customer_and_edge_reads_for_existing_order_editor(self) -> None:
         frappe.get_doc(
             {
                 "doctype": "Custom DocPerm",
@@ -100,7 +121,17 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
             }
         ).insert(ignore_permissions=True)
 
-        sync_permission_types()
+        from almdina_erp.patches.v1_0.materialize_permission_prerequisites import (
+            execute as materialize_permission_prerequisites,
+        )
+
+        materialize_permission_prerequisites()
+
+        state = FrappePermissionMatrixRepository().role_state(ROLE)["capabilities"]
+        self.assertTrue(state[Capability.CREATE_ORDER])
+        self.assertTrue(state[Capability.EDIT_ORDER])
+        self.assertTrue(state[Capability.VIEW_CUSTOMERS])
+        self.assertTrue(state[Capability.VIEW_EDGE_BANDING_TYPES])
 
         for doctype in ("Customer", "Edge Banding Type"):
             permission = frappe.db.get_value(

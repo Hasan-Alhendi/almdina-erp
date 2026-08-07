@@ -5,6 +5,7 @@ import unittest
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_CONTROL_CENTER,
     WORKSPACE_MAIN,
+    WORKSPACE_MAIN_ROUTE,
     WORKSPACE_SETTINGS,
     WORKSPACE_SHOP_FLOOR,
     build_navigation_context,
@@ -113,17 +114,20 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertEqual(navigation["default_route"], "")
         self.assertEqual(navigation["workspaces"], [])
 
-    def test_capabilities_expand_workspaces_without_changing_application(self) -> None:
+    def test_capabilities_open_the_main_factory_workspace(self) -> None:
         navigation = build_navigation_context(
             {
                 Capability.VIEW_ORDERS,
                 Capability.REASSIGN_WORKER,
-                Capability.MANAGE_FACTORY_SETTINGS,
+                Capability.VIEW_FACTORY_SETTINGS,
             }
         )
         self.assertEqual(navigation["profile"], "full")
-        self.assertEqual(navigation["home_page"], "")
-        self.assertEqual(navigation["default_route"], "/desk")
+        self.assertEqual(navigation["home_page"], WORKSPACE_MAIN_ROUTE)
+        self.assertEqual(
+            navigation["default_route"],
+            f"/desk/{WORKSPACE_MAIN_ROUTE}",
+        )
         self.assertIn(WORKSPACE_MAIN, navigation["workspaces"])
         self.assertIn(WORKSPACE_SHOP_FLOOR, navigation["workspaces"])
         self.assertIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])

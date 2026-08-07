@@ -67,18 +67,16 @@ class Capability:
     VIEW_USERS = "view_users"
     CREATE_USERS = "create_users"
     EDIT_USERS = "edit_users"
-    ASSIGN_WORKFORCE_PROFILE = "assign_workforce_profile"
+    ASSIGN_USER_ROLES = "assign_user_roles"
     ENABLE_USERS = "enable_users"
     DISABLE_USERS = "disable_users"
     RESET_USER_PASSWORD = "reset_user_password"
-    MANAGE_USERS = "manage_users"
 
     # Factory settings sections
     VIEW_FACTORY_SETTINGS = "view_factory_settings"
     EDIT_FACTORY_CUTTING_DEFAULTS = "edit_factory_cutting_defaults"
     EDIT_FACTORY_COST_DEFAULTS = "edit_factory_cost_defaults"
     EDIT_FACTORY_PRODUCTION_CONTROLS = "edit_factory_production_controls"
-    MANAGE_FACTORY_SETTINGS = "manage_factory_settings"
 
     # Master data
     VIEW_PRODUCTION_ROUTINGS = "view_production_routings"
@@ -91,7 +89,11 @@ class Capability:
     EDIT_EDGE_BANDING_TYPES = "edit_edge_banding_types"
     DELETE_EDGE_BANDING_TYPES = "delete_edge_banding_types"
 
-    # Administration
+    # RBAC administration
+    VIEW_ROLES = "view_roles"
+    CREATE_ROLES = "create_roles"
+    EDIT_ROLES = "edit_roles"
+    DELETE_ROLES = "delete_roles"
     MANAGE_PERMISSIONS = "manage_permissions"
 
 
@@ -160,16 +162,14 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_USERS, Capability.VIEW_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.CREATE_USERS, Capability.CREATE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.EDIT_USERS, Capability.EDIT_USERS, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.ASSIGN_WORKFORCE_PROFILE, Capability.ASSIGN_WORKFORCE_PROFILE, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.ASSIGN_USER_ROLES, Capability.ASSIGN_USER_ROLES, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.ENABLE_USERS, Capability.ENABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.DISABLE_USERS, Capability.DISABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.RESET_USER_PASSWORD, Capability.RESET_USER_PASSWORD, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.MANAGE_USERS, Capability.MANAGE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.VIEW_FACTORY_SETTINGS, "read", _SETTINGS_DOCTYPE, "factory_settings", False),
     CapabilityDefinition(Capability.EDIT_FACTORY_CUTTING_DEFAULTS, Capability.EDIT_FACTORY_CUTTING_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_FACTORY_COST_DEFAULTS, Capability.EDIT_FACTORY_COST_DEFAULTS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, Capability.EDIT_FACTORY_PRODUCTION_CONTROLS, _SETTINGS_DOCTYPE, "factory_settings"),
-    CapabilityDefinition(Capability.MANAGE_FACTORY_SETTINGS, Capability.MANAGE_FACTORY_SETTINGS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),
@@ -179,6 +179,10 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.CREATE_EDGE_BANDING_TYPES, "create", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_EDGE_BANDING_TYPES, "write", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.DELETE_EDGE_BANDING_TYPES, "delete", _EDGE_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.VIEW_ROLES, Capability.VIEW_ROLES, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.CREATE_ROLES, Capability.CREATE_ROLES, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.EDIT_ROLES, Capability.EDIT_ROLES, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.DELETE_ROLES, Capability.DELETE_ROLES, _SETTINGS_DOCTYPE, "administration"),
     CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
 )
 
@@ -206,7 +210,8 @@ REPORTING_CAPABILITIES = _category_capabilities("reports")
 WORKFORCE_CAPABILITIES = _category_capabilities("workforce")
 FACTORY_SETTINGS_CAPABILITIES = _category_capabilities("factory_settings")
 MASTER_DATA_CAPABILITIES = _category_capabilities("master_data")
-ADMINISTRATION_CAPABILITIES = _category_capabilities("administration") | FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
+ROLE_ADMINISTRATION_CAPABILITIES = _category_capabilities("administration")
+ADMINISTRATION_CAPABILITIES = ROLE_ADMINISTRATION_CAPABILITIES | FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 
 PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
     {
@@ -286,6 +291,7 @@ __all__ = [
     "PRODUCTION_OPERATOR_CAPABILITIES",
     "PRODUCTION_SUPERVISOR_CAPABILITIES",
     "REPORTING_CAPABILITIES",
+    "ROLE_ADMINISTRATION_CAPABILITIES",
     "SHOP_FLOOR_ACCESS_CAPABILITIES",
     "WORKFORCE_CAPABILITIES",
     "Capability",

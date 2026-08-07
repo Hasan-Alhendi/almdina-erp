@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
     standard_permission_projection,
+    validate_capability_dependencies,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.factory_settings import (
@@ -35,38 +36,51 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertFalse(denied.allowed)
         self.assertEqual(denied.code, "missing_capability")
 
-    def test_manage_factory_settings_expands_to_all_sections(self) -> None:
-        expanded = expand_factory_settings_capabilities(
-            {Capability.MANAGE_FACTORY_SETTINGS}
-        )
-        for capability in (
+    def test_factory_settings_grants_are_exact_and_not_expanded(self) -> None:
+        selected = {
             Capability.VIEW_FACTORY_SETTINGS,
             Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
-            Capability.EDIT_FACTORY_COST_DEFAULTS,
-            Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
-        ):
-            self.assertIn(capability, expanded)
+        }
+        expanded = expand_factory_settings_capabilities(selected)
+        self.assertEqual(expanded, frozenset(selected))
         context = settings_context(expanded)
         self.assertTrue(context["can_view"])
-        self.assertTrue(all(section["editable"] for section in context["sections"].values()))
+        self.assertTrue(context["sections"]["cutting"]["editable"])
+        self.assertFalse(context["sections"]["costing"]["editable"])
+        self.assertFalse(context["sections"]["production"]["editable"])
 
-    def test_permission_matrix_dependencies_add_read_only_where_needed(self) -> None:
+    def test_permission_matrix_dependencies_are_required_but_never_auto_added(self) -> None:
         routing = normalize_capability_state(
             {Capability.DELETE_PRODUCTION_ROUTINGS: True}
         )
-        self.assertTrue(routing[Capability.VIEW_PRODUCTION_ROUTINGS])
-        self.assertFalse(routing[Capability.EDIT_PRODUCTION_ROUTINGS])
+        self.assertTrue(routing[Capability.DELETE_PRODUCTION_ROUTINGS])
+        self.assertFalse(routing[Capability.VIEW_PRODUCTION_ROUTINGS])
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies(routing)
 
         edges = normalize_capability_state(
             {Capability.CREATE_EDGE_BANDING_TYPES: True}
         )
-        self.assertTrue(edges[Capability.VIEW_EDGE_BANDING_TYPES])
+        self.assertFalse(edges[Capability.VIEW_EDGE_BANDING_TYPES])
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies(edges)
 
         production_controls = normalize_capability_state(
             {Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True}
         )
-        self.assertTrue(production_controls[Capability.VIEW_FACTORY_SETTINGS])
-        self.assertTrue(production_controls[Capability.VIEW_PRODUCTION_ROUTINGS])
+        self.assertFalse(production_controls[Capability.VIEW_FACTORY_SETTINGS])
+        self.assertFalse(production_controls[Capability.VIEW_PRODUCTION_ROUTINGS])
+        with self.assertRaisesRegex(ValueError, "Missing required permissions"):
+            validate_capability_dependencies(production_controls)
+
+        valid = validate_capability_dependencies(
+            {
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True,
+                Capability.VIEW_FACTORY_SETTINGS: True,
+                Capability.VIEW_PRODUCTION_ROUTINGS: True,
+            }
+        )
+        self.assertTrue(valid[Capability.EDIT_FACTORY_PRODUCTION_CONTROLS])
 
     def test_standard_permission_projection_is_per_doctype(self) -> None:
         state = {
@@ -110,16 +124,14 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertFalse(navigation["sections"]["administration"])
 
     def test_unknown_and_empty_settings_updates_fail_closed(self) -> None:
+        grants = {Capability.VIEW_FACTORY_SETTINGS}
         unknown = decide_settings_update(
-            {Capability.MANAGE_FACTORY_SETTINGS},
+            grants,
             {"unknown_setting": 1},
         )
         self.assertFalse(unknown.allowed)
         self.assertEqual(unknown.code, "unknown_fields")
-        empty = decide_settings_update(
-            {Capability.MANAGE_FACTORY_SETTINGS},
-            {},
-        )
+        empty = decide_settings_update(grants, {})
         self.assertFalse(empty.allowed)
         self.assertEqual(empty.code, "empty_update")
 

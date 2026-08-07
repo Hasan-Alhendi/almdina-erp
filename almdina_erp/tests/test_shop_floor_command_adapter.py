@@ -136,10 +136,11 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
         ):
             adapter.assert_order_ready_for_dispatch(invalid)
 
-    def test_private_compatibility_helpers_delegate_to_application(self) -> None:
+    def test_only_generic_transition_compatibility_remains(self) -> None:
         adapter = AdapterHarness().load()
         self.assertEqual(adapter._transition("Pending", "start", "error"), "In Progress")
-        self.assertEqual(adapter._next_stage("Drawing", "Drawing"), "CNC")
+        self.assertFalse(hasattr(adapter, "_next_stage"))
+        self.assertFalse(hasattr(adapter, "_validate_path"))
         with self.assertRaisesRegex(
             adapter.commands.ShopFloorCommandError,
             "error",

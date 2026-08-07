@@ -47,7 +47,7 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 
 
 @frappe.whitelist()
-def get_handoff_workers(stage_name: str) -> list[dict[str, str]]:
+def get_handoff_workers(stage_name: str) -> list[dict[str, Any]]:
     return _execute(commands.get_handoff_workers, stage_name)
 
 
@@ -109,10 +109,10 @@ def return_order_to_draft(order_name: str) -> dict[str, Any]:
     return create_controlled_return(order_name)
 
 
-# Private compatibility aliases retained for older Python callers and tests.
+# The transition alias remains for historical callers because it is generic and
+# contains no route catalog. Fixed-path aliases were removed; callers must load
+# the configured ProductionRoute through the application boundary.
 _transition = commands._transition
-_next_stage = commands._next_stage
-_validate_path = commands._validate_path
 
 
 __all__ = [

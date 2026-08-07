@@ -12,8 +12,8 @@ from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_authorization import (
-    STAGE_ROLE_BY_TYPE,
+from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
+    decode_eligible_roles,
 )
 
 
@@ -27,11 +27,10 @@ def _stage_definition(row: Any) -> RoutingStage:
             or department_for_stage_type(stage_type)
             or stage_type
         ).strip(),
-        operational_role=str(
-            getattr(row, "operational_role", None)
-            or STAGE_ROLE_BY_TYPE.get(stage_type)
-            or ""
-        ).strip(),
+        eligible_roles=decode_eligible_roles(
+            getattr(row, "eligible_roles_json", None),
+            legacy_role=getattr(row, "operational_role", None),
+        ),
     )
 
 
@@ -44,10 +43,11 @@ def get_route(name: str, *, require_enabled: bool = True) -> ProductionRoute:
     if require_enabled and cint(document.disabled):
         raise ValueError(f"Production route {resolved} is disabled.")
 
+    # Every persisted row is an executable stage. Historical ``required`` flags
+    # are normalized by a patch but never used to hide route work at runtime.
     stages = tuple(
         _stage_definition(row)
         for row in sorted(document.stages or (), key=lambda item: cint(item.sequence))
-        if cint(row.required)
     )
     return ProductionRoute(
         name=str(document.name),
@@ -69,7 +69,7 @@ def list_active_routes() -> list[ProductionRoute]:
             routes.append(get_route(str(name)))
         except ValueError:
             # Invalid legacy rows stay out of dispatch until an administrator
-            # supplies their missing operational role from master data.
+            # explicitly selects at least one eligible role for every stage.
             continue
     return routes
 

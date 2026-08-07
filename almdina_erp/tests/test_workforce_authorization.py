@@ -7,57 +7,42 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
     build_navigation_context,
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
+    missing_capability_dependencies,
     normalize_capability_state,
 )
 from almdina_erp.almdina_erp.application.security.workforce_management import (
     audit_snapshot,
     normalize_identity,
+    normalize_role_selection,
     validate_temporary_password,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.workforce import (
-    PROFILES,
     WorkforceAction,
     WorkforceFacts,
     decide_workforce_action,
     expand_workforce_capabilities,
-    infer_profile,
 )
 
 
 class TestWorkforceAuthorization(unittest.TestCase):
-    def test_legacy_manage_users_expands_to_every_workforce_action(self) -> None:
-        expanded = expand_workforce_capabilities({Capability.MANAGE_USERS})
-        for capability in (
-            Capability.VIEW_USERS,
-            Capability.CREATE_USERS,
-            Capability.EDIT_USERS,
-            Capability.ASSIGN_WORKFORCE_PROFILE,
-            Capability.ENABLE_USERS,
-            Capability.DISABLE_USERS,
-            Capability.RESET_USER_PASSWORD,
-        ):
-            self.assertIn(capability, expanded)
+    def test_workforce_grants_are_not_expanded(self) -> None:
+        expanded = expand_workforce_capabilities({Capability.DISABLE_USERS})
+        self.assertEqual(expanded, frozenset({Capability.DISABLE_USERS}))
 
-    def test_permission_matrix_adds_view_dependency_and_legacy_expansion(self) -> None:
-        granular = normalize_capability_state({Capability.DISABLE_USERS: True})
-        self.assertTrue(granular[Capability.DISABLE_USERS])
-        self.assertTrue(granular[Capability.VIEW_USERS])
-        self.assertFalse(granular[Capability.CREATE_USERS])
-
-        legacy = normalize_capability_state({Capability.MANAGE_USERS: True})
-        self.assertTrue(legacy[Capability.VIEW_USERS])
-        self.assertTrue(legacy[Capability.CREATE_USERS])
-        self.assertTrue(legacy[Capability.RESET_USER_PASSWORD])
+    def test_permission_matrix_reports_view_dependency_without_enabling_it(self) -> None:
+        state = normalize_capability_state({Capability.DISABLE_USERS: True})
+        self.assertTrue(state[Capability.DISABLE_USERS])
+        self.assertFalse(state[Capability.VIEW_USERS])
+        missing = missing_capability_dependencies(state)
+        row = next(item for item in missing if item["capability"] == Capability.DISABLE_USERS)
+        self.assertIn(Capability.VIEW_USERS, row["missing"])
 
     def test_self_disable_and_active_assignments_are_blocked(self) -> None:
         self_disable = decide_workforce_action(
             {Capability.DISABLE_USERS},
             action=WorkforceAction.DISABLE,
-            facts=WorkforceFacts(
-                actor="manager@example.com",
-                target_user="manager@example.com",
-            ),
+            facts=WorkforceFacts(actor="manager@example.com", target_user="manager@example.com"),
         )
         self.assertFalse(self_disable.allowed)
         self.assertEqual(self_disable.code, "self_disable")
@@ -65,26 +50,18 @@ class TestWorkforceAuthorization(unittest.TestCase):
         active = decide_workforce_action(
             {Capability.DISABLE_USERS},
             action=WorkforceAction.DISABLE,
-            facts=WorkforceFacts(
-                actor="manager@example.com",
-                target_user="worker@example.com",
-                active_assignments=2,
-            ),
+            facts=WorkforceFacts(actor="manager@example.com", target_user="worker@example.com", active_assignments=2),
         )
         self.assertFalse(active.allowed)
         self.assertEqual(active.code, "active_assignments")
 
-        profile_change = decide_workforce_action(
-            {Capability.ASSIGN_WORKFORCE_PROFILE},
-            action=WorkforceAction.ASSIGN_PROFILE,
-            facts=WorkforceFacts(
-                actor="manager@example.com",
-                target_user="worker@example.com",
-                active_assignments=1,
-            ),
+        role_change = decide_workforce_action(
+            {Capability.ASSIGN_USER_ROLES},
+            action=WorkforceAction.ASSIGN_ROLES,
+            facts=WorkforceFacts(actor="manager@example.com", target_user="worker@example.com", active_assignments=1),
         )
-        self.assertFalse(profile_change.allowed)
-        self.assertEqual(profile_change.code, "active_assignments")
+        self.assertFalse(role_change.allowed)
+        self.assertEqual(role_change.code, "active_assignments")
 
     def test_protected_and_external_users_are_blocked(self) -> None:
         protected = decide_workforce_action(
@@ -97,22 +74,23 @@ class TestWorkforceAuthorization(unittest.TestCase):
         external = decide_workforce_action(
             {Capability.RESET_USER_PASSWORD},
             action=WorkforceAction.RESET_PASSWORD,
-            facts=WorkforceFacts(
-                actor="manager",
-                target_user="outside@example.com",
-                target_is_almdina=False,
-            ),
+            facts=WorkforceFacts(actor="manager", target_user="outside@example.com", target_is_almdina=False),
         )
         self.assertEqual(external.code, "outside_scope")
 
-    def test_profiles_are_operational_and_inferred_without_unrelated_roles(self) -> None:
-        drawing = PROFILES["drawing_operator"]
-        self.assertEqual(infer_profile((*drawing.roles, "Some Unrelated Role")), "drawing_operator")
+    def test_explicit_role_selection_is_deduplicated_and_protected(self) -> None:
         self.assertEqual(
-            infer_profile(("عامل رسم", "عامل CNC")),
-            "custom",
+            normalize_role_selection(["عامل CNC", "عامل رسم", "عامل CNC"]),
+            ("عامل CNC", "عامل رسم"),
         )
-        self.assertNotIn("approve_order", drawing.roles)
+        self.assertEqual(
+            normalize_role_selection('["عامل رسم", "عامل CNC"]'),
+            ("عامل رسم", "عامل CNC"),
+        )
+        with self.assertRaisesRegex(ValueError, "Protected role"):
+            normalize_role_selection(["System Manager"])
+        with self.assertRaisesRegex(ValueError, "at least one role"):
+            normalize_role_selection([])
 
     def test_identity_and_password_validation_are_deterministic(self) -> None:
         identity = normalize_identity(
@@ -124,25 +102,24 @@ class TestWorkforceAuthorization(unittest.TestCase):
         self.assertEqual(identity.email, "worker@example.com")
         self.assertEqual(identity.first_name, "محمد أحمد")
         self.assertEqual(identity.last_name, "العامل")
-        self.assertEqual(
-            validate_temporary_password("SecurePass123!", email=identity.email),
-            "SecurePass123!",
-        )
+        self.assertEqual(validate_temporary_password("SecurePass123!", email=identity.email), "SecurePass123!")
         with self.assertRaisesRegex(ValueError, "10 characters"):
             validate_temporary_password("Short1")
         with self.assertRaisesRegex(ValueError, "email name"):
             validate_temporary_password("WorkerSecure123", email=identity.email)
 
-    def test_audit_snapshot_never_contains_password_material(self) -> None:
+    def test_audit_snapshot_never_contains_password_or_bundle_material(self) -> None:
         snapshot = audit_snapshot(
             {
                 "email": "worker@example.com",
                 "first_name": "Worker",
                 "enabled": True,
+                "roles": ["عامل رسم", "عامل CNC", "عامل رسم"],
                 "temporary_password": "NeverLog123",
                 "new_password": "NeverLog456",
             }
         )
+        self.assertEqual(snapshot["roles"], ["عامل CNC", "عامل رسم"])
         self.assertNotIn("temporary_password", snapshot)
         self.assertNotIn("new_password", snapshot)
         self.assertNotIn("NeverLog", repr(snapshot))

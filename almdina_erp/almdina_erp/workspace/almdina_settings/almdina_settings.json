@@ -11,7 +11,7 @@
   "is_hidden": 0,
   "label": "Almdina Settings",
   "links": [
-    {"hidden":0,"is_query_report":0,"label":"إدارة الأدوار","link_count":0,"link_to":"Role","link_type":"DocType","onboard":0,"type":"Link"},
+    {"hidden":0,"is_query_report":0,"label":"إدارة الأدوار","link_count":0,"link_to":"factory-roles","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"إدارة المستخدمين","link_count":0,"link_to":"factory-workforce","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"إدارة الصلاحيات","link_count":0,"link_to":"factory-permissions","link_type":"Page","onboard":0,"type":"Link"},
     {"hidden":0,"is_query_report":0,"label":"إدارة مسارات الإنتاج","link_count":0,"link_to":"factory-master-data","link_type":"Page","onboard":0,"type":"Link"},
@@ -26,7 +26,7 @@
   "roles": [],
   "sequence_id": 3,
   "shortcuts": [
-    {"color":"Purple","doc_view":"List","label":"إدارة الأدوار","link_to":"Role","type":"DocType"},
+    {"color":"Purple","label":"إدارة الأدوار","link_to":"factory-roles","type":"Page"},
     {"color":"Green","label":"إدارة المستخدمين","link_to":"factory-workforce","type":"Page"},
     {"color":"Blue","label":"إدارة الصلاحيات","link_to":"factory-permissions","type":"Page"},
     {"color":"Orange","label":"إدارة مسارات الإنتاج","link_to":"factory-master-data","type":"Page"},

@@ -34,17 +34,17 @@ class FakeRepository:
                 "Sharyoun",
                 "شريون",
                 (
-                    RoutingStage(10, "Sharyoun", "شريون", "عامل شريون"),
-                    RoutingStage(20, "Sanding", "تقشيط", "عامل تقشيط"),
+                    RoutingStage(10, "Sharyoun", "شريون", ("عامل شريون", "مشرف شريون")),
+                    RoutingStage(20, "Sanding", "تقشيط", ("عامل تقشيط",)),
                 ),
             ),
             "Drawing": ProductionRoute(
                 "Drawing",
                 "رسم وCNC",
                 (
-                    RoutingStage(10, "Drawing", "رسم", "عامل رسم"),
-                    RoutingStage(20, "CNC", "CNC", "عامل CNC"),
-                    RoutingStage(30, "Sanding", "تقشيط", "عامل تقشيط"),
+                    RoutingStage(10, "Drawing", "رسم", ("عامل رسم",)),
+                    RoutingStage(20, "CNC", "CNC", ("عامل CNC", "مشرف CNC")),
+                    RoutingStage(30, "Sanding", "تقشيط", ("عامل تقشيط",)),
                 ),
             ),
         }
@@ -112,8 +112,16 @@ class FakeRepository:
     def list_revert_stages(self, order_name: str) -> list[Any]:
         return list(self.revert_rows)
 
-    def get_users_for_role(self, role: str) -> list[dict[str, str]]:
-        return [{"name": f"{role.lower()}@example.com", "full_name": role}]
+    def get_users_for_roles(self, roles: tuple[str, ...]) -> list[dict[str, str]]:
+        users: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for role in roles:
+            name = f"{role.lower()}@example.com"
+            if name in seen:
+                continue
+            seen.add(name)
+            users.append({"name": name, "full_name": role})
+        return users
 
     def default_production_route(self) -> str | None:
         return "Sharyoun"
@@ -172,6 +180,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual([row["name"] for row in rows], ["PST-CURRENT"])
         self.assertEqual(rows[0]["can_handoff_to"], "CNC")
         self.assertEqual(rows[0]["department_label"], "رسم")
+        self.assertEqual(rows[0]["eligible_roles"], ["عامل رسم"])
         self.assertEqual(rows[0]["edge_color"], "أبيض")
         self.assertEqual(rows[0]["board_description"], "MDF أبيض 18 مم")
         self.assertTrue(rows[0]["can_handoff_stage"])
@@ -209,6 +218,11 @@ class TestShopFloorQueryApplication(unittest.TestCase):
 
         result = queries.get_dispatch_options(repository, "DCO-1")
         self.assertEqual([row["value"] for row in result["paths"]], ["Sharyoun", "Drawing"])
+        self.assertEqual(
+            result["paths"][0]["eligible_roles"],
+            ["عامل شريون", "مشرف شريون"],
+        )
+        self.assertEqual(len(result["workers"]["Sharyoun"]), 2)
 
         repository.capabilities.remove(Capability.DISPATCH_ORDER)
         with self.assertRaises(queries.ShopFloorPermissionDenied):
@@ -251,6 +265,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual(detail["stage_snapshot"]["active_stage_type"], "Drawing")
         self.assertEqual(detail["stage_snapshot"]["active_stage_assigned_to"], repository.user)
         self.assertEqual(detail["stage_snapshot"]["can_handoff_to"], "CNC")
+        self.assertEqual(detail["stage_snapshot"]["active_stage_eligible_roles"], ["عامل رسم"])
         self.assertTrue(detail["stage_snapshot"]["can_handoff_stage"])
         self.assertTrue(detail["stage_snapshot"]["can_reassign_worker"])
         self.assertTrue(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
@@ -268,7 +283,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         repository.routes["Custom Route"] = ProductionRoute(
             "Custom Route",
             "مسار مخصص",
-            (RoutingStage(10, "Drawing", "التصميم", "مصمم مخصص"),),
+            (RoutingStage(10, "Drawing", "التصميم", ("مصمم مخصص",)),),
         )
         repository.order = SimpleNamespace(
             name="DCO-2",
@@ -348,6 +363,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
 
         self.assertEqual(context["active_stage_name"], "PST-2")
         self.assertTrue(context["can_start_stage"])
+        self.assertEqual(context["active_stage_eligible_roles"], ["عامل CNC", "مشرف CNC"])
         self.assertEqual(
             [stage["department"] for stage in context["route_stages"]],
             ["رسم", "CNC", "تقشيط"],

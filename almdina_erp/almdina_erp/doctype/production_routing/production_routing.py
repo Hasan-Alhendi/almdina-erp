@@ -5,6 +5,12 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.domain.security.role_management import (
+    PROTECTED_ROLE_NAMES,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import (
+    is_managed_role,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     audit_deleted_document,
     audit_saved_document,
@@ -12,6 +18,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_references import (
     find_link_references,
     reference_summary,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.routing_role_codec import (
+    decode_eligible_roles,
+    eligible_roles_display,
+    encode_eligible_roles,
 )
 
 
@@ -22,12 +33,11 @@ class ProductionRouting(Document):
 
         sequences: set[int] = set()
         stage_types: set[str] = set()
-        required_count = 0
+        prepared: list[tuple[object, tuple[str, ...]]] = []
         ordered = sorted(self.stages, key=lambda row: cint(row.sequence))
         for index, row in enumerate(ordered, start=1):
             row.stage_type = str(row.stage_type or "").strip()
             row.department_label = str(row.department_label or "").strip()
-            row.operational_role = str(row.operational_role or "").strip()
             sequence = cint(row.sequence)
             if sequence <= 0:
                 frappe.throw(_("Routing stage sequence must be greater than zero."))
@@ -37,27 +47,97 @@ class ProductionRouting(Document):
                 frappe.throw(_("Routing stage code is required."))
             if row.stage_type in stage_types:
                 frappe.throw(_("Routing stage {0} is duplicated.").format(row.stage_type))
-            if cint(row.required):
-                required_count += 1
-                if not str(row.department_label or "").strip():
-                    frappe.throw(
-                        _("Department label is required for stage {0}.").format(
-                            row.stage_type
-                        )
+            if not row.department_label:
+                frappe.throw(
+                    _("Department label is required for stage {0}.").format(
+                        row.stage_type
                     )
-                if not str(row.operational_role or "").strip():
-                    frappe.throw(
-                        _("Operational role is required for stage {0}.").format(
-                            row.stage_type
-                        )
+                )
+
+            roles = self._stage_roles(row)
+            if not roles:
+                frappe.throw(
+                    _("Choose at least one eligible role for stage {0}.").format(
+                        row.stage_type
                     )
+                )
+
+            row.required = 1
+            row.auto_complete_if_not_applicable = 0
+            prepared.append((row, roles))
             sequences.add(sequence)
             stage_types.add(row.stage_type)
             row.idx = index
-        if not required_count:
-            frappe.throw(_("Production Routing requires at least one required stage."))
+
+        self._lock_roles(
+            tuple(role for _row, roles in prepared for role in roles)
+        )
+        for row, roles in prepared:
+            self._validate_roles(roles, stage_type=row.stage_type)
+            row.eligible_roles_json = encode_eligible_roles(roles)
+            row.eligible_roles_display = eligible_roles_display(roles)
+            row.operational_role = roles[0]
 
         self._prevent_active_route_mutation()
+
+    @staticmethod
+    def _stage_roles(row) -> tuple[str, ...]:
+        try:
+            return decode_eligible_roles(
+                getattr(row, "eligible_roles_json", None),
+                legacy_role=getattr(row, "operational_role", None),
+            )
+        except ValueError as error:
+            frappe.throw(_(str(error)), frappe.ValidationError)
+        raise AssertionError("frappe.throw must interrupt execution")
+
+    @staticmethod
+    def _lock_roles(roles: tuple[str, ...]) -> None:
+        for role in sorted(set(roles)):
+            frappe.db.sql(
+                "select name from `tabRole` where name = %s for update",
+                (role,),
+            )
+
+    @staticmethod
+    def _validate_roles(roles: tuple[str, ...], *, stage_type: str) -> None:
+        for role in roles:
+            if role in PROTECTED_ROLE_NAMES:
+                frappe.throw(
+                    _("Role {0} is protected and cannot be used for stage {1}.").format(
+                        role,
+                        stage_type,
+                    ),
+                    frappe.ValidationError,
+                )
+            if not is_managed_role(role):
+                frappe.throw(
+                    _(
+                        "Eligible role {0} is outside the Almdina managed-role registry."
+                    ).format(role),
+                    frappe.ValidationError,
+                )
+            values = frappe.db.get_value(
+                "Role",
+                role,
+                ["disabled", "desk_access"],
+                as_dict=True,
+            )
+            if not values:
+                frappe.throw(
+                    _("Eligible role {0} does not exist.").format(role),
+                    frappe.ValidationError,
+                )
+            if cint(values.disabled):
+                frappe.throw(
+                    _("Eligible role {0} is disabled.").format(role),
+                    frappe.ValidationError,
+                )
+            if not cint(values.desk_access):
+                frappe.throw(
+                    _("Eligible role {0} does not allow Desk access.").format(role),
+                    frappe.ValidationError,
+                )
 
     def _prevent_active_route_mutation(self) -> None:
         """Keep an in-flight order on the route definition it was dispatched with."""
@@ -74,6 +154,7 @@ class ProductionRouting(Document):
                 "sequence",
                 "stage_type",
                 "department_label",
+                "eligible_roles_json",
                 "operational_role",
                 "required",
             ],
@@ -84,8 +165,11 @@ class ProductionRouting(Document):
                 cint(row.sequence),
                 str(row.stage_type or ""),
                 str(row.department_label or ""),
-                str(row.operational_role or ""),
-                cint(row.required),
+                decode_eligible_roles(
+                    row.eligible_roles_json,
+                    legacy_role=row.operational_role,
+                ),
+                1,
             )
             for row in previous_rows
         ]
@@ -94,8 +178,8 @@ class ProductionRouting(Document):
                 cint(row.sequence),
                 str(row.stage_type or ""),
                 str(row.department_label or ""),
-                str(row.operational_role or ""),
-                cint(row.required),
+                self._stage_roles(row),
+                1,
             )
             for row in sorted(self.stages or (), key=lambda item: cint(item.sequence))
         ]

@@ -35,11 +35,9 @@ STAGE_STATUSES = (
     "Cancelled",
 )
 
-PRODUCTION_PATHS: dict[str, tuple[str, ...]] = {
-    "Sharyoun": ("Sharyoun", "Sanding"),
-    "Drawing": ("Drawing", "CNC", "Sanding"),
-}
-
+# These maps preserve user-facing statuses and Arabic labels for historical
+# stage codes. They do not define route order or role eligibility. Any custom
+# stage code remains valid and falls back to the generic production status.
 SHOP_FLOOR_ORDER_STATUSES: dict[str, str] = {
     "Sharyoun": "At Sharyoun",
     "Drawing": "At Drawing",
@@ -88,36 +86,6 @@ def normalize_order_status(status: str | None) -> str:
     return status or "Draft"
 
 
-def production_path_sequence(path: str) -> tuple[str, ...]:
-    try:
-        return PRODUCTION_PATHS[path]
-    except KeyError as exc:
-        raise ValueError(f"Invalid production path: {path}") from exc
-
-
-def first_stage_type(path: str) -> str:
-    return production_path_sequence(path)[0]
-
-
-def next_stage_type(path: str, current_stage_type: str) -> str | None:
-    sequence = production_path_sequence(path)
-    try:
-        index = sequence.index(current_stage_type)
-    except ValueError as exc:
-        raise ValueError(f"Stage {current_stage_type} is not part of path {path}") from exc
-    if index + 1 >= len(sequence):
-        return None
-    return sequence[index + 1]
-
-
-def stage_sequence(path: str, stage_type: str) -> int:
-    sequence = production_path_sequence(path)
-    try:
-        return (sequence.index(stage_type) + 1) * 10
-    except ValueError as exc:
-        raise ValueError(f"Stage {stage_type} is not part of path {path}") from exc
-
-
 def department_for_stage_type(stage_type: str) -> str | None:
     return STAGE_DEPARTMENTS.get(stage_type)
 
@@ -135,6 +103,7 @@ def resolve_shop_floor_stage_type(value: str | None) -> str:
     for stage_type, department in STAGE_DEPARTMENTS.items():
         if raw == department:
             return stage_type
+    # Custom stages are route data, so an unknown code is accepted unchanged.
     return raw
 
 
@@ -210,9 +179,7 @@ def derive_order_status(
 
     if production_path:
         if current_stage and current_stage.status != "Cancelled":
-            mapped = SHOP_FLOOR_ORDER_STATUSES.get(current_stage.stage_type)
-            if mapped:
-                return mapped
+            return order_status_for_stage_type(current_stage.stage_type)
         if normalized_current.startswith("At "):
             return normalized_current
 

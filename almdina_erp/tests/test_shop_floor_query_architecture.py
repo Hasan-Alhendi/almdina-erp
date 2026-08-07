@@ -75,7 +75,7 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
 
     def test_legacy_service_is_only_a_small_lazy_compatibility_facade(self) -> None:
         source = LEGACY_PATH.read_text(encoding="utf-8")
-        self.assertLess(len(source.splitlines()), 160)
+        self.assertLess(len(source.splitlines()), 130)
         self.assertNotIn("frappe.db", source)
         self.assertNotIn("frappe.get_all", source)
         self.assertNotIn("dco-sheet-card", source)
@@ -88,6 +88,15 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
             "from almdina_erp.almdina_erp.services.shop_floor_commands import",
             source,
         )
+        for forbidden in (
+            "PRODUCTION" + "_PATHS",
+            "STAGE_ROLE" + "_BY_TYPE",
+            "production_path_" + "sequence",
+            "next_stage_" + "type",
+            "stage_" + "sequence",
+            "PATH_" + "SEQUENCE",
+        ):
+            self.assertNotIn(forbidden, source)
 
     def test_hooks_route_legacy_reads_and_drawing_actions_to_focused_services(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))

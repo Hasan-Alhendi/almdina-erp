@@ -15,15 +15,15 @@ from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     build_production_action_context,
     decide_production_action,
 )
+from almdina_erp.almdina_erp.domain.orders.production_routing import (
+    ProductionRoute,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     DRAWING_CAPABILITIES,
     PLANNING_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
     SHOP_FLOOR_ACCESS_CAPABILITIES,
     Capability,
-)
-from almdina_erp.almdina_erp.domain.orders.production_routing import (
-    ProductionRoute,
 )
 
 
@@ -86,7 +86,10 @@ class ShopFloorQueryPort(Protocol):
 
     def list_revert_stages(self, order_name: str) -> list[Any]: ...
 
-    def get_users_for_role(self, role: str) -> list[dict[str, str]]: ...
+    def get_users_for_roles(
+        self,
+        roles: tuple[str, ...],
+    ) -> list[dict[str, Any]]: ...
 
     def default_production_route(self) -> str | None: ...
 
@@ -188,9 +191,12 @@ def _enrich_stage_rows(
         production_path = _value(order, "production_path")
         stage_type = str(_value(stage, "stage_type") or "")
         can_handoff_to = None
+        eligible_roles: list[str] = []
         route = _production_route(repository, str(production_path or ""))
         if route:
             try:
+                current = route.stage(stage_type)
+                eligible_roles = list(current.eligible_roles)
                 next_stage = route.next_stage(stage_type)
                 can_handoff_to = next_stage.stage_type if next_stage else None
             except ValueError:
@@ -220,6 +226,7 @@ def _enrich_stage_rows(
                 "department_label": _value(stage, "department_label")
                 or department_for_stage_type(stage_type)
                 or stage_type,
+                "eligible_roles": eligible_roles,
                 "can_handoff_to": can_handoff_to,
                 "can_start_stage": bool(
                     actions[Capability.START_ASSIGNED_STAGE]["allowed"]
@@ -296,6 +303,16 @@ def _assert_query_action(
     raise ShopFloorQueryError(decision.reason)
 
 
+def _stage_payload(stage: Any) -> dict[str, Any]:
+    return {
+        "sequence": stage.sequence,
+        "stage_type": stage.stage_type,
+        "department": stage.department_label,
+        "eligible_roles": list(stage.eligible_roles),
+        "operational_role": stage.operational_role,
+    }
+
+
 def get_dispatch_options(
     repository: ShopFloorQueryPort,
     order_name: str,
@@ -321,23 +338,16 @@ def get_dispatch_options(
                 "label": route.label,
                 "first_stage_type": route.first_stage.stage_type,
                 "department": route.first_stage.department_label,
+                "eligible_roles": list(route.first_stage.eligible_roles),
                 "operational_role": route.first_stage.operational_role,
                 "stage_count": len(route.stages),
-                "stages": [
-                    {
-                        "sequence": stage.sequence,
-                        "stage_type": stage.stage_type,
-                        "department": stage.department_label,
-                        "operational_role": stage.operational_role,
-                    }
-                    for stage in route.stages
-                ],
+                "stages": [_stage_payload(stage) for stage in route.stages],
             }
             for route in routes
         ],
         "workers": {
-            route.name: repository.get_users_for_role(
-                route.first_stage.operational_role
+            route.name: repository.get_users_for_roles(
+                route.first_stage.eligible_roles
             )
             for route in routes
         },
@@ -389,6 +399,7 @@ def _active_stage_snapshot(
             "active_stage_status": None,
             "active_stage_type": None,
             "active_stage_assigned_to": None,
+            "active_stage_eligible_roles": [],
             "can_start_stage": False,
             "can_handoff_stage": False,
             "can_reassign_worker": False,
@@ -401,18 +412,12 @@ def _active_stage_snapshot(
     stage_type = str(_value(stage, "stage_type") or "")
     production_path = _value(order, "production_path")
     can_handoff_to = None
+    active_roles: list[str] = []
     route = _production_route(repository, str(production_path or ""))
-    route_stages = [
-        {
-            "stage_type": route_stage.stage_type,
-            "department": route_stage.department_label,
-            "operational_role": route_stage.operational_role,
-            "sequence": route_stage.sequence,
-        }
-        for route_stage in (route.stages if route else ())
-    ]
+    route_stages = [_stage_payload(item) for item in (route.stages if route else ())]
     if route:
         try:
+            active_roles = list(route.stage(stage_type).eligible_roles)
             next_stage = route.next_stage(stage_type)
             can_handoff_to = next_stage.stage_type if next_stage else None
         except ValueError:
@@ -422,6 +427,7 @@ def _active_stage_snapshot(
         "active_stage_status": stage_status,
         "active_stage_type": stage_type,
         "active_stage_assigned_to": _value(stage, "assigned_to"),
+        "active_stage_eligible_roles": active_roles,
         "can_start_stage": bool(
             actions[Capability.START_ASSIGNED_STAGE]["allowed"]
         ),
@@ -458,9 +464,7 @@ def _plan_snapshots(
     can_view_plan: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool, str, str]:
     approved_plan = _value(order, "approved_plan")
-    approved_source = str(
-        _value(order, "approved_plan_source") or "System"
-    )
+    approved_source = str(_value(order, "approved_plan_source") or "System")
     if not can_view_plan:
         return {}, {}, {}, False, approved_source, approved_source
 

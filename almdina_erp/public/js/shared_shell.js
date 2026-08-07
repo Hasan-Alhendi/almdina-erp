@@ -3,15 +3,18 @@
 
     const APP_NAME = "almdina_erp";
     const CAPABILITY_ROUTE_RULES = Object.freeze([
-        { any: ["manage_permissions"], routes: ["factory-permissions", "role"] },
-        { any: ["view_users", "manage_users"], routes: ["factory-workforce"] },
+        { any: ["manage_permissions"], routes: ["factory-permissions"] },
+        {
+            any: ["view_roles", "create_roles", "edit_roles", "delete_roles"],
+            routes: ["factory-roles"],
+        },
+        { any: ["view_users"], routes: ["factory-workforce"] },
         {
             any: [
                 "view_factory_settings",
                 "edit_factory_cutting_defaults",
                 "edit_factory_cost_defaults",
                 "edit_factory_production_controls",
-                "manage_factory_settings",
             ],
             routes: ["factory-production-settings", "almdina-erp-settings"],
         },
@@ -120,7 +123,6 @@
         if (registeredWorkspace(requested) || registeredPage(requested)) {
             return requested;
         }
-
         for (const workspace of nav && Array.isArray(nav.workspaces) ? nav.workspaces : []) {
             const candidate = routeSlug(workspace);
             if (registeredWorkspace(candidate)) return candidate;
@@ -130,11 +132,7 @@
 
     function syncAppDefaultRoute() {
         const nav = navigation();
-        // Only app-confined profiles should have their app card rewritten to
-        // their forced landing route. Administrator keeps the app's own route
-        // so /desk opens Desktop while the Almdina card opens its workspace.
         if (!nav || !nav.app_only || !frappe.boot || !nav.default_route) return;
-
         if (frappe.boot.apps_data && typeof frappe.boot.apps_data === "object") {
             frappe.boot.apps_data.default_path = nav.default_route;
         }
@@ -208,27 +206,18 @@
     function routeIsRoot() {
         const route = String((frappe.get_route_str && frappe.get_route_str()) || "").toLowerCase();
         const path = String(window.location.pathname || "").replace(/\/+$/, "").toLowerCase();
-        return (
-            !route ||
-            route === "desktop" ||
-            route === "workspaces" ||
-            path.endsWith("/app") ||
-            path.endsWith("/desk")
-        );
+        return !route || route === "desktop" || route === "workspaces" || path.endsWith("/app") || path.endsWith("/desk");
     }
 
     function openConfiguredHome() {
         const nav = navigation();
         if (!nav || !nav.shared_shell || !nav.home_page || !routeIsRoot()) return true;
-
         const home = resolveHomeRoute(nav);
         if (!home) return false;
-
         if (typeof frappe.set_route === "function") {
             frappe.set_route(home);
             return true;
         }
-
         window.location.replace(`/desk/${home}`);
         return true;
     }
@@ -275,11 +264,9 @@
         if (initialized) return;
         const nav = navigation();
         if (!nav || !nav.shared_shell) return;
-
         initialized = true;
         applyShell();
         retryConfiguredHome();
-
         if (frappe.router && !frappe.router.__almdinaSharedShell) {
             frappe.router.__almdinaSharedShell = true;
             frappe.router.on("change", () => {
@@ -315,7 +302,6 @@
     if (window.jQuery) {
         window.jQuery(document).on("app_ready.almdinaSharedShell", () => waitForDesk(0));
     }
-
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", () => waitForDesk(0));
     } else {

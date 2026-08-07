@@ -78,6 +78,9 @@ class InfrastructureHarness:
                             "stage_type": doc.stage_type,
                             "assignee": doc.assigned_to,
                             "sequence": doc.sequence,
+                            "eligible_roles_json": doc.eligible_roles_json,
+                            "eligible_roles_display": doc.eligible_roles_display,
+                            "operational_role": doc.operational_role,
                             "status": doc.status,
                             "ignore_permissions": ignore_permissions,
                         }
@@ -176,6 +179,30 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         self.assertEqual(stage.name, "PST-NEW")
         self.assertEqual(len(harness.stage_inserts), 1)
         self.assertEqual(harness.events, [])
+
+    def test_stage_role_snapshot_is_derived_from_the_canonical_role_set(self) -> None:
+        harness = InfrastructureHarness()
+        stages = harness.load(STAGE_REPOSITORY_PATH, "_production_stage_roles_test")
+
+        stages.create_stage(
+            "DCO-1",
+            "CNC",
+            "worker@example.com",
+            20,
+            operational_role="Stale Legacy Role",
+            eligible_roles=("Night CNC", "CNC Supervisor", "Night CNC"),
+        )
+
+        snapshot = harness.stage_inserts[0]
+        self.assertEqual(
+            json.loads(snapshot["eligible_roles_json"]),
+            ["Night CNC", "CNC Supervisor"],
+        )
+        self.assertEqual(
+            snapshot["eligible_roles_display"],
+            "Night CNC، CNC Supervisor",
+        )
+        self.assertEqual(snapshot["operational_role"], "Night CNC")
 
     def test_infrastructure_is_split_by_responsibility(self) -> None:
         application_source = APPLICATION_PATH.read_text(encoding="utf-8")

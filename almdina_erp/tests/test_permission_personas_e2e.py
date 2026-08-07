@@ -4,6 +4,7 @@ import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_GO_LIVE,
+    WORKSPACE_MAIN_ROUTE,
     WORKSPACE_REPORTS,
     WORKSPACE_SETTINGS,
     WORKSPACE_SHOP_FLOOR,
@@ -11,37 +12,144 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     enabled_capabilities,
-)
-from almdina_erp.almdina_erp.application.security.permission_templates import (
-    template_state,
+    validate_capability_dependencies,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
+def explicit_state(*capabilities: str) -> dict[str, bool]:
+    """Build and validate a fully explicit administrator-selected role state."""
+
+    return validate_capability_dependencies(
+        {capability: True for capability in capabilities}
+    )
+
+
+PERSONA_STATES = {
+    "order_entry": explicit_state(
+        Capability.VIEW_ORDERS,
+        Capability.CREATE_ORDER,
+        Capability.EDIT_ORDER,
+        Capability.SUBMIT_ORDER,
+        Capability.PRINT_MEASUREMENTS,
+        Capability.PRINT_CUSTOMER_INVOICE,
+        Capability.VIEW_CUSTOMERS,
+        Capability.VIEW_EDGE_BANDING_TYPES,
+    ),
+    "planner_designer": explicit_state(
+        Capability.VIEW_ORDERS,
+        Capability.VIEW_CUTTING_PLAN,
+        Capability.RECALCULATE_PLAN,
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        Capability.PRINT_CUTTING_PLAN,
+        Capability.VIEW_DRAWING_WORKSPACE,
+        Capability.EDIT_SPECIAL_DRAWING,
+        Capability.EXPORT_DXF,
+        Capability.UPLOAD_DXF,
+        Capability.REPLACE_DXF,
+        Capability.APPROVE_DXF,
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+    ),
+    "production_operator": explicit_state(
+        Capability.VIEW_ORDERS,
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+        Capability.VIEW_CUTTING_PLAN,
+        Capability.PRINT_CUTTING_PLAN,
+        Capability.RECORD_INCIDENT,
+        Capability.VIEW_REPLACEMENTS,
+        Capability.START_REPLACEMENT,
+        Capability.COMPLETE_REPLACEMENT,
+    ),
+    "production_supervisor": explicit_state(
+        Capability.VIEW_ORDERS,
+        Capability.VIEW_CUTTING_PLAN,
+        Capability.DISPATCH_ORDER,
+        Capability.REVERT_DEPARTMENT,
+        Capability.RETURN_ORDER_TO_DRAFT,
+        Capability.MARK_DELIVERED,
+        Capability.REASSIGN_WORKER,
+        Capability.CREATE_REPLACEMENT,
+        Capability.VIEW_REPLACEMENTS,
+        Capability.APPROVE_REPLACEMENT,
+        Capability.CANCEL_REPLACEMENT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
+    ),
+    "pricing_and_documents": explicit_state(
+        Capability.VIEW_ORDERS,
+        Capability.VIEW_COSTS,
+        Capability.EDIT_COST_SETTINGS,
+        Capability.EDIT_SPECIAL_PRICE,
+        Capability.APPROVE_SPECIAL_PRICE,
+        Capability.VIEW_REPLACEMENTS,
+        Capability.EDIT_REPLACEMENT_COST,
+        Capability.PRINT_MEASUREMENTS,
+        Capability.PRINT_CUSTOMER_INVOICE,
+        Capability.PRINT_INTERNAL_COST_REPORT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
+        Capability.VIEW_FINANCIAL_REPORTS,
+    ),
+    "control_center": explicit_state(
+        Capability.VIEW_ORDERS,
+        Capability.APPROVE_ORDER,
+        Capability.REJECT_ORDER,
+        Capability.VIEW_CUTTING_PLAN,
+        Capability.PRINT_CUTTING_PLAN,
+        Capability.ARCHIVE_APPROVED_PLAN,
+        Capability.CREATE_REPLACEMENT,
+        Capability.VIEW_REPLACEMENTS,
+        Capability.APPROVE_REPLACEMENT,
+        Capability.CANCEL_REPLACEMENT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
+    ),
+    "factory_administration": explicit_state(
+        Capability.VIEW_USERS,
+        Capability.CREATE_USERS,
+        Capability.EDIT_USERS,
+        Capability.ASSIGN_USER_ROLES,
+        Capability.ENABLE_USERS,
+        Capability.DISABLE_USERS,
+        Capability.RESET_USER_PASSWORD,
+        Capability.VIEW_FACTORY_SETTINGS,
+        Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
+        Capability.EDIT_FACTORY_COST_DEFAULTS,
+        Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        Capability.VIEW_PRODUCTION_ROUTINGS,
+        Capability.CREATE_PRODUCTION_ROUTINGS,
+        Capability.EDIT_PRODUCTION_ROUTINGS,
+        Capability.DELETE_PRODUCTION_ROUTINGS,
+        Capability.VIEW_EDGE_BANDING_TYPES,
+        Capability.CREATE_EDGE_BANDING_TYPES,
+        Capability.EDIT_EDGE_BANDING_TYPES,
+        Capability.DELETE_EDGE_BANDING_TYPES,
+        Capability.VIEW_ROLES,
+        Capability.CREATE_ROLES,
+        Capability.EDIT_ROLES,
+        Capability.DELETE_ROLES,
+        Capability.MANAGE_PERMISSIONS,
+    ),
+}
+
+
 class TestPermissionPersonasE2E(unittest.TestCase):
-    def _navigation(self, template: str) -> tuple[dict[str, bool], dict]:
-        state = template_state(template)
+    def _navigation(self, persona: str) -> tuple[dict[str, bool], dict]:
+        state = PERSONA_STATES[persona]
         navigation = build_navigation_context(enabled_capabilities(state))
         return state, navigation
+
+    def test_personas_are_valid_explicit_fixtures_not_runtime_templates(self) -> None:
+        self.assertTrue(PERSONA_STATES)
+        for state in PERSONA_STATES.values():
+            self.assertEqual(validate_capability_dependencies(state), state)
 
     def test_order_entry_sees_only_order_work(self) -> None:
         state, navigation = self._navigation("order_entry")
         self.assertEqual(navigation["profile"], "order_entry")
-        self.assertEqual(navigation["home_page"], "")
-        self.assertEqual(navigation["default_route"], "/desk")
+        self.assertEqual(navigation["home_page"], WORKSPACE_MAIN_ROUTE)
+        self.assertEqual(navigation["default_route"], f"/desk/{WORKSPACE_MAIN_ROUTE}")
         self.assertTrue(navigation["sections"]["orders"])
-        for section in (
-            "costing",
-            "planning",
-            "drawing",
-            "production",
-            "quality",
-            "workforce",
-            "factory_settings",
-            "master_data",
-            "administration",
-            "reports",
-        ):
+        for section in ("costing", "planning", "drawing", "production", "quality", "workforce", "factory_settings", "master_data", "administration", "reports"):
             self.assertFalse(navigation["sections"][section], section)
         self.assertTrue(state[Capability.PRINT_CUSTOMER_INVOICE])
         self.assertTrue(state[Capability.PRINT_MEASUREMENTS])
@@ -85,6 +193,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertFalse(state[Capability.VIEW_COSTS])
         self.assertFalse(state[Capability.VIEW_FINANCIAL_REPORTS])
         self.assertFalse(state[Capability.MANAGE_PERMISSIONS])
+        self.assertFalse(state[Capability.VIEW_ROLES])
         self.assertNotIn(WORKSPACE_SETTINGS, navigation["workspaces"])
         self.assertNotIn(WORKSPACE_GO_LIVE, navigation["workspaces"])
 
@@ -114,6 +223,11 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertTrue(navigation["sections"]["factory_settings"])
         self.assertTrue(navigation["sections"]["master_data"])
         self.assertTrue(navigation["sections"]["administration"])
+        self.assertTrue(state[Capability.VIEW_ROLES])
+        self.assertTrue(state[Capability.CREATE_ROLES])
+        self.assertTrue(state[Capability.EDIT_ROLES])
+        self.assertTrue(state[Capability.DELETE_ROLES])
+        self.assertTrue(state[Capability.MANAGE_PERMISSIONS])
         self.assertFalse(navigation["sections"]["orders"])
         self.assertFalse(navigation["sections"]["production"])
         self.assertFalse(navigation["sections"]["quality"])
