@@ -5,15 +5,13 @@ from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
 
-from .authorization import Capability, WORKFORCE_CAPABILITIES, normalize_capabilities
+from .authorization import Capability, normalize_capabilities
 
 
 PROTECTED_USERS = frozenset({"Administrator", "Guest"})
 
 
 class WorkforceAction(str, Enum):
-    """Actions exposed by the Almdina workforce console."""
-
     VIEW = "view"
     CREATE = "create"
     EDIT = "edit"
@@ -55,18 +53,9 @@ class WorkforceDecision:
 def expand_workforce_capabilities(
     capabilities: Iterable[str] | None,
 ) -> frozenset[str]:
-    """Expand only the explicitly documented legacy manage-users umbrella.
+    """Compatibility name; returns the exact granular grants without expansion."""
 
-    New roles should use the granular workforce capabilities. The umbrella is
-    retained temporarily for existing installations until its grants are
-    migrated to their granular equivalents; it is not used for role assignment
-    or operational routing.
-    """
-
-    granted = set(normalize_capabilities(capabilities))
-    if Capability.MANAGE_USERS in granted:
-        granted.update(WORKFORCE_CAPABILITIES)
-    return frozenset(granted)
+    return normalize_capabilities(capabilities)
 
 
 def decide_workforce_action(
@@ -78,51 +67,24 @@ def decide_workforce_action(
     granted = expand_workforce_capabilities(capabilities)
     required = ACTION_CAPABILITIES[action]
     if required not in granted:
-        return WorkforceDecision(
-            False,
-            "missing_capability",
-            "You do not have permission for this workforce action.",
-        )
-
+        return WorkforceDecision(False, "missing_capability", "You do not have permission for this workforce action.")
     if action in {WorkforceAction.VIEW, WorkforceAction.CREATE}:
         return WorkforceDecision(True, "allowed", "Allowed.")
-
     if facts.target_user in PROTECTED_USERS:
-        return WorkforceDecision(
-            False,
-            "protected_user",
-            "Administrator and Guest cannot be changed from the Almdina workforce console.",
-        )
+        return WorkforceDecision(False, "protected_user", "Administrator and Guest cannot be changed from the Almdina workforce console.")
     if not facts.target_is_almdina:
-        return WorkforceDecision(
-            False,
-            "outside_scope",
-            "This account is outside the Almdina workforce scope.",
-        )
+        return WorkforceDecision(False, "outside_scope", "This account is outside the Almdina workforce scope.")
     if action == WorkforceAction.ASSIGN_ROLES and facts.active_assignments > 0:
-        return WorkforceDecision(
-            False,
-            "active_assignments",
-            "Reassign the user's active production stages before changing assigned roles.",
-        )
+        return WorkforceDecision(False, "active_assignments", "Reassign the user's active production stages before changing assigned roles.")
     if action == WorkforceAction.DISABLE:
         if facts.target_user == facts.actor:
-            return WorkforceDecision(
-                False,
-                "self_disable",
-                "You cannot disable your own account.",
-            )
+            return WorkforceDecision(False, "self_disable", "You cannot disable your own account.")
         if not facts.target_enabled:
             return WorkforceDecision(False, "already_disabled", "User is already disabled.")
         if facts.active_assignments > 0:
-            return WorkforceDecision(
-                False,
-                "active_assignments",
-                "Reassign the user's active production stages before disabling the account.",
-            )
+            return WorkforceDecision(False, "active_assignments", "Reassign the user's active production stages before disabling the account.")
     if action == WorkforceAction.ENABLE and facts.target_enabled:
         return WorkforceDecision(False, "already_enabled", "User is already enabled.")
-
     return WorkforceDecision(True, "allowed", "Allowed.")
 
 
@@ -138,9 +100,7 @@ def action_context(
             "reason": decision.reason,
         }
         for action in WorkforceAction
-        for decision in [
-            decide_workforce_action(capabilities, action=action, facts=facts)
-        ]
+        for decision in [decide_workforce_action(capabilities, action=action, facts=facts)]
     }
 
 
