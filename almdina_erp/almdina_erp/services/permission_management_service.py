@@ -14,7 +14,7 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
     permission_impact,
 )
-from almdina_erp.almdina_erp.application.security.permission_templates import (
+from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_SCHEMA,
     PERMISSION_TRANSFER_VERSION,
     build_permission_bundle,
