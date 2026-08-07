@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import frappe
+from frappe.core.doctype.permission_type.permission_type import (
+    CUSTOM_FIELD_TARGET,
+    get_doctype_ptype_map,
+)
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
@@ -33,7 +37,9 @@ def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, boo
     actual_settings_grants = FACTORY_SETTINGS_CAPABILITIES.difference(
         {Capability.VIEW_FACTORY_SETTINGS}
     )
-    has_settings_grant = any(normalized.get(capability) for capability in actual_settings_grants)
+    has_settings_grant = any(
+        normalized.get(capability) for capability in actual_settings_grants
+    )
     legacy_admin_grant = normalized.get(Capability.MANAGE_PERMISSIONS) or any(
         normalized.get(capability) for capability in WORKFORCE_CAPABILITIES
     )
@@ -47,15 +53,17 @@ def reconcile_custom_permission_projections() -> None:
 
     Earlier releases projected administration capabilities onto broad standard
     ``read``/``write`` rights. Re-saving each existing Almdina role state through
-    the current repository removes stale standard rights, applies new safe
-    dependencies, and preserves unrelated Frappe permission columns. No role is
-    created and no capability absent from its effective state is granted.
+    the current projected repository removes stale rights and also repairs the
+    native permissions of related resources such as Cutting Plan and Production
+    Stage. No role is created and no absent business capability is granted.
     """
 
     if not frappe.db.exists("DocType", "Custom DocPerm"):
         return
     doctypes = [
-        doctype for doctype in _managed_doctypes() if frappe.db.exists("DocType", doctype)
+        doctype
+        for doctype in _managed_doctypes()
+        if frappe.db.exists("DocType", doctype)
     ]
     if not doctypes:
         return
@@ -76,11 +84,13 @@ def reconcile_custom_permission_projections() -> None:
         return
 
     from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-        FrappePermissionMatrixRepository,
         PROTECTED_ROLES,
     )
+    from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
+        ProjectedPermissionMatrixRepository,
+    )
 
-    repository = FrappePermissionMatrixRepository()
+    repository = ProjectedPermissionMatrixRepository()
     for resolved in roles:
         if resolved in PROTECTED_ROLES or not frappe.db.exists("Role", resolved):
             continue
@@ -91,12 +101,28 @@ def reconcile_custom_permission_projections() -> None:
         )
 
 
+def _ensure_permission_type_schema(permission_type_name: str) -> None:
+    """Repair generated permission fields for a pre-existing Permission Type.
+
+    Long-lived sites can contain the Permission Type record while one of its
+    generated Custom Fields is missing or has stale ``depends_on`` metadata.
+    Frappe only creates those fields in PermissionType.on_update, so merely
+    skipping an existing row leaves the role matrix looking saved while native
+    permission checks cannot see the capability.
+    """
+
+    document = frappe.get_doc("Permission Type", permission_type_name)
+    for target in CUSTOM_FIELD_TARGET:
+        document.create_custom_field(target)
+
+
 def sync_permission_types() -> None:
-    """Install capability columns and normalize existing role projections.
+    """Install and repair capability columns, then normalize role projections.
 
     Permission Type creates the required DocPerm and Custom DocPerm fields in
-    Frappe v16. No role assignment is seeded here: administrators remain the sole
-    owners of which roles receive each business capability.
+    Frappe v16. Existing records are repaired as well as new ones so upgrades are
+    self-healing. No role assignment is seeded here: administrators remain the
+    sole owners of which roles receive each business capability.
     """
 
     if not frappe.db.exists("DocType", "Permission Type"):
@@ -105,13 +131,15 @@ def sync_permission_types() -> None:
     for definition in CUSTOM_PERMISSION_DEFINITIONS:
         if not frappe.db.exists("DocType", definition.applies_to):
             continue
-        if frappe.db.exists(
+        existing = frappe.db.exists(
             "Permission Type",
             {
                 "perm_type": definition.permission_type,
                 "doc_type": definition.applies_to,
             },
-        ):
+        )
+        if existing:
+            _ensure_permission_type_schema(str(existing))
             continue
         frappe.get_doc(
             {
@@ -121,16 +149,23 @@ def sync_permission_types() -> None:
             }
         ).insert(ignore_permissions=True)
 
-    from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-        FrappePermissionMatrixRepository,
+    # Frappe v16 caches the permission-type map per worker process with
+    # @site_cache. Invalidate it explicitly after schema repair so a long-lived
+    # process cannot keep authorizing against the pre-migration map.
+    get_doctype_ptype_map.clear_cache()
+    for permission_doctype in ("DocPerm", "Custom DocPerm", "DocShare"):
+        frappe.clear_cache(doctype=permission_doctype)
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
+        ProjectedPermissionMatrixRepository,
     )
 
     # Reconcile only roles that already had custom rows. Baseline creation adds
-    # the standard roles to Custom DocPerm, so doing it first would make those
-    # untouched roles look like permission-console roles and could normalize
-    # rights that this app does not own.
+    # standard roles to Custom DocPerm, so doing it first would make untouched
+    # roles look like permission-console roles and could normalize rights this
+    # app does not own.
     reconcile_custom_permission_projections()
-    FrappePermissionMatrixRepository().ensure_custom_permission_baseline(
+    ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()
     )
 
