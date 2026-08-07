@@ -114,20 +114,22 @@ class TestRoleAdministrationArchitecture(unittest.TestCase):
         self.assertIn('values["eligible_roles_display"]', references)
         self.assertIn('values["operational_role"]', references)
 
-    def test_every_role_endpoint_is_server_authorized(self) -> None:
+    def test_role_endpoints_use_granular_server_capabilities(self) -> None:
         source = SERVICE.read_text(encoding="utf-8")
-        for endpoint in (
-            "get_role_console",
-            "get_role_details",
-            "create_factory_role",
-            "update_factory_role",
-            "set_factory_role_enabled",
-            "delete_factory_role",
-            "get_factory_role_audit",
-        ):
+        expected = {
+            "get_role_console": "Capability.VIEW_ROLES",
+            "get_role_details": "Capability.VIEW_ROLES",
+            "create_factory_role": "Capability.CREATE_ROLES",
+            "update_factory_role": "Capability.EDIT_ROLES",
+            "set_factory_role_enabled": "Capability.EDIT_ROLES",
+            "delete_factory_role": "Capability.DELETE_ROLES",
+            "get_factory_role_audit": "Capability.VIEW_ROLES",
+        }
+        for endpoint, capability in expected.items():
             block = _function_source(source, endpoint)
-            self.assertIn("_require_role_management()", block, endpoint)
-        self.assertIn("Capability.MANAGE_PERMISSIONS", source)
+            self.assertIn("_require_role_capability(", block, endpoint)
+            self.assertIn(capability, block, endpoint)
+        self.assertNotIn("Capability.MANAGE_PERMISSIONS", source)
         self.assertIn("confirm_delete", source)
 
     def test_new_roles_are_custom_desk_roles_with_no_permission_seed(self) -> None:
