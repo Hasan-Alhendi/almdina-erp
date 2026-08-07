@@ -28,12 +28,14 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     require_doctype_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-    FrappePermissionMatrixRepository,
     PROTECTED_ROLES,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
+    ProjectedPermissionMatrixRepository,
 )
 
 
-_repository = FrappePermissionMatrixRepository()
+_repository = ProjectedPermissionMatrixRepository()
 _MAX_TRANSFER_BYTES = 128 * 1024
 
 
