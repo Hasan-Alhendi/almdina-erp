@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
-TRANSFER = ROOT / "almdina_erp" / "application" / "security" / "permission_transfer.py"
+LEGACY_TRANSFER_MODULE = ROOT / "almdina_erp" / "application" / "security" / "permission_transfer.py"
 LEGACY_TEMPLATE_MODULE = ROOT / "almdina_erp" / "application" / "security" / "permission_templates.py"
 REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_matrix_repository.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "permission_management_service.py"
@@ -30,23 +30,29 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn("from frappe", source)
         self.assertNotIn("Custom DocPerm", source)
 
-    def test_transfer_policy_is_separate_and_framework_independent(self) -> None:
-        source = TRANSFER.read_text(encoding="utf-8")
-        self.assertNotIn("import frappe", source)
-        self.assertNotIn("from frappe", source)
-        self.assertIn("build_permission_export", source)
-        self.assertIn("parse_permission_export", source)
-        self.assertIn("preview_permission_bundle", source)
-
-    def test_permission_templates_are_removed_from_runtime_and_ui(self) -> None:
+    def test_permission_transfer_and_templates_are_removed_from_runtime_and_ui(self) -> None:
         service = SERVICE.read_text(encoding="utf-8")
         page = PAGE.read_text(encoding="utf-8")
+        self.assertFalse(LEGACY_TRANSFER_MODULE.exists())
         self.assertFalse(LEGACY_TEMPLATE_MODULE.exists())
-        for token in ("PermissionTemplate", "permission_template_catalog", "preview_permission_template", "template_state", "PERMISSION_TEMPLATES"):
+        for token in (
+            "PermissionTemplate",
+            "permission_template_catalog",
+            "preview_permission_template",
+            "template_state",
+            "PERMISSION_TEMPLATES",
+            "permission_transfer",
+            "export_role_permissions",
+            "preview_permission_import",
+            "import_permission_bundle",
+            "apc-export",
+            "apc-import",
+            "تطبيق قالب",
+            "تصدير JSON",
+            "استيراد للمعاينة",
+        ):
             self.assertNotIn(token, service)
             self.assertNotIn(token, page)
-        self.assertNotIn("apc-template", page)
-        self.assertNotIn("تطبيق قالب", page)
         self.assertIn("apc-capability-search", page)
         self.assertIn("apc-filter-toggle", page)
         self.assertIn("حدد صلاحياته يدويًا", page)
@@ -103,7 +109,15 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
 
     def test_permission_console_has_preview_audit_and_race_guards(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
-        for token in ("preview_role_permissions", "update_role_permissions", "requires_self_lockout_confirmation", "roleRequest", "previewRequest", "apc-savebar", "loadPreview().then"):
+        for token in (
+            "preview_role_permissions",
+            "update_role_permissions",
+            "requires_self_lockout_confirmation",
+            "roleRequest",
+            "previewRequest",
+            "apc-savebar",
+            "loadPreview().then",
+        ):
             self.assertIn(token, source)
         self.assertNotIn("frappe.user_roles", source)
         for role in ("Production Manager", "System Manager", "Order Entry"):
