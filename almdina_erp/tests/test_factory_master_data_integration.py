@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -44,11 +46,15 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         )
         repository.save_role_state(
             CUTTING_ROLE,
-            {Capability.EDIT_FACTORY_CUTTING_DEFAULTS: True},
+            {
+                Capability.VIEW_FACTORY_SETTINGS: True,
+                Capability.EDIT_FACTORY_CUTTING_DEFAULTS: True,
+            },
         )
         repository.save_role_state(
             ROUTING_ROLE,
             {
+                Capability.VIEW_PRODUCTION_ROUTINGS: True,
                 Capability.CREATE_PRODUCTION_ROUTINGS: True,
                 Capability.EDIT_PRODUCTION_ROUTINGS: True,
                 Capability.DELETE_PRODUCTION_ROUTINGS: True,
@@ -57,6 +63,7 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         repository.save_role_state(
             EDGE_ROLE,
             {
+                Capability.VIEW_EDGE_BANDING_TYPES: True,
                 Capability.CREATE_EDGE_BANDING_TYPES: True,
                 Capability.EDIT_EDGE_BANDING_TYPES: True,
                 Capability.DELETE_EDGE_BANDING_TYPES: True,
@@ -77,6 +84,7 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
         for role in (VIEWER_ROLE, CUTTING_ROLE, ROUTING_ROLE, EDGE_ROLE):
             frappe.db.delete("Custom DocPerm", {"role": role})
+            frappe.db.delete("Almdina Role Metadata", {"role": role})
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
@@ -87,6 +95,16 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         if not frappe.db.exists("Role", role):
             frappe.get_doc(
                 {"doctype": "Role", "role_name": role, "desk_access": 1}
+            ).insert(ignore_permissions=True)
+        if not frappe.db.exists("Almdina Role Metadata", {"role": role}):
+            frappe.get_doc(
+                {
+                    "doctype": "Almdina Role Metadata",
+                    "role": role,
+                    "role_uid": str(uuid.uuid4()),
+                    "description": "Integration-test managed role.",
+                    "managed_by_almdina": 1,
+                }
             ).insert(ignore_permissions=True)
 
     @classmethod
@@ -113,18 +131,25 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         user.save(ignore_permissions=True)
 
     @classmethod
-    def _delete_test_records(cls) -> None:
+    def _clear_default_routing_reference(cls) -> None:
         settings = frappe.get_single("Almdina ERP Settings")
-        if settings.default_production_routing == ROUTING_NAME:
-            fallback = frappe.get_all(
-                "Production Routing",
-                filters={"name": ["!=", ROUTING_NAME], "disabled": 0},
-                pluck="name",
-                limit_page_length=1,
-            )
-            if fallback:
-                settings.default_production_routing = fallback[0]
-                settings.save(ignore_permissions=True)
+        if settings.default_production_routing != ROUTING_NAME:
+            return
+        fallback = frappe.get_all(
+            "Production Routing",
+            filters={"name": ["!=", ROUTING_NAME], "disabled": 0},
+            pluck="name",
+            limit_page_length=1,
+        )
+        frappe.db.set_single_value(
+            "Almdina ERP Settings",
+            "default_production_routing",
+            fallback[0] if fallback else "",
+        )
+
+    @classmethod
+    def _delete_test_records(cls) -> None:
+        cls._clear_default_routing_reference()
         if frappe.db.exists("Production Routing", ROUTING_NAME):
             frappe.delete_doc("Production Routing", ROUTING_NAME, force=True, ignore_permissions=True)
         if frappe.db.exists("Edge Banding Type", EDGE_NAME):
@@ -168,6 +193,12 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
                 "default_production_routing"
             ]
         update_production_settings(restore)
+        if not self.original_settings["default_production_routing"]:
+            frappe.db.set_single_value(
+                "Almdina ERP Settings",
+                "default_production_routing",
+                "",
+            )
         self._delete_test_records()
         frappe.db.delete(
             "Almdina Master Data Audit",
@@ -267,13 +298,20 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             delete_master_data_record("Production Routing", ROUTING_NAME)
 
         frappe.set_user("Administrator")
-        update_production_settings(
-            {
-                "default_production_routing": self.original_settings[
-                    "default_production_routing"
-                ]
-            }
-        )
+        if self.original_settings["default_production_routing"]:
+            update_production_settings(
+                {
+                    "default_production_routing": self.original_settings[
+                        "default_production_routing"
+                    ]
+                }
+            )
+        else:
+            frappe.db.set_single_value(
+                "Almdina ERP Settings",
+                "default_production_routing",
+                "",
+            )
         frappe.set_user(ROUTING_USER)
         deleted = delete_master_data_record("Production Routing", ROUTING_NAME)
         self.assertTrue(deleted["deleted"])
