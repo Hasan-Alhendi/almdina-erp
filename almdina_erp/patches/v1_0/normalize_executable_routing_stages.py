@@ -33,7 +33,7 @@ def execute() -> None:
         if changed:
             frappe.db.set_value(
                 ROUTING_STAGE_DOCTYPE,
-                row.name,
+                row.get("name"),
                 changed,
                 update_modified=False,
             )
