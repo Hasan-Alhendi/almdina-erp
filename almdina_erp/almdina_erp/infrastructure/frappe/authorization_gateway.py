@@ -8,22 +8,13 @@ from frappe import _
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
-    CAPABILITY_CATALOG,
     capability_definition,
 )
 
 
-def _registered_permission_types() -> dict[str, frozenset[str]]:
-    """Return the custom permission types currently installed on the site."""
-
-    from frappe.core.doctype.permission_type.permission_type import (
-        get_doctype_ptype_map,
-    )
-
-    return {
-        doctype: frozenset(permission_types)
-        for doctype, permission_types in get_doctype_ptype_map().items()
-    }
+_TRANSACTIONAL_SCOPE_DOCTYPES = frozenset(
+    {"Door Cutting Order", "Replacement Piece"}
+)
 
 
 def _matrix_repository() -> tuple[Any, frozenset[str]]:
@@ -37,31 +28,13 @@ def _matrix_repository() -> tuple[Any, frozenset[str]]:
     return FrappePermissionMatrixRepository(), PROTECTED_ROLES
 
 
-def _permission_type_is_available(capability: str) -> bool:
-    definition = capability_definition(capability)
-    if not definition.custom:
-        return True
-    return definition.permission_type in _registered_permission_types().get(
-        definition.applies_to,
-        frozenset(),
-    )
-
-
-def _raw_doctype_capability(capability: str, user: str) -> bool:
-    definition = capability_definition(capability)
-    if not _permission_type_is_available(capability):
-        return False
-    return bool(
-        frappe.has_permission(
-            definition.applies_to,
-            definition.permission_type,
-            user=user,
-        )
-    )
-
-
 def _matrix_granted_capabilities(user: str) -> frozenset[str]:
-    """Read the same persisted matrix shown by the permission console."""
+    """Resolve capabilities only from editable roles in the factory matrix.
+
+    Frappe automatically attaches roles such as ``Desk User`` and ``All`` to a
+    session. Those roles are intentionally excluded by ``PROTECTED_ROLES`` and
+    must never become an implicit source of Almdina business authority.
+    """
 
     cache = getattr(frappe.local, "almdina_matrix_capabilities", None)
     if cache is None:
@@ -90,27 +63,12 @@ def _matrix_granted_capabilities(user: str) -> frozenset[str]:
 
 
 def granted_capabilities(user: str | None = None) -> frozenset[str]:
-    """Resolve the union of all role capabilities for one user."""
+    """Resolve the union of explicit factory-role capabilities for one user."""
 
     resolved_user = user or frappe.session.user
     if resolved_user == "Administrator":
         return ALL_CAPABILITIES
-
-    registered = _registered_permission_types()
-    granted: set[str] = set(_matrix_granted_capabilities(resolved_user))
-    for capability, definition in CAPABILITY_CATALOG.items():
-        if definition.custom and definition.permission_type not in registered.get(
-            definition.applies_to,
-            frozenset(),
-        ):
-            continue
-        if frappe.has_permission(
-            definition.applies_to,
-            definition.permission_type,
-            user=resolved_user,
-        ):
-            granted.add(capability)
-    return frozenset(granted)
+    return _matrix_granted_capabilities(resolved_user)
 
 
 def doctype_has_capability(
@@ -118,10 +76,12 @@ def doctype_has_capability(
     *,
     user: str | None = None,
 ) -> bool:
+    """Check an Almdina capability without accepting unrelated native grants."""
+
+    # Validate the capability key even when the matrix is empty.
+    capability_definition(capability)
     resolved_user = user or frappe.session.user
     if resolved_user == "Administrator":
-        return True
-    if _raw_doctype_capability(capability, resolved_user):
         return True
     return capability in _matrix_granted_capabilities(resolved_user)
 
@@ -174,26 +134,39 @@ def document_has_capability(
     *,
     user: str | None = None,
 ) -> bool:
+    """Require explicit capability first, then preserve native document scope.
+
+    The old implementation checked Frappe native permission first. A stale grant
+    on the automatic ``Desk User`` role could therefore bypass an empty factory
+    role. The matrix is now the authority; native permissions are used only as a
+    second, narrowing check for the concrete document.
+    """
+
     definition = capability_definition(capability)
     if getattr(document, "doctype", None) != definition.applies_to:
         return False
+
     resolved_user = user or frappe.session.user
     if resolved_user == "Administrator":
         return True
-    if _permission_type_is_available(capability) and frappe.has_permission(
-        document,
-        definition.permission_type,
-        user=resolved_user,
-    ):
-        return True
-    # Business grants can fall back to the persisted matrix only when Frappe
-    # independently confirms native read access to the transactional document.
-    return bool(
-        definition.custom
-        and definition.applies_to in {"Door Cutting Order", "Replacement Piece"}
-        and capability in _matrix_granted_capabilities(resolved_user)
-        and frappe.has_permission(document, "read", user=resolved_user)
-    )
+    if capability not in _matrix_granted_capabilities(resolved_user):
+        return False
+
+    if definition.applies_to in _TRANSACTIONAL_SCOPE_DOCTYPES:
+        native_permission = (
+            "read" if definition.custom else definition.permission_type
+        )
+        return bool(
+            frappe.has_permission(
+                document,
+                native_permission,
+                user=resolved_user,
+            )
+        )
+
+    # Non-transactional services perform their own resource validation after the
+    # capability boundary. No unrelated Frappe role may add authority here.
+    return True
 
 
 def document_has_any_capability(
