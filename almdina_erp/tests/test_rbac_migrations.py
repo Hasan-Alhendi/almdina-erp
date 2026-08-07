@@ -9,6 +9,7 @@ PATCHES = ROOT / "patches.txt"
 MIGRATE_WORKFORCE = ROOT / "patches" / "v1_0" / "migrate_dynamic_workforce_roles.py"
 MIGRATE_ADMIN = ROOT / "patches" / "v1_0" / "migrate_granular_administration_permissions.py"
 MATERIALIZE = ROOT / "patches" / "v1_0" / "materialize_permission_prerequisites.py"
+MATERIALIZE_ROLE_ADMIN = ROOT / "patches" / "v1_0" / "materialize_role_administration_prerequisites.py"
 HELPERS = ROOT / "patches" / "v1_0" / "permission_migration_helpers.py"
 SYNC = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_type_sync.py"
 LEGACY_BOOTSTRAP = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "legacy_permission_bootstrap.py"
@@ -20,8 +21,10 @@ class TestRbacMigrations(unittest.TestCase):
         workforce = source.index("migrate_dynamic_workforce_roles")
         administration = source.index("migrate_granular_administration_permissions")
         prerequisites = source.index("materialize_permission_prerequisites")
+        role_administration = source.index("materialize_role_administration_prerequisites")
         self.assertLess(workforce, administration)
         self.assertLess(administration, prerequisites)
+        self.assertLess(prerequisites, role_administration)
 
     def test_workforce_migration_adopts_before_bootstrapping_and_never_creates_roles(self) -> None:
         source = MIGRATE_WORKFORCE.read_text(encoding="utf-8")
@@ -58,6 +61,20 @@ class TestRbacMigrations(unittest.TestCase):
         self.assertIn("required_capabilities", source)
         self.assertIn("managed_role_names", source)
         self.assertIn("repository.save_role_state(role, explicit)", source)
+        self.assertNotIn('"doctype": "Role"', source)
+
+    def test_role_administration_migration_adds_visibility_only(self) -> None:
+        source = MATERIALIZE_ROLE_ADMIN.read_text(encoding="utf-8")
+        self.assertIn("Capability.VIEW_ROLES", source)
+        self.assertIn("Capability.ASSIGN_USER_ROLES", source)
+        self.assertIn("Capability.MANAGE_PERMISSIONS", source)
+        self.assertIn("Capability.CREATE_ROLES", source)
+        self.assertIn("Capability.EDIT_ROLES", source)
+        self.assertIn("Capability.DELETE_ROLES", source)
+        self.assertIn("explicit[Capability.VIEW_ROLES] = True", source)
+        self.assertNotIn("explicit[Capability.CREATE_ROLES] = True", source)
+        self.assertNotIn("explicit[Capability.EDIT_ROLES] = True", source)
+        self.assertNotIn("explicit[Capability.DELETE_ROLES] = True", source)
         self.assertNotIn('"doctype": "Role"', source)
 
     def test_early_legacy_bootstrap_skips_unregistered_roles(self) -> None:
