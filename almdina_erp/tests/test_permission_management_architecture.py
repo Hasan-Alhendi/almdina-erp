@@ -127,6 +127,10 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         source = SHARED_SHELL.read_text(encoding="utf-8")
         self.assertIn("CAPABILITY_ROUTE_RULES", source)
         self.assertIn('any: ["manage_permissions"]', source)
+        for capability in ("view_roles", "create_roles", "edit_roles", "delete_roles"):
+            self.assertIn(f'"{capability}"', source)
+        self.assertIn('routes: ["factory-roles"]', source)
+        self.assertIn('routes: ["factory-permissions"]', source)
         self.assertIn('any: ["view_users"]', source)
         self.assertIn("view_factory_settings", source)
         self.assertIn("edit_factory_production_controls", source)
@@ -147,7 +151,9 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertEqual(targets["إدارة المستخدمين"], "factory-workforce")
         self.assertEqual(targets["إدارة الصلاحيات"], "factory-permissions")
         self.assertEqual(targets["إدارة مسارات الإنتاج"], "factory-master-data")
-        self.assertIn('routes: ["factory-permissions", "role"]', SHARED_SHELL.read_text(encoding="utf-8"))
+        shared_shell = SHARED_SHELL.read_text(encoding="utf-8")
+        self.assertIn('routes: ["factory-roles"]', shared_shell)
+        self.assertIn('routes: ["factory-permissions"]', shared_shell)
 
 
 if __name__ == "__main__":
