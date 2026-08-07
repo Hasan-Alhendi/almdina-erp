@@ -12,15 +12,15 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     enabled_capabilities,
-    normalize_capability_state,
+    validate_capability_dependencies,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 def explicit_state(*capabilities: str) -> dict[str, bool]:
-    """Build a test fixture from grants selected explicitly by an administrator."""
+    """Build and validate a fully explicit administrator-selected role state."""
 
-    return normalize_capability_state(
+    return validate_capability_dependencies(
         {capability: True for capability in capabilities}
     )
 
@@ -82,6 +82,7 @@ PERSONA_STATES = {
         Capability.EDIT_COST_SETTINGS,
         Capability.EDIT_SPECIAL_PRICE,
         Capability.APPROVE_SPECIAL_PRICE,
+        Capability.VIEW_REPLACEMENTS,
         Capability.EDIT_REPLACEMENT_COST,
         Capability.PRINT_MEASUREMENTS,
         Capability.PRINT_CUSTOMER_INVOICE,
@@ -133,33 +134,18 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         navigation = build_navigation_context(enabled_capabilities(state))
         return state, navigation
 
-    def test_personas_are_test_fixtures_not_runtime_templates(self) -> None:
+    def test_personas_are_valid_explicit_fixtures_not_runtime_templates(self) -> None:
         self.assertTrue(PERSONA_STATES)
-        self.assertTrue(
-            all(isinstance(state, dict) for state in PERSONA_STATES.values())
-        )
+        for state in PERSONA_STATES.values():
+            self.assertEqual(validate_capability_dependencies(state), state)
 
     def test_order_entry_sees_only_order_work(self) -> None:
         state, navigation = self._navigation("order_entry")
         self.assertEqual(navigation["profile"], "order_entry")
         self.assertEqual(navigation["home_page"], WORKSPACE_MAIN_ROUTE)
-        self.assertEqual(
-            navigation["default_route"],
-            f"/desk/{WORKSPACE_MAIN_ROUTE}",
-        )
+        self.assertEqual(navigation["default_route"], f"/desk/{WORKSPACE_MAIN_ROUTE}")
         self.assertTrue(navigation["sections"]["orders"])
-        for section in (
-            "costing",
-            "planning",
-            "drawing",
-            "production",
-            "quality",
-            "workforce",
-            "factory_settings",
-            "master_data",
-            "administration",
-            "reports",
-        ):
+        for section in ("costing", "planning", "drawing", "production", "quality", "workforce", "factory_settings", "master_data", "administration", "reports"):
             self.assertFalse(navigation["sections"][section], section)
         self.assertTrue(state[Capability.PRINT_CUSTOMER_INVOICE])
         self.assertTrue(state[Capability.PRINT_MEASUREMENTS])
