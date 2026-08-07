@@ -13,3 +13,4 @@ almdina_erp.patches.v1_0.migrate_routing_stage_eligible_roles
 almdina_erp.patches.v1_0.normalize_executable_routing_stages
 almdina_erp.patches.v1_0.migrate_dynamic_workforce_roles
 almdina_erp.patches.v1_0.migrate_granular_administration_permissions
+almdina_erp.patches.v1_0.materialize_permission_prerequisites
