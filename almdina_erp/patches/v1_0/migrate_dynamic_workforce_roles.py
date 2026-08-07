@@ -7,8 +7,14 @@ import frappe
 from almdina_erp.almdina_erp.application.security.legacy_permission_bootstrap import (
     LEGACY_ROLE_CAPABILITIES,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    ALL_CAPABILITIES,
+    Capability,
+)
 from almdina_erp.almdina_erp.domain.security.role_management import PROTECTED_ROLE_NAMES
+from almdina_erp.almdina_erp.infrastructure.frappe.legacy_permission_bootstrap import (
+    bootstrap_legacy_role_permissions,
+)
 from almdina_erp.patches.v1_0.permission_migration_helpers import ensure_permission_types
 
 
@@ -55,16 +61,11 @@ def _copy_role_assignment_grants() -> None:
         if not _doctype_exists(permission_doctype):
             continue
         meta = frappe.get_meta(permission_doctype)
-        if not meta.has_field(_LEGACY_ASSIGNMENT_PERMISSION) or not meta.has_field(
-            new_permission
-        ):
+        if not meta.has_field(_LEGACY_ASSIGNMENT_PERMISSION) or not meta.has_field(new_permission):
             continue
         rows = frappe.get_all(
             permission_doctype,
-            filters={
-                "parent": _SETTINGS_DOCTYPE,
-                _LEGACY_ASSIGNMENT_PERMISSION: 1,
-            },
+            filters={"parent": _SETTINGS_DOCTYPE, _LEGACY_ASSIGNMENT_PERMISSION: 1},
             pluck="name",
             limit_page_length=0,
         )
@@ -79,6 +80,13 @@ def _copy_role_assignment_grants() -> None:
 
 
 def execute() -> None:
+    """Adopt existing business roles, then preserve their historical access."""
+
     _adopt_existing_workforce_roles()
+    # The pre-model bootstrap may have run before role metadata existed. Ensure
+    # all current fields now exist, then retry the idempotent bootstrap after
+    # adoption so existing users keep their effective permissions.
+    ensure_permission_types(ALL_CAPABILITIES)
+    bootstrap_legacy_role_permissions()
     _copy_role_assignment_grants()
     frappe.clear_cache()
