@@ -95,12 +95,20 @@ class TestPermissionTypeSyncNoRoleCreation(unittest.TestCase):
         self.assertTrue(all(row["doctype"] == "Permission Type" for row in inserted))
         self.assertFalse(any(row["doctype"] == "Role" for row in inserted))
         permission_types = {str(row["perm_type"]) for row in inserted}
-        self.assertIn("submit_order", permission_types)
-        self.assertIn("approve_dxf", permission_types)
-        self.assertIn("dispatch_order", permission_types)
-        self.assertIn("manage_permissions", permission_types)
-        self.assertIn("view_users", permission_types)
-        self.assertIn("assign_user_roles", permission_types)
+        for permission_type in (
+            "submit_order",
+            "approve_dxf",
+            "dispatch_order",
+            "manage_permissions",
+            "view_users",
+            "assign_user_roles",
+            "view_roles",
+            "create_roles",
+            "edit_roles",
+            "delete_roles",
+        ):
+            with self.subTest(permission_type=permission_type):
+                self.assertIn(permission_type, permission_types)
         self.assertNotIn("assign_workforce_profile", permission_types)
         self.assertNotIn("manage_users", permission_types)
         self.assertNotIn("manage_factory_settings", permission_types)
