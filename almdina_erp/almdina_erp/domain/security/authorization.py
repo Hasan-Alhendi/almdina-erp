@@ -67,7 +67,7 @@ class Capability:
     VIEW_USERS = "view_users"
     CREATE_USERS = "create_users"
     EDIT_USERS = "edit_users"
-    ASSIGN_WORKFORCE_PROFILE = "assign_workforce_profile"
+    ASSIGN_USER_ROLES = "assign_user_roles"
     ENABLE_USERS = "enable_users"
     DISABLE_USERS = "disable_users"
     RESET_USER_PASSWORD = "reset_user_password"
@@ -160,7 +160,7 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_USERS, Capability.VIEW_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.CREATE_USERS, Capability.CREATE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.EDIT_USERS, Capability.EDIT_USERS, _SETTINGS_DOCTYPE, "workforce"),
-    CapabilityDefinition(Capability.ASSIGN_WORKFORCE_PROFILE, Capability.ASSIGN_WORKFORCE_PROFILE, _SETTINGS_DOCTYPE, "workforce"),
+    CapabilityDefinition(Capability.ASSIGN_USER_ROLES, Capability.ASSIGN_USER_ROLES, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.ENABLE_USERS, Capability.ENABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.DISABLE_USERS, Capability.DISABLE_USERS, _SETTINGS_DOCTYPE, "workforce"),
     CapabilityDefinition(Capability.RESET_USER_PASSWORD, Capability.RESET_USER_PASSWORD, _SETTINGS_DOCTYPE, "workforce"),
