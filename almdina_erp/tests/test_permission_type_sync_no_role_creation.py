@@ -31,8 +31,11 @@ class _FakeDocument:
 
 class _FakeDB:
     def exists(self, doctype: str, filters=None):
+        if doctype == "Permission Type":
+            # Permission Type DocType exists, but no individual capability rows
+            # exist yet in this isolated test harness.
+            return not isinstance(filters, dict)
         if doctype in {
-            "Permission Type",
             "Door Cutting Order",
             "Replacement Piece",
             "Almdina ERP Settings",
