@@ -89,7 +89,11 @@ class Capability:
     EDIT_EDGE_BANDING_TYPES = "edit_edge_banding_types"
     DELETE_EDGE_BANDING_TYPES = "delete_edge_banding_types"
 
-    # Administration
+    # RBAC administration
+    VIEW_ROLES = "view_roles"
+    CREATE_ROLES = "create_roles"
+    EDIT_ROLES = "edit_roles"
+    DELETE_ROLES = "delete_roles"
     MANAGE_PERMISSIONS = "manage_permissions"
 
 
@@ -175,6 +179,10 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.CREATE_EDGE_BANDING_TYPES, "create", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_EDGE_BANDING_TYPES, "write", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.DELETE_EDGE_BANDING_TYPES, "delete", _EDGE_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.VIEW_ROLES, Capability.VIEW_ROLES, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.CREATE_ROLES, Capability.CREATE_ROLES, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.EDIT_ROLES, Capability.EDIT_ROLES, _SETTINGS_DOCTYPE, "administration"),
+    CapabilityDefinition(Capability.DELETE_ROLES, Capability.DELETE_ROLES, _SETTINGS_DOCTYPE, "administration"),
     CapabilityDefinition(Capability.MANAGE_PERMISSIONS, Capability.MANAGE_PERMISSIONS, _SETTINGS_DOCTYPE, "administration"),
 )
 
@@ -202,7 +210,8 @@ REPORTING_CAPABILITIES = _category_capabilities("reports")
 WORKFORCE_CAPABILITIES = _category_capabilities("workforce")
 FACTORY_SETTINGS_CAPABILITIES = _category_capabilities("factory_settings")
 MASTER_DATA_CAPABILITIES = _category_capabilities("master_data")
-ADMINISTRATION_CAPABILITIES = _category_capabilities("administration") | FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
+ROLE_ADMINISTRATION_CAPABILITIES = _category_capabilities("administration")
+ADMINISTRATION_CAPABILITIES = ROLE_ADMINISTRATION_CAPABILITIES | FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 
 PRODUCTION_OPERATOR_CAPABILITIES = frozenset(
     {
@@ -282,6 +291,7 @@ __all__ = [
     "PRODUCTION_OPERATOR_CAPABILITIES",
     "PRODUCTION_SUPERVISOR_CAPABILITIES",
     "REPORTING_CAPABILITIES",
+    "ROLE_ADMINISTRATION_CAPABILITIES",
     "SHOP_FLOOR_ACCESS_CAPABILITIES",
     "WORKFORCE_CAPABILITIES",
     "Capability",
