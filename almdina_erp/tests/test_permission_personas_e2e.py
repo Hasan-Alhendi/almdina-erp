@@ -33,6 +33,8 @@ PERSONA_STATES = {
         Capability.SUBMIT_ORDER,
         Capability.PRINT_MEASUREMENTS,
         Capability.PRINT_CUSTOMER_INVOICE,
+        Capability.VIEW_CUSTOMERS,
+        Capability.VIEW_EDGE_BANDING_TYPES,
     ),
     "planner_designer": explicit_state(
         Capability.VIEW_ORDERS,
@@ -84,6 +86,7 @@ PERSONA_STATES = {
         Capability.PRINT_MEASUREMENTS,
         Capability.PRINT_CUSTOMER_INVOICE,
         Capability.PRINT_INTERNAL_COST_REPORT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
         Capability.VIEW_FINANCIAL_REPORTS,
     ),
     "control_center": explicit_state(
@@ -103,7 +106,7 @@ PERSONA_STATES = {
         Capability.VIEW_USERS,
         Capability.CREATE_USERS,
         Capability.EDIT_USERS,
-        Capability.ASSIGN_WORKFORCE_PROFILE,
+        Capability.ASSIGN_USER_ROLES,
         Capability.ENABLE_USERS,
         Capability.DISABLE_USERS,
         Capability.RESET_USER_PASSWORD,
