@@ -101,10 +101,16 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.REPLACE_DXF", policy)
         self.assertIn("_validate_and_attach_dxf_file", service)
 
-    def test_shop_floor_dxf_link_uses_dxf_permissions_not_plan_permission(self) -> None:
+    def test_shop_floor_dxf_link_uses_server_document_capabilities_not_plan_permission(self) -> None:
         source = DXF_VISIBILITY.read_text(encoding="utf-8")
-        self.assertIn('can("view_drawing_workspace")', source)
-        self.assertIn('can("export_dxf")', source)
+        self.assertIn("DXF_CAPABILITIES", source)
+        self.assertIn('"view_drawing_workspace"', source)
+        self.assertIn('"export_dxf"', source)
+        self.assertIn('"upload_dxf"', source)
+        self.assertIn('"replace_dxf"', source)
+        self.assertIn('"approve_dxf"', source)
+        self.assertIn("detail.document_capabilities", source)
+        self.assertNotIn('"view_cutting_plan"', source)
         self.assertNotIn('can("view_cutting_plan")', source)
 
 
