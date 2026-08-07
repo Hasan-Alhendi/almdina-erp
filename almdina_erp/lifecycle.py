@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from almdina_erp.almdina_erp.infrastructure.frappe.legacy_permission_bootstrap import (
-    bootstrap_legacy_role_permissions,
-)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -13,8 +10,14 @@ from almdina_erp.install import (
 
 
 def _sync_security_foundation() -> None:
+    """Keep permission-type metadata in sync without assigning role grants.
+
+    Historical role grants belong to one-time migration patches. Re-running that
+    bootstrap after every install/migrate would make role names implicit policy
+    and could repopulate an intentionally empty role.
+    """
+
     sync_permission_types()
-    bootstrap_legacy_role_permissions()
 
 
 def after_install() -> None:
