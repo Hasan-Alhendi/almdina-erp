@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -15,6 +17,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
 MANAGER_ROLE = "Almdina Workforce Manager Test"
 VIEWER_ROLE = "Almdina Workforce Viewer Test"
 LEGACY_ROLE = "Almdina Workforce Legacy Test"
+DRAWING_ROLE = "Almdina Drawing Worker Test"
+CNC_ROLE = "Almdina CNC Worker Test"
 UNRELATED_ROLE = "Almdina Workforce Unrelated Test"
 MANAGER_USER = "almdina.workforce.manager@example.com"
 VIEWER_USER = "almdina.workforce.viewer@example.com"
@@ -28,8 +32,17 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         super().setUpClass()
         frappe.set_user("Administrator")
         sync_permission_types()
-        for role in (MANAGER_ROLE, VIEWER_ROLE, LEGACY_ROLE, UNRELATED_ROLE):
+        for role in (
+            MANAGER_ROLE,
+            VIEWER_ROLE,
+            LEGACY_ROLE,
+            DRAWING_ROLE,
+            CNC_ROLE,
+            UNRELATED_ROLE,
+        ):
             cls._ensure_role(role)
+        for role in (DRAWING_ROLE, CNC_ROLE):
+            cls._ensure_managed_role(role)
         cls._ensure_user(MANAGER_USER, MANAGER_ROLE, almdina=True)
         cls._ensure_user(VIEWER_USER, VIEWER_ROLE)
         cls._ensure_user(LEGACY_USER, LEGACY_ROLE)
@@ -40,7 +53,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 Capability.VIEW_USERS: 1,
                 Capability.CREATE_USERS: 1,
                 Capability.EDIT_USERS: 1,
-                Capability.ASSIGN_WORKFORCE_PROFILE: 1,
+                Capability.ASSIGN_USER_ROLES: 1,
                 Capability.ENABLE_USERS: 1,
                 Capability.DISABLE_USERS: 1,
                 Capability.RESET_USER_PASSWORD: 1,
@@ -68,7 +81,18 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         for user in (MANAGER_USER, VIEWER_USER, LEGACY_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
-        for role in (MANAGER_ROLE, VIEWER_ROLE, LEGACY_ROLE, UNRELATED_ROLE):
+        frappe.db.delete(
+            "Almdina Role Metadata",
+            {"role": ["in", [DRAWING_ROLE, CNC_ROLE]]},
+        )
+        for role in (
+            MANAGER_ROLE,
+            VIEWER_ROLE,
+            LEGACY_ROLE,
+            DRAWING_ROLE,
+            CNC_ROLE,
+            UNRELATED_ROLE,
+        ):
             frappe.db.delete("Custom DocPerm", {"role": role})
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
@@ -81,6 +105,20 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             frappe.get_doc(
                 {"doctype": "Role", "role_name": role, "desk_access": 1}
             ).insert(ignore_permissions=True)
+
+    @classmethod
+    def _ensure_managed_role(cls, role: str) -> None:
+        if frappe.db.exists("Almdina Role Metadata", {"role": role}):
+            return
+        frappe.get_doc(
+            {
+                "doctype": "Almdina Role Metadata",
+                "role": role,
+                "role_uid": str(uuid.uuid4()),
+                "description": "Integration-test managed role",
+                "managed_by_almdina": 1,
+            }
+        ).insert(ignore_permissions=True)
 
     @classmethod
     def _ensure_user(cls, email: str, role: str, *, almdina: bool = False) -> None:
@@ -161,16 +199,16 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 "first_name": "عامل",
                 "last_name": "اختبار",
                 "language": "ar",
-                "roles": ["عامل رسم", "عامل CNC"],
+                "roles": [DRAWING_ROLE, CNC_ROLE],
                 "temporary_password": "SecureTemp123!",
             }
         )
         self.assertEqual(result["user"]["email"], WORKER_USER)
         self.assertEqual(
             set(result["user"]["workforce_roles"]),
-            {"عامل رسم", "عامل CNC"},
+            {DRAWING_ROLE, CNC_ROLE},
         )
-        self.assertEqual(result["user"]["profile"], "custom")
+        self.assertNotIn("profile", result["user"])
         self.assertTrue(result["user"]["enabled"])
 
         roles = set(
@@ -180,10 +218,8 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 pluck="role",
             )
         )
-        self.assertIn("عامل رسم", roles)
-        self.assertIn("عامل CNC", roles)
-        self.assertNotIn("Production Manager", roles)
-        self.assertNotIn("Accounts Management", roles)
+        self.assertIn(DRAWING_ROLE, roles)
+        self.assertIn(CNC_ROLE, roles)
 
         frappe.set_user("Administrator")
         worker = frappe.get_doc("User", WORKER_USER)
@@ -196,12 +232,12 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             WORKER_USER,
             {
                 "first_name": "عامل CNC",
-                "roles": ["عامل CNC"],
+                "roles": [CNC_ROLE],
                 "language": "ar",
             },
         )["user"]
-        self.assertEqual(updated["profile"], "cnc_operator")
-        self.assertEqual(updated["workforce_roles"], ["عامل CNC"])
+        self.assertEqual(updated["workforce_roles"], [CNC_ROLE])
+        self.assertNotIn("profile", updated)
         roles = set(
             frappe.get_all(
                 "Has Role",
@@ -209,9 +245,9 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 pluck="role",
             )
         )
-        self.assertIn("عامل CNC", roles)
+        self.assertIn(CNC_ROLE, roles)
         self.assertIn(UNRELATED_ROLE, roles)
-        self.assertNotIn("عامل رسم", roles)
+        self.assertNotIn(DRAWING_ROLE, roles)
 
         reset = reset_workforce_password(WORKER_USER, "AnotherSecure123!")
         self.assertFalse(reset["password_logged"])
@@ -225,9 +261,10 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         console = get_workforce_console(search=WORKER_USER)
         self.assertEqual(len(console["users"]), 1)
         self.assertEqual(console["users"][0]["email"], WORKER_USER)
+        self.assertNotIn("profiles", console)
         assignable = {role["name"] for role in console["roles"]}
-        self.assertIn("عامل رسم", assignable)
-        self.assertIn("عامل CNC", assignable)
+        self.assertIn(DRAWING_ROLE, assignable)
+        self.assertIn(CNC_ROLE, assignable)
         self.assertNotIn(UNRELATED_ROLE, assignable)
 
         audits = frappe.get_all(
@@ -243,23 +280,31 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             serialized = f"{row.before_json}\n{row.after_json}"
             self.assertNotIn("SecureTemp123", serialized)
             self.assertNotIn("AnotherSecure123", serialized)
+            self.assertNotIn('"profile"', serialized)
 
-    def test_legacy_profile_payload_remains_supported(self) -> None:
+    def test_role_selection_is_required_and_profile_payload_is_rejected(self) -> None:
         from almdina_erp.almdina_erp.services.workforce_service import (
             create_workforce_user,
         )
 
         frappe.set_user(MANAGER_USER)
-        result = create_workforce_user(
-            {
-                "email": WORKER_USER,
-                "first_name": "عامل",
-                "profile": "drawing_operator",
-                "temporary_password": "SecureTemp123!",
-            }
-        )
-        self.assertEqual(result["user"]["profile"], "drawing_operator")
-        self.assertEqual(result["user"]["workforce_roles"], ["عامل رسم"])
+        with self.assertRaises(frappe.ValidationError):
+            create_workforce_user(
+                {
+                    "email": WORKER_USER,
+                    "first_name": "عامل",
+                    "temporary_password": "SecureTemp123!",
+                }
+            )
+        with self.assertRaises(frappe.ValidationError):
+            create_workforce_user(
+                {
+                    "email": WORKER_USER,
+                    "first_name": "عامل",
+                    "profile": "drawing_operator",
+                    "temporary_password": "SecureTemp123!",
+                }
+            )
 
     def test_viewer_can_list_but_cannot_create(self) -> None:
         from almdina_erp.almdina_erp.services.workforce_service import (
@@ -274,7 +319,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 {
                     "email": WORKER_USER,
                     "first_name": "Denied",
-                    "roles": ["عامل رسم"],
+                    "roles": [DRAWING_ROLE],
                     "temporary_password": "DeniedSecure123!",
                 }
             )
@@ -283,6 +328,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
         frappe.set_user(LEGACY_USER)
         self.assertTrue(doctype_has_capability(Capability.VIEW_USERS))
         self.assertTrue(doctype_has_capability(Capability.CREATE_USERS))
+        self.assertTrue(doctype_has_capability(Capability.ASSIGN_USER_ROLES))
         self.assertTrue(doctype_has_capability(Capability.DISABLE_USERS))
         self.assertTrue(doctype_has_capability(Capability.RESET_USER_PASSWORD))
 
