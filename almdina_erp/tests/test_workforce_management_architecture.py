@@ -10,8 +10,10 @@ APP = ROOT / "almdina_erp"
 DOMAIN = APP / "domain" / "security" / "workforce.py"
 APPLICATION = APP / "application" / "security" / "workforce_management.py"
 REPOSITORY = APP / "infrastructure" / "frappe" / "workforce_repository.py"
+REGISTRY = APP / "infrastructure" / "frappe" / "managed_role_registry.py"
 SERVICE = APP / "services" / "workforce_service.py"
 PROVISION = APP / "application" / "security" / "provision_user.py"
+PROVISION_SERVICE = APP / "services" / "workforce_provisioning_service.py"
 PAGE = APP / "page" / "factory_workforce" / "factory_workforce.js"
 PAGE_JSON = PAGE.with_suffix(".json")
 AUDIT_JSON = APP / "doctype" / "almdina_user_audit" / "almdina_user_audit.json"
@@ -27,7 +29,18 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertNotIn("frappe.db", source)
 
     def test_runtime_uses_roles_only_and_has_no_operational_profile_model(self) -> None:
-        source = "\n".join(path.read_text(encoding="utf-8") for path in (DOMAIN, APPLICATION, REPOSITORY, SERVICE, PAGE))
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (
+                DOMAIN,
+                APPLICATION,
+                REPOSITORY,
+                SERVICE,
+                PROVISION,
+                PROVISION_SERVICE,
+                PAGE,
+            )
+        )
         for token in (
             "OperationalProfile",
             "PROFILES",
@@ -37,10 +50,12 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
             "ASSIGN_PROFILE",
             "assign_workforce_profile",
             'fieldname:"profile"',
+            '"profile":',
         ):
             self.assertNotIn(token, source)
         self.assertIn("ASSIGN_USER_ROLES", DOMAIN.read_text(encoding="utf-8"))
         self.assertIn('fieldname:"roles"', PAGE.read_text(encoding="utf-8"))
+        self.assertIn("roles=roles", PROVISION.read_text(encoding="utf-8"))
 
     def test_frappe_user_writes_and_password_updates_are_isolated(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
@@ -60,18 +75,29 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         for role in ("System Manager", "Production Manager", "Accounts Management", "عامل رسم"):
             self.assertNotIn(role, source)
 
-    def test_legacy_provisioner_is_only_a_clean_facade(self) -> None:
-        source = PROVISION.read_text(encoding="utf-8")
-        self.assertIn("workforce_provisioning_service", source)
-        self.assertNotIn("import frappe", source)
-        self.assertNotIn("update_password", source)
-        self.assertNotIn("frappe.get_doc", source)
+    def test_provisioning_is_roles_only_and_delegates_to_secured_workforce_service(self) -> None:
+        facade = PROVISION.read_text(encoding="utf-8")
+        service = PROVISION_SERVICE.read_text(encoding="utf-8")
+        self.assertIn("workforce_provisioning_service", facade)
+        self.assertIn("create_workforce_user", service)
+        self.assertIn("update_workforce_user", service)
+        self.assertIn('"roles": selected_roles', service)
+        self.assertNotIn("profile", facade.lower())
+        self.assertNotIn("profile", service.lower())
+        self.assertNotIn("import frappe", facade)
+        self.assertNotIn("update_password", facade)
 
     def test_workforce_page_uses_dynamic_multi_role_selection(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
         metadata = json.loads(PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(metadata["roles"], [])
-        for endpoint in ("get_workforce_console", "create_workforce_user", "update_workforce_user", "reset_workforce_password", "get_workforce_user_audit"):
+        for endpoint in (
+            "get_workforce_console",
+            "create_workforce_user",
+            "update_workforce_user",
+            "reset_workforce_password",
+            "get_workforce_user_audit",
+        ):
             self.assertIn(endpoint, source)
         self.assertIn("requestId", source)
         self.assertIn("@media(max-width:600px)", source)
@@ -79,15 +105,19 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn('fieldtype:"MultiSelectList"', source)
         self.assertIn('fieldname:"roles"', source)
         self.assertIn("workforce_roles", source)
+        self.assertNotIn("assign_profile", source)
+        self.assertNotIn("manage_users", source)
         self.assertNotIn("frappe.user_roles", source)
         self.assertNotIn("frappe.get_roles", source)
         self.assertNotIn('set_route("Form", "User"', source)
 
     def test_role_replacement_preserves_unmanaged_technical_roles(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
+        registry = REGISTRY.read_text(encoding="utf-8")
         self.assertIn("managed_role_names", repository)
-        self.assertIn("Almdina Role Metadata", repository)
-        self.assertIn("if row.role not in managed_roles", repository)
+        self.assertIn("managed_role_metadata", repository)
+        self.assertIn('ROLE_METADATA_DOCTYPE = "Almdina Role Metadata"', registry)
+        self.assertIn("if row.role not in managed", repository)
         self.assertIn("required = list(dict.fromkeys", repository)
         self.assertNotIn('user.set("roles", roles)', repository)
 
