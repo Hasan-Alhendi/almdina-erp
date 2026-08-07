@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
@@ -8,6 +9,9 @@ import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.services import cost_document_service
+
+
+FIXED_NOW = datetime.datetime(2026, 8, 1, 12, 0, 0)
 
 
 class TestCostDocumentServiceIntegration(unittest.TestCase):
@@ -30,6 +34,7 @@ class TestCostDocumentServiceIntegration(unittest.TestCase):
         order = self._order()
         with (
             patch.object(cost_document_service.frappe, "get_doc", return_value=order),
+            patch.object(cost_document_service, "now_datetime", return_value=FIXED_NOW),
             patch.object(
                 cost_document_service,
                 "require_document_capability",
@@ -50,11 +55,13 @@ class TestCostDocumentServiceIntegration(unittest.TestCase):
         builder.assert_called_once()
         self.assertEqual(result["kind"], "customer_invoice")
         self.assertEqual(result["order_name"], order.name)
+        self.assertEqual(result["generated_on"], FIXED_NOW)
 
     def test_internal_report_checks_read_view_and_internal_print_permissions(self) -> None:
         order = self._order()
         with (
             patch.object(cost_document_service.frappe, "get_doc", return_value=order),
+            patch.object(cost_document_service, "now_datetime", return_value=FIXED_NOW),
             patch.object(
                 cost_document_service,
                 "require_document_capability",
@@ -76,6 +83,7 @@ class TestCostDocumentServiceIntegration(unittest.TestCase):
             ],
         )
         self.assertEqual(result["kind"], "internal_cost_report")
+        self.assertEqual(result["generated_on"], FIXED_NOW)
 
     def test_permission_failure_stops_document_building(self) -> None:
         order = self._order()

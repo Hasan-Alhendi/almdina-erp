@@ -14,16 +14,14 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
     permission_impact,
 )
-from almdina_erp.almdina_erp.application.security.permission_templates import (
+from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_SCHEMA,
     PERMISSION_TRANSFER_VERSION,
     build_permission_bundle,
     build_permission_export,
     parse_permission_bundle,
     parse_permission_export,
-    permission_template_catalog,
     preview_permission_bundle,
-    template_state,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -222,7 +220,7 @@ def _bundle_preview(
 
 @frappe.whitelist()
 def get_permission_console(role: str | None = None) -> dict[str, Any]:
-    """Return the complete, least-privilege permission console payload."""
+    """Return the permission catalog, roles and secure transfer metadata."""
 
     _require_permission_management()
     roles = _repository.list_roles()
@@ -230,7 +228,6 @@ def get_permission_console(role: str | None = None) -> dict[str, Any]:
     selected = _role_payload(selected_role) if selected_role else None
     return {
         "catalog": capability_catalog_payload(),
-        "templates": permission_template_catalog(),
         "transfer": {
             "schema": PERMISSION_TRANSFER_SCHEMA,
             "version": PERMISSION_TRANSFER_VERSION,
@@ -267,24 +264,6 @@ def preview_role_permissions(
     except ValueError as error:
         frappe.throw(_(str(error)))
     return _preview_payload(role=role, before=before, after=after)
-
-
-@frappe.whitelist()
-def preview_permission_template(role: str, template_key: str) -> dict[str, Any]:
-    """Preview an optional least-privilege template without persisting it."""
-
-    _require_permission_management()
-    try:
-        before = _repository.role_state(role)["capabilities"]
-        after = template_state(template_key)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
-    return _preview_payload(
-        role=role,
-        before=before,
-        after=after,
-        source={"kind": "template", "key": str(template_key)},
-    )
 
 
 @frappe.whitelist()
@@ -505,7 +484,6 @@ __all__ = [
     "import_permission_bundle",
     "preview_permission_bundle_import",
     "preview_permission_import",
-    "preview_permission_template",
     "preview_role_permissions",
     "update_role_permissions",
 ]

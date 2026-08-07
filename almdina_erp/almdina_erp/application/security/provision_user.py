@@ -1,22 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
-
-from almdina_erp.almdina_erp.domain.security.workforce import (
-    PROFILES,
-    OperationalProfile as UserProfile,
-)
 
 
 def provision_user(
     email: str,
-    profile: str,
+    roles: Sequence[str],
     first_name: str,
     last_name: str = "",
     temporary_password: str | None = None,
     language: str = "ar",
 ) -> dict[str, Any]:
-    """Delegate the legacy seed command to the secured workforce service."""
+    """Delegate explicit role-based provisioning to the secured workforce service."""
 
     from almdina_erp.almdina_erp.services.workforce_provisioning_service import (
         provision_user as execute,
@@ -24,7 +20,7 @@ def provision_user(
 
     return execute(
         email=email,
-        profile=profile,
+        roles=roles,
         first_name=first_name,
         last_name=last_name,
         temporary_password=temporary_password,
@@ -32,4 +28,4 @@ def provision_user(
     )
 
 
-__all__ = ["PROFILES", "UserProfile", "provision_user"]
+__all__ = ["provision_user"]

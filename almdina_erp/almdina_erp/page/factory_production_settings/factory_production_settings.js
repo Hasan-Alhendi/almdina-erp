@@ -94,8 +94,8 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
                         [__("رسم القشاط اليدوي"), `${esc(values.default_special_manual_edge_fee_usd)} USD`],
                         [__("هامش الدرف الخاصة"), `${esc(values.default_special_margin_percent)}%`],
                     ])}
-                    ${sectionCard("production", __("ضوابط الإنتاج"), __("المسار الافتراضي والاستثناءات التشغيلية الحساسة."), [
-                        [__("مسار الإنتاج الافتراضي"), values.default_production_routing || "—"],
+                    ${sectionCard("production", __("ضوابط الإنتاج"), __("يمكن ترك المسار الافتراضي فارغًا وبناء المسارات من شاشة إدارة المسارات. عند إرسال الطلب للإنتاج يجب اختيار مسار فعلي."), [
+                        [__("مسار الإنتاج الافتراضي"), values.default_production_routing || __("غير محدد")],
                         [__("تجاوز تسلسل المراحل"), values.allow_stage_override ? __("مسموح") : __("غير مسموح")],
                         [__("اعتماد قطع غير موزعة"), values.allow_unplaced_approval ? __("مسموح") : __("غير مسموح")],
                     ])}
@@ -137,7 +137,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
             {fieldname:"default_special_manual_edge_fee_usd",fieldtype:"Currency",label:__("رسم القشاط اليدوي / قطعة"),default:values.default_special_manual_edge_fee_usd,reqd:1},
             {fieldname:"default_special_margin_percent",fieldtype:"Percent",label:__("هامش الدرف الخاصة"),default:values.default_special_margin_percent,reqd:1},
         ] : [
-            {fieldname:"default_production_routing",fieldtype:"Select",label:__("مسار الإنتاج الافتراضي"),options:(current.routing_options || []).join("\n"),default:values.default_production_routing,reqd:1},
+            {fieldname:"default_production_routing",fieldtype:"Select",label:__("مسار الإنتاج الافتراضي (اختياري)"),options:["", ...(current.routing_options || [])].join("\n"),default:values.default_production_routing || "",reqd:0},
             {fieldname:"allow_stage_override",fieldtype:"Check",label:__("السماح بتجاوز تسلسل المراحل"),default:values.allow_stage_override},
             {fieldname:"allow_unplaced_approval",fieldtype:"Check",label:__("السماح الاستثنائي باعتماد قطع غير موزعة"),default:values.allow_unplaced_approval},
         ];

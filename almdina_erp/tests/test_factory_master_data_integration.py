@@ -125,6 +125,9 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             if fallback:
                 settings.default_production_routing = fallback[0]
                 settings.save(ignore_permissions=True)
+            else:
+                settings.default_production_routing = ""
+                settings.save(ignore_permissions=True)
         if frappe.db.exists("Production Routing", ROUTING_NAME):
             frappe.delete_doc("Production Routing", ROUTING_NAME, force=True, ignore_permissions=True)
         if frappe.db.exists("Edge Banding Type", EDGE_NAME):
@@ -162,11 +165,10 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             "default_cutting_cost_per_board_usd": self.original_settings[
                 "default_cutting_cost_per_board_usd"
             ],
-        }
-        if self.original_settings["default_production_routing"]:
-            restore["default_production_routing"] = self.original_settings[
+            "default_production_routing": self.original_settings[
                 "default_production_routing"
-            ]
+            ] or "",
+        }
         update_production_settings(restore)
         self._delete_test_records()
         frappe.db.delete(
@@ -230,6 +232,8 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
                         "doctype": "Production Routing Stage",
                         "sequence": 10,
                         "stage_type": "Cutting",
+                        "department_label": "القص",
+                        "operational_role": ROUTING_ROLE,
                         "required": 1,
                         "auto_complete_if_not_applicable": 0,
                     },
@@ -237,6 +241,8 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
                         "doctype": "Production Routing Stage",
                         "sequence": 20,
                         "stage_type": "Edge Banding",
+                        "department_label": "التقشيط",
+                        "operational_role": ROUTING_ROLE,
                         "required": 1,
                         "auto_complete_if_not_applicable": 1,
                     },
@@ -244,6 +250,7 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             }
         ).insert()
         self.assertEqual(routing.name, ROUTING_NAME)
+        self.assertEqual(routing.stages[0].operational_role, ROUTING_ROLE)
         set_master_data_disabled("Production Routing", ROUTING_NAME, 1)
         self.assertEqual(
             frappe.db.get_value("Production Routing", ROUTING_NAME, "disabled"),
@@ -267,7 +274,7 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
             {
                 "default_production_routing": self.original_settings[
                     "default_production_routing"
-                ]
+                ] or ""
             }
         )
         frappe.set_user(ROUTING_USER)

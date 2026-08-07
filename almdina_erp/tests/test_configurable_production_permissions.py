@@ -61,10 +61,15 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertNotIn("ADMIN_ROLES", source)
         self.assertNotIn("require_stage_assignee_or_admin", source)
 
-    def test_operational_roles_are_not_action_authorization(self) -> None:
+    def test_operational_roles_come_from_routing_not_stage_type_constants(self) -> None:
         source = AUTHORIZATION.read_text(encoding="utf-8")
-        self.assertIn("STAGE_ROLE_BY_TYPE", source)
-        self.assertIn("operational department", source)
+        self.assertIn("assert_enabled_user_has_role", source)
+        self.assertIn("get_users_for_role", source)
+        self.assertNotIn("STAGE_ROLE_BY_TYPE", source)
+        self.assertNotIn("عامل شريون", source)
+        self.assertNotIn("عامل رسم", source)
+        self.assertNotIn("عامل CNC", source)
+        self.assertNotIn("عامل تقشيط", source)
         self.assertNotIn("DISPATCH_ROLES", source)
         self.assertNotIn("ADMIN_ROLES", source)
         self.assertNotIn("STAGE_ADMIN_ROLES", source)

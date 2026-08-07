@@ -118,12 +118,12 @@ class TestAuthorizationDomain(unittest.TestCase):
             {
                 Capability.VIEW_ORDERS,
                 Capability.REASSIGN_WORKER,
-                Capability.MANAGE_FACTORY_SETTINGS,
+                Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
             }
         )
         self.assertEqual(navigation["profile"], "full")
-        self.assertEqual(navigation["home_page"], "")
-        self.assertEqual(navigation["default_route"], "/desk")
+        self.assertEqual(navigation["home_page"], "almdina-erp")
+        self.assertEqual(navigation["default_route"], "/desk/almdina-erp")
         self.assertIn(WORKSPACE_MAIN, navigation["workspaces"])
         self.assertIn(WORKSPACE_SHOP_FLOOR, navigation["workspaces"])
         self.assertIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])

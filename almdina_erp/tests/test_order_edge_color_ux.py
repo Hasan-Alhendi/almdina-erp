@@ -22,7 +22,7 @@ def test_order_has_editable_text_edge_color_below_default_edge_type():
     assert fields["edge_color"]["fieldtype"] == "Data"
     assert not fields["edge_color"].get("read_only")
     assert doc["field_order"].index("default_edge_type") < doc["field_order"].index("edge_color")
-    assert doc["field_order"].index("edge_color") < doc["field_order"].index("cutting_settings_column")
+    assert doc["field_order"].index("edge_color") < doc["field_order"].index("pieces_section")
 
 
 def test_edge_color_is_defaulted_from_selected_edge_type_but_remains_editable():

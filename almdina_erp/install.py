@@ -18,42 +18,16 @@ EDGE_BANDING_TYPES = (
     {"name":"قشاط 4سم لميع يدوي","english":"4cm Glossy Manual Edge","width":4,"finish":"Glossy","method":"Manual","rate":4.0},
 )
 
-ROLES = (
-    "Order Entry",
-    "Cutting Operator",
-    "Edge Operator",
-    "Production Manager",
-    "Accounts Management",
-    "عامل رسم",
-    "عامل شريون",
-    "عامل CNC",
-    "عامل تقشيط",
-)
-
-# Convenience records used only by explicit administrative seed commands.
-OPERATOR_USERS = (
-    {"email": "drawing@almdina.local", "first_name": "عامل", "last_name": "رسم", "profile": "drawing_operator"},
-    {"email": "sharyoun@almdina.local", "first_name": "عامل", "last_name": "شريون", "profile": "sharyoun_operator"},
-    {"email": "cnc@almdina.local", "first_name": "عامل", "last_name": "CNC", "profile": "cnc_operator"},
-    {"email": "taqsheet@almdina.local", "first_name": "عامل", "last_name": "تقشيط", "profile": "sanding_operator"},
-)
-
-ORDER_ENTRY_USERS = (
-    {
-        "email": "orders@almdina.local",
-        "first_name": "موظف",
-        "last_name": "الطلبات",
-        "profile": "order_entry",
-    },
-)
-
-DEFAULT_ROUTING_NAME = "MDF Cutting Baseline v1"
-
 
 def sync_setup() -> None:
-    seed_roles()
+    """Synchronize product defaults without inventing security or workflow policy.
+
+    Roles, user-role assignments and production routings are administrator-owned
+    configuration. Install and migrate must never recreate them from source-code
+    names. Existing records are left untouched.
+    """
+
     seed_edge_banding_types()
-    seed_default_routing()
     seed_settings_defaults()
     sync_plan_recalculation_state()
     sync_dual_plan_json_backfill()
@@ -68,12 +42,6 @@ def after_install() -> None:
 
 def after_migrate() -> None:
     sync_setup()
-
-
-def seed_roles() -> None:
-    for role_name in ROLES:
-        if not frappe.db.exists("Role", role_name):
-            frappe.get_doc({"doctype":"Role","role_name":role_name}).insert(ignore_permissions=True)
 
 
 def sync_replacement_board_descriptions() -> None:
@@ -152,47 +120,6 @@ def sync_plan_board_descriptions() -> None:
     )
 
 
-def _require_explicit_password(password: str | None) -> str:
-    password = str(password or "")
-    if not password:
-        frappe.throw(
-            "Pass password explicitly. Almdina ERP does not store a default user password in source code."
-        )
-    return password
-
-
-def _seed_users(rows: tuple[dict, ...], password: str | None) -> list[str]:
-    from almdina_erp.almdina_erp.application.security.provision_user import provision_user
-
-    seed_roles()
-    password = _require_explicit_password(password)
-    results: list[str] = []
-    for row in rows:
-        result = provision_user(
-            email=row["email"],
-            profile=row["profile"],
-            first_name=row["first_name"],
-            last_name=row.get("last_name", ""),
-            temporary_password=password,
-        )
-        action = "created" if result["created"] else "updated"
-        results.append(f"{action}:{row['email']}")
-    frappe.db.commit()
-    return results
-
-
-def seed_operator_users(password: str | None = None) -> list[str]:
-    """Explicitly create the four shop-floor users with a runtime password."""
-
-    return _seed_users(OPERATOR_USERS, password)
-
-
-def seed_order_entry_users(password: str | None = None) -> list[str]:
-    """Explicitly create the order-entry user with a runtime password."""
-
-    return _seed_users(ORDER_ENTRY_USERS, password)
-
-
 def seed_edge_banding_types() -> None:
     for row in EDGE_BANDING_TYPES:
         if frappe.db.exists("Edge Banding Type", row["name"]):
@@ -209,18 +136,6 @@ def seed_edge_banding_types() -> None:
         doc.save(ignore_permissions=True)
 
 
-def seed_default_routing() -> None:
-    if frappe.db.exists("Production Routing", DEFAULT_ROUTING_NAME):
-        return
-    routing = frappe.new_doc("Production Routing")
-    routing.routing_name = DEFAULT_ROUTING_NAME
-    routing.disabled = 0
-    routing.append("stages", {"sequence":10,"stage_type":"Review / Preparation","department_label":"مراجعة وتجهيز","operational_role":"Production Manager","required":1,"auto_complete_if_not_applicable":1})
-    routing.append("stages", {"sequence":20,"stage_type":"Cutting","department_label":"قص","operational_role":"Cutting Operator","required":1,"auto_complete_if_not_applicable":0})
-    routing.append("stages", {"sequence":30,"stage_type":"Edge Banding","department_label":"قشاط","operational_role":"Edge Operator","required":1,"auto_complete_if_not_applicable":1})
-    routing.insert(ignore_permissions=True)
-
-
 def seed_settings_defaults() -> None:
     settings = frappe.get_single("Almdina ERP Settings")
     changed = False
@@ -232,7 +147,6 @@ def seed_settings_defaults() -> None:
         "default_cutting_machine_type": "Auto",
         "default_optimization_time_limit_sec": 10,
         "optimal_search_piece_limit": 40,
-        "default_production_routing": DEFAULT_ROUTING_NAME,
         "min_remnant_width_mm": 300,
         "min_remnant_length_mm": 300,
         "min_remnant_area_m2": 0.09,

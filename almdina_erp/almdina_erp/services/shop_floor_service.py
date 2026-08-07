@@ -2,7 +2,7 @@
 
 New code must use the focused command, query, DXF, or infrastructure modules.
 This facade preserves historical whitelisted endpoints and stable routing helpers
-without exposing removed role-based business authorization symbols.
+without exposing role-name authorization or assignment policy.
 """
 
 from __future__ import annotations
@@ -23,9 +23,6 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     resolve_shop_floor_stage_type,
     stage_sequence,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_authorization import (
-    STAGE_ROLE_BY_TYPE,
-)
 
 
 _COMMANDS = "almdina_erp.almdina_erp.services.shop_floor_commands"
@@ -35,20 +32,11 @@ _DISPATCH = "almdina_erp.almdina_erp.services.order_dispatch_service"
 _PRODUCTION = "almdina_erp.almdina_erp.services.production_service"
 
 
-def _delegate(
-    module_path: str,
-    function_name: str,
-    *args: Any,
-    **kwargs: Any,
-) -> Any:
-    function = getattr(import_module(module_path), function_name)
-    return function(*args, **kwargs)
+def _delegate(module_path: str, function_name: str, *args: Any, **kwargs: Any) -> Any:
+    return getattr(import_module(module_path), function_name)(*args, **kwargs)
 
 
-def _public_delegate(
-    module_path: str,
-    function_name: str,
-) -> Callable[..., Any]:
+def _public_delegate(module_path: str, function_name: str) -> Callable[..., Any]:
     def delegated(*args: Any, **kwargs: Any) -> Any:
         return _delegate(module_path, function_name, *args, **kwargs)
 
@@ -58,23 +46,16 @@ def _public_delegate(
     return frappe.whitelist()(delegated)
 
 
-# Historical API paths remain valid, but every call reaches the canonical
-# capability-protected service. No role-based authorization is owned here.
 get_shop_floor_context = _public_delegate(_QUERIES, "get_shop_floor_context")
 get_dispatch_options = _public_delegate(_QUERIES, "get_dispatch_options")
 get_revert_targets = _public_delegate(_QUERIES, "get_revert_targets")
 get_my_inbox = _public_delegate(_QUERIES, "get_my_inbox")
 get_my_archive = _public_delegate(_QUERIES, "get_my_archive")
-get_order_shop_floor_detail = _public_delegate(
-    _QUERIES,
-    "get_order_shop_floor_detail",
-)
-
+get_order_shop_floor_detail = _public_delegate(_QUERIES, "get_order_shop_floor_detail")
 mark_dxf_exported = _public_delegate(_DXF, "mark_dxf_exported")
 upload_production_dxf = _public_delegate(_DXF, "upload_production_dxf")
 recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")
 approve_production_dxf = _public_delegate(_DXF, "approve_production_dxf")
-
 get_handoff_workers = _public_delegate(_COMMANDS, "get_handoff_workers")
 get_handoff_context = _public_delegate(_COMMANDS, "get_handoff_context")
 start_my_stage = _public_delegate(_COMMANDS, "start_my_stage")
@@ -93,10 +74,9 @@ def sync_order_status(order_name: str) -> str:
     return _delegate(_PRODUCTION, "sync_order_status", order_name)
 
 
-# Read-only routing aliases are retained for older Python callers. STAGE_ROLE
-# describes operational assignment eligibility, never business authorization.
+# Read-only lifecycle aliases remain for older Python callers. Operational role
+# eligibility now comes only from each configured Production Routing stage.
 PATH_SEQUENCE = PRODUCTION_PATHS
-STAGE_ROLE = STAGE_ROLE_BY_TYPE
 STAGE_DEPARTMENT = STAGE_DEPARTMENTS
 STAGE_ORDER_STATUS = SHOP_FLOOR_ORDER_STATUSES
 DEPARTMENT_STATUS_MAP = DEPARTMENT_STATUS_BY_STAGE_STATUS

@@ -77,9 +77,17 @@ def _finite_positive(value: Any, label: str) -> float:
 
 
 def _validate_routing(name: Any) -> str:
+    """Validate an optional default routing.
+
+    A factory may intentionally have no default routing while administrators are
+    still defining roles and production paths. Dispatch remains responsible for
+    requiring an explicit configured route when work is actually sent to the
+    shop floor.
+    """
+
     routing_name = str(name or "").strip()
     if not routing_name:
-        frappe.throw(_("Default Production Routing is required."), frappe.ValidationError)
+        return ""
     routing = frappe.db.get_value(
         "Production Routing",
         routing_name,
