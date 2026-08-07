@@ -5,6 +5,8 @@ from typing import Any
 import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
+    CAPABILITY_CATALOG,
+    PRODUCTION_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
     REPORTING_CAPABILITIES,
@@ -49,7 +51,27 @@ _BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
     | PRODUCTION_SUPERVISOR_CAPABILITIES
     | REPORTING_CAPABILITIES
 )
+_STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
+    {
+        Capability.RECORD_INCIDENT,
+        Capability.CREATE_REPLACEMENT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
+        Capability.VIEW_FINANCIAL_REPORTS,
+    }
+)
 _READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
+_MUTATING_PERMISSION_TYPES = frozenset({"create", "write", "delete"})
+
+_DCO_PERMISSION_CAPABILITIES = {
+    definition.permission_type: capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.applies_to == "Door Cutting Order"
+}
+_REPLACEMENT_PERMISSION_CAPABILITIES = {
+    definition.permission_type: capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.applies_to == "Replacement Piece"
+}
 
 
 def _resolved_permission_type(
@@ -61,11 +83,12 @@ def _resolved_permission_type(
     return ptype if ptype is not None else permission_type
 
 
+def _has(user: str, capability: str) -> bool:
+    return doctype_has_capability(capability, user=user)
+
+
 def _has_any(user: str, capabilities: frozenset[str]) -> bool:
-    return any(
-        doctype_has_capability(capability, user=user)
-        for capability in capabilities
-    )
+    return any(_has(user, capability) for capability in capabilities)
 
 
 def _requires_assigned_scope(user: str) -> bool:
@@ -99,18 +122,15 @@ def _assigned_order_exists(user: str, order_name: str | None) -> bool:
     )
 
 
-def _assigned_read_decision(
+def _scoped_read_decision(
     *,
     user: str,
-    permission_type: str | None,
+    required_capability: str,
     order_name: str | None,
 ) -> bool:
-    # Frappe v16 requires has_permission hooks to return an explicit boolean.
-    # Standard DocPerm checks run separately, so non-read actions only need this
-    # hook to avoid adding an extra restriction.
-    if permission_type not in _READ_PERMISSION_TYPES:
+    if user == "Administrator":
         return True
-    if user == "Guest":
+    if user == "Guest" or not _has(user, required_capability):
         return False
     if not _requires_assigned_scope(user):
         return True
@@ -119,6 +139,10 @@ def _assigned_read_decision(
 
 def door_cutting_order_query(user: str | None = None) -> str:
     user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has(user, Capability.VIEW_ORDERS):
+        return "1=0"
     if not _requires_assigned_scope(user):
         return ""
     return (
@@ -130,6 +154,10 @@ def door_cutting_order_query(user: str | None = None) -> str:
 
 def production_stage_query(user: str | None = None) -> str:
     user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has_any(user, _STAGE_READ_CAPABILITIES):
+        return "1=0"
     if not _requires_assigned_scope(user):
         return ""
     return f"`tabProduction Stage`.assigned_to = {frappe.db.escape(user)}"
@@ -137,6 +165,10 @@ def production_stage_query(user: str | None = None) -> str:
 
 def cutting_plan_query(user: str | None = None) -> str:
     user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has(user, Capability.VIEW_CUTTING_PLAN):
+        return "1=0"
     if not _requires_assigned_scope(user):
         return ""
     return (
@@ -148,6 +180,10 @@ def cutting_plan_query(user: str | None = None) -> str:
 
 def replacement_piece_query(user: str | None = None) -> str:
     user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has(user, Capability.VIEW_REPLACEMENTS):
+        return "1=0"
     if not _requires_assigned_scope(user):
         return ""
     return (
@@ -164,11 +200,28 @@ def door_cutting_order_has_permission(
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
-    return _assigned_read_decision(
-        user=resolved_user,
-        permission_type=_resolved_permission_type(ptype, permission_type),
-        order_name=getattr(doc, "name", None),
-    )
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_ORDERS,
+            order_name=getattr(doc, "name", None),
+        )
+    if resolved_type == "delete":
+        # Orders are lifecycle records. There is intentionally no business
+        # capability that allows physical deletion from the Desk UI.
+        return False
+
+    required = _DCO_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
+    if required:
+        return _has(resolved_user, required)
+
+    # Unknown native permission types remain subject to Frappe's own role checks;
+    # this hook never grants them.
+    return resolved_type not in _MUTATING_PERMISSION_TYPES
 
 
 def production_stage_has_permission(
@@ -179,13 +232,20 @@ def production_stage_has_permission(
 ) -> bool:
     resolved_user = user or frappe.session.user
     resolved_type = _resolved_permission_type(ptype, permission_type)
-    if resolved_type not in _READ_PERMISSION_TYPES:
+
+    if resolved_user == "Administrator":
         return True
-    if resolved_user == "Guest":
+    if resolved_type in _READ_PERMISSION_TYPES:
+        if not _has_any(resolved_user, _STAGE_READ_CAPABILITIES):
+            return False
+        if not _requires_assigned_scope(resolved_user):
+            return True
+        return bool(getattr(doc, "assigned_to", None) == resolved_user)
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        # Stage mutation is command-driven (start/handoff/reassign), never a raw
+        # Production Stage form write.
         return False
-    if not _requires_assigned_scope(resolved_user):
-        return True
-    return bool(getattr(doc, "assigned_to", None) == resolved_user)
+    return True
 
 
 def cutting_plan_has_permission(
@@ -195,11 +255,20 @@ def cutting_plan_has_permission(
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
-    return _assigned_read_decision(
-        user=resolved_user,
-        permission_type=_resolved_permission_type(ptype, permission_type),
-        order_name=getattr(doc, "door_cutting_order", None),
-    )
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_CUTTING_PLAN,
+            order_name=getattr(doc, "door_cutting_order", None),
+        )
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        # Plans are immutable/service-managed records.
+        return False
+    return True
 
 
 def replacement_piece_has_permission(
@@ -209,11 +278,25 @@ def replacement_piece_has_permission(
     permission_type: str | None = None,
 ) -> bool:
     resolved_user = user or frappe.session.user
-    return _assigned_read_decision(
-        user=resolved_user,
-        permission_type=_resolved_permission_type(ptype, permission_type),
-        order_name=getattr(doc, "door_cutting_order", None),
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_REPLACEMENTS,
+            order_name=getattr(doc, "door_cutting_order", None),
+        )
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        return False
+
+    required = _REPLACEMENT_PERMISSION_CAPABILITIES.get(
+        str(resolved_type or "")
     )
+    if required:
+        return _has(resolved_user, required)
+    return True
 
 
 __all__ = [
