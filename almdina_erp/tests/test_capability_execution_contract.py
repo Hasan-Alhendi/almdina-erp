@@ -36,6 +36,11 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
             Capability.EDIT_FACTORY_COST_DEFAULTS,
             Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+            Capability.VIEW_ROLES,
+            Capability.CREATE_ROLES,
+            Capability.EDIT_ROLES,
+            Capability.DELETE_ROLES,
+            Capability.MANAGE_PERMISSIONS,
         ):
             self.assertIn(capability, CAPABILITY_CATALOG)
         self.assertNotIn("manage_users", CAPABILITY_CATALOG)
