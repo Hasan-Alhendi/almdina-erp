@@ -12,9 +12,8 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-    FrappePermissionMatrixRepository,
-)
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import managed_role_names
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import FrappePermissionMatrixRepository
 
 
 BOOTSTRAP_SOURCE = "Almdina legacy permission upgrade bootstrap"
@@ -47,13 +46,6 @@ def _has_permission_audit(role: str) -> bool:
 
 
 def _has_assigned_legacy_user(role: str) -> bool:
-    """Return whether a real user still depends on one historical role.
-
-    Fresh installations create the historical Role records for compatibility,
-    but an unassigned role must remain empty.  The bootstrap is an upgrade aid
-    for existing users, not a hidden permission template for future users.
-    """
-
     if not frappe.db.exists("DocType", "Has Role"):
         return False
     return bool(
@@ -68,12 +60,7 @@ def _has_assigned_legacy_user(role: str) -> bool:
     )
 
 
-def _has_explicit_capability_grant(
-    role: str,
-    doctypes: list[str],
-) -> bool:
-    """Detect a matrix that was already configured with the capability model."""
-
+def _has_explicit_capability_grant(role: str, doctypes: list[str]) -> bool:
     if not doctypes or not frappe.db.exists("DocType", "Custom DocPerm"):
         return False
     fields_by_doctype = _custom_fields_by_doctype()
@@ -83,36 +70,31 @@ def _has_explicit_capability_grant(
             continue
         rows = frappe.get_all(
             "Custom DocPerm",
-            filters={
-                "parent": doctype,
-                "role": role,
-                "permlevel": 0,
-            },
+            filters={"parent": doctype, "role": role, "permlevel": 0},
             fields=fields,
         )
-        if any(
-            bool(row.get(fieldname))
-            for row in rows
-            for fieldname in fields
-        ):
+        if any(bool(row.get(fieldname)) for row in rows for fieldname in fields):
             return True
     return False
 
 
 def _has_explicit_matrix(role: str, doctypes: list[str]) -> bool:
-    # Console saves are append-only audited, including an intentionally empty
-    # matrix. Direct Role Permission Manager configurations are recognized when
-    # at least one of the new custom capability columns is enabled.
-    return _has_permission_audit(role) or _has_explicit_capability_grant(
-        role,
-        doctypes,
-    )
+    return _has_permission_audit(role) or _has_explicit_capability_grant(role, doctypes)
 
 
 def bootstrap_legacy_role_permissions() -> list[str]:
-    """Upgrade assigned historical roles without seeding fresh role records."""
+    """Upgrade assigned historical roles only after they enter the Almdina registry.
+
+    The early pre-model patch may call this before the metadata DocType exists or
+    before historical roles have been adopted. In that case the function safely
+    skips them; the post-model workforce migration invokes it again after adoption.
+    """
 
     if not frappe.db.exists("DocType", "Custom DocPerm"):
+        return []
+
+    registered = managed_role_names()
+    if not registered:
         return []
 
     doctypes = _managed_doctypes()
@@ -120,6 +102,8 @@ def bootstrap_legacy_role_permissions() -> list[str]:
     applied: list[str] = []
 
     for role in legacy_roles():
+        if role not in registered:
+            continue
         if not frappe.db.exists("Role", role):
             continue
         if not _has_assigned_legacy_user(role):
