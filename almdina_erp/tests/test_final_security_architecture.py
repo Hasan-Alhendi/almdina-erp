@@ -17,7 +17,7 @@ PERMISSION_PAGE = PAGES / "factory_permissions" / "factory_permissions.js"
 CUTTING_PLAN_SERVICE = SERVICES / "cutting_plan_service.py"
 SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
-TEMPLATE_POLICY = APP / "application" / "security" / "permission_templates.py"
+TRANSFER_POLICY = APP / "application" / "security" / "permission_transfer.py"
 HOOKS = ROOT / "hooks.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
@@ -220,10 +220,7 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
                 if source.startswith(prefix)
             }
             self.assertTrue(mappings, f"Missing retired mapping for {module}")
-            self.assertTrue(
-                all(target == _RETIRED_TARGET for target in mappings.values()),
-                mappings,
-            )
+            self.assertTrue(all(target == _RETIRED_TARGET for target in mappings.values()), mappings)
             self.assertNotIn(module, loaded_js)
         for legacy_js in (
             "material_consumption_log.js",
@@ -235,10 +232,7 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
 
     def test_active_controller_and_reports_have_no_role_gates(self) -> None:
         candidates = [
-            APP
-            / "doctype"
-            / "door_cutting_order"
-            / "door_cutting_order_controller.py",
+            APP / "doctype" / "door_cutting_order" / "door_cutting_order_controller.py",
             ROOT / "permissions.py",
             *REPORTS.rglob("*.py"),
         ]
@@ -290,7 +284,6 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         page = PERMISSION_PAGE.read_text(encoding="utf-8")
         for endpoint in (
             "get_permission_console",
-            "preview_permission_template",
             "export_role_permissions",
             "export_permission_bundle",
             "preview_permission_import",
@@ -298,21 +291,21 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
             "import_permission_bundle",
             "update_role_permissions",
         ):
-            self.assertIn(
-                "_require_permission_management",
-                _function_calls(service, endpoint),
-            )
+            self.assertIn("_require_permission_management", _function_calls(service, endpoint))
         self.assertIn("confirm_sensitive", service)
         self.assertIn("confirm_self_lockout", service)
         self.assertIn("save_role_states", service)
-        self.assertIn("preview_permission_template", page)
+        self.assertNotIn("preview_permission_template", service)
+        self.assertNotIn("preview_permission_template", page)
+        self.assertNotIn("apc-template", page)
         self.assertIn("preview_permission_import", page)
         self.assertIn("export_role_permissions", page)
         self.assertIn("لن يتم الحفظ تلقائيًا", page)
-        policy = TEMPLATE_POLICY.read_text(encoding="utf-8")
+        policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)
         self.assertIn("checksum", policy)
+        self.assertNotIn("PermissionTemplate", policy)
         self.assertNotIn("frappe.user_roles", page)
 
     def test_hooks_keep_old_api_paths_on_protected_services(self) -> None:
