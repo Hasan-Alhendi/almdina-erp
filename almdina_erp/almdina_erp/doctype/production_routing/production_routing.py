@@ -8,6 +8,9 @@ from frappe.utils import cint
 from almdina_erp.almdina_erp.domain.security.role_management import (
     PROTECTED_ROLE_NAMES,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.managed_role_registry import (
+    is_managed_role,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     audit_deleted_document,
     audit_saved_document,
@@ -59,9 +62,6 @@ class ProductionRouting(Document):
                     )
                 )
 
-            # Applicability rules are not part of the current route model. Every
-            # row is therefore an executable stage; do not preserve misleading
-            # optional/auto-skip values from older schemas.
             row.required = 1
             row.auto_complete_if_not_applicable = 0
             prepared.append((row, roles))
@@ -69,9 +69,6 @@ class ProductionRouting(Document):
             stage_types.add(row.stage_type)
             row.idx = index
 
-        # Every route save and role rename locks the same Role rows in sorted
-        # order. A concurrent save therefore either finishes before the rename
-        # (and is included in it) or validates after the old role no longer exists.
         self._lock_roles(
             tuple(role for _row, roles in prepared for role in roles)
         )
@@ -79,8 +76,6 @@ class ProductionRouting(Document):
             self._validate_roles(roles, stage_type=row.stage_type)
             row.eligible_roles_json = encode_eligible_roles(roles)
             row.eligible_roles_display = eligible_roles_display(roles)
-            # Keep the first role only as a read-only compatibility snapshot for
-            # older reports and in-flight records. New authorization uses all roles.
             row.operational_role = roles[0]
 
         self._prevent_active_route_mutation()
@@ -113,6 +108,13 @@ class ProductionRouting(Document):
                         role,
                         stage_type,
                     ),
+                    frappe.ValidationError,
+                )
+            if not is_managed_role(role):
+                frappe.throw(
+                    _(
+                        "Eligible role {0} is outside the Almdina managed-role registry."
+                    ).format(role),
                     frappe.ValidationError,
                 )
             values = frappe.db.get_value(
