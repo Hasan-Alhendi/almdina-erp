@@ -2,13 +2,8 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from almdina_erp.almdina_erp.application.security.permission_matrix import (
-    normalize_capability_state,
-)
-from almdina_erp.almdina_erp.domain.security.authorization import (
-    ALL_CAPABILITIES,
-    Capability,
-)
+from almdina_erp.almdina_erp.application.security.permission_matrix import normalize_capability_state
+from almdina_erp.almdina_erp.domain.security.authorization import ALL_CAPABILITIES, Capability
 
 
 # Historical grants are migration compatibility only. They are never exposed as
@@ -21,6 +16,8 @@ _ORDER_ENTRY_GRANTS = frozenset(
         Capability.SUBMIT_ORDER,
         Capability.PRINT_MEASUREMENTS,
         Capability.PRINT_CUSTOMER_INVOICE,
+        Capability.VIEW_CUSTOMERS,
+        Capability.VIEW_EDGE_BANDING_TYPES,
     }
 )
 _PLANNING_AND_DRAWING_GRANTS = frozenset(
@@ -76,10 +73,12 @@ _PRICING_AND_DOCUMENT_GRANTS = frozenset(
         Capability.EDIT_COST_SETTINGS,
         Capability.EDIT_SPECIAL_PRICE,
         Capability.APPROVE_SPECIAL_PRICE,
+        Capability.VIEW_REPLACEMENTS,
         Capability.EDIT_REPLACEMENT_COST,
         Capability.PRINT_MEASUREMENTS,
         Capability.PRINT_CUSTOMER_INVOICE,
         Capability.PRINT_INTERNAL_COST_REPORT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
         Capability.VIEW_FINANCIAL_REPORTS,
     }
 )
@@ -121,8 +120,6 @@ FULL_ACCESS_LEGACY_ROLES = frozenset({"System Manager"})
 
 
 def legacy_role_state(role: str) -> dict[str, bool]:
-    """Return a one-time upgrade state for one historical Almdina role."""
-
     resolved = str(role or "").strip()
     if resolved in FULL_ACCESS_LEGACY_ROLES:
         capabilities = ALL_CAPABILITIES
@@ -131,15 +128,11 @@ def legacy_role_state(role: str) -> dict[str, bool]:
             capabilities = LEGACY_ROLE_CAPABILITIES[resolved]
         except KeyError as exc:
             raise ValueError(f"Unknown legacy Almdina role: {resolved}") from exc
-    return normalize_capability_state(
-        {capability: True for capability in capabilities}
-    )
+    return normalize_capability_state({capability: True for capability in capabilities})
 
 
 def legacy_roles() -> tuple[str, ...]:
-    return tuple(
-        sorted((*LEGACY_ROLE_CAPABILITIES, *FULL_ACCESS_LEGACY_ROLES))
-    )
+    return tuple(sorted((*LEGACY_ROLE_CAPABILITIES, *FULL_ACCESS_LEGACY_ROLES)))
 
 
 __all__ = [
