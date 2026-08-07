@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.application.security.permission_matrix import (
+    capability_catalog_payload,
+)
 from almdina_erp.almdina_erp.application.security.workforce_management import (
     normalize_identity,
-    profile_catalog_payload,
-    validate_profile,
+    normalize_role_selection,
     validate_temporary_password,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
@@ -16,13 +19,11 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 )
 from almdina_erp.almdina_erp.domain.security.workforce import (
     ACTION_CAPABILITIES,
-    PROFILES,
     WorkforceAction,
     WorkforceFacts,
     action_context,
     decide_workforce_action,
     expand_workforce_capabilities,
-    profile_for_key,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
@@ -39,6 +40,16 @@ def _payload(value: Any) -> dict[str, Any]:
     if isinstance(value, str):
         value = frappe.parse_json(value)
     return dict(value or {})
+
+
+def _role_values(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        value = frappe.parse_json(value)
+    if value is None:
+        return ()
+    if not isinstance(value, Iterable) or isinstance(value, (str, bytes, dict)):
+        raise ValueError("Roles must be provided as a list.")
+    return normalize_role_selection(value)
 
 
 def _bool_value(value: Any) -> bool:
@@ -102,17 +113,59 @@ def _facts(snapshot: dict[str, Any]) -> WorkforceFacts:
 
 def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
     row = dict(snapshot)
-    profile_key = str(row.get("profile") or "")
-    profile = PROFILES.get(profile_key)
-    if profile:
-        row["profile_label"] = profile.label
-    elif profile_key == "custom":
-        row["profile_label"] = _("ملف مخصص")
-    else:
-        row["profile_label"] = _("غير محدد")
+    row["roles"] = list(normalize_role_selection(row.get("roles") or ()))
+    row["role_count"] = len(row["roles"])
     row["actions"] = action_context(_granted(), facts=_facts(row))
     row.pop("is_almdina", None)
     return row
+
+
+def _capability_catalog_by_key() -> dict[str, dict[str, Any]]:
+    catalog: dict[str, dict[str, Any]] = {}
+    for group in capability_catalog_payload():
+        for item in group.get("capabilities") or ():
+            key = str(item.get("key") or "")
+            if not key:
+                continue
+            catalog[key] = {
+                **dict(item),
+                "category": str(group.get("key") or ""),
+                "category_label": str(group.get("label") or ""),
+            }
+    return catalog
+
+
+def _effective_access(snapshot: dict[str, Any]) -> dict[str, Any]:
+    roles = list(normalize_role_selection(snapshot.get("roles") or ()))
+    states = _repository.role_states(roles)
+    granted = sorted(
+        {
+            capability
+            for state in states.values()
+            for capability, enabled in state.items()
+            if enabled is True
+        }
+    )
+    catalog = _capability_catalog_by_key()
+    return {
+        "user": str(snapshot.get("email") or ""),
+        "roles": roles,
+        "role_details": [
+            {
+                "role": role,
+                "enabled_count": sum(
+                    1 for enabled in states.get(role, {}).values() if enabled is True
+                ),
+            }
+            for role in roles
+        ],
+        "capabilities": [
+            catalog[key]
+            for key in granted
+            if key in catalog
+        ],
+        "capability_count": len(granted),
+    }
 
 
 @frappe.whitelist()
@@ -136,7 +189,7 @@ def get_workforce_console(
     )
     granted = _granted()
     return {
-        "profiles": profile_catalog_payload(),
+        "roles": _repository.list_assignable_roles(),
         "users": [_present_user(user) for user in users],
         "permissions": {
             capability: capability in granted
@@ -164,14 +217,14 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
             last_name=values.get("last_name"),
             language=values.get("language") or "ar",
         )
-        profile_key = validate_profile(values.get("profile"))
+        roles = _role_values(values.get("roles"))
         password = validate_temporary_password(
             values.get("temporary_password"),
             email=identity.email,
         )
         created = _repository.create_user(
             identity=identity,
-            profile=profile_for_key(profile_key),
+            roles=roles,
             temporary_password=password,
         )
     except ValueError as error:
@@ -183,9 +236,7 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
         action="Created",
         before=None,
         after=created,
-        summary=_("Created Almdina workforce account with operational profile {0}.").format(
-            profile_key
-        ),
+        summary=_("Created Almdina workforce account with direct role assignment."),
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(created), "audit": audit_name}
@@ -195,7 +246,7 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
 def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
     _require_any_action_capability(
         WorkforceAction.EDIT,
-        WorkforceAction.ASSIGN_PROFILE,
+        WorkforceAction.ASSIGN_ROLES,
     )
     user_name = str(user or "").strip().lower()
     values = _payload(data)
@@ -208,11 +259,11 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             last_name=values.get("last_name", before["last_name"]),
             language=values.get("language", before["language"]),
         )
-        profile_supplied = "profile" in values and values.get("profile") not in (None, "")
-        profile_key = (
-            validate_profile(values.get("profile"))
-            if profile_supplied
-            else str(before.get("profile") or "")
+        roles_supplied = "roles" in values
+        selected_roles = (
+            _role_values(values.get("roles"))
+            if roles_supplied
+            else tuple(before.get("roles") or ())
         )
     except ValueError as error:
         _raise_value_error(error)
@@ -225,13 +276,15 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             identity.language != before["language"],
         )
     )
-    profile_changed = profile_supplied and profile_key != before["profile"]
+    roles_changed = roles_supplied and frozenset(selected_roles) != frozenset(
+        before.get("roles") or ()
+    )
     facts = _facts(before)
     if identity_changed:
         _require_action(WorkforceAction.EDIT, facts=facts)
-    if profile_changed:
-        _require_action(WorkforceAction.ASSIGN_PROFILE, facts=facts)
-    if not identity_changed and not profile_changed:
+    if roles_changed:
+        _require_action(WorkforceAction.ASSIGN_ROLES, facts=facts)
+    if not identity_changed and not roles_changed:
         return {"user": _present_user(before), "audits": []}
 
     current = before
@@ -249,21 +302,16 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
                     changed_by=str(frappe.session.user),
                 )
             )
-        if profile_changed:
-            profile_before = current
-            current = _repository.assign_profile(
-                user_name,
-                profile_for_key(profile_key),
-            )
+        if roles_changed:
+            roles_before = current
+            current = _repository.assign_roles(user_name, selected_roles)
             audits.append(
                 _repository.record_audit(
                     user_name=user_name,
-                    action="Profile Changed",
-                    before=profile_before,
+                    action="Roles Changed",
+                    before=roles_before,
                     after=current,
-                    summary=_("Changed operational profile to {0}.").format(
-                        profile_key
-                    ),
+                    summary=_("Changed user roles directly from the workforce console."),
                     changed_by=str(frappe.session.user),
                 )
             )
@@ -272,6 +320,18 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
         raise AssertionError("frappe.throw must interrupt execution")
 
     return {"user": _present_user(current), "audits": audits}
+
+
+@frappe.whitelist()
+def get_workforce_user_access(user: str) -> dict[str, Any]:
+    _require_action(WorkforceAction.VIEW)
+    user_name = str(user or "").strip().lower()
+    try:
+        snapshot = _repository.get_user(user_name)
+        return _effective_access(snapshot)
+    except ValueError as error:
+        _raise_value_error(error)
+        raise AssertionError("frappe.throw must interrupt execution")
 
 
 @frappe.whitelist()
@@ -352,6 +412,7 @@ def get_workforce_user_audit(user: str, limit: int = 30) -> dict[str, Any]:
 __all__ = [
     "create_workforce_user",
     "get_workforce_console",
+    "get_workforce_user_access",
     "get_workforce_user_audit",
     "reset_workforce_password",
     "set_workforce_user_enabled",

@@ -48,7 +48,6 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn("WorkforceAction", source)
         self.assertIn("granted_capabilities", source)
         self.assertNotIn("frappe.get_roles", source)
-        self.assertNotIn("System Manager", source)
         self.assertNotIn("Production Manager", source)
         self.assertNotIn("Accounts Management", source)
         self.assertNotIn("عامل رسم", source)
@@ -60,21 +59,25 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertNotIn("update_password", source)
         self.assertNotIn("frappe.get_doc", source)
 
-    def test_workforce_page_is_role_free_responsive_and_race_safe(self) -> None:
+    def test_workforce_page_is_role_driven_responsive_and_race_safe(self) -> None:
         source = PAGE.read_text(encoding="utf-8")
         metadata = json.loads(PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(metadata["roles"], [])
         self.assertIn("get_workforce_console", source)
         self.assertIn("create_workforce_user", source)
         self.assertIn("update_workforce_user", source)
-        self.assertIn("reset_workforce_password", source)
+        self.assertIn("get_workforce_user_access", source)
         self.assertIn("get_workforce_user_audit", source)
         self.assertIn("requestId", source)
         self.assertIn("@media(max-width:600px)", source)
         self.assertIn('fieldtype:"Password"', source)
+        self.assertIn("assign_roles", source)
+        self.assertIn("aw-role-picker", source)
         self.assertNotIn("frappe.user_roles", source)
         self.assertNotIn("frappe.get_roles", source)
         self.assertNotIn('set_route("Form", "User"', source)
+        self.assertNotIn("operational profile", source.lower())
+        self.assertNotIn("الملف التشغيلي", source)
 
     def test_audit_is_append_only_private_and_password_free(self) -> None:
         metadata = json.loads(AUDIT_JSON.read_text(encoding="utf-8"))
@@ -95,11 +98,25 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn('any: ["view_users", "manage_users"]', shell)
         self.assertNotIn("frappe.user_roles", shell)
 
-    def test_profile_changes_preserve_unrelated_roles_by_construction(self) -> None:
+    def test_role_assignment_uses_permission_catalog_and_preserves_system_roles(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
-        self.assertIn("role not in MANAGED_OPERATIONAL_ROLES", repository)
-        self.assertIn("required = list(dict.fromkeys", repository)
-        self.assertNotIn("user.set(\"roles\", profile.roles)", repository)
+        self.assertIn("FrappePermissionMatrixRepository", repository)
+        self.assertIn("list_assignable_roles", repository)
+        self.assertIn("assign_roles", repository)
+        self.assertIn("row.role not in assignable", repository)
+        self.assertIn('"System Manager"', repository)
+        self.assertNotIn("OperationalProfile", repository)
+        self.assertNotIn("MANAGED_OPERATIONAL_ROLES", repository)
+
+    def test_no_operational_profile_layer_remains_in_workforce_stack(self) -> None:
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (DOMAIN, APPLICATION, REPOSITORY, SERVICE, PAGE)
+        )
+        self.assertNotIn("profile_for_key", source)
+        self.assertNotIn("infer_profile", source)
+        self.assertNotIn("profile_catalog_payload", source)
+        self.assertNotIn("assign_profile", source)
 
 
 if __name__ == "__main__":

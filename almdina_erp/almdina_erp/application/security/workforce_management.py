@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-
-from almdina_erp.almdina_erp.domain.security.workforce import PROFILES, profile_for_key
 
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -48,6 +47,31 @@ def normalize_identity(
     )
 
 
+def normalize_role_selection(roles: Iterable[Any] | None) -> tuple[str, ...]:
+    """Normalize an explicit user-role selection without role templates.
+
+    Role existence and assignability are infrastructure concerns and are checked
+    by the Frappe repository. This function only owns deterministic input shape.
+    """
+
+    if roles is None:
+        return ()
+    if isinstance(roles, (str, bytes)):
+        raise ValueError("Roles must be provided as a list.")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in roles:
+        role = " ".join(str(value or "").split())
+        if not role or role in seen:
+            continue
+        if len(role) > 140:
+            raise ValueError("Role name is too long.")
+        seen.add(role)
+        normalized.append(role)
+    return tuple(normalized)
+
+
 def validate_temporary_password(password: str, *, email: str = "") -> str:
     value = str(password or "")
     if len(value) < 10:
@@ -62,24 +86,9 @@ def validate_temporary_password(password: str, *, email: str = "") -> str:
     return value
 
 
-def profile_catalog_payload() -> list[dict[str, Any]]:
-    return [
-        {
-            "key": profile.key,
-            "label": profile.label,
-            "description": profile.description,
-            "default_workspace": profile.default_workspace,
-        }
-        for profile in PROFILES.values()
-    ]
-
-
-def validate_profile(profile_key: str) -> str:
-    return profile_for_key(profile_key).key
-
-
 def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
     source = dict(user or {})
+    roles = source.get("roles") or ()
     return {
         "email": str(source.get("email") or source.get("name") or ""),
         "first_name": str(source.get("first_name") or ""),
@@ -87,7 +96,7 @@ def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
         "full_name": str(source.get("full_name") or ""),
         "enabled": bool(source.get("enabled")),
         "language": str(source.get("language") or ""),
-        "profile": str(source.get("profile") or ""),
+        "roles": list(normalize_role_selection(roles)),
         "default_workspace": str(source.get("default_workspace") or ""),
         "default_app": str(source.get("default_app") or ""),
     }
@@ -98,7 +107,6 @@ __all__ = [
     "WorkforceIdentity",
     "audit_snapshot",
     "normalize_identity",
-    "profile_catalog_payload",
-    "validate_profile",
+    "normalize_role_selection",
     "validate_temporary_password",
 ]
