@@ -91,7 +91,7 @@ class TestRoleAdministrationArchitecture(unittest.TestCase):
         service = SERVICE.read_text(encoding="utf-8")
         self.assertIn('"doctype": "Role"', repository)
         self.assertIn('frappe.rename_doc("Role"', repository)
-        self.assertIn('frappe.delete_doc(\n            "Role"', repository)
+        self.assertIn('frappe.delete_doc("Role", resolved', repository)
         self.assertIn('"Production Routing Stage"', repository)
         self.assertIn('"Workflow Transition"', repository)
         self.assertIn('"Production Stage"', repository)
