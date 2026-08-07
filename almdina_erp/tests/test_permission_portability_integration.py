@@ -3,19 +3,11 @@ from __future__ import annotations
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from almdina_erp.almdina_erp.application.security.permission_matrix import (
-    normalize_capability_state,
-)
-from almdina_erp.almdina_erp.application.security.permission_transfer import (
-    build_permission_bundle,
-)
+from almdina_erp.almdina_erp.application.security.permission_matrix import validate_capability_dependencies
+from almdina_erp.almdina_erp.application.security.permission_transfer import build_permission_bundle
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-    FrappePermissionMatrixRepository,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
-    sync_permission_types,
-)
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import FrappePermissionMatrixRepository
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import sync_permission_types
 
 
 ROLE_ENTRY = "Almdina Portability Entry Test"
@@ -24,7 +16,7 @@ MISSING_ROLE = "Almdina Portability Missing Test"
 
 
 def manual_state(*capabilities: str) -> dict[str, bool]:
-    return normalize_capability_state(
+    return validate_capability_dependencies(
         {capability: True for capability in capabilities}
     )
 
@@ -38,49 +30,24 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
         cls.repository = FrappePermissionMatrixRepository()
         for role in (ROLE_ENTRY, ROLE_OPERATOR):
             if not frappe.db.exists("Role", role):
-                frappe.get_doc(
-                    {
-                        "doctype": "Role",
-                        "role_name": role,
-                        "desk_access": 1,
-                    }
-                ).insert(ignore_permissions=True)
+                frappe.get_doc({"doctype": "Role", "role_name": role, "desk_access": 1}).insert(ignore_permissions=True)
 
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
-        frappe.db.delete(
-            "Almdina Permission Audit",
-            {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]]},
-        )
-        frappe.db.delete(
-            "Custom DocPerm",
-            {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]]},
-        )
+        frappe.db.delete("Almdina Permission Audit", {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]]})
+        frappe.db.delete("Custom DocPerm", {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR, MISSING_ROLE]]})
         for role in (ROLE_ENTRY, ROLE_OPERATOR):
             if frappe.db.exists("Role", role):
-                frappe.delete_doc(
-                    "Role",
-                    role,
-                    force=True,
-                    ignore_permissions=True,
-                )
+                frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
         super().tearDownClass()
 
     def setUp(self):
         super().setUp()
         frappe.set_user("Administrator")
-        frappe.db.delete(
-            "Almdina Permission Audit",
-            {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR]]},
-        )
-        self.repository.save_role_states(
-            {
-                ROLE_ENTRY: {},
-                ROLE_OPERATOR: {},
-            }
-        )
+        frappe.db.delete("Almdina Permission Audit", {"role": ["in", [ROLE_ENTRY, ROLE_OPERATOR]]})
+        self.repository.save_role_states({ROLE_ENTRY: {}, ROLE_OPERATOR: {}})
 
     def test_full_matrix_export_preview_and_atomic_import(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
@@ -95,6 +62,8 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
                 Capability.CREATE_ORDER,
                 Capability.SUBMIT_ORDER,
                 Capability.APPROVE_ORDER,
+                Capability.VIEW_CUSTOMERS,
+                Capability.VIEW_EDGE_BANDING_TYPES,
             ),
             ROLE_OPERATOR: manual_state(
                 Capability.VIEW_ORDERS,
@@ -109,7 +78,6 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
             exported_at="2026-08-01 22:00:00",
             app_version="1.0.0-dev",
         )
-
         preview = preview_permission_bundle_import(bundle)
         self.assertEqual(preview["summary"]["role_count"], 2)
         self.assertEqual(preview["summary"]["changed_role_count"], 2)
@@ -138,9 +106,7 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
             fields=["role", "source"],
         )
         self.assertEqual(len(audits), 2)
-        self.assertTrue(
-            all(row.source == "Almdina Permission Import" for row in audits)
-        )
+        self.assertTrue(all(row.source == "Almdina Permission Import" for row in audits))
 
         exported = export_permission_bundle()
         self.assertEqual(exported["kind"], "role_matrix")
@@ -153,9 +119,7 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
         self.assertIn(ROLE_OPERATOR, exported_roles)
 
     def test_missing_target_role_aborts_before_any_write(self) -> None:
-        from almdina_erp.almdina_erp.services.permission_management_service import (
-            preview_permission_bundle_import,
-        )
+        from almdina_erp.almdina_erp.services.permission_management_service import preview_permission_bundle_import
 
         before = self.repository.role_state(ROLE_ENTRY)["capabilities"]
         bundle = build_permission_bundle(
@@ -163,6 +127,8 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
                 ROLE_ENTRY: manual_state(
                     Capability.VIEW_ORDERS,
                     Capability.CREATE_ORDER,
+                    Capability.VIEW_CUSTOMERS,
+                    Capability.VIEW_EDGE_BANDING_TYPES,
                 ),
                 MISSING_ROLE: manual_state(
                     Capability.VIEW_ORDERS,
@@ -173,19 +139,11 @@ class TestPermissionPortabilityIntegration(FrappeTestCase):
             exported_at="2026-08-01 22:00:00",
             app_version="1.0.0-dev",
         )
-
         with self.assertRaises(frappe.ValidationError):
             preview_permission_bundle_import(bundle)
-
         after = self.repository.role_state(ROLE_ENTRY)["capabilities"]
         self.assertEqual(after, before)
-        self.assertEqual(
-            frappe.db.count(
-                "Almdina Permission Audit",
-                {"role": ROLE_ENTRY},
-            ),
-            0,
-        )
+        self.assertEqual(frappe.db.count("Almdina Permission Audit", {"role": ROLE_ENTRY}), 0)
 
 
 if __name__ == "__main__":
