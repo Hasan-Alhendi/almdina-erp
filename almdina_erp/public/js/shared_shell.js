@@ -4,14 +4,13 @@
     const APP_NAME = "almdina_erp";
     const CAPABILITY_ROUTE_RULES = Object.freeze([
         { any: ["manage_permissions"], routes: ["factory-permissions", "role"] },
-        { any: ["view_users", "manage_users"], routes: ["factory-workforce"] },
+        { any: ["view_users"], routes: ["factory-workforce"] },
         {
             any: [
                 "view_factory_settings",
                 "edit_factory_cutting_defaults",
                 "edit_factory_cost_defaults",
                 "edit_factory_production_controls",
-                "manage_factory_settings",
             ],
             routes: ["factory-production-settings", "almdina-erp-settings"],
         },
@@ -130,9 +129,9 @@
 
     function syncAppDefaultRoute() {
         const nav = navigation();
-        // Only app-confined profiles should have their app card rewritten to
-        // their forced landing route. Administrator keeps the app's own route
-        // so /desk opens Desktop while the Almdina card opens its workspace.
+        // Only app-confined navigation contexts should have their app card
+        // rewritten to their configured landing route. Administrator keeps the
+        // app's own route so /desk opens Desktop while the card opens Almdina.
         if (!nav || !nav.app_only || !frappe.boot || !nav.default_route) return;
 
         if (frappe.boot.apps_data && typeof frappe.boot.apps_data === "object") {
