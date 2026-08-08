@@ -106,7 +106,17 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("planIsLocked", source)
         self.assertIn("mayEditOptimizer && !locked", source)
         self.assertIn("RECALCULATE_METHOD", controls)
-        self.assertIn("recalculate_order", controls)
+        self.assertIn(
+            '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"',
+            controls,
+        )
+        self.assertNotIn(
+            '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"',
+            controls,
+        )
+        self.assertIn("__almdinaPlanCommandBound", controls)
+        self.assertIn("scheduleSimplify", controls)
+        self.assertIn("setTextIfChanged", controls)
         self.assertIn('.off("click")', controls)
         self.assertNotIn("frm.save", controls)
         self.assertIn("secureInvoicePrint", source)
@@ -128,6 +138,10 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn('"اعتماد خطة القص"', controls)
         self.assertIn('can(frm, "approve_dxf")', controls)
         self.assertIn("plan_needs_recalculation", controls)
+        self.assertIn(
+            '"almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf"',
+            controls,
+        )
 
     def test_dxf_upload_and_replacement_are_separate_server_permissions(self) -> None:
         service = DXF_SERVICE.read_text(encoding="utf-8")
