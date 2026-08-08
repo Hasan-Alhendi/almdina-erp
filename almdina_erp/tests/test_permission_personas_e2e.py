@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    enabled_business_capabilities,
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_GO_LIVE,
     WORKSPACE_REPORTS,
@@ -9,19 +13,15 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_SHOP_FLOOR,
     build_navigation_context,
 )
-from almdina_erp.almdina_erp.application.security.permission_matrix import (
-    enabled_capabilities,
-    normalize_capability_state,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 class TestPermissionPersonasE2E(unittest.TestCase):
     def _context(self, *capabilities: str) -> tuple[dict[str, bool], dict]:
-        state = normalize_capability_state(
+        state = normalize_business_capability_state(
             {capability: True for capability in capabilities}
         )
-        navigation = build_navigation_context(enabled_capabilities(state))
+        navigation = build_navigation_context(enabled_business_capabilities(state))
         return state, navigation
 
     def test_order_entry_grants_expose_only_order_work(self) -> None:
@@ -50,6 +50,8 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             "reports",
         ):
             self.assertFalse(navigation["sections"][section], section)
+        self.assertFalse(state[Capability.VIEW_CUSTOMERS])
+        self.assertFalse(state[Capability.VIEW_EDGE_BANDING_TYPES])
         self.assertTrue(state[Capability.PRINT_CUSTOMER_INVOICE])
         self.assertTrue(state[Capability.PRINT_MEASUREMENTS])
         self.assertFalse(state[Capability.APPROVE_ORDER])
