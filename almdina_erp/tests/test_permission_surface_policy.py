@@ -11,19 +11,42 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 class TestPermissionSurfacePolicy(unittest.TestCase):
-    def test_order_entry_dependencies_do_not_expose_master_data_admin(self) -> None:
+    def test_order_entry_lookup_support_does_not_expose_master_data_admin(self) -> None:
         surfaces = build_surface_access(
             {
                 Capability.VIEW_ORDERS,
                 Capability.CREATE_ORDER,
-                Capability.VIEW_CUSTOMERS,
-                Capability.VIEW_EDGE_BANDING_TYPES,
             }
         )
         self.assertTrue(surfaces[Surface.ORDERS])
         self.assertFalse(surfaces[Surface.CUSTOMER_ADMIN])
         self.assertFalse(surfaces[Surface.EDGE_BANDING_TYPES])
         self.assertFalse(surfaces[Surface.FACTORY_MASTER_DATA])
+
+    def test_explicit_edge_view_is_visible_even_for_order_entry_role(self) -> None:
+        surfaces = build_surface_access(
+            {
+                Capability.VIEW_ORDERS,
+                Capability.CREATE_ORDER,
+                Capability.EDIT_ORDER,
+                Capability.VIEW_EDGE_BANDING_TYPES,
+            }
+        )
+        self.assertTrue(surfaces[Surface.ORDERS])
+        self.assertTrue(surfaces[Surface.EDGE_BANDING_TYPES])
+        self.assertTrue(surfaces[Surface.FACTORY_MASTER_DATA])
+        self.assertFalse(surfaces[Surface.CUSTOMER_ADMIN])
+
+    def test_explicit_customer_view_is_visible_even_for_order_entry_role(self) -> None:
+        surfaces = build_surface_access(
+            {
+                Capability.VIEW_ORDERS,
+                Capability.CREATE_ORDER,
+                Capability.VIEW_CUSTOMERS,
+            }
+        )
+        self.assertTrue(surfaces[Surface.CUSTOMER_ADMIN])
+        self.assertFalse(surfaces[Surface.EDGE_BANDING_TYPES])
 
     def test_workforce_and_permission_admin_surfaces_are_explicit(self) -> None:
         workforce = build_surface_access({Capability.VIEW_USERS})
