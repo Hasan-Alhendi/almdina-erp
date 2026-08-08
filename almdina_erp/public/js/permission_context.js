@@ -25,6 +25,7 @@
         profile: "shared",
         capabilities: Object.freeze({}),
         navigation: EMPTY_NAVIGATION,
+        surfaces: Object.freeze({}),
     });
 
     const STANDARD_CAPABILITY_PERMISSION_TYPES = Object.freeze({
@@ -44,18 +45,10 @@
     });
 
     const ORDER_MODULES = Object.freeze([
-        Object.freeze({
-            global: "AlmdinaOrderCostUX",
-        }),
-        Object.freeze({
-            global: "AlmdinaOrderPermissionRefreshUX",
-        }),
-        Object.freeze({
-            global: "AlmdinaOrderTabPermissionsUX",
-        }),
-        Object.freeze({
-            global: "AlmdinaCustomerInvoiceToolbarUX",
-        }),
+        Object.freeze({ global: "AlmdinaOrderCostUX" }),
+        Object.freeze({ global: "AlmdinaOrderPermissionRefreshUX" }),
+        Object.freeze({ global: "AlmdinaOrderTabPermissionsUX" }),
+        Object.freeze({ global: "AlmdinaCustomerInvoiceToolbarUX" }),
     ]);
 
     function normalizeNavigation(raw) {
@@ -81,23 +74,25 @@
         });
     }
 
-    function normalize(raw) {
-        if (!raw || typeof raw !== "object") return EMPTY_CONTEXT;
-
-        const source = raw.capabilities;
-        const capabilities = {};
-        if (source && typeof source === "object") {
-            Object.keys(source).forEach(capability => {
-                capabilities[String(capability)] = source[capability] === true;
+    function normalizeBooleanMap(raw) {
+        const result = {};
+        if (raw && typeof raw === "object") {
+            Object.keys(raw).forEach(key => {
+                result[String(key)] = raw[key] === true;
             });
         }
-        const navigation = normalizeNavigation(raw.navigation);
+        return Object.freeze(result);
+    }
 
+    function normalize(raw) {
+        if (!raw || typeof raw !== "object") return EMPTY_CONTEXT;
+        const navigation = normalizeNavigation(raw.navigation);
         return Object.freeze({
             version: Number.isFinite(Number(raw.version)) ? Number(raw.version) : 0,
             profile: String(raw.profile || navigation.profile || "shared"),
-            capabilities: Object.freeze(capabilities),
+            capabilities: normalizeBooleanMap(raw.capabilities),
             navigation,
+            surfaces: normalizeBooleanMap(raw.surfaces),
         });
     }
 
@@ -135,9 +130,7 @@
 
     function emitUpdatedContext() {
         window.dispatchEvent(
-            new CustomEvent("almdina:permissions-updated", {
-                detail: context,
-            })
+            new CustomEvent("almdina:permissions-updated", { detail: context })
         );
     }
 
@@ -159,7 +152,6 @@
         }).finally(() => {
             refreshPromise = null;
         });
-
         return refreshPromise;
     }
 
@@ -169,7 +161,6 @@
 
     function waitForGlobal(name, timeoutMs = 12000) {
         if (globalExists(name)) return Promise.resolve(window[name]);
-
         return new Promise((resolve, reject) => {
             const started = Date.now();
             const timer = window.setInterval(() => {
@@ -187,12 +178,7 @@
     }
 
     function requireModule(module) {
-        if (globalExists(module.global)) {
-            return Promise.resolve(window[module.global]);
-        }
-        // Protected order modules are registered through doctype_js/FormMeta.
-        // Waiting for their globals keeps the runtime independent from the
-        // mutable sites/assets volume used by container deployments.
+        if (globalExists(module.global)) return Promise.resolve(window[module.global]);
         return waitForGlobal(module.global);
     }
 
@@ -260,6 +246,9 @@
         section(sectionName) {
             return context.navigation.sections[String(sectionName || "")] === true;
         },
+        surface(surfaceName) {
+            return context.surfaces[String(surfaceName || "")] === true;
+        },
         profile() {
             return context.profile;
         },
@@ -298,8 +287,6 @@
             return;
         }
         const loading = loadOrderModules();
-        if (loading || attempts >= 100) {
-            window.clearInterval(timer);
-        }
+        if (loading || attempts >= 100) window.clearInterval(timer);
     }, 100);
 })();
