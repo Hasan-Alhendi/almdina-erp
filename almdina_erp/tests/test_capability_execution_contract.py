@@ -14,6 +14,8 @@ HOOKS = ROOT / "hooks.py"
 PLAN_PERMISSION_SERVICE = (
     ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 )
+PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+APPROVAL_SERVICE = ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 ACTION_GUARD = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
 DXF_VISIBILITY = ROOT / "public" / "js" / "shop_floor_dxf_visibility_ux.js"
 DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
@@ -51,9 +53,24 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             hooks,
         )
         self.assertIn("Capability.RECALCULATE_PLAN", service)
+        self.assertIn("Capability.EDIT_OPTIMIZER_SETTINGS", service)
         self.assertIn("require_document_capability", service)
         self.assertIn("for update", service)
         self.assertIn("assert_order_editable", service)
+
+    def test_recalculation_response_never_exposes_internal_costs(self) -> None:
+        service = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
+        self.assertIn("def _recalculation_result", service)
+        for financial_field in (
+            "mdf_cost_usd",
+            "cutting_cost_usd",
+            "edge_cost_usd",
+            "total_cost_usd",
+            "special_shape_cost_usd",
+            "customer_quote_total_usd",
+        ):
+            with self.subTest(financial_field=financial_field):
+                self.assertNotIn(financial_field, service)
 
     def test_optimizer_and_special_drawings_are_guarded_on_every_save(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
@@ -70,8 +87,9 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("get_doc_before_save", service)
         self.assertIn('raw_status == "Documented"', service)
 
-    def test_browser_actions_follow_the_same_capabilities(self) -> None:
+    def test_browser_plan_actions_do_not_depend_on_full_order_editability(self) -> None:
         source = ACTION_GUARD.read_text(encoding="utf-8")
+        controls = PLAN_CONTROLS.read_text(encoding="utf-8")
 
         for capability in (
             "recalculate_plan",
@@ -84,13 +102,32 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         ):
             with self.subTest(capability=capability):
                 self.assertIn(f'"{capability}"', source)
-        self.assertIn("orderEditable", source)
+        self.assertNotIn("orderEditable", source)
+        self.assertIn("planIsLocked", source)
+        self.assertIn("mayEditOptimizer && !locked", source)
+        self.assertIn("RECALCULATE_METHOD", controls)
+        self.assertIn("recalculate_order", controls)
+        self.assertIn('.off("click")', controls)
+        self.assertNotIn("frm.save", controls)
         self.assertIn("secureInvoicePrint", source)
         self.assertIn("AlmdinaCustomerInvoiceToolbarUX", source)
         self.assertIn("protectUnifiedPrintApi", source)
         self.assertIn("protectPlanPrintApis", source)
         self.assertIn("requestAnimationFrame", source)
         self.assertIn("MutationObserver(scheduleObserverApply)", source)
+
+    def test_plan_approval_locks_and_rejects_stale_system_plan(self) -> None:
+        service = APPROVAL_SERVICE.read_text(encoding="utf-8")
+        controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+
+        self.assertIn("Capability.APPROVE_DXF", service)
+        self.assertIn("for update", service)
+        self.assertIn("_assert_reviewed_system_plan", service)
+        self.assertIn("plan_needs_recalculation", service)
+        self.assertNotIn("force_cutting_plan_recalculation", service)
+        self.assertIn('"اعتماد خطة القص"', controls)
+        self.assertIn('can(frm, "approve_dxf")', controls)
+        self.assertIn("plan_needs_recalculation", controls)
 
     def test_dxf_upload_and_replacement_are_separate_server_permissions(self) -> None:
         service = DXF_SERVICE.read_text(encoding="utf-8")
@@ -101,14 +138,14 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.REPLACE_DXF", policy)
         self.assertIn("_validate_and_attach_dxf_file", service)
 
-    def test_shop_floor_dxf_link_uses_server_document_capabilities_not_plan_permission(self) -> None:
+    def test_shop_floor_dxf_link_uses_drawing_capabilities_not_plan_approval(self) -> None:
         source = DXF_VISIBILITY.read_text(encoding="utf-8")
         self.assertIn("DXF_CAPABILITIES", source)
         self.assertIn('"view_drawing_workspace"', source)
         self.assertIn('"export_dxf"', source)
         self.assertIn('"upload_dxf"', source)
         self.assertIn('"replace_dxf"', source)
-        self.assertIn('"approve_dxf"', source)
+        self.assertNotIn('"approve_dxf"', source)
         self.assertIn("detail.document_capabilities", source)
         self.assertNotIn('"view_cutting_plan"', source)
         self.assertNotIn('can("view_cutting_plan")', source)
