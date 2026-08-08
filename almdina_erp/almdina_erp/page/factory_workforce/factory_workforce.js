@@ -12,7 +12,15 @@ class AlmdinaWorkforceConsole {
         this.page = page;
         this.wrapper = wrapper;
         this.$main = $(wrapper).find(".layout-main-section");
-        this.state = { users: [], roles: [], permissions: {}, summary: {}, search: "", enabled: "all" };
+        this.state = {
+            users: [],
+            availableUsers: [],
+            roles: [],
+            permissions: {},
+            summary: {},
+            search: "",
+            enabled: "all",
+        };
         this.requestId = 0;
         this.searchTimer = null;
         this.installStyles();
@@ -25,13 +33,13 @@ class AlmdinaWorkforceConsole {
         const style = document.createElement("style");
         style.id = "almdina-workforce-style";
         style.textContent = `
-            .aw-shell{direction:rtl;display:grid;gap:16px;padding-bottom:30px}.aw-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 180px auto;gap:10px;align-items:end;padding:14px;background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;position:sticky;top:58px;z-index:12;box-shadow:0 4px 16px rgba(0,0,0,.04)}.aw-field label{display:block;font-weight:700;font-size:12px;color:var(--text-muted,#6b7280);margin-bottom:6px}.aw-field input,.aw-field select{width:100%;min-height:42px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px;padding:8px 12px;background:var(--control-bg,#fff)}.aw-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.aw-stat{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:14px}.aw-stat span{display:block;color:var(--text-muted,#6b7280);font-size:12px;font-weight:700}.aw-stat b{display:block;font-size:25px;margin-top:5px}.aw-list{display:grid;gap:12px}.aw-card{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.035)}.aw-card-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.aw-name{font-size:17px;font-weight:800;margin:0}.aw-email{direction:ltr;text-align:right;color:var(--text-muted,#6b7280);font-size:13px;margin-top:3px}.aw-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.aw-badge{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--subtle-fg,#f4f5f6)}.aw-badge.is-enabled{background:#e8f7ee;color:#18794e}.aw-badge.is-disabled{background:#fdecec;color:#b42318}.aw-badge.is-warning{background:#fff4d6;color:#8a5b00}.aw-role{background:#eef5ff;color:#285b9a}.aw-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aw-detail span{display:block;color:var(--text-muted,#6b7280);font-size:11px;font-weight:700}.aw-detail b{display:block;margin-top:4px;font-size:13px;overflow-wrap:anywhere}.aw-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.aw-actions .btn{min-height:38px;border-radius:9px;font-weight:700}.aw-empty{padding:42px 18px;text-align:center;border:1px dashed var(--border-color,#d7dde3);border-radius:16px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}.aw-loading{padding:46px;text-align:center;color:var(--text-muted,#6b7280)}.aw-error{padding:22px;border:1px solid #f5b7b1;background:#fff5f4;color:#9f2d20;border-radius:14px}.aw-audit{display:grid;gap:8px;max-height:430px;overflow:auto}.aw-audit-item{border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:11px}.aw-audit-title{display:flex;justify-content:space-between;gap:10px;font-weight:800}.aw-audit-meta{font-size:12px;color:var(--text-muted,#6b7280);margin-top:5px}.aw-audit-summary{margin-top:7px;font-size:13px}@media(max-width:900px){.aw-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.aw-details{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.aw-toolbar{position:static;grid-template-columns:1fr}.aw-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.aw-card-head{display:block}.aw-details{grid-template-columns:1fr 1fr}.aw-actions .btn{flex:1 1 calc(50% - 8px)}}
+            .aw-shell{direction:rtl;display:grid;gap:18px;padding-bottom:30px}.aw-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 180px auto;gap:10px;align-items:end;padding:14px;background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;position:sticky;top:58px;z-index:12;box-shadow:0 4px 16px rgba(0,0,0,.04)}.aw-field label{display:block;font-weight:700;font-size:12px;color:var(--text-muted,#6b7280);margin-bottom:6px}.aw-field input,.aw-field select{width:100%;min-height:42px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px;padding:8px 12px;background:var(--control-bg,#fff)}.aw-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.aw-stat{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;padding:14px}.aw-stat span{display:block;color:var(--text-muted,#6b7280);font-size:12px;font-weight:700}.aw-stat b{display:block;font-size:25px;margin-top:5px}.aw-section{display:grid;gap:12px}.aw-section-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:2px 2px 0}.aw-section-title{margin:0;font-size:18px;font-weight:800}.aw-section-copy{margin:5px 0 0;color:var(--text-muted,#6b7280);font-size:13px;line-height:1.7}.aw-section-count{display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:30px;padding:4px 10px;border-radius:999px;background:var(--subtle-fg,#f4f5f6);font-size:12px;font-weight:800}.aw-list{display:grid;gap:12px}.aw-card{background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.035)}.aw-card.is-available{border-style:dashed;background:linear-gradient(180deg,var(--fg-color,#fff),var(--subtle-fg,#fafafa))}.aw-card-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.aw-name{font-size:17px;font-weight:800;margin:0}.aw-email{direction:ltr;text-align:right;color:var(--text-muted,#6b7280);font-size:13px;margin-top:3px}.aw-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.aw-badge{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:700;background:var(--subtle-fg,#f4f5f6)}.aw-badge.is-enabled{background:#e8f7ee;color:#18794e}.aw-badge.is-disabled{background:#fdecec;color:#b42318}.aw-badge.is-warning{background:#fff4d6;color:#8a5b00}.aw-badge.is-neutral{background:#f2f4f7;color:#475467}.aw-role{background:#eef5ff;color:#285b9a}.aw-details{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aw-detail span{display:block;color:var(--text-muted,#6b7280);font-size:11px;font-weight:700}.aw-detail b{display:block;margin-top:4px;font-size:13px;overflow-wrap:anywhere}.aw-scope-note{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--subtle-fg,#f7f7f8);color:var(--text-muted,#667085);font-size:12px;line-height:1.65}.aw-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.aw-actions .btn{min-height:38px;border-radius:9px;font-weight:700}.aw-empty{padding:42px 18px;text-align:center;border:1px dashed var(--border-color,#d7dde3);border-radius:16px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}.aw-loading{padding:46px;text-align:center;color:var(--text-muted,#6b7280)}.aw-error{padding:22px;border:1px solid #f5b7b1;background:#fff5f4;color:#9f2d20;border-radius:14px}.aw-audit{display:grid;gap:8px;max-height:430px;overflow:auto}.aw-audit-item{border:1px solid var(--border-color,#e5e7eb);border-radius:12px;padding:11px}.aw-audit-title{display:flex;justify-content:space-between;gap:10px;font-weight:800}.aw-audit-meta{font-size:12px;color:var(--text-muted,#6b7280);margin-top:5px}.aw-audit-summary{margin-top:7px;font-size:13px}@media(max-width:900px){.aw-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.aw-details{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.aw-toolbar{position:static;grid-template-columns:1fr}.aw-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.aw-section-head{display:block}.aw-section-count{margin-top:8px}.aw-card-head{display:block}.aw-details{grid-template-columns:1fr 1fr}.aw-actions .btn{flex:1 1 calc(50% - 8px)}}
         `;
         document.head.appendChild(style);
     }
 
     buildToolbar() {
-        this.page.set_primary_action(__("إضافة مستخدم"), () => this.openCreateDialog(), "add");
+        this.page.set_primary_action(__("إنشاء مستخدم جديد"), () => this.openCreateDialog(), "add");
         this.page.add_inner_button(__("تحديث"), () => this.load(), null, "refresh");
         this.renderLoading();
     }
@@ -56,10 +64,11 @@ class AlmdinaWorkforceConsole {
 
     load() {
         const requestId = ++this.requestId;
-        if (!this.state.users.length) this.renderLoading();
+        if (!this.state.users.length && !this.state.availableUsers.length) this.renderLoading();
         return this.call("get_workforce_console", { search: this.state.search, enabled: this.state.enabled, limit: 150 }).then(data => {
             if (requestId !== this.requestId) return;
             this.state.users = Array.isArray(data.users) ? data.users : [];
+            this.state.availableUsers = Array.isArray(data.available_users) ? data.available_users : [];
             this.state.roles = Array.isArray(data.roles) ? data.roles : [];
             this.state.permissions = data.permissions || {};
             this.state.summary = data.summary || {};
@@ -72,7 +81,7 @@ class AlmdinaWorkforceConsole {
     }
 
     render() {
-        this.$main.html(`<div class="aw-shell">${this.toolbarHtml()}${this.summaryHtml()}<div class="aw-list">${this.usersHtml()}</div></div>`);
+        this.$main.html(`<div class="aw-shell">${this.toolbarHtml()}${this.summaryHtml()}${this.workforceSectionHtml()}${this.availableUsersSectionHtml()}</div>`);
         this.bindToolbar();
         this.bindUserActions();
     }
@@ -83,13 +92,27 @@ class AlmdinaWorkforceConsole {
 
     summaryHtml() {
         const summary = this.state.summary || {};
-        const cards = [[__("إجمالي الحسابات"), summary.total || 0], [__("الحسابات المفعلة"), summary.enabled || 0], [__("الحسابات المعطلة"), summary.disabled || 0], [__("المراحل النشطة المسندة"), summary.active_assignments || 0]];
+        const cards = [[__("إجمالي حسابات المعمل"), summary.total || 0], [__("الحسابات المفعلة"), summary.enabled || 0], [__("الحسابات المعطلة"), summary.disabled || 0], [__("المراحل النشطة المسندة"), summary.active_assignments || 0]];
         return `<div class="aw-summary">${cards.map(item => `<div class="aw-stat"><span>${item[0]}</span><b>${this.escape(item[1])}</b></div>`).join("")}</div>`;
     }
 
+    workforceSectionHtml() {
+        return `<section class="aw-section"><div class="aw-section-head"><div><h2 class="aw-section-title">${__("مستخدمو المعمل")}</h2><p class="aw-section-copy">${__("الحسابات التي تم ضمها إلى Almdina ويمكن إدارة أدوارها وصلاحياتها من هنا.")}</p></div><span class="aw-section-count">${this.escape(this.state.users.length)}</span></div><div class="aw-list">${this.usersHtml()}</div></section>`;
+    }
+
+    availableUsersSectionHtml() {
+        if (!this.can("create_users")) return "";
+        return `<section class="aw-section"><div class="aw-section-head"><div><h2 class="aw-section-title">${__("مستخدمون غير مضافين إلى المعمل")}</h2><p class="aw-section-copy">${__("حسابات System User الموجودة في Frappe ولم تُضم بعد إلى نطاق Almdina.")}</p></div><span class="aw-section-count">${this.escape(this.state.availableUsers.length)}</span></div><div class="aw-list">${this.availableUsersHtml()}</div></section>`;
+    }
+
     usersHtml() {
-        if (!this.state.users.length) return `<div class="aw-empty">${__("لا يوجد مستخدمون مطابقون للبحث الحالي.")}</div>`;
+        if (!this.state.users.length) return `<div class="aw-empty">${__("لا يوجد مستخدمون في المعمل مطابقون للبحث الحالي.")}</div>`;
         return this.state.users.map(user => this.userCardHtml(user)).join("");
+    }
+
+    availableUsersHtml() {
+        if (!this.state.availableUsers.length) return `<div class="aw-empty">${__("لا توجد حسابات System User خارج المعمل مطابقة للبحث الحالي.")}</div>`;
+        return this.state.availableUsers.map(user => this.availableUserCardHtml(user)).join("");
     }
 
     userCardHtml(user) {
@@ -106,6 +129,11 @@ class AlmdinaWorkforceConsole {
         return `<article class="aw-card"><div class="aw-card-head"><div><h3 class="aw-name">${this.escape(user.full_name || user.email)}</h3><div class="aw-email">${this.escape(user.email)}</div><div class="aw-badges"><span class="aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}">${user.enabled ? __("مفعّل") : __("معطّل")}</span>${active ? `<span class="aw-badge is-warning">${__("مراحل نشطة")}: ${active}</span>` : ""}</div><div class="aw-badges">${roleBadges}</div></div></div><div class="aw-details"><div class="aw-detail"><span>${__("اللغة")}</span><b>${user.language === "en" ? "English" : "العربية"}</b></div><div class="aw-detail"><span>${__("مساحة العمل")}</span><b>${this.escape(user.default_workspace || "—")}</b></div><div class="aw-detail"><span>${__("آخر نشاط")}</span><b>${this.escape(user.last_active || "—")}</b></div></div>${active && this.can("disable_users") ? `<div class="text-muted" style="margin-top:10px;font-size:12px">${__("يجب إعادة إسناد المراحل النشطة قبل تعطيل المستخدم أو تغيير أدواره.")}</div>` : ""}<div class="aw-actions">${buttons.join("")}</div></article>`;
     }
 
+    availableUserCardHtml(user) {
+        const source = user.default_app ? user.default_app : __("بدون تطبيق افتراضي");
+        return `<article class="aw-card is-available"><div class="aw-card-head"><div><h3 class="aw-name">${this.escape(user.full_name || user.email)}</h3><div class="aw-email">${this.escape(user.email)}</div><div class="aw-badges"><span class="aw-badge ${user.enabled ? "is-enabled" : "is-disabled"}">${user.enabled ? __("مفعّل") : __("معطّل")}</span><span class="aw-badge is-neutral">${__("خارج المعمل")}</span></div></div></div><div class="aw-details"><div class="aw-detail"><span>${__("التطبيق الحالي")}</span><b>${this.escape(source)}</b></div><div class="aw-detail"><span>${__("مساحة العمل")}</span><b>${this.escape(user.default_workspace || "—")}</b></div><div class="aw-detail"><span>${__("آخر نشاط")}</span><b>${this.escape(user.last_active || "—")}</b></div></div><div class="aw-scope-note">${__("إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا. بعد الإضافة يمكنك اختيار أدوار المعمل له بشكل صريح.")}</div><div class="aw-actions"><button class="btn btn-primary aw-adopt-user" data-user="${this.escape(user.email)}">${__("إضافة إلى المعمل")}</button></div></article>`;
+    }
+
     bindToolbar() {
         this.$main.find(".aw-search").on("input", event => { clearTimeout(this.searchTimer); this.searchTimer = setTimeout(() => { this.state.search = String(event.target.value || "").trim(); this.load(); }, 350); });
         this.$main.find(".aw-enabled-filter").on("change", event => { this.state.enabled = String(event.target.value || "all"); this.load(); });
@@ -113,12 +141,27 @@ class AlmdinaWorkforceConsole {
     }
 
     findUser(email) { return this.state.users.find(user => user.email === email) || null; }
+    findAvailableUser(email) { return this.state.availableUsers.find(user => user.email === email) || null; }
 
     bindUserActions() {
         this.$main.find(".aw-edit").on("click", event => this.openEditDialog(this.findUser(event.currentTarget.dataset.user)));
         this.$main.find(".aw-password").on("click", event => this.openPasswordDialog(this.findUser(event.currentTarget.dataset.user)));
         this.$main.find(".aw-toggle").on("click", event => this.toggleUser(this.findUser(event.currentTarget.dataset.user), event.currentTarget.dataset.enabled === "1"));
         this.$main.find(".aw-audit-open").on("click", event => this.openAudit(this.findUser(event.currentTarget.dataset.user)));
+        this.$main.find(".aw-adopt-user").on("click", event => this.adoptUser(this.findAvailableUser(event.currentTarget.dataset.user)));
+    }
+
+    adoptUser(user) {
+        if (!user || !this.can("create_users")) return;
+        frappe.confirm(
+            __("سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا. هل تريد المتابعة؟", [user.email]),
+            () => {
+                this.call("adopt_workforce_user", { user: user.email }, __("جاري إضافة المستخدم إلى المعمل...")).then(() => {
+                    frappe.show_alert({ message: __("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره."), indicator: "green" });
+                    return this.load();
+                });
+            }
+        );
     }
 
     roleField(defaultValue = [], readOnly = false) {
