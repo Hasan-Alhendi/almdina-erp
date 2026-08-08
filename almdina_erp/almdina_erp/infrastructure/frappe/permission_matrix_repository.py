@@ -8,10 +8,12 @@ from typing import Any
 import frappe
 from frappe.permissions import setup_custom_perms
 
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     changed_capabilities,
     field_permission_projection,
-    normalize_capability_state,
     standard_permission_projection,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
@@ -116,7 +118,7 @@ class FrappePermissionMatrixRepository:
         source = "canonical" if exists else "none"
         return {
             "role": resolved,
-            "capabilities": normalize_capability_state(state),
+            "capabilities": normalize_business_capability_state(state),
             "source_by_doctype": {
                 doctype: source for doctype in sorted(_DEFINITIONS_BY_DOCTYPE)
             },
@@ -148,14 +150,20 @@ class FrappePermissionMatrixRepository:
         self,
         role_states: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, dict[str, Any]]:
-        """Persist canonical state first, then project it atomically to Frappe."""
+        """Persist canonical business state first, then project it to Frappe.
+
+        Order-entry lookup dependencies are intentionally excluded from the
+        canonical business state. ``standard_permission_projection`` may still
+        derive read/select rights for Frappe Link-field UX, but those rights can
+        never expose Customer/Edge administration surfaces by themselves.
+        """
 
         prepared: dict[str, dict[str, bool]] = {}
         for role, state in role_states.items():
             resolved = self.validate_role(role)
             if resolved in prepared:
                 raise ValueError(f"Duplicate role state: {resolved}")
-            prepared[resolved] = normalize_capability_state(state)
+            prepared[resolved] = normalize_business_capability_state(state)
         if not prepared:
             raise ValueError("At least one role state is required.")
 
@@ -204,12 +212,12 @@ class FrappePermissionMatrixRepository:
                     change["key"] for change in changes
                 ),
                 "before_json": json.dumps(
-                    normalize_capability_state(before),
+                    normalize_business_capability_state(before),
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
                 "after_json": json.dumps(
-                    normalize_capability_state(after),
+                    normalize_business_capability_state(after),
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
