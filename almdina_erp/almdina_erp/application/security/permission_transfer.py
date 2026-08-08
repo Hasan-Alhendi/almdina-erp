@@ -5,10 +5,11 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from almdina_erp.almdina_erp.application.security.permission_matrix import (
-    changed_capabilities,
-    normalize_capability_state,
-    permission_impact,
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    business_permission_impact,
+    changed_business_capabilities,
+    enabled_business_capabilities,
+    normalize_business_capability_state,
 )
 
 
@@ -18,12 +19,7 @@ MAX_TRANSFER_ROLES = 500
 
 
 def _enabled_capabilities(state: Mapping[str, Any] | None) -> list[str]:
-    normalized = normalize_capability_state(state)
-    return sorted(
-        capability
-        for capability, granted in normalized.items()
-        if granted is True
-    )
+    return sorted(enabled_business_capabilities(state))
 
 
 def _checksum(payload: Mapping[str, Any]) -> str:
@@ -54,7 +50,7 @@ def build_permission_export(
     role: str,
     state: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    """Build a stable checksummed single-role permission document."""
+    """Build a stable checksummed single-role business permission document."""
 
     canonical = _canonical_transfer_payload(
         role=role,
@@ -92,7 +88,7 @@ def parse_permission_export(payload: Mapping[str, Any] | None) -> dict[str, Any]
     if not checksum or checksum != _checksum(canonical):
         raise ValueError("Permission export checksum is invalid.")
 
-    state = normalize_capability_state(
+    state = normalize_business_capability_state(
         {capability: True for capability in canonical["capabilities"]}
     )
     return {
@@ -144,7 +140,7 @@ def build_permission_bundle(
     exported_at: str,
     app_version: str,
 ) -> dict[str, Any]:
-    """Build a checksummed multi-role bundle without users or audit records."""
+    """Build a checksummed multi-role bundle without technical lookup grants."""
 
     canonical = _canonical_bundle_payload(role_states)
     return {
@@ -198,7 +194,7 @@ def parse_permission_bundle(
             raise ValueError(
                 f"Permission bundle role {role} contains an invalid capability key."
             )
-        role_states[role] = normalize_capability_state(
+        role_states[role] = normalize_business_capability_state(
             {capability: True for capability in capabilities}
         )
 
@@ -215,16 +211,16 @@ def preview_permission_bundle(
 ) -> dict[str, Any]:
     role_previews: list[dict[str, Any]] = []
     for role in sorted(imported_states):
-        before = normalize_capability_state(current_states.get(role))
-        after = normalize_capability_state(imported_states[role])
-        changes = changed_capabilities(before, after)
+        before = normalize_business_capability_state(current_states.get(role))
+        after = normalize_business_capability_state(imported_states[role])
+        changes = changed_business_capabilities(before, after)
         role_previews.append(
             {
                 "role": role,
                 "changed": bool(changes),
                 "changes": changes,
                 "capabilities": after,
-                "impact": permission_impact(after),
+                "impact": business_permission_impact(after),
             }
         )
 
