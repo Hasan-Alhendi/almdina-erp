@@ -62,7 +62,9 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertIn("latest_audited_state", canonical)
         self.assertIn("historical inspection only", canonical)
         self.assertIn("bootstrap_fail_closed", canonical)
-        bootstrap = canonical[canonical.index("    def bootstrap_fail_closed"):]
+        start = canonical.index("    def bootstrap_fail_closed(")
+        end = canonical.index("\n\n__all__", start)
+        bootstrap = canonical[start:end]
         self.assertIn("return self.save(resolved, {})", bootstrap)
         self.assertNotIn("latest_audited_state", bootstrap)
         self.assertNotIn("AUDIT_DOCTYPE", bootstrap)
