@@ -4,6 +4,13 @@ import json
 import unittest
 from pathlib import Path
 
+from almdina_erp.almdina_erp.application.security.surface_access import Surface
+from almdina_erp.almdina_erp.application.security.workspace_visibility import (
+    WORKSPACE_ENTRY_SURFACES,
+    filter_workspace_content,
+    workspace_item_allowed,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
@@ -64,6 +71,7 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertEqual(configured_labels, set(expected))
         for label, surface in expected.items():
             self.assertIn(f'"{label}": "{surface}"', source)
+            self.assertEqual(WORKSPACE_ENTRY_SURFACES[label], surface)
 
         self.assertIn("WORKSPACE_LABELS_LONGEST_FIRST", source)
         self.assertIn("right.length - left.length", source)
@@ -84,6 +92,71 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertIn("guardWorkspaceSections", source)
         self.assertIn("almdinaPermissionSectionHidden", source)
         self.assertIn(".some(surfaceAllowed)", source)
+
+    def test_server_projects_order_only_workspace_before_render(self) -> None:
+        workspace = json.loads(WORKSPACE.read_text(encoding="utf-8"))
+        surfaces = {surface: False for surface in set(WORKSPACE_ENTRY_SURFACES.values())}
+        surfaces[Surface.ORDERS] = True
+
+        filtered = json.loads(filter_workspace_content(workspace["content"], surfaces))
+        shortcut_names = {
+            block.get("data", {}).get("shortcut_name")
+            for block in filtered
+            if block.get("type") == "shortcut"
+        }
+        headers = {
+            block.get("data", {}).get("text", "")
+            for block in filtered
+            if block.get("type") == "header"
+        }
+
+        self.assertEqual({"طلبات قص الدرف"}, shortcut_names)
+        self.assertTrue(any("التشغيل اليومي" in value for value in headers))
+        for hidden_section in (
+            "الإعدادات الأساسية",
+            "إدارة النظام ومسارات العمل",
+            "التقارير التشغيلية والتكلفة",
+        ):
+            self.assertFalse(any(hidden_section in value for value in headers))
+
+    def test_v16_sidebar_links_are_authorized_by_business_surface(self) -> None:
+        surfaces = {
+            Surface.ORDERS: True,
+            Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: False,
+        }
+        order_link = {
+            "type": "Link",
+            "parent_page": "Almdina ERP",
+            "link_to": "Door Cutting Order",
+            "label": "طلبات قص الدرف",
+        }
+        denied_report = {
+            "type": "Link",
+            "parent_page": "Almdina ERP",
+            "link_to": "Production Stage Performance",
+            "label": "أداء مراحل الإنتاج",
+        }
+        self.assertIs(workspace_item_allowed(order_link, surfaces), True)
+        self.assertIs(workspace_item_allowed(denied_report, surfaces), False)
+
+    def test_workspace_server_guards_cover_boot_and_desktop_endpoint(self) -> None:
+        boot = (ROOT / "boot.py").read_text(encoding="utf-8")
+        hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
+        endpoint = (ROOT / "workspace_api.py").read_text(encoding="utf-8")
+
+        self.assertIn('"sidebar_pages"', boot)
+        self.assertIn("workspace_item_allowed", boot)
+        self.assertIn("project_workspace_page", boot)
+        self.assertIn("Unknown child links inside the Almdina shell fail closed", boot)
+
+        self.assertIn('"frappe.desk.desktop.get_desktop_page"', hooks)
+        self.assertIn('"almdina_erp.workspace_api.get_desktop_page"', hooks)
+        self.assertIn("frappe_get_desktop_page(page)", endpoint)
+        self.assertIn("filter_desktop_page_payload", endpoint)
+        self.assertLess(
+            endpoint.index("frappe_get_desktop_page(page)"),
+            endpoint.index("filter_desktop_page_payload(payload"),
+        )
 
     def test_workforce_create_action_flash_is_guarded(self) -> None:
         source = (PUBLIC / "permission_action_visibility_guard.js").read_text(encoding="utf-8")
