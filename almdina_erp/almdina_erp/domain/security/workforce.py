@@ -62,56 +62,56 @@ def decide_workforce_action(
         return WorkforceDecision(
             False,
             "missing_capability",
-            "You do not have permission for this workforce action.",
+            "لا تملك الصلاحية المطلوبة لتنفيذ هذا الإجراء على مستخدمي المعمل.",
         )
 
     if action in {WorkforceAction.VIEW, WorkforceAction.CREATE}:
-        return WorkforceDecision(True, "allowed", "Allowed.")
+        return WorkforceDecision(True, "allowed", "مسموح.")
 
     if facts.target_user in PROTECTED_USERS:
         return WorkforceDecision(
             False,
             "protected_user",
-            "Administrator and Guest cannot be changed from the Almdina workforce console.",
+            "لا يمكن تعديل حساب Administrator أو Guest من إدارة مستخدمي المعمل.",
         )
     if not facts.target_is_almdina:
         return WorkforceDecision(
             False,
             "outside_scope",
-            "This account is outside the Almdina workforce scope.",
+            "هذا الحساب غير مضاف إلى نطاق مستخدمي معمل Almdina.",
         )
     if action == WorkforceAction.ASSIGN_ROLES:
         if facts.target_user == facts.actor:
             return WorkforceDecision(
                 False,
                 "self_role_change",
-                "You cannot change your own roles from the Almdina workforce console.",
+                "لا يمكنك تغيير أدوارك من حسابك الحالي. استخدم حساب مسؤول صلاحيات آخر.",
             )
         if facts.active_assignments > 0:
             return WorkforceDecision(
                 False,
                 "active_assignments",
-                "Reassign the user's active production stages before changing roles.",
+                "أعد إسناد مراحل الإنتاج النشطة لهذا المستخدم قبل تغيير أدواره.",
             )
     if action == WorkforceAction.DISABLE:
         if facts.target_user == facts.actor:
             return WorkforceDecision(
                 False,
                 "self_disable",
-                "You cannot disable your own account.",
+                "لا يمكنك تعطيل حسابك الحالي.",
             )
         if not facts.target_enabled:
-            return WorkforceDecision(False, "already_disabled", "User is already disabled.")
+            return WorkforceDecision(False, "already_disabled", "حساب المستخدم معطّل بالفعل.")
         if facts.active_assignments > 0:
             return WorkforceDecision(
                 False,
                 "active_assignments",
-                "Reassign the user's active production stages before disabling the account.",
+                "أعد إسناد مراحل الإنتاج النشطة لهذا المستخدم قبل تعطيل حسابه.",
             )
     if action == WorkforceAction.ENABLE and facts.target_enabled:
-        return WorkforceDecision(False, "already_enabled", "User is already enabled.")
+        return WorkforceDecision(False, "already_enabled", "حساب المستخدم مفعّل بالفعل.")
 
-    return WorkforceDecision(True, "allowed", "Allowed.")
+    return WorkforceDecision(True, "allowed", "مسموح.")
 
 
 def action_context(
@@ -126,9 +126,7 @@ def action_context(
             "reason": decision.reason,
         }
         for action in WorkforceAction
-        for decision in [
-            decide_workforce_action(capabilities, action=action, facts=facts)
-        ]
+        for decision in [decide_workforce_action(capabilities, action=action, facts=facts)]
     }
 
 
