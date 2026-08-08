@@ -133,6 +133,9 @@ permission_query_conditions = {
     "Production Incident": "almdina_erp.permissions.production_incident_query",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_query",
+    "Customer": "almdina_erp.resource_permissions.customer_query",
+    "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_query",
+    "Production Routing": "almdina_erp.resource_permissions.production_routing_query",
 }
 
 has_permission = {
@@ -141,6 +144,10 @@ has_permission = {
     "Production Incident": "almdina_erp.permissions.production_incident_has_permission",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_has_permission",
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_has_permission",
+    "Customer": "almdina_erp.resource_permissions.customer_has_permission",
+    "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_has_permission",
+    "Production Routing": "almdina_erp.resource_permissions.production_routing_has_permission",
+    "Almdina ERP Settings": "almdina_erp.resource_permissions.factory_settings_has_permission",
 }
 
 boot_session = "almdina_erp.boot.boot_session"
