@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.security.permission_context import (
 )
 from almdina_erp.almdina_erp.application.security.workspace_visibility import (
     project_workspace_page,
+    workspace_item_allowed,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
@@ -38,6 +39,40 @@ def _workspace_name(page: Any) -> str:
     return str(page.get("name") or page.get("title") or page.get("label") or "")
 
 
+def _workspace_page_allowed(
+    page: Any,
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> bool:
+    """Authorize a v16 workspace/sidebar record.
+
+    Real Workspaces are controlled by the navigation workspace allow-list. v16
+    also models sidebar destinations as Workspace rows of type Link/URL under a
+    parent Workspace; known Almdina Links are controlled by their business
+    surface instead of inheriting visibility from the parent.
+    """
+
+    if isinstance(page, str):
+        return page in allowed
+    if not isinstance(page, dict):
+        return False
+
+    if _workspace_name(page) in allowed:
+        return True
+
+    parent = str(page.get("parent_page") or "")
+    page_type = str(page.get("type") or "Workspace").strip().lower()
+    if parent in allowed and page_type in {"link", "url"}:
+        decision = workspace_item_allowed(page, surfaces)
+        # Unknown child links inside the Almdina shell fail closed. Standard
+        # sidebar links are covered by regression tests, so an unclassified new
+        # entry cannot silently leak into a restricted role.
+        return decision is True
+
+    return False
+
+
 def _project_allowed_pages(
     pages: Any,
     *,
@@ -49,7 +84,7 @@ def _project_allowed_pages(
     return [
         project_workspace_page(page, surfaces)
         for page in pages
-        if _workspace_name(page) in allowed
+        if _workspace_page_allowed(page, allowed=allowed, surfaces=surfaces)
     ]
 
 
@@ -111,7 +146,7 @@ def _filter_workspaces(
                 kept = _project_allowed_pages(values, allowed=allowed, surfaces=surfaces)
                 if kept:
                     filtered[module] = kept
-            elif _workspace_name(values) in allowed:
+            elif _workspace_page_allowed(values, allowed=allowed, surfaces=surfaces):
                 filtered[module] = project_workspace_page(values, surfaces)
         bootinfo["module_wise_workspaces"] = filtered
 
