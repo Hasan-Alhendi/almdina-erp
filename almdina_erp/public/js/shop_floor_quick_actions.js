@@ -1,11 +1,24 @@
 (() => {
     "use strict";
 
+    const SHOP_FLOOR_STYLESHEET_ID = "almdina-shop-floor-responsive-css";
+    const SHOP_FLOOR_STYLESHEET_HREF = "/assets/almdina_erp/css/shop_floor_responsive.css";
+
     const METHODS = Object.freeze({
         start: "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
         handoffContext: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
         handoff: "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
     });
+
+    function ensureStylesheet() {
+        if (typeof document === "undefined" || !document.head) return;
+        if (document.getElementById(SHOP_FLOOR_STYLESHEET_ID)) return;
+        const link = document.createElement("link");
+        link.id = SHOP_FLOOR_STYLESHEET_ID;
+        link.rel = "stylesheet";
+        link.href = SHOP_FLOOR_STYLESHEET_HREF;
+        document.head.appendChild(link);
+    }
 
     function actionFor(context) {
         if (context && context.canStart === true) {
@@ -151,6 +164,8 @@
         }
         return handoff(context, options);
     }
+
+    ensureStylesheet();
 
     window.AlmdinaShopFloorQuickActions = Object.freeze({
         actionFor,
