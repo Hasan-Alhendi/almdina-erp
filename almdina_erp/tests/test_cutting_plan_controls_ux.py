@@ -42,9 +42,29 @@ def test_simple_controls_keep_only_current_settings_recalculation_action():
 
     for selector in (".dco-auto-pro-plan", ".dco-deep-plan", ".dco-optimal-plan", ".dco-algorithm-palette"):
         assert selector in controls
-    assert "find(DUPLICATED_ACTIONS).remove()" in controls
+    assert "find(DUPLICATED_ACTIONS)" in controls
+    assert "duplicated.remove()" in controls
     assert "إعادة الحساب بالإعدادات الحالية" in controls
     assert "إعادة الحساب بالإعدادات الحالية" in plan
+
+
+def test_recalculation_button_uses_focused_command_without_full_document_save():
+    controls = source(CONTROLS_UX)
+
+    assert (
+        '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"'
+        in controls
+    )
+    assert (
+        '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"'
+        not in controls
+    )
+    assert "frm.save" not in controls
+    assert "__almdinaPlanCommandBound" in controls
+    assert "scheduleSimplify" in controls
+    assert "setTextIfChanged" in controls
+    assert 'can(frm, "recalculate_plan")' in controls
+    assert 'can(frm, "edit_optimizer_settings")' in controls
 
 
 def test_advanced_algorithm_labels_are_applied_inside_the_primary_select():
