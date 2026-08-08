@@ -15,9 +15,14 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
     standard_permission_projection,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
+)
 
 
-PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})
+# Backward-compatible public alias. The protected-role policy has one source of
+# truth so System Manager can never drift back into factory business authority.
+PROTECTED_ROLES = PROTECTED_SYSTEM_ROLES
 _IDENTITY_FIELDS = frozenset(
     {
         "name",
