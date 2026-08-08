@@ -36,7 +36,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "cutting_plan": {"label": "خطة القص", "description": "عرض الخطة وحسابها وتعديل إعدادات المحسّن وطباعتها.", "icon": "organization"},
     "drawing": {"label": "الرسم وDXF", "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها واعتمادها.", "icon": "image-view"},
     "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
-    "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وتسجيل الحوادث وإدارة قطع التعويض.", "icon": "dashboard"},
+    "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.", "icon": "dashboard"},
     "reports": {"label": "التقارير", "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.", "icon": "chart"},
     "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.", "icon": "users"},
     "factory_settings": {"label": "إعدادات المعمل", "description": "عرض وتعديل إعدادات القص والتكلفة وضوابط الإنتاج كل قسم بصورة مستقلة.", "icon": "setting-gear"},
@@ -84,6 +84,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.MARK_DELIVERED: _presentation("تأكيد التسليم", "تغيير حالة الطلب إلى تم التسليم.", "critical"),
     Capability.REASSIGN_WORKER: _presentation("تغيير العامل", "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.", "sensitive"),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),
+    Capability.VIEW_PRODUCTION_INCIDENTS: _presentation("عرض أخطاء الإنتاج", "عرض قائمة حوادث وأخطاء الإنتاج المسجلة ومتابعة تفاصيلها."),
     Capability.RECORD_INCIDENT: _presentation("تسجيل حادث إنتاج", "تسجيل قطعة متضررة أو مشكلة أثناء التنفيذ.", "sensitive"),
     Capability.CREATE_REPLACEMENT: _presentation("إنشاء قطعة تعويض", "إنشاء قطعة تعويض من حادث إنتاج مسجل.", "sensitive"),
     Capability.VIEW_REPLACEMENTS: _presentation("عرض قطع التعويض", "فتح قطع التعويض ومتابعة حالتها."),
@@ -246,6 +247,9 @@ def standard_permission_projection(
             if definition.applies_to == doctype
         )
         return {"read": enabled, "select": enabled, "create": False, "write": False, "delete": False}
+    if doctype == "Production Incident":
+        can_read = normalized[Capability.VIEW_PRODUCTION_INCIDENTS]
+        return {"read": can_read, "select": can_read, "create": False, "write": False, "delete": False}
     if doctype == "Production Routing":
         can_read = normalized[Capability.VIEW_PRODUCTION_ROUTINGS]
         return {
