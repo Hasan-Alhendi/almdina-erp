@@ -9,10 +9,10 @@ import frappe
 from frappe.permissions import setup_custom_perms
 
 from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    changed_business_capabilities,
     normalize_business_capability_state,
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
-    changed_capabilities,
     field_permission_projection,
     standard_permission_projection,
 )
@@ -197,7 +197,7 @@ class FrappePermissionMatrixRepository:
         changed_by: str,
         source: str = "Almdina Permission Console",
     ) -> str | None:
-        changes = changed_capabilities(before, after)
+        changes = changed_business_capabilities(before, after)
         if not changes:
             return None
         document = frappe.get_doc(
