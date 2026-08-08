@@ -44,6 +44,9 @@
         delete_edge_banding_types: "delete",
     });
 
+    // Protected form modules are registered by Frappe from source files.
+    // Waiting for their globals keeps permission recovery deterministic without
+    // re-injecting duplicate script tags or weakening the source load order.
     const ORDER_MODULES = Object.freeze([
         Object.freeze({ global: "AlmdinaOrderCostUX" }),
         Object.freeze({ global: "AlmdinaOrderPermissionRefreshUX" }),
