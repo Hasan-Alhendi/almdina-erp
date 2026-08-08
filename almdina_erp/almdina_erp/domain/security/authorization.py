@@ -51,6 +51,7 @@ class Capability:
 
     # Control center and quality
     ARCHIVE_APPROVED_PLAN = "archive_approved_plan"
+    VIEW_PRODUCTION_INCIDENTS = "view_production_incidents"
     RECORD_INCIDENT = "record_incident"
     CREATE_REPLACEMENT = "create_replacement"
     VIEW_REPLACEMENTS = "view_replacements"
@@ -106,6 +107,7 @@ class CapabilityDefinition:
 
 _ORDER_DOCTYPE = "Door Cutting Order"
 _REPLACEMENT_DOCTYPE = "Replacement Piece"
+_INCIDENT_DOCTYPE = "Production Incident"
 _SETTINGS_DOCTYPE = "Almdina ERP Settings"
 _ROUTING_DOCTYPE = "Production Routing"
 _CUSTOMER_DOCTYPE = "Customer"
@@ -146,6 +148,7 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.MARK_DELIVERED, Capability.MARK_DELIVERED, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.REASSIGN_WORKER, Capability.REASSIGN_WORKER, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.ARCHIVE_APPROVED_PLAN, Capability.ARCHIVE_APPROVED_PLAN, _ORDER_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.VIEW_PRODUCTION_INCIDENTS, "read", _INCIDENT_DOCTYPE, "control_center", False),
     CapabilityDefinition(Capability.RECORD_INCIDENT, Capability.RECORD_INCIDENT, _ORDER_DOCTYPE, "control_center"),
     CapabilityDefinition(Capability.CREATE_REPLACEMENT, Capability.CREATE_REPLACEMENT, _ORDER_DOCTYPE, "control_center"),
     CapabilityDefinition(Capability.VIEW_REPLACEMENTS, Capability.VIEW_REPLACEMENTS, _REPLACEMENT_DOCTYPE, "control_center"),
@@ -260,7 +263,7 @@ def normalize_capabilities(capabilities: Iterable[str] | None) -> frozenset[str]
     normalized = frozenset(str(value) for value in (capabilities or ()) if value)
     unknown = normalized.difference(ALL_CAPABILITIES)
     if unknown:
-        raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}")
+        raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}") from exc
     return normalized
 
 
