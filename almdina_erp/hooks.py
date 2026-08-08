@@ -154,6 +154,8 @@ boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
 override_whitelisted_methods = {
+    "frappe.desk.desktop.get_desktop_page":
+        "almdina_erp.workspace_api.get_desktop_page",
     "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order":
         "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review":
