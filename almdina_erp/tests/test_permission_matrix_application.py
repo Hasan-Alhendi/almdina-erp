@@ -120,6 +120,26 @@ class TestPermissionMatrixApplication(unittest.TestCase):
                 state = normalize_capability_state({action: True})
                 self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
 
+    def test_optimizer_editing_implies_recalculation_without_cost_or_order_edit(self) -> None:
+        state = normalize_capability_state(
+            {Capability.EDIT_OPTIMIZER_SETTINGS: True}
+        )
+        self.assertTrue(state[Capability.EDIT_OPTIMIZER_SETTINGS])
+        self.assertTrue(state[Capability.RECALCULATE_PLAN])
+        self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_ORDERS])
+        self.assertFalse(state[Capability.EDIT_ORDER])
+        self.assertFalse(state[Capability.VIEW_COSTS])
+        self.assertFalse(state[Capability.EDIT_COST_SETTINGS])
+        self.assertFalse(state[Capability.VIEW_DRAWING_WORKSPACE])
+
+        business = normalize_business_capability_state(
+            {Capability.EDIT_OPTIMIZER_SETTINGS: True}
+        )
+        self.assertTrue(business[Capability.RECALCULATE_PLAN])
+        self.assertFalse(business[Capability.VIEW_COSTS])
+        self.assertFalse(business[Capability.EDIT_ORDER])
+
     def test_plan_approval_does_not_require_drawing_workspace(self) -> None:
         state = normalize_capability_state({Capability.APPROVE_DXF: True})
         self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
