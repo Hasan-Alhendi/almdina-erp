@@ -12,6 +12,10 @@ SURFACE_POLICY = ROOT / "almdina_erp" / "application" / "security" / "surface_ac
 REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_matrix_repository.py"
 PROJECTED_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "projected_permission_matrix_repository.py"
 SUPPORT_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "supporting_doctype_permission_repository.py"
+SYSTEM_ROLE_POLICY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "system_role_policy.py"
+WORKFORCE_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "workforce_repository.py"
+AUTHORIZATION_GATEWAY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "authorization_gateway.py"
+AUTOMATIC_ROLE_CLEANUP = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "automatic_role_permission_cleanup.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "permission_management_service.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 WORKFORCE_SERVICE = ROOT / "almdina_erp" / "services" / "workforce_service.py"
@@ -58,6 +62,22 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("setup_custom_perms", repository)
         self.assertIn("_override_from_standard", repository)
         self.assertIn('frappe.db.exists("Custom DocPerm", {"parent": doctype})', repository)
+
+    def test_protected_system_roles_have_one_policy_source(self) -> None:
+        policy = SYSTEM_ROLE_POLICY.read_text(encoding="utf-8")
+        repository = REPOSITORY.read_text(encoding="utf-8")
+        workforce = WORKFORCE_REPOSITORY.read_text(encoding="utf-8")
+        gateway = AUTHORIZATION_GATEWAY.read_text(encoding="utf-8")
+        cleanup = AUTOMATIC_ROLE_CLEANUP.read_text(encoding="utf-8")
+
+        for role in ("All", "Guest", "Desk User", "System Manager"):
+            self.assertIn(f'"{role}"', policy)
+        self.assertIn("PROTECTED_ROLES = PROTECTED_SYSTEM_ROLES", repository)
+        self.assertIn("PROTECTED_ASSIGNMENT_ROLES = PROTECTED_SYSTEM_ROLES", workforce)
+        self.assertIn("PROTECTED_SYSTEM_ROLES", gateway)
+        self.assertIn("PROTECTED_SYSTEM_ROLES", cleanup)
+        self.assertNotIn('PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})', repository)
+        self.assertNotIn('PROTECTED_ASSIGNMENT_ROLES = frozenset(', workforce)
 
     def test_administration_services_use_capabilities_not_role_names(self) -> None:
         combined = "\n".join(
