@@ -17,6 +17,7 @@ def _stage_definition(row: Any) -> RoutingStage:
         stage_type=str(row.stage_type or "").strip(),
         department_label=str(getattr(row, "department_label", None) or "").strip(),
         operational_role=str(getattr(row, "operational_role", None) or "").strip(),
+        is_planning_stage=bool(cint(getattr(row, "is_planning_stage", 0))),
     )
 
 
