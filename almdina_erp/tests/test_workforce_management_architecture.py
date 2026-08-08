@@ -63,6 +63,7 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         for endpoint in (
             "get_workforce_console",
             "create_workforce_user",
+            "adopt_workforce_user",
             "update_workforce_user",
             "reset_workforce_password",
             "get_workforce_user_audit",
@@ -70,6 +71,10 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
             self.assertIn(endpoint, source)
         self.assertIn("MultiSelectList", source)
         self.assertIn("assign_user_roles", source)
+        self.assertIn("available_users", source)
+        self.assertIn("مستخدمون غير مضافين إلى المعمل", source)
+        self.assertIn("إضافة إلى المعمل", source)
+        self.assertIn("لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا", source)
         self.assertIn("requestId", source)
         self.assertIn("@media(max-width:600px)", source)
         self.assertIn('fieldtype: "Password"', source)
@@ -98,11 +103,19 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn('"view_users"', shell)
         self.assertNotIn("frappe.user_roles", shell)
 
-    def test_repository_uses_dynamic_roles_not_managed_role_names(self) -> None:
+    def test_repository_uses_explicit_scope_and_safe_adoption(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
+        service = SERVICE.read_text(encoding="utf-8")
         self.assertIn("list_assignable_roles", repository)
         self.assertIn("validate_roles", repository)
-        self.assertIn('coalesce(u.default_app, \'\') = \'almdina_erp\'",', repository)
+        self.assertIn("list_available_users", repository)
+        self.assertIn("adopt_user", repository)
+        self.assertIn("coalesce(u.default_app, '') = 'almdina_erp'", repository)
+        self.assertIn("coalesce(u.default_app, '') != 'almdina_erp'", repository)
+        self.assertIn('if role != "System Manager"', repository)
+        self.assertNotIn("RETAINED_SYSTEM_ROLES", repository)
+        self.assertIn("Capability.CREATE_USERS in granted", service)
+        self.assertIn("without granting a factory role", service)
         self.assertNotIn("MANAGED_OPERATIONAL_ROLES", repository)
         self.assertNotIn("infer_profile", repository)
 
