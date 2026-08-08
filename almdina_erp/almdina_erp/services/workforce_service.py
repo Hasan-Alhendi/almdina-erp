@@ -49,7 +49,7 @@ def _bool_value(value: Any) -> bool:
             return True
         if normalized in {"0", "false", "no", "off", ""}:
             return False
-        raise ValueError("Invalid boolean value.")
+        raise ValueError("قيمة حالة المستخدم غير صالحة.")
     return bool(value)
 
 
@@ -58,7 +58,9 @@ def _granted() -> frozenset[str]:
 
 
 def _raise_value_error(error: ValueError) -> None:
-    frappe.throw(_(str(error)), frappe.ValidationError)
+    raw = str(error or "").strip()
+    message = raw if any("\u0600" <= char <= "\u06ff" for char in raw) else "البيانات المدخلة غير صالحة. راجع الحقول المطلوبة والقيم ثم أعد المحاولة."
+    frappe.throw(_(message), frappe.ValidationError)
 
 
 def _require_any_action_capability(*actions: WorkforceAction) -> None:
@@ -66,7 +68,7 @@ def _require_any_action_capability(*actions: WorkforceAction) -> None:
     if any(ACTION_CAPABILITIES[action] in granted for action in actions):
         return
     frappe.throw(
-        _("You do not have permission for this workforce action."),
+        _("لا تملك الصلاحية المطلوبة لتنفيذ هذا الإجراء على مستخدمي المعمل."),
         frappe.PermissionError,
     )
 
@@ -83,11 +85,7 @@ def _require_action(
     )
     if decision.allowed:
         return
-    exception = (
-        frappe.PermissionError
-        if decision.code == "missing_capability"
-        else frappe.ValidationError
-    )
+    exception = frappe.PermissionError if decision.code == "missing_capability" else frappe.ValidationError
     frappe.throw(_(decision.reason), exception)
 
 
@@ -110,8 +108,6 @@ def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _present_available_user(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Expose only identity/status fields for accounts outside workforce scope."""
-
     return {
         "email": str(snapshot.get("email") or ""),
         "first_name": str(snapshot.get("first_name") or ""),
@@ -135,8 +131,6 @@ def _validated_roles(values: Any) -> tuple[str, ...]:
 
 
 def _guard_privileged_roles(roles: tuple[str, ...]) -> None:
-    """Prevent workforce administration from escalating into permission admin."""
-
     actor = str(frappe.session.user)
     if actor == "Administrator" or Capability.MANAGE_PERMISSIONS in _granted():
         return
@@ -150,9 +144,7 @@ def _guard_privileged_roles(roles: tuple[str, ...]) -> None:
             privileged.append(role)
     if privileged:
         frappe.throw(
-            _(
-                "Only a permission administrator can assign roles that manage permissions: {0}"
-            ).format(", ".join(sorted(privileged))),
+            _("لا يمكن إسناد دور يدير الصلاحيات إلا بواسطة مسؤول الصلاحيات. الأدوار المحمية: {0}").format(", ".join(sorted(privileged))),
             frappe.PermissionError,
         )
 
@@ -165,44 +157,29 @@ def get_workforce_console(
 ) -> dict[str, Any]:
     _require_action(WorkforceAction.VIEW)
     try:
-        enabled_filter = (
-            None if enabled in (None, "", "all") else _bool_value(enabled)
-        )
+        enabled_filter = None if enabled in (None, "", "all") else _bool_value(enabled)
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
-    users = _repository.list_users(
-        search=str(search or ""),
-        enabled=enabled_filter,
-        limit=limit,
-    )
+    users = _repository.list_users(search=str(search or ""), enabled=enabled_filter, limit=limit)
     granted = _granted()
     available_users = (
-        _repository.list_available_users(
-            search=str(search or ""),
-            enabled=enabled_filter,
-            limit=limit,
-        )
+        _repository.list_available_users(search=str(search or ""), enabled=enabled_filter, limit=limit)
         if Capability.CREATE_USERS in granted
         else []
     )
     return {
         "roles": _repository.list_assignable_roles(),
         "users": [_present_user(user) for user in users],
-        "available_users": [
-            _present_available_user(user) for user in available_users
-        ],
+        "available_users": [_present_available_user(user) for user in available_users],
         "permissions": {
-            capability: capability in granted
-            for capability in sorted(WORKFORCE_CAPABILITIES)
+            capability: capability in granted for capability in sorted(WORKFORCE_CAPABILITIES)
         },
         "summary": {
             "total": len(users),
             "enabled": sum(1 for user in users if user["enabled"]),
             "disabled": sum(1 for user in users if not user["enabled"]),
-            "active_assignments": sum(
-                int(user.get("active_assignments") or 0) for user in users
-            ),
+            "active_assignments": sum(int(user.get("active_assignments") or 0) for user in users),
             "available": len(available_users),
         },
     }
@@ -220,10 +197,7 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
             language=values.get("language") or "ar",
         )
         roles = _validated_roles(values.get("roles") or ())
-        password = validate_temporary_password(
-            values.get("temporary_password"),
-            email=identity.email,
-        )
+        password = validate_temporary_password(values.get("temporary_password"), email=identity.email)
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -240,11 +214,7 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
         _guard_privileged_roles(roles)
 
     try:
-        created = _repository.create_user(
-            identity=identity,
-            roles=roles,
-            temporary_password=password,
-        )
+        created = _repository.create_user(identity=identity, roles=roles, temporary_password=password)
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -254,9 +224,7 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
         action="Created",
         before=None,
         after=created,
-        summary=_("Created Almdina workforce account with {0} assigned role(s).").format(
-            len(roles)
-        ),
+        summary=_("تم إنشاء حساب مستخدم للمعمل وإسناد {0} دور إليه.").format(len(roles)),
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(created), "audit": audit_name}
@@ -264,12 +232,10 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["POST"])
 def adopt_workforce_user(user: str) -> dict[str, Any]:
-    """Explicitly add an existing Frappe System User to Almdina workforce."""
-
     _require_action(WorkforceAction.CREATE)
     user_name = str(user or "").strip().lower()
     if not user_name:
-        _raise_value_error(ValueError("User is required."))
+        _raise_value_error(ValueError("يجب اختيار المستخدم المراد إضافته إلى المعمل."))
         raise AssertionError("frappe.throw must interrupt execution")
 
     _repository.lock_user(user_name)
@@ -287,9 +253,7 @@ def adopt_workforce_user(user: str) -> dict[str, Any]:
         action="Added to Workforce",
         before=before,
         after=after,
-        summary=_(
-            "Added existing Frappe System User to Almdina workforce without granting a factory role."
-        ),
+        summary=_("تمت إضافة مستخدم Frappe موجود إلى مستخدمي المعمل دون منحه أي دور مصنع تلقائيًا."),
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(after), "audit": audit_name}
@@ -297,10 +261,7 @@ def adopt_workforce_user(user: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
-    _require_any_action_capability(
-        WorkforceAction.EDIT,
-        WorkforceAction.ASSIGN_ROLES,
-    )
+    _require_any_action_capability(WorkforceAction.EDIT, WorkforceAction.ASSIGN_ROLES)
     user_name = str(user or "").strip().lower()
     values = _payload(data)
     _repository.lock_user(user_name)
@@ -313,22 +274,16 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
             language=values.get("language", before["language"]),
         )
         roles_supplied = "roles" in values and values.get("roles") is not None
-        roles = (
-            _validated_roles(values.get("roles") or ())
-            if roles_supplied
-            else tuple(before.get("roles") or ())
-        )
+        roles = _validated_roles(values.get("roles") or ()) if roles_supplied else tuple(before.get("roles") or ())
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
 
-    identity_changed = any(
-        (
-            identity.first_name != before["first_name"],
-            identity.last_name != before["last_name"],
-            identity.language != before["language"],
-        )
-    )
+    identity_changed = any((
+        identity.first_name != before["first_name"],
+        identity.last_name != before["last_name"],
+        identity.language != before["language"],
+    ))
     roles_changed = roles_supplied and tuple(roles) != tuple(before.get("roles") or ())
     facts = _facts(before)
     if identity_changed:
@@ -344,31 +299,25 @@ def update_workforce_user(user: str, data: Any) -> dict[str, Any]:
     try:
         if identity_changed:
             current = _repository.update_identity(user_name, identity)
-            audits.append(
-                _repository.record_audit(
-                    user_name=user_name,
-                    action="Identity Updated",
-                    before=before,
-                    after=current,
-                    summary=_("Updated workforce identity and language."),
-                    changed_by=str(frappe.session.user),
-                )
-            )
+            audits.append(_repository.record_audit(
+                user_name=user_name,
+                action="Identity Updated",
+                before=before,
+                after=current,
+                summary=_("تم تحديث اسم المستخدم ولغته."),
+                changed_by=str(frappe.session.user),
+            ))
         if roles_changed:
             roles_before = current
             current = _repository.assign_roles(user_name, roles)
-            audits.append(
-                _repository.record_audit(
-                    user_name=user_name,
-                    action="Roles Changed",
-                    before=roles_before,
-                    after=current,
-                    summary=_("Changed assigned roles to: {0}").format(
-                        ", ".join(roles) if roles else _("none")
-                    ),
-                    changed_by=str(frappe.session.user),
-                )
-            )
+            audits.append(_repository.record_audit(
+                user_name=user_name,
+                action="Roles Changed",
+                before=roles_before,
+                after=current,
+                summary=_("تم تغيير أدوار المستخدم إلى: {0}").format(", ".join(roles) if roles else _("بدون أدوار")),
+                changed_by=str(frappe.session.user),
+            ))
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -402,7 +351,7 @@ def set_workforce_user_enabled(user: str, enabled: int | bool | str) -> dict[str
         action=audit_action,
         before=before,
         after=after,
-        summary=_("Workforce account {0}.").format(audit_action.lower()),
+        summary=_("تم {0} حساب مستخدم المعمل.").format(_("تفعيل") if target_enabled else _("تعطيل")),
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(after), "audit": audit_name}
@@ -415,10 +364,7 @@ def reset_workforce_password(user: str, temporary_password: str) -> dict[str, An
     _repository.lock_user(user_name)
     try:
         snapshot = _repository.get_user(user_name)
-        password = validate_temporary_password(
-            temporary_password,
-            email=user_name,
-        )
+        password = validate_temporary_password(temporary_password, email=user_name)
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
@@ -430,7 +376,7 @@ def reset_workforce_password(user: str, temporary_password: str) -> dict[str, An
         action="Password Reset",
         before=snapshot,
         after=snapshot,
-        summary=_("Assigned a new temporary password. Password value was not logged."),
+        summary=_("تم تعيين كلمة مرور مؤقتة جديدة دون تسجيل قيمة كلمة المرور في سجل التدقيق."),
         changed_by=str(frappe.session.user),
     )
     return {"user": user_name, "audit": audit_name, "password_logged": False}
@@ -445,10 +391,7 @@ def get_workforce_user_audit(user: str, limit: int = 30) -> dict[str, Any]:
     except ValueError as error:
         _raise_value_error(error)
         raise AssertionError("frappe.throw must interrupt execution")
-    return {
-        "user": _present_user(snapshot),
-        "events": _repository.list_audit(user_name, limit=limit),
-    }
+    return {"user": _present_user(snapshot), "events": _repository.list_audit(user_name, limit=limit)}
 
 
 __all__ = [
