@@ -70,7 +70,16 @@ def test_shared_shell_keeps_desk_and_uses_navigation_context() -> None:
     assert "frappe.set_route = function" not in source
     assert "frappe.set_route = (" not in source
     assert "frappe.set_route(home)" in source
-    assert "MutationObserver" not in source
+
+    # Frappe renders workspace shortcuts asynchronously. The observer is deliberately
+    # narrow: it only reacts to added child nodes, then runs the debounced permission
+    # visibility scan. It must never become a general DOM mutation watcher.
+    assert "MutationObserver" in source
+    assert "schedulePermissionScan" in source
+    assert "observer.observe(document.body, { childList: true, subtree: true })" in source
+    assert "attributes: true" not in source
+    assert "characterData: true" not in source
+
     for hidden_chrome in (".awesomebar", ".body-sidebar", ".notifications-icon"):
         assert hidden_chrome not in source
 
