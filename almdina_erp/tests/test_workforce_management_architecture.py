@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 DOMAIN = APP / "domain" / "security" / "workforce.py"
 APPLICATION = APP / "application" / "security" / "workforce_management.py"
+SURFACE_POLICY = APP / "application" / "security" / "surface_access.py"
 REPOSITORY = APP / "infrastructure" / "frappe" / "workforce_repository.py"
 SERVICE = APP / "services" / "workforce_service.py"
 PROVISION = APP / "application" / "security" / "provision_user.py"
@@ -95,12 +96,15 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertNotIn('"temporary_password":', repository)
         self.assertNotIn('"new_password":', repository)
 
-    def test_workspace_and_shared_shell_expose_workforce_by_view_capability(self) -> None:
+    def test_workspace_and_shared_shell_expose_workforce_by_surface_policy(self) -> None:
         workspace = WORKSPACE.read_text(encoding="utf-8")
         shell = SHARED_SHELL.read_text(encoding="utf-8")
+        surface_policy = SURFACE_POLICY.read_text(encoding="utf-8")
+
         self.assertIn("factory-workforce", workspace)
-        self.assertIn("factory-workforce", shell)
-        self.assertIn('"view_users"', shell)
+        self.assertIn('{ surface: "workforce", routes: ["factory-workforce"] }', shell)
+        self.assertIn("Capability.VIEW_USERS", surface_policy)
+        self.assertNotIn('"view_users"', shell)
         self.assertNotIn("frappe.user_roles", shell)
 
     def test_repository_uses_explicit_scope_and_safe_adoption(self) -> None:
@@ -115,7 +119,7 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn('if role != "System Manager"', repository)
         self.assertNotIn("RETAINED_SYSTEM_ROLES", repository)
         self.assertIn("Capability.CREATE_USERS in granted", service)
-        self.assertIn("without granting a factory role", service)
+        self.assertIn("دون منحه أي دور مصنع تلقائيًا", service)
         self.assertNotIn("MANAGED_OPERATIONAL_ROLES", repository)
         self.assertNotIn("infer_profile", repository)
 

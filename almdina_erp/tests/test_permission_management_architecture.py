@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
 SUPPORT_POLICY = ROOT / "almdina_erp" / "application" / "security" / "supporting_doctype_permissions.py"
+SURFACE_POLICY = ROOT / "almdina_erp" / "application" / "security" / "surface_access.py"
 REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "permission_matrix_repository.py"
 PROJECTED_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "projected_permission_matrix_repository.py"
 SUPPORT_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "supporting_doctype_permission_repository.py"
@@ -98,22 +99,30 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         for role in ("Production Manager", "System Manager", "Order Entry"):
             self.assertNotIn(role, source)
 
-    def test_shared_shell_hides_only_capability_owned_shortcuts(self) -> None:
+    def test_shared_shell_uses_surface_policy_not_raw_capabilities(self) -> None:
         source = SHARED_SHELL.read_text(encoding="utf-8")
-        self.assertIn("CAPABILITY_ROUTE_RULES", source)
-        self.assertIn('any: ["manage_permissions"]', source)
-        self.assertIn('any: ["view_users"]', source)
-        self.assertIn("view_factory_settings", source)
-        self.assertIn("edit_factory_production_controls", source)
-        self.assertIn("view_production_routings", source)
-        self.assertIn("view_edge_banding_types", source)
-        self.assertIn('any: ["approve_order", "reject_order"]', source)
-        self.assertIn('any: ["view_operational_reports", "view_financial_reports"]', source)
-        self.assertIn("ruleAllowed", source)
+        surface_policy = SURFACE_POLICY.read_text(encoding="utf-8")
+
+        self.assertIn("SURFACE_ROUTE_RULES", source)
+        self.assertIn("surfaceAllowed", source)
+        self.assertIn('surface: "permissions"', source)
+        self.assertIn('surface: "role_admin"', source)
+        self.assertIn('surface: "workforce"', source)
+        self.assertIn('surface: "factory_settings"', source)
+        self.assertIn('surface: "production_routings"', source)
+        self.assertIn('surface: "edge_banding_types"', source)
+        self.assertIn('surface: "report_factory_order_analysis"', source)
         self.assertIn("hideUnauthorizedShortcuts", source)
+        self.assertNotIn("CAPABILITY_ROUTE_RULES", source)
         self.assertNotIn("frappe.user_roles", source)
         self.assertNotIn("manage_users", source)
         self.assertNotIn("manage_factory_settings", source)
+
+        self.assertIn("Capability.MANAGE_PERMISSIONS", surface_policy)
+        self.assertIn("Capability.VIEW_USERS", surface_policy)
+        self.assertIn("Capability.VIEW_PRODUCTION_ROUTINGS", surface_policy)
+        self.assertIn("Capability.VIEW_EDGE_BANDING_TYPES", surface_policy)
+        self.assertIn('sections.get("factory_settings")', surface_policy)
 
     def test_settings_workspace_has_direct_administration_entries(self) -> None:
         workspace = json.loads(SETTINGS_WORKSPACE.read_text(encoding="utf-8"))
@@ -122,7 +131,12 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertEqual(targets["إدارة المستخدمين"], "factory-workforce")
         self.assertEqual(targets["إدارة الصلاحيات"], "factory-permissions")
         self.assertEqual(targets["إدارة مسارات الإنتاج"], "factory-master-data")
-        self.assertIn('routes: ["factory-permissions", "role"]', SHARED_SHELL.read_text(encoding="utf-8"))
+
+        shell = SHARED_SHELL.read_text(encoding="utf-8")
+        self.assertIn('{ surface: "permissions", routes: ["factory-permissions"] }', shell)
+        self.assertIn('surface: "role_admin"', shell)
+        self.assertIn('"role"', shell)
+        self.assertIn('{ surface: "workforce", routes: ["factory-workforce"] }', shell)
 
 
 if __name__ == "__main__":
