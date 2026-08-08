@@ -87,6 +87,13 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         master_data = (
             root / "almdina_erp" / "services" / "master_data_service.py"
         ).read_text(encoding="utf-8")
+        repository = (
+            root
+            / "almdina_erp"
+            / "infrastructure"
+            / "frappe"
+            / "production_routing_repository.py"
+        ).read_text(encoding="utf-8")
         self.assertIn("get_production_route", commands)
         self.assertIn("list_active_routes", queries)
         self.assertNotIn('options: "Sharyoun\\nDrawing"', order_ux)
@@ -94,6 +101,9 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertNotIn("Production Manager", routing_ux)
         self.assertIn("search_operational_roles", routing_ux)
         self.assertIn("Capability.VIEW_PRODUCTION_ROUTINGS", master_data)
+        self.assertNotIn("STAGE_ROLE_BY_TYPE", repository)
+        self.assertNotIn("shop_floor_authorization", repository)
+        self.assertIn('getattr(row, "operational_role", None)', repository)
 
     def test_migration_preserves_legacy_routes_and_backfills_stage_snapshots(self) -> None:
         root = Path(__file__).resolve().parents[1]
