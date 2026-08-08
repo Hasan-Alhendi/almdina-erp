@@ -80,15 +80,15 @@ const phoneRoot = { getBoundingClientRect: () => ({ width: 340 }) };
 assert.strictEqual(api.isPhoneLayout(phoneRoot), true, "a real phone must use order cards");
 assert.strictEqual(responsive.usesCardLayout(phoneRoot), true);
 
-// A touch-first tablet uses the card presentation even though it is wider than a phone.
-context.document.documentElement.clientWidth = 1024;
-context.window.innerWidth = 1024;
-context.window.screen.width = 1024;
-context.window.screen.height = 1366;
+// A portrait touch-first tablet uses cards even though its viewport is below 900px.
+context.document.documentElement.clientWidth = 820;
+context.window.innerWidth = 820;
+context.window.screen.width = 820;
+context.window.screen.height = 1180;
 coarsePointer = true;
 noHover = true;
-const tabletRoot = { getBoundingClientRect: () => ({ width: 1024 }) };
-assert.strictEqual(responsive.isTabletDevice(tabletRoot), true, "a touch tablet must be detected as a tablet");
+const tabletRoot = { getBoundingClientRect: () => ({ width: 820 }) };
+assert.strictEqual(responsive.isTabletDevice(tabletRoot), true, "a portrait touch tablet must be detected as a tablet");
 assert.strictEqual(api.isPhoneLayout(tabletRoot), true, "a tablet must use order cards");
 
 // A laptop keeps the original Frappe table even at a similar viewport width.
