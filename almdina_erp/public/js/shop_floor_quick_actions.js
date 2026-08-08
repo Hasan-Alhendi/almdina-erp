@@ -3,7 +3,7 @@
 
     const METHODS = Object.freeze({
         start: "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
-        handoffWorkers: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
+        handoffContext: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
         handoff: "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
     });
 
@@ -16,10 +16,9 @@
             };
         }
         if (context && context.canHandoff === true) {
-            const isFinalStage = context.stageType === "Sanding";
             return {
                 kind: "handoff",
-                label: isFinalStage ? __("إنهاء التقشيط") : __("إنهاء وإرسال"),
+                label: __("إنهاء وإرسال"),
                 indicator: "success",
             };
         }
@@ -74,7 +73,7 @@
 
     function finishFinalStage(context, options) {
         frappe.confirm(
-            __("تأكيد إنهاء التقشيط واعتبار الطلب جاهزًا للتسليم؟"),
+            __("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"),
             () => runCommand({
                 method: METHODS.handoff,
                 args: { stage_name: context.stage },
@@ -85,44 +84,63 @@
         );
     }
 
-    function handoff(context, options) {
-        if (context.stageType === "Sanding") {
-            finishFinalStage(context, options);
+    function promptNextWorker(context, options, handoffContext) {
+        const workers = Array.isArray(handoffContext.workers)
+            ? handoffContext.workers
+            : [];
+        if (!workers.length) {
+            frappe.msgprint(
+                __("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [
+                    handoffContext.operational_role || "",
+                ])
+            );
             return;
         }
 
+        const nextDepartment = handoffContext.next_department
+            || handoffContext.next_stage_type
+            || __("القسم التالي");
+        frappe.prompt(
+            [{
+                fieldname: "next_assignee",
+                fieldtype: "Select",
+                label: `${__("العامل التالي")} — ${nextDepartment}`,
+                options: workerOptions(workers),
+                reqd: 1,
+            }],
+            values => runCommand({
+                method: METHODS.handoff,
+                args: {
+                    stage_name: context.stage,
+                    next_assignee: values.next_assignee,
+                },
+                button: options.button,
+                successMessage: __("تم إنهاء المرحلة وإرسال الطلب للقسم التالي."),
+                onSuccess: options.onSuccess,
+            }),
+            __("إنهاء وإرسال"),
+            __("إرسال")
+        );
+    }
+
+    function handoff(context, options) {
         setBusy(options.button, true);
         return frappe.call({
-            method: METHODS.handoffWorkers,
+            method: METHODS.handoffContext,
             args: { stage_name: context.stage },
         }).then(response => {
-            const workers = response.message || [];
-            if (!workers.length) {
-                frappe.msgprint(__("لا يوجد عمال متاحون للقسم التالي."));
-                return;
+            setBusy(options.button, false);
+            const handoffContext = response.message || {};
+            if (handoffContext.final_stage === true) {
+                finishFinalStage(context, options);
+                return handoffContext;
             }
-            frappe.prompt(
-                [{
-                    fieldname: "next_assignee",
-                    fieldtype: "Select",
-                    label: __("العامل التالي"),
-                    options: workerOptions(workers),
-                    reqd: 1,
-                }],
-                values => runCommand({
-                    method: METHODS.handoff,
-                    args: {
-                        stage_name: context.stage,
-                        next_assignee: values.next_assignee,
-                    },
-                    button: options.button,
-                    successMessage: __("تم إنهاء المرحلة وإرسال الطلب للقسم التالي."),
-                    onSuccess: options.onSuccess,
-                }),
-                __("إنهاء وإرسال"),
-                __("إرسال")
-            );
-        }).finally(() => setBusy(options.button, false));
+            promptNextWorker(context, options, handoffContext);
+            return handoffContext;
+        }).catch(error => {
+            setBusy(options.button, false);
+            throw error;
+        });
     }
 
     function perform(context, options = {}) {
