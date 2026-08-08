@@ -45,6 +45,10 @@
 		);
 	}
 
+	function canEditDrawingOptimizer(frm = null) {
+		return can("edit_optimizer_settings", frm);
+	}
+
 	function canUseDrawingOptimizerInbox(detail, meta) {
 		return Boolean(
 			detail &&
@@ -113,42 +117,45 @@
 			</div>`;
 	}
 
-	function buildDrawingPanelHtml(plan, packingMode) {
+	function buildDrawingPanelHtml(plan, packingMode, mayEditSettings) {
+		const disabled = mayEditSettings ? "" : "disabled";
 		const options = PACKING_MODES.map(
 			(mode) => `<option value="${escape(mode)}" ${packingMode === mode ? "selected" : ""}>${escape(__(mode))}</option>`
 		).join("");
 		return `
 			<div class="dco-drawing-plan-panel" style="direction:rtl;border:1px solid var(--border-color,#dfe3e8);border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f8fafc));margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.035)">
 				<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
-					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${__("محرك خطة الرسم")}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${__("إعادة الحساب متاحة للمصمم المسند إليه الطلب فقط.")}</p></div>
-					<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(36,144,239,.1);color:#1769aa;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("صلاحية فعالة")}</span>
+					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${__("محرك خطة الرسم")}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${__("إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.")}</p></div>
+					<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(36,144,239,.1);color:#1769aa;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("إعادة الحساب متاحة")}</span>
 				</div>
 				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
-					<select class="form-control input-sm" style="max-width:240px;min-height:36px" data-drawing-mode>${options}</select>
+					<select class="form-control input-sm" style="max-width:240px;min-height:36px" data-drawing-mode ${disabled}>${options}</select>
 					<button type="button" class="btn btn-primary btn-sm" data-drawing-recalc>${__("إعادة الحساب")}</button>
-					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Auto Pro">${__("أفضل توزيع متقدم")}</button>
-					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Deep Search">${__("بحث معمق")}</button>
-					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Optimal Search">${__("بحث أمثل")}</button>
+					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Auto Pro" ${disabled}>${__("أفضل توزيع متقدم")}</button>
+					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Deep Search" ${disabled}>${__("بحث معمق")}</button>
+					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Optimal Search" ${disabled}>${__("بحث أمثل")}</button>
 				</div>
+				${mayEditSettings ? "" : `<div class="text-muted" style="font-size:11px;margin-top:8px">${__("تغيير الخوارزمية يحتاج صلاحية «تعديل إعدادات المحسّن». يمكنك إعادة الحساب بالخوارزمية الحالية.")}</div>`}
 				${summaryCards(plan)}
 			</div>`;
 	}
 
-	function recalculationArgs(orderName, detail, packingMode) {
+	function recalculationArgs(orderName, detail, packingMode, mayEditSettings) {
 		return {
 			order_name: orderName,
-			packing_mode: packingMode || (detail && detail.packing_mode) || "Auto Pro",
+			packing_mode: mayEditSettings ? (packingMode || (detail && detail.packing_mode) || "Auto Pro") : (detail && detail.packing_mode),
 			cutting_machine_type: detail && detail.cutting_machine_type,
 			kerf_mm: detail && detail.kerf_mm,
 			trim_margin_mm: detail && detail.trim_margin_mm,
+			optimization_time_limit_sec: detail && detail.optimization_time_limit_sec,
 		};
 	}
 
-	function recalcOrder(orderName, detail, packingMode, onSuccess) {
+	function recalcOrder(orderName, detail, packingMode, mayEditSettings, onSuccess) {
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
-				args: recalculationArgs(orderName, detail, packingMode),
+				args: recalculationArgs(orderName, detail, packingMode, mayEditSettings),
 				freeze: true,
 				freeze_message: __("جاري حساب خطة القص..."),
 			})
@@ -165,10 +172,11 @@
 		const context = documentContext();
 		const identity = context.capture(frm);
 		const orderName = frm.doc.name;
+		const mayEditSettings = canEditDrawingOptimizer(frm);
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
-				args: recalculationArgs(orderName, frm.doc, packingMode),
+				args: recalculationArgs(orderName, frm.doc, packingMode, mayEditSettings),
 				freeze: true,
 				freeze_message: __("جاري حساب خطة القص..."),
 			})
@@ -179,20 +187,22 @@
 			});
 	}
 
-	function bindInboxPanel(root, orderName, detail, onSuccess) {
+	function bindInboxPanel(root, orderName, detail, mayEditSettings, onSuccess) {
 		root.find("[data-drawing-recalc]").on("click", () =>
-			recalcOrder(orderName, detail, root.find("[data-drawing-mode]").val(), onSuccess)
+			recalcOrder(orderName, detail, root.find("[data-drawing-mode]").val(), mayEditSettings, onSuccess)
 		);
 		root.find("[data-drawing-mode-btn]").on("click", function selectMode() {
-			recalcOrder(orderName, detail, $(this).attr("data-drawing-mode-btn"), onSuccess);
+			if (!mayEditSettings) return;
+			recalcOrder(orderName, detail, $(this).attr("data-drawing-mode-btn"), true, onSuccess);
 		});
 	}
 
-	function bindFormPanel(root, frm) {
+	function bindFormPanel(root, frm, mayEditSettings) {
 		root.find("[data-drawing-recalc]").on("click", () =>
 			recalcCurrentOrder(frm, root.find("[data-drawing-mode]").val())
 		);
 		root.find("[data-drawing-mode-btn]").on("click", function selectMode() {
+			if (!mayEditSettings) return;
 			recalcCurrentOrder(frm, $(this).attr("data-drawing-mode-btn"));
 		});
 	}
@@ -202,9 +212,10 @@
 			if (host && host.length) host.empty();
 			return;
 		}
+		const mayEditSettings = canEditDrawingOptimizer();
 		const plan = parsePlan(detail.system_plan_json);
-		host.html(buildDrawingPanelHtml(plan, detail.packing_mode || "Auto Pro"));
-		bindInboxPanel(host, meta.order, detail, onSuccess);
+		host.html(buildDrawingPanelHtml(plan, detail.packing_mode || "Auto Pro", mayEditSettings));
+		bindInboxPanel(host, meta.order, detail, mayEditSettings, onSuccess);
 	}
 
 	function renderPanel(frm, host) {
@@ -214,8 +225,9 @@
 			if (target) target.empty();
 			return;
 		}
+		const mayEditSettings = canEditDrawingOptimizer(frm);
 		const plan = parsePlan(frm.doc.system_plan_json || frm.doc.cutting_plan_json);
-		const html = buildDrawingPanelHtml(plan, frm.doc.packing_mode);
+		const html = buildDrawingPanelHtml(plan, frm.doc.packing_mode, mayEditSettings);
 		const root = target || (frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper);
 		if (!root) return;
 		if (target) {
@@ -225,7 +237,7 @@
 			if (existing.length) existing.replaceWith($(html));
 			else root.prepend(html);
 		}
-		bindFormPanel(root.find(".dco-drawing-plan-panel"), frm);
+		bindFormPanel(root.find(".dco-drawing-plan-panel"), frm, mayEditSettings);
 	}
 
 	function refreshPlanView(frm) {
@@ -238,6 +250,7 @@
 	}
 
 	window.AlmdinaDrawingPlanUX = {
+		canEditDrawingOptimizer,
 		canUseDrawingOptimizer,
 		canUseDrawingOptimizerInbox,
 		renderPanel,
