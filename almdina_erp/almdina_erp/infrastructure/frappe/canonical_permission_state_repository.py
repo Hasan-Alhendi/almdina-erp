@@ -6,6 +6,9 @@ from typing import Any
 
 import frappe
 
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
 )
@@ -26,7 +29,7 @@ class CanonicalPermissionStateRepository:
 
     @staticmethod
     def _empty_state() -> dict[str, bool]:
-        return normalize_capability_state({})
+        return normalize_business_capability_state({})
 
     @staticmethod
     def _payload(raw: str | Mapping[str, Any] | None) -> dict[str, Any]:
@@ -45,13 +48,14 @@ class CanonicalPermissionStateRepository:
 
     @classmethod
     def _decode(cls, raw: str | Mapping[str, Any] | None) -> dict[str, bool]:
-        """Decode current canonical state strictly.
+        """Decode current canonical business state strictly.
 
-        Unknown capability keys remain an error for canonical state. This keeps
-        the authoritative store self-validating and prevents silent corruption.
+        Unknown capability keys remain an error for canonical state. Lookup-only
+        dependencies are not promoted to explicit Customer/Edge administration
+        grants when state is read back.
         """
 
-        return normalize_capability_state(cls._payload(raw))
+        return normalize_business_capability_state(cls._payload(raw))
 
     @classmethod
     def _decode_legacy_audit(
@@ -100,7 +104,7 @@ class CanonicalPermissionStateRepository:
         if not self.available():
             raise RuntimeError(f"{STATE_DOCTYPE} is not installed.")
 
-        normalized = normalize_capability_state(state)
+        normalized = normalize_business_capability_state(state)
         encoded = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
         name = frappe.db.exists(STATE_DOCTYPE, {"role": resolved})
         if name:
