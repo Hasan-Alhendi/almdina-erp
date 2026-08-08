@@ -5,6 +5,14 @@ from typing import Any
 import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
+
+def lock_stage(stage_name: str) -> None:
+    frappe.db.sql(
+        "select name from `tabProduction Stage` where name = %s for update",
+        (stage_name,),
+    )
+
+
 def get_stage(stage_name: str) -> Any:
     return frappe.get_doc("Production Stage", stage_name)
 
@@ -63,10 +71,7 @@ def create_stage(
 
 
 def reassign_stage(stage_name: str, *, assignee: str) -> Any:
-    frappe.db.sql(
-        "select name from `tabProduction Stage` where name = %s for update",
-        (stage_name,),
-    )
+    lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.assigned_to = assignee
     stage.save(ignore_permissions=True)
@@ -200,6 +205,7 @@ __all__ = [
     "get_stage",
     "list_later_stages",
     "list_revert_stage_candidates",
+    "lock_stage",
     "reassign_stage",
     "reopen_stage",
     "stage_exists",
