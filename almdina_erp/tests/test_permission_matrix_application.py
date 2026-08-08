@@ -38,6 +38,21 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             )
         )
 
+    def test_cutting_plan_approval_is_presented_in_plan_group(self) -> None:
+        groups = capability_catalog_payload()
+        plan_group = next(group for group in groups if group["key"] == "cutting_plan")
+        approval = next(
+            item
+            for item in plan_group["capabilities"]
+            if item["key"] == Capability.APPROVE_DXF
+        )
+        self.assertEqual(approval["label"], "اعتماد خطة القص")
+        drawing_group = next(group for group in groups if group["key"] == "drawing")
+        self.assertNotIn(
+            Capability.APPROVE_DXF,
+            {item["key"] for item in drawing_group["capabilities"]},
+        )
+
     def test_order_actions_automatically_require_order_read(self) -> None:
         state = normalize_capability_state({Capability.APPROVE_DXF: True})
         self.assertTrue(state[Capability.APPROVE_DXF])
@@ -99,10 +114,16 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             Capability.RECALCULATE_PLAN,
             Capability.EDIT_OPTIMIZER_SETTINGS,
             Capability.PRINT_CUTTING_PLAN,
+            Capability.APPROVE_DXF,
         ):
             with self.subTest(action=action):
                 state = normalize_capability_state({action: True})
                 self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+
+    def test_plan_approval_does_not_require_drawing_workspace(self) -> None:
+        state = normalize_capability_state({Capability.APPROVE_DXF: True})
+        self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_DRAWING_WORKSPACE])
 
     def test_drawing_actions_automatically_require_drawing_workspace(self) -> None:
         for action in (
@@ -110,7 +131,6 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             Capability.EXPORT_DXF,
             Capability.UPLOAD_DXF,
             Capability.REPLACE_DXF,
-            Capability.APPROVE_DXF,
         ):
             with self.subTest(action=action):
                 state = normalize_capability_state({action: True})
