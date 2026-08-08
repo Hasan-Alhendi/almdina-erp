@@ -47,10 +47,9 @@ def _workspace_page_allowed(
 ) -> bool:
     """Authorize a v16 workspace/sidebar record.
 
-    Real Workspaces are controlled by the navigation workspace allow-list. v16
-    also models sidebar destinations as Workspace rows of type Link/URL under a
-    parent Workspace; known Almdina Links are controlled by their business
-    surface instead of inheriting visibility from the parent.
+    Link/URL rows are business destinations, not Workspaces. They must be checked
+    against their exact Almdina surface *before* the Workspace allow-list so a
+    translated sidebar link cannot inherit visibility from an allowed parent.
     """
 
     if isinstance(page, str):
@@ -58,19 +57,20 @@ def _workspace_page_allowed(
     if not isinstance(page, dict):
         return False
 
-    if _workspace_name(page) in allowed:
-        return True
-
     parent = str(page.get("parent_page") or "")
     page_type = str(page.get("type") or "Workspace").strip().lower()
-    if parent in allowed and page_type in {"link", "url"}:
-        decision = workspace_item_allowed(page, surfaces)
-        # Unknown child links inside the Almdina shell fail closed. Standard
-        # sidebar links are covered by regression tests, so an unclassified new
-        # entry cannot silently leak into a restricted role.
-        return decision is True
 
-    return False
+    if page_type in {"link", "url"}:
+        decision = workspace_item_allowed(page, surfaces)
+        if decision is not None:
+            return decision
+        # Unknown child links inside an Almdina workspace fail closed. New
+        # destinations must be classified in workspace_visibility explicitly.
+        if parent in allowed or parent == ALMDINA_MODULE:
+            return False
+        return False
+
+    return _workspace_name(page) in allowed
 
 
 def _project_allowed_pages(
