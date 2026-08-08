@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+from almdina_erp.almdina_erp.application.security.navigation_context import (
+    WORKSPACE_CONTROL_CENTER,
+    build_navigation_context,
+)
 from almdina_erp.almdina_erp.application.security.surface_access import (
     ALL_SURFACES,
     Surface,
@@ -47,6 +51,20 @@ class TestPermissionSurfacePolicy(unittest.TestCase):
         )
         self.assertTrue(surfaces[Surface.CUSTOMER_ADMIN])
         self.assertFalse(surfaces[Surface.EDGE_BANDING_TYPES])
+
+    def test_cutting_plan_approval_does_not_expose_drawing_or_control_center(self) -> None:
+        navigation = build_navigation_context(
+            {
+                Capability.VIEW_ORDERS,
+                Capability.VIEW_CUTTING_PLAN,
+                Capability.APPROVE_DXF,
+            }
+        )
+        self.assertTrue(navigation["sections"]["planning"])
+        self.assertFalse(navigation["sections"]["drawing"])
+        self.assertFalse(navigation["sections"]["quality"])
+        self.assertFalse(navigation["sections"]["costing"])
+        self.assertNotIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])
 
     def test_workforce_and_permission_admin_surfaces_are_explicit(self) -> None:
         workforce = build_surface_access({Capability.VIEW_USERS})
