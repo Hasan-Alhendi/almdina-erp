@@ -22,6 +22,7 @@ class Surface:
     CUSTOMER_ADMIN = "customer_admin"
     CUTTING_PLANS = "cutting_plans"
     PRODUCTION_STAGES = "production_stages"
+    PRODUCTION_INCIDENTS = "production_incidents"
     REPLACEMENTS = "replacements"
     FACTORY_MASTER_DATA = "factory_master_data"
     PRODUCTION_ROUTINGS = "production_routings"
@@ -60,6 +61,7 @@ ALL_SURFACES = frozenset(
         Surface.CUSTOMER_ADMIN,
         Surface.CUTTING_PLANS,
         Surface.PRODUCTION_STAGES,
+        Surface.PRODUCTION_INCIDENTS,
         Surface.REPLACEMENTS,
         Surface.FACTORY_MASTER_DATA,
         Surface.PRODUCTION_ROUTINGS,
@@ -94,10 +96,7 @@ def build_surface_access(
     sections = navigation["sections"]
     report_access = build_report_access(granted)
 
-    can_open_reports = (
-        report_access.operational
-        and Capability.VIEW_ORDERS in granted
-    )
+    can_open_reports = report_access.operational and Capability.VIEW_ORDERS in granted
     can_open_master_data = sections.get("master_data") is True
 
     flags = {
@@ -107,6 +106,7 @@ def build_surface_access(
         ),
         Surface.CUTTING_PLANS: Capability.VIEW_CUTTING_PLAN in granted,
         Surface.PRODUCTION_STAGES: sections.get("production") is True,
+        Surface.PRODUCTION_INCIDENTS: Capability.VIEW_PRODUCTION_INCIDENTS in granted,
         Surface.REPLACEMENTS: Capability.VIEW_REPLACEMENTS in granted,
         Surface.FACTORY_MASTER_DATA: can_open_master_data,
         Surface.PRODUCTION_ROUTINGS: (
@@ -132,6 +132,7 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
         Surface.CUSTOMER_ADMIN: ("customer",),
         Surface.CUTTING_PLANS: ("cutting-plan",),
         Surface.PRODUCTION_STAGES: ("production-stage",),
+        Surface.PRODUCTION_INCIDENTS: ("production-incident",),
         Surface.REPLACEMENTS: ("replacement-piece",),
         Surface.FACTORY_MASTER_DATA: ("factory-master-data",),
         Surface.PRODUCTION_ROUTINGS: ("production-routing",),
@@ -148,38 +149,14 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
             "permission-inspector",
             "user-permission",
         ),
-        Surface.REPORT_FACTORY_OPERATIONS_SUMMARY: (
-            "factory-operations-summary",
-            "factory%20operations%20summary",
-        ),
-        Surface.REPORT_FACTORY_ORDER_ANALYSIS: (
-            "factory-order-analysis",
-            "factory%20order%20analysis",
-        ),
-        Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: (
-            "production-stage-performance",
-            "production%20stage%20performance",
-        ),
-        Surface.REPORT_PRODUCTION_INCIDENTS: (
-            "production-incidents-and-replacements",
-            "production%20incidents%20and%20replacements",
-        ),
-        Surface.REPORT_BOARD_USAGE: (
-            "board-usage-analysis",
-            "board%20usage%20analysis",
-        ),
-        Surface.REPORT_PIECE_SIZE_USAGE: (
-            "piece-size-usage-analysis",
-            "piece%20size%20usage%20analysis",
-        ),
-        Surface.REPORT_ORDER_STOCK_AVAILABILITY: (
-            "order-stock-availability",
-            "order%20stock%20availability",
-        ),
-        Surface.REPORT_REMNANT_INVENTORY: (
-            "remnant-inventory",
-            "remnant%20inventory",
-        ),
+        Surface.REPORT_FACTORY_OPERATIONS_SUMMARY: ("factory-operations-summary",),
+        Surface.REPORT_FACTORY_ORDER_ANALYSIS: ("factory-order-analysis",),
+        Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: ("production-stage-performance",),
+        Surface.REPORT_PRODUCTION_INCIDENTS: ("production-incidents-and-replacements",),
+        Surface.REPORT_BOARD_USAGE: ("board-usage-analysis",),
+        Surface.REPORT_PIECE_SIZE_USAGE: ("piece-size-usage-analysis",),
+        Surface.REPORT_ORDER_STOCK_AVAILABILITY: ("order-stock-availability",),
+        Surface.REPORT_REMNANT_INVENTORY: ("remnant-inventory",),
     }
 )
 
