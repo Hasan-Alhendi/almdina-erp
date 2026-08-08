@@ -11,6 +11,7 @@ class RoutingStage:
     stage_type: str
     department_label: str
     operational_role: str
+    is_planning_stage: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,9 +45,25 @@ class ProductionRoute:
         if tuple(sequences) != tuple(sorted(sequences)):
             raise ValueError("يجب أن تكون مراحل مسار الإنتاج مرتبة حسب التسلسل.")
 
+        planning = [stage for stage in self.stages if stage.is_planning_stage]
+        if len(planning) > 1:
+            raise ValueError("يمكن أن يحتوي المسار على مرحلة تخطيط واحدة فقط.")
+        if planning and planning[0] != self.first_stage:
+            raise ValueError("مرحلة التخطيط يجب أن تكون أول مرحلة فعالة في المسار.")
+
     @property
     def first_stage(self) -> RoutingStage:
         return self.stages[0]
+
+    @property
+    def starts_with_planning(self) -> bool:
+        return self.first_stage.is_planning_stage
+
+    @property
+    def requires_approved_plan_before_dispatch(self) -> bool:
+        """Physical routes require an approved plan before the first assignment."""
+
+        return not self.starts_with_planning
 
     def stage(self, stage_type: str) -> RoutingStage:
         resolved = str(stage_type or "").strip()
