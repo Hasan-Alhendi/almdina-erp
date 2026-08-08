@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from almdina_erp.almdina_erp.application.security.report_access import (
+    build_report_access,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CONTROL_CENTER_CAPABILITIES,
     COSTING_CAPABILITIES,
@@ -32,10 +35,7 @@ WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
 
 _CUSTOMER_DOCUMENT_CAPABILITIES = frozenset(
-    {
-        Capability.PRINT_MEASUREMENTS,
-        Capability.PRINT_CUSTOMER_INVOICE,
-    }
+    {Capability.PRINT_MEASUREMENTS, Capability.PRINT_CUSTOMER_INVOICE}
 )
 _FINANCIAL_CAPABILITIES = frozenset(
     COSTING_CAPABILITIES.difference(_CUSTOMER_DOCUMENT_CAPABILITIES)
@@ -65,10 +65,7 @@ _ORDER_INPUT_CAPABILITIES = frozenset(
     }
 )
 _ORDER_SUPPORTING_MASTER_DATA = frozenset(
-    {
-        Capability.VIEW_CUSTOMERS,
-        Capability.VIEW_EDGE_BANDING_TYPES,
-    }
+    {Capability.VIEW_CUSTOMERS, Capability.VIEW_EDGE_BANDING_TYPES}
 )
 
 
@@ -142,7 +139,11 @@ def build_navigation_context(
     has_drawing = _intersects(granted, DRAWING_CAPABILITIES)
     has_production = _intersects(granted, PRODUCTION_CAPABILITIES)
     has_quality = _intersects(granted, CONTROL_CENTER_CAPABILITIES)
-    has_reports = _intersects(granted, REPORTING_CAPABILITIES)
+    report_access = build_report_access(granted)
+    # Every current Almdina Script Report is registered against Door Cutting
+    # Order. Without VIEW_ORDERS Frappe rejects the report before execute(), so
+    # the workspace must not advertise an action the user cannot open.
+    has_reports = report_access.operational and Capability.VIEW_ORDERS in granted
     has_workforce = _intersects(granted, WORKFORCE_CAPABILITIES)
     has_factory_settings = _intersects(granted, FACTORY_SETTINGS_CAPABILITIES)
     visible_configuration = _visible_configuration_capabilities(granted)
@@ -208,8 +209,6 @@ def build_navigation_context(
 
     return {
         "shared_shell": active,
-        # The built-in Administrator keeps the complete Frappe Desktop, apps and
-        # workspace registry. Every other Almdina profile stays inside the factory app.
         "app_only": active and not system_administrator,
         "profile": _profile(granted),
         "home_page": home_page if active else "",
