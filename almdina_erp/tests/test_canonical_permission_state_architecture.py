@@ -56,19 +56,21 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertNotIn("_effective_rows", source)
         self.assertIn("DocPerm and Custom DocPerm are write-only projections", source)
 
-    def test_legacy_projection_bootstrap_uses_audit_or_deny_all(self) -> None:
+    def test_missing_canonical_state_bootstraps_deny_all_only(self) -> None:
         canonical = CANONICAL_REPOSITORY.read_text(encoding="utf-8")
         sync = SYNC.read_text(encoding="utf-8")
         self.assertIn("latest_audited_state", canonical)
+        self.assertIn("historical inspection only", canonical)
         self.assertIn("bootstrap_fail_closed", canonical)
-        self.assertIn("audited if audited is not None else {}", canonical)
         bootstrap = canonical[canonical.index("    def bootstrap_fail_closed"):]
+        self.assertIn("return self.save(resolved, {})", bootstrap)
+        self.assertNotIn("latest_audited_state", bootstrap)
+        self.assertNotIn("AUDIT_DOCTYPE", bootstrap)
         self.assertNotIn('frappe.get_all("DocPerm"', bootstrap)
         self.assertNotIn('frappe.get_all("Custom DocPerm"', bootstrap)
         self.assertNotIn('frappe.db.get_value("DocPerm"', bootstrap)
         self.assertNotIn('frappe.db.get_value("Custom DocPerm"', bootstrap)
         self.assertIn("canonical.bootstrap_fail_closed", sync)
-        self.assertIn("Project", sync)
         self.assertIn("save_role_states(prepared)", sync)
 
     def test_standard_baseline_cannot_import_custom_business_fields(self) -> None:
