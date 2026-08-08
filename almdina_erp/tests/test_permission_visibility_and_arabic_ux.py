@@ -123,6 +123,7 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         surfaces = {
             Surface.ORDERS: True,
             Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE: False,
+            Surface.REPORT_PRODUCTION_INCIDENTS: False,
         }
         order_link = {
             "type": "Link",
@@ -130,14 +131,21 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             "link_to": "Door Cutting Order",
             "label": "طلبات قص الدرف",
         }
-        denied_report = {
+        denied_performance = {
             "type": "Link",
             "parent_page": "Almdina ERP",
             "link_to": "Production Stage Performance",
             "label": "أداء مراحل الإنتاج",
         }
+        denied_incidents = {
+            "type": "Link",
+            "parent_page": "Almdina ERP",
+            "link_to": "Production Incidents and Replacements",
+            "label": "أخطاء الإنتاج والقطع التعويضية",
+        }
         self.assertIs(workspace_item_allowed(order_link, surfaces), True)
-        self.assertIs(workspace_item_allowed(denied_report, surfaces), False)
+        self.assertIs(workspace_item_allowed(denied_performance, surfaces), False)
+        self.assertIs(workspace_item_allowed(denied_incidents, surfaces), False)
 
     def test_workspace_server_guards_cover_boot_and_desktop_endpoint(self) -> None:
         boot = (ROOT / "boot.py").read_text(encoding="utf-8")
@@ -147,7 +155,11 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertIn('"sidebar_pages"', boot)
         self.assertIn("workspace_item_allowed", boot)
         self.assertIn("project_workspace_page", boot)
-        self.assertIn("Unknown child links inside the Almdina shell fail closed", boot)
+        self.assertIn("Link/URL rows are business destinations", boot)
+        self.assertLess(
+            boot.index('if page_type in {"link", "url"}:'),
+            boot.index("return _workspace_name(page) in allowed"),
+        )
 
         self.assertIn('"frappe.desk.desktop.get_desktop_page"', hooks)
         self.assertIn('"almdina_erp.workspace_api.get_desktop_page"', hooks)
