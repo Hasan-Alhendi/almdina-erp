@@ -73,7 +73,9 @@ jobs:
             almdina_erp.tests.test_authorization_gateway_matrix_fallback \
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
+            almdina_erp.tests.test_canonical_permission_state_architecture \
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
+            almdina_erp.tests.test_resource_permission_hooks \
             almdina_erp.tests.test_permission_management_architecture \
             almdina_erp.tests.test_permission_templates \
             almdina_erp.tests.test_permission_personas_e2e \
