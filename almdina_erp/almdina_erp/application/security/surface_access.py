@@ -54,6 +54,8 @@ REPORT_SURFACES = frozenset(
         Surface.REPORT_REMNANT_INVENTORY,
     }
 )
+FINANCIAL_REPORT_SURFACES = frozenset({Surface.REPORT_FACTORY_ORDER_ANALYSIS})
+OPERATIONAL_REPORT_SURFACES = REPORT_SURFACES.difference(FINANCIAL_REPORT_SURFACES)
 
 ALL_SURFACES = frozenset(
     {
@@ -96,7 +98,12 @@ def build_surface_access(
     sections = navigation["sections"]
     report_access = build_report_access(granted)
 
-    can_open_reports = report_access.operational and Capability.VIEW_ORDERS in granted
+    can_open_operational_reports = (
+        report_access.operational and Capability.VIEW_ORDERS in granted
+    )
+    can_open_financial_reports = (
+        report_access.financial and Capability.VIEW_ORDERS in granted
+    )
     can_open_master_data = sections.get("master_data") is True
 
     flags = {
@@ -119,10 +126,12 @@ def build_surface_access(
         Surface.WORKFORCE: Capability.VIEW_USERS in granted,
         Surface.PERMISSIONS: Capability.MANAGE_PERMISSIONS in granted,
         Surface.ROLE_ADMIN: Capability.MANAGE_PERMISSIONS in granted,
-        Surface.REPORTS_WORKSPACE: can_open_reports,
+        Surface.REPORTS_WORKSPACE: can_open_operational_reports,
     }
-    for surface in REPORT_SURFACES:
-        flags[surface] = can_open_reports
+    for surface in OPERATIONAL_REPORT_SURFACES:
+        flags[surface] = can_open_operational_reports
+    for surface in FINANCIAL_REPORT_SURFACES:
+        flags[surface] = can_open_financial_reports
     return {surface: flags.get(surface, False) for surface in sorted(ALL_SURFACES)}
 
 
@@ -147,7 +156,9 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
             "role",
             "role-permission-manager",
             "permission-inspector",
+            "permission-type",
             "user-permission",
+            "user",
         ),
         Surface.REPORT_FACTORY_OPERATIONS_SUMMARY: ("factory-operations-summary",),
         Surface.REPORT_FACTORY_ORDER_ANALYSIS: ("factory-order-analysis",),
@@ -163,6 +174,8 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
 
 __all__ = [
     "ALL_SURFACES",
+    "FINANCIAL_REPORT_SURFACES",
+    "OPERATIONAL_REPORT_SURFACES",
     "REPORT_SURFACES",
     "SURFACE_ROUTE_HINTS",
     "Surface",
