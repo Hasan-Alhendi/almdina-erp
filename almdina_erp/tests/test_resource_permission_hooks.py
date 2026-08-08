@@ -26,6 +26,9 @@ def load_resource_permissions(granted: set[str]):
     fake_gateway.doctype_has_capability = (
         lambda capability, user=None: capability in granted
     )
+    fake_gateway.doctype_has_any_capability = (
+        lambda capabilities, user=None: any(capability in granted for capability in capabilities)
+    )
 
     previous_frappe = sys.modules.get("frappe")
     previous_gateway = sys.modules.get(GATEWAY_MODULE)
@@ -82,10 +85,8 @@ class TestResourcePermissionHooks(unittest.TestCase):
             )
         )
 
-    def test_order_entry_dependencies_allow_lookup_but_not_administration(self) -> None:
-        module = load_resource_permissions(
-            {Capability.VIEW_CUSTOMERS, Capability.VIEW_EDGE_BANDING_TYPES}
-        )
+    def test_order_input_capability_allows_lookup_but_not_administration_mutations(self) -> None:
+        module = load_resource_permissions({Capability.CREATE_ORDER})
         doc = SimpleNamespace()
 
         self.assertEqual(module.customer_query("entry@example.com"), "")
