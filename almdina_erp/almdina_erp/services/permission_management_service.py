@@ -8,11 +8,13 @@ from frappe import _
 from frappe.utils import cint
 
 from almdina_erp import __version__
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    business_permission_impact,
+    changed_business_capabilities,
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     capability_catalog_payload,
-    changed_capabilities,
-    normalize_capability_state,
-    permission_impact,
 )
 from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_SCHEMA,
@@ -78,7 +80,7 @@ def _parse_capabilities(values: str | Mapping[str, Any] | None) -> dict[str, boo
         error_message="يجب أن تكون قيم الصلاحيات كائن JSON صحيحًا.",
     )
     try:
-        return normalize_capability_state(parsed)
+        return normalize_business_capability_state(parsed)
     except ValueError:
         _validation_error("تحتوي بيانات الصلاحيات على صلاحية غير معروفة أو قيمة غير صالحة.")
     raise AssertionError("frappe.throw must interrupt execution")
@@ -150,7 +152,7 @@ def _bulk_self_lockout_warning(imported_states: Mapping[str, Mapping[str, Any]])
 
     for role, current in current_states.items():
         effective = imported_states.get(role, current)
-        if normalize_capability_state(effective).get(Capability.MANAGE_PERMISSIONS) is True:
+        if normalize_business_capability_state(effective).get(Capability.MANAGE_PERMISSIONS) is True:
             return False
     return True
 
@@ -160,7 +162,7 @@ def _role_payload(role: str) -> dict[str, Any]:
     capabilities = state["capabilities"]
     return {
         **state,
-        "impact": permission_impact(capabilities),
+        "impact": business_permission_impact(capabilities),
         "audit": _repository.list_audit(role, limit=20),
     }
 
@@ -172,13 +174,13 @@ def _preview_payload(
     after: Mapping[str, Any],
     source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    normalized = normalize_capability_state(after)
-    changes = changed_capabilities(before, normalized)
+    normalized = normalize_business_capability_state(after)
+    changes = changed_business_capabilities(before, normalized)
     result: dict[str, Any] = {
         "role": role,
         "capabilities": normalized,
         "changes": changes,
-        "impact": permission_impact(normalized),
+        "impact": business_permission_impact(normalized),
         "requires_self_lockout_confirmation": _self_lockout_warning(role, before, normalized),
         "has_sensitive_changes": any(
             change["risk"] in {"sensitive", "critical"} for change in changes
@@ -335,7 +337,7 @@ def update_role_permissions(
         _role_error()
         raise AssertionError("frappe.throw must interrupt execution")
 
-    changes = changed_capabilities(before, after)
+    changes = changed_business_capabilities(before, after)
     if not changes:
         try:
             _repository.save_role_state(role, after)
