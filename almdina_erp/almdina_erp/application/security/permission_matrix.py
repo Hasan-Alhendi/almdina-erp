@@ -68,7 +68,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.PRINT_INTERNAL_COST_REPORT: _presentation("طباعة تقرير التكلفة الداخلي", "طباعة التقرير السري الذي يتضمن التكلفة والخسائر والربحية.", "critical"),
     Capability.VIEW_CUTTING_PLAN: _presentation("عرض خطة القص", "عرض رسومات الخطة وبيانات ألواح القص."),
     Capability.RECALCULATE_PLAN: _presentation("إعادة حساب الخطة", "إعادة تشغيل محرك توزيع القطع على الألواح.", "sensitive"),
-    Capability.EDIT_OPTIMIZER_SETTINGS: _presentation("تعديل إعدادات المحسّن", "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث.", "sensitive"),
+    Capability.EDIT_OPTIMIZER_SETTINGS: _presentation("تعديل إعدادات المحسّن", "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث ثم إعادة حساب الخطة. تتضمن صلاحية إعادة الحساب تلقائيًا.", "sensitive"),
     Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
     Capability.APPROVE_DXF: _presentation("اعتماد خطة القص", "اعتماد خطة النظام الحالية أو خطة DXF المرفوعة كمصدر نهائي للإنتاج بعد مراجعتها.", "critical"),
     Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
@@ -173,6 +173,12 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         capability: supplied.get(capability) is True
         for capability in sorted(ALL_CAPABILITIES)
     }
+    # Optimizer editing is not useful without running the engine. This dependency
+    # stays strictly inside the cutting-plan boundary and never grants order edit
+    # or financial authority.
+    if state[Capability.EDIT_OPTIMIZER_SETTINGS]:
+        state[Capability.RECALCULATE_PLAN] = True
+
     order_actions = {
         capability
         for capability, enabled in state.items()
