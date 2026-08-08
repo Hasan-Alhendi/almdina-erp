@@ -74,6 +74,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             current_stage=order.current_production_stage or None,
             has_cutting_plan=bool(order.cutting_plan_json),
             plan_needs_recalculation=bool(_as_int(order.plan_needs_recalculation)),
+            has_approved_plan=bool(order.approved_plan),
             drawing_dxf_status=order.drawing_dxf_status or None,
         )
 
