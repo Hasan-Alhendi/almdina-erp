@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     granted_capabilities,
     require_doctype_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
+)
 
 
 _MASTER_DEFINITIONS = {
@@ -67,18 +70,22 @@ def search_operational_roles(
         Capability.VIEW_PRODUCTION_ROUTINGS,
         message=_("لا تملك صلاحية عرض مسارات الإنتاج."),
     )
-    rows = frappe.db.sql(
-        """
-        select name, name
-          from `tabRole`
-         where name like %s
-           and name not in ('All', 'Guest')
-         order by name asc
-         limit %s offset %s
-        """,
-        (f"%{txt or ''}%", max(1, min(cint(page_len or 20), 100)), cint(start)),
+    role_filters: list[list[Any]] = [
+        ["Role", "name", "like", f"%{txt or ''}%"],
+        ["Role", "name", "not in", sorted(PROTECTED_SYSTEM_ROLES)],
+    ]
+    role_meta = frappe.get_meta("Role")
+    if role_meta.has_field("disabled"):
+        role_filters.append(["Role", "disabled", "=", 0])
+    rows = frappe.get_all(
+        "Role",
+        filters=role_filters,
+        fields=["name"],
+        order_by="name asc",
+        limit_start=max(0, cint(start)),
+        limit_page_length=max(1, min(cint(page_len or 20), 100)),
     )
-    return [[str(row[0]), str(row[1])] for row in rows]
+    return [[str(row.name), str(row.name)] for row in rows]
 
 
 def _routing_rows() -> list[dict[str, Any]]:
