@@ -9,8 +9,18 @@ const source = fs.readFileSync(
     "utf8"
 );
 
+assert(!source.includes('context.stageType === "Sanding"'), "quick actions must not hard-code the final production stage");
+assert(source.includes("get_handoff_context"), "handoff decisions must come from the server routing context");
+
 const calls = [];
 const alerts = [];
+let handoffContext = {
+    final_stage: false,
+    next_stage_type: "CNC",
+    next_department: "CNC",
+    operational_role: "عامل CNC",
+    workers: [{ name: "cnc@example.com", full_name: "عامل CNC" }],
+};
 const button = {
     disabled: false,
     attributes: {},
@@ -24,10 +34,8 @@ const context = {
     frappe: {
         call(options) {
             calls.push(options);
-            if (options.method.endsWith("get_handoff_workers")) {
-                return Promise.resolve({
-                    message: [{ name: "cnc@example.com", full_name: "عامل CNC" }],
-                });
+            if (options.method.endsWith("get_handoff_context")) {
+                return Promise.resolve({ message: handoffContext });
             }
             return Promise.resolve({ message: { ok: true } });
         },
@@ -46,8 +54,8 @@ vm.runInContext(source, context);
     const api = context.window.AlmdinaShopFloorQuickActions;
     assert.strictEqual(api.actionFor({ canStart: true }).label, "بدء العمل");
     assert.strictEqual(
-        api.actionFor({ canHandoff: true, stageType: "Sanding" }).label,
-        "إنهاء التقشيط"
+        api.actionFor({ canHandoff: true, stageType: "Any Configured Stage" }).label,
+        "إنهاء وإرسال"
     );
 
     await api.perform({ stage: "PST-1", canStart: true }, { button });
@@ -60,15 +68,36 @@ vm.runInContext(source, context);
         canHandoff: true,
     }, { button });
     await new Promise(resolve => setImmediate(resolve));
-    assert(calls.some(call => call.method.endsWith("get_handoff_workers")));
+    assert(calls.some(call => call.method.endsWith("get_handoff_context")));
     assert(calls.some(call => (
         call.method.endsWith("handoff_to_next")
         && call.args.next_assignee === "cnc@example.com"
     )));
-    assert(alerts.length >= 2);
+
+    // The final stage is determined exclusively by the configured server route.
+    handoffContext = {
+        final_stage: true,
+        next_stage_type: null,
+        next_department: null,
+        operational_role: null,
+        workers: [],
+    };
+    await api.perform({
+        stage: "PST-FINAL",
+        stageType: "Packing",
+        canHandoff: true,
+    }, { button });
+    await new Promise(resolve => setImmediate(resolve));
+    assert(calls.some(call => (
+        call.method.endsWith("handoff_to_next")
+        && call.args.stage_name === "PST-FINAL"
+        && !Object.prototype.hasOwnProperty.call(call.args, "next_assignee")
+    )));
+
+    assert(alerts.length >= 3);
     assert.strictEqual(button.disabled, false);
 
-    console.log("Shop-floor quick-action simulation passed");
+    console.log("Shop-floor route-aware quick-action simulation passed");
 })().catch(error => {
     console.error(error);
     process.exitCode = 1;
