@@ -59,6 +59,12 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             if document_has_capability(order, capability)
         )
 
+    def lock_order(self, order_name: str) -> None:
+        order_tracking_repository.lock_order(order_name)
+
+    def lock_stage(self, stage_name: str) -> None:
+        production_stage_repository.lock_stage(stage_name)
+
     def get_order_state(self, order_name: str) -> OrderState:
         order = order_tracking_repository.get_order(order_name)
         return OrderState(
