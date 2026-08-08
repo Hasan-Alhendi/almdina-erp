@@ -1,0 +1,387 @@
+/*
+ * Almdina shop-floor responsive presentation.
+ *
+ * This file owns visual hierarchy, touch sizing, and viewport adaptation for
+ * the worker inbox. Production state and authorization remain server-driven.
+ */
+
+.almdina-sf-content,
+.almdina-sf-shell,
+.almdina-sf-list,
+.almdina-sf-order-card,
+.shop-floor-detail {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.almdina-sf-shell {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+    padding-bottom: 24px;
+}
+
+.almdina-sf-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 8px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .05);
+}
+
+.almdina-sf-tab,
+.almdina-sf-refresh {
+    min-height: 42px;
+    border-radius: 10px !important;
+    font-weight: 700;
+}
+
+.almdina-sf-tab {
+    flex: 0 0 auto;
+    padding-inline: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted, #64748b);
+}
+
+.almdina-sf-tab.is-active {
+    border-color: rgba(36, 144, 239, .18);
+    background: rgba(36, 144, 239, .09);
+    color: var(--text-color, #0f172a);
+}
+
+.almdina-sf-refresh {
+    margin-inline-start: auto;
+}
+
+.almdina-sf-list-title {
+    margin: 0 0 10px;
+    color: var(--text-color, #0f172a);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.almdina-sf-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.almdina-sf-order-card {
+    --sf-accent: var(--primary, #2490ef);
+    position: relative;
+    width: 100%;
+    margin: 0 !important;
+    padding: 15px !important;
+    border: 1px solid var(--border-color, #dfe3e8) !important;
+    border-inline-start: 4px solid var(--sf-accent) !important;
+    border-radius: 15px !important;
+    background: var(--card-bg, var(--fg-color, #fff)) !important;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .065) !important;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.almdina-sf-order-card[data-status="Pending"] {
+    --sf-accent: #d97706;
+}
+
+.almdina-sf-order-card[data-status="In Progress"] {
+    --sf-accent: var(--primary, #2490ef);
+}
+
+.almdina-sf-order-card[data-status="Paused"] {
+    --sf-accent: #dc2626;
+}
+
+.almdina-sf-order-card[data-status="Completed"] {
+    --sf-accent: #16a34a;
+}
+
+.almdina-sf-order-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--sf-accent);
+    opacity: .14;
+    pointer-events: none;
+}
+
+.almdina-sf-order-card .indicator-pill {
+    flex: 0 0 auto;
+    min-height: 28px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.almdina-sf-order-card[data-status="Pending"] .indicator-pill {
+    background: rgba(217, 119, 6, .11) !important;
+    color: #92400e !important;
+}
+
+.almdina-sf-order-card[data-status="In Progress"] .indicator-pill {
+    background: rgba(36, 144, 239, .11) !important;
+    color: #1d4ed8 !important;
+}
+
+.almdina-sf-order-card[data-status="Paused"] .indicator-pill {
+    background: rgba(220, 38, 38, .10) !important;
+    color: #b91c1c !important;
+}
+
+.almdina-sf-order-card[data-status="Completed"] .indicator-pill {
+    background: rgba(22, 163, 74, .11) !important;
+    color: #15803d !important;
+}
+
+.almdina-sf-order-card > div:first-child {
+    min-width: 0;
+}
+
+.almdina-sf-order-card > div:nth-child(2) {
+    gap: 8px !important;
+    margin-top: 12px !important;
+}
+
+.almdina-sf-order-card > div:nth-child(2) > div {
+    min-height: 58px;
+    padding: 9px 10px !important;
+    border: 1px solid var(--border-color, #edf0f2);
+    background: var(--subtle-fg, #f8fafc) !important;
+}
+
+.almdina-sf-order-card > div:last-child {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 8px !important;
+    margin-top: 13px !important;
+}
+
+.almdina-sf-order-card :where(.sf-quick-action, .sf-open-btn) {
+    width: 100% !important;
+    min-width: 0;
+    min-height: 46px !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+    font-size: 13px;
+    font-weight: 800 !important;
+    touch-action: manipulation;
+}
+
+.almdina-sf-order-card .sf-quick-action {
+    position: relative;
+}
+
+.almdina-sf-order-card .sf-quick-action.is-loading {
+    padding-inline-end: 38px !important;
+    opacity: .78;
+    pointer-events: none;
+}
+
+.almdina-sf-order-card .sf-quick-action.is-loading::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 14px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    margin-top: -8px;
+    border: 2px solid currentColor;
+    border-inline-start-color: transparent;
+    border-radius: 50%;
+    animation: almdina-sf-spin .65s linear infinite;
+}
+
+.almdina-sf-order-card .sf-quick-action[aria-busy="true"] {
+    cursor: progress;
+}
+
+.almdina-sf-empty {
+    width: 100%;
+    padding: 24px 16px;
+    border: 1px dashed var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--subtle-fg, #fafbfc);
+    color: var(--text-muted, #64748b);
+    text-align: center;
+}
+
+.almdina-sf-account-card {
+    width: min(100%, 640px);
+    margin-inline: auto;
+    padding: 18px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 15px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .06);
+}
+
+.almdina-sf-account-row {
+    display: grid;
+    grid-template-columns: minmax(110px, .7fr) minmax(0, 1.3fr);
+    gap: 10px;
+    padding-block: 9px;
+    border-bottom: 1px solid var(--border-color, #edf0f2);
+}
+
+.almdina-sf-account-row:last-of-type {
+    border-bottom: 0;
+}
+
+.shop-floor-detail > .frappe-card {
+    max-width: 100%;
+    border: 1px solid var(--border-color, #dfe3e8) !important;
+    border-radius: 15px !important;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .06);
+}
+
+.almdina-sf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.almdina-sf-actions .btn {
+    min-height: 42px;
+    border-radius: 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .almdina-sf-order-card:hover {
+        border-color: color-mix(in srgb, var(--sf-accent) 36%, var(--border-color, #dfe3e8)) !important;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .09) !important;
+        transform: translateY(-1px);
+    }
+}
+
+@media (max-width: 900px) {
+    .almdina-sf-shell {
+        max-width: 100%;
+    }
+
+    .almdina-sf-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .almdina-sf-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .almdina-sf-tab,
+    .almdina-sf-refresh {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 720px) {
+    .almdina-sf-shell {
+        padding-inline: 2px;
+        padding-bottom: 18px;
+    }
+
+    .almdina-sf-tabs {
+        gap: 6px;
+        margin-bottom: 10px;
+        padding: 6px;
+        border-radius: 12px;
+    }
+
+    .almdina-sf-tab,
+    .almdina-sf-refresh {
+        min-height: 46px;
+        padding-inline: 13px;
+        font-size: 12px;
+    }
+
+    .almdina-sf-list {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .almdina-sf-order-card {
+        padding: 13px !important;
+        border-radius: 14px !important;
+    }
+
+    .almdina-sf-order-card > div:nth-child(2) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .almdina-sf-order-card :where(.sf-quick-action, .sf-open-btn) {
+        min-height: 48px !important;
+        font-size: 13px;
+    }
+
+    .almdina-sf-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-actions .btn {
+        width: 100%;
+        min-width: 0;
+        min-height: 46px;
+    }
+
+    .almdina-sf-account-card {
+        padding: 14px;
+    }
+
+    .almdina-sf-account-row {
+        grid-template-columns: 1fr;
+        gap: 3px;
+    }
+}
+
+@media (max-width: 420px) {
+    .almdina-sf-order-card > div:last-child {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-order-card > div:nth-child(2) {
+        gap: 7px !important;
+    }
+
+    .almdina-sf-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 340px) {
+    .almdina-sf-order-card > div:nth-child(2) {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-sf-order-card,
+    .almdina-sf-order-card *,
+    .almdina-sf-tabs * {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+@keyframes almdina-sf-spin {
+    to { transform: rotate(360deg); }
+}
