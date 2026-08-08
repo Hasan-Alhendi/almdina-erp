@@ -60,15 +60,17 @@
         ]),
     });
 
-    const WORKSPACE_ITEM_SELECTOR = [
+    const STRUCTURAL_WORKSPACE_ITEM_SELECTOR = [
         ".shortcut-widget-box",
         ".widget.shortcut-widget-box",
         ".link-item",
         ".workspace-link",
         ".sidebar-item-container",
         ".desk-sidebar-item",
-        "[data-widget-name]",
+        ".standard-sidebar-item",
     ].join(", ");
+
+    const WORKSPACE_ITEM_SELECTOR = `${STRUCTURAL_WORKSPACE_ITEM_SELECTOR}, [data-widget-name]`;
 
     const WORKSPACE_HEADER_SELECTOR = [
         "h1",
@@ -171,12 +173,13 @@
         }
     }
 
-    function workspaceLabel(element) {
+    function workspaceLabel(element, allowVisibleText = true) {
         if (!element) return "";
         const values = [
             element.getAttribute && element.getAttribute("data-widget-name"),
             element.getAttribute && element.getAttribute("data-name"),
             element.getAttribute && element.getAttribute("data-label"),
+            element.getAttribute && element.getAttribute("item-name"),
             element.getAttribute && element.getAttribute("aria-label"),
             element.getAttribute && element.getAttribute("title"),
             element.dataset && element.dataset.widgetName,
@@ -190,6 +193,7 @@
             }
         }
 
+        if (!allowVisibleText) return "";
         const visible = normalizedText(element.textContent);
         if (!visible) return "";
         for (const label of WORKSPACE_LABELS_LONGEST_FIRST) {
@@ -200,17 +204,23 @@
 
     function workspaceItemContainer(element) {
         if (!element) return null;
-        if (typeof element.matches === "function" && element.matches(WORKSPACE_ITEM_SELECTOR)) {
+        const structural = element.closest && element.closest(STRUCTURAL_WORKSPACE_ITEM_SELECTOR);
+        if (structural) return structural;
+        if (typeof element.matches === "function" && element.matches("[data-widget-name]")) {
             return element;
         }
-        return element.closest && element.closest(WORKSPACE_ITEM_SELECTOR);
+        return null;
     }
 
     function guardWorkspaceItems() {
         document.querySelectorAll(WORKSPACE_ITEM_SELECTOR).forEach(element => {
             const container = workspaceItemContainer(element);
             if (!container) return;
-            const label = workspaceLabel(container) || workspaceLabel(element);
+            const structural = Boolean(
+                typeof container.matches === "function"
+                && container.matches(STRUCTURAL_WORKSPACE_ITEM_SELECTOR)
+            );
+            const label = workspaceLabel(container, structural) || workspaceLabel(element, structural);
             const surface = label && WORKSPACE_LABEL_SURFACES[label];
             if (!surface) return;
             setHidden(container, !surfaceAllowed(surface), "almdinaPermissionSurfaceHidden");
