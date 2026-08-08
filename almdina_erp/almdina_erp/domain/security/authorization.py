@@ -263,7 +263,7 @@ def normalize_capabilities(capabilities: Iterable[str] | None) -> frozenset[str]
     normalized = frozenset(str(value) for value in (capabilities or ()) if value)
     unknown = normalized.difference(ALL_CAPABILITIES)
     if unknown:
-        raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}") from exc
+        raise ValueError(f"Unknown capabilities: {', '.join(sorted(unknown))}")
     return normalized
 
 
