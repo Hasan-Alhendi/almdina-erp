@@ -5,9 +5,6 @@ from typing import Any
 import frappe
 from frappe.utils import cint
 
-from almdina_erp.almdina_erp.domain.orders.lifecycle import (
-    department_for_stage_type,
-)
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
@@ -15,30 +12,22 @@ from almdina_erp.almdina_erp.domain.orders.production_routing import (
 
 
 def _stage_definition(row: Any) -> RoutingStage:
-    stage_type = str(row.stage_type or "").strip()
     return RoutingStage(
         sequence=cint(row.sequence),
-        stage_type=stage_type,
-        department_label=str(
-            getattr(row, "department_label", None)
-            or department_for_stage_type(stage_type)
-            or stage_type
-        ).strip(),
-        operational_role=str(
-            getattr(row, "operational_role", None)
-            or ""
-        ).strip(),
+        stage_type=str(row.stage_type or "").strip(),
+        department_label=str(getattr(row, "department_label", None) or "").strip(),
+        operational_role=str(getattr(row, "operational_role", None) or "").strip(),
     )
 
 
 def get_route(name: str, *, require_enabled: bool = True) -> ProductionRoute:
     resolved = str(name or "").strip()
     if not resolved or not frappe.db.exists("Production Routing", resolved):
-        raise ValueError(f"Production route {resolved or '<empty>'} does not exist.")
+        raise ValueError(f"مسار الإنتاج {resolved or '<فارغ>'} غير موجود.")
 
     document = frappe.get_doc("Production Routing", resolved)
     if require_enabled and cint(document.disabled):
-        raise ValueError(f"Production route {resolved} is disabled.")
+        raise ValueError(f"مسار الإنتاج {resolved} معطّل.")
 
     stages = tuple(
         _stage_definition(row)
@@ -65,7 +54,7 @@ def list_active_routes() -> list[ProductionRoute]:
             routes.append(get_route(str(name)))
         except ValueError:
             # Invalid legacy rows stay out of dispatch until an administrator
-            # supplies their missing operational role from master data.
+            # completes their required route metadata from master data.
             continue
     return routes
 
