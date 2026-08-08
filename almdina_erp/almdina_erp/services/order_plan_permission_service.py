@@ -12,7 +12,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     document_has_capability,
     require_document_capability,
 )
-from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
+from almdina_erp.almdina_erp.services.order_edit_policy import (
+    assert_order_editable,
+    user_can_recalculate_drawing_system_plan,
+)
 
 
 _OPTIMIZER_FIELDS = (
@@ -108,7 +111,9 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
     """Protect capability-bound fields before any Door Cutting Order save.
 
     Standard ``write`` permission remains necessary for ordinary order edits, but
-    it no longer grants optimizer or special-drawing authority implicitly.
+    it never grants optimizer or special-drawing authority implicitly. Focused
+    plan commands may save with ``ignore_permissions`` only after the same
+    capability checks have succeeded here.
     """
 
     del method
@@ -119,8 +124,7 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
         if changed:
             frappe.throw(
                 _(
-                    "You do not have permission to edit cutting-plan optimizer settings. "
-                    "Protected fields: {0}."
+                    "لا تملك صلاحية تعديل إعدادات محسن خطة القص. الحقول المحمية: {0}."
                 ).format(", ".join(changed)),
                 frappe.PermissionError,
             )
@@ -128,12 +132,74 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
     if not _capability_allowed(doc, Capability.EDIT_SPECIAL_DRAWING):
         if _drawing_changed(doc, old):
             frappe.throw(
-                _("You do not have permission to edit special-door drawings."),
+                _("لا تملك صلاحية تعديل رسومات الدرف الخاصة."),
                 frappe.PermissionError,
             )
 
 
+def _requested_optimizer_updates(
+    *,
+    packing_mode: str | None = None,
+    cutting_machine_type: str | None = None,
+    kerf_mm: float | None = None,
+    trim_margin_mm: float | None = None,
+    optimization_time_limit_sec: float | None = None,
+) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if packing_mode is not None:
+        updates["packing_mode"] = str(packing_mode).strip()
+    if cutting_machine_type is not None:
+        updates["cutting_machine_type"] = str(cutting_machine_type).strip()
+    if kerf_mm is not None:
+        updates["kerf_mm"] = flt(kerf_mm)
+    if trim_margin_mm is not None:
+        updates["trim_margin_mm"] = flt(trim_margin_mm)
+    if optimization_time_limit_sec is not None:
+        updates["optimization_time_limit_sec"] = flt(optimization_time_limit_sec)
+    return updates
+
+
+def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
+    changed = [
+        fieldname
+        for fieldname, value in updates.items()
+        if not _same_value(fieldname, doc.get(fieldname), value)
+    ]
+    if not changed:
+        return []
+
+    require_document_capability(
+        doc,
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
+    )
+    for fieldname in changed:
+        doc.set(fieldname, updates[fieldname])
+    return changed
+
+
+def _assert_recalculation_state(doc: Any) -> None:
+    if getattr(doc, "approved_plan", None):
+        frappe.throw(
+            _("لا يمكن إعادة حساب خطة قص تم اعتمادها. ألغِ الاعتماد أو أنشئ مسار تعديل معتمد أولًا."),
+            frappe.ValidationError,
+        )
+
+    # Drawing-stage planners are intentionally allowed to recalculate through
+    # the focused capability without receiving full EDIT_ORDER authority.
+    if user_can_recalculate_drawing_system_plan(doc):
+        return
+
+    # Before production, keep the existing lifecycle boundary. This checks state,
+    # not cost permissions, and does not require a full document write grant for
+    # draft-like orders.
+    assert_order_editable(doc)
+
+
 def _recalculation_result(doc: Any) -> dict[str, Any]:
+    """Return production-plan data only; financial data never crosses this API."""
+
+    system_plan = getattr(doc, "system_plan_json", None) or doc.cutting_plan_json
     return {
         "name": doc.name,
         "required_boards": doc.required_boards,
@@ -143,23 +209,34 @@ def _recalculation_result(doc: Any) -> dict[str, Any]:
         "packing_score": doc.packing_score,
         "total_area_m2": doc.total_area_m2,
         "total_edge_meters": doc.total_edge_meters,
-        "mdf_cost_usd": doc.mdf_cost_usd,
-        "cutting_cost_usd": doc.cutting_cost_usd,
-        "edge_cost_usd": doc.edge_cost_usd,
-        "total_cost_usd": doc.total_cost_usd,
-        "special_shapes_baseline_cost_usd": doc.special_shapes_baseline_cost_usd,
-        "special_shapes_estimated_total_usd": doc.special_shapes_estimated_total_usd,
-        "special_shapes_final_total_usd": doc.special_shapes_final_total_usd,
-        "customer_quote_total_usd": doc.customer_quote_total_usd,
-        "customer_quote_status": doc.customer_quote_status,
+        "packing_mode": doc.packing_mode,
+        "cutting_machine_type": doc.cutting_machine_type,
+        "kerf_mm": doc.kerf_mm,
+        "trim_margin_mm": doc.trim_margin_mm,
+        "optimization_time_limit_sec": doc.optimization_time_limit_sec,
         "plan_needs_recalculation": doc.plan_needs_recalculation,
         "cutting_plan_json": doc.cutting_plan_json,
+        "system_plan_json": system_plan,
+        "approved_plan": doc.approved_plan,
+        "approved_plan_source": doc.approved_plan_source,
     }
 
 
 @frappe.whitelist()
-def recalculate_order(order_name: str) -> dict[str, Any]:
-    """Run the optimizer only after explicit document capability authorization."""
+def recalculate_order(
+    order_name: str,
+    packing_mode: str | None = None,
+    cutting_machine_type: str | None = None,
+    kerf_mm: float | None = None,
+    trim_margin_mm: float | None = None,
+    optimization_time_limit_sec: float | None = None,
+) -> dict[str, Any]:
+    """Recalculate one plan through granular plan capabilities only.
+
+    ``RECALCULATE_PLAN`` authorizes running the engine. Changing any optimizer
+    input additionally requires ``EDIT_OPTIMIZER_SETTINGS``. Neither operation
+    requires cost visibility or cost editing authority.
+    """
 
     name = str(order_name or "").strip()
     frappe.db.sql(
@@ -171,14 +248,27 @@ def recalculate_order(order_name: str) -> dict[str, Any]:
     require_document_capability(
         doc,
         Capability.RECALCULATE_PLAN,
-        message=_("You do not have permission to recalculate this cutting plan."),
+        message=_("لا تملك صلاحية إعادة حساب خطة القص لهذا الطلب."),
     )
-    assert_order_editable(doc)
+    _assert_recalculation_state(doc)
+
+    updates = _requested_optimizer_updates(
+        packing_mode=packing_mode,
+        cutting_machine_type=cutting_machine_type,
+        kerf_mm=kerf_mm,
+        trim_margin_mm=trim_margin_mm,
+        optimization_time_limit_sec=optimization_time_limit_sec,
+    )
+    changed = _apply_optimizer_updates(doc, updates)
+
     doc.flags.force_cutting_plan_recalculation = True
     doc.save(ignore_permissions=True)
     doc.add_comment(
         "Info",
-        text=_("Cutting plan recalculated by {0}.").format(frappe.session.user),
+        text=_("تمت إعادة حساب خطة القص بواسطة {0}{1}.").format(
+            frappe.session.user,
+            _(" مع تحديث إعدادات المحسن") if changed else "",
+        ),
     )
     return _recalculation_result(doc)
 
