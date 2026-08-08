@@ -13,11 +13,14 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
     audit_snapshot,
     normalize_role_selection,
 )
-
-
-PROTECTED_ASSIGNMENT_ROLES = frozenset(
-    {"All", "Guest", "Desk User", "System Manager"}
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
 )
+
+
+# Workforce role assignment follows the same protected system-role policy used
+# by the permission matrix and authorization gateway.
+PROTECTED_ASSIGNMENT_ROLES = PROTECTED_SYSTEM_ROLES
 
 
 class FrappeWorkforceRepository:
