@@ -15,15 +15,13 @@ from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     build_production_action_context,
     decide_production_action,
 )
+from almdina_erp.almdina_erp.domain.orders.production_routing import ProductionRoute
 from almdina_erp.almdina_erp.domain.security.authorization import (
     DRAWING_CAPABILITIES,
     PLANNING_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
     SHOP_FLOOR_ACCESS_CAPABILITIES,
     Capability,
-)
-from almdina_erp.almdina_erp.domain.orders.production_routing import (
-    ProductionRoute,
 )
 
 
@@ -120,9 +118,7 @@ def _assert_shop_floor_access(repository: ShopFloorQueryPort) -> frozenset[str]:
     if user == "Guest" or not capabilities.intersection(
         SHOP_FLOOR_ACCESS_CAPABILITIES
     ):
-        raise ShopFloorPermissionDenied(
-            "You do not have access to the production workspace."
-        )
+        raise ShopFloorPermissionDenied("لا تملك صلاحية الدخول إلى صالة الإنتاج.")
     return capabilities
 
 
@@ -159,12 +155,36 @@ def _filter_active_stages(
     return [
         row
         for row in stages
-        if not current_by_order.get(
-            str(_value(row, "door_cutting_order") or "")
-        )
+        if not current_by_order.get(str(_value(row, "door_cutting_order") or ""))
         or _value(row, "name")
         == current_by_order.get(str(_value(row, "door_cutting_order") or ""))
     ]
+
+
+def _planning_handoff_block(
+    route: ProductionRoute | None,
+    order: Any,
+    stage_type: str,
+) -> tuple[str | None, str]:
+    if not route:
+        return None, ""
+    try:
+        route_stage = route.stage(stage_type)
+    except ValueError:
+        return "invalid_route_stage", "المرحلة الحالية ليست ضمن مسار الإنتاج المحدد."
+    if not route_stage.is_planning_stage:
+        return None, ""
+    if not _value(order, "approved_plan"):
+        return (
+            "plan_not_approved",
+            "اعتمد خطة القص بعد مراجعتها قبل تسليم مرحلة التخطيط إلى القسم التالي.",
+        )
+    if _as_bool(_value(order, "plan_needs_recalculation")):
+        return (
+            "approved_plan_stale",
+            "خطة القص تغيّرت وتحتاج إلى إعادة حساب واعتماد جديد قبل مغادرة مرحلة التخطيط.",
+        )
+    return None, ""
 
 
 def _enrich_stage_rows(
@@ -199,6 +219,20 @@ def _enrich_stage_rows(
             capabilities=repository.capabilities_for_order(order),
             facts=_production_facts(repository, order, stage),
         )
+        handoff_code, handoff_reason = _planning_handoff_block(
+            route,
+            order,
+            stage_type,
+        )
+        generic_handoff = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
+        can_handoff = generic_handoff and not handoff_code
+        if generic_handoff and handoff_code:
+            actions[Capability.HANDOFF_ASSIGNED_STAGE] = {
+                **actions[Capability.HANDOFF_ASSIGNED_STAGE],
+                "allowed": False,
+                "code": handoff_code,
+                "reason": handoff_reason,
+            }
         enriched.append(
             {
                 **dict(stage),
@@ -210,9 +244,7 @@ def _enrich_stage_rows(
                 "production_path": production_path,
                 "current_department": _value(order, "current_department"),
                 "department_status": _value(order, "department_status")
-                or department_status_for_stage_status(
-                    str(_value(stage, "status") or "")
-                ),
+                or department_status_for_stage_status(str(_value(stage, "status") or "")),
                 "approved_plan": _value(order, "approved_plan"),
                 "production_dxf": _value(order, "production_dxf"),
                 "drawing_dxf_status": _value(order, "drawing_dxf_status"),
@@ -221,12 +253,10 @@ def _enrich_stage_rows(
                 or department_for_stage_type(stage_type)
                 or stage_type,
                 "can_handoff_to": can_handoff_to,
-                "can_start_stage": bool(
-                    actions[Capability.START_ASSIGNED_STAGE]["allowed"]
-                ),
-                "can_handoff_stage": bool(
-                    actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]
-                ),
+                "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
+                "can_handoff_stage": can_handoff,
+                "handoff_block_code": handoff_code or "",
+                "handoff_block_reason": handoff_reason,
             }
         )
     return enriched
@@ -235,23 +265,14 @@ def _enrich_stage_rows(
 def get_my_inbox(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     _assert_shop_floor_access(repository)
     user = repository.current_user()
-    stages = repository.list_inbox_stages(
-        user=user,
-        is_admin=repository.is_admin(),
-    )
-    return _enrich_stage_rows(
-        repository,
-        _filter_active_stages(repository, stages),
-    )
+    stages = repository.list_inbox_stages(user=user, is_admin=repository.is_admin())
+    return _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
 
 
 def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     _assert_shop_floor_access(repository)
     user = repository.current_user()
-    stages = repository.list_archive_stages(
-        user=user,
-        is_admin=repository.is_admin(),
-    )
+    stages = repository.list_archive_stages(user=user, is_admin=repository.is_admin())
     return _enrich_stage_rows(repository, stages)
 
 
@@ -265,9 +286,7 @@ def _production_facts(
         production_path=_value(order, "production_path"),
         current_stage_name=_value(order, "current_production_stage"),
         has_cutting_plan=bool(_value(order, "cutting_plan_json")),
-        plan_needs_recalculation=_as_bool(
-            _value(order, "plan_needs_recalculation")
-        ),
+        plan_needs_recalculation=_as_bool(_value(order, "plan_needs_recalculation")),
         stage_name=_value(stage, "name") if stage else None,
         stage_type=_value(stage, "stage_type") if stage else None,
         stage_status=_value(stage, "status") if stage else None,
@@ -305,17 +324,15 @@ def get_dispatch_options(
     routes = repository.list_active_routes()
     if not routes:
         raise ShopFloorQueryError(
-            "Create and enable a production route before sending orders to production."
+            "أنشئ مسار إنتاج وفعّله قبل إرسال الطلبات إلى الإنتاج."
         )
+    approved_plan = bool(_value(order, "approved_plan"))
     available_names = {route.name for route in routes}
     configured_default = repository.default_production_route()
-    return {
-        "default_path": (
-            configured_default
-            if configured_default in available_names
-            else routes[0].name
-        ),
-        "paths": [
+    path_rows = []
+    for route in routes:
+        blocked = route.requires_approved_plan_before_dispatch and not approved_plan
+        path_rows.append(
             {
                 "value": route.name,
                 "label": route.label,
@@ -323,22 +340,34 @@ def get_dispatch_options(
                 "department": route.first_stage.department_label,
                 "operational_role": route.first_stage.operational_role,
                 "stage_count": len(route.stages),
+                "starts_with_planning": route.starts_with_planning,
+                "can_dispatch": not blocked,
+                "dispatch_block_reason": (
+                    "يجب اعتماد خطة القص قبل اختيار مسار يبدأ بالتنفيذ الفعلي."
+                    if blocked
+                    else ""
+                ),
                 "stages": [
                     {
                         "sequence": stage.sequence,
                         "stage_type": stage.stage_type,
                         "department": stage.department_label,
                         "operational_role": stage.operational_role,
+                        "is_planning_stage": stage.is_planning_stage,
                     }
                     for stage in route.stages
                 ],
             }
-            for route in routes
-        ],
+        )
+    return {
+        "default_path": (
+            configured_default
+            if configured_default in available_names
+            else routes[0].name
+        ),
+        "paths": path_rows,
         "workers": {
-            route.name: repository.get_users_for_role(
-                route.first_stage.operational_role
-            )
+            route.name: repository.get_users_for_role(route.first_stage.operational_role)
             for route in routes
         },
     }
@@ -393,6 +422,8 @@ def _active_stage_snapshot(
             "can_handoff_stage": False,
             "can_reassign_worker": False,
             "can_handoff_to": None,
+            "handoff_block_code": "",
+            "handoff_block_reason": "",
             "route_stages": [],
             "production_actions": actions,
         }
@@ -408,6 +439,7 @@ def _active_stage_snapshot(
             "department": route_stage.department_label,
             "operational_role": route_stage.operational_role,
             "sequence": route_stage.sequence,
+            "is_planning_stage": route_stage.is_planning_stage,
         }
         for route_stage in (route.stages if route else ())
     ]
@@ -417,21 +449,27 @@ def _active_stage_snapshot(
             can_handoff_to = next_stage.stage_type if next_stage else None
         except ValueError:
             can_handoff_to = None
+    handoff_code, handoff_reason = _planning_handoff_block(route, order, stage_type)
+    generic_handoff = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
+    can_handoff = generic_handoff and not handoff_code
+    if generic_handoff and handoff_code:
+        actions[Capability.HANDOFF_ASSIGNED_STAGE] = {
+            **actions[Capability.HANDOFF_ASSIGNED_STAGE],
+            "allowed": False,
+            "code": handoff_code,
+            "reason": handoff_reason,
+        }
     return {
         "active_stage_name": _value(stage, "name"),
         "active_stage_status": stage_status,
         "active_stage_type": stage_type,
         "active_stage_assigned_to": _value(stage, "assigned_to"),
-        "can_start_stage": bool(
-            actions[Capability.START_ASSIGNED_STAGE]["allowed"]
-        ),
-        "can_handoff_stage": bool(
-            actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"]
-        ),
-        "can_reassign_worker": bool(
-            actions[Capability.REASSIGN_WORKER]["allowed"]
-        ),
+        "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
+        "can_handoff_stage": can_handoff,
+        "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),
         "can_handoff_to": can_handoff_to,
+        "handoff_block_code": handoff_code or "",
+        "handoff_block_reason": handoff_reason,
         "route_stages": route_stages,
         "production_actions": actions,
     }
@@ -446,7 +484,7 @@ def get_current_stage_context(
     _assert_shop_floor_access(repository)
     order = repository.get_order(order_name)
     if not repository.can_view_order(order):
-        raise ShopFloorPermissionDenied("You cannot view this production order.")
+        raise ShopFloorPermissionDenied("لا تملك صلاحية عرض طلب الإنتاج هذا.")
     capabilities = repository.capabilities_for_order(order)
     return _active_stage_snapshot(repository, order, capabilities)
 
@@ -458,9 +496,7 @@ def _plan_snapshots(
     can_view_plan: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool, str, str]:
     approved_plan = _value(order, "approved_plan")
-    approved_source = str(
-        _value(order, "approved_plan_source") or "System"
-    )
+    approved_source = str(_value(order, "approved_plan_source") or "System")
     if not can_view_plan:
         return {}, {}, {}, False, approved_source, approved_source
 
@@ -496,7 +532,7 @@ def get_order_detail(
     _assert_shop_floor_access(repository)
     order = repository.get_order(order_name)
     if not repository.can_view_order(order):
-        raise ShopFloorPermissionDenied("Not permitted to view this order.")
+        raise ShopFloorPermissionDenied("لا تملك صلاحية عرض هذا الطلب.")
 
     document_capabilities = repository.capabilities_for_order(order)
     stages = [
@@ -504,11 +540,7 @@ def get_order_detail(
         for row in repository.list_order_stages(order_name)
         if not _value(row, "piece_label")
     ]
-    stage_snapshot = _active_stage_snapshot(
-        repository,
-        order,
-        document_capabilities,
-    )
+    stage_snapshot = _active_stage_snapshot(repository, order, document_capabilities)
     can_view_plan = Capability.VIEW_CUTTING_PLAN in document_capabilities
     (
         system_snapshot,
@@ -517,22 +549,27 @@ def get_order_detail(
         can_view_dual,
         approved_source,
         active_source,
-    ) = _plan_snapshots(
-        repository,
-        order,
-        can_view_plan=can_view_plan,
-    )
+    ) = _plan_snapshots(repository, order, can_view_plan=can_view_plan)
 
     approved_plan = _value(order, "approved_plan")
-    current_stage_type = stage_snapshot.get("active_stage_type")
+    current_stage_type = str(stage_snapshot.get("active_stage_type") or "")
+    route = _production_route(repository, str(_value(order, "production_path") or ""))
+    planning_stage_active = False
+    if route and current_stage_type:
+        try:
+            planning_stage_active = route.stage(current_stage_type).is_planning_stage
+        except ValueError:
+            planning_stage_active = False
+    elif _value(order, "status") == "At Drawing":
+        # Transitional fallback for a legacy order that has not yet been migrated
+        # to an explicit Production Routing snapshot.
+        planning_stage_active = True
+
     can_recalculate = bool(
         can_view_plan
         and Capability.RECALCULATE_PLAN in document_capabilities
         and not approved_plan
-        and (
-            current_stage_type == "Drawing"
-            or _value(order, "status") == "At Drawing"
-        )
+        and planning_stage_active
     )
 
     return {
