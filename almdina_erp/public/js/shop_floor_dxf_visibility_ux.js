@@ -11,7 +11,6 @@
         "export_dxf",
         "upload_dxf",
         "replace_dxf",
-        "approve_dxf",
     ]);
     let scheduled = false;
 
