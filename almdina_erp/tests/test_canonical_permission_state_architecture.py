@@ -62,7 +62,11 @@ class TestCanonicalPermissionStateArchitecture(unittest.TestCase):
         self.assertIn("latest_audited_state", canonical)
         self.assertIn("bootstrap_fail_closed", canonical)
         self.assertIn("audited if audited is not None else {}", canonical)
-        self.assertNotIn("DocPerm", canonical[canonical.index("    def bootstrap_fail_closed"):])
+        bootstrap = canonical[canonical.index("    def bootstrap_fail_closed"):]
+        self.assertNotIn('frappe.get_all("DocPerm"', bootstrap)
+        self.assertNotIn('frappe.get_all("Custom DocPerm"', bootstrap)
+        self.assertNotIn('frappe.db.get_value("DocPerm"', bootstrap)
+        self.assertNotIn('frappe.db.get_value("Custom DocPerm"', bootstrap)
         self.assertIn("canonical.bootstrap_fail_closed", sync)
         self.assertIn("Project", sync)
         self.assertIn("save_role_states(prepared)", sync)
