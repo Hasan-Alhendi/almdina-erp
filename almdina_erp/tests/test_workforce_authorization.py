@@ -87,7 +87,7 @@ class TestWorkforceAuthorization(unittest.TestCase):
 
     def test_role_selection_is_normalized_without_profiles(self) -> None:
         self.assertEqual(normalize_role_selection(["عامل CNC", " عامل رسم ", "عامل CNC"]), ("عامل CNC", "عامل رسم"))
-        with self.assertRaisesRegex(ValueError, "list"):
+        with self.assertRaisesRegex(ValueError, "قائمة"):
             normalize_role_selection("عامل CNC")
 
     def test_identity_and_password_validation_are_deterministic(self) -> None:
@@ -101,10 +101,23 @@ class TestWorkforceAuthorization(unittest.TestCase):
         self.assertEqual(identity.first_name, "محمد أحمد")
         self.assertEqual(identity.last_name, "العامل")
         self.assertEqual(validate_temporary_password("SecurePass123!", email=identity.email), "SecurePass123!")
-        with self.assertRaisesRegex(ValueError, "10 characters"):
+        with self.assertRaisesRegex(ValueError, "10"):
             validate_temporary_password("Short1")
-        with self.assertRaisesRegex(ValueError, "email name"):
+        with self.assertRaisesRegex(ValueError, "اسم البريد الإلكتروني"):
             validate_temporary_password("WorkerSecure123", email=identity.email)
+
+    def test_validation_messages_are_clear_arabic(self) -> None:
+        checks = (
+            lambda: normalize_identity(email="bad", first_name="محمد"),
+            lambda: normalize_identity(email="worker@example.com", first_name=""),
+            lambda: normalize_role_selection("عامل CNC"),
+            lambda: validate_temporary_password("Short1"),
+        )
+        for operation in checks:
+            with self.assertRaises(ValueError) as raised:
+                operation()
+            message = str(raised.exception)
+            self.assertTrue(any("\u0600" <= char <= "\u06ff" for char in message), message)
 
     def test_audit_snapshot_never_contains_password_material(self) -> None:
         snapshot = audit_snapshot({

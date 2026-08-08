@@ -80,7 +80,8 @@ class FrappeWorkforceRepository:
         invalid = sorted(set(selected).difference(catalog))
         if invalid:
             raise ValueError(
-                "Unknown or protected user roles: " + ", ".join(invalid)
+                "تحتوي الأدوار المحددة على أدوار غير موجودة أو محمية ولا يمكن إسنادها: "
+                + ", ".join(invalid)
             )
         return selected
 
@@ -118,10 +119,10 @@ class FrappeWorkforceRepository:
 
     def get_user(self, user: str, *, require_almdina: bool = True) -> dict[str, Any]:
         if not self.user_exists(user):
-            raise ValueError("User does not exist.")
+            raise ValueError("المستخدم المحدد غير موجود.")
         snapshot = self._snapshot_from_doc(frappe.get_doc("User", user))
         if require_almdina and not snapshot["is_almdina"]:
-            raise ValueError("This account is outside the Almdina workforce scope.")
+            raise ValueError("هذا الحساب غير مضاف إلى نطاق مستخدمي معمل Almdina.")
         return snapshot
 
     def _list_user_names(
@@ -215,13 +216,13 @@ class FrappeWorkforceRepository:
 
         resolved = str(user_name or "").strip().lower()
         if not resolved or resolved in {"administrator", "guest"}:
-            raise ValueError("Select an eligible System User.")
+            raise ValueError("اختر مستخدم نظام صالحًا يمكن إضافته إلى مستخدمي المعمل.")
         if not self.user_exists(resolved):
-            raise ValueError("User does not exist.")
+            raise ValueError("المستخدم المحدد غير موجود.")
 
         user = frappe.get_doc("User", resolved)
         if str(user.user_type or "") != "System User":
-            raise ValueError("Only System Users can be added to the Almdina workforce.")
+            raise ValueError("يمكن إضافة مستخدمي النظام فقط إلى مستخدمي معمل Almdina.")
         if self._is_almdina_user(default_app=str(user.default_app or "")):
             return self.get_user(resolved)
 
@@ -250,7 +251,7 @@ class FrappeWorkforceRepository:
         temporary_password: str,
     ) -> dict[str, Any]:
         if self.user_exists(identity.email):
-            raise ValueError("A user with this email already exists.")
+            raise ValueError("يوجد مستخدم مسجل مسبقًا بهذا البريد الإلكتروني.")
         selected_roles = self.validate_roles(roles)
         user = frappe.get_doc(
             {
@@ -281,7 +282,7 @@ class FrappeWorkforceRepository:
         identity: WorkforceIdentity,
     ) -> dict[str, Any]:
         if identity.email != user_name:
-            raise ValueError("User email cannot be changed from this console.")
+            raise ValueError("لا يمكن تغيير البريد الإلكتروني للمستخدم من شاشة إدارة مستخدمي المعمل.")
         user = frappe.get_doc("User", user_name)
         user.first_name = identity.first_name
         user.last_name = identity.last_name

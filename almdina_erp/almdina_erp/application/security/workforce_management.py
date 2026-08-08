@@ -32,13 +32,13 @@ def normalize_identity(
     normalized_language = str(language or "ar").strip().lower()
 
     if not _EMAIL_PATTERN.match(normalized_email):
-        raise ValueError("A valid user email is required.")
+        raise ValueError("يجب إدخال بريد إلكتروني صالح للمستخدم.")
     if not normalized_first:
-        raise ValueError("First name is required.")
+        raise ValueError("الاسم الأول للمستخدم مطلوب.")
     if len(normalized_first) > 140 or len(normalized_last) > 140:
-        raise ValueError("User name is too long.")
+        raise ValueError("اسم المستخدم أطول من الحد المسموح.")
     if normalized_language not in SUPPORTED_LANGUAGES:
-        raise ValueError("Unsupported user language.")
+        raise ValueError("لغة المستخدم المحددة غير مدعومة.")
 
     return WorkforceIdentity(
         email=normalized_email,
@@ -52,33 +52,33 @@ def normalize_role_selection(roles: Iterable[str] | None) -> tuple[str, ...]:
     if roles is None:
         return ()
     if isinstance(roles, (str, bytes)):
-        raise ValueError("User roles must be a list.")
+        raise ValueError("يجب إرسال أدوار المستخدم على شكل قائمة.")
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_role in roles:
         role = str(raw_role or "").strip()
         if not role:
-            raise ValueError("User roles cannot contain an empty value.")
+            raise ValueError("لا يجوز أن تحتوي قائمة أدوار المستخدم على قيمة فارغة.")
         if role in seen:
             continue
         seen.add(role)
         normalized.append(role)
     if len(normalized) > MAX_USER_ROLES:
-        raise ValueError(f"A user cannot have more than {MAX_USER_ROLES} roles.")
+        raise ValueError(f"لا يمكن إسناد أكثر من {MAX_USER_ROLES} دور للمستخدم.")
     return tuple(normalized)
 
 
 def validate_temporary_password(password: str, *, email: str = "") -> str:
     value = str(password or "")
     if len(value) < 10:
-        raise ValueError("Temporary password must contain at least 10 characters.")
+        raise ValueError("يجب أن تتكون كلمة المرور المؤقتة من 10 محارف على الأقل.")
     if not any(character.isalpha() for character in value):
-        raise ValueError("Temporary password must contain at least one letter.")
+        raise ValueError("يجب أن تحتوي كلمة المرور المؤقتة على حرف واحد على الأقل.")
     if not any(character.isdigit() for character in value):
-        raise ValueError("Temporary password must contain at least one number.")
+        raise ValueError("يجب أن تحتوي كلمة المرور المؤقتة على رقم واحد على الأقل.")
     local_part = str(email or "").split("@", 1)[0].strip().lower()
     if local_part and len(local_part) >= 4 and local_part in value.lower():
-        raise ValueError("Temporary password must not contain the email name.")
+        raise ValueError("يجب ألا تحتوي كلمة المرور المؤقتة على اسم البريد الإلكتروني قبل علامة @.")
     return value
 
 
