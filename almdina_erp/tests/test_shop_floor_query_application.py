@@ -42,7 +42,7 @@ class FakeRepository:
                 "Drawing",
                 "رسم وCNC",
                 (
-                    RoutingStage(10, "Drawing", "رسم", "عامل رسم"),
+                    RoutingStage(10, "Drawing", "رسم", "عامل رسم", True),
                     RoutingStage(20, "CNC", "CNC", "عامل CNC"),
                     RoutingStage(30, "Sanding", "تقشيط", "عامل تقشيط"),
                 ),
@@ -130,10 +130,10 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertTrue(context["capabilities"][Capability.START_ASSIGNED_STAGE])
 
         repository.global_grants.clear()
-        with self.assertRaises(queries.ShopFloorPermissionDenied):
+        with self.assertRaisesRegex(queries.ShopFloorPermissionDenied, "صلاحية الدخول"):
             queries.get_shop_floor_context(repository)
 
-    def test_inbox_filters_stale_rows_and_enriches_current_stage(self) -> None:
+    def test_inbox_hides_stale_rows_and_explains_planning_handoff_gate(self) -> None:
         repository = FakeRepository()
         repository.inbox = [
             {
@@ -162,7 +162,8 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "current_department": "رسم",
                 "department_status": "قيد العمل",
                 "current_production_stage": "PST-CURRENT",
-                "drawing_dxf_status": "Approved by Drawing",
+                "approved_plan": None,
+                "plan_needs_recalculation": 0,
                 "revision": 2,
             }
         }
@@ -172,11 +173,15 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual([row["name"] for row in rows], ["PST-CURRENT"])
         self.assertEqual(rows[0]["can_handoff_to"], "CNC")
         self.assertEqual(rows[0]["department_label"], "رسم")
-        self.assertEqual(rows[0]["edge_color"], "أبيض")
-        self.assertEqual(rows[0]["board_description"], "MDF أبيض 18 مم")
-        self.assertTrue(rows[0]["can_handoff_stage"])
+        self.assertFalse(rows[0]["can_handoff_stage"])
+        self.assertEqual(rows[0]["handoff_block_code"], "plan_not_approved")
+        self.assertIn("اعتمد خطة القص", rows[0]["handoff_block_reason"])
         self.assertFalse(rows[0]["can_start_stage"])
-        self.assertEqual(repository.last_inbox_args, (repository.user, False))
+
+        repository.orders["DCO-1"]["approved_plan"] = "PLAN-1"
+        rows = queries.get_my_inbox(repository)
+        self.assertTrue(rows[0]["can_handoff_stage"])
+        self.assertEqual(rows[0]["handoff_block_code"], "")
 
     def test_guest_ungranted_and_unassigned_order_are_rejected(self) -> None:
         repository = FakeRepository()
@@ -195,7 +200,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         with self.assertRaises(queries.ShopFloorPermissionDenied):
             queries.get_order_detail(repository, "DCO-1")
 
-    def test_dispatch_options_require_capability_and_ready_order(self) -> None:
+    def test_dispatch_options_mark_physical_route_blocked_until_plan_approval(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-1",
@@ -204,17 +209,26 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             current_production_stage=None,
             cutting_plan_json='{"sheets":[{}]}',
             plan_needs_recalculation=0,
-            drawing_dxf_status="None",
+            approved_plan=None,
         )
 
         result = queries.get_dispatch_options(repository, "DCO-1")
-        self.assertEqual([row["value"] for row in result["paths"]], ["Sharyoun", "Drawing"])
+        by_name = {row["value"]: row for row in result["paths"]}
+        self.assertFalse(by_name["Sharyoun"]["can_dispatch"])
+        self.assertIn("اعتماد خطة القص", by_name["Sharyoun"]["dispatch_block_reason"])
+        self.assertTrue(by_name["Drawing"]["can_dispatch"])
+        self.assertTrue(by_name["Drawing"]["starts_with_planning"])
+        self.assertTrue(by_name["Drawing"]["stages"][0]["is_planning_stage"])
+
+        repository.order.approved_plan = "PLAN-1"
+        result = queries.get_dispatch_options(repository, "DCO-1")
+        self.assertTrue(all(row["can_dispatch"] for row in result["paths"]))
 
         repository.capabilities.remove(Capability.DISPATCH_ORDER)
         with self.assertRaises(queries.ShopFloorPermissionDenied):
             queries.get_dispatch_options(repository, "DCO-1")
 
-    def test_order_detail_uses_server_action_and_document_context(self) -> None:
+    def test_order_detail_uses_route_planning_gate_and_document_capabilities(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-2",
@@ -226,7 +240,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             approved_plan_source="System",
             cutting_plan_json='{"sheets":[{}]}',
             plan_needs_recalculation=0,
-            drawing_dxf_status="Approved by Drawing",
         )
         repository.order_stages = [
             {"name": "PST-2", "stage_type": "Drawing", "piece_label": None}
@@ -249,55 +262,50 @@ class TestShopFloorQueryApplication(unittest.TestCase):
 
         self.assertEqual(detail["active_plan_source"], "System")
         self.assertEqual(detail["stage_snapshot"]["active_stage_type"], "Drawing")
-        self.assertEqual(detail["stage_snapshot"]["active_stage_assigned_to"], repository.user)
         self.assertEqual(detail["stage_snapshot"]["can_handoff_to"], "CNC")
-        self.assertTrue(detail["stage_snapshot"]["can_handoff_stage"])
+        self.assertFalse(detail["stage_snapshot"]["can_handoff_stage"])
+        self.assertEqual(detail["stage_snapshot"]["handoff_block_code"], "plan_not_approved")
+        self.assertFalse(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
         self.assertTrue(detail["stage_snapshot"]["can_reassign_worker"])
-        self.assertTrue(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
-        self.assertTrue(actions[Capability.REASSIGN_WORKER]["allowed"])
         self.assertTrue(detail["can_recalculate_drawing_plan"])
         self.assertTrue(detail["document_capabilities"][Capability.VIEW_CUTTING_PLAN])
-        self.assertTrue(detail["document_capabilities"][Capability.PRINT_CUTTING_PLAN])
 
-        repository.capabilities.remove(Capability.RECALCULATE_PLAN)
+        repository.order.approved_plan = "PLAN-1"
         detail = queries.get_order_detail(repository, "DCO-2")
+        self.assertTrue(detail["stage_snapshot"]["can_handoff_stage"])
         self.assertFalse(detail["can_recalculate_drawing_plan"])
 
-    def test_custom_route_drawing_stage_keeps_drawing_recalculation(self) -> None:
+    def test_any_configured_planning_stage_enables_recalculation_without_drawing_name(self) -> None:
         repository = FakeRepository()
         repository.routes["Custom Route"] = ProductionRoute(
             "Custom Route",
             "مسار مخصص",
-            (RoutingStage(10, "Drawing", "التصميم", "مصمم مخصص"),),
+            (RoutingStage(10, "PlanningDesk", "التخطيط", "مصمم مخصص", True),),
         )
         repository.order = SimpleNamespace(
             name="DCO-2",
-            customer="Customer",
-            status="At Drawing",
+            status="Production In Progress",
             production_path="Custom Route",
             current_production_stage="PST-2",
             approved_plan=None,
             approved_plan_source="System",
             cutting_plan_json='{"sheets":[{}]}',
             plan_needs_recalculation=0,
-            drawing_dxf_status="None",
         )
         repository.stage_summaries["PST-2"] = {
             "name": "PST-2",
             "status": "In Progress",
-            "stage_type": "Drawing",
+            "stage_type": "PlanningDesk",
             "assigned_to": repository.user,
         }
 
         detail = queries.get_order_detail(repository, "DCO-2")
-
         self.assertTrue(detail["can_recalculate_drawing_plan"])
 
     def test_action_context_denies_another_workers_stage(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-2",
-            customer="Customer",
             status="At CNC",
             production_path="Drawing",
             current_production_stage="PST-2",
@@ -305,7 +313,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             approved_plan_source="System",
             cutting_plan_json='{"sheets":[{}]}',
             plan_needs_recalculation=0,
-            drawing_dxf_status="Approved by Drawing",
         )
         repository.stage_summaries = {
             "PST-2": {
@@ -320,22 +327,19 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         actions = detail["stage_snapshot"]["production_actions"]
 
         self.assertFalse(detail["stage_snapshot"]["can_start_stage"])
-        self.assertEqual(
-            actions[Capability.START_ASSIGNED_STAGE]["code"],
-            "not_assigned",
-        )
+        self.assertEqual(actions[Capability.START_ASSIGNED_STAGE]["code"], "not_assigned")
         self.assertTrue(detail["stage_snapshot"]["can_reassign_worker"])
 
-    def test_minimal_current_stage_context_uses_server_action_policy(self) -> None:
+    def test_minimal_current_stage_context_is_route_aware_and_data_minimal(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-2",
             status="At CNC",
             production_path="Drawing",
             current_production_stage="PST-2",
+            approved_plan="PLAN-1",
             cutting_plan_json='{"sheets":[{}]}',
             plan_needs_recalculation=0,
-            drawing_dxf_status="Approved by Drawing",
         )
         repository.stage_summaries["PST-2"] = {
             "name": "PST-2",
@@ -352,6 +356,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             [stage["department"] for stage in context["route_stages"]],
             ["رسم", "CNC", "تقشيط"],
         )
+        self.assertTrue(context["route_stages"][0]["is_planning_stage"])
         self.assertNotIn("cutting_plan_json", context)
 
     def test_revert_targets_are_unique_and_permission_protected(self) -> None:
@@ -363,7 +368,6 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             current_production_stage="PST-3",
             cutting_plan_json='{"sheets":[{}]}',
             plan_needs_recalculation=0,
-            drawing_dxf_status="Approved by Drawing",
         )
         repository.revert_rows = [
             {"name": "PST-1", "stage_type": "Drawing", "status": "Completed", "sequence": 10, "assigned_to": "a@example.com", "piece_label": None},
