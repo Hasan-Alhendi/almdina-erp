@@ -12,9 +12,6 @@ from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
     RoutingStage,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_authorization import (
-    STAGE_ROLE_BY_TYPE,
-)
 
 
 def _stage_definition(row: Any) -> RoutingStage:
@@ -29,7 +26,6 @@ def _stage_definition(row: Any) -> RoutingStage:
         ).strip(),
         operational_role=str(
             getattr(row, "operational_role", None)
-            or STAGE_ROLE_BY_TYPE.get(stage_type)
             or ""
         ).strip(),
     )
