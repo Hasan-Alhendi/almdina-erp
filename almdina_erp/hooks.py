@@ -38,9 +38,6 @@ app_include_js = [
 
 doctype_js = {
     "Door Cutting Order": [
-        # Keep the authorization context inside FormMeta as well as the global
-        # Desk include.  Frappe reads these files from the app source, so order
-        # access does not fail when a Docker sites/assets volume is stale.
         "public/js/permission_context.js",
         "public/js/door_cutting_order_document_context.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
@@ -132,6 +129,7 @@ doc_events = {
 permission_query_conditions = {
     "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_query",
     "Production Stage": "almdina_erp.permissions.production_stage_query",
+    "Production Incident": "almdina_erp.permissions.production_incident_query",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_query",
 }
@@ -139,6 +137,7 @@ permission_query_conditions = {
 has_permission = {
     "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_has_permission",
     "Production Stage": "almdina_erp.permissions.production_stage_has_permission",
+    "Production Incident": "almdina_erp.permissions.production_incident_has_permission",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_has_permission",
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_has_permission",
 }
