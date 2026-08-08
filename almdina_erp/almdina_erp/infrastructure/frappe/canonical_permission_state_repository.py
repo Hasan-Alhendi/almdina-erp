@@ -9,6 +9,7 @@ import frappe
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     normalize_capability_state,
 )
+from almdina_erp.almdina_erp.domain.security.authorization import ALL_CAPABILITIES
 
 
 STATE_DOCTYPE = "Almdina Role Capability State"
@@ -28,7 +29,7 @@ class CanonicalPermissionStateRepository:
         return normalize_capability_state({})
 
     @staticmethod
-    def _decode(raw: str | Mapping[str, Any] | None) -> dict[str, bool]:
+    def _payload(raw: str | Mapping[str, Any] | None) -> dict[str, Any]:
         if isinstance(raw, Mapping):
             payload: Any = dict(raw)
         else:
@@ -40,9 +41,43 @@ class CanonicalPermissionStateRepository:
                     payload = json.loads(text)
                 except (TypeError, ValueError, json.JSONDecodeError):
                     payload = {}
-        if not isinstance(payload, dict):
-            payload = {}
-        return normalize_capability_state(payload)
+        return payload if isinstance(payload, dict) else {}
+
+    @classmethod
+    def _decode(cls, raw: str | Mapping[str, Any] | None) -> dict[str, bool]:
+        """Decode current canonical state strictly.
+
+        Unknown capability keys remain an error for canonical state. This keeps
+        the authoritative store self-validating and prevents silent corruption.
+        """
+
+        return normalize_capability_state(cls._payload(raw))
+
+    @classmethod
+    def _decode_legacy_audit(
+        cls,
+        raw: str | Mapping[str, Any] | None,
+    ) -> dict[str, bool]:
+        """Read historical audit JSON without reviving removed broad grants.
+
+        Older Almdina releases wrote capability keys that no longer exist after
+        the granular permission redesign (for example ``manage_users``,
+        ``assign_workforce_profile`` and ``manage_factory_settings``). Migration
+        must not fail because those immutable audit rows remain in the database,
+        and it must not guess a wider modern grant for a removed broad key.
+
+        Therefore only capability keys that still exist in the current catalog
+        are restored. Unknown historical keys are ignored fail-closed. Current
+        canonical storage itself stays strict through ``_decode`` above.
+        """
+
+        payload = cls._payload(raw)
+        current_only = {
+            str(key): value
+            for key, value in payload.items()
+            if str(key) in ALL_CAPABILITIES
+        }
+        return normalize_capability_state(current_only)
 
     def available(self) -> bool:
         return bool(frappe.db.exists("DocType", STATE_DOCTYPE))
@@ -92,7 +127,12 @@ class CanonicalPermissionStateRepository:
         return normalized
 
     def latest_audited_state(self, role: str) -> dict[str, bool] | None:
-        """Return the last explicitly audited matrix state, if one exists."""
+        """Return the last explicitly audited matrix state, if one exists.
+
+        Audit rows are historical records and can outlive capability schema
+        changes, so they use the compatibility decoder. Removed broad keys never
+        grant modern capabilities implicitly.
+        """
 
         resolved = str(role or "").strip()
         if not resolved or not frappe.db.exists("DocType", AUDIT_DOCTYPE):
@@ -106,7 +146,7 @@ class CanonicalPermissionStateRepository:
         )
         if not rows:
             return None
-        return self._decode(rows[0].get("after_json"))
+        return self._decode_legacy_audit(rows[0].get("after_json"))
 
     def bootstrap_fail_closed(self, role: str) -> dict[str, bool]:
         """Create canonical state from explicit audit provenance or deny-all.
