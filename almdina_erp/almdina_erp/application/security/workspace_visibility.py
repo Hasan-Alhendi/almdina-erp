@@ -11,7 +11,7 @@ from almdina_erp.almdina_erp.application.security.surface_access import Surface
 
 # Workspace labels are presentation identifiers only. Authorization always comes
 # from the server-built surface map; these mappings only tell the projector which
-# surface owns a standard Almdina widget.
+# surface owns a standard Almdina widget or v16 sidebar Link workspace.
 WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "أنواع القشاط وأسعاره": Surface.EDGE_BANDING_TYPES,
     "الزبائن": Surface.CUSTOMER_ADMIN,
@@ -30,7 +30,22 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "تحليل قياسات الدرف": Surface.REPORT_PIECE_SIZE_USAGE,
     "أداء مراحل الإنتاج": Surface.REPORT_PRODUCTION_STAGE_PERFORMANCE,
     "أخطاء الإنتاج والقطع التعويضية": Surface.REPORT_PRODUCTION_INCIDENTS,
-    # Secondary reports workspace uses the untranslated standard labels.
+    # v16 sidebar/desktop records can expose link_to instead of the translated label.
+    "Door Cutting Order": Surface.ORDERS,
+    "Customer": Surface.CUSTOMER_ADMIN,
+    "Cutting Plan": Surface.CUTTING_PLANS,
+    "Production Stage": Surface.PRODUCTION_STAGES,
+    "Production Incident": Surface.PRODUCTION_INCIDENTS,
+    "Replacement Piece": Surface.REPLACEMENTS,
+    "factory-master-data": Surface.FACTORY_MASTER_DATA,
+    "Production Routing": Surface.PRODUCTION_ROUTINGS,
+    "Edge Banding Type": Surface.EDGE_BANDING_TYPES,
+    "Almdina ERP Settings": Surface.FACTORY_SETTINGS,
+    "factory-workforce": Surface.WORKFORCE,
+    "factory-permissions": Surface.PERMISSIONS,
+    "Role": Surface.ROLE_ADMIN,
+    "User": Surface.ROLE_ADMIN,
+    # Secondary reports workspace uses untranslated standard labels.
     "Factory Operations Summary": Surface.REPORT_FACTORY_OPERATIONS_SUMMARY,
     "Factory Order Analysis": Surface.REPORT_FACTORY_ORDER_ANALYSIS,
     "Board Usage Analysis": Surface.REPORT_BOARD_USAGE,
@@ -88,7 +103,9 @@ def _plain_text(value: Any) -> str:
     return " ".join(text.split())
 
 
-def _surface_for_item(item: Mapping[str, Any] | None) -> str | None:
+def workspace_surface(item: Mapping[str, Any] | None) -> str | None:
+    """Resolve an Almdina Workspace widget/sidebar record to its business surface."""
+
     if not isinstance(item, Mapping):
         return None
     for key in ("label", "shortcut_name", "link_to", "name", "title"):
@@ -96,6 +113,18 @@ def _surface_for_item(item: Mapping[str, Any] | None) -> str | None:
         if value in WORKSPACE_ENTRY_SURFACES:
             return WORKSPACE_ENTRY_SURFACES[value]
     return None
+
+
+def workspace_item_allowed(
+    item: Mapping[str, Any] | None,
+    surface_flags: Mapping[str, Any],
+) -> bool | None:
+    """Return True/False for known Almdina entries, None for unknown entries."""
+
+    surface = workspace_surface(item)
+    if not surface:
+        return None
+    return _allowed(surface_flags, surface)
 
 
 def _section_for_header(block: Mapping[str, Any]) -> tuple[str, ...] | None:
@@ -118,7 +147,7 @@ def filter_workspace_content(content: Any, surface_flags: Mapping[str, Any]) -> 
         return content
     try:
         blocks = json.loads(content)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return content
     if not isinstance(blocks, list):
         return content
@@ -133,8 +162,8 @@ def filter_workspace_content(content: Any, surface_flags: Mapping[str, Any]) -> 
         data = block.get("data") if isinstance(block.get("data"), Mapping) else {}
 
         if block_type == "shortcut":
-            surface = _surface_for_item(data)
-            if surface and not _allowed(surface_flags, surface):
+            decision = workspace_item_allowed(data, surface_flags)
+            if decision is False:
                 continue
         elif block_type == "header":
             section_surfaces = _section_for_header(block)
@@ -151,8 +180,11 @@ def _filter_items(items: Any, surface_flags: Mapping[str, Any]) -> Any:
         return items
     result: list[Any] = []
     for item in items:
-        surface = _surface_for_item(item if isinstance(item, Mapping) else None)
-        if surface and not _allowed(surface_flags, surface):
+        decision = workspace_item_allowed(
+            item if isinstance(item, Mapping) else None,
+            surface_flags,
+        )
+        if decision is False:
             continue
         result.append(item)
     return result
@@ -176,9 +208,10 @@ def filter_desktop_page_payload(payload: Any, surface_flags: Mapping[str, Any]) 
             if not isinstance(card, dict):
                 kept_cards.append(card)
                 continue
-            links = _filter_items(card.get("links"), surface_flags)
+            original_links = card.get("links")
+            links = _filter_items(original_links, surface_flags)
             card["links"] = links
-            if links or not isinstance(card.get("links"), list):
+            if links or not isinstance(original_links, list):
                 kept_cards.append(card)
         cards["items"] = kept_cards
 
@@ -202,4 +235,6 @@ __all__ = [
     "filter_desktop_page_payload",
     "filter_workspace_content",
     "project_workspace_page",
+    "workspace_item_allowed",
+    "workspace_surface",
 ]
