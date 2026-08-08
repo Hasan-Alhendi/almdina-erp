@@ -16,6 +16,11 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 from almdina_erp.almdina_erp.infrastructure.frappe.automatic_role_permission_cleanup import (
     revoke_automatic_role_business_grants,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.canonical_permission_state_repository import (
+    AUDIT_DOCTYPE,
+    STATE_DOCTYPE,
+    CanonicalPermissionStateRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
@@ -28,14 +33,7 @@ def _managed_doctypes() -> tuple[str, ...]:
 
 
 def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, bool]:
-    """Remove the old administration-derived Settings read projection.
-
-    Before granular settings capabilities existed, workforce and permission
-    administration grants projected ``read=1`` onto the Settings singleton.
-    Preserve an explicit read-only Settings role, and preserve roles that own an
-    actual Settings edit capability, but fail closed for old unrelated admin
-    roles. Administrators can explicitly re-grant view access when it is wanted.
-    """
+    """Remove the old administration-derived Settings read projection."""
 
     normalized = dict(capabilities)
     if not normalized.get(Capability.VIEW_FACTORY_SETTINGS):
@@ -54,28 +52,12 @@ def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, boo
     return normalized
 
 
-def reconcile_custom_permission_projections() -> None:
-    """Normalize existing role overrides after capability model upgrades.
+def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
+    """Collect roles with legacy projections, canonical state, or explicit audit."""
 
-    Earlier releases projected administration capabilities onto broad standard
-    ``read``/``write`` rights. Re-saving each existing Almdina role state through
-    the current projected repository removes stale rights and also repairs the
-    native permissions of related resources such as Cutting Plan and Production
-    Stage. Protected platform roles are never treated as editable factory roles.
-    """
-
-    if not frappe.db.exists("DocType", "Custom DocPerm"):
-        return
-    doctypes = [
-        doctype
-        for doctype in _managed_doctypes()
-        if frappe.db.exists("DocType", doctype)
-    ]
-    if not doctypes:
-        return
-
-    roles = sorted(
-        {
+    roles: set[str] = set()
+    if frappe.db.exists("DocType", "Custom DocPerm"):
+        roles.update(
             str(role)
             for role in frappe.get_all(
                 "Custom DocPerm",
@@ -84,8 +66,49 @@ def reconcile_custom_permission_projections() -> None:
                 order_by="role asc",
             )
             if role
-        }
-    )
+        )
+    if frappe.db.exists("DocType", STATE_DOCTYPE):
+        roles.update(
+            str(role)
+            for role in frappe.get_all(
+                STATE_DOCTYPE,
+                pluck="role",
+                order_by="role asc",
+            )
+            if role
+        )
+    if frappe.db.exists("DocType", AUDIT_DOCTYPE):
+        roles.update(
+            str(role)
+            for role in frappe.get_all(
+                AUDIT_DOCTYPE,
+                pluck="role",
+                order_by="role asc",
+            )
+            if role
+        )
+    return sorted(roles)
+
+
+def reconcile_custom_permission_projections() -> None:
+    """Rebuild Frappe projections exclusively from canonical Almdina state.
+
+    Legacy DocPerm/Custom DocPerm rows are never imported as business authority.
+    On the first migration to canonical state, the latest explicit Almdina audit
+    is trusted as provenance. Roles without an audit fail closed to no business
+    capabilities. The resulting canonical state is then projected back to Frappe,
+    removing stale permissions that old baselines may have resurrected.
+    """
+
+    doctypes = [
+        doctype
+        for doctype in _managed_doctypes()
+        if frappe.db.exists("DocType", doctype)
+    ]
+    if not doctypes or not frappe.db.exists("DocType", STATE_DOCTYPE):
+        return
+
+    roles = _roles_requiring_reconciliation(doctypes)
     if not roles:
         return
 
@@ -93,26 +116,20 @@ def reconcile_custom_permission_projections() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    repository = ProjectedPermissionMatrixRepository()
+    canonical = CanonicalPermissionStateRepository()
+    prepared: dict[str, dict[str, bool]] = {}
     for resolved in roles:
         if resolved in PROTECTED_SYSTEM_ROLES or not frappe.db.exists("Role", resolved):
             continue
-        effective = repository.role_state(resolved)["capabilities"]
-        repository.save_role_state(
-            resolved,
-            _remove_legacy_settings_read(effective),
-        )
+        state = canonical.bootstrap_fail_closed(resolved)
+        prepared[resolved] = _remove_legacy_settings_read(state)
+
+    if prepared:
+        ProjectedPermissionMatrixRepository().save_role_states(prepared)
 
 
 def _ensure_permission_type_schema(permission_type_name: str) -> None:
-    """Repair generated permission fields for a pre-existing Permission Type.
-
-    Long-lived sites can contain the Permission Type record while one of its
-    generated Custom Fields is missing or has stale ``depends_on`` metadata.
-    Frappe only creates those fields in PermissionType.on_update, so merely
-    skipping an existing row leaves the role matrix looking saved while native
-    permission checks cannot see the capability.
-    """
+    """Repair generated permission fields for a pre-existing Permission Type."""
 
     document = frappe.get_doc("Permission Type", permission_type_name)
     for target in CUSTOM_FIELD_TARGET:
@@ -120,13 +137,7 @@ def _ensure_permission_type_schema(permission_type_name: str) -> None:
 
 
 def sync_permission_types() -> None:
-    """Install/repair capability columns and fail closed on platform roles.
-
-    Permission Type creates the required DocPerm and Custom DocPerm fields in
-    Frappe v16. Existing records are repaired as well as new ones so upgrades are
-    self-healing. Protected platform roles are excluded from Almdina business
-    authority and must never become implicit factory roles.
-    """
+    """Install capability columns and rebuild projections from canonical state."""
 
     if not frappe.db.exists("DocType", "Permission Type"):
         return
@@ -152,14 +163,9 @@ def sync_permission_types() -> None:
             }
         ).insert(ignore_permissions=True)
 
-    # Remove historical grants before any projection/baseline work. Otherwise a
-    # stale automatic-role row can survive forever because protected roles are
-    # never editable in the factory permission console.
+    # Platform roles are never Almdina business authority.
     revoke_automatic_role_business_grants()
 
-    # Frappe v16 caches the permission-type map per worker process with
-    # @site_cache. Invalidate it explicitly after schema repair so a long-lived
-    # process cannot keep authorizing against the pre-migration map.
     get_doctype_ptype_map.clear_cache()
     for permission_doctype in ("DocPerm", "Custom DocPerm", "DocShare"):
         frappe.clear_cache(doctype=permission_doctype)
@@ -168,15 +174,16 @@ def sync_permission_types() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    # Reconcile only editable roles that already had custom rows. Protected
-    # platform roles are skipped and cannot be reintroduced as factory policy.
+    # Canonical bootstrap happens before any baseline can be trusted. Existing
+    # business grants are restored only from explicit audit provenance; otherwise
+    # they fail closed. Then the canonical state overwrites all legacy projections.
     reconcile_custom_permission_projections()
     ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()
     )
 
-    # Defense in depth: baseline helpers must not be able to resurrect automatic
-    # role grants if a stale standard row existed during an unusual upgrade.
+    # A baseline may preserve native Frappe rows for compatibility, but it must
+    # never become business authority because the gateway reads canonical state.
     revoke_automatic_role_business_grants()
 
 
