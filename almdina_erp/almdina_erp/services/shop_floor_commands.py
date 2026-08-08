@@ -37,6 +37,7 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
         plan_needs_recalculation=bool(
             int(getattr(order, "plan_needs_recalculation", None) or 0)
         ),
+        has_approved_plan=bool(getattr(order, "approved_plan", None)),
         drawing_dxf_status=getattr(order, "drawing_dxf_status", None) or None,
     )
     try:
