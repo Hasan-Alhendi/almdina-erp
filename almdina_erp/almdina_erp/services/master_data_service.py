@@ -105,7 +105,7 @@ def _routing_rows() -> list[dict[str, Any]]:
                 "department_label",
                 "operational_role",
                 "required",
-                "auto_complete_if_not_applicable",
+                "is_planning_stage",
             ],
             order_by="sequence asc, idx asc",
         )
