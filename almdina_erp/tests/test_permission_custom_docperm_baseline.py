@@ -26,6 +26,21 @@ class Field:
         self.fieldname = fieldname
 
 
+PERMISSION_FIELDS = (
+    "role",
+    "permlevel",
+    "if_owner",
+    "read",
+    "write",
+    "create",
+    "delete",
+    "report",
+    "print",
+    "email",
+    "view_costs",
+)
+
+
 class Meta:
     def __init__(self, fields: tuple[str, ...]) -> None:
         self.fields = [Field(fieldname) for fieldname in fields]
@@ -38,20 +53,7 @@ class Meta:
 class Document(Row):
     def __init__(self, payload: dict[str, Any], inserted: list[dict[str, Any]]) -> None:
         super().__init__(payload)
-        self.meta = Meta(
-            (
-                "role",
-                "permlevel",
-                "if_owner",
-                "read",
-                "write",
-                "create",
-                "delete",
-                "report",
-                "print",
-                "email",
-            )
-        )
+        self.meta = Meta(PERMISSION_FIELDS)
         self._inserted = inserted
 
     def insert(self, ignore_permissions: bool = False) -> "Document":
@@ -112,20 +114,7 @@ class RepositoryHarness:
         fake_frappe.db = FakeDatabase(self)
         fake_frappe.get_all = self.get_all
         fake_frappe.get_doc = self.get_doc
-        fake_frappe.get_meta = lambda _doctype: Meta(
-            (
-                "role",
-                "permlevel",
-                "if_owner",
-                "read",
-                "write",
-                "create",
-                "delete",
-                "report",
-                "print",
-                "email",
-            )
-        )
+        fake_frappe.get_meta = lambda _doctype: Meta(PERMISSION_FIELDS)
 
         permissions = types.ModuleType("frappe.permissions")
         permissions.setup_custom_perms = self.setup_calls.append
@@ -169,11 +158,13 @@ def standard_row(name: str, role: str) -> dict[str, Any]:
         "report": 1,
         "print": 1,
         "email": 0,
+        # Simulate a polluted historical business Permission Type field.
+        "view_costs": 1,
     }
 
 
 class TestPermissionCustomDocPermBaseline(unittest.TestCase):
-    def test_partial_custom_overrides_copy_every_missing_standard_role(self) -> None:
+    def test_partial_custom_overrides_copy_native_rights_but_not_business_grants(self) -> None:
         harness = RepositoryHarness(
             standard_rows=[
                 standard_row("STD-ENTRY", "Order Entry"),
@@ -196,6 +187,7 @@ class TestPermissionCustomDocPermBaseline(unittest.TestCase):
         self.assertEqual(copied["read"], 1)
         self.assertEqual(copied["report"], 1)
         self.assertEqual(copied["print"], 1)
+        self.assertEqual(copied["view_costs"], 0)
 
     def test_first_customization_uses_frappe_complete_baseline_setup(self) -> None:
         harness = RepositoryHarness(
@@ -209,26 +201,13 @@ class TestPermissionCustomDocPermBaseline(unittest.TestCase):
         self.assertEqual(harness.setup_calls, ["Door Cutting Order"])
         self.assertEqual(harness.inserted, [])
 
-    def test_role_state_does_not_fall_back_to_ignored_standard_rows(self) -> None:
-        harness = RepositoryHarness(
-            standard_rows=[standard_row("STD-REVIEW", "Review Role")],
-            custom_rows=[
-                {
-                    **standard_row("CUSTOM-ENTRY", "Order Entry"),
-                    "name": "CUSTOM-ENTRY",
-                }
-            ],
-        )
-        repository = harness.load_repository()
-
-        rows, source = repository._effective_rows(
-            "Door Cutting Order",
-            "Review Role",
-            [],
-        )
-
-        self.assertEqual(rows, [])
-        self.assertEqual(source, "custom")
+    def test_repository_source_never_reads_docperm_as_business_authority(self) -> None:
+        source = REPOSITORY_PATH.read_text(encoding="utf-8")
+        role_state = source[source.index("    def role_state("):source.index("    def role_states(")]
+        self.assertIn("self._canonical.read", role_state)
+        self.assertNotIn("Custom DocPerm", role_state)
+        self.assertNotIn("DocPerm", role_state)
+        self.assertNotIn("_effective_rows", source)
 
 
 if __name__ == "__main__":
