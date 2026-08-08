@@ -23,24 +23,26 @@ class ProductionRoute:
 
     def __post_init__(self) -> None:
         if not self.name.strip():
-            raise ValueError("Production route name is required.")
+            raise ValueError("اسم مسار الإنتاج مطلوب.")
         if not self.stages:
-            raise ValueError("Production route requires at least one stage.")
+            raise ValueError("يجب أن يحتوي مسار الإنتاج على مرحلة واحدة على الأقل.")
 
         sequences = [stage.sequence for stage in self.stages]
         stage_types = [stage.stage_type for stage in self.stages]
         if any(sequence <= 0 for sequence in sequences):
-            raise ValueError("Production route stage sequences must be positive.")
+            raise ValueError("ترتيب مراحل مسار الإنتاج يجب أن يكون رقمًا موجبًا.")
         if len(sequences) != len(set(sequences)):
-            raise ValueError("Production route stage sequences must be unique.")
+            raise ValueError("ترتيب مراحل مسار الإنتاج يجب ألا يحتوي على تكرار.")
         if len(stage_types) != len(set(stage_types)):
-            raise ValueError("Production route stage types must be unique.")
+            raise ValueError("لا يمكن تكرار رمز المرحلة داخل مسار الإنتاج.")
         if any(not stage.stage_type.strip() for stage in self.stages):
-            raise ValueError("Production route stage type is required.")
+            raise ValueError("رمز مرحلة الإنتاج مطلوب.")
+        if any(not stage.department_label.strip() for stage in self.stages):
+            raise ValueError("الاسم الظاهر لكل مرحلة إنتاج مطلوب.")
         if any(not stage.operational_role.strip() for stage in self.stages):
-            raise ValueError("Every production route stage requires an operational role.")
+            raise ValueError("يجب تحديد الدور التشغيلي لكل مرحلة إنتاج.")
         if tuple(sequences) != tuple(sorted(sequences)):
-            raise ValueError("Production route stages must be ordered by sequence.")
+            raise ValueError("يجب أن تكون مراحل مسار الإنتاج مرتبة حسب التسلسل.")
 
     @property
     def first_stage(self) -> RoutingStage:
@@ -52,7 +54,7 @@ class ProductionRoute:
             if stage.stage_type == resolved:
                 return stage
         raise ValueError(
-            f"Stage {resolved or '<empty>'} is not part of route {self.name}."
+            f"المرحلة {resolved or '<فارغ>'} ليست ضمن المسار {self.name}."
         )
 
     def next_stage(self, stage_type: str) -> RoutingStage | None:
