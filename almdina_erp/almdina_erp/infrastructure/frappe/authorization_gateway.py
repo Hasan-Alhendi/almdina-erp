@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
 _TRANSACTIONAL_SCOPE_DOCTYPES = frozenset(
     {"Door Cutting Order", "Replacement Piece"}
 )
+_DEFAULT_PERMISSION_MESSAGE = "لا تملك الصلاحية المطلوبة لتنفيذ هذا الإجراء."
 
 
 def _matrix_repository() -> tuple[Any, frozenset[str]]:
@@ -31,13 +32,7 @@ def _matrix_repository() -> tuple[Any, frozenset[str]]:
 
 
 def _matrix_granted_capabilities(user: str) -> frozenset[str]:
-    """Resolve capabilities only from editable roles in the factory matrix.
-
-    Frappe automatically attaches roles such as ``Desk User`` and ``All`` to a
-    session, while ``System Manager`` is a platform administration role. These
-    roles are intentionally excluded by ``PROTECTED_SYSTEM_ROLES`` and must
-    never become an implicit source of Almdina business authority.
-    """
+    """Resolve capabilities only from editable roles in the factory matrix."""
 
     cache = getattr(frappe.local, "almdina_matrix_capabilities", None)
     if cache is None:
@@ -81,7 +76,6 @@ def doctype_has_capability(
 ) -> bool:
     """Check an Almdina capability without accepting unrelated native grants."""
 
-    # Validate the capability key even when the matrix is empty.
     capability_definition(capability)
     resolved_user = user or frappe.session.user
     if resolved_user == "Administrator":
@@ -111,7 +105,7 @@ def require_doctype_capability(
     if doctype_has_capability(capability, user=user):
         return
     frappe.throw(
-        message or _("You do not have permission for this operation."),
+        message or _(_DEFAULT_PERMISSION_MESSAGE),
         frappe.PermissionError,
     )
 
@@ -126,7 +120,7 @@ def require_any_doctype_capability(
     if requested and doctype_has_any_capability(requested, user=user):
         return
     frappe.throw(
-        message or _("You do not have permission for this operation."),
+        message or _(_DEFAULT_PERMISSION_MESSAGE),
         frappe.PermissionError,
     )
 
@@ -139,10 +133,8 @@ def document_has_capability(
 ) -> bool:
     """Require explicit capability first, then preserve native document scope.
 
-    The old implementation checked Frappe native permission first. A stale grant
-    on a protected platform role could therefore bypass an empty factory role.
-    The matrix is now the authority; native permissions are used only as a
-    second, narrowing check for the concrete document.
+    The matrix is the authority. Native Frappe permissions are used only as a
+    second, narrowing check for concrete transactional documents.
     """
 
     definition = capability_definition(capability)
@@ -156,9 +148,7 @@ def document_has_capability(
         return False
 
     if definition.applies_to in _TRANSACTIONAL_SCOPE_DOCTYPES:
-        native_permission = (
-            "read" if definition.custom else definition.permission_type
-        )
+        native_permission = "read" if definition.custom else definition.permission_type
         return bool(
             frappe.has_permission(
                 document,
@@ -167,8 +157,6 @@ def document_has_capability(
             )
         )
 
-    # Non-transactional services perform their own resource validation after the
-    # capability boundary. No unrelated Frappe role may add authority here.
     return True
 
 
@@ -194,7 +182,7 @@ def require_document_capability(
     if document_has_capability(document, capability, user=user):
         return
     frappe.throw(
-        message or _("You do not have permission for this operation."),
+        message or _(_DEFAULT_PERMISSION_MESSAGE),
         frappe.PermissionError,
     )
 
@@ -210,7 +198,7 @@ def require_any_document_capability(
     if requested and document_has_any_capability(document, requested, user=user):
         return
     frappe.throw(
-        message or _("You do not have permission for this operation."),
+        message or _(_DEFAULT_PERMISSION_MESSAGE),
         frappe.PermissionError,
     )
 
