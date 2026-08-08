@@ -34,7 +34,10 @@ def _definition(doctype: str) -> dict[str, str]:
     try:
         return _MASTER_DEFINITIONS[str(doctype or "")]
     except KeyError:
-        frappe.throw(_("Unsupported factory master data type."), frappe.ValidationError)
+        frappe.throw(
+            _("نوع البيانات الأساسية المطلوب غير مدعوم في إدارة المعمل."),
+            frappe.ValidationError,
+        )
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -60,7 +63,10 @@ def search_operational_roles(
     """Role link query for routing editors without general role administration."""
 
     del doctype, searchfield, filters
-    require_doctype_capability(Capability.VIEW_PRODUCTION_ROUTINGS)
+    require_doctype_capability(
+        Capability.VIEW_PRODUCTION_ROUTINGS,
+        message=_("لا تملك صلاحية عرض مسارات الإنتاج."),
+    )
     rows = frappe.db.sql(
         """
         select name, name
@@ -175,7 +181,10 @@ def get_master_data_console() -> dict[str, Any]:
     can_view_routings = permissions[Capability.VIEW_PRODUCTION_ROUTINGS]
     can_view_edges = permissions[Capability.VIEW_EDGE_BANDING_TYPES]
     if not can_view_routings and not can_view_edges:
-        frappe.throw(_("You do not have permission to view factory master data."), frappe.PermissionError)
+        frappe.throw(
+            _("لا تملك صلاحية عرض البيانات الأساسية للمعمل."),
+            frappe.PermissionError,
+        )
 
     allowed_doctypes = []
     if can_view_routings:
@@ -201,7 +210,7 @@ def set_master_data_disabled(doctype: str, name: str, disabled: int | bool) -> d
     definition = _definition(doctype)
     require_doctype_capability(
         definition["edit"],
-        message=_("You do not have permission to modify this master data."),
+        message=_("لا تملك صلاحية تعديل هذا النوع من البيانات الأساسية."),
     )
     target_name = str(name or "").strip()
     frappe.db.sql(
@@ -219,7 +228,7 @@ def delete_master_data_record(doctype: str, name: str) -> dict[str, Any]:
     definition = _definition(doctype)
     require_doctype_capability(
         definition["delete"],
-        message=_("You do not have permission to delete this master data."),
+        message=_("لا تملك صلاحية حذف هذا النوع من البيانات الأساسية."),
     )
     target_name = str(name or "").strip()
     frappe.delete_doc(doctype, target_name, ignore_permissions=False)
