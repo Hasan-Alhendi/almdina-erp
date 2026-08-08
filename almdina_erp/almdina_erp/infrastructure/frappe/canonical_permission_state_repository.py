@@ -19,9 +19,9 @@ AUDIT_DOCTYPE = "Almdina Permission Audit"
 class CanonicalPermissionStateRepository:
     """Persist the sole authoritative Almdina capability state per role.
 
-    Frappe DocPerm and Custom DocPerm are projections only. They must never be
-    read back as business authority, because legacy/native permission rows can
-    otherwise silently widen factory access during migrate or permission setup.
+    Frappe DocPerm, Custom DocPerm, and historical audit rows are never business
+    authority. They exist only for runtime projection or historical inspection.
+    Missing canonical state always fails closed to an empty matrix.
     """
 
     @staticmethod
@@ -58,17 +58,12 @@ class CanonicalPermissionStateRepository:
         cls,
         raw: str | Mapping[str, Any] | None,
     ) -> dict[str, bool]:
-        """Read historical audit JSON without reviving removed broad grants.
+        """Decode historical audit JSON for display/inspection only.
 
-        Older Almdina releases wrote capability keys that no longer exist after
-        the granular permission redesign (for example ``manage_users``,
-        ``assign_workforce_profile`` and ``manage_factory_settings``). Migration
-        must not fail because those immutable audit rows remain in the database,
-        and it must not guess a wider modern grant for a removed broad key.
-
-        Therefore only capability keys that still exist in the current catalog
-        are restored. Unknown historical keys are ignored fail-closed. Current
-        canonical storage itself stays strict through ``_decode`` above.
+        Older releases wrote broad keys that no longer exist after the granular
+        permission redesign. Unknown historical keys are ignored so immutable
+        audit rows remain readable, but this decoder is never used to bootstrap
+        business authority.
         """
 
         payload = cls._payload(raw)
@@ -127,12 +122,7 @@ class CanonicalPermissionStateRepository:
         return normalized
 
     def latest_audited_state(self, role: str) -> dict[str, bool] | None:
-        """Return the last explicitly audited matrix state, if one exists.
-
-        Audit rows are historical records and can outlive capability schema
-        changes, so they use the compatibility decoder. Removed broad keys never
-        grant modern capabilities implicitly.
-        """
+        """Return the last audited snapshot for historical inspection only."""
 
         resolved = str(role or "").strip()
         if not resolved or not frappe.db.exists("DocType", AUDIT_DOCTYPE):
@@ -149,19 +139,17 @@ class CanonicalPermissionStateRepository:
         return self._decode_legacy_audit(rows[0].get("after_json"))
 
     def bootstrap_fail_closed(self, role: str) -> dict[str, bool]:
-        """Create canonical state from explicit audit provenance or deny-all.
+        """Create missing canonical state as deny-all.
 
-        Legacy/native DocPerm rows are intentionally ignored. Without an Almdina
-        audit record there is no trustworthy evidence that a business capability
-        was explicitly granted through the factory matrix, so migration fails
-        closed instead of resurrecting historical Frappe permissions.
+        The Permission Matrix is the only business authority. Historical audit
+        records and Frappe permission projections must never resurrect grants
+        automatically during migrate or permission synchronization.
         """
 
         resolved = str(role or "").strip()
         if self.exists(resolved):
             return self.read(resolved)
-        audited = self.latest_audited_state(resolved)
-        return self.save(resolved, audited if audited is not None else {})
+        return self.save(resolved, {})
 
 
 __all__ = [
