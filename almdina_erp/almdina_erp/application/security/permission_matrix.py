@@ -33,8 +33,8 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "order": {"label": "الطلبات", "description": "إنشاء الطلب ومراجعته واعتماده وإدارة دورة حياته.", "icon": "file-text"},
     "costing": {"label": "التكلفة والتسعير", "description": "عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.", "icon": "accounting"},
     "documents": {"label": "المستندات والطباعة", "description": "طباعة القياسات وفاتورة الزبون والتقرير الداخلي السري.", "icon": "printer"},
-    "cutting_plan": {"label": "خطة القص", "description": "عرض الخطة وحسابها وتعديل إعدادات المحسّن وطباعتها.", "icon": "organization"},
-    "drawing": {"label": "الرسم وDXF", "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها واعتمادها.", "icon": "image-view"},
+    "cutting_plan": {"label": "خطة القص", "description": "عرض الخطة وحسابها وتعديل إعدادات المحسّن واعتمادها وطباعتها.", "icon": "organization"},
+    "drawing": {"label": "الرسم وDXF", "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها.", "icon": "image-view"},
     "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
     "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.", "icon": "dashboard"},
     "reports": {"label": "التقارير", "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.", "icon": "chart"},
@@ -70,12 +70,12 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.RECALCULATE_PLAN: _presentation("إعادة حساب الخطة", "إعادة تشغيل محرك توزيع القطع على الألواح.", "sensitive"),
     Capability.EDIT_OPTIMIZER_SETTINGS: _presentation("تعديل إعدادات المحسّن", "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث.", "sensitive"),
     Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
+    Capability.APPROVE_DXF: _presentation("اعتماد خطة القص", "اعتماد خطة النظام الحالية أو خطة DXF المرفوعة كمصدر نهائي للإنتاج بعد مراجعتها.", "critical"),
     Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
     Capability.EDIT_SPECIAL_DRAWING: _presentation("تعديل الرسم الخاص", "تحرير هندسة وملاحظات الدرف الخاصة.", "sensitive"),
     Capability.EXPORT_DXF: _presentation("تصدير DXF", "تصدير رسم الإنتاج بصيغة DXF.", "sensitive"),
     Capability.UPLOAD_DXF: _presentation("رفع خطة قص DXF", "رفع خطة قص كملف DXF مع التحقق قبل اعتمادها. مخصصة لعامل الرسم.", "sensitive"),
     Capability.REPLACE_DXF: _presentation("استبدال خطة قص DXF", "استبدال ملف DXF المرفوع سابقًا بعد التحقق. مخصصة لعامل الرسم.", "critical"),
-    Capability.APPROVE_DXF: _presentation("اعتماد الرسم", "اعتماد خطة النظام أو الخطة المرفوعة كمصدر للإنتاج.", "critical"),
     Capability.DISPATCH_ORDER: _presentation("إرسال الطلب للإنتاج", "اختيار مسار الإنتاج والعامل الأول وإنشاء المراحل.", "critical"),
     Capability.START_ASSIGNED_STAGE: _presentation("بدء المرحلة المسندة", "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه."),
     Capability.HANDOFF_ASSIGNED_STAGE: _presentation("تسليم المرحلة المسندة", "إنهاء المرحلة وإرسال الطلب إلى العامل التالي."),
@@ -134,13 +134,13 @@ _PLAN_VIEW_ACTIONS = frozenset({
     Capability.RECALCULATE_PLAN,
     Capability.EDIT_OPTIMIZER_SETTINGS,
     Capability.PRINT_CUTTING_PLAN,
+    Capability.APPROVE_DXF,
 })
 _DRAWING_VIEW_ACTIONS = frozenset({
     Capability.EDIT_SPECIAL_DRAWING,
     Capability.EXPORT_DXF,
     Capability.UPLOAD_DXF,
     Capability.REPLACE_DXF,
-    Capability.APPROVE_DXF,
 })
 _WORKFORCE_ACTIONS = frozenset(WORKFORCE_CAPABILITIES.difference({Capability.VIEW_USERS}))
 _FACTORY_SECTION_EDITS = frozenset(FACTORY_SETTINGS_CAPABILITIES.difference({Capability.VIEW_FACTORY_SETTINGS}))
