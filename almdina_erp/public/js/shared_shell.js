@@ -2,66 +2,77 @@
     "use strict";
 
     const APP_NAME = "almdina_erp";
-    const CAPABILITY_ROUTE_RULES = Object.freeze([
-        { any: ["manage_permissions"], routes: ["factory-permissions", "role"] },
-        { any: ["view_users"], routes: ["factory-workforce"] },
+    const PERMISSION_CONTEXT_VERSION = 6;
+    const SURFACE_ROUTE_RULES = Object.freeze([
+        { surface: "orders", routes: ["door-cutting-order"] },
+        { surface: "customer_admin", routes: ["customer"] },
+        { surface: "cutting_plans", routes: ["cutting-plan"] },
+        { surface: "production_stages", routes: ["production-stage"] },
+        { surface: "production_incidents", routes: ["production-incident"] },
+        { surface: "replacements", routes: ["replacement-piece"] },
+        { surface: "factory_master_data", routes: ["factory-master-data"] },
+        { surface: "production_routings", routes: ["production-routing"] },
+        { surface: "edge_banding_types", routes: ["edge-banding-type"] },
         {
-            any: [
-                "view_factory_settings",
-                "edit_factory_cutting_defaults",
-                "edit_factory_cost_defaults",
-                "edit_factory_production_controls",
-            ],
+            surface: "factory_settings",
             routes: ["factory-production-settings", "almdina-erp-settings"],
         },
+        { surface: "workforce", routes: ["factory-workforce"] },
+        { surface: "permissions", routes: ["factory-permissions"] },
         {
-            any: [
-                "view_production_routings",
-                "create_production_routings",
-                "edit_production_routings",
-                "delete_production_routings",
-                "view_edge_banding_types",
-                "create_edge_banding_types",
-                "edit_edge_banding_types",
-                "delete_edge_banding_types",
-            ],
-            routes: ["factory-master-data"],
-        },
-        {
-            any: [
-                "view_production_routings",
-                "create_production_routings",
-                "edit_production_routings",
-                "delete_production_routings",
-            ],
-            routes: ["production-routing"],
-        },
-        {
-            any: [
-                "view_edge_banding_types",
-                "create_edge_banding_types",
-                "edit_edge_banding_types",
-                "delete_edge_banding_types",
-            ],
-            routes: ["edge-banding-type"],
-        },
-        { any: ["approve_order", "reject_order"], routes: ["factory-approval-queue"] },
-        { any: ["archive_approved_plan"], routes: ["factory-plan-archive"] },
-        { any: ["view_replacements"], routes: ["replacement-piece"] },
-        {
-            any: ["view_operational_reports", "view_financial_reports"],
+            surface: "role_admin",
             routes: [
-                "factory-operations-summary",
-                "factory%20operations%20summary",
-                "production-incidents-and-replacements",
-                "production%20incidents%20and%20replacements",
-                "production-stage-performance",
-                "production%20stage%20performance",
+                "role",
+                "role-permission-manager",
+                "permission-inspector",
+                "permission-type",
+                "user-permission",
+                "user",
             ],
         },
+        {
+            surface: "report_factory_operations_summary",
+            routes: ["factory-operations-summary"],
+        },
+        {
+            surface: "report_factory_order_analysis",
+            routes: ["factory-order-analysis"],
+        },
+        {
+            surface: "report_production_stage_performance",
+            routes: ["production-stage-performance"],
+        },
+        {
+            surface: "report_production_incidents_and_replacements",
+            routes: ["production-incidents-and-replacements"],
+        },
+        { surface: "report_board_usage_analysis", routes: ["board-usage-analysis"] },
+        {
+            surface: "report_piece_size_usage_analysis",
+            routes: ["piece-size-usage-analysis"],
+        },
+        {
+            surface: "report_order_stock_availability",
+            routes: ["order-stock-availability"],
+        },
+        { surface: "report_remnant_inventory", routes: ["remnant-inventory"] },
     ]);
+    const ALMDINA_WORKSPACE_ROUTES = Object.freeze(
+        new Set([
+            "almdina-erp",
+            "shop-floor",
+            "almdina-control-center",
+            "almdina-reports",
+            "almdina-settings",
+            "almdina-go-live",
+        ])
+    );
 
     let initialized = false;
+    let observer = null;
+    let observerTimer = null;
+    let redirecting = false;
+    let lastDeniedRoute = "";
 
     function permissions() {
         return window.AlmdinaPermissions || null;
@@ -72,15 +83,13 @@
         return api && typeof api.navigation === "function" ? api.navigation() : null;
     }
 
-    function can(capability) {
+    function surfaceAllowed(surface) {
         const api = permissions();
-        return Boolean(api && typeof api.can === "function" && api.can(capability));
-    }
-
-    function ruleAllowed(rule) {
-        const any = Array.isArray(rule.any) ? rule.any : [];
-        const all = Array.isArray(rule.all) ? rule.all : [];
-        return (any.length === 0 || any.some(can)) && all.every(can);
+        return Boolean(
+            api
+            && typeof api.surface === "function"
+            && api.surface(String(surface || ""))
+        );
     }
 
     function routeSlug(value) {
@@ -93,6 +102,36 @@
             .toLowerCase()
             .replace(/[^a-z0-9\u0600-\u06ff]+/g, "-")
             .replace(/^-+|-+$/g, "");
+    }
+
+    function canonicalRoute(value) {
+        let text = String(value || "").trim();
+        if (!text) return "";
+        try {
+            if (/^https?:\/\//i.test(text)) {
+                text = new URL(text, window.location.origin).pathname;
+            }
+        } catch (error) {
+            console.debug("تعذر تحليل رابط أثناء تطبيق الصلاحيات", error);
+        }
+        try {
+            text = decodeURIComponent(text);
+        } catch (error) {
+            console.debug("تعذر فك ترميز رابط أثناء تطبيق الصلاحيات", error);
+        }
+        text = text
+            .replace(/^#\/?/, "")
+            .replace(/^\/+/, "")
+            .replace(/^(app|desk)\//i, "")
+            .split("?")[0]
+            .split("#")[0];
+
+        const typed = text.match(/^(list|form)\/([^/]+)/i);
+        if (typed) return routeSlug(typed[2]);
+        const report = text.match(/^(query-report|report)\/(.+)$/i);
+        if (report) return routeSlug(report[2]);
+        const firstSegment = text.split("/")[0];
+        return routeSlug(firstSegment || text);
     }
 
     function registeredWorkspace(route) {
@@ -119,7 +158,6 @@
         if (registeredWorkspace(requested) || registeredPage(requested)) {
             return requested;
         }
-
         for (const workspace of nav && Array.isArray(nav.workspaces) ? nav.workspaces : []) {
             const candidate = routeSlug(workspace);
             if (registeredWorkspace(candidate)) return candidate;
@@ -127,11 +165,79 @@
         return "";
     }
 
+    function allowedWorkspaceRoutes(nav) {
+        return new Set(
+            nav && Array.isArray(nav.workspaces)
+                ? nav.workspaces.map(routeSlug).filter(Boolean)
+                : []
+        );
+    }
+
+    function workspaceAllowed(route) {
+        const nav = navigation();
+        if (!nav || !nav.shared_shell) return true;
+        const key = canonicalRoute(route);
+        if (!ALMDINA_WORKSPACE_ROUTES.has(key)) return true;
+        return allowedWorkspaceRoutes(nav).has(key);
+    }
+
+    function ruleForRoutes(routes) {
+        const requested = new Set(routes.filter(Boolean));
+        return SURFACE_ROUTE_RULES.find(rule =>
+            rule.routes.some(route => requested.has(route))
+        ) || null;
+    }
+
+    function normalizedRoutes(element) {
+        const values = [
+            element.getAttribute && element.getAttribute("data-link-to"),
+            element.getAttribute && element.getAttribute("data-route"),
+            element.getAttribute && element.getAttribute("data-name"),
+            element.getAttribute && element.getAttribute("href"),
+            element.dataset && element.dataset.linkTo,
+            element.dataset && element.dataset.route,
+        ];
+        return [...new Set(values.filter(Boolean).map(canonicalRoute).filter(Boolean))];
+    }
+
+    function currentRouteCandidates() {
+        const values = [];
+        if (frappe.get_route_str && typeof frappe.get_route_str === "function") {
+            values.push(frappe.get_route_str());
+        }
+        if (frappe.get_route && typeof frappe.get_route === "function") {
+            const route = frappe.get_route();
+            if (Array.isArray(route)) values.push(...route);
+            else if (route) values.push(route);
+        }
+        values.push(window.location.pathname || "");
+        return [...new Set(values.map(canonicalRoute).filter(Boolean))];
+    }
+
+    function shortcutContainer(element) {
+        return (
+            element.closest &&
+            element.closest(
+                ".shortcut-widget-box, .widget.shortcut-widget-box, .link-item, .workspace-link, .sidebar-item-container, .desk-sidebar-item, .card"
+            )
+        ) || element;
+    }
+
+    function setPermissionVisibility(element, allowed) {
+        if (!element || !element.style) return;
+        if (!allowed) {
+            element.dataset.almdinaPermissionHidden = "1";
+            element.style.setProperty("display", "none", "important");
+            return;
+        }
+        if (element.dataset.almdinaPermissionHidden === "1") {
+            delete element.dataset.almdinaPermissionHidden;
+            element.style.removeProperty("display");
+        }
+    }
+
     function syncAppDefaultRoute() {
         const nav = navigation();
-        // Only app-confined navigation contexts should have their app card
-        // rewritten to their configured landing route. Administrator keeps the
-        // app's own route so /desk opens Desktop while the card opens Almdina.
         if (!nav || !nav.app_only || !frappe.boot || !nav.default_route) return;
 
         if (frappe.boot.apps_data && typeof frappe.boot.apps_data === "object") {
@@ -160,47 +266,23 @@
             });
     }
 
-    function normalizedRoute(element) {
-        const values = [
-            element.getAttribute && element.getAttribute("data-link-to"),
-            element.getAttribute && element.getAttribute("data-route"),
-            element.getAttribute && element.getAttribute("href"),
-            element.dataset && element.dataset.linkTo,
-            element.dataset && element.dataset.route,
-        ];
-        return values
-            .filter(Boolean)
-            .map(value => String(value).toLowerCase().replace(/^#\/?/, "").replace(/^\/?app\//, ""))
-            .join(" ");
-    }
-
-    function shortcutContainer(element) {
-        return (
-            element.closest &&
-            element.closest(
-                ".shortcut-widget-box, .widget.shortcut-widget-box, .link-item, .workspace-link, .card"
-            )
-        ) || element;
-    }
-
     function hideUnauthorizedShortcuts() {
         const nav = navigation();
         if (!nav || !nav.shared_shell) return;
         document
-            .querySelectorAll("[data-link-to], [data-route], a[href*='/app/'], a[href*='/desk/']")
+            .querySelectorAll("[data-link-to], [data-route], [data-name], a[href*='/app/'], a[href*='/desk/']")
             .forEach(element => {
-                const route = normalizedRoute(element);
-                const rule = CAPABILITY_ROUTE_RULES.find(item =>
-                    item.routes.some(candidate => route.includes(candidate))
-                );
-                if (!rule) return;
-                const allowed = ruleAllowed(rule);
+                const routes = normalizedRoutes(element);
+                if (!routes.length) return;
                 const container = shortcutContainer(element);
-                container.style.setProperty(
-                    "display",
-                    allowed ? "" : "none",
-                    allowed ? "" : "important"
-                );
+                const workspaceRoute = routes.find(route => ALMDINA_WORKSPACE_ROUTES.has(route));
+                if (workspaceRoute) {
+                    setPermissionVisibility(container, workspaceAllowed(workspaceRoute));
+                    return;
+                }
+                const rule = ruleForRoutes(routes);
+                if (!rule) return;
+                setPermissionVisibility(container, surfaceAllowed(rule.surface));
             });
     }
 
@@ -208,28 +290,71 @@
         const route = String((frappe.get_route_str && frappe.get_route_str()) || "").toLowerCase();
         const path = String(window.location.pathname || "").replace(/\/+$/, "").toLowerCase();
         return (
-            !route ||
-            route === "desktop" ||
-            route === "workspaces" ||
-            path.endsWith("/app") ||
-            path.endsWith("/desk")
+            !route
+            || route === "desktop"
+            || route === "workspaces"
+            || path.endsWith("/app")
+            || path.endsWith("/desk")
         );
     }
 
     function openConfiguredHome() {
         const nav = navigation();
         if (!nav || !nav.shared_shell || !nav.home_page || !routeIsRoot()) return true;
-
         const home = resolveHomeRoute(nav);
         if (!home) return false;
-
         if (typeof frappe.set_route === "function") {
             frappe.set_route(home);
             return true;
         }
-
         window.location.replace(`/desk/${home}`);
         return true;
+    }
+
+    function protectedRouteDecision() {
+        const nav = navigation();
+        if (!nav || !nav.shared_shell) return null;
+        const routes = currentRouteCandidates();
+        const workspaceRoute = routes.find(route => ALMDINA_WORKSPACE_ROUTES.has(route));
+        if (workspaceRoute && !workspaceAllowed(workspaceRoute)) {
+            return { allowed: false, route: workspaceRoute };
+        }
+        const rule = ruleForRoutes(routes);
+        if (!rule) return null;
+        return {
+            allowed: surfaceAllowed(rule.surface),
+            route: rule.routes[0],
+            surface: rule.surface,
+        };
+    }
+
+    function guardCurrentRoute() {
+        if (redirecting || routeIsRoot()) return true;
+        const decision = protectedRouteDecision();
+        if (!decision || decision.allowed) return true;
+
+        const nav = navigation();
+        const home = resolveHomeRoute(nav);
+        if (!home || canonicalRoute(home) === canonicalRoute(decision.route)) return false;
+
+        const deniedRoute = currentRouteCandidates().join("|");
+        if (lastDeniedRoute !== deniedRoute) {
+            lastDeniedRoute = deniedRoute;
+            frappe.show_alert(
+                {
+                    message: __("لا تملك صلاحية الوصول إلى هذا القسم."),
+                    indicator: "orange",
+                },
+                5
+            );
+        }
+        redirecting = true;
+        Promise.resolve(frappe.set_route(home)).finally(() => {
+            window.setTimeout(() => {
+                redirecting = false;
+            }, 100);
+        });
+        return false;
     }
 
     function injectStyles() {
@@ -239,6 +364,7 @@
         style.textContent = `
             body.almdina-shared-shell .navbar {border-bottom:1px solid var(--border-color,#e5e7eb)}
             body.almdina-shared-shell .page-head {backdrop-filter:blur(8px)}
+            [data-almdina-permission-hidden="1"]{display:none!important}
             .almdina-sf-tabs{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;background:var(--fg-color,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:14px;margin-bottom:12px}
             .almdina-sf-tab{appearance:none;border:1px solid var(--border-color,#dfe3e8);background:var(--control-bg,#fff);color:var(--text-color,#1f272e);min-height:42px;padding:8px 16px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
             .almdina-sf-tab.is-active{background:var(--primary,#2490ef);border-color:var(--primary,#2490ef);color:#fff}
@@ -265,29 +391,73 @@
         injectStyles();
     }
 
+    function schedulePermissionScan() {
+        if (observerTimer) window.clearTimeout(observerTimer);
+        observerTimer = window.setTimeout(() => {
+            observerTimer = null;
+            hideUnauthorizedShortcuts();
+        }, 40);
+    }
+
+    function observeDeskMutations() {
+        if (observer || !document.body) return;
+        observer = new MutationObserver(mutations => {
+            if (mutations.some(mutation => mutation.addedNodes && mutation.addedNodes.length)) {
+                schedulePermissionScan();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
     function retryConfiguredHome(attempt = 0) {
         if (openConfiguredHome() || attempt >= 20 || !routeIsRoot()) return;
         window.setTimeout(() => retryConfiguredHome(attempt + 1), 100);
+    }
+
+    function startShell() {
+        applyShell();
+        observeDeskMutations();
+        retryConfiguredHome();
+        window.setTimeout(guardCurrentRoute, 0);
+
+        if (frappe.router && !frappe.router.__almdinaSharedShell) {
+            frappe.router.__almdinaSharedShell = true;
+            frappe.router.on("change", () => {
+                applyShell();
+                window.setTimeout(() => {
+                    retryConfiguredHome();
+                    guardCurrentRoute();
+                }, 0);
+                [100, 300, 800].forEach(delay => setTimeout(hideUnauthorizedShortcuts, delay));
+            });
+        }
+        if (!window.__almdinaPermissionUpdateListener) {
+            window.__almdinaPermissionUpdateListener = true;
+            window.addEventListener("almdina:permissions-updated", () => {
+                applyShell();
+                guardCurrentRoute();
+            });
+        }
+        [100, 300, 900, 1800].forEach(delay => setTimeout(applyShell, delay));
     }
 
     function init() {
         if (initialized) return;
         const nav = navigation();
         if (!nav || !nav.shared_shell) return;
-
         initialized = true;
-        applyShell();
-        retryConfiguredHome();
 
-        if (frappe.router && !frappe.router.__almdinaSharedShell) {
-            frappe.router.__almdinaSharedShell = true;
-            frappe.router.on("change", () => {
-                applyShell();
-                window.setTimeout(() => retryConfiguredHome(), 0);
-                [150, 500].forEach(delay => setTimeout(hideUnauthorizedShortcuts, delay));
-            });
+        const api = permissions();
+        if (
+            api
+            && typeof api.version === "function"
+            && api.version() < PERMISSION_CONTEXT_VERSION
+            && typeof api.refresh === "function"
+        ) {
+            api.refresh().then(startShell).catch(startShell);
+            return;
         }
-        [300, 900, 1800].forEach(delay => setTimeout(applyShell, delay));
+        startShell();
     }
 
     function deskIsReady() {
