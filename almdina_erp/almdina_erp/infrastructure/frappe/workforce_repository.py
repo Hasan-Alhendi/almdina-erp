@@ -18,7 +18,6 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
 PROTECTED_ASSIGNMENT_ROLES = frozenset(
     {"All", "Guest", "Desk User", "System Manager"}
 )
-RETAINED_SYSTEM_ROLES = frozenset({"System Manager"})
 
 
 class FrappeWorkforceRepository:
@@ -122,17 +121,22 @@ class FrappeWorkforceRepository:
             raise ValueError("This account is outside the Almdina workforce scope.")
         return snapshot
 
-    def list_users(
+    def _list_user_names(
         self,
         *,
-        search: str = "",
-        enabled: bool | None = None,
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
+        search: str,
+        enabled: bool | None,
+        limit: int,
+        almdina: bool,
+    ) -> list[str]:
         conditions = [
             "u.user_type = 'System User'",
             "u.name not in ('Guest', 'Administrator')",
-            "coalesce(u.default_app, '') = 'almdina_erp'",
+            (
+                "coalesce(u.default_app, '') = 'almdina_erp'"
+                if almdina
+                else "coalesce(u.default_app, '') != 'almdina_erp'"
+            ),
         ]
         values: list[Any] = []
         normalized_search = str(search or "").strip()
@@ -159,7 +163,81 @@ class FrappeWorkforceRepository:
             tuple(values),
             as_dict=True,
         )
-        return [self.get_user(str(row.name)) for row in rows]
+        return [str(row.name) for row in rows]
+
+    def list_users(
+        self,
+        *,
+        search: str = "",
+        enabled: bool | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        return [
+            self.get_user(user)
+            for user in self._list_user_names(
+                search=search,
+                enabled=enabled,
+                limit=limit,
+                almdina=True,
+            )
+        ]
+
+    def list_available_users(
+        self,
+        *,
+        search: str = "",
+        enabled: bool | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return System Users that exist in Frappe but are outside Almdina."""
+
+        return [
+            self.get_user(user, require_almdina=False)
+            for user in self._list_user_names(
+                search=search,
+                enabled=enabled,
+                limit=limit,
+                almdina=False,
+            )
+        ]
+
+    def adopt_user(self, user_name: str) -> dict[str, Any]:
+        """Explicitly move an existing System User into Almdina scope.
+
+        Existing non-protected roles are preserved to avoid destructive changes to
+        ERPNext access. The platform-wide System Manager role is deliberately
+        removed, while Desk User is retained/added as non-business shell access.
+        No factory business role is granted by this operation.
+        """
+
+        resolved = str(user_name or "").strip().lower()
+        if not resolved or resolved in {"administrator", "guest"}:
+            raise ValueError("Select an eligible System User.")
+        if not self.user_exists(resolved):
+            raise ValueError("User does not exist.")
+
+        user = frappe.get_doc("User", resolved)
+        if str(user.user_type or "") != "System User":
+            raise ValueError("Only System Users can be added to the Almdina workforce.")
+        if self._is_almdina_user(default_app=str(user.default_app or "")):
+            return self.get_user(resolved)
+
+        retained_roles = tuple(
+            role
+            for role in self._roles_for_user(resolved)
+            if role != "System Manager"
+        )
+        required_roles = tuple(dict.fromkeys((*retained_roles, "Desk User")))
+        user.set("roles", [])
+        for role in required_roles:
+            if frappe.db.exists("Role", role):
+                user.append("roles", {"role": role})
+        user.default_app = "almdina_erp"
+        if frappe.db.exists("Workspace", "Almdina ERP"):
+            user.default_workspace = "Almdina ERP"
+        user.save(ignore_permissions=True)
+        frappe.clear_cache(user=resolved)
+        return self.get_user(resolved)
 
     def create_user(
         self,
@@ -215,13 +293,7 @@ class FrappeWorkforceRepository:
         roles: Sequence[str],
     ) -> dict[str, Any]:
         selected_roles = self.validate_roles(roles)
-        current_roles = self._roles_for_user(user_name)
-        retained_system_roles = tuple(
-            role for role in current_roles if role in RETAINED_SYSTEM_ROLES
-        )
-        required_roles = tuple(
-            dict.fromkeys(("Desk User", *retained_system_roles, *selected_roles))
-        )
+        required_roles = tuple(dict.fromkeys(("Desk User", *selected_roles)))
 
         user = frappe.get_doc("User", user_name)
         user.set("roles", [])
@@ -297,5 +369,4 @@ class FrappeWorkforceRepository:
 __all__ = [
     "FrappeWorkforceRepository",
     "PROTECTED_ASSIGNMENT_ROLES",
-    "RETAINED_SYSTEM_ROLES",
 ]
