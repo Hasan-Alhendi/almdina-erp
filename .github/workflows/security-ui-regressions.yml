@@ -30,6 +30,7 @@ jobs:
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
             almdina_erp.tests.test_canonical_permission_state_architecture \
+            almdina_erp.tests.test_canonical_permission_reset_patch \
             almdina_erp.tests.test_legacy_audit_capability_migration \
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
             almdina_erp.tests.test_resource_permission_hooks \
