@@ -109,6 +109,22 @@ def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _present_available_user(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Expose only identity/status fields for accounts outside workforce scope."""
+
+    return {
+        "email": str(snapshot.get("email") or ""),
+        "first_name": str(snapshot.get("first_name") or ""),
+        "last_name": str(snapshot.get("last_name") or ""),
+        "full_name": str(snapshot.get("full_name") or snapshot.get("email") or ""),
+        "enabled": bool(snapshot.get("enabled")),
+        "language": str(snapshot.get("language") or "ar"),
+        "default_workspace": str(snapshot.get("default_workspace") or ""),
+        "default_app": str(snapshot.get("default_app") or ""),
+        "last_active": str(snapshot.get("last_active") or ""),
+    }
+
+
 def _validated_roles(values: Any) -> tuple[str, ...]:
     try:
         selected = normalize_role_selection(values)
@@ -161,9 +177,21 @@ def get_workforce_console(
         limit=limit,
     )
     granted = _granted()
+    available_users = (
+        _repository.list_available_users(
+            search=str(search or ""),
+            enabled=enabled_filter,
+            limit=limit,
+        )
+        if Capability.CREATE_USERS in granted
+        else []
+    )
     return {
         "roles": _repository.list_assignable_roles(),
         "users": [_present_user(user) for user in users],
+        "available_users": [
+            _present_available_user(user) for user in available_users
+        ],
         "permissions": {
             capability: capability in granted
             for capability in sorted(WORKFORCE_CAPABILITIES)
@@ -175,6 +203,7 @@ def get_workforce_console(
             "active_assignments": sum(
                 int(user.get("active_assignments") or 0) for user in users
             ),
+            "available": len(available_users),
         },
     }
 
@@ -231,6 +260,39 @@ def create_workforce_user(data: Any) -> dict[str, Any]:
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(created), "audit": audit_name}
+
+
+@frappe.whitelist(methods=["POST"])
+def adopt_workforce_user(user: str) -> dict[str, Any]:
+    """Explicitly add an existing Frappe System User to Almdina workforce."""
+
+    _require_action(WorkforceAction.CREATE)
+    user_name = str(user or "").strip().lower()
+    if not user_name:
+        _raise_value_error(ValueError("User is required."))
+        raise AssertionError("frappe.throw must interrupt execution")
+
+    _repository.lock_user(user_name)
+    try:
+        before = _repository.get_user(user_name, require_almdina=False)
+        if before.get("is_almdina"):
+            return {"user": _present_user(before), "audit": ""}
+        after = _repository.adopt_user(user_name)
+    except ValueError as error:
+        _raise_value_error(error)
+        raise AssertionError("frappe.throw must interrupt execution")
+
+    audit_name = _repository.record_audit(
+        user_name=user_name,
+        action="Added to Workforce",
+        before=before,
+        after=after,
+        summary=_(
+            "Added existing Frappe System User to Almdina workforce without granting a factory role."
+        ),
+        changed_by=str(frappe.session.user),
+    )
+    return {"user": _present_user(after), "audit": audit_name}
 
 
 @frappe.whitelist()
@@ -390,6 +452,7 @@ def get_workforce_user_audit(user: str, limit: int = 30) -> dict[str, Any]:
 
 
 __all__ = [
+    "adopt_workforce_user",
     "create_workforce_user",
     "get_workforce_console",
     "get_workforce_user_audit",
