@@ -9,4 +9,5 @@ almdina_erp.patches.v1_0.repair_capability_permission_projections
 almdina_erp.patches.v1_0.repair_order_input_permissions
 
 [post_model_sync]
+almdina_erp.patches.v1_0.reset_canonical_permission_states
 almdina_erp.patches.v1_0.activate_configurable_production_routings
