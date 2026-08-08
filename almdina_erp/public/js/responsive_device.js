@@ -43,7 +43,7 @@
 
     function isTabletDevice(root) {
         const width = viewportWidth(root);
-        return width > PHONE_VIEWPORT_MAX_WIDTH
+        return !isPhoneDevice(root)
             && width <= TABLET_VIEWPORT_MAX_WIDTH
             && mediaMatches(COARSE_POINTER_QUERY)
             && mediaMatches(NO_HOVER_QUERY);
