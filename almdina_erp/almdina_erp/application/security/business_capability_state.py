@@ -24,20 +24,29 @@ _EDGE_ADMIN_ACTIONS = frozenset(
         Capability.DELETE_EDGE_BANDING_TYPES,
     }
 )
+_DRAWING_VIEW_ACTIONS = frozenset(
+    {
+        Capability.EDIT_SPECIAL_DRAWING,
+        Capability.EXPORT_DXF,
+        Capability.UPLOAD_DXF,
+        Capability.REPLACE_DXF,
+    }
+)
 
 
 def normalize_business_capability_state(
     raw: Mapping[str, Any] | None,
 ) -> dict[str, bool]:
-    """Normalize business authority without promoting lookup dependencies.
+    """Normalize explicit business authority without promoting technical grants.
 
     Order entry needs Customer and Edge Banding Type records as lookup data, but
     that technical dependency must not become a business grant that exposes the
-    corresponding administration surfaces. Frappe projections may still grant
-    read/select separately for lookup UX.
+    corresponding administration surfaces.
 
-    Edge-band CRUD actions remain a genuine business dependency of edge-band
-    viewing, so any explicit create/edit/delete grant also enables its view grant.
+    ``approve_dxf`` is retained as the historical storage key for compatibility,
+    but its business meaning is approval of the selected production cutting plan.
+    It therefore implies cutting-plan viewing, not access to the drawing workspace.
+    Upload/replace/export/special-drawing actions still imply drawing visibility.
     """
 
     supplied = {str(key): value for key, value in dict(raw or {}).items()}
@@ -49,6 +58,16 @@ def normalize_business_capability_state(
     normalized[Capability.VIEW_EDGE_BANDING_TYPES] = (
         supplied.get(Capability.VIEW_EDGE_BANDING_TYPES) is True
         or any(supplied.get(capability) is True for capability in _EDGE_ADMIN_ACTIONS)
+    )
+
+    # Plan approval is a planning authority. The old low-level key is preserved
+    # to avoid a destructive permission migration, while the effective business
+    # dependencies now match what the user is actually allowed to do.
+    if supplied.get(Capability.APPROVE_DXF) is True:
+        normalized[Capability.VIEW_CUTTING_PLAN] = True
+    normalized[Capability.VIEW_DRAWING_WORKSPACE] = (
+        supplied.get(Capability.VIEW_DRAWING_WORKSPACE) is True
+        or any(supplied.get(capability) is True for capability in _DRAWING_VIEW_ACTIONS)
     )
     return normalized
 
