@@ -53,7 +53,11 @@ def _remove_legacy_settings_read(capabilities: dict[str, bool]) -> dict[str, boo
 
 
 def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
-    """Collect roles with legacy projections, canonical state, or explicit audit."""
+    """Collect roles that need a canonical/projection reconciliation pass.
+
+    Historical audit rows may identify old roles that still need an explicit
+    deny-all canonical record, but audit content is never imported as authority.
+    """
 
     roles: set[str] = set()
     if frappe.db.exists("DocType", "Custom DocPerm"):
@@ -93,11 +97,10 @@ def _roles_requiring_reconciliation(doctypes: list[str]) -> list[str]:
 def reconcile_custom_permission_projections() -> None:
     """Rebuild Frappe projections exclusively from canonical Almdina state.
 
-    Legacy DocPerm/Custom DocPerm rows are never imported as business authority.
-    On the first migration to canonical state, the latest explicit Almdina audit
-    is trusted as provenance. Roles without an audit fail closed to no business
-    capabilities. The resulting canonical state is then projected back to Frappe,
-    removing stale permissions that old baselines may have resurrected.
+    Legacy DocPerm/Custom DocPerm and historical audit snapshots are never
+    imported as business authority. Missing canonical state fails closed to an
+    empty matrix. Existing canonical state is projected back to Frappe, removing
+    stale permissions that native/custom baselines may still contain.
     """
 
     doctypes = [
@@ -174,9 +177,9 @@ def sync_permission_types() -> None:
         ProjectedPermissionMatrixRepository,
     )
 
-    # Canonical bootstrap happens before any baseline can be trusted. Existing
-    # business grants are restored only from explicit audit provenance; otherwise
-    # they fail closed. Then the canonical state overwrites all legacy projections.
+    # Canonical state is the only source of business authority. Missing state is
+    # created as deny-all; legacy projections and audit history are never read as
+    # grants. Canonical state then overwrites all Frappe projections.
     reconcile_custom_permission_projections()
     ProjectedPermissionMatrixRepository().ensure_custom_permission_baseline(
         _managed_doctypes()
