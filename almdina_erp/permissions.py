@@ -163,6 +163,13 @@ def production_stage_query(user: str | None = None) -> str:
     return f"`tabProduction Stage`.assigned_to = {frappe.db.escape(user)}"
 
 
+def production_incident_query(user: str | None = None) -> str:
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    return "" if _has(user, Capability.VIEW_PRODUCTION_INCIDENTS) else "1=0"
+
+
 def cutting_plan_query(user: str | None = None) -> str:
     user = user or frappe.session.user
     if user == "Administrator":
@@ -211,16 +218,11 @@ def door_cutting_order_has_permission(
             order_name=getattr(doc, "name", None),
         )
     if resolved_type == "delete":
-        # Orders are lifecycle records. There is intentionally no business
-        # capability that allows physical deletion from the Desk UI.
         return False
 
     required = _DCO_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
     if required:
         return _has(resolved_user, required)
-
-    # Unknown native permission types remain subject to Frappe's own role checks;
-    # this hook never grants them.
     return resolved_type not in _MUTATING_PERMISSION_TYPES
 
 
@@ -242,8 +244,26 @@ def production_stage_has_permission(
             return True
         return bool(getattr(doc, "assigned_to", None) == resolved_user)
     if resolved_type in _MUTATING_PERMISSION_TYPES:
-        # Stage mutation is command-driven (start/handoff/reassign), never a raw
-        # Production Stage form write.
+        return False
+    return True
+
+
+def production_incident_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    del doc
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _has(resolved_user, Capability.VIEW_PRODUCTION_INCIDENTS)
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        # Production incidents are created/updated through protected commands,
+        # never through unrestricted Desk CRUD.
         return False
     return True
 
@@ -266,7 +286,6 @@ def cutting_plan_has_permission(
             order_name=getattr(doc, "door_cutting_order", None),
         )
     if resolved_type in _MUTATING_PERMISSION_TYPES:
-        # Plans are immutable/service-managed records.
         return False
     return True
 
@@ -291,9 +310,7 @@ def replacement_piece_has_permission(
     if resolved_type in _MUTATING_PERMISSION_TYPES:
         return False
 
-    required = _REPLACEMENT_PERMISSION_CAPABILITIES.get(
-        str(resolved_type or "")
-    )
+    required = _REPLACEMENT_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
     if required:
         return _has(resolved_user, required)
     return True
@@ -304,6 +321,8 @@ __all__ = [
     "cutting_plan_query",
     "door_cutting_order_has_permission",
     "door_cutting_order_query",
+    "production_incident_has_permission",
+    "production_incident_query",
     "production_stage_has_permission",
     "production_stage_query",
     "replacement_piece_has_permission",
