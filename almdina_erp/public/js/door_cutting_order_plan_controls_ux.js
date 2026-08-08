@@ -14,10 +14,18 @@
         ".dco-algorithm-palette",
     ].join(",");
 
+    const OPTIMIZER_FIELDS = [
+        "packing_mode",
+        "cutting_machine_type",
+        "kerf_mm",
+        "trim_margin_mm",
+        "optimization_time_limit_sec",
+    ];
+
     const RECALCULATE_METHOD =
-        "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order";
+        "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order";
     const APPROVE_METHOD =
-        "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf";
+        "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -26,6 +34,13 @@
             return Boolean(permissions.canDocument(frm, capability));
         }
         return typeof permissions.can === "function" && Boolean(permissions.can(capability));
+    }
+
+    function setTextIfChanged(target, value) {
+        if (!target || !target.length) return;
+        if (String(target.text() || "") !== String(value || "")) {
+            target.text(value);
+        }
     }
 
     function installStyles() {
@@ -115,10 +130,28 @@
                     return this.value === value;
                 }).first();
             }
-            option.text(label);
+            if (String(option.text() || "") !== label) option.text(label);
         });
 
-        input.val(frm.doc.packing_mode || "Auto");
+        if (String(input.val() || "") !== String(frm.doc.packing_mode || "Auto")) {
+            input.val(frm.doc.packing_mode || "Auto");
+        }
+    }
+
+    function applyOptimizerFieldAccess(frm) {
+        const editable = Boolean(
+            can(frm, "edit_optimizer_settings")
+            && !frm.is_new()
+            && !frm.doc.approved_plan
+        );
+        const desiredReadOnly = editable ? 0 : 1;
+        OPTIMIZER_FIELDS.forEach((fieldname) => {
+            const field = frm.fields_dict && frm.fields_dict[fieldname];
+            if (!field || !field.df) return;
+            if (Number(field.df.read_only || 0) !== desiredReadOnly) {
+                frm.set_df_property(fieldname, "read_only", desiredReadOnly);
+            }
+        });
     }
 
     function optimizerArgs(frm) {
@@ -133,19 +166,24 @@
     }
 
     function canCalculate(frm) {
-        if (!can(frm, "recalculate_plan")) return false;
-        if (frm.is_new()) return false;
-        if (frm.doc.approved_plan) return false;
-        return true;
+        return Boolean(
+            frm
+            && !frm.is_new()
+            && !frm.doc.approved_plan
+            && can(frm, "recalculate_plan")
+        );
+    }
+
+    function recalculationDisabledReason(frm) {
+        if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
+        if (frm.doc.approved_plan) return __("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
+        if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");
+        return "";
     }
 
     function runRecalculation(frm) {
         if (!canCalculate(frm)) {
-            frappe.msgprint(__(
-                frm.doc.approved_plan
-                    ? "الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها."
-                    : "ليست لديك صلاحية إعادة حساب خطة القص."
-            ));
+            frappe.msgprint(recalculationDisabledReason(frm));
             return Promise.resolve(false);
         }
         if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
@@ -161,6 +199,9 @@
         }).then(() => {
             frappe.show_alert({ message: __("تم تحديث خطة القص والنتائج."), indicator: "green" }, 4);
             return frm.reload_doc();
+        }).catch((error) => {
+            console.error("Cutting plan recalculation failed", error);
+            throw error;
         });
     }
 
@@ -251,12 +292,11 @@
             && hasApprovalPlan(frm, source)
             && !(source === "System" && Number(frm.doc.plan_needs_recalculation || 0) === 1)
         );
-        button.prop("disabled", !allowed);
+        if (button.prop("disabled") === allowed) button.prop("disabled", !allowed);
         button.attr("aria-disabled", allowed ? "false" : "true");
-        button.text(
-            source === "Custom"
-                ? __("اعتماد خطة DXF")
-                : __("اعتماد خطة القص")
+        setTextIfChanged(
+            button,
+            source === "Custom" ? __("اعتماد خطة DXF") : __("اعتماد خطة القص")
         );
         if (!allowed) {
             button.attr(
@@ -283,42 +323,85 @@
             host.append(button);
         }
         approvalButtonState(frm, button);
-        button.off("click.almdinaApprovePlan").on("click.almdinaApprovePlan", () => runApproval(frm));
+        const element = button.get(0);
+        if (element && !element.__almdinaApprovePlanBound) {
+            button.off("click");
+            button.on("click.almdinaApprovePlan", (event) => {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                runApproval(frm);
+            });
+            element.__almdinaApprovePlanBound = true;
+        }
+    }
+
+    function bindRecalculationAction(frm, button) {
+        if (!button || !button.length) return;
+
+        setTextIfChanged(button, __("إعادة الحساب بالإعدادات الحالية"));
+        const allowed = canCalculate(frm);
+        if (button.prop("disabled") === allowed) button.prop("disabled", !allowed);
+        button.attr("aria-disabled", allowed ? "false" : "true");
+        const reason = recalculationDisabledReason(frm);
+        button.attr(
+            "title",
+            reason || __("إعادة حساب خطة القص باستخدام الخوارزمية والماكينة والهامش المحددة حاليًا")
+        );
+
+        const element = button.get(0);
+        if (element && !element.__almdinaPlanCommandBound) {
+            // This button is first created by the older presentation module. Remove
+            // its full-document save handler exactly once, then own the action from
+            // this focused plan-command controller. Repeated observer passes never
+            // tear down/rebind the click handler again.
+            button.off("click");
+            button.on("click.almdinaPlanCommand", (event) => {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                runRecalculation(frm);
+            });
+            element.__almdinaPlanCommandBound = true;
+        }
     }
 
     function simplifyActions(frm) {
         const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
 
-        field.$wrapper.find(DUPLICATED_ACTIONS).remove();
+        const duplicated = field.$wrapper.find(DUPLICATED_ACTIONS);
+        if (duplicated.length) duplicated.remove();
 
-        const recalculate = field.$wrapper.find(".dco-recalculate-plan").first();
-        if (recalculate.length) {
-            recalculate.text("إعادة الحساب بالإعدادات الحالية");
-            recalculate.attr("title", "إعادة حساب خطة القص باستخدام الخوارزمية والماكينة والهامش المحددة حاليًا");
-            recalculate.prop("disabled", !canCalculate(frm));
-            // Remove the legacy full-document save handler. Plan recalculation is
-            // a focused command and must never require EDIT_ORDER or cost access.
-            recalculate.off("click");
-            recalculate.on("click.almdinaPlanCommand", () => runRecalculation(frm));
-        }
-
+        bindRecalculationAction(
+            frm,
+            field.$wrapper.find(".dco-recalculate-plan").first()
+        );
         installApprovalAction(frm, field);
 
         const note = field.$wrapper.find(".dco-plan-note").first();
         if (note.length) {
-            note.text(
-                can(frm, "edit_optimizer_settings")
-                    ? "يمكنك تغيير الخوارزمية وإعدادات المحسّن ثم إعادة الحساب. لا تحتاج هذه العملية إلى صلاحية التكلفة أو تعديل الطلب."
-                    : "يمكنك إعادة حساب الخطة بالإعدادات الحالية. تغيير الخوارزمية يحتاج صلاحية «تعديل إعدادات المحسّن»."
-            );
+            const message = can(frm, "edit_optimizer_settings")
+                ? "يمكنك تغيير الخوارزمية وإعدادات المحسّن ثم إعادة الحساب. لا تحتاج هذه العملية إلى صلاحية التكلفة أو تعديل الطلب."
+                : can(frm, "recalculate_plan")
+                    ? "يمكنك إعادة حساب الخطة بالإعدادات الحالية. تغيير الخوارزمية يحتاج صلاحية «تعديل إعدادات المحسّن»."
+                    : "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
+            setTextIfChanged(note, message);
         }
     }
 
     function apply(frm) {
         installStyles();
         ensureAdvancedModes(frm);
+        applyOptimizerFieldAccess(frm);
         simplifyActions(frm);
+    }
+
+    function scheduleSimplify(frm) {
+        if (frm.__dcoSimplePlanControlsScheduled) return;
+        frm.__dcoSimplePlanControlsScheduled = true;
+        requestAnimationFrame(() => {
+            frm.__dcoSimplePlanControlsScheduled = false;
+            simplifyActions(frm);
+        });
     }
 
     function observeActions(frm) {
@@ -327,7 +410,7 @@
         if (!node || frm.__dcoSimplePlanControlsObserver) return;
 
         frm.__dcoSimplePlanControlsObserver = new MutationObserver(() => {
-            requestAnimationFrame(() => simplifyActions(frm));
+            scheduleSimplify(frm);
         });
         frm.__dcoSimplePlanControlsObserver.observe(node, { childList: true, subtree: true });
     }
@@ -336,7 +419,6 @@
         apply(frm);
         observeActions(frm);
         requestAnimationFrame(() => apply(frm));
-        setTimeout(() => apply(frm), 0);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
