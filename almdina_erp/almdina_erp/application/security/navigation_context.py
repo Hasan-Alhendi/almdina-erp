@@ -57,16 +57,6 @@ _CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
 _CONFIGURATION_CAPABILITIES = frozenset(
     FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 )
-_ORDER_INPUT_CAPABILITIES = frozenset(
-    {
-        Capability.CREATE_ORDER,
-        Capability.EDIT_ORDER,
-        Capability.CREATE_ORDER_REVISION,
-    }
-)
-_ORDER_SUPPORTING_MASTER_DATA = frozenset(
-    {Capability.VIEW_CUSTOMERS, Capability.VIEW_EDGE_BANDING_TYPES}
-)
 
 
 def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
@@ -74,12 +64,14 @@ def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
 
 
 def _visible_configuration_capabilities(granted: frozenset[str]) -> frozenset[str]:
-    """Exclude read dependencies that exist only to complete order entry UX."""
+    """Return explicit business configuration grants only.
 
-    visible = set(granted.intersection(_CONFIGURATION_CAPABILITIES))
-    if _intersects(granted, _ORDER_INPUT_CAPABILITIES):
-        visible.difference_update(_ORDER_SUPPORTING_MASTER_DATA)
-    return frozenset(visible)
+    Order-entry Customer/Edge lookup dependencies no longer live in canonical
+    business state, so every master-data capability present here is explicit and
+    may safely influence navigation visibility.
+    """
+
+    return frozenset(granted.intersection(_CONFIGURATION_CAPABILITIES))
 
 
 def _profile(granted: frozenset[str]) -> str:
