@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.application.security.report_access import (
     build_report_access,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
+    MASTER_DATA_CAPABILITIES,
     Capability,
     normalize_capabilities,
 )
@@ -85,9 +86,10 @@ def build_surface_access(
 ) -> dict[str, bool]:
     """Return exact visibility/access flags for Almdina Desk surfaces.
 
-    This policy intentionally differs from raw DocType read permissions. Some
-    read grants (Customer and Edge Banding Type) are supporting dependencies for
-    order entry and must not expose their administrative screens.
+    Business capability state already excludes lookup-only Customer/Edge grants
+    derived from order entry. Therefore an explicit master-data view grant can
+    safely expose its administration surface, while order-entry lookup support
+    remains invisible.
     """
 
     if system_administrator:
@@ -104,7 +106,7 @@ def build_surface_access(
     can_open_financial_reports = (
         report_access.financial and Capability.VIEW_ORDERS in granted
     )
-    can_open_master_data = sections.get("master_data") is True
+    can_open_master_data = bool(granted.intersection(MASTER_DATA_CAPABILITIES))
 
     flags = {
         Surface.ORDERS: Capability.VIEW_ORDERS in granted,
