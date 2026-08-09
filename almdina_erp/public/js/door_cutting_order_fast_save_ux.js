@@ -19,6 +19,15 @@
         return typeof permissions.can === "function" && Boolean(permissions.can(capability));
     }
 
+    async function validateCurrentPlanInputs(frm) {
+        const boardUX = window.AlmdinaBoardTextUX;
+        if (boardUX && typeof boardUX.syncInputs === "function") {
+            await boardUX.syncInputs(frm);
+        }
+        if (!boardUX || !boardUX.canCalculatePlan(frm)) return false;
+        return true;
+    }
+
     function installStyles() {
         if (document.getElementById("dco-fast-save-css")) return;
         $("head").append(`
@@ -128,5 +137,6 @@
         markOrderInputPlanStale,
         markOptimizerPlanStale,
         renderStaleState,
+        validateCurrentPlanInputs,
     });
 })();
