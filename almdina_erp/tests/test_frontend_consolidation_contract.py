@@ -16,6 +16,8 @@ CANONICAL_FORM = (
 PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 MEASUREMENT_ACTIONS = (
     ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 )
@@ -106,11 +108,30 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
     def test_modern_modules_own_recalculation_printing_and_dxf(self) -> None:
         fast_save = FAST_SAVE.read_text(encoding="utf-8")
+        text_board = TEXT_BOARD_PLAN.read_text(encoding="utf-8")
+        plan_controls = PLAN_CONTROLS.read_text(encoding="utf-8")
         measurements = MEASUREMENT_ACTIONS.read_text(encoding="utf-8")
         document_print = DOCUMENT_PRINT.read_text(encoding="utf-8")
         secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
 
-        self.assertIn("door_cutting_order.recalculate_order", fast_save)
+        self.assertIn(
+            "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
+            plan_controls,
+        )
+        self.assertIn('can(frm, "recalculate_plan")', plan_controls)
+        self.assertIn('can(frm, "edit_optimizer_settings")', plan_controls)
+        self.assertNotIn("frm.save", plan_controls)
+
+        # These modules may validate inputs or mark a plan stale, but they must
+        # never intercept or execute cutting-plan commands themselves.
+        for helper in (fast_save, text_board):
+            self.assertNotIn("door_cutting_order.recalculate_order", helper)
+            self.assertNotIn("order_plan_permission_service.recalculate_order", helper)
+            self.assertNotIn(".dco-recalculate-plan", helper)
+            self.assertNotIn('addEventListener("click"', helper)
+            self.assertNotIn("stopImmediatePropagation", helper)
+            self.assertNotIn("frm.save", helper)
+
         self.assertIn("dco-print-measurements", measurements)
         self.assertIn("window.AlmdinaOrderDocumentPrint", document_print)
         self.assertIn("printInvoice(frm)", document_print)
