@@ -1,0 +1,183 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const source = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order_plan_surface_bootstrap.js"),
+    "utf8"
+);
+
+function htmlWrapper(initial = "") {
+    return {
+        content: initial,
+        html(value) {
+            if (arguments.length === 0) return this.content;
+            this.content = String(value || "");
+            return this;
+        },
+        empty() {
+            this.content = "";
+            return this;
+        },
+        find(selector) {
+            const className = String(selector || "").replace(/^\./, "");
+            return { length: className && this.content.includes(className) ? 1 : 0 };
+        },
+        children() {
+            return { length: this.content.trim() ? 1 : 0 };
+        },
+    };
+}
+
+function buildHarness({ canViewPlan }) {
+    const actions = htmlWrapper();
+    const layout = htmlWrapper();
+    const requiredAssets = [];
+    const requestedCapabilities = [];
+    const timers = [];
+    const handlers = {};
+
+    const frm = {
+        doctype: "Door Cutting Order",
+        doc: { name: "DCO-TEST-0001" },
+        fields_dict: {
+            plan_control_actions: { $wrapper: actions },
+            cutting_plan_html: { $wrapper: layout },
+        },
+    };
+
+    const fakeWindow = {
+        cur_frm: frm,
+        AlmdinaPermissions: {
+            canDocument(_frm, capability) {
+                requestedCapabilities.push(capability);
+                return capability === "view_cutting_plan" && canViewPlan;
+            },
+            can(capability) {
+                requestedCapabilities.push(capability);
+                return capability === "view_cutting_plan" && canViewPlan;
+            },
+        },
+        addEventListener() {},
+        setTimeout(callback) {
+            timers.push(callback);
+            return timers.length;
+        },
+        clearTimeout() {},
+    };
+
+    const fakeFrappe = {
+        ui: {
+            form: {
+                on(doctype, mapping) {
+                    assert.equal(doctype, "Door Cutting Order");
+                    Object.assign(handlers, mapping);
+                },
+            },
+        },
+        require(asset) {
+            requiredAssets.push(asset);
+            if (asset.endsWith("door_cutting_order_cutting_plan_renderer.js")) {
+                fakeWindow.AlmdinaCuttingPlanRender = {};
+            } else if (asset.endsWith("door_cutting_order_plan_ux.js")) {
+                fakeWindow.AlmdinaDoorCuttingPlanUX = {
+                    refresh() {
+                        actions.html('<div class="dco-plan-actions-shell"><button class="dco-recalculate-plan">recalc</button></div>');
+                    },
+                };
+            } else if (asset.endsWith("door_cutting_order_plan_controls_ux.js")) {
+                fakeWindow.AlmdinaPlanControlsUX = { apply() {} };
+            } else if (asset.endsWith("door_cutting_order_plan_tabs_ux.js")) {
+                fakeWindow.AlmdinaPlanTabsUX = {
+                    afterRender() {
+                        layout.html('<div class="dco-plan-tabs"><div class="dco-plan-tab-content">PLAN</div></div>');
+                        return true;
+                    },
+                };
+            }
+            return Promise.resolve();
+        },
+    };
+
+    const context = vm.createContext({
+        window: fakeWindow,
+        frappe: fakeFrappe,
+        console,
+        Object,
+        String,
+        Boolean,
+        Promise,
+        Error,
+    });
+    vm.runInContext(source, context, {
+        filename: "door_cutting_order_plan_surface_bootstrap.js",
+    });
+
+    async function flushTimers() {
+        let safety = 0;
+        while (timers.length && safety < 20) {
+            const callback = timers.shift();
+            callback();
+            await Promise.resolve();
+            await Promise.resolve();
+            safety += 1;
+        }
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    return {
+        actions,
+        layout,
+        frm,
+        handlers,
+        fakeWindow,
+        requiredAssets,
+        requestedCapabilities,
+        flushTimers,
+    };
+}
+
+(async () => {
+    const authorized = buildHarness({ canViewPlan: true });
+    await authorized.flushTimers();
+
+    assert.ok(
+        authorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.surfaceReady(authorized.frm),
+        "authorized plan surface must recover even when plan modules were initially absent"
+    );
+    assert.match(authorized.actions.content, /dco-plan-actions-shell/);
+    assert.match(authorized.actions.content, /dco-recalculate-plan/);
+    assert.match(authorized.layout.content, /dco-plan-tabs/);
+    assert.deepEqual(
+        authorized.requiredAssets,
+        [
+            "/assets/almdina_erp/js/door_cutting_order_cutting_plan_renderer.js",
+            "/assets/almdina_erp/js/door_cutting_order_plan_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order_plan_controls_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order_plan_tabs_ux.js",
+        ]
+    );
+    assert.ok(authorized.requestedCapabilities.includes("view_cutting_plan"));
+    assert.ok(
+        !authorized.requestedCapabilities.includes("view_costs"),
+        "cutting-plan recovery must never depend on cost visibility"
+    );
+
+    const denied = buildHarness({ canViewPlan: false });
+    denied.actions.html('<div class="dco-plan-actions-shell">STALE</div>');
+    denied.layout.html('<div class="dco-plan-tabs">STALE</div>');
+    await denied.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(denied.frm);
+
+    assert.equal(denied.actions.content, "");
+    assert.equal(denied.layout.content, "");
+    assert.deepEqual(denied.requiredAssets, []);
+
+    console.log("cutting plan surface isolation simulation passed");
+})().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+});
