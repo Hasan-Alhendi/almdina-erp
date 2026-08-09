@@ -84,6 +84,52 @@ def _repair_standard_docfields() -> None:
     )
 
 
+def cutting_plan_surface_metadata_state() -> dict[str, object]:
+    """Return the effective field levels and any surviving local overrides."""
+
+    if not frappe.db.exists("DocType", DOCTYPE):
+        return {"doctype": DOCTYPE, "fields": {}, "property_setters": []}
+
+    meta = frappe.get_meta(DOCTYPE)
+    fields: dict[str, int | None] = {}
+    for fieldname in CUTTING_PLAN_SURFACE_FIELDS:
+        field = meta.get_field(fieldname)
+        fields[fieldname] = None if field is None else int(field.permlevel or 0)
+
+    property_setters = frappe.get_all(
+        "Property Setter",
+        filters={
+            "doc_type": DOCTYPE,
+            "field_name": ["in", CUTTING_PLAN_SURFACE_FIELDS],
+            "property": "permlevel",
+        },
+        fields=["name", "field_name", "value"],
+        order_by="field_name asc",
+    )
+    return {
+        "doctype": DOCTYPE,
+        "fields": fields,
+        "property_setters": [dict(row) for row in property_setters],
+    }
+
+
+def _assert_cutting_plan_surface_metadata() -> None:
+    state = cutting_plan_surface_metadata_state()
+    invalid = {
+        fieldname: permlevel
+        for fieldname, permlevel in state["fields"].items()
+        if permlevel != 0
+    }
+    setters = state["property_setters"]
+    if not invalid and not setters:
+        return
+
+    raise RuntimeError(
+        "Cutting Plan metadata repair failed: "
+        f"invalid permlevels={invalid}, property_setters={setters}"
+    )
+
+
 def sync_cutting_plan_surface_metadata() -> None:
     """Enforce the plan/cost metadata boundary after model synchronization.
 
@@ -103,6 +149,11 @@ def sync_cutting_plan_surface_metadata() -> None:
     _remove_stale_permlevel_property_setters()
     _repair_standard_docfields()
     frappe.clear_cache(doctype=DOCTYPE)
+    _assert_cutting_plan_surface_metadata()
 
 
-__all__ = ["CUTTING_PLAN_SURFACE_FIELDS", "sync_cutting_plan_surface_metadata"]
+__all__ = [
+    "CUTTING_PLAN_SURFACE_FIELDS",
+    "cutting_plan_surface_metadata_state",
+    "sync_cutting_plan_surface_metadata",
+]
