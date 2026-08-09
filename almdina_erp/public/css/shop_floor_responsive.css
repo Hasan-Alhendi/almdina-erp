@@ -9,6 +9,10 @@
 .almdina-sf-shell,
 .almdina-sf-list,
 .almdina-sf-order-card,
+.almdina-sf-boards,
+.almdina-sf-route-board,
+.almdina-sf-kanban,
+.almdina-sf-kanban-column,
 .shop-floor-detail {
     min-width: 0;
     max-width: 100%;
@@ -71,6 +75,226 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     width: 100%;
+}
+
+.almdina-sf-board-shell {
+    max-width: 100%;
+}
+
+.almdina-sf-board-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, .7fr) minmax(240px, 1fr) minmax(420px, 1.8fr);
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .045);
+}
+
+.almdina-sf-board-toolbar label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-board-toolbar .form-control {
+    min-height: 42px;
+    border-radius: 9px;
+}
+
+.almdina-sf-board-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.almdina-sf-board-metric {
+    --sf-metric: #64748b;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid color-mix(in srgb, var(--sf-metric) 20%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--sf-metric) 7%, transparent);
+}
+
+.almdina-sf-board-metric[data-tone="pending"] { --sf-metric: #d97706; }
+.almdina-sf-board-metric[data-tone="progress"] { --sf-metric: #2563eb; }
+.almdina-sf-board-metric[data-tone="paused"] { --sf-metric: #dc2626; }
+.almdina-sf-board-metric[data-tone="ready"] { --sf-metric: #16a34a; }
+
+.almdina-sf-board-metric span {
+    display: block;
+    overflow: hidden;
+    color: var(--text-muted, #64748b);
+    font-size: 10px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-board-metric b {
+    display: block;
+    margin-top: 1px;
+    color: var(--sf-metric);
+    font-size: 18px;
+    line-height: 1.15;
+}
+
+.almdina-sf-board-help {
+    margin-bottom: 12px;
+    padding: 9px 11px;
+    border-inline-start: 3px solid var(--primary, #2490ef);
+    border-radius: 8px;
+    background: rgba(36, 144, 239, .07);
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+.almdina-sf-boards {
+    display: grid;
+    gap: 16px;
+}
+
+.almdina-sf-route-board {
+    overflow: hidden;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 15px;
+    background: var(--subtle-fg, #f7f8fa);
+    box-shadow: 0 3px 14px rgba(15, 23, 42, .055);
+}
+
+.almdina-sf-route-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-color, #dfe3e8);
+    background: var(--card-bg, var(--fg-color, #fff));
+}
+
+.almdina-sf-route-heading > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.almdina-sf-route-heading h3 {
+    margin: 0;
+    color: var(--text-color, #0f172a);
+    font-size: 15px;
+    font-weight: 850;
+}
+
+.almdina-sf-route-heading span,
+.almdina-sf-route-heading small {
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+}
+
+.almdina-sf-kanban {
+    display: grid;
+    grid-auto-columns: minmax(270px, 1fr);
+    grid-auto-flow: column;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    scroll-snap-type: inline proximity;
+}
+
+.almdina-sf-kanban-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--card-bg, #fff) 82%, transparent);
+    scroll-snap-align: start;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.almdina-sf-kanban-column.is-ready {
+    background: rgba(22, 163, 74, .045);
+}
+
+.almdina-sf-kanban-column.is-drag-over {
+    border-color: var(--primary, #2490ef);
+    background: rgba(36, 144, 239, .09);
+    box-shadow: inset 0 0 0 2px rgba(36, 144, 239, .13);
+}
+
+.almdina-sf-kanban-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 45px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.almdina-sf-kanban-column-header > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.almdina-sf-kanban-column-header b {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-kanban-column-header > div > span {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.almdina-sf-column-count {
+    display: inline-grid;
+    flex: 0 0 auto;
+    min-width: 24px;
+    min-height: 24px;
+    padding-inline: 6px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--subtle-fg, #eef2f7);
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-kanban-cards {
+    display: grid;
+    align-content: start;
+    gap: 9px;
+    min-height: 172px;
+    padding: 9px;
+}
+
+.almdina-sf-kanban-empty {
+    display: grid;
+    min-height: 86px;
+    place-items: center;
+    border: 1px dashed var(--border-color, #dfe3e8);
+    border-radius: 9px;
+    color: var(--text-muted, #94a3b8);
+    font-size: 11px;
 }
 
 .almdina-sf-order-card {
@@ -162,7 +386,7 @@
     background: var(--subtle-fg, #f8fafc) !important;
 }
 
-.almdina-sf-order-card > div:last-child {
+.almdina-sf-order-card > .almdina-sf-card-actions {
     display: grid !important;
     grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
     gap: 8px !important;
@@ -206,6 +430,51 @@
 
 .almdina-sf-order-card .sf-quick-action[aria-busy="true"] {
     cursor: progress;
+}
+
+.almdina-sf-kanban-card {
+    padding: 11px !important;
+    border-radius: 11px !important;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, .055) !important;
+}
+
+.almdina-sf-kanban-card[draggable="true"] {
+    cursor: grab;
+}
+
+.almdina-sf-kanban-card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.almdina-sf-kanban-card.is-dragging {
+    opacity: .48;
+    transform: rotate(.4deg) scale(.99);
+}
+
+.almdina-sf-kanban-card > .almdina-sf-card-meta {
+    margin-top: 8px !important;
+}
+
+.almdina-sf-kanban-card > .almdina-sf-card-meta > div {
+    min-height: 48px;
+    padding: 7px 8px !important;
+}
+
+.almdina-sf-kanban-card > .almdina-sf-card-actions {
+    margin-top: 9px !important;
+}
+
+.almdina-sf-kanban-card :where(.sf-quick-action, .sf-open-btn) {
+    min-height: 38px !important;
+    padding-inline: 8px;
+    font-size: 11px;
+}
+
+.almdina-sf-drag-hint {
+    margin-top: 7px;
+    color: var(--text-muted, #94a3b8);
+    font-size: 9px;
+    text-align: center;
 }
 
 .almdina-sf-empty {
@@ -277,6 +546,14 @@
         gap: 10px;
     }
 
+    .almdina-sf-board-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-board-metrics {
+        grid-column: 1 / -1;
+    }
+
     .almdina-sf-tabs {
         max-width: 100%;
         overflow-x: auto;
@@ -317,6 +594,39 @@
         gap: 10px;
     }
 
+    .almdina-sf-board-toolbar {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .almdina-sf-board-metrics {
+        grid-column: auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-route-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 12px;
+    }
+
+    .almdina-sf-kanban {
+        grid-auto-columns: minmax(82vw, 82vw);
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .almdina-sf-kanban-column {
+        min-height: 200px;
+    }
+
+    .almdina-sf-board-help,
+    .almdina-sf-drag-hint {
+        display: none;
+    }
+
     .almdina-sf-order-card {
         padding: 13px !important;
         border-radius: 14px !important;
@@ -353,7 +663,7 @@
 }
 
 @media (max-width: 420px) {
-    .almdina-sf-order-card > div:last-child {
+    .almdina-sf-order-card > .almdina-sf-card-actions {
         grid-template-columns: 1fr;
     }
 
@@ -363,6 +673,10 @@
 
     .almdina-sf-actions {
         grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-kanban {
+        grid-auto-columns: minmax(88vw, 88vw);
     }
 }
 
@@ -375,7 +689,8 @@
 @media (prefers-reduced-motion: reduce) {
     .almdina-sf-order-card,
     .almdina-sf-order-card *,
-    .almdina-sf-tabs * {
+    .almdina-sf-tabs *,
+    .almdina-sf-kanban-column {
         transition-duration: .01ms !important;
         animation-duration: .01ms !important;
         animation-iteration-count: 1 !important;

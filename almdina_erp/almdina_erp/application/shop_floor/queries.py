@@ -126,9 +126,28 @@ def get_shop_floor_context(repository: ShopFloorQueryPort) -> dict[str, Any]:
     capabilities = _assert_shop_floor_access(repository)
     identity = dict(repository.session_identity())
     identity.pop("roles", None)
+    routes = [
+        {
+            "name": route.name,
+            "label": route.label,
+            "stages": [
+                {
+                    "sequence": stage.sequence,
+                    "stage_type": stage.stage_type,
+                    "department": stage.department_label,
+                    "is_planning_stage": stage.is_planning_stage,
+                }
+                for stage in route.stages
+            ],
+        }
+        for route in repository.list_active_routes()
+    ]
     return {
         "identity": identity,
         "navigation": build_navigation_context(capabilities),
+        # The board needs the configured workflow order, but never needs role
+        # names. Command authorization and worker selection remain server-side.
+        "production_routes": routes,
         "capabilities": {
             capability: capability in capabilities
             for capability in sorted(SHOP_FLOOR_ACCESS_CAPABILITIES)

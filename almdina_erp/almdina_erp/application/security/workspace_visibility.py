@@ -35,6 +35,7 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "Customer": Surface.CUSTOMER_ADMIN,
     "Cutting Plan": Surface.CUTTING_PLANS,
     "Production Stage": Surface.PRODUCTION_STAGES,
+    "shop-floor-inbox": Surface.PRODUCTION_STAGES,
     "Production Incident": Surface.PRODUCTION_INCIDENTS,
     "Replacement Piece": Surface.REPLACEMENTS,
     "factory-master-data": Surface.FACTORY_MASTER_DATA,

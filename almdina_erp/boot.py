@@ -64,7 +64,7 @@ def _workspace_page_allowed(
         decision = workspace_item_allowed(page, surfaces)
         if decision is not None:
             return decision
-        # Unknown child links inside an Almdina workspace fail closed. New
+        # Unknown child links inside the Almdina shell fail closed. New
         # destinations must be classified in workspace_visibility explicitly.
         if parent in allowed or parent == ALMDINA_MODULE:
             return False
