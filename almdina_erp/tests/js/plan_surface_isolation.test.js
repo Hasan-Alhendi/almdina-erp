@@ -116,19 +116,6 @@ function buildHarness({ canViewPlan }) {
         filename: "door_cutting_order_plan_surface_bootstrap.js",
     });
 
-    async function flushTimers() {
-        let safety = 0;
-        while (timers.length && safety < 20) {
-            const callback = timers.shift();
-            callback();
-            await Promise.resolve();
-            await Promise.resolve();
-            safety += 1;
-        }
-        await Promise.resolve();
-        await Promise.resolve();
-    }
-
     return {
         actions,
         layout,
@@ -137,14 +124,17 @@ function buildHarness({ canViewPlan }) {
         fakeWindow,
         requiredAssets,
         requestedCapabilities,
-        flushTimers,
+        timers,
     };
 }
 
 (async () => {
     const authorized = buildHarness({ canViewPlan: true });
-    await authorized.flushTimers();
+    const recovered = await authorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(
+        authorized.frm
+    );
 
+    assert.equal(recovered, true);
     assert.ok(
         authorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.surfaceReady(authorized.frm),
         "authorized plan surface must recover even when plan modules were initially absent"
@@ -166,12 +156,19 @@ function buildHarness({ canViewPlan }) {
         !authorized.requestedCapabilities.includes("view_costs"),
         "cutting-plan recovery must never depend on cost visibility"
     );
+    assert.ok(
+        authorized.timers.length > 0,
+        "lazy-loaded bootstrap should also schedule recovery for the active form"
+    );
 
     const denied = buildHarness({ canViewPlan: false });
     denied.actions.html('<div class="dco-plan-actions-shell">STALE</div>');
     denied.layout.html('<div class="dco-plan-tabs">STALE</div>');
-    await denied.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(denied.frm);
+    const deniedResult = await denied.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(
+        denied.frm
+    );
 
+    assert.equal(deniedResult, false);
     assert.equal(denied.actions.content, "");
     assert.equal(denied.layout.content, "");
     assert.deepEqual(denied.requiredAssets, []);
