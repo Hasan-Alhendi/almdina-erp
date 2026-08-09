@@ -174,4 +174,8 @@
         schedule,
         surfaceReady,
     });
+
+    // This file can be lazy-loaded after the current Form refresh already ran.
+    // Recover the active order immediately instead of waiting for another event.
+    window.setTimeout(() => schedule(window.cur_frm), 0);
 })();
