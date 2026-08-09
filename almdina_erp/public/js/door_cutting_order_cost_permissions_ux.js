@@ -65,9 +65,16 @@
     }
 
     function setCostTabVisibility(frm, visible) {
-        frm.set_df_property("cost_tab", "hidden", visible ? 0 : 1);
         const wrapper = costWrapper(frm);
         if (!visible && wrapper) wrapper.empty();
+
+        // Tab navigation is owned by AlmdinaOrderTabPermissionsUX. Never mutate
+        // the cost Tab Break df here: changing a Tab Break's hidden property can
+        // rebuild the Frappe layout and erase already-rendered plan HTML.
+        const tabs = window.AlmdinaOrderTabPermissionsUX;
+        if (tabs && typeof tabs.apply === "function") {
+            tabs.apply(frm);
+        }
     }
 
     function scrubCostData(frm) {
