@@ -21,6 +21,7 @@ AUDIT_JSON = ROOT / "almdina_erp" / "doctype" / "almdina_master_data_audit" / "a
 SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
 MASTER_PAGE = ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js"
 MASTER_PAGE_JSON = MASTER_PAGE.with_suffix(".json")
+ROUTING_WORKFLOW_CSS = ROOT / "public" / "css" / "factory_routing_workflow.css"
 WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "almdina_settings.json"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 
@@ -87,15 +88,19 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
     def test_pages_are_arabic_responsive_and_do_not_read_roles(self) -> None:
         master_metadata = json.loads(MASTER_PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(master_metadata["roles"], [])
+        settings_source = SETTINGS_PAGE.read_text(encoding="utf-8")
+        self.assertIn("@media", settings_source)
         for page in (SETTINGS_PAGE, MASTER_PAGE):
             source = page.read_text(encoding="utf-8")
-            self.assertIn("@media", source)
             self.assertIn("requestId", source)
             self.assertNotIn("frappe.user_roles", source)
         master = MASTER_PAGE.read_text(encoding="utf-8")
-        self.assertIn("get_master_data_console", master)
+        css = ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
+        self.assertIn("get_production_routing_console", master)
+        self.assertIn("save_production_routing", master)
         self.assertIn("سجل التغييرات", master)
         self.assertIn("سيُرفض الحذف", master)
+        self.assertIn("@media", css)
 
     def test_settings_workspace_uses_consoles_not_raw_single_doctype(self) -> None:
         metadata = json.loads(WORKSPACE.read_text(encoding="utf-8"))
