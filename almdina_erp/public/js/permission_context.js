@@ -44,15 +44,22 @@
         delete_edge_banding_types: "delete",
     });
 
-    // Protected form modules are registered by Frappe from source files.
-    // Waiting for their globals keeps permission recovery deterministic without
-    // re-injecting duplicate script tags or weakening the source load order.
+    // Protected form modules normally arrive through Frappe's DocType source
+    // bundle. Keep this compatibility loader for the permission/security layer.
     const ORDER_MODULES = Object.freeze([
         Object.freeze({ global: "AlmdinaOrderCostUX" }),
         Object.freeze({ global: "AlmdinaOrderPermissionRefreshUX" }),
         Object.freeze({ global: "AlmdinaOrderTabPermissionsUX" }),
         Object.freeze({ global: "AlmdinaCustomerInvoiceToolbarUX" }),
     ]);
+
+    // Cutting-plan presentation is intentionally loaded independently from the
+    // cost/financial chain. A failure or delay in an unrelated protected module
+    // must never leave an authorized cutting-plan surface empty.
+    const PLAN_SURFACE_MODULE = Object.freeze({
+        global: "AlmdinaCuttingPlanSurfaceBootstrap",
+        asset: "/assets/almdina_erp/js/door_cutting_order_plan_surface_bootstrap.js",
+    });
 
     function normalizeNavigation(raw) {
         if (!raw || typeof raw !== "object") return EMPTY_NAVIGATION;
@@ -130,6 +137,7 @@
     let context = normalize(frappe.boot && frappe.boot.almdina_permissions);
     let refreshPromise = null;
     let modulesPromise = null;
+    let planSurfacePromise = null;
 
     function emitUpdatedContext() {
         window.dispatchEvent(
@@ -182,6 +190,14 @@
 
     function requireModule(module) {
         if (globalExists(module.global)) return Promise.resolve(window[module.global]);
+        if (module.asset && window.frappe && typeof frappe.require === "function") {
+            return frappe.require(module.asset).then(() => {
+                if (!globalExists(module.global)) {
+                    throw new Error(`Module did not initialize: ${module.global}`);
+                }
+                return window[module.global];
+            });
+        }
         return waitForGlobal(module.global);
     }
 
@@ -199,8 +215,46 @@
         return Promise.resolve(recovery.refreshPermissions(frm));
     }
 
+    function loadPlanSurfaceModule() {
+        if (
+            !window.cur_frm
+            || window.cur_frm.doctype !== "Door Cutting Order"
+            || !window.frappe
+            || typeof frappe.require !== "function"
+        ) {
+            return Promise.resolve(false);
+        }
+        if (planSurfacePromise) return planSurfacePromise;
+
+        planSurfacePromise = requireModule(PLAN_SURFACE_MODULE)
+            .then(module => {
+                const frm = window.cur_frm;
+                if (
+                    !frm
+                    || frm.doctype !== "Door Cutting Order"
+                    || !module
+                    || typeof module.recover !== "function"
+                ) {
+                    return false;
+                }
+                return module.recover(frm);
+            })
+            .catch(error => {
+                console.error("Failed to load Almdina cutting-plan surface", error);
+                return false;
+            })
+            .finally(() => {
+                planSurfacePromise = null;
+            });
+
+        return planSurfacePromise;
+    }
+
     function loadOrderModules() {
-        if (modulesPromise) return modulesPromise;
+        if (modulesPromise) {
+            loadPlanSurfaceModule();
+            return modulesPromise;
+        }
         if (
             !window.cur_frm
             || window.cur_frm.doctype !== "Door Cutting Order"
@@ -211,6 +265,10 @@
         ) {
             return null;
         }
+
+        // Start the plan surface independently. Do not put it behind the serial
+        // cost/permission compatibility chain below.
+        loadPlanSurfaceModule();
 
         modulesPromise = ORDER_MODULES.reduce(
             (promise, module) => promise.then(() => requireModule(module)),
