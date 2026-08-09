@@ -181,28 +181,44 @@
         return "";
     }
 
-    function runRecalculation(frm) {
-        if (!canCalculate(frm)) {
-            frappe.msgprint(recalculationDisabledReason(frm));
-            return Promise.resolve(false);
-        }
-        if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
-            frappe.msgprint(__("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص."));
-            return Promise.resolve(false);
+    async function preparePlanInputs(frm) {
+        const compatibility = window.AlmdinaTextBoardPlanUX;
+        if (compatibility && typeof compatibility.preparePlanInputs === "function") {
+            return Boolean(await compatibility.preparePlanInputs(frm));
         }
 
-        return frappe.call({
-            method: RECALCULATE_METHOD,
-            args: optimizerArgs(frm),
-            freeze: true,
-            freeze_message: __("جاري إعادة حساب خطة القص..."),
-        }).then(() => {
+        const boardUX = window.AlmdinaBoardTextUX;
+        if (boardUX && typeof boardUX.syncInputs === "function") {
+            await boardUX.syncInputs(frm);
+        }
+        if (!boardUX || !boardUX.canCalculatePlan(frm)) {
+            frappe.msgprint(__("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص."));
+            return false;
+        }
+        return true;
+    }
+
+    async function runRecalculation(frm) {
+        if (!canCalculate(frm)) {
+            frappe.msgprint(recalculationDisabledReason(frm));
+            return false;
+        }
+        if (!(await preparePlanInputs(frm))) return false;
+
+        try {
+            await frappe.call({
+                method: RECALCULATE_METHOD,
+                args: optimizerArgs(frm),
+                freeze: true,
+                freeze_message: __("جاري إعادة حساب خطة القص..."),
+            });
             frappe.show_alert({ message: __("تم تحديث خطة القص والنتائج."), indicator: "green" }, 4);
-            return frm.reload_doc();
-        }).catch((error) => {
+            await frm.reload_doc();
+            return true;
+        } catch (error) {
             console.error("Cutting plan recalculation failed", error);
             throw error;
-        });
+        }
     }
 
     function parsePlan(raw) {
@@ -350,10 +366,6 @@
 
         const element = button.get(0);
         if (element && !element.__almdinaPlanCommandBound) {
-            // This button is first created by the older presentation module. Remove
-            // its full-document save handler exactly once, then own the action from
-            // this focused plan-command controller. Repeated observer passes never
-            // tear down/rebind the click handler again.
             button.off("click");
             button.on("click.almdinaPlanCommand", (event) => {
                 event.preventDefault();
@@ -429,10 +441,20 @@
         kerf_mm(frm) { refresh(frm); },
         trim_margin_mm(frm) { refresh(frm); },
         optimization_time_limit_sec(frm) { refresh(frm); },
+        board_description(frm) { refresh(frm); },
+        board_length_cm(frm) { refresh(frm); },
+        board_width_cm(frm) { refresh(frm); },
     });
 
     window.addEventListener("almdina:permissions-updated", () => {
         const frm = window.cur_frm;
         if (frm && frm.doctype === "Door Cutting Order") refresh(frm);
+    });
+
+    window.AlmdinaPlanControlsUX = Object.freeze({
+        apply,
+        canCalculate,
+        preparePlanInputs,
+        runRecalculation,
     });
 })();
