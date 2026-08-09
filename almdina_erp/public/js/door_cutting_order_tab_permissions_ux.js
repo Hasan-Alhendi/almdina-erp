@@ -66,18 +66,31 @@
         if (order && typeof order.click === "function") order.click();
     }
 
-    function apply(frm) {
-        if (!frm || frm.doctype !== "Door Cutting Order") return;
-
-        const visibility = {
+    function visibilityState(frm) {
+        return {
             results_tab: can(frm, TAB_RULES.results_tab),
             cost_tab: can(frm, TAB_RULES.cost_tab) || can(frm, "print_customer_invoice"),
         };
+    }
 
+    function applyRenderedVisibility(frm, visibility) {
         Object.entries(visibility).forEach(([fieldname, visible]) => {
-            frm.set_df_property(fieldname, "hidden", visible ? 0 : 1);
             setRenderedVisibility(frm, fieldname, visible);
         });
+    }
+
+    function apply(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+
+        const visibility = visibilityState(frm);
+
+        // IMPORTANT: Do not call frm.set_df_property(..., "hidden", ...) for a
+        // Tab Break here. Frappe refreshes the form layout when a Tab Break's
+        // hidden state changes, which rebuilds HTML fields and can erase the
+        // already-rendered cutting-plan commands and Board Layout. Business
+        // authorization is enforced by the server; this module only controls
+        // the rendered navigation surface.
+        applyRenderedVisibility(frm, visibility);
 
         const active = currentTabFieldname(frm);
         if (active && visibility[active] === false) {
@@ -85,9 +98,7 @@
         }
 
         window.requestAnimationFrame(() => {
-            Object.entries(visibility).forEach(([fieldname, visible]) => {
-                setRenderedVisibility(frm, fieldname, visible);
-            });
+            applyRenderedVisibility(frm, visibility);
         });
     }
 
@@ -97,6 +108,8 @@
         },
         refresh(frm) {
             apply(frm);
+            // Frappe may repaint the tab navigation after refresh. Reapply only
+            // DOM visibility; never rebuild the form layout.
             window.setTimeout(() => apply(frm), 180);
             window.setTimeout(() => apply(frm), 700);
         },
@@ -110,6 +123,7 @@
     window.AlmdinaOrderTabPermissionsUX = Object.freeze({
         apply,
         renderedTabNodes,
+        visibilityState,
     });
 
     window.setTimeout(() => {
