@@ -87,6 +87,9 @@ class Capability:
     EDIT_PRODUCTION_ROUTINGS = "edit_production_routings"
     DELETE_PRODUCTION_ROUTINGS = "delete_production_routings"
     VIEW_CUSTOMERS = "view_customers"
+    CREATE_CUSTOMERS = "create_customers"
+    EDIT_CUSTOMERS = "edit_customers"
+    DELETE_CUSTOMERS = "delete_customers"
     VIEW_EDGE_BANDING_TYPES = "view_edge_banding_types"
     CREATE_EDGE_BANDING_TYPES = "create_edge_banding_types"
     EDIT_EDGE_BANDING_TYPES = "edit_edge_banding_types"
@@ -176,6 +179,9 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.DELETE_PRODUCTION_ROUTINGS, "delete", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.VIEW_CUSTOMERS, "read", _CUSTOMER_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.CREATE_CUSTOMERS, "create", _CUSTOMER_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.EDIT_CUSTOMERS, "write", _CUSTOMER_DOCTYPE, "master_data", False),
+    CapabilityDefinition(Capability.DELETE_CUSTOMERS, "delete", _CUSTOMER_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.VIEW_EDGE_BANDING_TYPES, "read", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_EDGE_BANDING_TYPES, "create", _EDGE_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_EDGE_BANDING_TYPES, "write", _EDGE_DOCTYPE, "master_data", False),

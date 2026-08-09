@@ -129,11 +129,27 @@
 
     function isPhoneLayout(root) {
         const responsiveDevice = window.AlmdinaResponsiveDevice;
-        return Boolean(
+        if (
+            responsiveDevice
+            && typeof responsiveDevice.usesCardLayout === "function"
+        ) {
+            return responsiveDevice.usesCardLayout(root);
+        }
+        if (
             responsiveDevice
             && typeof responsiveDevice.isPhoneLayout === "function"
-            && responsiveDevice.isPhoneLayout(root)
-        );
+        ) {
+            return responsiveDevice.isPhoneLayout(root);
+        }
+        // Last-resort fallback when the shared detector is unavailable.
+        try {
+            return Boolean(
+                window.matchMedia
+                && window.matchMedia("(max-width: 600px)").matches
+            );
+        } catch (error) {
+            return false;
+        }
     }
 
     function applyCardLayoutClass(listview) {
@@ -335,13 +351,33 @@
         const refreshLayout = () => {
             const wasPhoneLayout = root.classList.contains("dco-order-card-layout");
             const needsPhoneLayout = isPhoneLayout(root);
-            if (wasPhoneLayout !== needsPhoneLayout) renderMobileCards(listview);
+            if (wasPhoneLayout !== needsPhoneLayout) {
+                renderMobileCards(listview);
+                return;
+            }
+            // Keep cards in sync when the list reflows while already in card mode.
+            if (needsPhoneLayout) renderMobileCards(listview);
         };
         if (typeof ResizeObserver === "function") {
             listview._dcoResponsiveObserver = new ResizeObserver(refreshLayout);
             listview._dcoResponsiveObserver.observe(root);
         }
         window.addEventListener("resize", refreshLayout, { passive: true });
+        if (window.matchMedia) {
+            try {
+                const media = window.matchMedia("(max-width: 600px)");
+                const onMedia = () => refreshLayout();
+                if (typeof media.addEventListener === "function") {
+                    media.addEventListener("change", onMedia);
+                } else if (typeof media.addListener === "function") {
+                    media.addListener(onMedia);
+                }
+                listview._dcoCardMediaQuery = media;
+                listview._dcoCardMediaHandler = onMedia;
+            } catch (error) {
+                /* matchMedia unavailable */
+            }
+        }
         listview._dcoResponsiveObserverInstalled = true;
     }
 

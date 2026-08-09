@@ -30,6 +30,12 @@ _MASTER_DEFINITIONS = {
         "edit": Capability.EDIT_EDGE_BANDING_TYPES,
         "delete": Capability.DELETE_EDGE_BANDING_TYPES,
     },
+    "Customer": {
+        "view": Capability.VIEW_CUSTOMERS,
+        "create": Capability.CREATE_CUSTOMERS,
+        "edit": Capability.EDIT_CUSTOMERS,
+        "delete": Capability.DELETE_CUSTOMERS,
+    },
 }
 
 

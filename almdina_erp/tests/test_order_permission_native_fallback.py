@@ -70,7 +70,10 @@ def test_locked_order_explains_the_controlled_revision_path() -> None:
 
     assert "canOfferEditSession" in revision
     assert "__(\"تعديل\")" in revision or '__("تعديل")' in revision
-    assert "__(\"اعتماد التعديل\")" in revision or '__("اعتماد التعديل")' in revision
+    assert "__(\"حفظ\")" in revision or '__("حفظ")' in revision
+    assert "commitEditSession" in revision
+    assert "lockEditSession" in revision
+    assert "frm.add_custom_button(CONFIRM_EDIT_LABEL" not in revision
     assert "At Sharyoun" in revision
     assert "At CNC" in revision
     assert 'can(frm, "edit_order")' in revision

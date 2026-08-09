@@ -118,6 +118,8 @@ class TestResourcePermissionHooks(unittest.TestCase):
     def test_explicit_master_data_actions_map_one_to_one(self) -> None:
         module = load_resource_permissions(
             {
+                Capability.VIEW_CUSTOMERS,
+                Capability.CREATE_CUSTOMERS,
                 Capability.VIEW_EDGE_BANDING_TYPES,
                 Capability.EDIT_EDGE_BANDING_TYPES,
                 Capability.VIEW_PRODUCTION_ROUTINGS,
@@ -125,6 +127,19 @@ class TestResourcePermissionHooks(unittest.TestCase):
             }
         )
         doc = SimpleNamespace()
+
+        self.assertTrue(
+            module.customer_has_permission(doc, user="admin@example.com", ptype="read")
+        )
+        self.assertTrue(
+            module.customer_has_permission(doc, user="admin@example.com", ptype="create")
+        )
+        self.assertFalse(
+            module.customer_has_permission(doc, user="admin@example.com", ptype="write")
+        )
+        self.assertFalse(
+            module.customer_has_permission(doc, user="admin@example.com", ptype="delete")
+        )
 
         self.assertTrue(
             module.edge_banding_type_has_permission(

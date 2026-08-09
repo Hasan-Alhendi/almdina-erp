@@ -37,8 +37,13 @@
     }
 
     function isPhoneDevice(root) {
+        const viewport = viewportWidth(root);
+        // Prefer the live viewport so real phones and mobile browser chrome still
+        // get cards even when screen.* reports the desktop monitor size (common
+        // with DevTools, PWAs embedded in desktop shells, or some WebViews).
+        if (viewport <= PHONE_SHORT_SIDE_MAX_WIDTH) return true;
         return deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH
-            && viewportWidth(root) <= PHONE_VIEWPORT_MAX_WIDTH;
+            && viewport <= PHONE_VIEWPORT_MAX_WIDTH;
     }
 
     function isTabletDevice(root) {

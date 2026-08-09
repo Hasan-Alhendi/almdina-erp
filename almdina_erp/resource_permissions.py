@@ -90,6 +90,9 @@ def customer_has_permission(
         ptype=ptype,
         permission_type=permission_type,
         view=(Capability.VIEW_CUSTOMERS, *_ORDER_LOOKUP_CAPABILITIES),
+        create=Capability.CREATE_CUSTOMERS,
+        write=Capability.EDIT_CUSTOMERS,
+        delete=Capability.DELETE_CUSTOMERS,
     )
 
 
