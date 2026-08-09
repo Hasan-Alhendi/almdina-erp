@@ -9,12 +9,7 @@
         ));
     }
 
-    async function validatePlanInputs(frm) {
-        const boardUX = window.AlmdinaBoardTextUX;
-        if (boardUX && typeof boardUX.syncInputs === "function") {
-            await boardUX.syncInputs(frm);
-        }
-
+    function validatePlanInputs(frm) {
         if (!String(frm.doc.board_description || "").trim()) {
             frappe.msgprint("أدخل صنف اللوح أولًا، مثال: MDF أبيض 18 مم.");
             return false;
@@ -30,11 +25,21 @@
         return true;
     }
 
+    async function preparePlanInputs(frm) {
+        const boardUX = window.AlmdinaBoardTextUX;
+        if (boardUX && typeof boardUX.syncInputs === "function") {
+            await boardUX.syncInputs(frm);
+        }
+        if (!validatePlanInputs(frm)) return false;
+        return true;
+    }
+
     // Compatibility/validation layer only. Cutting-plan commands are owned by
     // door_cutting_order_plan_controls_ux.js so permissions, lifecycle checks,
     // and server calls have exactly one browser controller.
     window.AlmdinaTextBoardPlanUX = Object.freeze({
         validPieces,
         validatePlanInputs,
+        preparePlanInputs,
     });
 })();
