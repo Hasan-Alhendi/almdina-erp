@@ -6,9 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
+DETAIL_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
 HOOKS = ROOT / "hooks.py"
 PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
 CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+PLAN_TABS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
+ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
 REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
 
 
@@ -63,8 +68,56 @@ def test_recalculation_button_uses_focused_command_without_full_document_save():
     assert "__almdinaPlanCommandBound" in controls
     assert "scheduleSimplify" in controls
     assert "setTextIfChanged" in controls
+    assert "preparePlanInputs" in controls
     assert 'can(frm, "recalculate_plan")' in controls
     assert 'can(frm, "edit_optimizer_settings")' in controls
+
+
+def test_legacy_helpers_never_intercept_or_save_cutting_plan_commands():
+    fast_save = source(FAST_SAVE_UX)
+    text_board = source(TEXT_BOARD_PLAN_UX)
+
+    for legacy in (fast_save, text_board):
+        assert "frm.save" not in legacy
+        assert 'addEventListener("click"' not in legacy
+        assert "stopImmediatePropagation" not in legacy
+        assert ".dco-recalculate-plan" not in legacy
+
+    assert "validateCurrentPlanInputs" in fast_save
+    assert "preparePlanInputs" in text_board
+    assert "door_cutting_order_plan_controls_ux.js" in text_board
+
+
+def test_cutting_plan_browser_authority_never_depends_on_cost_visibility():
+    controls = source(CONTROLS_UX)
+    tabs = source(PLAN_TABS_UX)
+    guard = source(ACTION_GUARD_UX)
+
+    for module in (controls, tabs, guard):
+        assert 'can(frm, "view_costs")' not in module
+        assert 'can("view_costs")' not in module
+
+    assert '"view_cutting_plan"' in tabs
+    assert '"recalculate_plan"' in controls
+    assert '"edit_optimizer_settings"' in controls
+
+
+def test_piece_financial_fields_are_protected_at_cost_permission_level():
+    payload = json.loads(source(DETAIL_DOCTYPE))
+    fields = {field["fieldname"]: field for field in payload["fields"]}
+    for fieldname in (
+        "edge_long_rate_usd",
+        "edge_width_rate_usd",
+        "edge_long_cost_usd",
+        "edge_width_cost_usd",
+        "edge_cost_usd",
+        "edge_rate_usd",
+        "special_shape_estimated_unit_price_usd",
+        "special_shape_custom_unit_price_usd",
+        "special_shape_final_unit_price_usd",
+        "clipped_corner_edge_price_usd",
+    ):
+        assert fields[fieldname].get("permlevel") == 1
 
 
 def test_advanced_algorithm_labels_are_applied_inside_the_primary_select():
