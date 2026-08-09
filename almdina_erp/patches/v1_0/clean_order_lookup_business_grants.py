@@ -22,6 +22,13 @@ _EDGE_ADMIN_ACTIONS = frozenset(
         Capability.DELETE_EDGE_BANDING_TYPES,
     }
 )
+_CUSTOMER_ADMIN_ACTIONS = frozenset(
+    {
+        Capability.CREATE_CUSTOMERS,
+        Capability.EDIT_CUSTOMERS,
+        Capability.DELETE_CUSTOMERS,
+    }
+)
 
 
 def execute() -> None:
@@ -33,8 +40,9 @@ def execute() -> None:
     menu visibility.
 
     This one-time migration is deliberately fail-closed: for roles with order
-    input actions, Customer view is removed and Edge view is removed unless the
-    role also owns an explicit Edge create/edit/delete action. Frappe lookup
+    input actions, Customer view is removed unless the role also owns an explicit
+    Customer create/edit/delete action, and Edge view is removed unless the role
+    also owns an explicit Edge create/edit/delete action. Frappe lookup
     read/select rights are rebuilt by the projection layer, so order entry keeps
     working without exposing master-data surfaces.
     """
@@ -53,7 +61,13 @@ def execute() -> None:
             continue
 
         changed = False
-        if state.get(Capability.VIEW_CUSTOMERS) is True:
+        has_customer_admin = any(
+            state.get(capability) is True for capability in _CUSTOMER_ADMIN_ACTIONS
+        )
+        if (
+            state.get(Capability.VIEW_CUSTOMERS) is True
+            and not has_customer_admin
+        ):
             state[Capability.VIEW_CUSTOMERS] = False
             changed = True
 

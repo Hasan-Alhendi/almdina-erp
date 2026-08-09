@@ -80,6 +80,20 @@ const phoneRoot = { getBoundingClientRect: () => ({ width: 340 }) };
 assert.strictEqual(api.isPhoneLayout(phoneRoot), true, "a real phone must use order cards");
 assert.strictEqual(responsive.usesCardLayout(phoneRoot), true);
 
+// Narrow live viewports get cards even when screen.* still reports a desktop monitor.
+context.document.documentElement.clientWidth = 390;
+context.window.innerWidth = 390;
+context.window.screen.width = 1440;
+context.window.screen.height = 900;
+coarsePointer = false;
+noHover = false;
+const narrowViewportRoot = { getBoundingClientRect: () => ({ width: 390 }) };
+assert.strictEqual(
+    api.isPhoneLayout(narrowViewportRoot),
+    true,
+    "a phone-sized viewport must use order cards without relying on screen.*"
+);
+
 // A portrait touch-first tablet uses cards even though its viewport is below 900px.
 context.document.documentElement.clientWidth = 820;
 context.window.innerWidth = 820;

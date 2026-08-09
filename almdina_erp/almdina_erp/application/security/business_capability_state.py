@@ -24,6 +24,13 @@ _EDGE_ADMIN_ACTIONS = frozenset(
         Capability.DELETE_EDGE_BANDING_TYPES,
     }
 )
+_CUSTOMER_ADMIN_ACTIONS = frozenset(
+    {
+        Capability.CREATE_CUSTOMERS,
+        Capability.EDIT_CUSTOMERS,
+        Capability.DELETE_CUSTOMERS,
+    }
+)
 _DRAWING_VIEW_ACTIONS = frozenset(
     {
         Capability.EDIT_SPECIAL_DRAWING,
@@ -54,6 +61,7 @@ def normalize_business_capability_state(
 
     normalized[Capability.VIEW_CUSTOMERS] = (
         supplied.get(Capability.VIEW_CUSTOMERS) is True
+        or any(supplied.get(capability) is True for capability in _CUSTOMER_ADMIN_ACTIONS)
     )
     normalized[Capability.VIEW_EDGE_BANDING_TYPES] = (
         supplied.get(Capability.VIEW_EDGE_BANDING_TYPES) is True

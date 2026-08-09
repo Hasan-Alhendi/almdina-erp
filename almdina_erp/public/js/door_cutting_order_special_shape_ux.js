@@ -1126,11 +1126,20 @@
         }, 6);
     }
 
+    let activeDialog = null;
+
     function open(frm, row, options = {}) {
         installStyles();
         if ((row.piece_type || "Regular") !== "Special") {
             frappe.msgprint("حوّل نوع الدرفة إلى «خاصة» أولًا.");
             return;
+        }
+
+        // One sketch dialog at a time. Duplicate open calls (stacked click
+        // listeners or double activation) must not layer modals that need N closes.
+        if (activeDialog) {
+            try { activeDialog.hide(); } catch (error) { /* closing previous dialog */ }
+            activeDialog = null;
         }
 
         const readOnly = Boolean(options.readOnly);
@@ -1149,6 +1158,10 @@
         });
         dialog.$wrapper.addClass("dco-special-shape-modal");
         if (readOnly) dialog.$wrapper.addClass("dco-special-shape-readonly");
+        activeDialog = dialog;
+        dialog.$wrapper.on("hidden.bs.modal.dco-special-shape-active", () => {
+            if (activeDialog === dialog) activeDialog = null;
+        });
         dialog.show();
 
         const root = dialog.fields_dict.special_shape_canvas.$wrapper

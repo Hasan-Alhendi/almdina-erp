@@ -60,6 +60,11 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertTrue(edges[Capability.VIEW_EDGE_BANDING_TYPES])
 
+        customers = normalize_capability_state(
+            {Capability.CREATE_CUSTOMERS: True}
+        )
+        self.assertTrue(customers[Capability.VIEW_CUSTOMERS])
+
         production_controls = normalize_capability_state(
             {Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: True}
         )
@@ -83,6 +88,17 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertTrue(edge["read"])
         self.assertTrue(edge["delete"])
         self.assertFalse(edge["write"])
+
+        customer_state = {
+            Capability.VIEW_CUSTOMERS: True,
+            Capability.CREATE_CUSTOMERS: True,
+            Capability.EDIT_CUSTOMERS: True,
+        }
+        customer = standard_permission_projection("Customer", customer_state)
+        self.assertTrue(customer["read"])
+        self.assertTrue(customer["create"])
+        self.assertTrue(customer["write"])
+        self.assertFalse(customer["delete"])
 
     def test_non_settings_administration_does_not_expose_settings_record(self) -> None:
         workforce = standard_permission_projection(

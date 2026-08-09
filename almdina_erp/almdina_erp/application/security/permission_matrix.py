@@ -113,7 +113,10 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.CREATE_EDGE_BANDING_TYPES: _presentation("إنشاء نوع قشاط", "إضافة نوع قشاط جديد.", "sensitive"),
     Capability.EDIT_EDGE_BANDING_TYPES: _presentation("تعديل أنواع القشاط", "تعديل السماكة والسعر والخصائص أو تعطيل النوع.", "critical"),
     Capability.DELETE_EDGE_BANDING_TYPES: _presentation("حذف نوع قشاط", "حذف نوع غير مستخدم في أي طلب أو قطعة.", "critical"),
-    Capability.VIEW_CUSTOMERS: _presentation("عرض الزبائن للطلبات", "اختيار الزبون وعرض اسمه عند إنشاء الطلب أو تعديله."),
+    Capability.VIEW_CUSTOMERS: _presentation("عرض الزبائن", "عرض قائمة الزبائن وإدارتها من مساحة البيانات الأساسية، واختيار الزبون في الطلبات."),
+    Capability.CREATE_CUSTOMERS: _presentation("إنشاء زبون", "إضافة زبون جديد من قائمة الزبائن أو من حقل الاختيار في الطلب.", "sensitive"),
+    Capability.EDIT_CUSTOMERS: _presentation("تعديل الزبائن", "تعديل بيانات الزبون الحالية.", "sensitive"),
+    Capability.DELETE_CUSTOMERS: _presentation("حذف زبون", "حذف زبون غير مرتبط بطلبات محفوظة.", "critical"),
     Capability.MANAGE_PERMISSIONS: _presentation("إدارة الصلاحيات", "تعديل مصفوفة الصلاحيات لجميع الأدوار.", "critical"),
 }
 
@@ -153,6 +156,11 @@ _EDGE_ACTIONS = frozenset({
     Capability.CREATE_EDGE_BANDING_TYPES,
     Capability.EDIT_EDGE_BANDING_TYPES,
     Capability.DELETE_EDGE_BANDING_TYPES,
+})
+_CUSTOMER_ACTIONS = frozenset({
+    Capability.CREATE_CUSTOMERS,
+    Capability.EDIT_CUSTOMERS,
+    Capability.DELETE_CUSTOMERS,
 })
 _ORDER_INPUT_ACTIONS = frozenset({
     Capability.CREATE_ORDER,
@@ -212,6 +220,8 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.VIEW_PRODUCTION_ROUTINGS] = True
     if any(state[capability] for capability in _EDGE_ACTIONS):
         state[Capability.VIEW_EDGE_BANDING_TYPES] = True
+    if any(state[capability] for capability in _CUSTOMER_ACTIONS):
+        state[Capability.VIEW_CUSTOMERS] = True
     if any(state[capability] for capability in _ORDER_INPUT_ACTIONS):
         state[Capability.VIEW_CUSTOMERS] = True
         state[Capability.VIEW_EDGE_BANDING_TYPES] = True
@@ -267,7 +277,13 @@ def standard_permission_projection(
         }
     if doctype == "Customer":
         can_read = normalized[Capability.VIEW_CUSTOMERS]
-        return {"read": can_read, "select": can_read, "create": False, "write": False, "delete": False}
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": normalized[Capability.CREATE_CUSTOMERS],
+            "write": normalized[Capability.EDIT_CUSTOMERS],
+            "delete": normalized[Capability.DELETE_CUSTOMERS],
+        }
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {

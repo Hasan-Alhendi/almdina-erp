@@ -140,6 +140,7 @@ def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel()
     assert "function deviceShortSide()" in responsive
     assert "root && root.getBoundingClientRect" in responsive
     assert "Math.min(...widths)" in responsive
+    assert "viewport <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
     assert "deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
     assert "window.AlmdinaResponsiveDevice" in cards
     assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
@@ -153,6 +154,7 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     hooks = source(HOOKS)
 
     assert "window.AlmdinaResponsiveDevice" in list_source
+    assert "usesCardLayout" in list_source
     assert 'root.classList.toggle("dco-order-card-layout"' in list_source
     assert 'node.matches(".list-row-container")' in list_source
     assert 'class="dco-mobile-order-card"' in list_source
@@ -161,6 +163,7 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     assert 'class="dco-card-workflow"' in list_source
     assert 'class="dco-card-assignee"' in list_source
     assert "AlmdinaShopFloorQuickActions.perform" in list_source
+    assert 'matchMedia("(max-width: 600px)")' in list_source
     assert ".dco-order-card-container > .list-row" in css
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css

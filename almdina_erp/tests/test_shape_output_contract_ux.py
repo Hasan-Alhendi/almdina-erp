@@ -91,7 +91,7 @@ def test_special_shape_button_resolves_the_editor_at_click_time():
 
     assert 'event.target.closest(".dco-special-sketch-button")' in operator
     assert "row && window.AlmdinaSpecialShapeEditor" in operator
-    assert "window.AlmdinaSpecialShapeEditor.open(frm, row)" in operator
+    assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = {" in editor
     assert "open," in editor
 

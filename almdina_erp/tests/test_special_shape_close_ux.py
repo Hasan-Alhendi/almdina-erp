@@ -35,3 +35,15 @@ def test_close_fix_is_loaded_immediately_after_special_shape_editor():
     assert editor in hooks
     assert close_fix in hooks
     assert hooks.index(editor) < hooks.index(close_fix)
+
+
+def test_special_shape_editor_keeps_a_single_active_dialog():
+    source = (ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js").read_text(
+        encoding="utf-8"
+    )
+    assert "let activeDialog = null" in source
+    assert "if (activeDialog)" in source
+    assert "activeDialog.hide()" in source
+    assert 'hidden.bs.modal.dco-special-shape-active' in source
+    assert "activeDialog = dialog" in source
+    assert "Duplicate open calls" in source

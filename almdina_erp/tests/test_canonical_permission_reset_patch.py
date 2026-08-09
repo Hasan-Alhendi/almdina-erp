@@ -52,6 +52,7 @@ class TestCanonicalPermissionResetPatch(unittest.TestCase):
         self.assertIn("Capability.VIEW_EDGE_BANDING_TYPES", source)
         self.assertIn("Capability.CREATE_ORDER", source)
         self.assertIn("Capability.CREATE_EDGE_BANDING_TYPES", source)
+        self.assertIn("Capability.CREATE_CUSTOMERS", source)
         self.assertIn("repository.save_role_state(role, state)", source)
         self.assertNotIn("Custom DocPerm", source)
         self.assertNotIn("DocPerm", source)
