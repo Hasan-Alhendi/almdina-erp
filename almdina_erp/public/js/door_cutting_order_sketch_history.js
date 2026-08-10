@@ -2,6 +2,7 @@
     "use strict";
 
     const DEFAULT_HISTORY_LIMIT = 80;
+    let activeState = null;
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -20,13 +21,22 @@
     }
 
     function createState(elements = []) {
-        return {
+        activeState = {
             elements: clone(elementsOf(elements)),
             undo: [],
             redo: [],
             selectedId: "",
             hasChanges: false,
         };
+        return activeState;
+    }
+
+    function getActiveState() {
+        return activeState;
+    }
+
+    function clearActiveState(state = null) {
+        if (!state || activeState === state) activeState = null;
     }
 
     function snapshot(state, elements = state && state.elements, limit = DEFAULT_HISTORY_LIMIT) {
@@ -135,6 +145,8 @@
     window.AlmdinaSketchHistory = Object.freeze({
         DEFAULT_HISTORY_LIMIT,
         createState,
+        getActiveState,
+        clearActiveState,
         snapshot,
         addElement,
         selectElement,
