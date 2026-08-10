@@ -41,6 +41,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
                 Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
                 Capability.EDIT_FACTORY_COST_DEFAULTS,
                 Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+                Capability.EDIT_FACTORY_PRINT_IDENTITY,
             }
         )
         self.assertIn(Capability.VIEW_FACTORY_SETTINGS, expanded)
