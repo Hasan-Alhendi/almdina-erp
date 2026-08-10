@@ -108,6 +108,19 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("piece.label)}</b>", source)
         self.assertNotIn("ERPNext Cutting Plan", source)
 
+        # Printed boards are workshop-first: only the piece number is printed,
+        # banding marks stay thin/red, and sparse board sets are clustered rather
+        # than stretched across artificial grid tracks.
+        self.assertIn("dco-piece-number", source)
+        self.assertIn("dco-piece-size { display: none !important; }", source)
+        self.assertIn("border-color: #e00000 !important", source)
+        self.assertIn("border-width: .45pt !important", source)
+        self.assertIn("if (count <= 6) return count", source)
+        self.assertIn("pageGridHeightMm = 164", source)
+        self.assertIn("flex-wrap: wrap", source)
+        self.assertIn("justify-content: center", source)
+        self.assertIn("align-content: flex-start", source)
+
     def test_modern_modules_own_recalculation_printing_and_dxf(self) -> None:
         fast_save = FAST_SAVE.read_text(encoding="utf-8")
         text_board = TEXT_BOARD_PLAN.read_text(encoding="utf-8")
