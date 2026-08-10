@@ -38,11 +38,13 @@
 
     function buildFromEndpoints(element, transform, startCm, endCm) {
         if (!element || !transform) return { valid: false, reason: "missing-input", element: null };
-        const start = lineModel.clampPointToPiece(transform, startCm);
-        const end = lineModel.clampPointToPiece(transform, endCm);
-        if (!lineModel.insidePiece(transform, start, 0.01) || !lineModel.insidePiece(transform, end, 0.01)) {
+        const rawStart = [num(startCm && startCm[0]), num(startCm && startCm[1])];
+        const rawEnd = [num(endCm && endCm[0]), num(endCm && endCm[1])];
+        if (!lineModel.insidePiece(transform, rawStart, 0.01) || !lineModel.insidePiece(transform, rawEnd, 0.01)) {
             return { valid: false, reason: "outside-piece", element: null };
         }
+        const start = lineModel.clampPointToPiece(transform, rawStart);
+        const end = lineModel.clampPointToPiece(transform, rawEnd);
         const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
         if (length < lineModel.MIN_LENGTH_CM) {
             return { valid: false, reason: "length-too-small", element: null };
@@ -90,10 +92,9 @@
     function replaceEndpoint(element, transform, role, point) {
         const current = endpoints(element);
         if (!current) return { valid: false, reason: "not-exact-line", element: null };
-        const next = lineModel.clampPointToPiece(transform, point);
         return role === "start"
-            ? buildFromEndpoints(element, transform, next, current.end)
-            : buildFromEndpoints(element, transform, current.start, next);
+            ? buildFromEndpoints(element, transform, point, current.end)
+            : buildFromEndpoints(element, transform, current.start, point);
     }
 
     function connectedCount(elements, selectedId, point) {
