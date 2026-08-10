@@ -37,6 +37,10 @@ assert.equal(byEndpoints.valid, true);
 assert.equal(lineModel.exactMeta(byEndpoints.element).length_cm, 5);
 assert.equal(lineModel.exactMeta(byEndpoints.element).angle_deg, 53.13);
 
+const outside = editModel.buildFromEndpoints(base, transform, [-1, 7], [8, 11]);
+assert.equal(outside.valid, false);
+assert.equal(outside.reason, "outside-piece");
+
 const first = line("first", [10, 10], 30, 0);
 const second = line("second", [40, 10], 20, 90);
 const changedFirst = editModel.resize(first, transform, 20, 0, "start");
