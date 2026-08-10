@@ -14,6 +14,9 @@
         "ellipse",
         "dimension",
     ]);
+    const SMART_ENDPOINT_SNAP_RADIUS = 24;
+    const SOFT_AXIS_SNAP_DEGREES = 7;
+    const FORCED_AXIS_ANCHOR_TOLERANCE = 4;
 
     function clone(value) {
         return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -25,6 +28,114 @@
         return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
     }
 
+    function effectiveSnapRadius(radius) {
+        const requested = Number(radius);
+        return Math.max(
+            SMART_ENDPOINT_SNAP_RADIUS,
+            Number.isFinite(requested) && requested > 0 ? requested : 0
+        );
+    }
+
+    function nearestAnchor(point, elements, radius) {
+        const anchor = sketchEngine.nearestAnchor(
+            [Number(point.x), Number(point.y)],
+            elements,
+            effectiveSnapRadius(radius)
+        );
+        return anchor ? { x: anchor[0], y: anchor[1] } : null;
+    }
+
+    function axisConstrain(start, end) {
+        const dx = Number(end.x) - Number(start.x);
+        const dy = Number(end.y) - Number(start.y);
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            return {
+                point: { x: Number(end.x), y: Number(start.y) },
+                axis: "horizontal",
+            };
+        }
+        return {
+            point: { x: Number(start.x), y: Number(end.y) },
+            axis: "vertical",
+        };
+    }
+
+    function softAxisSnap(start, end) {
+        const dx = Number(end.x) - Number(start.x);
+        const dy = Number(end.y) - Number(start.y);
+        const length = Math.hypot(dx, dy);
+        if (length < 0.001) return { point: { ...end }, axis: "" };
+
+        const angle = Math.atan2(dy, dx);
+        const interval = Math.PI / 2;
+        const snappedAngle = Math.round(angle / interval) * interval;
+        const difference = Math.abs(Math.atan2(
+            Math.sin(angle - snappedAngle),
+            Math.cos(angle - snappedAngle)
+        ));
+        if (difference > SOFT_AXIS_SNAP_DEGREES * Math.PI / 180) {
+            return { point: { ...end }, axis: "" };
+        }
+
+        const horizontal = Math.abs(Math.cos(snappedAngle)) >= Math.abs(Math.sin(snappedAngle));
+        return horizontal
+            ? {
+                point: { x: Number(end.x), y: Number(start.y) },
+                axis: "horizontal",
+            }
+            : {
+                point: { x: Number(start.x), y: Number(end.y) },
+                axis: "vertical",
+            };
+    }
+
+    function anchorPreservesForcedAxis(start, anchor, axis) {
+        if (axis === "horizontal") {
+            return Math.abs(Number(anchor.y) - Number(start.y)) <= FORCED_AXIS_ANCHOR_TOLERANCE;
+        }
+        if (axis === "vertical") {
+            return Math.abs(Number(anchor.x) - Number(start.x)) <= FORCED_AXIS_ANCHOR_TOLERANCE;
+        }
+        return true;
+    }
+
+    function projectAnchorToAxis(start, anchor, axis) {
+        if (axis === "horizontal") return { x: Number(anchor.x), y: Number(start.y) };
+        if (axis === "vertical") return { x: Number(start.x), y: Number(anchor.y) };
+        return { x: Number(anchor.x), y: Number(anchor.y) };
+    }
+
+    function resolveLineEndpoint(start, point, elements, forceAxis, radius) {
+        const alignment = forceAxis
+            ? axisConstrain(start, point)
+            : softAxisSnap(start, point);
+        const anchor = nearestAnchor(alignment.point, elements, radius);
+        if (!anchor) {
+            return {
+                endpoint: alignment.point,
+                snapPoint: null,
+                axis: alignment.axis,
+            };
+        }
+
+        if (forceAxis && !anchorPreservesForcedAxis(start, anchor, alignment.axis)) {
+            return {
+                endpoint: alignment.point,
+                snapPoint: null,
+                axis: alignment.axis,
+            };
+        }
+
+        const endpoint = forceAxis
+            ? projectAnchorToAxis(start, anchor, alignment.axis)
+            : anchor;
+        return {
+            endpoint,
+            snapPoint: endpoint,
+            axis: alignment.axis,
+        };
+    }
+
     function beginDraft(options = {}) {
         const tool = String(options.tool || "");
         let start = pointOf(options.point);
@@ -34,13 +145,9 @@
 
         let snapPoint = null;
         if (["pen", "line", "dimension"].includes(tool)) {
-            const anchor = sketchEngine.nearestAnchor(
-                [start.x, start.y],
-                options.elements,
-                options.snapRadius
-            );
+            const anchor = nearestAnchor(start, options.elements, options.snapRadius);
             if (anchor) {
-                start = { x: anchor[0], y: anchor[1] };
+                start = anchor;
                 snapPoint = { ...start };
             }
         }
@@ -100,13 +207,14 @@
     function penSnapPoint(draft, elements, radius = sketchEngine.DEFAULT_SNAP_RADIUS) {
         const points = sketchEngine.sanitizePoints(draft && draft.points);
         if (!points.length) return null;
+        const smartRadius = effectiveSnapRadius(radius);
         const last = points[points.length - 1];
         const closeStart = points.length > 8
             && sketchEngine.polylineLength(points) >= 70
-            && sketchEngine.pointDistance(last, points[0]) <= Number(radius) * 1.35
+            && sketchEngine.pointDistance(last, points[0]) <= smartRadius * 1.35
             ? points[0]
             : null;
-        const anchor = closeStart || sketchEngine.nearestAnchor(last, elements, radius);
+        const anchor = closeStart || sketchEngine.nearestAnchor(last, elements, smartRadius);
         return anchor ? { x: anchor[0], y: anchor[1] } : null;
     }
 
@@ -133,24 +241,19 @@
         if (!start || !point) return { draft, snapPoint: null };
 
         if (draft.type === "line" || draft.type === "dimension") {
-            const aligned = sketchEngine.snapLineEnd(
+            const resolved = resolveLineEndpoint(
                 start,
                 point,
-                Boolean(options.forceAngle)
-            );
-            const anchor = sketchEngine.nearestAnchor(
-                [aligned.x, aligned.y],
                 options.elements,
+                Boolean(options.forceAngle),
                 options.snapRadius
             );
-            const endpoint = anchor
-                ? { x: anchor[0], y: anchor[1] }
-                : aligned;
-            draft.x2 = endpoint.x;
-            draft.y2 = endpoint.y;
+            draft.x2 = resolved.endpoint.x;
+            draft.y2 = resolved.endpoint.y;
             return {
                 draft,
-                snapPoint: anchor ? endpoint : null,
+                snapPoint: resolved.snapPoint,
+                axis: resolved.axis,
             };
         }
         if (draft.type === "rectangle") {
@@ -210,7 +313,7 @@
             element.points = sketchEngine.snapPenEndpoints(
                 sketchEngine.normalizePenStroke(element.points),
                 options.elements,
-                options.snapRadius
+                effectiveSnapRadius(options.snapRadius)
             );
             return {
                 accepted: element.points.length >= 2,
@@ -237,6 +340,12 @@
 
     window.AlmdinaSketchInteraction = Object.freeze({
         DRAWING_TOOLS,
+        SMART_ENDPOINT_SNAP_RADIUS,
+        SOFT_AXIS_SNAP_DEGREES,
+        effectiveSnapRadius,
+        axisConstrain,
+        softAxisSnap,
+        resolveLineEndpoint,
         beginDraft,
         appendPenPoints,
         penSnapPoint,
