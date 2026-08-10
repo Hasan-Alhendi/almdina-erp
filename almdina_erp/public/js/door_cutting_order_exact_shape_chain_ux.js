@@ -25,11 +25,11 @@
             .dco-exact-shape-card.is-visible{display:block}
             .dco-exact-shape-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;background:#f7fafc;border-bottom:1px solid #e4eaee}
             .dco-exact-shape-head strong{font-size:10px;color:#183c56}.dco-exact-shape-badge{padding:4px 7px;border-radius:999px;background:#eef3f6;color:#526779;font-size:7.5px;font-weight:900}
-            .dco-exact-shape-badge.is-open{background:#fff4d8;color:#8a5a08}.dco-exact-shape-badge.is-valid{background:#e6f8ef;color:#12633f}.dco-exact-shape-badge.is-error{background:#fff0ee;color:#a33126}
+            .dco-exact-shape-badge.is-open{background:#fff4d8;color:#8a5a08}.dco-exact-shape-badge.is-valid{background:#e6f8ef;color:#12633f}.dco-exact-shape-badge.is-curve{background:#e9f5ff;color:#0d6da8}.dco-exact-shape-badge.is-error{background:#fff0ee;color:#a33126}
             .dco-exact-shape-body{padding:10px}.dco-exact-shape-status{font-size:8px;line-height:1.6;color:#536979;margin-bottom:8px}.dco-exact-shape-status b{color:#233f53}
             .dco-exact-shape-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px}.dco-exact-shape-stat{padding:6px 5px;border-radius:8px;background:#f6f9fb;text-align:center}.dco-exact-shape-stat b{display:block;color:#24465c;font-size:10px;font-variant-numeric:tabular-nums}.dco-exact-shape-stat span{font-size:6.8px;color:#718096}
             .dco-exact-shape-action{width:100%;min-height:34px;border:1px solid #2490ef;border-radius:9px;background:#edf8ff;color:#0e639d;cursor:pointer;font-size:8px;font-weight:900}.dco-exact-shape-action:hover{background:#dff3ff}.dco-exact-shape-action[hidden]{display:none}
-            .dco-exact-shape-note{margin-top:7px;padding:6px 7px;border-radius:8px;background:#f8fafc;color:#6b7b87;font-size:7px;line-height:1.5}.dco-exact-shape-note.is-warning{background:#fff8e8;color:#7a5414}.dco-exact-shape-note.is-success{background:#edf9f3;color:#12633f}
+            .dco-exact-shape-note{margin-top:7px;padding:6px 7px;border-radius:8px;background:#f8fafc;color:#6b7b87;font-size:7px;line-height:1.5}.dco-exact-shape-note.is-warning{background:#fff8e8;color:#7a5414}.dco-exact-shape-note.is-success{background:#edf9f3;color:#12633f}.dco-exact-shape-note.is-curve{background:#eef8ff;color:#145d87}
             .dco-exact-close-preview{stroke:#168a60;stroke-width:2;stroke-dasharray:7 5;vector-effect:non-scaling-stroke;pointer-events:none}.dco-exact-close-point{fill:#fff;stroke:#168a60;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}.dco-exact-close-label{fill:#12633f;font-family:Tahoma,Arial,sans-serif;font-size:10px;font-weight:900;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:4;stroke-linejoin:round;pointer-events:none}
             @media(max-width:700px){.dco-exact-shape-card{left:12px;right:12px;bottom:12px;width:auto}.dco-exact-shape-stats{grid-template-columns:repeat(3,1fr)}}
         `;
@@ -70,17 +70,21 @@
 
     function labelFor(analysis) {
         if (analysis.state === "exact-closed") return ["مغلق ودقيق", "is-valid"];
+        if (analysis.state === "exact-closed-curved") return ["مغلق · قوس دقيق", "is-curve"];
         if (analysis.state === "closed-invalid") return ["مغلق · يحتاج تصحيح", "is-error"];
         if (analysis.state === "open") return ["المسار مفتوح", "is-open"];
         if (analysis.state === "branched") return ["المسار متشعب", "is-error"];
-        if (analysis.state === "disconnected") return ["خطوط منفصلة", "is-error"];
+        if (analysis.state === "disconnected") return ["مقاطع منفصلة", "is-error"];
         if (analysis.state === "invalid") return ["مسار غير صالح", "is-error"];
-        return ["لا توجد خطوط دقيقة", ""];
+        return ["لا توجد مقاطع دقيقة", ""];
     }
 
     function statusText(controller, analysis) {
         if (analysis.state === "exact-closed") {
-            return `تم التعرف على حدود مغلقة حقيقية من <b>${analysis.exactLineCount}</b> أضلاع. سيُزامن الشكل الهندسي بالسنتيمتر عند حفظ الرسم.`;
+            return `تم التعرف على حدود مغلقة حقيقية من <b>${analysis.exactSegmentCount}</b> مقاطع. سيُزامن الشكل الهندسي بالسنتيمتر عند حفظ الرسم.`;
+        }
+        if (analysis.state === "exact-closed-curved") {
+            return `المسار مغلق هندسيًا ويحتوي <b>${analysis.exactArcCount}</b> قوس دائري دقيق. المحيط محسوب من طول القوس الحقيقي، وليس من الخطوط العيّنية.`;
         }
         if (analysis.state === "closed-invalid") {
             const firstError = analysis.geometryErrors[0] || "الشكل المغلق لا يحقق شروط الهندسة الدقيقة.";
@@ -89,25 +93,29 @@
         if (analysis.state === "open") {
             return analysis.canAutoClose
                 ? `المسار متصل لكنه مفتوح. المسافة بين طرفي الإغلاق <b>${lineModel.rounded(analysis.closeGapCm, 2)} سم</b>.`
-                : "أكمل الأضلاع حتى يصبح لديك مسار واحد يمكن إغلاقه.";
+                : "أكمل المقاطع حتى يصبح لديك مسار واحد يمكن إغلاقه.";
         }
-        if (analysis.state === "branched") return "هناك نقطة تتصل بها أكثر من ضلعين. حدود الدرفة يجب أن تكون مسارًا واحدًا بلا تفرعات.";
-        if (analysis.state === "disconnected") return "توجد مجموعات خطوط دقيقة غير متصلة. اربطها أولًا قبل اعتماد الشكل.";
-        if (analysis.state === "invalid") return "الخطوط الحالية لا تكوّن مسارًا بسيطًا. راجع نقاط الاتصال ثم حاول مجددًا.";
-        return "ابدأ بإضافة خطوط بمقاسات حقيقية. عند إغلاق الحدود سيتعرف النظام على الشكل تلقائيًا.";
+        if (analysis.state === "branched") return "هناك نقطة تتصل بها أكثر من قطعتين. حدود الدرفة يجب أن تكون مسارًا واحدًا بلا تفرعات.";
+        if (analysis.state === "disconnected") return "توجد مجموعات مقاطع دقيقة غير متصلة. اربطها أولًا قبل اعتماد الشكل.";
+        if (analysis.state === "invalid") return "المقاطع الحالية لا تكوّن مسارًا بسيطًا. راجع نقاط الاتصال ثم حاول مجددًا.";
+        return "ابدأ بإضافة خطوط بمقاسات حقيقية، ثم حوّل أي ضلع إلى قوس عند الحاجة. عند إغلاق الحدود سيتعرف النظام على الشكل تلقائيًا.";
     }
 
     function renderPanel(controller) {
         const analysis = analyze(controller);
         controller.lastAnalysis = stateCopy(analysis);
         const [badgeText, badgeClass] = labelFor(analysis);
-        controller.card.classList.toggle("is-visible", analysis.exactLineCount > 0);
+        controller.card.classList.toggle("is-visible", analysis.exactSegmentCount > 0);
         controller.badge.className = `dco-exact-shape-badge${badgeClass ? ` ${badgeClass}` : ""}`;
         controller.badge.textContent = badgeText;
         controller.status.innerHTML = statusText(controller, analysis);
-        controller.linesValue.textContent = String(analysis.exactLineCount);
-        controller.perimeterValue.textContent = analysis.exactLineCount ? `${lineModel.rounded(analysis.perimeterCm, 2)} سم` : "—";
-        controller.areaValue.textContent = analysis.closed ? `${lineModel.rounded(analysis.areaCm2 / 10000, 3)} م²` : "—";
+        controller.linesValue.textContent = analysis.exactArcCount
+            ? `${analysis.exactSegmentCount} · ⌒${analysis.exactArcCount}`
+            : String(analysis.exactSegmentCount);
+        controller.perimeterValue.textContent = analysis.exactSegmentCount ? `${lineModel.rounded(analysis.perimeterCm, 2)} سم` : "—";
+        controller.areaValue.textContent = analysis.closed
+            ? `${analysis.areaExact ? "" : "≈ "}${lineModel.rounded(analysis.areaCm2 / 10000, 3)} م²`
+            : "—";
         controller.closeButton.hidden = !analysis.canAutoClose;
 
         const existingForeign = Boolean(
@@ -115,7 +123,12 @@
             && !chainModel.isGeneratedGeometry(controller.row.special_shape_geometry_json)
         );
         controller.note.className = "dco-exact-shape-note";
-        if (existingForeign && analysis.geometryValid) {
+        if (analysis.state === "exact-closed-curved") {
+            controller.note.classList.add("is-curve");
+            controller.note.textContent = existingForeign
+                ? "يوجد مسار هندسي دقيق محفوظ من مصدر آخر؛ أُبقيه كما هو. القوس الحالي محفوظ بدقة داخل الرسم ولن يُحوّل إلى Polygon."
+                : "القوس محفوظ بمعادلة دائرة حقيقية ونصف قطر بالسنتيمتر. لا يتم تحويل المسار المنحني إلى Polygon أو DXF قديم؛ دعم DXF ARC يأتي في المرحلة التالية.";
+        } else if (existingForeign && analysis.geometryValid) {
             controller.note.classList.add("is-warning");
             controller.note.textContent = "يوجد شكل هندسي دقيق محفوظ من مصدر آخر؛ لن يستبدله النظام تلقائيًا عند حفظ رسم الخطوط.";
         } else if (analysis.geometryValid) {
@@ -123,9 +136,9 @@
             controller.note.textContent = "جاهز: حفظ الرسم سيحفظ نفس الحدود كـ Polygon دقيق بالسنتيمتر.";
         } else if (chainModel.isGeneratedGeometry(controller.row.special_shape_geometry_json)) {
             controller.note.classList.add("is-warning");
-            controller.note.textContent = "الشكل الدقيق السابق مولّد من هذه الخطوط. إذا حفظت المسار وهو غير صالح سيُزال المسار الدقيق القديم كي لا يبقى DXF قديمًا.";
+            controller.note.textContent = "الشكل الدقيق السابق مولّد من هذه المقاطع. إذا حفظت المسار وهو غير صالح أو أصبح منحنيًا سيُزال المسار القديم كي لا يبقى DXF لا يطابق الرسم.";
         } else {
-            controller.note.textContent = "التحويل الهندسي لا يعتمد على شكل الشاشة؛ يعتمد على إحداثيات CM المخزنة في الخطوط الدقيقة.";
+            controller.note.textContent = "التحليل الهندسي لا يعتمد على شكل الشاشة؛ يعتمد على إحداثيات CM وبيانات الأقواس الدقيقة المخزنة.";
         }
         renderOverlay(controller, analysis);
         return analysis;
@@ -240,7 +253,9 @@
             row.special_shape_geometry_json = "";
             controller.frm.dirty();
             if (window.frappe) frappe.show_alert({
-                message: "أُزيل المسار الهندسي الدقيق السابق لأن حدود الخطوط المحفوظة لم تعد مغلقة وصالحة.",
+                message: analysis.hasCurves
+                    ? "أُزيل Polygon السابق لأن الحدود أصبحت تحتوي قوسًا دائريًا دقيقًا. لن يبقى DXF مستقيم قديم لا يطابق الرسم."
+                    : "أُزيل المسار الهندسي الدقيق السابق لأن الحدود المحفوظة لم تعد مغلقة وصالحة.",
                 indicator: "orange",
             }, 6);
         }
@@ -252,8 +267,8 @@
             <div class="dco-exact-shape-body">
                 <div class="dco-exact-shape-status"></div>
                 <div class="dco-exact-shape-stats">
-                    <div class="dco-exact-shape-stat"><b data-shape-lines>0</b><span>أضلاع دقيقة</span></div>
-                    <div class="dco-exact-shape-stat"><b data-shape-perimeter>—</b><span>المحيط</span></div>
+                    <div class="dco-exact-shape-stat"><b data-shape-lines>0</b><span>مقاطع دقيقة</span></div>
+                    <div class="dco-exact-shape-stat"><b data-shape-perimeter>—</b><span>المحيط الحقيقي</span></div>
                     <div class="dco-exact-shape-stat"><b data-shape-area>—</b><span>المساحة</span></div>
                 </div>
                 <button type="button" class="dco-exact-shape-action" data-shape-auto-close hidden>إغلاق المسار بخط دقيق</button>
