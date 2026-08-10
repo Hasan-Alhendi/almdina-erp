@@ -23,6 +23,22 @@
 		return window.AlmdinaPermissions || null;
 	}
 
+	function capture(frm) {
+		const context = window.AlmdinaDocumentContext;
+		if (context && typeof context.capture === "function") {
+			return context.capture(frm);
+		}
+		return `${frm.doctype || ""}::${frm.doc && frm.doc.name || "__new__"}`;
+	}
+
+	function isCurrent(frm, identity) {
+		const context = window.AlmdinaDocumentContext;
+		if (context && typeof context.isCurrent === "function") {
+			return context.isCurrent(frm, identity);
+		}
+		return Boolean(window.cur_frm === frm && capture(frm) === identity);
+	}
+
 	function canCapability(frm, capability) {
 		const context = permissions();
 		return Boolean(
@@ -80,6 +96,7 @@
 	}
 
 	function getCachedApprovedPlan(frm) {
+		if (frm.__almdina_approved_plan_order !== frm.doc.name) return null;
 		const cached = frm.__almdina_approved_plan_snapshot;
 		if (cached && typeof cached === "object") return cached;
 		return null;
@@ -204,34 +221,56 @@
 	function ensureApprovedPlanLoaded(frm) {
 		if (!hasApprovedPlan(frm)) {
 			frm.__almdina_approved_plan_snapshot = null;
+			frm.__almdina_approved_plan_order = null;
 			return Promise.resolve(null);
 		}
+		const identity = capture(frm);
+		const orderName = frm.doc.name;
+		const approvedPlan = frm.doc.approved_plan;
 		const cached = getCachedApprovedPlan(frm);
 		if (cached) return Promise.resolve(cached);
-		if (frm.__almdina_approved_plan_loading) {
+		if (
+			frm.__almdina_approved_plan_loading
+			&& isCurrent(frm, frm.__almdina_approved_plan_context)
+		) {
 			return frm.__almdina_approved_plan_loading;
 		}
 
-		frm.__almdina_approved_plan_loading = frappe
-			.call({
+		const loading = Promise.resolve(
+			frappe.call({
 				method: "almdina_erp.almdina_erp.api.get_approved_cutting_plan_snapshot",
-				args: { order_name: frm.doc.name },
+				args: { order_name: orderName },
 			})
+		)
 			.then((response) => {
+				if (
+					!isCurrent(frm, identity)
+					|| frm.doc.name !== orderName
+					|| frm.doc.approved_plan !== approvedPlan
+				) return null;
 				const payload = (response && response.message) || {};
 				const snapshot = parseJsonField(payload.snapshot_json);
 				frm.__almdina_approved_plan_snapshot = snapshot;
+				frm.__almdina_approved_plan_order = orderName;
 				return snapshot;
 			})
 			.catch(() => {
-				frm.__almdina_approved_plan_snapshot = null;
+				if (isCurrent(frm, identity)) {
+					frm.__almdina_approved_plan_snapshot = null;
+					frm.__almdina_approved_plan_order = null;
+				}
 				return null;
 			})
 			.finally(() => {
-				frm.__almdina_approved_plan_loading = null;
+				if (frm.__almdina_approved_plan_loading === loading) {
+					frm.__almdina_approved_plan_loading = null;
+					frm.__almdina_approved_plan_context = null;
+				}
 			});
 
-		return frm.__almdina_approved_plan_loading;
+		frm.__almdina_approved_plan_context = identity;
+		frm.__almdina_approved_plan_loading = loading;
+		return loading;
 	}
 
 	function renderDualTabs(frm) {
@@ -262,8 +301,9 @@
 		}
 
 		if (activeTab === "Approved" && hasApprovedPlan(frm) && !getCachedApprovedPlan(frm)) {
+			const identity = capture(frm);
 			ensureApprovedPlanLoaded(frm).then(() => {
-				if (frm.__almdina_active_plan_tab === "Approved") {
+				if (isCurrent(frm, identity) && frm.__almdina_active_plan_tab === "Approved") {
 					renderDualTabs(frm);
 				}
 			});
@@ -300,6 +340,7 @@
 		visibleTabs,
 		defaultTab,
 		getPlanForTab,
+		ensureApprovedPlanLoaded,
 		renderDualTabs,
 		printActivePlan,
 		afterRender(frm) {
@@ -314,6 +355,7 @@
 	frappe.ui.form.on("Door Cutting Order", {
 		refresh(frm) {
 			frm.__almdina_approved_plan_snapshot = null;
+			frm.__almdina_approved_plan_order = null;
 			if (shouldShowPlanTabs(frm)) {
 				setTimeout(() => renderDualTabs(frm), 0);
 			}

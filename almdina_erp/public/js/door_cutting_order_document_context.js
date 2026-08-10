@@ -11,6 +11,22 @@
         "plan_controls_intro",
         "cutting_plan_html",
     ]);
+    const TIMER_FIELDS = Object.freeze([
+        "_dco_calc_timer",
+        "__almdinaPlanSurfaceTimer",
+    ]);
+    const TIMER_MAP_FIELDS = Object.freeze([
+        "_dco_fast_trigger_timers",
+        "_dco_piece_type_trigger_timers",
+    ]);
+    const OBSERVER_FIELDS = Object.freeze([
+        "_dcoToolbarObserver",
+        "__almdina_financial_observer",
+        "__almdina_cost_actions_observer",
+        "__dcoSimplePlanControlsObserver",
+        "__dcoMobileCardsObserver",
+        "_almdina_secure_dxf_observer",
+    ]);
 
     function formIdentity(frm) {
         const doc = frm && frm.doc;
@@ -21,15 +37,40 @@
     }
 
     function capture(frm) {
-        return formIdentity(frm);
+        const identity = formIdentity(frm);
+        if (!identity) return null;
+        return Object.freeze({
+            identity,
+            generation: Number(frm._almdinaDocumentContextGeneration || 0),
+        });
     }
 
-    function isCurrent(frm, identity) {
+    function tokenIdentity(token) {
+        if (typeof token === "string") return token;
+        return token && typeof token === "object" ? String(token.identity || "") : "";
+    }
+
+    function tokenGeneration(token) {
+        if (!token || typeof token !== "object") return null;
+        const generation = Number(token.generation);
+        return Number.isFinite(generation) ? generation : null;
+    }
+
+    function isCurrent(frm, token) {
+        const identity = tokenIdentity(token);
         if (!identity || formIdentity(frm) !== identity) return false;
+
+        const generation = tokenGeneration(token);
+        if (
+            generation !== null
+            && Number(frm._almdinaDocumentContextGeneration || 0) !== generation
+        ) {
+            return false;
+        }
 
         const activeForm = window.cur_frm;
         if (!activeForm) return true;
-        return activeForm === frm || formIdentity(activeForm) === identity;
+        return activeForm === frm;
     }
 
     function fieldWrapper(frm, fieldname) {
@@ -61,11 +102,38 @@
         HTML_FIELDS.forEach(fieldname => clearWrapper(fieldWrapper(frm, fieldname)));
     }
 
-    function resetDocumentState(frm) {
-        if (frm._dco_calc_timer) {
-            window.clearTimeout(frm._dco_calc_timer);
-            frm._dco_calc_timer = null;
+    function clearTimer(frm, fieldname) {
+        const timer = frm[fieldname];
+        if (!timer) return;
+        window.clearTimeout(timer);
+        frm[fieldname] = null;
+    }
+
+    function clearTimerMap(frm, fieldname) {
+        const timers = frm[fieldname];
+        if (!timers || typeof timers !== "object") return;
+        Object.values(timers).forEach(timer => {
+            if (timer) window.clearTimeout(timer);
+        });
+        frm[fieldname] = {};
+    }
+
+    function disconnectObserver(frm, fieldname) {
+        const observer = frm[fieldname];
+        if (observer && typeof observer.disconnect === "function") {
+            observer.disconnect();
         }
+        frm[fieldname] = null;
+    }
+
+    function cancelDocumentEffects(frm) {
+        TIMER_FIELDS.forEach(fieldname => clearTimer(frm, fieldname));
+        TIMER_MAP_FIELDS.forEach(fieldname => clearTimerMap(frm, fieldname));
+        OBSERVER_FIELDS.forEach(fieldname => disconnectObserver(frm, fieldname));
+    }
+
+    function resetDocumentState(frm) {
+        cancelDocumentEffects(frm);
         frm._dco_calc_version = Number(frm._dco_calc_version || 0) + 1;
 
         frm._dco_selected_piece_rows = new Set();
@@ -75,6 +143,10 @@
         frm._dco_plan_recalculation_running = false;
         frm._dcoTextBoardPlanBusy = false;
         frm.__almdina_active_plan_tab = null;
+        frm.__almdina_approved_plan_snapshot = null;
+        frm.__almdina_approved_plan_order = null;
+        frm.__almdina_approved_plan_loading = null;
+        frm.__almdina_approved_plan_context = null;
         frm.__almdina_stage_type = null;
         frm.__almdina_actor_holds_stage_role = false;
         frm.__almdina_stage_operational_role = null;
@@ -90,6 +162,9 @@
         }
 
         frm._almdinaDocumentContextIdentity = identity;
+        frm._almdinaDocumentContextGeneration = (
+            Number(frm._almdinaDocumentContextGeneration || 0) + 1
+        );
         resetDocumentState(frm);
         clearDocumentHtml(frm);
         return true;

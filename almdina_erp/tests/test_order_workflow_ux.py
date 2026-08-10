@@ -73,6 +73,9 @@ def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_ac
     assert "max-height:none!important" in source
     assert "overflow:visible!important" in source
     assert "MutationObserver" in source
+    assert "removeEmptyGroups" not in source
+    assert '".custom-actions > button,.custom-actions > a"' in source
+    assert 'ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"])' in source
 
 
 def test_all_new_ux_layers_are_loaded_in_the_required_order():

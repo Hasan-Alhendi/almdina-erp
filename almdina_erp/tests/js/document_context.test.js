@@ -12,6 +12,7 @@ const source = fs.readFileSync(
 
 const handlers = {};
 const clearedTimers = [];
+let disconnectedObservers = 0;
 
 function htmlWrapper(content) {
     return {
@@ -39,6 +40,13 @@ function form(name) {
             fields.map(fieldname => [fieldname, { $wrapper: htmlWrapper(`old:${fieldname}`) }])
         ),
         _dco_calc_timer: 77,
+        __almdinaPlanSurfaceTimer: 88,
+        _dco_fast_trigger_timers: { width: 99 },
+        __almdina_financial_observer: {
+            disconnect() {
+                disconnectedObservers += 1;
+            },
+        },
         _dco_calc_version: 4,
         _dco_selected_piece_rows: new Set(["ROW-OLD"]),
         _dco_edge_color_map: { Old: "red" },
@@ -84,10 +92,18 @@ vm.runInContext(source, context, { filename: "door_cutting_order_document_contex
 const frm = form("DCO-2026-00001");
 fakeWindow.cur_frm = frm;
 handlers.before_load(frm);
+const firstVisit = fakeWindow.AlmdinaDocumentContext.capture(frm);
 
 assert.equal(frm._almdinaDocumentContextIdentity, "Door Cutting Order::DCO-2026-00001");
-assert.deepEqual(clearedTimers, [77]);
+assert.equal(frm._almdinaDocumentContextGeneration, 1);
+assert.equal(firstVisit.identity, "Door Cutting Order::DCO-2026-00001");
+assert.equal(firstVisit.generation, 1);
+assert.deepEqual(clearedTimers, [77, 88, 99]);
+assert.equal(disconnectedObservers, 1);
 assert.equal(frm._dco_calc_timer, null);
+assert.equal(frm.__almdinaPlanSurfaceTimer, null);
+assert.deepEqual(Object.keys(frm._dco_fast_trigger_timers), []);
+assert.equal(frm.__almdina_financial_observer, null);
 assert.equal(frm._dco_calc_version, 5);
 assert.equal(frm._dco_selected_piece_rows.size, 0);
 assert.deepEqual(Object.keys(frm._dco_edge_color_map), []);
@@ -119,8 +135,10 @@ frm.doc.name = "DCO-2026-00002";
 frm._dco_selected_piece_rows.add("ROW-FROM-FIRST-ORDER");
 frm._dco_piece_type_restore_token = "first-order-token";
 handlers.onload(frm);
+const secondVisit = fakeWindow.AlmdinaDocumentContext.capture(frm);
 
 assert.equal(frm._almdinaDocumentContextIdentity, "Door Cutting Order::DCO-2026-00002");
+assert.equal(frm._almdinaDocumentContextGeneration, 2);
 assert.equal(frm._dco_selected_piece_rows.size, 0);
 assert.equal(frm._dco_piece_type_restore_token, null);
 Object.values(frm.fields_dict).forEach(field => {
@@ -136,5 +154,24 @@ assert.equal(
     fakeWindow.AlmdinaDocumentContext.isCurrent(frm, "Door Cutting Order::DCO-2026-00002"),
     true
 );
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, firstVisit), false);
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, secondVisit), true);
+
+// Returning A -> B -> A creates a new visit generation. An old response from
+// the first A visit must never become current merely because the name matches.
+frm.doc.name = "DCO-2026-00001";
+handlers.before_load(frm);
+const thirdVisit = fakeWindow.AlmdinaDocumentContext.capture(frm);
+assert.equal(thirdVisit.identity, firstVisit.identity);
+assert.notEqual(thirdVisit.generation, firstVisit.generation);
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, firstVisit), false);
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, thirdVisit), true);
+
+// A detached Form for the same order is stale even when its name and local
+// generation happen to match the active Form.
+const detached = form("DCO-2026-00001");
+detached._almdinaDocumentContextGeneration = thirdVisit.generation;
+const detachedVisit = fakeWindow.AlmdinaDocumentContext.capture(detached);
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(detached, detachedVisit), false);
 
 console.log("Door cutting order document-context simulation passed");
