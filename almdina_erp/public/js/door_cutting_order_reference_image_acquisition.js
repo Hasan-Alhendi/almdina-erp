@@ -39,16 +39,33 @@
     function pickImageFile() {
         return new Promise(resolve => {
             const input = document.createElement("input");
+            let settled = false;
+            let focusTimer = null;
+            const finish = file => {
+                if (settled) return;
+                settled = true;
+                if (focusTimer) window.clearTimeout(focusTimer);
+                window.removeEventListener("focus", handleWindowFocus);
+                input.remove();
+                resolve(file || null);
+            };
+            const handleWindowFocus = () => {
+                focusTimer = window.setTimeout(() => {
+                    const file = input.files && input.files[0] || null;
+                    if (file) finish(file);
+                    else finish(null);
+                }, 250);
+            };
             input.type = "file";
             input.accept = ALLOWED_TYPES.join(",");
             input.style.position = "fixed";
             input.style.left = "-10000px";
             input.style.top = "-10000px";
             input.addEventListener("change", () => {
-                const file = input.files && input.files[0] || null;
-                input.remove();
-                resolve(file);
+                finish(input.files && input.files[0] || null);
             }, { once: true });
+            input.addEventListener("cancel", () => finish(null), { once: true });
+            window.addEventListener("focus", handleWindowFocus, { once: true });
             document.body.appendChild(input);
             input.click();
         });
