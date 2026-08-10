@@ -32,6 +32,10 @@ for (const item of catalog.all()) {
         points[points.length - 1],
         `${item.key} should be closed so it is immediately useful as a door outline`
     );
+    for (const point of points) {
+        assert.ok(point[0] >= 0 && point[0] <= catalog.CANVAS.width, `${item.key} X should stay inside canvas`);
+        assert.ok(point[1] >= 0 && point[1] <= catalog.CANVAS.height, `${item.key} Y should stay inside canvas`);
+    }
 }
 
 assert.ok(engine.templatePoints("u-bottom").length >= 8);
