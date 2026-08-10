@@ -15,8 +15,15 @@
             *{box-sizing:border-box}
             html,body{margin:0;padding:0;background:#fff;color:#172033;direction:rtl;font-family:Tahoma,"Segoe UI",Arial,sans-serif}
             body{font-size:${bodySize};line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
-            .header{display:flex;align-items:flex-start;justify-content:space-between;gap:8mm;padding-bottom:2.2mm;margin-bottom:2.2mm;border-bottom:1.6pt solid #172033}
-            .header h1{margin:0 0 .8mm;font-size:${measurements ? "15.5pt" : "16.5pt"};line-height:1.05;font-weight:900;letter-spacing:-.15pt}
+            .header{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(42mm,.75fr);align-items:start;gap:6mm;padding-bottom:2.2mm;margin-bottom:2.2mm;border-bottom:1.6pt solid #172033}
+            .factory-identity{min-width:0;text-align:right;line-height:1.3}
+            .factory-name{font-size:${measurements ? "13.5pt" : "14.3pt"};font-weight:950;line-height:1.05;margin-bottom:.7mm}
+            .factory-description{font-size:${measurements ? "7pt" : "7.35pt"};font-weight:800;line-height:1.35;color:#394550}
+            .factory-address{margin-top:.65mm;font-size:${measurements ? "6.7pt" : "7pt"};font-weight:650;color:#5d6874}
+            .factory-contacts{display:flex;flex-wrap:wrap;gap:.45mm 2.4mm;margin-top:.55mm;color:#4f5a65;font-size:${measurements ? "6.45pt" : "6.75pt"};font-weight:700}
+            .factory-contacts span{white-space:nowrap}
+            .document-heading{text-align:left;min-width:0}
+            .header h1{margin:0 0 1mm;font-size:${measurements ? "15.5pt" : "16.5pt"};line-height:1.05;font-weight:900;letter-spacing:-.15pt}
             .header-order{text-align:left;white-space:nowrap;font-size:8.2pt;line-height:1.35}
             .muted{color:#65717d;font-size:${measurements ? "6.9pt" : "7.2pt"};line-height:1.35}
             .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
