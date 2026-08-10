@@ -81,6 +81,12 @@
         return html;
     }
 
+    function print_piece_number(value) {
+        const label = String(value || "—").trim();
+        const primary = label.split(".")[0].trim();
+        return primary || "—";
+    }
+
     function render_piece_label(piece) {
         const shape_output = window.AlmdinaShapeOutputContract;
         const exact_special = piece.piece_type === "Special"
@@ -92,7 +98,7 @@
         const clipped = piece.piece_type === "Clipped Corner"
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
             : "";
-        const piece_number = String(piece.label || "—");
+        const piece_number = print_piece_number(piece.label);
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
                 ${special}${clipped}
@@ -316,11 +322,18 @@
         return holder.querySelector(".dco-cutting-plan");
     }
 
+    function printRowSizes(count) {
+        if (count <= 0) return [];
+        if (count <= 6) return [count];
+        if (count === 7) return [4, 3];
+        if (count === 8) return [4, 4];
+        if (count === 9) return [5, 4];
+        return [5, Math.max(0, count - 5)].filter(Boolean);
+    }
+
     function printGridColumns(count) {
-        if (count <= 1) return 1;
-        if (count <= 6) return count;
-        if (count <= 8) return 4;
-        return 5;
+        const rows = printRowSizes(count);
+        return rows.length ? Math.max(...rows) : 1;
     }
 
     function requestedPieceCount(frm) {
@@ -387,8 +400,9 @@
 
     function sizeBoardsForPage(cards, frm, plan) {
         const count = cards.length;
+        const rowSizes = printRowSizes(count);
         const cols = printGridColumns(count);
-        const rows = Math.ceil(count / cols);
+        const rows = rowSizes.length;
         const aspect = Math.max(0.15, boardAspectFromCards(cards, frm, plan));
         const pageGridWidthMm = 281;
         const pageGridHeightMm = 164;
@@ -425,7 +439,7 @@
             card.style.margin = "0";
             card.style.padding = ".4mm";
         });
-        return { cols, rows };
+        return { cols, rows, rowSizes };
     }
 
     function pageChunks(cards) {
@@ -445,11 +459,17 @@
 
         return chunks.map((cards, pageIndex) => {
             const layout = sizeBoardsForPage(cards, frm, plan);
-            const gridCards = cards.map(card => {
-                const title = card.querySelector(".dco-sheet-title");
-                globalBoardIndex += 1;
-                if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${globalBoardIndex}</div>`;
-                return card.outerHTML;
+            let cardOffset = 0;
+            const gridRows = layout.rowSizes.map(rowSize => {
+                const rowCards = cards.slice(cardOffset, cardOffset + rowSize);
+                cardOffset += rowSize;
+                const rowHtml = rowCards.map(card => {
+                    const title = card.querySelector(".dco-sheet-title");
+                    globalBoardIndex += 1;
+                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${globalBoardIndex}</div>`;
+                    return card.outerHTML;
+                }).join("");
+                return `<div class="dco-print-sheets-row">${rowHtml}</div>`;
             }).join("");
             return `<section class="dco-print-page" data-page="${pageIndex + 1}">
                 <header class="dco-print-header">
@@ -460,7 +480,7 @@
                     </div>
                 </header>
                 ${printOrderMetaHtml(frm, plan, totalSheets)}
-                <div class="dco-print-sheets-grid" style="--print-cols:${layout.cols};--print-rows:${layout.rows}">${gridCards}</div>
+                <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
         }).join("");
     }
@@ -534,12 +554,21 @@ html, body {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-content: flex-start;
-    align-items: flex-start;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-content: stretch;
+    align-items: stretch;
     gap: 2.2mm;
     padding-top: .8mm;
+}
+.dco-print-sheets-row {
+    width: 100%;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 2.2mm;
 }
 .dco-sheet-card {
     flex: 0 0 var(--print-card-width, auto);
