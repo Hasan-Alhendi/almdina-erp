@@ -11,22 +11,25 @@
 
     function close(points) {
         if (!points.length) return [];
-        const first = points[0];
-        const last = points[points.length - 1];
-        if (first[0] === last[0] && first[1] === last[1]) return points;
-        return [...points, [first[0], first[1]]];
+        const source = points.map(point => [Number(point[0]), Number(point[1])]);
+        const first = source[0];
+        const last = source[source.length - 1];
+        if (first[0] === last[0] && first[1] === last[1]) return source;
+        return [...source, [first[0], first[1]]];
     }
 
     function rectangle() {
         return close([[250, 150], [750, 150], [750, 500], [250, 500]]);
     }
 
+    // A full sloped side, not a small clipped corner. This distinction is important
+    // because the operator chooses templates by their outside silhouette.
     function slopeLeft() {
-        return close([[340, 150], [750, 150], [750, 500], [250, 500], [250, 250]]);
+        return close([[340, 150], [750, 150], [750, 500], [250, 500]]);
     }
 
     function slopeRight() {
-        return close([[250, 150], [660, 150], [750, 250], [750, 500], [250, 500]]);
+        return close([[250, 150], [660, 150], [750, 500], [250, 500]]);
     }
 
     function clippedTopLeft() {
@@ -45,12 +48,13 @@
         return close([[340, 150], [660, 150], [750, 500], [250, 500]]);
     }
 
+    // L-left means the lower leg is on the left. L-right is its mirror.
     function lBottomLeft() {
-        return close([[250, 150], [750, 150], [750, 500], [500, 500], [500, 330], [250, 330]]);
+        return close([[250, 150], [750, 150], [750, 330], [500, 330], [500, 500], [250, 500]]);
     }
 
     function lBottomRight() {
-        return close([[250, 150], [750, 150], [750, 330], [500, 330], [500, 500], [250, 500]]);
+        return close([[250, 150], [750, 150], [750, 500], [500, 500], [500, 330], [250, 330]]);
     }
 
     function uBottom() {
@@ -119,20 +123,20 @@
     });
 
     const TEMPLATES = Object.freeze([
-        { key: "rectangle", icon: "▭", label: "مستطيل", hint: "شكل أساسي", group: "basic", common: true },
-        { key: "l-bottom-left", icon: "⌞", label: "L يسار", hint: "نقرة سفلية يسار", group: "notch", common: true },
-        { key: "l-bottom-right", icon: "⌟", label: "L يمين", hint: "نقرة سفلية يمين", group: "notch", common: true },
-        { key: "u-bottom", icon: "∪", label: "فتحة U", hint: "فتحة من الأسفل", group: "notch", common: true },
-        { key: "single-slope-left", icon: "◩", label: "ميل يسار", hint: "طرف علوي مائل", group: "angled", common: true },
-        { key: "single-slope-right", icon: "◪", label: "ميل يمين", hint: "طرف علوي مائل", group: "angled", common: true },
-        { key: "clipped-top-left", icon: "⌜", label: "قص يسار", hint: "زاوية علوية مقصوصة", group: "angled", common: false },
-        { key: "clipped-top-right", icon: "⌝", label: "قص يمين", hint: "زاوية علوية مقصوصة", group: "angled", common: false },
-        { key: "double-clipped", icon: "⬡", label: "قصتان علويتان", hint: "زاويتان متماثلتان", group: "angled", common: true },
-        { key: "trapezoid", icon: "▱", label: "شبه منحرف", hint: "ميل من الجهتين", group: "angled", common: false },
-        { key: "step-left", icon: "▟", label: "درجة يسار", hint: "بروز/تراجع جانبي", group: "step", common: true },
-        { key: "step-right", icon: "▙", label: "درجة يمين", hint: "بروز/تراجع جانبي", group: "step", common: true },
-        { key: "arch", icon: "⌒", label: "قوس علوي", hint: "قوس ناعم", group: "curve", common: true },
-        { key: "crown", icon: "♜", label: "تاج علوي", hint: "رأس زخرفي مبسط", group: "curve", common: false },
+        { key: "rectangle", label: "مستطيل", hint: "حدود مستطيلة كاملة", group: "basic", common: true },
+        { key: "l-bottom-left", label: "L يسار", hint: "الرجل السفلية جهة اليسار", group: "notch", common: true },
+        { key: "l-bottom-right", label: "L يمين", hint: "الرجل السفلية جهة اليمين", group: "notch", common: true },
+        { key: "u-bottom", label: "فتحة U", hint: "فتحة مستطيلة من الأسفل", group: "notch", common: true },
+        { key: "single-slope-left", label: "ميل يسار", hint: "الضلع الخارجي الأيسر مائل بالكامل", group: "angled", common: true },
+        { key: "single-slope-right", label: "ميل يمين", hint: "الضلع الخارجي الأيمن مائل بالكامل", group: "angled", common: true },
+        { key: "clipped-top-left", label: "قص علوي يسار", hint: "قص صغير في الزاوية العلوية اليسرى", group: "angled", common: false },
+        { key: "clipped-top-right", label: "قص علوي يمين", hint: "قص صغير في الزاوية العلوية اليمنى", group: "angled", common: false },
+        { key: "double-clipped", label: "قصتان علويتان", hint: "قص متماثل في الزاويتين العلويتين", group: "angled", common: true },
+        { key: "trapezoid", label: "شبه منحرف", hint: "الجانبان مائلان والقمة أضيق", group: "angled", common: false },
+        { key: "step-left", label: "درجة يسار", hint: "درجة داخلية في الضلع الأيسر", group: "step", common: true },
+        { key: "step-right", label: "درجة يمين", hint: "درجة داخلية في الضلع الأيمن", group: "step", common: true },
+        { key: "arch", label: "قوس علوي", hint: "قوس نصف دائري ناعم من الأعلى", group: "curve", common: true },
+        { key: "crown", label: "تاج علوي", hint: "قمة مركزية متعددة الأضلاع", group: "curve", common: false },
     ]);
 
     function resolveKey(key) {
@@ -144,6 +148,14 @@
         const resolved = resolveKey(key);
         const builder = BUILDERS[resolved];
         return builder ? builder().map(point => [Number(point[0]), Number(point[1])]) : [];
+    }
+
+    function pathData(key) {
+        const source = points(key);
+        if (!source.length) return "";
+        return source.map((point, index) =>
+            `${index ? "L" : "M"} ${Number(point[0]).toFixed(1)} ${Number(point[1]).toFixed(1)}`
+        ).join(" ");
     }
 
     function find(key) {
@@ -174,6 +186,7 @@
         ALIASES,
         resolveKey,
         points,
+        pathData,
         find,
         common,
         all,
