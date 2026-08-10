@@ -24,7 +24,8 @@ def test_measurement_toolbar_uses_compact_accessible_icon_actions():
 def test_measurement_toolbar_is_single_row_and_actions_stay_on_physical_left():
     source = _source()
 
-    assert ".dco-fast-entry-toolbar{flex-wrap:nowrap !important" in source
+    assert ".dco-fast-entry-toolbar{" in source
+    assert "flex-wrap:nowrap !important;" in source
     assert ".dco-fast-entry-toolbar>.dco-measurement-table-actions" in source
     assert "order:100;" in source
     assert "direction:ltr;" in source
@@ -32,14 +33,18 @@ def test_measurement_toolbar_is_single_row_and_actions_stay_on_physical_left():
     assert "min-height:42px !important;" in source
 
 
-def test_measurement_toolbar_reduces_visible_help_without_losing_guidance():
+def test_measurement_toolbar_shows_only_measurement_table_title():
     source = _source()
 
-    assert "dco-fast-tip" in source
-    assert "dco-fast-info" in source
-    assert "القشاط: نقرة" in source
-    assert "الأسهم للتنقل بين الحقول" in source
-    assert 'note.textContent = isArabic() ? "🔒 عرض فقط" : "🔒 Read only"' in source
+    assert "جدول قياسات الدرف" in source
+    assert "Door Measurements Table" in source
+    assert 'class="dco-measurement-title"' in source
+    assert ".dco-fast-entry-toolbar>.dco-fast-readonly-note" in source
+    assert ".dco-fast-entry-toolbar>.dco-order-edge-color-badge" in source
+    assert "display:none !important;" in source
+    assert "إدخال سريع:" not in source
+    assert "القشاط: نقرة" not in source
+    assert "الأسهم للتنقل بين الحقول" not in source
 
 
 def test_measurement_toolbar_polish_survives_dynamic_action_rendering():
