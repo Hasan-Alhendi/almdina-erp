@@ -86,24 +86,26 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("print_measurements_table", source)
         self.assertNotIn("export_cutting_plan_dxf", source)
         self.assertNotIn("setup_pieces_excel_ux", source)
-        # Single A4 print: screen header + all sheet boards scaled to one page.
-        self.assertIn("size: A4 portrait", source)
+
+        # Workshop print stays inside the renderer but is now a separate compact
+        # landscape document: up to ten boards per page, preserving board ratio.
+        self.assertIn("size: A4 landscape", source)
+        self.assertIn("MAX_SHEETS_PER_PAGE = 10", source)
         self.assertIn("planRootFromVisibleDom", source)
-        self.assertIn("dco-print-plan-single", source)
-        self.assertIn("layoutPlanForSingleA4", source)
-        self.assertIn("dco-summary-grid", source)
+        self.assertIn("buildPrintPages", source)
+        self.assertIn("boardAspectFromCards", source)
+        self.assertIn("dco-print-sheets-grid", source)
+        self.assertIn("page-break-after: always", source)
         self.assertIn("render_plan_header_cards", source)
         self.assertIn("dco-plan-header-cards", source)
         self.assertIn("رقم الطلب", source)
         self.assertIn("اسم الزبون", source)
-        self.assertIn("تاريخ الطلب", source)
-        self.assertIn("نوع اللوح", source)
-        self.assertIn("لون القشاط", source)
+        self.assertIn("لون اللوح", source)
+        self.assertIn("عدد الألواح", source)
+        self.assertIn("عدد القطع", source)
+        self.assertIn("قياس اللوح", source)
         self.assertIn('round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>', source)
         self.assertNotIn("piece.label)}</b>", source)
-        self.assertNotIn(" سم</span>", source)
-        self.assertNotIn("page-break-after: always", source)
-        self.assertNotIn("print-header", source)
         self.assertNotIn("ERPNext Cutting Plan", source)
 
     def test_modern_modules_own_recalculation_printing_and_dxf(self) -> None:
