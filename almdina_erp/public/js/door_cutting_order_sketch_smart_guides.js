@@ -9,6 +9,98 @@
     }
 
     const GUIDE_COLOR = "#2490ef";
+    const DEFAULT_VERTEX_SNAP_THRESHOLD = 14;
+
+    function clonePoints(points) {
+        return engine.sanitizePoints(points).map(point => [point[0], point[1]]);
+    }
+
+    function samePoint(first, second, epsilon = 0.001) {
+        return Boolean(first && second)
+            && Math.abs(Number(first[0]) - Number(second[0])) <= epsilon
+            && Math.abs(Number(first[1]) - Number(second[1])) <= epsilon;
+    }
+
+    function uniqueClosedPoints(points) {
+        const source = clonePoints(points);
+        if (source.length > 2 && samePoint(source[0], source[source.length - 1])) {
+            return source.slice(0, -1);
+        }
+        return source;
+    }
+
+    function constrainVertexPoint(rawPoint, originalPoint, shiftKey) {
+        const raw = [Number(rawPoint[0]), Number(rawPoint[1])];
+        const original = [Number(originalPoint[0]), Number(originalPoint[1])];
+        if (!shiftKey || !raw.every(Number.isFinite) || !original.every(Number.isFinite)) {
+            return raw;
+        }
+        const dx = raw[0] - original[0];
+        const dy = raw[1] - original[1];
+        return Math.abs(dx) >= Math.abs(dy)
+            ? [raw[0], original[1]]
+            : [original[0], raw[1]];
+    }
+
+    function nearestCandidate(value, candidates, threshold) {
+        let best = null;
+        let bestDistance = Number(threshold);
+        (candidates || []).forEach(candidate => {
+            const numeric = Number(candidate);
+            if (!Number.isFinite(numeric)) return;
+            const distance = Math.abs(numeric - Number(value));
+            if (distance <= bestDistance) {
+                best = numeric;
+                bestDistance = distance;
+            }
+        });
+        return best;
+    }
+
+    function snapTemplateVertex(points, index, rawPoint, options = {}) {
+        const source = uniqueClosedPoints(points);
+        const pointIndex = Math.max(0, Math.min(source.length - 1, Number(index) || 0));
+        const original = source[pointIndex] || [Number(rawPoint[0]), Number(rawPoint[1])];
+        const constrained = constrainVertexPoint(rawPoint, options.originalPoint || original, options.shiftKey);
+        const width = Number(options.width) > 0 ? Number(options.width) : engine.DEFAULT_CANVAS.width;
+        const height = Number(options.height) > 0 ? Number(options.height) : engine.DEFAULT_CANVAS.height;
+        const threshold = Math.max(3, Number(options.threshold) || DEFAULT_VERTEX_SNAP_THRESHOLD);
+        const otherPoints = source.filter((_, pointIndexValue) => pointIndexValue !== pointIndex);
+        const external = engine.sanitizePoints(options.externalAnchors);
+        const xCandidates = [0, width / 2, width];
+        const yCandidates = [0, height / 2, height];
+        [...otherPoints, ...external].forEach(point => {
+            xCandidates.push(point[0]);
+            yCandidates.push(point[1]);
+        });
+
+        const snappedX = nearestCandidate(constrained[0], xCandidates, threshold);
+        const snappedY = nearestCandidate(constrained[1], yCandidates, threshold);
+        const point = [
+            snappedX === null ? constrained[0] : snappedX,
+            snappedY === null ? constrained[1] : snappedY,
+        ];
+        return {
+            point,
+            guides: {
+                x: snappedX,
+                y: snappedY,
+            },
+        };
+    }
+
+    function applyClosedVertex(points, index, point) {
+        const source = clonePoints(points);
+        if (!source.length) return source;
+        const closed = source.length > 2 && samePoint(source[0], source[source.length - 1]);
+        const uniqueCount = closed ? source.length - 1 : source.length;
+        const safeIndex = Math.max(0, Math.min(uniqueCount - 1, Number(index) || 0));
+        source[safeIndex] = [Number(point[0]), Number(point[1])];
+        if (closed && safeIndex === 0) {
+            source[source.length - 1] = source[0].slice();
+        }
+        return source;
+    }
 
     function inferredAxis(state) {
         const draft = state && state.draft;
@@ -65,5 +157,16 @@
         },
         smartGuideMarkup: guideMarkup,
         inferredAxis,
+    });
+
+    window.AlmdinaSketchSmartGuides = Object.freeze({
+        GUIDE_COLOR,
+        DEFAULT_VERTEX_SNAP_THRESHOLD,
+        samePoint,
+        uniqueClosedPoints,
+        constrainVertexPoint,
+        nearestCandidate,
+        snapTemplateVertex,
+        applyClosedVertex,
     });
 })();
