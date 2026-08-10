@@ -55,9 +55,21 @@ def test_permission_refresh_reapplies_both_protected_surfaces() -> None:
     assert "AlmdinaPlanTabsUX" in refresh
     assert "AlmdinaOrderRevisionUX" in refresh
     assert "AlmdinaOrderTabPermissionsUX" in refresh
+    assert "AlmdinaShopFloorOrderUX" in refresh
     assert "permissions.refresh()" in refresh
     assert "applySurfaces(frm)" in refresh
     assert "__almdinaPermissionRefreshPromise" in refresh
+    assert "__almdinaPermissionRefreshContext" in refresh
+
+
+def test_cutting_plan_recovery_bootstrap_is_part_of_the_form_bundle() -> None:
+    hooks = HOOKS.read_text(encoding="utf-8")
+    order_scripts = hooks.split('"Door Cutting Order": [', 1)[1].split("],", 1)[0]
+
+    assert '"public/js/door_cutting_order_plan_surface_bootstrap.js"' in order_scripts
+    assert order_scripts.index("door_cutting_order_plan_tabs_ux.js") < order_scripts.index(
+        "door_cutting_order_plan_surface_bootstrap.js"
+    )
 
 
 def test_order_form_authorization_does_not_depend_on_public_asset_symlinks() -> None:

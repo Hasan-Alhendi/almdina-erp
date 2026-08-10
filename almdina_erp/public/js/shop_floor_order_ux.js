@@ -9,6 +9,26 @@
 		return window.AlmdinaPermissions || null;
 	}
 
+	function documentContext() {
+		return window.AlmdinaDocumentContext || null;
+	}
+
+	function capture(frm) {
+		const context = documentContext();
+		if (context && typeof context.capture === "function") {
+			return context.capture(frm);
+		}
+		return `${frm.doctype || ""}::${frm.doc && frm.doc.name || "__new__"}`;
+	}
+
+	function isCurrent(frm, identity) {
+		const context = documentContext();
+		if (context && typeof context.isCurrent === "function") {
+			return context.isCurrent(frm, identity);
+		}
+		return Boolean(window.cur_frm === frm && capture(frm) === identity);
+	}
+
 	function can(frm, capability) {
 		const context = permissionContext();
 		return Boolean(
@@ -542,13 +562,25 @@
 	function addWorkerStageButtons(frm) {
 		if (frm.is_new() || !frm.doc.current_production_stage) return;
 		if (!["start_assigned_stage", "handoff_assigned_stage", "reassign_worker"].some((capability) => can(frm, capability))) return;
+		if (
+			frm.__almdinaProductionActionsPromise
+			&& isCurrent(frm, frm.__almdinaProductionActionsContext)
+		) {
+			return frm.__almdinaProductionActionsPromise;
+		}
+		const identity = capture(frm);
 		const documentName = frm.doc.name;
 		const stageName = frm.doc.current_production_stage;
-		frappe.call({
+		const actionPromise = frappe.call({
 			method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
 			args: { order_name: documentName },
 		}).then((response) => {
-			if (!frm.doc || frm.doc.name !== documentName || frm.doc.current_production_stage !== stageName) return;
+			if (
+				!isCurrent(frm, identity)
+				|| !frm.doc
+				|| frm.doc.name !== documentName
+				|| frm.doc.current_production_stage !== stageName
+			) return;
 			const stage = response.message || {};
 			frm.__almdinaProductionRouteName = frm.doc.production_path;
 			frm.__almdinaProductionRouteSteps = Array.isArray(stage.route_stages) ? stage.route_stages : [];
@@ -579,7 +611,19 @@
 			frm.add_custom_button(__("إنهاء وإرسال"), () => {
 				openHandoffDialog(frm, stageName);
 			}, PRODUCTION_ACTION_GROUP);
+		}).catch((error) => {
+			if (isCurrent(frm, identity)) {
+				console.error("Failed to load production actions", error);
+			}
+		}).finally(() => {
+			if (frm.__almdinaProductionActionsPromise === actionPromise) {
+				frm.__almdinaProductionActionsPromise = null;
+				frm.__almdinaProductionActionsContext = null;
+			}
 		});
+		frm.__almdinaProductionActionsContext = identity;
+		frm.__almdinaProductionActionsPromise = actionPromise;
+		return actionPromise;
 	}
 
 	function removeProductionButtons(frm) {
@@ -595,15 +639,21 @@
 		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
 	}
 
+	function reconcileProductionActions(frm) {
+		if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return false;
+		removeProductionButtons(frm);
+		addDispatchButton(frm);
+		addDeliveryButtons(frm);
+		addWorkerStageButtons(frm);
+		return true;
+	}
+
 	frappe.ui.form.on("Door Cutting Order", {
 		refresh(frm) {
 			applyShopFloorPresentation(frm);
 			renderTrackingStrip(frm);
-			removeProductionButtons(frm);
-			addDispatchButton(frm);
-			addDeliveryButtons(frm);
+			reconcileProductionActions(frm);
 			removeDrawingDxfToolbarButtons(frm);
-			addWorkerStageButtons(frm);
 		},
 	});
 
@@ -611,9 +661,23 @@
 		const frm = window.cur_frm;
 		if (frm && frm.doctype === "Door Cutting Order") {
 			applyShopFloorPresentation(frm);
+			renderTrackingStrip(frm);
+			reconcileProductionActions(frm);
 		}
 	});
 
 	frappe.almdina = frappe.almdina || {};
 	frappe.almdina.upload_production_dxf = uploadDrawingDxf;
+	window.AlmdinaShopFloorOrderUX = Object.freeze({
+		applyShopFloorPresentation,
+		reconcileProductionActions,
+		renderTrackingStrip,
+	});
+
+	window.setTimeout(() => {
+		const frm = window.cur_frm;
+		if (frm && frm.doctype === "Door Cutting Order") {
+			reconcileProductionActions(frm);
+		}
+	}, 0);
 })();

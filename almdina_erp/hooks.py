@@ -84,6 +84,7 @@ doctype_js = {
         "public/js/door_cutting_order_plan_controls_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_plan_tabs_ux.js",
+        "public/js/door_cutting_order_plan_surface_bootstrap.js",
         "public/js/door_cutting_order_tab_permissions_ux.js",
         "public/js/door_cutting_order_permission_refresh_ux.js",
         "public/js/door_cutting_order_drawing_plan_ux.js",

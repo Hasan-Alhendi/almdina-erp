@@ -51,6 +51,8 @@ class TestDocumentContextUxContract(unittest.TestCase):
             self.assertIn(f'"{fieldname}"', source)
 
         self.assertIn("frm._almdinaDocumentContextIdentity === identity", source)
+        self.assertIn("_almdinaDocumentContextGeneration", source)
+        self.assertIn("return activeForm === frm", source)
         self.assertIn("clearDocumentHtml(frm)", source)
         self.assertIn("resetDocumentState(frm)", source)
         self.assertIn("before_load(frm) { synchronize(frm); }", source)
@@ -59,13 +61,17 @@ class TestDocumentContextUxContract(unittest.TestCase):
     def test_identity_transition_invalidates_document_scoped_state(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
 
-        self.assertIn("window.clearTimeout(frm._dco_calc_timer)", source)
+        self.assertIn('"_dco_calc_timer"', source)
+        self.assertIn("window.clearTimeout(timer)", source)
         self.assertIn("frm._dco_calc_version =", source)
         self.assertIn("frm._dco_selected_piece_rows = new Set()", source)
         self.assertIn("frm._dco_edge_color_map = {}", source)
         self.assertIn("frm._dco_piece_type_restore_token = null", source)
         self.assertIn("frm.__almdina_active_plan_tab = null", source)
         self.assertIn("frm.__almdina_stage_type = null", source)
+        self.assertIn("frm.__almdinaCostSnapshotPromise = null", source)
+        self.assertIn("frm.__almdinaPermissionRefreshPromise = null", source)
+        self.assertIn("frm.__almdinaProductionActionsPromise = null", source)
         self.assertIn("delete frm._almdina_factory_defaults_loaded", source)
 
     def test_defaults_ignore_responses_captured_for_another_order(self) -> None:

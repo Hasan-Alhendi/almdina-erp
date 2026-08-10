@@ -111,11 +111,14 @@ async function flushPromises() {
     };
     fakeWindow.cur_frm = frm;
 
-    // The defaults response belongs to the first order and must not update the
-    // same Form instance after navigation changes its document identity.
+    // The defaults response belongs to the first visit and must not update the
+    // same Form instance after an A -> B -> A navigation cycle. Comparing only
+    // the document name would incorrectly accept this stale response.
     trigger("onload", frm);
     assert.equal(calls.length, 1);
     frm.doc.name = "DCO-2026-00002";
+    fakeWindow.AlmdinaDocumentContext.synchronize(frm);
+    frm.doc.name = "DCO-2026-00001";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
     calls[0].resolve({ message: { kerf_mm: 9 } });
     await flushPromises();

@@ -305,6 +305,10 @@
     function installActionsAfterRender(frm) {
         const wrapper = costWrapper(frm);
         if (!wrapper || !wrapper[0]) return;
+        if (frm.__almdina_cost_actions_observer) {
+            frm.__almdina_cost_actions_observer.disconnect();
+            frm.__almdina_cost_actions_observer = null;
+        }
         if (wrapper.find(".dco-cost-shell").length) {
             installActionPermissions(frm);
             return;
@@ -314,15 +318,25 @@
         const observer = new MutationObserver(() => {
             if (!documentContext().isCurrent(frm, identity)) {
                 observer.disconnect();
+                if (frm.__almdina_cost_actions_observer === observer) {
+                    frm.__almdina_cost_actions_observer = null;
+                }
                 return;
             }
             if (!wrapper.find(".dco-cost-shell").length) return;
             observer.disconnect();
+            if (frm.__almdina_cost_actions_observer === observer) {
+                frm.__almdina_cost_actions_observer = null;
+            }
             installActionPermissions(frm);
         });
         observer.observe(wrapper[0], { childList: true, subtree: true });
+        frm.__almdina_cost_actions_observer = observer;
         setTimeout(() => {
             observer.disconnect();
+            if (frm.__almdina_cost_actions_observer === observer) {
+                frm.__almdina_cost_actions_observer = null;
+            }
             if (documentContext().isCurrent(frm, identity)) {
                 installActionPermissions(frm);
             }
@@ -342,15 +356,32 @@
             return Promise.resolve();
         }
         const context = documentContext();
+        if (
+            frm.__almdinaCostSnapshotPromise
+            && context.isCurrent(frm, frm.__almdinaCostSnapshotContext)
+        ) {
+            return frm.__almdinaCostSnapshotPromise;
+        }
+
         const identity = context.capture(frm);
-        return frappe.call({
+        const orderName = frm.doc.name;
+        const snapshotPromise = frappe.call({
             method: "almdina_erp.almdina_erp.services.cost_permission_service.get_order_cost_snapshot",
-            args: { order_name: frm.doc.name },
+            args: { order_name: orderName },
         }).then((response) => {
             if (!context.isCurrent(frm, identity)) return;
             mergeSnapshot(frm, response.message || {});
             renderAuthorizedCost(frm);
+        }).finally(() => {
+            if (frm.__almdinaCostSnapshotPromise === snapshotPromise) {
+                frm.__almdinaCostSnapshotPromise = null;
+                frm.__almdinaCostSnapshotContext = null;
+            }
         });
+
+        frm.__almdinaCostSnapshotContext = identity;
+        frm.__almdinaCostSnapshotPromise = snapshotPromise;
+        return snapshotPromise;
     }
 
     function apply(frm) {
@@ -365,7 +396,10 @@
         setCostTabVisibility(frm, true);
 
         if (can(frm, "view_costs")) {
+            const context = documentContext();
+            const identity = context.capture(frm);
             loadCostSnapshot(frm).catch((error) => {
+                if (!context.isCurrent(frm, identity)) return;
                 console.error("Failed to load protected cost snapshot", error);
                 scrubCostData(frm);
                 setCostTabVisibility(frm, false);
