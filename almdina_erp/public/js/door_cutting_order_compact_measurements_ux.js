@@ -38,19 +38,89 @@
 
             .dco-fast-entry-toolbar {
                 padding:8px 10px !important;
-                gap:6px 12px !important;
+                gap:7px 12px !important;
                 min-height:44px;
             }
 
             .dco-fast-entry-toolbar .dco-fast-help {
-                flex:1 1 auto;
+                flex:1 0 100%;
                 min-width:0;
                 gap:5px 9px !important;
                 line-height:1.45;
+                padding-bottom:6px;
+                border-bottom:1px solid var(--border-color,#e4e8ec);
             }
 
             .dco-fast-entry-toolbar .dco-help-secondary {
                 color:var(--text-muted,#6c7680);
+            }
+
+            /* Keep table actions as a compact physical-left toolbar in RTL.
+               The help remains on its own row; status/meta stay on the right. */
+            .dco-fast-entry-toolbar > .dco-fast-readonly-note {
+                order:10;
+            }
+
+            .dco-fast-entry-toolbar > .dco-order-edge-color-badge {
+                order:20;
+                margin:0 !important;
+            }
+
+            .dco-fast-entry-toolbar > .dco-measurement-table-actions {
+                order:100;
+                direction:ltr;
+                display:flex;
+                align-items:center;
+                gap:6px !important;
+                width:auto !important;
+                margin:0 !important;
+                flex:0 0 auto;
+            }
+
+            .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button {
+                width:36px !important;
+                min-width:36px !important;
+                height:36px !important;
+                min-height:36px !important;
+                flex:0 0 36px !important;
+                display:inline-flex !important;
+                align-items:center;
+                justify-content:center;
+                padding:0 !important;
+                border:1px solid var(--border-color,#d8dee5) !important;
+                border-radius:9px !important;
+                background:var(--card-bg,var(--fg-color,#fff)) !important;
+                color:var(--text-color,#36414c) !important;
+                box-shadow:0 1px 2px rgba(15,23,42,.04);
+                transition:border-color .14s ease,background .14s ease,box-shadow .14s ease,transform .08s ease;
+            }
+
+            .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:hover {
+                border-color:var(--primary,#2490ef) !important;
+                background:rgba(36,144,239,.06) !important;
+                color:var(--primary,#2490ef) !important;
+                box-shadow:0 3px 9px rgba(15,23,42,.08);
+            }
+
+            .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:active {
+                transform:translateY(1px);
+            }
+
+            .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:focus-visible {
+                outline:2px solid var(--primary,#2490ef);
+                outline-offset:2px;
+            }
+
+            .dco-toolbar-icon-button svg {
+                width:18px;
+                height:18px;
+                display:block;
+                fill:none;
+                stroke:currentColor;
+                stroke-width:1.8;
+                stroke-linecap:round;
+                stroke-linejoin:round;
+                pointer-events:none;
             }
 
             .dco-fast-entry-scroll {
@@ -292,6 +362,8 @@
                 .dco-fast-table .dco-col-edges { width:148px !important; }
                 .dco-fast-table .dco-col-edge-type { width:94px !important; }
                 .dco-fast-entry-toolbar .dco-help-secondary { display:none; }
+                .dco-fast-entry-toolbar > .dco-measurement-table-actions { width:auto !important; }
+                .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button { flex:0 0 36px !important; }
             }
         `;
         document.head.appendChild(style);
@@ -312,6 +384,51 @@
                 <span>Width <kbd>Tab</kbd> Length <kbd>Enter</kbd> new row</span>
                 <span class="dco-arrow-nav-hint"><kbd>← ↑ ↓ →</kbd><span>navigate</span></span>
                 <span class="dco-help-secondary">Edges and rotation toggle in one click</span>`;
+    }
+
+    function toolbarIconSvg(kind) {
+        if (kind === "print") {
+            return `
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M7 8V4h10v4"></path>
+                    <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                    <path d="M7 14h10v6H7z"></path>
+                    <path d="M17.5 11.5h.01"></path>
+                </svg>`;
+        }
+        return `
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M8 3H3v5"></path>
+                <path d="M16 3h5v5"></path>
+                <path d="M21 16v5h-5"></path>
+                <path d="M3 16v5h5"></path>
+            </svg>`;
+    }
+
+    function polishToolbar(root) {
+        const actions = root.querySelector(".dco-measurement-table-actions");
+        if (!actions) return;
+
+        const printButton = actions.querySelector(".dco-print-measurements");
+        if (printButton && printButton.dataset.compactIconReady !== "1") {
+            const label = isArabic() ? "طباعة القياسات" : "Print measurements";
+            printButton.dataset.compactIconReady = "1";
+            printButton.classList.add("dco-toolbar-icon-button");
+            printButton.title = label;
+            printButton.setAttribute("aria-label", label);
+            printButton.innerHTML = toolbarIconSvg("print");
+        }
+
+        const openButton = actions.querySelector(".dco-open-measurements-window");
+        if (openButton && openButton.dataset.compactIconReady !== "1") {
+            const label = isArabic() ? "تكبير جدول الإدخال" : "Expand measurement table";
+            const title = isArabic() ? "فتح جدول الإدخال في نافذة مستقلة" : "Open measurement table in a separate window";
+            openButton.dataset.compactIconReady = "1";
+            openButton.classList.add("dco-toolbar-icon-button");
+            openButton.title = title;
+            openButton.setAttribute("aria-label", label);
+            openButton.innerHTML = toolbarIconSvg("expand");
+        }
     }
 
     function decorateControls(root) {
@@ -350,6 +467,19 @@
         root._dcoCompactObservedBody = tbody;
     }
 
+    function observeToolbar(root) {
+        const toolbar = root.querySelector(".dco-fast-entry-toolbar");
+        if (!toolbar || root._dcoCompactObservedToolbar === toolbar) return;
+        if (root._dcoCompactToolbarObserver) root._dcoCompactToolbarObserver.disconnect();
+
+        const observer = new MutationObserver(() => {
+            requestAnimationFrame(() => polishToolbar(root));
+        });
+        observer.observe(toolbar, { childList:true, subtree:true });
+        root._dcoCompactToolbarObserver = observer;
+        root._dcoCompactObservedToolbar = toolbar;
+    }
+
     function compactTable(frm) {
         installStyles();
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
@@ -365,7 +495,9 @@
 
         compactHelp(root);
         decorateControls(root);
+        polishToolbar(root);
         observeRows(frm, root);
+        observeToolbar(root);
     }
 
     function schedule(frm) {
