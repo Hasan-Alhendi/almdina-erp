@@ -65,6 +65,8 @@ class TestProductionRoutingWorkflowUx(unittest.TestCase):
         self.assertIn("_assert_version", source)
         self.assertIn("ignore_permissions=True", source)
         self.assertIn('group_by="production_path"', source)
+        self.assertIn('{"COUNT": "name", "as": "order_count"}', source)
+        self.assertNotIn('"count(name) as order_count"', source)
         self.assertEqual(source.count('"Production Routing Stage"'), 1)
 
 

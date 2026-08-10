@@ -68,7 +68,10 @@ def list_production_routings() -> list[dict[str, Any]]:
                 "current_production_stage": ["is", "set"],
                 "status": ["not in", ["Delivered", "Cancelled"]],
             },
-            fields=["production_path", "count(name) as order_count"],
+            fields=[
+                "production_path",
+                {"COUNT": "name", "as": "order_count"},
+            ],
             group_by="production_path",
         )
         in_flight_counts = {
