@@ -135,7 +135,7 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("def validate_assigned_drawing_action", action_policy_source)
         self.assertIn("not_assigned_designer", action_policy_source)
 
-        self.assertIn("validate_drawing_approval", approval_source)
+        self.assertIn("require_stage_operational_access", approval_source)
         self.assertIn("Capability.APPROVE_DXF", approval_source)
         self.assertIn("def validate_drawing_approval", approval_policy_source)
         self.assertNotIn("current_assignee", approval_policy_source)

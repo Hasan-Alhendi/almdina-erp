@@ -66,6 +66,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("frm._dco_piece_type_restore_token = null", source)
         self.assertIn("frm.__almdina_active_plan_tab = null", source)
         self.assertIn("frm.__almdina_stage_type = null", source)
+        self.assertIn("frm.__almdina_actor_holds_stage_role = false", source)
         self.assertIn("delete frm._almdina_factory_defaults_loaded", source)
 
     def test_defaults_ignore_responses_captured_for_another_order(self) -> None:

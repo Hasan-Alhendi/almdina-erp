@@ -16,6 +16,9 @@ from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     decide_production_action,
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import ProductionRoute
+from almdina_erp.almdina_erp.domain.orders.stage_operational_access import (
+    decide_stage_scoped_mutation,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     DRAWING_CAPABILITIES,
     PLANNING_CAPABILITIES,
@@ -46,6 +49,8 @@ class ShopFloorQueryPort(Protocol):
     def global_capabilities(self) -> frozenset[str]: ...
 
     def is_admin(self) -> bool: ...
+
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]: ...
 
     def capabilities_for_order(self, order: Any) -> frozenset[str]: ...
 
@@ -295,11 +300,32 @@ def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     return _enrich_stage_rows(repository, stages)
 
 
+def _resolve_operational_role(
+    repository: ShopFloorQueryPort,
+    order: Any,
+    stage: Any | None,
+) -> str | None:
+    if not stage:
+        return None
+    role = str(_value(stage, "operational_role") or "").strip()
+    if role:
+        return role
+    route = _production_route(repository, str(_value(order, "production_path") or ""))
+    stage_type = str(_value(stage, "stage_type") or "").strip()
+    if not route or not stage_type:
+        return None
+    try:
+        return str(route.stage(stage_type).operational_role or "").strip() or None
+    except ValueError:
+        return None
+
+
 def _production_facts(
     repository: ShopFloorQueryPort,
     order: Any,
     stage: Any | None = None,
 ) -> ProductionActionFacts:
+    actor = repository.current_user()
     return ProductionActionFacts(
         order_status=_value(order, "status"),
         production_path=_value(order, "production_path"),
@@ -310,8 +336,11 @@ def _production_facts(
         stage_type=_value(stage, "stage_type") if stage else None,
         stage_status=_value(stage, "status") if stage else None,
         assigned_to=_value(stage, "assigned_to") if stage else None,
-        actor=repository.current_user(),
+        actor=actor,
         drawing_dxf_status=_value(order, "drawing_dxf_status"),
+        operational_role=_resolve_operational_role(repository, order, stage),
+        actor_roles=repository.actor_roles(actor),
+        is_admin=actor == "Administrator",
     )
 
 
@@ -437,6 +466,8 @@ def _active_stage_snapshot(
             "active_stage_status": None,
             "active_stage_type": None,
             "active_stage_assigned_to": None,
+            "active_stage_operational_role": None,
+            "actor_holds_operational_role": False,
             "can_start_stage": False,
             "can_handoff_stage": False,
             "can_reassign_worker": False,
@@ -449,6 +480,13 @@ def _active_stage_snapshot(
 
     stage_status = str(_value(stage, "status") or "")
     stage_type = str(_value(stage, "stage_type") or "")
+    operational_role = _resolve_operational_role(repository, order, stage) or ""
+    actor_holds_role = decide_stage_scoped_mutation(
+        actor_roles=repository.actor_roles(),
+        operational_role=operational_role or None,
+        has_current_stage=True,
+        is_admin=repository.current_user() == "Administrator",
+    )[0]
     production_path = _value(order, "production_path")
     can_handoff_to = None
     route = _production_route(repository, str(production_path or ""))
@@ -483,6 +521,8 @@ def _active_stage_snapshot(
         "active_stage_status": stage_status,
         "active_stage_type": stage_type,
         "active_stage_assigned_to": _value(stage, "assigned_to"),
+        "active_stage_operational_role": operational_role or None,
+        "actor_holds_operational_role": bool(actor_holds_role),
         "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
         "can_handoff_stage": can_handoff,
         "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),

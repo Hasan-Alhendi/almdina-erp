@@ -35,18 +35,24 @@
 		return frm.__almdina_stage_type === "Drawing" || frm.doc.current_department === "رسم";
 	}
 
+	function holdsStageOperationalRole(frm) {
+		return Boolean(frm && frm.__almdina_actor_holds_stage_role);
+	}
+
 	function canUseDrawingOptimizer(frm) {
 		return Boolean(
 			frm &&
 			!frm.is_new() &&
 			can("recalculate_plan", frm) &&
-			isDrawingStage(frm) &&
+			holdsStageOperationalRole(frm) &&
 			!frm.doc.approved_plan
 		);
 	}
 
 	function canEditDrawingOptimizer(frm = null) {
-		return can("edit_optimizer_settings", frm);
+		return can("edit_optimizer_settings", frm) && (
+			!frm || holdsStageOperationalRole(frm) || !frm.doc || !frm.doc.current_production_stage
+		);
 	}
 
 	function canUseDrawingOptimizerInbox(detail, meta) {
@@ -54,10 +60,9 @@
 			detail &&
 			meta &&
 			can("recalculate_plan") &&
-			meta.stageType === "Drawing" &&
+			detail.actor_holds_operational_role &&
 			isAssignedToCurrentUser(detail.current_assignee) &&
-			!detail.approved_plan &&
-			(detail.current_department === "رسم" || detail.status === "At Drawing")
+			!detail.approved_plan
 		);
 	}
 
@@ -71,6 +76,8 @@
 		const requestedStage = frm.doc.current_production_stage;
 		if (!requestedStage) {
 			frm.__almdina_stage_type = null;
+			frm.__almdina_actor_holds_stage_role = false;
+			frm.__almdina_stage_operational_role = null;
 			return Promise.resolve(context.isCurrent(frm, identity));
 		}
 		return frappe
@@ -81,11 +88,18 @@
 			.then((response) => {
 				if (!context.isCurrent(frm, identity)) return false;
 				if (frm.doc.current_production_stage !== requestedStage) return false;
-				frm.__almdina_stage_type = (response.message && response.message.active_stage_type) || null;
+				const message = response.message || {};
+				frm.__almdina_stage_type = message.active_stage_type || null;
+				frm.__almdina_actor_holds_stage_role = Boolean(
+					message.actor_holds_operational_role
+				);
+				frm.__almdina_stage_operational_role =
+					message.active_stage_operational_role || null;
 				return true;
 			})
 			.catch((error) => {
 				console.error("Failed to load production stage type", error);
+				frm.__almdina_actor_holds_stage_role = false;
 				return false;
 			});
 	}

@@ -552,6 +552,9 @@
 			const stage = response.message || {};
 			frm.__almdinaProductionRouteName = frm.doc.production_path;
 			frm.__almdinaProductionRouteSteps = Array.isArray(stage.route_stages) ? stage.route_stages : [];
+			frm.__almdina_stage_type = stage.active_stage_type || null;
+			frm.__almdina_actor_holds_stage_role = Boolean(stage.actor_holds_operational_role);
+			frm.__almdina_stage_operational_role = stage.active_stage_operational_role || null;
 			renderTrackingStrip(frm);
 			const stageStatus = stage.active_stage_status || "";
 			const assignedTo = stage.active_stage_assigned_to || "";

@@ -89,12 +89,32 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         metadata = json.loads(AUDIT_JSON.read_text(encoding="utf-8"))
         controller = AUDIT_JSON.with_suffix(".py").read_text(encoding="utf-8")
         repository = REPOSITORY.read_text(encoding="utf-8")
+        service = SERVICE.read_text(encoding="utf-8")
         self.assertEqual(metadata["permissions"], [])
         self.assertEqual(metadata["allow_rename"], 0)
         self.assertIn("User audit records are immutable", controller)
         self.assertIn("audit_snapshot", repository)
         self.assertNotIn('"temporary_password":', repository)
         self.assertNotIn('"new_password":', repository)
+
+        action_field = next(
+            field for field in metadata["fields"] if field["fieldname"] == "action"
+        )
+        allowed_actions = {
+            option.strip()
+            for option in str(action_field["options"]).split("\n")
+            if option.strip()
+        }
+        self.assertIn("Added to Workforce", allowed_actions)
+        self.assertIn('action="Added to Workforce"', service)
+        for token in (
+            'action="Created"',
+            'action="Identity Updated"',
+            'action="Roles Changed"',
+            'action="Password Reset"',
+        ):
+            action_name = token.split('"')[1]
+            self.assertIn(action_name, allowed_actions)
 
     def test_workspace_and_shared_shell_expose_workforce_by_surface_policy(self) -> None:
         workspace = WORKSPACE.read_text(encoding="utf-8")

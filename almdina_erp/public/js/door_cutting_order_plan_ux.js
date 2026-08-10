@@ -22,19 +22,6 @@
         );
     }
 
-    function atDrawingStage(frm) {
-        return Boolean(
-            frm
-            && frm.doc
-            && (
-                frm.doc.status === "At Drawing"
-                || frm.doc.current_department === "رسم"
-                || frm.doc.production_path === "Drawing"
-                || frm.__almdina_stage_type === "Drawing"
-            )
-        );
-    }
-
     function hasUploadCapability(frm) {
         if (!frm || frm.is_new()) return false;
         return Boolean(frm.doc.production_dxf)
@@ -42,8 +29,12 @@
             : can(frm, "upload_dxf");
     }
 
+    function holdsStageOperationalRole(frm) {
+        return Boolean(frm && frm.__almdina_actor_holds_stage_role);
+    }
+
     function canUploadDxf(frm) {
-        return hasUploadCapability(frm) && atDrawingStage(frm);
+        return hasUploadCapability(frm) && holdsStageOperationalRole(frm);
     }
 
     function canPrintCuttingPlan(frm) {
@@ -51,10 +42,12 @@
     }
 
     function canExportDxf(frm) {
-        if (frappe.almdina && typeof frappe.almdina.can_export_dxf === "function") {
-            return Boolean(frappe.almdina.can_export_dxf(frm));
+        if (!(frappe.almdina && typeof frappe.almdina.can_export_dxf === "function"
+            ? Boolean(frappe.almdina.can_export_dxf(frm))
+            : can(frm, "export_dxf"))) {
+            return false;
         }
-        return can(frm, "export_dxf");
+        return holdsStageOperationalRole(frm);
     }
 
     function num(value, digits = 2) {
@@ -454,9 +447,9 @@
                     ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${replacing ? "استبدال خطة القص DXF" : "رفع خطة قص كملف DXF"}</button>`
                     : ""}
             </div>
-            ${uploadCapability && !atDrawingStage(frm)
+            ${uploadCapability && !holdsStageOperationalRole(frm)
                 ? `<div class="text-muted" style="font-size:12px;margin-top:8px;">${__(
-                    "زر رفع خطة DXF يظهر فقط عندما يكون الطلب في مرحلة الرسم."
+                    "رفع أو استبدال خطة DXF متاح فقط عندما يكون الطلب في مرحلة إنتاج تملك دورها التشغيلي."
                 )}</div>`
                 : ""}
         `;

@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     document_has_capability,
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
+    require_stage_operational_access,
+)
 from almdina_erp.almdina_erp.services.order_edit_policy import (
     assert_order_editable,
     user_can_recalculate_drawing_system_plan,
@@ -119,6 +122,7 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
     del method
     old = None if doc.is_new() else doc.get_doc_before_save()
 
+    optimizer_changed = False
     if not _capability_allowed(doc, Capability.EDIT_OPTIMIZER_SETTINGS):
         changed = _optimizer_changes(doc, old)
         if changed:
@@ -128,13 +132,25 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
                 ).format(", ".join(changed)),
                 frappe.PermissionError,
             )
+    else:
+        optimizer_changed = bool(_optimizer_changes(doc, old))
 
+    drawing_changed = False
     if not _capability_allowed(doc, Capability.EDIT_SPECIAL_DRAWING):
         if _drawing_changed(doc, old):
             frappe.throw(
                 _("لا تملك صلاحية تعديل رسومات الدرف الخاصة."),
                 frappe.PermissionError,
             )
+    else:
+        drawing_changed = _drawing_changed(doc, old)
+
+    # Once the order sits on a production stage, capability alone is not enough:
+    # the actor must also hold that stage's operational role.
+    if (optimizer_changed or drawing_changed) and getattr(
+        doc, "current_production_stage", None
+    ):
+        require_stage_operational_access(doc)
 
 
 def _requested_optimizer_updates(
@@ -173,6 +189,8 @@ def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
     )
+    if getattr(doc, "current_production_stage", None):
+        require_stage_operational_access(doc)
     for fieldname in changed:
         doc.set(fieldname, updates[fieldname])
     return changed
@@ -184,6 +202,12 @@ def _assert_recalculation_state(doc: Any) -> None:
             _("لا يمكن إعادة حساب خطة قص تم اعتمادها. ألغِ الاعتماد أو أنشئ مسار تعديل معتمد أولًا."),
             frappe.ValidationError,
         )
+
+    # On an active production stage, recalculation is a stage-scoped mutation:
+    # capability + current stage operational role.
+    if getattr(doc, "current_production_stage", None):
+        require_stage_operational_access(doc)
+        return
 
     # Drawing-stage planners are intentionally allowed to recalculate through
     # the focused capability without receiving full EDIT_ORDER authority.

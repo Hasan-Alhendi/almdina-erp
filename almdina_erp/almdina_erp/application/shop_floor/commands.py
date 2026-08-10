@@ -59,6 +59,10 @@ class ShopFloorCommandPort(Protocol):
 
     def capabilities_for_order(self, order_name: str) -> frozenset[str]: ...
 
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]: ...
+
+    def is_admin(self, user: str | None = None) -> bool: ...
+
     def lock_order(self, order_name: str) -> None: ...
 
     def lock_stage(self, stage_name: str) -> None: ...
@@ -217,11 +221,13 @@ def _locked_stage_scope(
 
 
 def _facts(
+    repository: ShopFloorCommandPort,
     order: OrderState,
     *,
     stage: StageState | None = None,
     actor: str | None = None,
 ) -> ProductionActionFacts:
+    resolved_actor = actor or None
     return ProductionActionFacts(
         order_status=order.status,
         production_path=order.production_path,
@@ -232,8 +238,11 @@ def _facts(
         stage_type=stage.stage_type if stage else None,
         stage_status=stage.status if stage else None,
         assigned_to=stage.assigned_to if stage else None,
-        actor=actor,
+        actor=resolved_actor,
         drawing_dxf_status=order.drawing_dxf_status,
+        operational_role=stage.operational_role if stage else None,
+        actor_roles=repository.actor_roles(resolved_actor) if resolved_actor else (),
+        is_admin=repository.is_admin(resolved_actor) if resolved_actor else False,
     )
 
 
@@ -248,7 +257,7 @@ def _assert_action_allowed(
     decision = decide_production_action(
         action,
         capabilities=repository.capabilities_for_order(order.name),
-        facts=_facts(order, stage=stage, actor=actor),
+        facts=_facts(repository, order, stage=stage, actor=actor),
     )
     if decision.allowed:
         return
@@ -295,7 +304,14 @@ def assert_order_ready_for_dispatch(order: OrderState) -> None:
     decision = decide_production_action(
         Capability.DISPATCH_ORDER,
         capabilities={Capability.DISPATCH_ORDER},
-        facts=_facts(order),
+        facts=ProductionActionFacts(
+            order_status=order.status,
+            production_path=order.production_path,
+            current_stage_name=order.current_stage,
+            has_cutting_plan=order.has_cutting_plan,
+            plan_needs_recalculation=order.plan_needs_recalculation,
+            drawing_dxf_status=order.drawing_dxf_status,
+        ),
     )
     if not decision.allowed:
         raise ShopFloorCommandError(decision.reason)

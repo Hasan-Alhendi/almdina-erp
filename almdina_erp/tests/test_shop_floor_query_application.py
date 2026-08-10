@@ -63,6 +63,21 @@ class FakeRepository:
     def global_capabilities(self) -> frozenset[str]:
         return frozenset(self.global_grants)
 
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        return tuple(
+            getattr(
+                self,
+                "roles",
+                (
+                    "عامل شريون",
+                    "عامل رسم",
+                    "عامل CNC",
+                    "عامل تقشيط",
+                    "مصمم مخصص",
+                ),
+            )
+        )
+
     def is_admin(self) -> bool:
         return self.admin
 
@@ -154,6 +169,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "stage_type": "Drawing",
                 "status": "Completed",
                 "assigned_to": repository.user,
+                "operational_role": "عامل رسم",
             },
             {
                 "name": "PST-CURRENT",
@@ -161,6 +177,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "stage_type": "Drawing",
                 "status": "In Progress",
                 "assigned_to": repository.user,
+                "operational_role": "عامل رسم",
             },
         ]
         repository.current = {"DCO-1": "PST-CURRENT"}
@@ -262,6 +279,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "status": "In Progress",
                 "stage_type": "Drawing",
                 "assigned_to": repository.user,
+                "operational_role": "عامل رسم",
             }
         }
         repository.snapshots = {
@@ -309,6 +327,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             "status": "In Progress",
             "stage_type": "PlanningDesk",
             "assigned_to": repository.user,
+            "operational_role": "مصمم مخصص",
         }
 
         detail = queries.get_order_detail(repository, "DCO-2")
@@ -332,6 +351,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "status": "Pending",
                 "stage_type": "CNC",
                 "assigned_to": "other@example.com",
+                "operational_role": "عامل CNC",
             }
         }
 
@@ -358,6 +378,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             "status": "Pending",
             "stage_type": "CNC",
             "assigned_to": repository.user,
+            "operational_role": "عامل CNC",
         }
 
         context = queries.get_current_stage_context(repository, "DCO-2")

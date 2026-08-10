@@ -86,13 +86,13 @@ def test_drawing_recalculation_is_capability_driven_not_client_assignment_driven
     )[0]
 
     assert 'can("recalculate_plan", frm)' in block
-    assert "isDrawingStage(frm)" in block
+    assert "holdsStageOperationalRole(frm)" in block
     assert "isAssignedToCurrentUser" not in block
 
-    service = (SERVICES / "shop_floor_dxf_service.py").read_text(encoding="utf-8")
-    server_block = service.split("def _get_recalculation_order", 1)[1].split(
-        "def _validate_and_attach_dxf_file", 1
-    )[0]
-    assert "Capability.RECALCULATE_PLAN" in server_block
-    assert "user_can_recalculate_drawing_system_plan" in server_block
-    assert "validate_assigned_drawing_action" not in server_block
+    plan_service = (SERVICES / "order_plan_permission_service.py").read_text(
+        encoding="utf-8"
+    )
+    assert "Capability.RECALCULATE_PLAN" in plan_service
+    assert "require_stage_operational_access" in plan_service
+    assert "user_can_recalculate_drawing_system_plan" in plan_service
+    assert "validate_assigned_drawing_action" not in plan_service

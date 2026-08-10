@@ -165,19 +165,32 @@
         };
     }
 
+    function holdsStageOperationalRole(frm) {
+        return Boolean(frm && frm.__almdina_actor_holds_stage_role);
+    }
+
     function canCalculate(frm) {
-        return Boolean(
-            frm
-            && !frm.is_new()
-            && !frm.doc.approved_plan
-            && can(frm, "recalculate_plan")
-        );
+        if (
+            !frm
+            || frm.is_new()
+            || frm.doc.approved_plan
+            || !can(frm, "recalculate_plan")
+        ) {
+            return false;
+        }
+        if (frm.doc.current_production_stage) {
+            return holdsStageOperationalRole(frm);
+        }
+        return true;
     }
 
     function recalculationDisabledReason(frm) {
         if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
         if (frm.doc.approved_plan) return __("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
         if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");
+        if (frm.doc.current_production_stage && !holdsStageOperationalRole(frm)) {
+            return __("إعادة الحساب متاحة فقط لمن يملك الدور التشغيلي للمرحلة الحالية.");
+        }
         return "";
     }
 
@@ -236,15 +249,6 @@
         return Boolean(plan && Array.isArray(plan.sheets) && plan.sheets.length);
     }
 
-    function atDrawing(frm) {
-        return Boolean(
-            frm.doc.status === "At Drawing"
-            || frm.doc.current_department === "رسم"
-            || frm.doc.production_path === "Drawing"
-            || frm.__almdina_stage_type === "Drawing"
-        );
-    }
-
     function approvalSource(frm) {
         const requested = frm.__almdina_active_plan_tab === "Custom" ? "Custom" : "System";
         if (
@@ -270,8 +274,8 @@
             frappe.msgprint(__("ليست لديك صلاحية اعتماد خطة القص."));
             return;
         }
-        if (!atDrawing(frm)) {
-            frappe.msgprint(__("اعتماد خطة القص متاح فقط عندما يكون الطلب في مرحلة الرسم."));
+        if (!holdsStageOperationalRole(frm)) {
+            frappe.msgprint(__("اعتماد خطة القص متاح فقط لمن يملك الدور التشغيلي للمرحلة الحالية."));
             return;
         }
         if (!hasApprovalPlan(frm, source)) {
@@ -306,7 +310,7 @@
         const allowed = Boolean(
             can(frm, "approve_dxf")
             && !frm.is_new()
-            && atDrawing(frm)
+            && holdsStageOperationalRole(frm)
             && hasApprovalPlan(frm, source)
             && !(source === "System" && Number(frm.doc.plan_needs_recalculation || 0) === 1)
         );

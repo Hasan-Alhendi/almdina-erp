@@ -36,6 +36,8 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
             "assigned_to": "worker@example.com",
             "actor": "worker@example.com",
             "drawing_dxf_status": "Approved by Drawing",
+            "operational_role": "عامل CNC",
+            "actor_roles": ("عامل CNC",),
         }
         values.update(overrides)
         return ProductionActionFacts(**values)
@@ -138,6 +140,13 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
         )
         self.assertTrue(allowed.allowed)
 
+        missing_role = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(actor_roles=("عامل رسم",)),
+        )
+        self.assertEqual(missing_role.code, "missing_operational_role")
+
     def test_handoff_policy_is_independent_from_drawing_and_dxf_metadata(self) -> None:
         for dxf_status in (None, "Uploaded", "Approved by Drawing"):
             with self.subTest(dxf_status=dxf_status):
@@ -149,6 +158,8 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
                         stage_type="Drawing",
                         stage_status="In Progress",
                         drawing_dxf_status=dxf_status,
+                        operational_role="عامل رسم",
+                        actor_roles=("عامل رسم",),
                     ),
                 )
                 self.assertTrue(decision.allowed)

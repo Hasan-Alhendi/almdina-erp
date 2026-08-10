@@ -76,6 +76,8 @@
         frm._dcoTextBoardPlanBusy = false;
         frm.__almdina_active_plan_tab = null;
         frm.__almdina_stage_type = null;
+        frm.__almdina_actor_holds_stage_role = false;
+        frm.__almdina_stage_operational_role = null;
 
         delete frm._almdina_factory_defaults_loaded;
         delete frm._dco_added_buttons;

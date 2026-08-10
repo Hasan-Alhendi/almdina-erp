@@ -10,18 +10,20 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     DrawingActionState,
     required_upload_capability,
     validate_assigned_drawing_action,
-    validate_drawing_stage_action,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
+    require_stage_operational_access,
+)
 
 MAX_DXF_FILE_SIZE = 10 * 1024 * 1024
 
 _POLICY_MESSAGES = {
-    "not_at_drawing": "رفع/استبدال خطة DXF متاح فقط عندما يكون الطلب في مرحلة الرسم.",
+    "not_at_drawing": "هذا الإجراء متاح فقط عندما يكون الطلب في مرحلة الرسم.",
     "designer_not_assigned": "أسند الطلب إلى مصمم قبل تنفيذ هذا الإجراء.",
     "not_assigned_designer": "فقط المصمم المسند لهذا الطلب يمكنه تنفيذ هذا الإجراء.",
     "plan_already_approved": "الخطة معتمدة ومقفلة ولا يمكن استبدال ملف DXF.",
@@ -53,24 +55,23 @@ def _get_authorized_order(
     *,
     require_unlocked_plan: bool = True,
     require_assigned_designer: bool = True,
+    require_stage_role: bool = False,
 ) -> Any:
     order = shop_floor_gateway.get_order(order_name)
     order.check_permission("read")
     require_document_capability(order, capability)
-    try:
-        state = _drawing_state(order)
-        if require_assigned_designer:
+    if require_stage_role:
+        require_stage_operational_access(order)
+    if require_assigned_designer:
+        try:
             validate_assigned_drawing_action(
-                state,
+                _drawing_state(order),
                 require_unlocked_plan=require_unlocked_plan,
             )
-        else:
-            validate_drawing_stage_action(
-                state,
-                require_unlocked_plan=require_unlocked_plan,
-            )
-    except DrawingActionDenied as error:
-        _throw_policy_error(error)
+        except DrawingActionDenied as error:
+            _throw_policy_error(error)
+    elif require_unlocked_plan and order.approved_plan:
+        _throw_policy_error(DrawingActionDenied("plan_already_approved"))
     return order
 
 
@@ -119,7 +120,13 @@ def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
 
 @frappe.whitelist()
 def mark_dxf_exported(order_name: str) -> dict[str, Any]:
-    order = _get_authorized_order(order_name, Capability.EXPORT_DXF)
+    order = _get_authorized_order(
+        order_name,
+        Capability.EXPORT_DXF,
+        require_assigned_designer=False,
+        require_stage_role=True,
+        require_unlocked_plan=False,
+    )
     current = order.drawing_dxf_status or "None"
     if current in {"None", "Exported"}:
         frappe.db.set_value(
@@ -143,12 +150,13 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     order = shop_floor_gateway.get_order(order_name)
     upload_capability = required_upload_capability(_drawing_state(order))
-    # Upload/replace is capability-gated from the permission matrix and only
-    # blocked by drawing-stage workflow — not by a hardcoded role or assignee.
+    # Upload/replace is capability-gated from the matrix and additionally
+    # restricted to actors who hold the current stage's operational role.
     order = _get_authorized_order(
         order_name,
         upload_capability,
         require_assigned_designer=False,
+        require_stage_role=True,
     )
     replacing_existing_file = bool(order.production_dxf)
     _validate_and_attach_dxf_file(order, file_url)

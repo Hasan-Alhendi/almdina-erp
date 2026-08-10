@@ -298,6 +298,12 @@ def present_order_detail(
         "current_production_stage": _value(order, "current_production_stage"),
         "active_stage_name": stage_snapshot.get("active_stage_name"),
         "active_stage_status": stage_snapshot.get("active_stage_status"),
+        "active_stage_operational_role": stage_snapshot.get(
+            "active_stage_operational_role"
+        ),
+        "actor_holds_operational_role": stage_snapshot.get(
+            "actor_holds_operational_role"
+        ),
         "can_start_stage": stage_snapshot.get("can_start_stage"),
         "can_handoff_stage": stage_snapshot.get("can_handoff_stage"),
         "can_handoff_to": stage_snapshot.get("can_handoff_to"),

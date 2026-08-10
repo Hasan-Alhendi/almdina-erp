@@ -60,7 +60,7 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
 
     assert "Capability.APPROVE_DXF" in approval_service
     assert "require_document_capability" in approval_service
-    assert "validate_drawing_approval" in approval_service
+    assert "require_stage_operational_access" in approval_service
     assert "current_assignee" not in policy
     assert "session_user" not in policy
     assert "approval_warning" in policy

@@ -53,6 +53,12 @@ class FrappeShopFloorQueryRepository:
     def global_capabilities(self) -> frozenset[str]:
         return granted_capabilities(user=self.current_user())
 
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        actor = str(user or self.current_user() or "").strip()
+        if not actor:
+            return ()
+        return tuple(str(role) for role in frappe.get_roles(actor) if role)
+
     def is_admin(self) -> bool:
         return any(
             doctype_has_capability(capability)

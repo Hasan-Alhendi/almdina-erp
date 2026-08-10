@@ -599,17 +599,12 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         };
     }
 
-    function atDrawingStage(detail, meta) {
-        return Boolean(
-            (detail && detail.status === "At Drawing")
-            || (detail && detail.current_department === "رسم")
-            || (meta && meta.stageType === "Drawing")
-            || (detail && detail.current_stage_type === "Drawing")
-        );
+    function holdsStageOperationalRole(detail) {
+        return Boolean(detail && detail.actor_holds_operational_role);
     }
 
     function canUploadDxf(detail, meta) {
-        if (!detail || !atDrawingStage(detail, meta)) return false;
+        if (!detail || !holdsStageOperationalRole(detail)) return false;
         const capability = detail.production_dxf ? "replace_dxf" : "upload_dxf";
         return documentCan(detail, capability);
     }
@@ -701,7 +696,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 
     function uploadDxfPlan(detail, meta) {
         if (!canUploadDxf(detail, meta)) {
-            frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF في هذه المرحلة."));
+            frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF في المرحلة الحالية."));
             return;
         }
         const orderName = detail.name || meta.order;
