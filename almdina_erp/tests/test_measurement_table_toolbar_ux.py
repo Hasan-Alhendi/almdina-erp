@@ -21,13 +21,25 @@ def test_measurement_toolbar_uses_compact_accessible_icon_actions():
     assert 'openButton.innerHTML = toolbarIconSvg("expand")' in source
 
 
-def test_measurement_toolbar_actions_are_kept_on_physical_left_in_rtl():
+def test_measurement_toolbar_is_single_row_and_actions_stay_on_physical_left():
     source = _source()
 
-    assert ".dco-fast-entry-toolbar > .dco-measurement-table-actions" in source
+    assert ".dco-fast-entry-toolbar{flex-wrap:nowrap !important" in source
+    assert ".dco-fast-entry-toolbar>.dco-measurement-table-actions" in source
     assert "order:100;" in source
     assert "direction:ltr;" in source
-    assert "width:36px !important;" in source
+    assert "width:32px !important;" in source
+    assert "min-height:42px !important;" in source
+
+
+def test_measurement_toolbar_reduces_visible_help_without_losing_guidance():
+    source = _source()
+
+    assert "dco-fast-tip" in source
+    assert "dco-fast-info" in source
+    assert "القشاط: نقرة" in source
+    assert "الأسهم للتنقل بين الحقول" in source
+    assert 'note.textContent = isArabic() ? "🔒 عرض فقط" : "🔒 Read only"' in source
 
 
 def test_measurement_toolbar_polish_survives_dynamic_action_rendering():
