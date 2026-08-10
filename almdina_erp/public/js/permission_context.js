@@ -154,15 +154,19 @@
         }
         if (refreshPromise) return refreshPromise;
 
-        refreshPromise = frappe.call({
-            method: "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
-        }).then(response => {
-            context = normalize(response && response.message);
-            emitUpdatedContext();
-            return context;
-        }).finally(() => {
-            refreshPromise = null;
-        });
+        refreshPromise = Promise.resolve(
+            frappe.call({
+                method: "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
+            })
+        )
+            .then(response => {
+                context = normalize(response && response.message);
+                emitUpdatedContext();
+                return context;
+            })
+            .finally(() => {
+                refreshPromise = null;
+            });
         return refreshPromise;
     }
 
@@ -191,12 +195,13 @@
     function requireModule(module) {
         if (globalExists(module.global)) return Promise.resolve(window[module.global]);
         if (module.asset && window.frappe && typeof frappe.require === "function") {
-            return frappe.require(module.asset).then(() => {
-                if (!globalExists(module.global)) {
-                    throw new Error(`Module did not initialize: ${module.global}`);
-                }
-                return window[module.global];
-            });
+            return Promise.resolve(frappe.require(module.asset))
+                .then(() => {
+                    if (!globalExists(module.global)) {
+                        throw new Error(`Module did not initialize: ${module.global}`);
+                    }
+                    return window[module.global];
+                });
         }
         return waitForGlobal(module.global);
     }

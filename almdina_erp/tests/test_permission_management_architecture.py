@@ -114,7 +114,12 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("roleRequest", source)
         self.assertIn("previewRequest", source)
         self.assertIn("apc-savebar", source)
-        self.assertIn("loadPreview().then", source)
+        self.assertIn("Promise.resolve(loadPreview()).then", source)
+        self.assertIn("const executeSave = async", source)
+        self.assertIn("finally {", source)
+        self.assertIn("state.saving = false", source)
+        self.assertIn("await refreshRuntimePermissions()", source)
+        self.assertNotIn(").finally(() => {\n                state.saving = false", source)
         self.assertNotIn("frappe.user_roles", source)
         for role in ("Production Manager", "System Manager", "Order Entry"):
             self.assertNotIn(role, source)

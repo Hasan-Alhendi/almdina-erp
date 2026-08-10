@@ -30,6 +30,7 @@
         ["دورة الطلب", 40],
         ["عرض", 50],
     ]);
+    const ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"]);
 
     function text(node) {
         return String(node && node.textContent || "")
@@ -342,8 +343,11 @@
 
     function dedupeButtons(head) {
         const seen = new Map();
+        // Frappe owns grouped-action nodes and keeps internal references to them.
+        // Removing a group directly from the DOM makes later asynchronous buttons
+        // land in a detached node. Only dedupe ungrouped actions here.
         const candidates = [...head.querySelectorAll(
-            ".custom-actions > button,.custom-actions > a,.custom-actions > .btn-group,.custom-actions > .dropdown"
+            ".custom-actions > button,.custom-actions > a"
         )];
         candidates.forEach(node => {
             const label = actionLabel(node);
@@ -360,6 +364,8 @@
         });
 
         head.querySelectorAll(".dropdown-menu").forEach(menu => {
+            const group = menu.closest(".btn-group,.dropdown");
+            if (ASYNC_ACTION_GROUPS.has(actionLabel(group))) return;
             const menuSeen = new Set();
             menu.querySelectorAll(".dropdown-item").forEach(item => {
                 const label = text(item);
@@ -367,13 +373,6 @@
                 if (menuSeen.has(label)) item.remove();
                 else menuSeen.add(label);
             });
-        });
-    }
-
-    function removeEmptyGroups(head) {
-        head.querySelectorAll(".custom-actions .btn-group,.custom-actions .dropdown").forEach(group => {
-            const menu = group.querySelector(".dropdown-menu");
-            if (menu && !menu.querySelector(".dropdown-item")) group.remove();
         });
     }
 
@@ -388,7 +387,6 @@
         removeLegacyButtons(frm, head);
         removeDrawingDxfGroup(head);
         dedupeButtons(head);
-        removeEmptyGroups(head);
     }
 
     function observe(frm) {

@@ -19,6 +19,17 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
+function jqueryThenable(promise) {
+    return {
+        then(onFulfilled, onRejected) {
+            return jqueryThenable(promise.then(onFulfilled, onRejected));
+        },
+        catch(onRejected) {
+            return jqueryThenable(promise.catch(onRejected));
+        },
+    };
+}
+
 async function flushPromises() {
     await Promise.resolve();
     await Promise.resolve();
@@ -77,7 +88,7 @@ async function verifyCostSnapshotIsolation() {
         call(options) {
             const pending = deferred();
             calls.push({ options, pending });
-            return pending.promise;
+            return jqueryThenable(pending.promise);
         },
     };
     const context = vm.createContext({
@@ -166,6 +177,8 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     const timers = [];
     const calls = [];
     const capabilities = new Set();
+    const permissionRefresh = deferred();
+    let permissionRefreshCalls = 0;
     let generation = 1;
 
     const fakeWindow = {
@@ -179,6 +192,10 @@ async function verifyProductionActionsRecoverAfterPermissions() {
             },
             profile() {
                 return "full";
+            },
+            refresh() {
+                permissionRefreshCalls += 1;
+                return jqueryThenable(permissionRefresh.promise);
             },
         },
         AlmdinaDocumentContext: {
@@ -220,7 +237,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         call(options) {
             const pending = deferred();
             calls.push({ options, pending });
-            return pending.promise;
+            return jqueryThenable(pending.promise);
         },
         set_route() {},
     };
@@ -273,13 +290,17 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     handlers.refresh(frm);
     assert.equal(added.some(button => button.group === "صالة الإنتاج"), false);
 
+    await flushPromises();
+    assert.equal(permissionRefreshCalls, 1);
     capabilities.add("dispatch_order");
-    listeners["almdina:permissions-updated"]();
+    permissionRefresh.resolve({ version: 2 });
+    await flushPromises();
     assert.equal(
         added.some(button => button.label === "إرسال للإنتاج" && button.group === "صالة الإنتاج"),
         true,
-        "production actions must be rebuilt as soon as permissions arrive"
+        "production actions must be rebuilt when the jqXHR-like permission refresh completes"
     );
+    assert.equal(typeof listeners["almdina:permissions-updated"], "function");
 
     capabilities.clear();
     capabilities.add("start_assigned_stage");

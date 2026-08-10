@@ -204,6 +204,8 @@ jobs:
           node almdina_erp/tests/js/cutting_plan_renderer.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
+          node almdina_erp/tests/js/approved_plan_navigation.test.js
+          node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
           node almdina_erp/tests/js/order_navigation_surfaces.test.js
           node almdina_erp/tests/js/input_stability.test.js
           node almdina_erp/tests/js/inline_note_editor.test.js

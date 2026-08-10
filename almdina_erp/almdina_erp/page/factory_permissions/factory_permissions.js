@@ -350,6 +350,8 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         $main.find(".apc-dirty").toggleClass("is-dirty", dirty).text(dirty ? __("لديك تغييرات غير محفوظة") : __("لا توجد تغييرات غير محفوظة"));
         $main.find(".apc-save").prop("disabled", !dirty || state.saving);
         $main.find(".apc-reset").prop("disabled", !dirty || state.saving);
+        $main.find(".apc-capability-input,.apc-role-select,.apc-role-search,.apc-export,.apc-import")
+            .prop("disabled", state.saving);
         if (!state.preview) updateStats([]);
     }
 
@@ -363,39 +365,68 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         syncDirtyState();
     }
 
+    function refreshRuntimePermissions() {
+        const permissions = window.AlmdinaPermissions;
+        if (!permissions || typeof permissions.refresh !== "function") {
+            return Promise.resolve();
+        }
+        return Promise.resolve()
+            .then(() => permissions.refresh())
+            .catch(error => {
+                console.error("Failed to refresh runtime permissions after save", error);
+            });
+    }
+
+    function showOperationError(error, fallback) {
+        const message = error && error.message ? error.message : fallback;
+        frappe.show_alert({ message, indicator: "red" }, 7);
+    }
+
     function savePermissions() {
         if (!state.selectedRole || !isDirty() || state.saving) return;
-        const executeSave = confirmSelfLockout => {
+        const executeSave = async confirmSelfLockout => {
+            const requestedRole = state.selectedRole;
+            const requestedState = clone(state.working);
             state.saving = true;
+            state.previewRequest += 1;
+            state.transferRequest += 1;
+            clearTimeout(state.previewTimer);
+            state.previewTimer = null;
             syncDirtyState();
-            return frappe.call({
-                method: METHODS.update,
-                args: {
-                    role: state.selectedRole,
-                    capabilities: JSON.stringify(state.working),
-                    confirm_self_lockout: confirmSelfLockout ? 1 : 0,
-                },
-                freeze: true,
-                freeze_message: __("جاري حفظ الصلاحيات..."),
-            }).then(
-                response => {
-                    const data = response.message || {};
-                    state.baseline = clone(data.capabilities || state.working);
-                    state.working = clone(state.baseline);
-                    state.preview = { capabilities: clone(state.working), changes: [], impact: data.impact || {} };
-                    renderPermissionGroups();
-                    renderImpact(state.preview);
-                    renderAudit(data.audit || []);
-                    frappe.show_alert({ message: __("تم حفظ صلاحيات الدور."), indicator: "green" });
-                },
-                error => showError(error, __("تعذر حفظ الصلاحيات."))
-            ).finally(() => {
+            try {
+                const response = await frappe.call({
+                    method: METHODS.update,
+                    args: {
+                        role: requestedRole,
+                        capabilities: JSON.stringify(requestedState),
+                        confirm_self_lockout: confirmSelfLockout ? 1 : 0,
+                    },
+                    freeze: true,
+                    freeze_message: __("جاري حفظ الصلاحيات..."),
+                });
+                if (requestedRole !== state.selectedRole) return false;
+
+                const data = response.message || {};
+                state.baseline = clone(data.capabilities || requestedState);
+                state.working = clone(state.baseline);
+                state.preview = { capabilities: clone(state.working), changes: [], impact: data.impact || {} };
+                renderPermissionGroups();
+                renderImpact(state.preview);
+                renderAudit(data.audit || []);
+                syncDirtyState();
+                await refreshRuntimePermissions();
+                frappe.show_alert({ message: __("تم حفظ صلاحيات الدور."), indicator: "green" });
+                return true;
+            } catch (error) {
+                showOperationError(error, __("تعذر حفظ الصلاحيات."));
+                return false;
+            } finally {
                 state.saving = false;
                 syncDirtyState();
-            });
+            }
         };
 
-        loadPreview().then(preview => {
+        Promise.resolve(loadPreview()).then(preview => {
             if (!preview || !isDirty()) return;
             if (preview.requires_self_lockout_confirmation) {
                 frappe.confirm(

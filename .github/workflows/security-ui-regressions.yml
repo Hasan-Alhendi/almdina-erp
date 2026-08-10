@@ -63,3 +63,6 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/secure_dxf_export.js
           node almdina_erp/tests/js/plan_surface_isolation.test.js
+          node almdina_erp/tests/js/approved_plan_navigation.test.js
+          node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
+          node almdina_erp/tests/js/order_navigation_surfaces.test.js

@@ -143,6 +143,10 @@
         frm._dco_plan_recalculation_running = false;
         frm._dcoTextBoardPlanBusy = false;
         frm.__almdina_active_plan_tab = null;
+        frm.__almdina_approved_plan_snapshot = null;
+        frm.__almdina_approved_plan_order = null;
+        frm.__almdina_approved_plan_loading = null;
+        frm.__almdina_approved_plan_context = null;
         frm.__almdina_stage_type = null;
         frm.__almdina_cost_snapshot_order = null;
         frm.__almdinaCostSnapshotPromise = null;
@@ -153,6 +157,8 @@
         frm.__almdinaProductionRouteSteps = [];
         frm.__almdinaProductionActionsPromise = null;
         frm.__almdinaProductionActionsContext = null;
+        frm.__almdinaProductionRecoveryPromise = null;
+        frm.__almdinaProductionRecoveryContext = null;
         frm._dcoToolbarObservedHead = null;
 
         delete frm._almdina_factory_defaults_loaded;

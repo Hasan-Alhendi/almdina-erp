@@ -9,6 +9,10 @@ HOOKS = ROOT / "hooks.py"
 DOCUMENT_CONTEXT = ROOT / "public" / "js" / "door_cutting_order_document_context.js"
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
+PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+TOOLBAR_STABILITY = (
+    ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
+)
 DOCUMENT_PRINT = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 )
@@ -68,10 +72,13 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("frm._dco_edge_color_map = {}", source)
         self.assertIn("frm._dco_piece_type_restore_token = null", source)
         self.assertIn("frm.__almdina_active_plan_tab = null", source)
+        self.assertIn("frm.__almdina_approved_plan_loading = null", source)
+        self.assertIn("frm.__almdina_approved_plan_context = null", source)
         self.assertIn("frm.__almdina_stage_type = null", source)
         self.assertIn("frm.__almdinaCostSnapshotPromise = null", source)
         self.assertIn("frm.__almdinaPermissionRefreshPromise = null", source)
         self.assertIn("frm.__almdinaProductionActionsPromise = null", source)
+        self.assertIn("frm.__almdinaProductionRecoveryPromise = null", source)
         self.assertIn("delete frm._almdina_factory_defaults_loaded", source)
 
     def test_defaults_ignore_responses_captured_for_another_order(self) -> None:
@@ -83,6 +90,16 @@ class TestDocumentContextUxContract(unittest.TestCase):
             2,
         )
         self.assertIn("frm.doc.default_edge_type !== requestedType", source)
+
+    def test_production_actions_wait_for_permissions_without_detaching_groups(self) -> None:
+        production = PRODUCTION_ACTIONS.read_text(encoding="utf-8")
+        toolbar = TOOLBAR_STABILITY.read_text(encoding="utf-8")
+
+        self.assertIn("recoverProductionActions", production)
+        self.assertIn('typeof permissions.refresh === "function"', production)
+        self.assertIn("Promise.resolve(frappe.call({", production)
+        self.assertNotIn("removeEmptyGroups", toolbar)
+        self.assertIn('ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"])', toolbar)
 
     def test_drawing_stage_and_recalculation_are_document_scoped(self) -> None:
         source = DRAWING_PLAN.read_text(encoding="utf-8")

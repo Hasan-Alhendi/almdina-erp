@@ -365,10 +365,10 @@
 
         const identity = context.capture(frm);
         const orderName = frm.doc.name;
-        const snapshotPromise = frappe.call({
+        const snapshotPromise = Promise.resolve(frappe.call({
             method: "almdina_erp.almdina_erp.services.cost_permission_service.get_order_cost_snapshot",
             args: { order_name: orderName },
-        }).then((response) => {
+        })).then((response) => {
             if (!context.isCurrent(frm, identity)) return;
             mergeSnapshot(frm, response.message || {});
             renderAuthorizedCost(frm);

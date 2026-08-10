@@ -571,10 +571,10 @@
 		const identity = capture(frm);
 		const documentName = frm.doc.name;
 		const stageName = frm.doc.current_production_stage;
-		const actionPromise = frappe.call({
+		const actionPromise = Promise.resolve(frappe.call({
 			method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
 			args: { order_name: documentName },
-		}).then((response) => {
+		})).then((response) => {
 			if (
 				!isCurrent(frm, identity)
 				|| !frm.doc
@@ -648,11 +648,53 @@
 		return true;
 	}
 
+	function recoverProductionActions(frm) {
+		if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) {
+			return Promise.resolve(false);
+		}
+		if (
+			frm.__almdinaProductionRecoveryPromise
+			&& isCurrent(frm, frm.__almdinaProductionRecoveryContext)
+		) {
+			return frm.__almdinaProductionRecoveryPromise;
+		}
+
+		const identity = capture(frm);
+		const permissions = permissionContext();
+		const operation = permissions && typeof permissions.refresh === "function"
+			? Promise.resolve().then(() => permissions.refresh())
+			: Promise.resolve();
+		const recoveryPromise = Promise.resolve(operation)
+			.catch((error) => {
+				if (isCurrent(frm, identity)) {
+					console.error("Failed to refresh permissions for production actions", error);
+				}
+			})
+			.then(() => {
+				if (!isCurrent(frm, identity)) return false;
+				return reconcileProductionActions(frm);
+			})
+			.finally(() => {
+				if (frm.__almdinaProductionRecoveryPromise === recoveryPromise) {
+					frm.__almdinaProductionRecoveryPromise = null;
+					frm.__almdinaProductionRecoveryContext = null;
+				}
+			});
+
+		frm.__almdinaProductionRecoveryContext = identity;
+		frm.__almdinaProductionRecoveryPromise = recoveryPromise;
+		return recoveryPromise;
+	}
+
 	frappe.ui.form.on("Door Cutting Order", {
+		onload_post_render(frm) {
+			recoverProductionActions(frm);
+		},
 		refresh(frm) {
 			applyShopFloorPresentation(frm);
 			renderTrackingStrip(frm);
 			reconcileProductionActions(frm);
+			recoverProductionActions(frm);
 			removeDrawingDxfToolbarButtons(frm);
 		},
 	});
@@ -671,6 +713,7 @@
 	window.AlmdinaShopFloorOrderUX = Object.freeze({
 		applyShopFloorPresentation,
 		reconcileProductionActions,
+		recoverProductionActions,
 		renderTrackingStrip,
 	});
 
