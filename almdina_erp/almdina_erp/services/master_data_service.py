@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, NoReturn
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.application.factory.production_routing_management import (
+    ProductionRoutingManagementConflict,
+    ProductionRoutingManagementError,
+    ProductionRoutingManagementPermissionDenied,
+    delete_production_routing as delete_routing_use_case,
+    save_production_routing as save_routing_use_case,
+    set_production_routing_disabled as set_routing_disabled_use_case,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
     granted_capabilities,
@@ -14,6 +23,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.production_routing_management_repository import (
+    FrappeProductionRoutingManagementRepository,
+    list_operational_roles,
+    list_production_routings,
 )
 
 
@@ -37,6 +51,75 @@ _MASTER_DEFINITIONS = {
         "delete": Capability.DELETE_CUSTOMERS,
     },
 }
+
+_PRODUCTION_STAGE_CATALOG = (
+    {
+        "stage_type": "Review / Preparation",
+        "label": "مراجعة وتجهيز",
+        "description": "مراجعة الطلب وخطة القص قبل بدء التنفيذ.",
+        "planning": True,
+    },
+    {
+        "stage_type": "Drawing",
+        "label": "رسم",
+        "description": "إعداد واعتماد ملفات الرسم والتفاصيل الفنية.",
+        "planning": True,
+    },
+    {
+        "stage_type": "Sharyoun",
+        "label": "شريون",
+        "description": "مرحلة تجهيز الشريون ضمن المسار التشغيلي.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Cutting",
+        "label": "قص",
+        "description": "تنفيذ خطة القص المعتمدة.",
+        "planning": False,
+    },
+    {
+        "stage_type": "CNC",
+        "label": "CNC",
+        "description": "تشغيل القطع على ماكينة CNC.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Edge Banding",
+        "label": "قشاط",
+        "description": "تلبيس الحواف المطلوبة للقطع.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Sanding",
+        "label": "تقشيط",
+        "description": "تجهيز وتشطيب الأسطح والحواف.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Drilling",
+        "label": "تثقيب",
+        "description": "تنفيذ الثقوب ومواضع التجميع.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Assembly",
+        "label": "تجميع",
+        "description": "تجميع مكونات الطلب وفحص المطابقة.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Quality Check",
+        "label": "فحص الجودة",
+        "description": "فحص الجودة النهائي قبل التغليف.",
+        "planning": False,
+    },
+    {
+        "stage_type": "Packing",
+        "label": "تغليف",
+        "description": "تغليف الطلب وتجهيزه للتسليم.",
+        "planning": False,
+    },
+)
 
 
 def _definition(doctype: str) -> dict[str, str]:
@@ -95,37 +178,43 @@ def search_operational_roles(
 
 
 def _routing_rows() -> list[dict[str, Any]]:
-    rows = frappe.get_all(
-        "Production Routing",
-        fields=["name", "routing_name", "disabled", "modified", "modified_by"],
-        order_by="disabled asc, routing_name asc",
-    )
-    result: list[dict[str, Any]] = []
-    for row in rows:
-        stages = frappe.get_all(
-            "Production Routing Stage",
-            filters={"parent": row.name, "parenttype": "Production Routing"},
-            fields=[
-                "sequence",
-                "stage_type",
-                "department_label",
-                "operational_role",
-                "required",
-                "is_planning_stage",
-            ],
-            order_by="sequence asc, idx asc",
-        )
-        result.append(
-            {
-                "name": str(row.name),
-                "label": row.routing_name or row.name,
-                "disabled": bool(row.disabled),
-                "modified": row.modified,
-                "modified_by": row.modified_by,
-                "stages": [dict(stage) for stage in stages],
-            }
-        )
-    return result
+    return list_production_routings()
+
+
+def _routing_permissions() -> dict[str, bool]:
+    granted = granted_capabilities()
+    return {
+        capability: capability in granted
+        for capability in _MASTER_DEFINITIONS["Production Routing"].values()
+    }
+
+
+def _routing_summary(routings: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "routings": len(routings),
+        "active_routings": sum(not row["disabled"] for row in routings),
+        "total_stages": sum(
+            sum(bool(stage.get("required", True)) for stage in row["stages"])
+            for row in routings
+        ),
+        "in_flight_orders": sum(int(row.get("in_flight_orders") or 0) for row in routings),
+    }
+
+
+def _management_payload(value: Any) -> Mapping[str, Any]:
+    resolved = frappe.parse_json(value) if isinstance(value, str) else value
+    if not isinstance(resolved, Mapping):
+        frappe.throw("بيانات مسار الإنتاج غير صالحة.", frappe.ValidationError)
+    return resolved
+
+
+def _raise_management_error(error: Exception) -> NoReturn:
+    if isinstance(error, ProductionRoutingManagementPermissionDenied):
+        frappe.throw(str(error), frappe.PermissionError)
+    if isinstance(error, ProductionRoutingManagementConflict):
+        frappe.throw(str(error), frappe.TimestampMismatchError)
+    frappe.throw(str(error), frappe.ValidationError)
+    raise AssertionError("frappe.throw must interrupt execution")
 
 
 def _edge_rows() -> list[dict[str, Any]]:
@@ -219,6 +308,84 @@ def get_master_data_console() -> dict[str, Any]:
 
 
 @frappe.whitelist()
+def get_production_routing_console() -> dict[str, Any]:
+    permissions = _routing_permissions()
+    if not permissions[Capability.VIEW_PRODUCTION_ROUTINGS]:
+        frappe.throw(
+            _("لا تملك صلاحية عرض مسارات الإنتاج."),
+            frappe.PermissionError,
+        )
+    routings = _routing_rows()
+    can_manage = (
+        permissions[Capability.CREATE_PRODUCTION_ROUTINGS]
+        or permissions[Capability.EDIT_PRODUCTION_ROUTINGS]
+    )
+    return {
+        "permissions": permissions,
+        "routings": routings,
+        "operational_roles": list_operational_roles() if can_manage else [],
+        "stage_catalog": [dict(stage) for stage in _PRODUCTION_STAGE_CATALOG],
+        "audit": _audit_rows(["Production Routing"], limit=60),
+        "summary": _routing_summary(routings),
+    }
+
+
+@frappe.whitelist()
+def save_production_routing(payload: Any) -> dict[str, Any]:
+    try:
+        result = save_routing_use_case(
+            FrappeProductionRoutingManagementRepository(),
+            frozenset(granted_capabilities()),
+            _management_payload(payload),
+        )
+    except (
+        ProductionRoutingManagementError,
+        ProductionRoutingManagementPermissionDenied,
+    ) as error:
+        _raise_management_error(error)
+    return dict(result)
+
+
+@frappe.whitelist()
+def set_production_routing_disabled(
+    name: str,
+    disabled: int | bool,
+    expected_modified: str,
+) -> dict[str, Any]:
+    try:
+        result = set_routing_disabled_use_case(
+            FrappeProductionRoutingManagementRepository(),
+            frozenset(granted_capabilities()),
+            name=name,
+            disabled=disabled,
+            expected_modified=expected_modified,
+        )
+    except (
+        ProductionRoutingManagementError,
+        ProductionRoutingManagementPermissionDenied,
+    ) as error:
+        _raise_management_error(error)
+    return dict(result)
+
+
+@frappe.whitelist()
+def delete_production_routing(name: str, expected_modified: str) -> dict[str, Any]:
+    try:
+        delete_routing_use_case(
+            FrappeProductionRoutingManagementRepository(),
+            frozenset(granted_capabilities()),
+            name=name,
+            expected_modified=expected_modified,
+        )
+    except (
+        ProductionRoutingManagementError,
+        ProductionRoutingManagementPermissionDenied,
+    ) as error:
+        _raise_management_error(error)
+    return {"name": str(name or "").strip(), "deleted": True}
+
+
+@frappe.whitelist()
 def set_master_data_disabled(doctype: str, name: str, disabled: int | bool) -> dict[str, Any]:
     definition = _definition(doctype)
     require_doctype_capability(
@@ -258,6 +425,10 @@ __all__ = [
     "can_open_master_data",
     "delete_master_data_record",
     "get_master_data_console",
+    "get_production_routing_console",
+    "delete_production_routing",
+    "save_production_routing",
     "search_operational_roles",
+    "set_production_routing_disabled",
     "set_master_data_disabled",
 ]

@@ -128,6 +128,18 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertNotIn("roles", context["identity"])
         self.assertTrue(context["navigation"]["shared_shell"])
         self.assertTrue(context["capabilities"][Capability.START_ASSIGNED_STAGE])
+        self.assertEqual(
+            [route["name"] for route in context["production_routes"]],
+            ["Sharyoun", "Drawing"],
+        )
+        self.assertEqual(
+            [stage["stage_type"] for stage in context["production_routes"][1]["stages"]],
+            ["Drawing", "CNC", "Sanding"],
+        )
+        self.assertNotIn(
+            "operational_role",
+            context["production_routes"][1]["stages"][0],
+        )
 
         repository.global_grants.clear()
         with self.assertRaisesRegex(queries.ShopFloorPermissionDenied, "صلاحية الدخول"):

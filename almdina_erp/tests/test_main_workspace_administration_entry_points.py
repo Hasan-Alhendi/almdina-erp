@@ -60,6 +60,20 @@ class TestMainWorkspaceAdministrationEntryPoints(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertEqual(cards.get(label), 3)
 
+    def test_production_stages_shortcut_opens_the_operational_board(self) -> None:
+        shortcuts = {
+            row["label"]: (row["link_to"], row["type"])
+            for row in self.workspace["shortcuts"]
+        }
+        links = {
+            row["label"]: (row["link_to"], row["link_type"])
+            for row in self.workspace["links"]
+        }
+
+        expected = ("shop-floor-inbox", "Page")
+        self.assertEqual(shortcuts.get("مراحل الإنتاج"), expected)
+        self.assertEqual(links.get("مراحل الإنتاج"), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

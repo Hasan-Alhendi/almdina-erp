@@ -215,6 +215,8 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         from almdina_erp.almdina_erp.services.master_data_service import (
             delete_master_data_record,
             get_master_data_console,
+            get_production_routing_console,
+            save_production_routing,
             set_master_data_disabled,
         )
         from almdina_erp.almdina_erp.services.production_settings_service import (
@@ -222,33 +224,26 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         )
 
         frappe.set_user(ROUTING_USER)
-        routing = frappe.get_doc(
+        created = save_production_routing(
             {
-                "doctype": "Production Routing",
                 "routing_name": ROUTING_NAME,
                 "disabled": 0,
                 "stages": [
                     {
-                        "doctype": "Production Routing Stage",
-                        "sequence": 10,
                         "stage_type": "Cutting",
                         "department_label": "القص",
                         "operational_role": ROUTING_ROLE,
-                        "required": 1,
-                        "auto_complete_if_not_applicable": 0,
                     },
                     {
-                        "doctype": "Production Routing Stage",
-                        "sequence": 20,
                         "stage_type": "Edge Banding",
                         "department_label": "التقشيط",
                         "operational_role": ROUTING_ROLE,
-                        "required": 1,
-                        "auto_complete_if_not_applicable": 1,
                     },
                 ],
             }
-        ).insert()
+        )
+        self.assertEqual(created["name"], ROUTING_NAME)
+        routing = frappe.get_doc("Production Routing", ROUTING_NAME)
         self.assertEqual(routing.name, ROUTING_NAME)
         self.assertEqual(routing.stages[0].operational_role, ROUTING_ROLE)
         set_master_data_disabled("Production Routing", ROUTING_NAME, 1)
@@ -262,6 +257,11 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
         self.assertTrue(
             any(row["name"] == ROUTING_NAME for row in console["routings"])
         )
+        routing_console = get_production_routing_console()
+        self.assertTrue(
+            any(row["name"] == ROUTING_NAME for row in routing_console["routings"])
+        )
+        self.assertNotIn("edge_types", routing_console)
 
         frappe.set_user("Administrator")
         update_production_settings({"default_production_routing": ROUTING_NAME})

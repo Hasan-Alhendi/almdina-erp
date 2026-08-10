@@ -85,6 +85,8 @@ jobs:
             almdina_erp.tests.test_workforce_management_architecture \
             almdina_erp.tests.test_factory_master_data_authorization \
             almdina_erp.tests.test_factory_master_data_architecture \
+            almdina_erp.tests.test_production_routing_management_application \
+            almdina_erp.tests.test_production_routing_workflow_ux \
             almdina_erp.tests.test_control_center_authorization \
             almdina_erp.tests.test_control_center_architecture \
             almdina_erp.tests.test_permission_surface_policy \
