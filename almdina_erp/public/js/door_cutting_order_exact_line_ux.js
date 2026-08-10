@@ -15,17 +15,6 @@
     const MOUNT_RETRIES = 14;
     let sequence = 0;
 
-    function esc(value) {
-        if (window.frappe && frappe.utils && frappe.utils.escape_html) {
-            return frappe.utils.escape_html(String(value ?? ""));
-        }
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;");
-    }
-
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
@@ -85,9 +74,6 @@
         return null;
     }
 
-    // The legacy editor originally spread the history seed into its host state.
-    // A harmless empty selection publishes that host object back through history,
-    // so extensions share one source of truth without duplicating editor state.
     function ensureLiveState(controller) {
         let state = liveState(controller);
         if (state) return state;
@@ -167,9 +153,9 @@
         controller.status.innerHTML = `البداية <b>${model.rounded(controller.startCm[0], 2)}، ${model.rounded(controller.startCm[1], 2)}</b> سم · اكتب الطول الآن ثم Enter. بعد الإضافة تصبح النهاية بداية الخط التالي تلقائيًا.`;
     }
 
-    function labelGroup(svg, x, y, text, className = "dco-exact-line-label") {
+    function appendLabel(parent, x, y, text) {
         const group = document.createElementNS(SVG_NS, "g");
-        group.setAttribute("class", className);
+        group.setAttribute("class", "dco-exact-line-label");
         const width = Math.max(64, String(text).length * 7.2);
         const rect = document.createElementNS(SVG_NS, "rect");
         rect.setAttribute("x", String(x - width / 2));
@@ -183,16 +169,17 @@
         label.setAttribute("y", String(y - 15));
         label.textContent = text;
         group.appendChild(label);
-        svg.appendChild(group);
+        parent.appendChild(group);
     }
 
     function renderOverlay(controller) {
         if (controller.rendering) return;
         controller.rendering = true;
+        if (controller.observer) controller.observer.disconnect();
         try {
             const existing = controller.svg.querySelector(".dco-exact-line-overlay");
             if (existing) existing.remove();
-            const state = liveState(controller) || history.getActiveState && history.getActiveState();
+            const state = liveState(controller);
             const exactLines = state && Array.isArray(state.elements)
                 ? state.elements.filter(element => model.exactMeta(element))
                 : [];
@@ -267,20 +254,19 @@
                 endCircle.setAttribute("cy", String(end[1]));
                 endCircle.setAttribute("r", "5");
                 group.appendChild(endCircle);
-                controller.svg.appendChild(group);
                 if (previewLength > 0.03) {
-                    labelGroup(
-                        controller.svg,
+                    appendLabel(
+                        group,
                         (start[0] + end[0]) / 2,
                         (start[1] + end[1]) / 2,
                         `${model.rounded(previewLength, 2)} سم · ${model.rounded(angle, 1)}°`
                     );
                 }
-                return;
             }
             controller.svg.appendChild(group);
         } finally {
             controller.rendering = false;
+            if (controller.observer) controller.observer.observe(controller.svg, { childList: true });
         }
     }
 
@@ -521,6 +507,8 @@
         document.addEventListener("keydown", keyHandler, true);
 
         controller.observer = new MutationObserver(() => {
+            if (controller.rendering) return;
+            if (controller.svg.querySelector(".dco-exact-line-overlay")) return;
             window.setTimeout(() => renderOverlay(controller), 0);
         });
         controller.observer.observe(svg, { childList: true });
