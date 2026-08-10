@@ -18,9 +18,11 @@ class DrawingApprovalState:
 
 
 def is_at_drawing_stage(state: DrawingApprovalState) -> bool:
-    return state.status == "At Drawing" or (
-        state.production_path == "Drawing" and state.current_department == "رسم"
-    )
+    if state.status == "At Drawing":
+        return True
+    if str(state.current_department or "").strip() == "رسم":
+        return True
+    return state.production_path == "Drawing"
 
 
 def validate_drawing_approval(state: DrawingApprovalState) -> None:

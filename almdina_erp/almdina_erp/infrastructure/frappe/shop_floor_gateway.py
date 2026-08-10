@@ -8,7 +8,8 @@ old import cannot silently bypass the configurable capability policy.
 
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from types import MappingProxyType
+from typing import Any, Mapping, NoReturn
 
 from almdina_erp.almdina_erp.infrastructure.frappe import (
     order_tracking_repository,
@@ -18,7 +19,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
 )
 
 
-STAGE_ROLE_BY_TYPE = shop_floor_authorization.STAGE_ROLE_BY_TYPE
+# Hardcoded stage→role maps were removed when production routing became
+# configurable. Keep an empty mapping so historical imports do not crash.
+STAGE_ROLE_BY_TYPE: Mapping[str, str] = MappingProxyType({})
 
 # Compatibility symbols only. Production authorization no longer consumes role
 # tuples; every business action is resolved through document capabilities.
@@ -27,10 +30,7 @@ ADMIN_ROLES: tuple[str, ...] = ()
 STAGE_ADMIN_ROLES: tuple[str, ...] = ()
 
 current_user = shop_floor_authorization.current_user
-assert_enabled_user_has_stage_role = (
-    shop_floor_authorization.assert_enabled_user_has_stage_role
-)
-get_users_for_stage = shop_floor_authorization.get_users_for_stage
+assert_enabled_user_has_role = shop_floor_authorization.assert_enabled_user_has_role
 get_users_for_role = shop_floor_authorization.get_users_for_role
 
 get_order = order_tracking_repository.get_order
@@ -72,6 +72,20 @@ def require_stage_assignee_or_admin(stage: Any) -> NoReturn:
     _legacy_role_gate_removed()
 
 
+def assert_enabled_user_has_stage_role(user: str, stage_type: str) -> NoReturn:
+    """Fail closed for the removed hardcoded stage-role lookup."""
+
+    del user, stage_type
+    _legacy_role_gate_removed()
+
+
+def get_users_for_stage(stage_type: str) -> NoReturn:
+    """Fail closed for the removed hardcoded stage-user lookup."""
+
+    del stage_type
+    _legacy_role_gate_removed()
+
+
 def create_stage(
     order_name: str,
     stage_type: str,
@@ -105,6 +119,7 @@ __all__ = [
     "DISPATCH_ROLES",
     "STAGE_ADMIN_ROLES",
     "STAGE_ROLE_BY_TYPE",
+    "assert_enabled_user_has_role",
     "assert_enabled_user_has_stage_role",
     "cancel_active_order_stages",
     "cancel_non_shop_floor_active_stages",

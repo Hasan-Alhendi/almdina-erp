@@ -1,20 +1,55 @@
 (() => {
 	"use strict";
 
+	const PLAN_TABS = Object.freeze([
+		Object.freeze({
+			id: "System",
+			label: "خطة النظام",
+			capability: "view_system_cutting_plan",
+		}),
+		Object.freeze({
+			id: "Custom",
+			label: "الخطة المرفوعة",
+			capability: "view_uploaded_cutting_plan",
+		}),
+		Object.freeze({
+			id: "Approved",
+			label: "الخطة المعتمدة",
+			capability: "view_approved_cutting_plan",
+		}),
+	]);
+
 	function permissions() {
 		return window.AlmdinaPermissions || null;
 	}
 
-	function canViewCuttingPlan(frm) {
+	function canCapability(frm, capability) {
 		const context = permissions();
 		return Boolean(
 			context &&
 			(
 				typeof context.canDocument === "function"
-					? context.canDocument(frm, "view_cutting_plan")
-					: context.can("view_cutting_plan")
+					? context.canDocument(frm, capability)
+					: context.can(capability)
 			)
 		);
+	}
+
+	function canViewCuttingPlan(frm) {
+		return (
+			canCapability(frm, "view_cutting_plan") ||
+			PLAN_TABS.some((tab) => canCapability(frm, tab.capability))
+		);
+	}
+
+	function visibleTabs(frm) {
+		const allowed = PLAN_TABS.filter((tab) => canCapability(frm, tab.capability));
+		if (allowed.length) return allowed;
+		// Legacy roles may still carry only the umbrella view_cutting_plan grant.
+		if (canCapability(frm, "view_cutting_plan")) {
+			return PLAN_TABS.slice();
+		}
+		return [];
 	}
 
 	function parseJsonField(raw) {
@@ -32,17 +67,30 @@
 		return Boolean(custom && custom.sheets && custom.sheets.length);
 	}
 
+	function hasApprovedPlan(frm) {
+		return Boolean(frm.doc && frm.doc.approved_plan);
+	}
+
 	function shouldShowPlanTabs(frm) {
-		return Boolean(frm && canViewCuttingPlan(frm));
+		return Boolean(frm && visibleTabs(frm).length);
 	}
 
 	function canShowDualTabs(frm) {
 		return shouldShowPlanTabs(frm);
 	}
 
+	function getCachedApprovedPlan(frm) {
+		const cached = frm.__almdina_approved_plan_snapshot;
+		if (cached && typeof cached === "object") return cached;
+		return null;
+	}
+
 	function getPlanForTab(frm, tab) {
 		if (tab === "Custom") {
 			return parseJsonField(frm.doc.custom_plan_json);
+		}
+		if (tab === "Approved") {
+			return getCachedApprovedPlan(frm);
 		}
 		return (
 			parseJsonField(frm.doc.system_plan_json) ||
@@ -52,29 +100,51 @@
 	}
 
 	function defaultTab(frm) {
-		if (frm.doc.approved_plan) {
-			if (frm.doc.approved_plan_source === "Custom" && hasCustomPlan(frm)) {
-				return "Custom";
-			}
-			return "System";
+		const allowed = visibleTabs(frm).map((tab) => tab.id);
+		if (!allowed.length) return "System";
+
+		const preferred = frm.__almdina_active_plan_tab;
+		if (preferred && allowed.includes(preferred)) {
+			return preferred;
 		}
-		return frm.__almdina_active_plan_tab || "System";
+
+		if (frm.doc.approved_plan && allowed.includes("Approved")) {
+			return "Approved";
+		}
+		if (
+			frm.doc.approved_plan &&
+			frm.doc.approved_plan_source === "Custom" &&
+			hasCustomPlan(frm) &&
+			allowed.includes("Custom")
+		) {
+			return "Custom";
+		}
+		if (allowed.includes("System")) return "System";
+		return allowed[0];
 	}
 
-	function buildTabBar(frm, activeTab) {
-		const approved = frm.doc.approved_plan_source || "System";
-		const badge = (tab) =>
-			frm.doc.approved_plan && approved === tab
-				? '<span style="margin-right:6px;font-size:10px;background:#15803d;color:#fff;border-radius:999px;padding:2px 8px;">معتمدة للإنتاج</span>'
-				: "";
+	function buildTabBar(frm, activeTab, tabs) {
+		const approvedSource = frm.doc.approved_plan_source || "System";
+		const badge = (tab) => {
+			if (tab === "Approved" && frm.doc.approved_plan) {
+				return '<span style="margin-right:6px;font-size:10px;background:#15803d;color:#fff;border-radius:999px;padding:2px 8px;">معتمدة للإنتاج</span>';
+			}
+			if (frm.doc.approved_plan && approvedSource === tab) {
+				return '<span style="margin-right:6px;font-size:10px;background:#15803d;color:#fff;border-radius:999px;padding:2px 8px;">مصدر الاعتماد</span>';
+			}
+			return "";
+		};
+		const buttons = tabs
+			.map(
+				(tab) => `
+				<button type="button" class="btn btn-sm ${activeTab === tab.id ? "btn-primary" : "btn-default"}" data-plan-tab="${tab.id}">
+					${badge(tab.id)}${__(tab.label)}
+				</button>`
+			)
+			.join("");
 		return `
 			<div class="dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px 0;">
-				<button type="button" class="btn btn-sm ${activeTab === "System" ? "btn-primary" : "btn-default"}" data-plan-tab="System">
-					${badge("System")}${__("خطة النظام")}
-				</button>
-				<button type="button" class="btn btn-sm ${activeTab === "Custom" ? "btn-primary" : "btn-default"}" data-plan-tab="Custom">
-					${badge("Custom")}${__("الخطة المرفوعة")}
-				</button>
+				${buttons}
 			</div>
 		`;
 	}
@@ -90,14 +160,32 @@
 		return `<div style="padding:12px;color:#666;">${__("تعذر عرض الخطة.")}</div>`;
 	}
 
+	function emptyState(message) {
+		return `<div style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${__(
+			message
+		)}</div>`;
+	}
+
 	function renderTabContent(frm, tab) {
 		if (tab === "Custom") {
 			if (!hasCustomPlan(frm)) {
-				return `<div style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${__(
-					"لا يوجد خطة مرفوعة"
-				)}</div>`;
+				return emptyState("لا يوجد خطة مرفوعة");
 			}
 			return renderPlanHtml(frm, getPlanForTab(frm, "Custom"));
+		}
+
+		if (tab === "Approved") {
+			if (!hasApprovedPlan(frm)) {
+				return emptyState("لا توجد خطة معتمدة للإنتاج.");
+			}
+			if (frm.__almdina_approved_plan_loading) {
+				return emptyState("جاري تحميل الخطة المعتمدة...");
+			}
+			const plan = getPlanForTab(frm, "Approved");
+			return (
+				renderPlanHtml(frm, plan) ||
+				emptyState("لا توجد بيانات لعرضها في الخطة المعتمدة.")
+			);
 		}
 
 		const parts = [];
@@ -109,23 +197,52 @@
 			parts.push('<div class="dco-drawing-plan-panel-host"></div>');
 		}
 		const planHtml = renderPlanHtml(frm, getPlanForTab(frm, "System"));
-		parts.push(
-			planHtml ||
-				`<div style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${__(
-					"لا توجد خطة نظام لعرضها."
-				)}</div>`
-		);
+		parts.push(planHtml || emptyState("لا توجد خطة نظام لعرضها."));
 		return parts.join("");
+	}
+
+	function ensureApprovedPlanLoaded(frm) {
+		if (!hasApprovedPlan(frm)) {
+			frm.__almdina_approved_plan_snapshot = null;
+			return Promise.resolve(null);
+		}
+		const cached = getCachedApprovedPlan(frm);
+		if (cached) return Promise.resolve(cached);
+		if (frm.__almdina_approved_plan_loading) {
+			return frm.__almdina_approved_plan_loading;
+		}
+
+		frm.__almdina_approved_plan_loading = frappe
+			.call({
+				method: "almdina_erp.almdina_erp.api.get_approved_cutting_plan_snapshot",
+				args: { order_name: frm.doc.name },
+			})
+			.then((response) => {
+				const payload = (response && response.message) || {};
+				const snapshot = parseJsonField(payload.snapshot_json);
+				frm.__almdina_approved_plan_snapshot = snapshot;
+				return snapshot;
+			})
+			.catch(() => {
+				frm.__almdina_approved_plan_snapshot = null;
+				return null;
+			})
+			.finally(() => {
+				frm.__almdina_approved_plan_loading = null;
+			});
+
+		return frm.__almdina_approved_plan_loading;
 	}
 
 	function renderDualTabs(frm) {
 		const wrapper = frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper;
-		if (!wrapper || !shouldShowPlanTabs(frm)) return false;
+		const tabs = visibleTabs(frm);
+		if (!wrapper || !tabs.length) return false;
 
-		const activeTab = frm.__almdina_active_plan_tab || defaultTab(frm);
+		const activeTab = defaultTab(frm);
 		frm.__almdina_active_plan_tab = activeTab;
 		const content = renderTabContent(frm, activeTab);
-		wrapper.html(`${buildTabBar(frm, activeTab)}<div class="dco-plan-tab-content">${content}</div>`);
+		wrapper.html(`${buildTabBar(frm, activeTab, tabs)}<div class="dco-plan-tab-content">${content}</div>`);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
 			frm.__almdina_active_plan_tab = $(this).attr("data-plan-tab");
 			renderDualTabs(frm);
@@ -143,6 +260,14 @@
 				window.AlmdinaDrawingPlanUX.renderPanel(frm);
 			}
 		}
+
+		if (activeTab === "Approved" && hasApprovedPlan(frm) && !getCachedApprovedPlan(frm)) {
+			ensureApprovedPlanLoaded(frm).then(() => {
+				if (frm.__almdina_active_plan_tab === "Approved") {
+					renderDualTabs(frm);
+				}
+			});
+		}
 		return true;
 	}
 
@@ -151,9 +276,11 @@
 		const plan = getPlanForTab(frm, tab);
 		const renderer = window.AlmdinaCuttingPlanRender;
 		if (!plan || !plan.sheets || !plan.sheets.length) {
-			frappe.msgprint(
-				tab === "Custom" ? __("لا يوجد خطة مرفوعة للطباعة.") : __("لا يوجد مخطط قص للطباعة.")
-			);
+			const emptyMessages = {
+				Custom: __("لا يوجد خطة مرفوعة للطباعة."),
+				Approved: __("لا توجد خطة معتمدة للطباعة."),
+			};
+			frappe.msgprint(emptyMessages[tab] || __("لا يوجد مخطط قص للطباعة."));
 			return;
 		}
 		if (renderer && typeof renderer.print === "function") {
@@ -164,10 +291,13 @@
 	}
 
 	window.AlmdinaPlanTabsUX = {
+		PLAN_TABS,
 		canShowDualTabs,
 		canViewCuttingPlan,
 		shouldShowPlanTabs,
 		hasCustomPlan,
+		hasApprovedPlan,
+		visibleTabs,
 		defaultTab,
 		getPlanForTab,
 		renderDualTabs,
@@ -183,6 +313,7 @@
 
 	frappe.ui.form.on("Door Cutting Order", {
 		refresh(frm) {
+			frm.__almdina_approved_plan_snapshot = null;
 			if (shouldShowPlanTabs(frm)) {
 				setTimeout(() => renderDualTabs(frm), 0);
 			}

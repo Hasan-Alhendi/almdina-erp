@@ -143,7 +143,40 @@ class TestPermissionMatrixApplication(unittest.TestCase):
     def test_plan_approval_does_not_require_drawing_workspace(self) -> None:
         state = normalize_capability_state({Capability.APPROVE_DXF: True})
         self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
         self.assertFalse(state[Capability.VIEW_DRAWING_WORKSPACE])
+
+    def test_plan_tab_views_imply_cutting_plan_section(self) -> None:
+        for capability in (
+            Capability.VIEW_SYSTEM_CUTTING_PLAN,
+            Capability.VIEW_UPLOADED_CUTTING_PLAN,
+            Capability.VIEW_APPROVED_CUTTING_PLAN,
+        ):
+            with self.subTest(capability=capability):
+                state = normalize_capability_state({capability: True})
+                self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+                self.assertTrue(state[capability])
+
+    def test_legacy_cutting_plan_view_expands_to_all_plan_tabs(self) -> None:
+        state = normalize_capability_state({Capability.VIEW_CUTTING_PLAN: True})
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
+
+    def test_explicit_plan_tab_denials_are_respected(self) -> None:
+        state = normalize_capability_state(
+            {
+                Capability.VIEW_CUTTING_PLAN: True,
+                Capability.VIEW_SYSTEM_CUTTING_PLAN: True,
+                Capability.VIEW_UPLOADED_CUTTING_PLAN: False,
+                Capability.VIEW_APPROVED_CUTTING_PLAN: False,
+            }
+        )
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
 
     def test_drawing_actions_automatically_require_drawing_workspace(self) -> None:
         for action in (

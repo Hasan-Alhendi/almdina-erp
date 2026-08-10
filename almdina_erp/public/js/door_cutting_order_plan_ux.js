@@ -22,11 +22,28 @@
         );
     }
 
-    function canUploadDxf(frm) {
+    function atDrawingStage(frm) {
+        return Boolean(
+            frm
+            && frm.doc
+            && (
+                frm.doc.status === "At Drawing"
+                || frm.doc.current_department === "رسم"
+                || frm.doc.production_path === "Drawing"
+                || frm.__almdina_stage_type === "Drawing"
+            )
+        );
+    }
+
+    function hasUploadCapability(frm) {
         if (!frm || frm.is_new()) return false;
         return Boolean(frm.doc.production_dxf)
             ? can(frm, "replace_dxf")
             : can(frm, "upload_dxf");
+    }
+
+    function canUploadDxf(frm) {
+        return hasUploadCapability(frm) && atDrawingStage(frm);
     }
 
     function canPrintCuttingPlan(frm) {
@@ -422,8 +439,9 @@
         const printAllowed = canPrintCuttingPlan(frm);
         const exportAllowed = canExportDxf(frm);
         const uploadAllowed = canUploadDxf(frm);
+        const uploadCapability = hasUploadCapability(frm);
         const replacing = Boolean(frm.doc.production_dxf);
-        if (!printAllowed && !exportAllowed && !uploadAllowed) return "";
+        if (!printAllowed && !exportAllowed && !uploadAllowed && !uploadCapability) return "";
         return `
             <div class="dco-plan-document-actions">
                 ${printAllowed
@@ -436,6 +454,11 @@
                     ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${replacing ? "استبدال خطة القص DXF" : "رفع خطة قص كملف DXF"}</button>`
                     : ""}
             </div>
+            ${uploadCapability && !atDrawingStage(frm)
+                ? `<div class="text-muted" style="font-size:12px;margin-top:8px;">${__(
+                    "زر رفع خطة DXF يظهر فقط عندما يكون الطلب في مرحلة الرسم."
+                )}</div>`
+                : ""}
         `;
     }
 

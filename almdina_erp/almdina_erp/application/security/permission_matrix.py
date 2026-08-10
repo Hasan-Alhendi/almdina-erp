@@ -33,7 +33,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "order": {"label": "الطلبات", "description": "إنشاء الطلب ومراجعته واعتماده وإدارة دورة حياته.", "icon": "file-text"},
     "costing": {"label": "التكلفة والتسعير", "description": "عرض التكلفة وتعديل إعداداتها واعتماد الأسعار الداخلية.", "icon": "accounting"},
     "documents": {"label": "المستندات والطباعة", "description": "طباعة القياسات وفاتورة الزبون والتقرير الداخلي السري.", "icon": "printer"},
-    "cutting_plan": {"label": "خطة القص", "description": "عرض الخطة وحسابها وتعديل إعدادات المحسّن واعتمادها وطباعتها.", "icon": "organization"},
+    "cutting_plan": {"label": "خطة القص", "description": "عرض تبويبات الخطة (نظام / مرفوعة / معتمدة) وحسابها وتعديل إعدادات المحسّن واعتمادها وطباعتها.", "icon": "organization"},
     "drawing": {"label": "الرسم وDXF", "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها.", "icon": "image-view"},
     "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
     "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.", "icon": "dashboard"},
@@ -66,7 +66,22 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.PRINT_MEASUREMENTS: _presentation("طباعة القياسات", "طباعة مستند القياسات دون أي أسعار."),
     Capability.PRINT_CUSTOMER_INVOICE: _presentation("طباعة فاتورة الزبون", "طباعة مستند الزبون المالي دون البيانات الداخلية.", "sensitive"),
     Capability.PRINT_INTERNAL_COST_REPORT: _presentation("طباعة تقرير التكلفة الداخلي", "طباعة التقرير السري الذي يتضمن التكلفة والخسائر والربحية.", "critical"),
-    Capability.VIEW_CUTTING_PLAN: _presentation("عرض خطة القص", "عرض رسومات الخطة وبيانات ألواح القص."),
+    Capability.VIEW_CUTTING_PLAN: _presentation(
+        "عرض قسم خطة القص",
+        "إظهار تبويب نتائج القص. امنح صلاحيات التبويبات أدناه لتحديد أي خطط يمكن مشاهدتها.",
+    ),
+    Capability.VIEW_SYSTEM_CUTTING_PLAN: _presentation(
+        "عرض خطة النظام",
+        "مشاهدة تبويب خطة القص المحسوبة بواسطة النظام.",
+    ),
+    Capability.VIEW_UPLOADED_CUTTING_PLAN: _presentation(
+        "عرض الخطة المرفوعة",
+        "مشاهدة تبويب خطة القص المرفوعة (DXF/مخصصة).",
+    ),
+    Capability.VIEW_APPROVED_CUTTING_PLAN: _presentation(
+        "عرض الخطة المعتمدة",
+        "مشاهدة تبويب الخطة المعتمدة للإنتاج.",
+    ),
     Capability.RECALCULATE_PLAN: _presentation("إعادة حساب الخطة", "إعادة تشغيل محرك توزيع القطع على الألواح.", "sensitive"),
     Capability.EDIT_OPTIMIZER_SETTINGS: _presentation("تعديل إعدادات المحسّن", "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث ثم إعادة حساب الخطة. تتضمن صلاحية إعادة الحساب تلقائيًا.", "sensitive"),
     Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
@@ -139,6 +154,11 @@ _PLAN_VIEW_ACTIONS = frozenset({
     Capability.PRINT_CUTTING_PLAN,
     Capability.APPROVE_DXF,
 })
+_PLAN_TAB_VIEW_ACTIONS = frozenset({
+    Capability.VIEW_SYSTEM_CUTTING_PLAN,
+    Capability.VIEW_UPLOADED_CUTTING_PLAN,
+    Capability.VIEW_APPROVED_CUTTING_PLAN,
+})
 _DRAWING_VIEW_ACTIONS = frozenset({
     Capability.EDIT_SPECIAL_DRAWING,
     Capability.EXPORT_DXF,
@@ -200,6 +220,8 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.VIEW_COSTS] = True
     if any(state[capability] for capability in _PLAN_VIEW_ACTIONS):
         state[Capability.VIEW_CUTTING_PLAN] = True
+    if any(state[capability] for capability in _PLAN_TAB_VIEW_ACTIONS):
+        state[Capability.VIEW_CUTTING_PLAN] = True
     if any(state[capability] for capability in _DRAWING_VIEW_ACTIONS):
         state[Capability.VIEW_DRAWING_WORKSPACE] = True
     if any(state[capability] for capability in _REPLACEMENT_ACTIONS):
@@ -207,6 +229,13 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if state[Capability.ARCHIVE_APPROVED_PLAN]:
         state[Capability.VIEW_CUTTING_PLAN] = True
         state[Capability.PRINT_CUTTING_PLAN] = True
+    # Legacy umbrella: roles that only stored view_cutting_plan keep all three tabs
+    # until an admin explicitly configures the granular tab grants.
+    if state[Capability.VIEW_CUTTING_PLAN] and not any(
+        key in supplied for key in _PLAN_TAB_VIEW_ACTIONS
+    ):
+        for capability in _PLAN_TAB_VIEW_ACTIONS:
+            state[capability] = True
     if state[Capability.VIEW_FINANCIAL_REPORTS]:
         state[Capability.VIEW_OPERATIONAL_REPORTS] = True
         state[Capability.VIEW_COSTS] = True

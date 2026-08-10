@@ -239,7 +239,9 @@
     function atDrawing(frm) {
         return Boolean(
             frm.doc.status === "At Drawing"
-            || (frm.doc.production_path === "Drawing" && frm.doc.current_department === "رسم")
+            || frm.doc.current_department === "رسم"
+            || frm.doc.production_path === "Drawing"
+            || frm.__almdina_stage_type === "Drawing"
         );
     }
 

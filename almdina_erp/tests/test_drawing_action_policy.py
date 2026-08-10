@@ -7,6 +7,7 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     DrawingActionState,
     required_upload_capability,
     validate_assigned_drawing_action,
+    validate_drawing_stage_action,
     validate_plan_source,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -39,10 +40,38 @@ class TestDrawingActionPolicy(unittest.TestCase):
     def test_wrong_stage_and_locked_plan_are_rejected(self) -> None:
         with self.assertRaisesRegex(DrawingActionDenied, "not_at_drawing"):
             validate_assigned_drawing_action(
-                state(status="At CNC", current_department="CNC")
+                state(status="At CNC", current_department="CNC", production_path="Sharyoun")
             )
         with self.assertRaisesRegex(DrawingActionDenied, "plan_already_approved"):
             validate_assigned_drawing_action(state(approved_plan="CP-0001"))
+
+    def test_drawing_department_counts_as_drawing_stage_for_configurable_routes(self) -> None:
+        validate_assigned_drawing_action(
+            state(
+                status="Production In Progress",
+                production_path="Custom Route",
+                current_department="رسم",
+            )
+        )
+
+    def test_upload_stage_gate_ignores_assignee(self) -> None:
+        validate_drawing_stage_action(
+            state(current_assignee="", session_user="anyone@example.com")
+        )
+        validate_drawing_stage_action(
+            state(
+                current_assignee="designer@example.com",
+                session_user="other@example.com",
+            )
+        )
+        with self.assertRaisesRegex(DrawingActionDenied, "not_at_drawing"):
+            validate_drawing_stage_action(
+                state(
+                    status="Draft",
+                    current_department="",
+                    production_path="",
+                )
+            )
 
     def test_upload_and_replace_have_distinct_capabilities(self) -> None:
         self.assertEqual(required_upload_capability(state()), Capability.UPLOAD_DXF)
