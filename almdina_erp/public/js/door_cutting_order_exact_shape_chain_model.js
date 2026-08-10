@@ -2,9 +2,10 @@
     "use strict";
 
     const lineModel = window.AlmdinaExactLineModel;
+    const arcModel = window.AlmdinaExactArcModel;
     const geometry = window.AlmdinaSpecialShapeGeometry;
-    if (!lineModel || !geometry) {
-        console.error("Exact-line and exact-geometry models must load before shape-chain model");
+    if (!lineModel || !arcModel || !geometry) {
+        console.error("Exact-line, exact-arc and exact-geometry models must load before shape-chain model");
         return;
     }
 
@@ -36,47 +37,59 @@
         ));
     }
 
-    function exactLines(elements) {
+    function exactSegments(elements) {
         return (Array.isArray(elements) ? elements : []).flatMap(element => {
-            const meta = lineModel.exactMeta(element);
+            const lineMeta = lineModel.exactMeta(element);
+            const arcMeta = arcModel.arcMeta(element);
+            const meta = lineMeta || arcMeta;
             if (!meta) return [];
             const start = point(meta.start_cm);
             const end = point(meta.end_cm);
+            const kind = arcMeta ? "arc" : "line";
             return [{
                 id: String(element.id || ""),
                 element,
+                kind,
                 start,
                 end,
                 startKey: pointKey(start),
                 endKey: pointKey(end),
-                lengthCm: distance(start, end),
+                lengthCm: rounded(arcMeta ? Number(arcMeta.length_cm) : distance(start, end)),
             }];
         });
     }
 
-    function graph(lines) {
+    function exactLines(elements) {
+        return exactSegments(elements).filter(segment => segment.kind === "line");
+    }
+
+    function exactArcs(elements) {
+        return exactSegments(elements).filter(segment => segment.kind === "arc");
+    }
+
+    function graph(segments) {
         const nodes = new Map();
         const addNode = (key, value) => {
             if (!nodes.has(key)) nodes.set(key, { key, point: point(value), edges: [] });
             return nodes.get(key);
         };
-        lines.forEach((edge, index) => {
+        segments.forEach((edge, index) => {
             addNode(edge.startKey, edge.start).edges.push(index);
             addNode(edge.endKey, edge.end).edges.push(index);
         });
         return nodes;
     }
 
-    function connectedNodeCount(lines, nodes) {
-        if (!lines.length || !nodes.size) return 0;
-        const firstKey = lines[0].startKey;
+    function connectedNodeCount(segments, nodes) {
+        if (!segments.length || !nodes.size) return 0;
+        const firstKey = segments[0].startKey;
         const visited = new Set([firstKey]);
         const queue = [firstKey];
         while (queue.length) {
             const key = queue.shift();
             const node = nodes.get(key);
             (node && node.edges || []).forEach(edgeIndex => {
-                const edge = lines[edgeIndex];
+                const edge = segments[edgeIndex];
                 const nextKey = edge.startKey === key ? edge.endKey : edge.startKey;
                 if (visited.has(nextKey)) return;
                 visited.add(nextKey);
@@ -86,33 +99,39 @@
         return visited.size;
     }
 
-    function orderedPath(lines, nodes, startKey) {
-        if (!lines.length || !startKey) return { points: [], edgeIds: [], closed: false, complete: false };
+    function orderedPath(segments, nodes, startKey) {
+        if (!segments.length || !startKey) {
+            return { points: [], edgeIds: [], steps: [], closed: false, complete: false };
+        }
         const used = new Set();
         const points = [clone(nodes.get(startKey).point)];
         const edgeIds = [];
+        const steps = [];
         let currentKey = startKey;
         let guard = 0;
-        while (used.size < lines.length && guard < lines.length + 2) {
+        while (used.size < segments.length && guard < segments.length + 2) {
             guard += 1;
             const node = nodes.get(currentKey);
             if (!node) break;
             const edgeIndex = node.edges.find(index => !used.has(index));
             if (edgeIndex === undefined) break;
             used.add(edgeIndex);
-            const edge = lines[edgeIndex];
+            const edge = segments[edgeIndex];
+            const forward = edge.startKey === currentKey;
             edgeIds.push(edge.id);
-            const nextKey = edge.startKey === currentKey ? edge.endKey : edge.startKey;
+            steps.push({ edgeIndex, forward });
+            const nextKey = forward ? edge.endKey : edge.startKey;
             currentKey = nextKey;
-            if (currentKey !== startKey || used.size < lines.length) {
+            if (currentKey !== startKey || used.size < segments.length) {
                 points.push(clone(nodes.get(currentKey).point));
             }
         }
         return {
             points,
             edgeIds,
+            steps,
             closed: currentKey === startKey,
-            complete: used.size === lines.length,
+            complete: used.size === segments.length,
         };
     }
 
@@ -125,6 +144,30 @@
         return rounded(Math.abs(signed));
     }
 
+    function sampledBoundary(segments, ordered) {
+        if (!ordered || !ordered.steps.length) return [];
+        const result = [];
+        ordered.steps.forEach((step, stepIndex) => {
+            const segment = segments[step.edgeIndex];
+            let samples;
+            if (segment.kind === "arc") {
+                samples = arcModel.sampleCm(segment.element);
+                if (!step.forward) samples = samples.slice().reverse();
+            } else {
+                samples = step.forward
+                    ? [segment.start.slice(), segment.end.slice()]
+                    : [segment.end.slice(), segment.start.slice()];
+            }
+            if (!samples.length) return;
+            const source = stepIndex ? samples.slice(1) : samples;
+            source.forEach(next => result.push(point(next)));
+        });
+        if (result.length > 1 && pointKey(result[0]) === pointKey(result[result.length - 1])) {
+            result.pop();
+        }
+        return result;
+    }
+
     function dimensionsOf(rowOrDimensions) {
         const source = rowOrDimensions || {};
         return {
@@ -134,11 +177,16 @@
     }
 
     function analyze(elements, rowOrDimensions) {
-        const lines = exactLines(elements);
+        const segments = exactSegments(elements);
+        const lineCount = segments.filter(segment => segment.kind === "line").length;
+        const arcCount = segments.filter(segment => segment.kind === "arc").length;
         const dimensions = dimensionsOf(rowOrDimensions);
         const result = {
             state: "empty",
-            exactLineCount: lines.length,
+            exactLineCount: lineCount,
+            exactArcCount: arcCount,
+            exactSegmentCount: segments.length,
+            hasCurves: arcCount > 0,
             closed: false,
             simple: false,
             canAutoClose: false,
@@ -146,17 +194,18 @@
             closeGapCm: 0,
             points: [],
             edgeIds: [],
-            perimeterCm: rounded(lines.reduce((sum, edge) => sum + edge.lengthCm, 0)),
+            perimeterCm: rounded(segments.reduce((sum, edge) => sum + edge.lengthCm, 0)),
             areaCm2: 0,
+            areaExact: arcCount === 0,
             geometry: null,
             geometryValid: false,
             geometryErrors: [],
         };
-        if (!lines.length) return result;
+        if (!segments.length) return result;
 
-        const nodes = graph(lines);
+        const nodes = graph(segments);
         const nodeList = Array.from(nodes.values());
-        const connectedCount = connectedNodeCount(lines, nodes);
+        const connectedCount = connectedNodeCount(segments, nodes);
         if (connectedCount !== nodes.size) {
             return { ...result, state: "disconnected" };
         }
@@ -166,13 +215,13 @@
 
         const loose = nodeList.filter(node => node.edges.length === 1);
         if (loose.length === 2 && nodeList.every(node => node.edges.length === 1 || node.edges.length === 2)) {
-            const ordered = orderedPath(lines, nodes, loose[0].key);
+            const ordered = orderedPath(segments, nodes, loose[0].key);
             const openEnds = [clone(loose[0].point), clone(loose[1].point)];
             return {
                 ...result,
                 state: "open",
                 simple: ordered.complete,
-                canAutoClose: ordered.complete && lines.length >= 2 && distance(openEnds[0], openEnds[1]) > EPSILON,
+                canAutoClose: ordered.complete && segments.length >= 2 && distance(openEnds[0], openEnds[1]) > EPSILON,
                 openEnds,
                 closeGapCm: distance(openEnds[0], openEnds[1]),
                 points: ordered.points,
@@ -182,15 +231,30 @@
 
         if (
             loose.length !== 0
-            || lines.length < 3
+            || segments.length < 3
             || !nodeList.every(node => node.edges.length === 2)
         ) {
             return { ...result, state: "invalid" };
         }
 
-        const ordered = orderedPath(lines, nodes, lines[0].startKey);
+        const ordered = orderedPath(segments, nodes, segments[0].startKey);
         if (!ordered.complete || !ordered.closed || ordered.points.length < 3) {
             return { ...result, state: "invalid" };
+        }
+
+        if (arcCount > 0) {
+            const boundary = sampledBoundary(segments, ordered);
+            return {
+                ...result,
+                state: "exact-closed-curved",
+                closed: true,
+                simple: true,
+                points: ordered.points,
+                edgeIds: ordered.edgeIds,
+                areaCm2: polygonArea(boundary),
+                areaExact: false,
+                geometryErrors: ["المسار يحتوي قوسًا دائريًا دقيقًا؛ لا يُحوّل إلى Polygon حتى يتم اعتماد مسار DXF المنحني."],
+            };
         }
 
         const candidate = geometry.create(
@@ -208,6 +272,7 @@
             points: ordered.points,
             edgeIds: ordered.edgeIds,
             areaCm2: polygonArea(ordered.points),
+            areaExact: true,
             geometry: validation.valid ? validation.geometry : candidate,
             geometryValid: validation.valid,
             geometryErrors: validation.errors.slice(),
@@ -236,7 +301,7 @@
     }
 
     function serializeGenerated(analysis) {
-        return analysis && analysis.geometryValid && analysis.geometry
+        return analysis && analysis.geometryValid && analysis.geometry && !analysis.hasCurves
             ? geometry.serialize(analysis.geometry)
             : "";
     }
@@ -246,8 +311,11 @@
         EPSILON,
         pointKey,
         distance,
+        exactSegments,
         exactLines,
+        exactArcs,
         polygonArea,
+        sampledBoundary,
         analyze,
         createClosingElement,
         isGeneratedGeometry,

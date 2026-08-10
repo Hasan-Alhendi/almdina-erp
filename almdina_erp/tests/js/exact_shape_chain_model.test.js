@@ -8,9 +8,11 @@ global.window = {};
 require(path.resolve(__dirname, "../../public/js/door_cutting_order_sketch_engine.js"));
 require(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_geometry.js"));
 require(path.resolve(__dirname, "../../public/js/door_cutting_order_exact_line_model.js"));
+require(path.resolve(__dirname, "../../public/js/door_cutting_order_exact_arc_model.js"));
 require(path.resolve(__dirname, "../../public/js/door_cutting_order_exact_shape_chain_model.js"));
 
 const lineModel = window.AlmdinaExactLineModel;
+const arcModel = window.AlmdinaExactArcModel;
 const chainModel = window.AlmdinaExactShapeChainModel;
 const transform = lineModel.createTransform(100, 80);
 
@@ -30,8 +32,11 @@ assert.equal(closed.state, "exact-closed");
 assert.equal(closed.closed, true);
 assert.equal(closed.geometryValid, true);
 assert.equal(closed.exactLineCount, 4);
+assert.equal(closed.exactArcCount, 0);
+assert.equal(closed.exactSegmentCount, 4);
 assert.equal(closed.perimeterCm, 360);
 assert.equal(closed.areaCm2, 8000);
+assert.equal(closed.areaExact, true);
 assert.equal(closed.geometry.template, "exact-line-chain");
 assert.equal(closed.points.length, 4);
 
@@ -47,6 +52,25 @@ assert.equal(closing.valid, true);
 const autoClosed = chainModel.analyze([top, right, bottom, closing.element], { width: 100, length: 80 });
 assert.equal(autoClosed.state, "exact-closed");
 assert.equal(autoClosed.geometryValid, true);
+
+const curvedTopResult = arcModel.fromLine(top, transform, 10, 1);
+assert.equal(curvedTopResult.valid, true);
+const curved = chainModel.analyze(
+    [curvedTopResult.element, right, bottom, left],
+    { width: 100, length: 80 }
+);
+assert.equal(curved.state, "exact-closed-curved");
+assert.equal(curved.closed, true);
+assert.equal(curved.exactLineCount, 3);
+assert.equal(curved.exactArcCount, 1);
+assert.equal(curved.exactSegmentCount, 4);
+assert.equal(curved.hasCurves, true);
+assert.equal(curved.geometryValid, false);
+assert.equal(curved.geometry, null);
+assert.equal(curved.areaExact, false);
+assert.ok(curved.perimeterCm > 360);
+assert.ok(curved.areaCm2 > 0 && curved.areaCm2 < 8000);
+assert.equal(chainModel.serializeGenerated(curved), "");
 
 const branch = line("branch", [100, 0], 30, 180);
 const branched = chainModel.analyze([top, right, branch], { width: 100, length: 80 });

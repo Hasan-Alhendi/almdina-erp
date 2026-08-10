@@ -20,7 +20,9 @@ for (const marker of [
     "الشكل الهندسي",
     "المسار مفتوح",
     "إغلاق المسار بخط دقيق",
-    "سيُزامن الشكل الهندسي بالسنتيمتر عند حفظ الرسم",
+    "exact-closed-curved",
+    "قوس دائري دقيق",
+    "المحيط الحقيقي",
     "special_shape_geometry_json",
     "chainModel.serializeGenerated",
     "chainModel.isGeneratedGeometry",
@@ -31,13 +33,15 @@ for (const marker of [
 
 const lineModelIndex = hooksSource.indexOf("door_cutting_order_exact_line_model.js");
 const editModelIndex = hooksSource.indexOf("door_cutting_order_exact_line_edit_model.js");
+const arcModelIndex = hooksSource.indexOf("door_cutting_order_exact_arc_model.js");
 const chainModelIndex = hooksSource.indexOf("door_cutting_order_exact_shape_chain_model.js");
 const editorIndex = hooksSource.indexOf("door_cutting_order_special_shape_ux.js");
 const inspectorIndex = hooksSource.indexOf("door_cutting_order_exact_line_inspector_ux.js");
+const arcUxIndex = hooksSource.indexOf("door_cutting_order_exact_arc_ux.js");
 const chainUxIndex = hooksSource.indexOf("door_cutting_order_exact_shape_chain_ux.js");
 const closeIndex = hooksSource.indexOf("door_cutting_order_special_shape_close_ux.js");
 assert.ok(lineModelIndex >= 0 && editModelIndex > lineModelIndex);
-assert.ok(chainModelIndex > editModelIndex && chainModelIndex < editorIndex);
-assert.ok(chainUxIndex > inspectorIndex && chainUxIndex < closeIndex);
+assert.ok(arcModelIndex > editModelIndex && chainModelIndex > arcModelIndex && chainModelIndex < editorIndex);
+assert.ok(arcUxIndex > inspectorIndex && chainUxIndex > arcUxIndex && chainUxIndex < closeIndex);
 
-console.log("Exact closed-shape UX contract passed");
+console.log("Exact curved-shape UX contract passed");

@@ -11,12 +11,16 @@ const modelSource = fs.readFileSync(
 
 for (const marker of [
     'const TEMPLATE = "exact-line-chain"',
+    "exactSegments(elements)",
+    'segment.kind === "arc"',
+    'state: "exact-closed-curved"',
     "geometry.create(",
     "geometry.validate(candidate",
     "geometry.serialize(analysis.geometry)",
-    "lines.length < 3",
+    "segments.length < 3",
+    "!analysis.hasCurves",
 ]) {
     assert.ok(modelSource.includes(marker), `Geometry promotion should include ${marker}`);
 }
 
-console.log("Exact shape geometry promotion contract passed");
+console.log("Exact straight/curved shape geometry contract passed");
