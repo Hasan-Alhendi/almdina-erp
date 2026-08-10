@@ -31,6 +31,11 @@
         return activeState;
     }
 
+    function activateState(state) {
+        activeState = state && typeof state === "object" ? state : null;
+        return activeState;
+    }
+
     function getActiveState() {
         return activeState;
     }
@@ -145,6 +150,7 @@
     window.AlmdinaSketchHistory = Object.freeze({
         DEFAULT_HISTORY_LIMIT,
         createState,
+        activateState,
         getActiveState,
         clearActiveState,
         snapshot,
