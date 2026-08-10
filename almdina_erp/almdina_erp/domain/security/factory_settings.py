@@ -11,6 +11,7 @@ class FactorySettingsSection:
     CUTTING = "cutting"
     COSTING = "costing"
     PRODUCTION = "production"
+    PRINT_IDENTITY = "print_identity"
 
 
 SECTION_FIELDS = MappingProxyType(
@@ -41,6 +42,14 @@ SECTION_FIELDS = MappingProxyType(
                 "allow_unplaced_approval",
             }
         ),
+        FactorySettingsSection.PRINT_IDENTITY: frozenset(
+            {
+                "print_factory_name",
+                "print_factory_description",
+                "print_factory_address",
+                "print_factory_contacts",
+            }
+        ),
     }
 )
 SECTION_CAPABILITIES = MappingProxyType(
@@ -48,6 +57,7 @@ SECTION_CAPABILITIES = MappingProxyType(
         FactorySettingsSection.CUTTING: Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
         FactorySettingsSection.COSTING: Capability.EDIT_FACTORY_COST_DEFAULTS,
         FactorySettingsSection.PRODUCTION: Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
     }
 )
 ALL_SETTINGS_FIELDS = frozenset().union(*SECTION_FIELDS.values())
