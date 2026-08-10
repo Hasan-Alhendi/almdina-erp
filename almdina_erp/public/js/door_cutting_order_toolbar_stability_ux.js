@@ -110,12 +110,87 @@
                 opacity:1!important;
             }
 
-            /* Measurement toolbar contract: title + print + separate-window only. */
+            /* Measurement toolbar: exactly one centered title and three actions on the left. */
+            .dco-fast-entry-toolbar {
+                position:relative!important;
+                display:flex!important;
+                align-items:center!important;
+                justify-content:center!important;
+                min-height:42px!important;
+                padding:5px 8px!important;
+            }
             .dco-fast-entry-toolbar > :not(.dco-fast-help):not(.dco-measurement-table-actions) {
                 display:none!important;
             }
+            .dco-fast-entry-toolbar .dco-fast-help {
+                flex:0 1 auto!important;
+                width:auto!important;
+                min-width:0!important;
+                margin:0 auto!important;
+                padding:0 116px!important;
+                display:flex!important;
+                align-items:center!important;
+                justify-content:center!important;
+                overflow:hidden!important;
+                text-align:center!important;
+            }
             .dco-fast-entry-toolbar .dco-fast-help > :not(.dco-measurement-title) {
                 display:none!important;
+            }
+            .dco-fast-entry-toolbar .dco-measurement-title {
+                display:block!important;
+                max-width:100%!important;
+                font-size:14px!important;
+                font-weight:850!important;
+                line-height:1.25!important;
+                text-align:center!important;
+                white-space:nowrap!important;
+                overflow:hidden!important;
+                text-overflow:ellipsis!important;
+            }
+            .dco-fast-entry-toolbar > .dco-measurement-table-actions {
+                position:absolute!important;
+                left:8px!important;
+                top:50%!important;
+                transform:translateY(-50%)!important;
+                order:100!important;
+                direction:ltr!important;
+                display:flex!important;
+                align-items:center!important;
+                gap:5px!important;
+                width:auto!important;
+                margin:0!important;
+                flex:0 0 auto!important;
+            }
+            .dco-fast-entry-toolbar .dco-input-help {
+                width:32px!important;
+                min-width:32px!important;
+                height:32px!important;
+                min-height:32px!important;
+                flex:0 0 32px!important;
+                display:inline-flex!important;
+                align-items:center!important;
+                justify-content:center!important;
+                padding:0!important;
+                border:1px solid var(--border-color,#d8dee5)!important;
+                border-radius:8px!important;
+                background:var(--card-bg,var(--fg-color,#fff))!important;
+                color:var(--text-color,#36414c)!important;
+                font-family:Georgia,serif!important;
+                font-size:17px!important;
+                font-weight:700!important;
+                font-style:italic!important;
+                line-height:1!important;
+                box-shadow:0 1px 2px rgba(15,23,42,.035)!important;
+            }
+            .dco-fast-entry-toolbar .dco-input-help:hover {
+                border-color:var(--primary,#2490ef)!important;
+                background:rgba(36,144,239,.06)!important;
+                color:var(--primary,#2490ef)!important;
+            }
+            .dco-fast-entry-toolbar .dco-input-help:focus-visible {
+                outline:2px solid var(--primary,#2490ef)!important;
+                outline-offset:2px!important;
             }
 
             @media(max-width:1200px){
@@ -125,8 +200,63 @@
                     padding-bottom:4px!important;
                 }
             }
+            @media(max-width:560px){
+                .dco-fast-entry-toolbar .dco-fast-help {
+                    padding-inline:108px!important;
+                }
+                .dco-fast-entry-toolbar .dco-measurement-title {
+                    font-size:12px!important;
+                }
+            }
         `;
         document.head.appendChild(style);
+    }
+
+    function showMeasurementInputHelp() {
+        const title = isArabic() ? "تعليمات إدخال القياسات" : "Measurement entry help";
+        const message = isArabic()
+            ? `
+                <div dir="rtl" style="text-align:right;line-height:1.9">
+                    <div><b>الإدخال السريع:</b> أدخل العرض ثم <kbd>Tab</kbd>، ثم الطول ثم <kbd>Enter</kbd> لإضافة السطر التالي.</div>
+                    <div><b>التنقل:</b> استخدم الأسهم ← ↑ ↓ → للتنقل بين الخلايا.</div>
+                    <div><b>القشاط:</b> نقرة على الضلع للتفعيل أو التعطيل، ونقرتان على الضلع لاختيار نوع القشاط.</div>
+                    <div><b>التدوير:</b> نقرة واحدة على زر التدوير لتفعيله أو إلغائه.</div>
+                    <div><b>القوائم:</b> القوائم قابلة للتمرير عند وجود خيارات إضافية.</div>
+                    <div><b>المقاس النهائي:</b> الخصم النهائي يُحسب حسب سماكة القشاط في كل ضلع.</div>
+                </div>`
+            : `
+                <div style="text-align:left;line-height:1.8">
+                    <div><b>Fast entry:</b> enter width, press <kbd>Tab</kbd>, enter length, then <kbd>Enter</kbd> for the next row.</div>
+                    <div><b>Navigation:</b> use the arrow keys to move between cells.</div>
+                    <div><b>Edge banding:</b> click a side to toggle it; double-click a side to choose the edge type.</div>
+                    <div><b>Rotation:</b> one click toggles rotation.</div>
+                    <div><b>Lists:</b> option lists are scrollable when more choices are available.</div>
+                    <div><b>Final size:</b> trim is calculated from the edge thickness on each side.</div>
+                </div>`;
+        frappe.msgprint({ title, message, indicator: "blue" });
+    }
+
+    function ensureMeasurementHelpAction(actions) {
+        if (!actions) return;
+        let button = actions.querySelector(":scope > .dco-input-help");
+        if (!button) {
+            button = document.createElement("button");
+            button.type = "button";
+            button.className = "btn btn-default btn-sm dco-input-help";
+            button.textContent = "i";
+            actions.appendChild(button);
+        }
+        const label = isArabic() ? "تعليمات إدخال القياسات" : "Measurement entry help";
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        if (button.dataset.helpBound !== "1") {
+            button.dataset.helpBound = "1";
+            button.addEventListener("click", event => {
+                event.preventDefault();
+                event.stopPropagation();
+                showMeasurementInputHelp();
+            });
+        }
     }
 
     function reconcileMeasurementToolbar(frm) {
@@ -154,10 +284,11 @@
 
         if (actions) {
             [...actions.children].forEach(child => {
-                if (!child.matches(".dco-print-measurements,.dco-open-measurements-window")) {
+                if (!child.matches(".dco-print-measurements,.dco-open-measurements-window,.dco-input-help")) {
                     child.remove();
                 }
             });
+            ensureMeasurementHelpAction(actions);
         }
     }
 
