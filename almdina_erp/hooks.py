@@ -68,6 +68,7 @@ doctype_js = {
         "public/js/door_cutting_order_reference_image_ux.js",
         "public/js/door_cutting_order_smart_template_palette.js",
         "public/js/door_cutting_order_smart_template_edges.js",
+        "public/js/door_cutting_order_smart_edge_features_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_action_permission_guard.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
