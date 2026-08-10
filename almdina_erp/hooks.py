@@ -80,6 +80,7 @@ doctype_js = {
         "public/js/door_cutting_order_exact_arc_ux.js",
         "public/js/door_cutting_order_exact_segment_dimensions_ux.js",
         "public/js/door_cutting_order_exact_shape_chain_ux.js",
+        "public/js/door_cutting_order_drawing_workspace_ux.js",
         "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_action_permission_guard.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
