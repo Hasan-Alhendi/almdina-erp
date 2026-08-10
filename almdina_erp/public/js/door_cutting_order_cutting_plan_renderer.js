@@ -87,15 +87,17 @@
             && shape_output
             && shape_output.hasExactCutPath(piece);
         const special = piece.piece_type === "Special"
-            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
             : "";
         const clipped = piece.piece_type === "Clipped Corner"
-            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
             : "";
+        const piece_number = String(piece.label || "—");
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
                 ${special}${clipped}
-                <span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
+                <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
+                <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
         `;
     }
@@ -316,9 +318,7 @@
 
     function printGridColumns(count) {
         if (count <= 1) return 1;
-        if (count <= 2) return 2;
-        if (count <= 4) return 2;
-        if (count <= 6) return 3;
+        if (count <= 6) return count;
         if (count <= 8) return 4;
         return 5;
     }
@@ -391,11 +391,11 @@
         const rows = Math.ceil(count / cols);
         const aspect = Math.max(0.15, boardAspectFromCards(cards, frm, plan));
         const pageGridWidthMm = 281;
-        const pageGridHeightMm = 145;
-        const columnGapMm = 2.4;
-        const rowGapMm = 2.4;
-        const titleHeightMm = 5.5;
-        const cardHorizontalSpaceMm = 1.4;
+        const pageGridHeightMm = 164;
+        const columnGapMm = 2.2;
+        const rowGapMm = 2.2;
+        const titleHeightMm = 4.2;
+        const cardHorizontalSpaceMm = 1;
 
         const widthLimit = (
             pageGridWidthMm
@@ -409,6 +409,7 @@
         const heightLimit = Math.max(12, heightPerRow - titleHeightMm);
         const boardWmm = Math.max(8, Math.min(widthLimit, heightLimit / aspect));
         const boardHmm = boardWmm * aspect;
+        const cardWmm = boardWmm + cardHorizontalSpaceMm;
 
         cards.forEach((card, index) => {
             const board = card.querySelector(".dco-sheet-board");
@@ -420,8 +421,9 @@
                 board.style.maxWidth = "100%";
                 board.style.margin = "0 auto";
             }
+            card.style.setProperty("--print-card-width", `${cardWmm}mm`);
             card.style.margin = "0";
-            card.style.padding = ".6mm";
+            card.style.padding = ".4mm";
         });
         return { cols, rows };
     }
@@ -498,51 +500,53 @@ html, body {
 .dco-print-header {
     display: grid;
     grid-template-columns: minmax(0, 1.7fr) minmax(45mm, .55fr);
-    gap: 6mm;
+    gap: 5mm;
     align-items: start;
-    padding-bottom: 1.6mm;
-    border-bottom: 1.2pt solid #111;
+    padding-bottom: 1.3mm;
+    border-bottom: 1pt solid #111;
 }
-.dco-print-factory-identity { min-width: 0; text-align: right; line-height: 1.25; }
-.dco-print-factory-name { font-size: 13pt; line-height: 1.05; font-weight: 950; }
-.dco-print-factory-description { margin-top: .7mm; font-size: 6.8pt; font-weight: 800; }
-.dco-print-factory-address { margin-top: .5mm; font-size: 6.4pt; font-weight: 650; }
-.dco-print-factory-contacts { display: flex; flex-wrap: wrap; gap: .4mm 2.4mm; margin-top: .45mm; font-size: 6.2pt; font-weight: 700; }
+.dco-print-factory-identity { min-width: 0; text-align: right; line-height: 1.2; }
+.dco-print-factory-name { font-size: 12.5pt; line-height: 1.05; font-weight: 950; }
+.dco-print-factory-description { margin-top: .55mm; font-size: 6.6pt; font-weight: 800; }
+.dco-print-factory-address { margin-top: .4mm; font-size: 6.2pt; font-weight: 650; }
+.dco-print-factory-contacts { display: flex; flex-wrap: wrap; gap: .35mm 2.2mm; margin-top: .4mm; font-size: 6pt; font-weight: 700; }
 .dco-print-factory-contacts span { white-space: nowrap; }
 .dco-print-document-title { text-align: left; }
-.dco-print-document-title h1 { margin: 0; font-size: 15pt; font-weight: 950; line-height: 1.1; }
-.dco-print-document-title span { display: block; margin-top: 1mm; font-size: 6.5pt; color: #555; }
+.dco-print-document-title h1 { margin: 0; font-size: 14.5pt; font-weight: 950; line-height: 1.05; }
+.dco-print-document-title span { display: block; margin-top: .8mm; font-size: 6.2pt; color: #555; }
 .dco-print-order-meta {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 1.2mm;
-    margin: 1.6mm 0 2mm;
+    gap: 1mm;
+    margin: 1.25mm 0 1.4mm;
 }
 .dco-print-order-meta > div {
     min-width: 0;
-    padding: 1mm 1.2mm;
-    border: .6pt solid #aab0b6;
-    border-radius: 1.2mm;
+    padding: .8mm 1mm;
+    border: .45pt solid #aab0b6;
+    border-radius: 1mm;
     background: #fff;
-    line-height: 1.15;
+    line-height: 1.1;
 }
-.dco-print-order-meta b { display: block; margin-bottom: .45mm; font-size: 5.7pt; color: #4d555c; }
-.dco-print-order-meta span { display: block; font-size: 7.1pt; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dco-print-order-meta b { display: block; margin-bottom: .35mm; font-size: 5.4pt; color: #4d555c; }
+.dco-print-order-meta span { display: block; font-size: 6.9pt; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dco-print-sheets-grid {
     flex: 1 1 auto;
     min-height: 0;
-    display: grid;
-    grid-template-columns: repeat(var(--print-cols, 1), minmax(0, 1fr));
-    grid-template-rows: repeat(var(--print-rows, 1), minmax(0, 1fr));
-    gap: 2.4mm;
-    align-items: start;
-    justify-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+    align-items: flex-start;
+    gap: 2.2mm;
+    padding-top: .8mm;
 }
 .dco-sheet-card {
-    width: 100%;
-    max-width: 100%;
+    flex: 0 0 var(--print-card-width, auto);
+    width: var(--print-card-width, auto) !important;
+    max-width: var(--print-card-width, 100%) !important;
     margin: 0 !important;
-    padding: .6mm !important;
+    padding: .4mm !important;
     border: 0 !important;
     border-radius: 0 !important;
     background: #fff !important;
@@ -552,9 +556,9 @@ html, body {
 }
 .dco-sheet-title {
     display: block !important;
-    margin: 0 0 .8mm !important;
+    margin: 0 0 .6mm !important;
     text-align: center !important;
-    font-size: 9pt !important;
+    font-size: 8.5pt !important;
     font-weight: 950 !important;
     line-height: 1 !important;
 }
@@ -563,7 +567,7 @@ html, body {
     position: relative !important;
     direction: ltr !important;
     display: block !important;
-    border: 1.1pt solid #111 !important;
+    border: 1.05pt solid #111 !important;
     background: #fff !important;
     overflow: hidden !important;
     box-shadow: none !important;
@@ -582,13 +586,26 @@ html, body {
 .dco-piece-label {
     direction: ltr !important;
     text-align: center !important;
-    font-size: 6pt !important;
     line-height: 1 !important;
     color: #111 !important;
     white-space: nowrap !important;
 }
-.dco-piece-label span { background: transparent !important; color: #111 !important; border: 0 !important; padding: 0 !important; }
-.dco-edge-line { border-color: #111 !important; }
+.dco-piece-kind-badge,
+.dco-piece-size { display: none !important; }
+.dco-piece-number {
+    display: block !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #111 !important;
+    font-size: 6.6pt !important;
+    font-weight: 950 !important;
+    line-height: 1 !important;
+}
+.dco-edge-line {
+    border-color: #e00000 !important;
+    border-width: .45pt !important;
+}
 @media print {
     a { color: inherit !important; text-decoration: none !important; }
 }
