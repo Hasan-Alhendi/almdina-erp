@@ -510,26 +510,72 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
     }
 
     function buildPlanTabsHtml(detail) {
-        if (!documentCan(detail, "view_cutting_plan")) return "";
-        if (!detail.show_dual_tabs) {
-            return detail.cutting_plan_html || emptyPlanHtml(__("لا توجد خطة قص للعرض."));
+        const tabs = Array.isArray(detail.visible_plan_tabs) && detail.visible_plan_tabs.length
+            ? detail.visible_plan_tabs
+            : (
+                documentCan(detail, "view_cutting_plan")
+                    ? ["System", "Custom", "Approved"].filter(tab => {
+                        if (tab === "System") return documentCan(detail, "view_system_cutting_plan");
+                        if (tab === "Custom") return documentCan(detail, "view_uploaded_cutting_plan");
+                        return documentCan(detail, "view_approved_cutting_plan");
+                    })
+                    : []
+            );
+        if (!tabs.length) return "";
+
+        if (tabs.length === 1 && !detail.show_dual_tabs) {
+            const only = tabs[0];
+            const html = planHtmlForTab(detail, only);
+            return html || emptyPlanHtml(__("لا توجد خطة قص للعرض."));
         }
-        const active = detail.active_plan_source === "Custom" && hasCustomPlan(detail) ? "Custom" : "System";
+
+        const preferred = detail.active_plan_source;
+        const active = tabs.includes(preferred) ? preferred : tabs[0];
         const approvedSource = detail.approved_plan_source || "System";
-        const badge = source => detail.approved_plan && approvedSource === source
-            ? `<span class="indicator-pill green" style="margin-inline-start:6px">${__("معتمدة")}</span>`
-            : "";
+        const badge = source => {
+            if (source === "Approved" && detail.approved_plan) {
+                return `<span class="indicator-pill green" style="margin-inline-start:6px">${__("معتمدة")}</span>`;
+            }
+            if (detail.approved_plan && approvedSource === source) {
+                return `<span class="indicator-pill green" style="margin-inline-start:6px">${__("مصدر الاعتماد")}</span>`;
+            }
+            return "";
+        };
+        const labels = {
+            System: __("خطة النظام"),
+            Custom: __("الخطة المرفوعة"),
+            Approved: __("الخطة المعتمدة"),
+        };
+        const buttons = tabs.map(tab => (
+            `<button type="button" class="btn btn-sm sf-plan-tab ${active === tab ? "btn-primary" : "btn-default"}" data-plan-tab="${esc(tab)}">${labels[tab] || tab}${badge(tab)}</button>`
+        )).join("");
+        const panels = tabs.map(tab => (
+            `<div class="sf-plan-tab-panel" data-plan-panel="${esc(tab)}" style="${active === tab ? "" : "display:none"}">${planHtmlForTab(detail, tab) || emptyPlanHtml(emptyMessageForTab(tab))}</div>`
+        )).join("");
+
         return `
             <div class="dco-drawing-plan-inbox-host"></div>
             <div class="almdina-sf-plan-tabs" data-active-tab="${esc(active)}">
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-                    <button type="button" class="btn btn-sm sf-plan-tab ${active === "System" ? "btn-primary" : "btn-default"}" data-plan-tab="System">${__("خطة النظام")}${badge("System")}</button>
-                    <button type="button" class="btn btn-sm sf-plan-tab ${active === "Custom" ? "btn-primary" : "btn-default"}" data-plan-tab="Custom">${__("الخطة المرفوعة")}${badge("Custom")}</button>
-                </div>
-                <div class="sf-plan-tab-panel" data-plan-panel="System" style="${active === "System" ? "" : "display:none"}">${detail.system_plan_html || emptyPlanHtml(__("لا توجد خطة نظام."))}</div>
-                <div class="sf-plan-tab-panel" data-plan-panel="Custom" style="${active === "Custom" ? "" : "display:none"}">${hasCustomPlan(detail) ? detail.custom_plan_html : emptyPlanHtml(__("لا توجد خطة مرفوعة."))}</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${buttons}</div>
+                ${panels}
             </div>
         `;
+    }
+
+    function planHtmlForTab(detail, tab) {
+        if (tab === "Custom") {
+            return hasCustomPlan(detail) ? detail.custom_plan_html : "";
+        }
+        if (tab === "Approved") {
+            return detail.approved_plan_html || "";
+        }
+        return detail.system_plan_html || "";
+    }
+
+    function emptyMessageForTab(tab) {
+        if (tab === "Custom") return __("لا توجد خطة مرفوعة.");
+        if (tab === "Approved") return __("لا توجد خطة معتمدة.");
+        return __("لا توجد خطة نظام.");
     }
 
     function bindPlanTabs($detail) {
@@ -553,6 +599,21 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         };
     }
 
+    function atDrawingStage(detail, meta) {
+        return Boolean(
+            (detail && detail.status === "At Drawing")
+            || (detail && detail.current_department === "رسم")
+            || (meta && meta.stageType === "Drawing")
+            || (detail && detail.current_stage_type === "Drawing")
+        );
+    }
+
+    function canUploadDxf(detail, meta) {
+        if (!detail || !atDrawingStage(detail, meta)) return false;
+        const capability = detail.production_dxf ? "replace_dxf" : "upload_dxf";
+        return documentCan(detail, capability);
+    }
+
     function buildActionsHtml(detail, meta) {
         const context = resolveStageContext(detail, meta);
         const actions = [`<button type="button" class="btn btn-default back-to-list">${__("رجوع")}</button>`];
@@ -565,6 +626,11 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         }
         if (activeMode && detail.can_reassign_worker) {
             actions.push(`<button type="button" class="btn btn-default reassign-worker">${__("تغيير العامل")}</button>`);
+        }
+        if (canUploadDxf(detail, meta)) {
+            actions.push(
+                `<button type="button" class="btn btn-default upload-dxf-plan">${detail.production_dxf ? __("استبدال خطة DXF") : __("رفع خطة DXF")}</button>`
+            );
         }
         if (documentCan(detail, "print_cutting_plan")) {
             actions.push(`<button type="button" class="btn btn-default print-plan">${__("طباعة خطة القص")}</button>`);
@@ -601,7 +667,13 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         const context = resolveStageContext(detail, meta);
         selected = { ...meta, ...context };
         const showDxf = Boolean(detail.production_dxf) && documentCan(detail, "view_cutting_plan");
-        const showPlan = documentCan(detail, "view_cutting_plan");
+        const showPlan = Boolean(
+            (Array.isArray(detail.visible_plan_tabs) && detail.visible_plan_tabs.length) ||
+            documentCan(detail, "view_cutting_plan") ||
+            documentCan(detail, "view_system_cutting_plan") ||
+            documentCan(detail, "view_uploaded_cutting_plan") ||
+            documentCan(detail, "view_approved_cutting_plan")
+        );
         $detail.html(`
             <div class="frappe-card" style="padding:14px;border-radius:14px">
                 <div style="margin-bottom:12px">
@@ -621,9 +693,42 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         $detail.find(".start-stage").on("click", () => startStage(context));
         $detail.find(".handoff-stage").on("click", () => handoffStage(context));
         $detail.find(".reassign-worker").on("click", () => reassignWorker(context));
+        $detail.find(".upload-dxf-plan").on("click", () => uploadDxfPlan(detail, context));
         $detail.find(".print-plan").on("click", () => printPlan($detail, detail));
         bindPlanTabs($detail);
         renderDrawingPanel($detail, detail, context, requestId);
+    }
+
+    function uploadDxfPlan(detail, meta) {
+        if (!canUploadDxf(detail, meta)) {
+            frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF في هذه المرحلة."));
+            return;
+        }
+        const orderName = detail.name || meta.order;
+        const replacing = Boolean(detail.production_dxf);
+        new frappe.ui.FileUploader({
+            doctype: "Door Cutting Order",
+            docname: orderName,
+            folder: "Home/Attachments",
+            is_private: 1,
+            restrictions: { allowed_file_types: [".dxf"], max_file_size: 10 * 1024 * 1024 },
+            on_success(file) {
+                frappe.call({
+                    method: "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf",
+                    args: { order_name: orderName, file_url: file.file_url },
+                    freeze: true,
+                    freeze_message: __("جاري التحقق من ملف DXF وتطبيق الخطة..."),
+                }).then(() => {
+                    frappe.show_alert({
+                        message: replacing
+                            ? __("تم استبدال ملف DXF والتحقق منه.")
+                            : __("تم رفع ملف DXF والتحقق منه."),
+                        indicator: "green",
+                    }, 5);
+                    return openDetail({ ...meta, order: orderName });
+                });
+            },
+        });
     }
 
     function renderDrawingPanel($detail, detail, context, requestId) {
@@ -741,8 +846,14 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 
     function printPlan($detail, detail) {
         if (!documentCan(detail, "print_cutting_plan")) return;
-        const tab = $detail.find(".almdina-sf-plan-tabs").attr("data-active-tab") || "System";
-        const html = tab === "Custom" ? detail.custom_plan_html : (detail.system_plan_html || detail.cutting_plan_html);
+        const tab = $detail.find(".almdina-sf-plan-tabs").attr("data-active-tab")
+            || detail.active_plan_source
+            || "System";
+        const html = tab === "Custom"
+            ? detail.custom_plan_html
+            : tab === "Approved"
+                ? detail.approved_plan_html
+                : (detail.system_plan_html || detail.cutting_plan_html);
         if (!html) {
             frappe.msgprint(__("لا يوجد مخطط قص للطباعة."));
             return;

@@ -57,10 +57,14 @@ def test_dxf_export_uses_stored_system_plan_before_approval():
     assert "_stored_order_export_snapshot(order)" in block
 
 
-def test_dual_tabs_ux_exposes_system_and_custom_tabs():
+def test_dual_tabs_ux_exposes_system_custom_and_approved_tabs():
     src = _source(TABS_UX)
     assert "خطة النظام" in src
     assert "الخطة المرفوعة" in src
+    assert "الخطة المعتمدة" in src
+    assert "view_system_cutting_plan" in src
+    assert "view_uploaded_cutting_plan" in src
+    assert "view_approved_cutting_plan" in src
     assert "shouldShowPlanTabs" in src
     assert "لا يوجد خطة مرفوعة" in src
 

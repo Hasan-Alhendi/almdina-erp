@@ -512,36 +512,83 @@ def _plan_snapshots(
     repository: ShopFloorQueryPort,
     order: Any,
     *,
-    can_view_plan: bool,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool, str, str]:
+    document_capabilities: frozenset[str],
+) -> dict[str, Any]:
     approved_plan = _value(order, "approved_plan")
     approved_source = str(_value(order, "approved_plan_source") or "System")
-    if not can_view_plan:
-        return {}, {}, {}, False, approved_source, approved_source
-
-    system_snapshot = repository.load_plan_snapshot(order, "System")
-    custom_snapshot = repository.load_plan_snapshot(order, "Custom")
-    can_view_dual = repository.user_can_view_dual_plans()
-    active_source = approved_source if can_view_dual and approved_plan else "System"
-    if not can_view_dual:
-        active_source = approved_source
-
-    active_snapshot = (
-        custom_snapshot
-        if active_source == "Custom" and custom_snapshot.get("sheets")
-        else system_snapshot
+    can_system = Capability.VIEW_SYSTEM_CUTTING_PLAN in document_capabilities
+    can_uploaded = Capability.VIEW_UPLOADED_CUTTING_PLAN in document_capabilities
+    can_approved = Capability.VIEW_APPROVED_CUTTING_PLAN in document_capabilities
+    can_view_plan = (
+        Capability.VIEW_CUTTING_PLAN in document_capabilities
+        or can_system
+        or can_uploaded
+        or can_approved
     )
-    if approved_plan and not can_view_dual:
+    if not can_view_plan:
+        return {
+            "system_snapshot": {},
+            "custom_snapshot": {},
+            "approved_snapshot": {},
+            "active_snapshot": {},
+            "visible_plan_tabs": [],
+            "show_dual_tabs": False,
+            "approved_plan_source": approved_source,
+            "active_plan_source": approved_source,
+        }
+
+    system_snapshot = (
+        repository.load_plan_snapshot(order, "System") if can_system else {}
+    )
+    custom_snapshot = (
+        repository.load_plan_snapshot(order, "Custom") if can_uploaded else {}
+    )
+    approved_snapshot = (
+        repository.load_plan_snapshot(order) if can_approved else {}
+    )
+
+    visible_plan_tabs: list[str] = []
+    if can_system:
+        visible_plan_tabs.append("System")
+    if can_uploaded:
+        visible_plan_tabs.append("Custom")
+    if can_approved:
+        visible_plan_tabs.append("Approved")
+
+    if can_approved and approved_plan:
+        active_source = "Approved"
+        active_snapshot = approved_snapshot
+    elif (
+        can_uploaded
+        and approved_source == "Custom"
+        and custom_snapshot.get("sheets")
+    ):
+        active_source = "Custom"
+        active_snapshot = custom_snapshot
+    elif can_system:
+        active_source = "System"
+        active_snapshot = system_snapshot
+    elif visible_plan_tabs:
+        active_source = visible_plan_tabs[0]
+        active_snapshot = {
+            "System": system_snapshot,
+            "Custom": custom_snapshot,
+            "Approved": approved_snapshot,
+        }.get(active_source, {})
+    else:
+        active_source = approved_source
         active_snapshot = repository.load_plan_snapshot(order)
 
-    return (
-        system_snapshot,
-        custom_snapshot,
-        active_snapshot,
-        can_view_dual,
-        approved_source,
-        active_source,
-    )
+    return {
+        "system_snapshot": system_snapshot,
+        "custom_snapshot": custom_snapshot,
+        "approved_snapshot": approved_snapshot,
+        "active_snapshot": active_snapshot,
+        "visible_plan_tabs": visible_plan_tabs,
+        "show_dual_tabs": len(visible_plan_tabs) > 1,
+        "approved_plan_source": approved_source,
+        "active_plan_source": active_source,
+    }
 
 
 def get_order_detail(
@@ -560,15 +607,14 @@ def get_order_detail(
         if not _value(row, "piece_label")
     ]
     stage_snapshot = _active_stage_snapshot(repository, order, document_capabilities)
-    can_view_plan = Capability.VIEW_CUTTING_PLAN in document_capabilities
-    (
-        system_snapshot,
-        custom_snapshot,
-        active_snapshot,
-        can_view_dual,
-        approved_source,
-        active_source,
-    ) = _plan_snapshots(repository, order, can_view_plan=can_view_plan)
+    plan_payload = _plan_snapshots(
+        repository,
+        order,
+        document_capabilities=document_capabilities,
+    )
+    can_view_plan = bool(plan_payload["visible_plan_tabs"]) or (
+        Capability.VIEW_CUTTING_PLAN in document_capabilities
+    )
 
     approved_plan = _value(order, "approved_plan")
     current_stage_type = str(stage_snapshot.get("active_stage_type") or "")
@@ -595,12 +641,14 @@ def get_order_detail(
         "order": order,
         "stages": stages,
         "stage_snapshot": stage_snapshot,
-        "system_snapshot": system_snapshot,
-        "custom_snapshot": custom_snapshot,
-        "active_snapshot": active_snapshot,
-        "approved_plan_source": approved_source,
-        "active_plan_source": active_source,
-        "show_dual_tabs": can_view_dual,
+        "system_snapshot": plan_payload["system_snapshot"],
+        "custom_snapshot": plan_payload["custom_snapshot"],
+        "approved_snapshot": plan_payload["approved_snapshot"],
+        "active_snapshot": plan_payload["active_snapshot"],
+        "approved_plan_source": plan_payload["approved_plan_source"],
+        "active_plan_source": plan_payload["active_plan_source"],
+        "visible_plan_tabs": plan_payload["visible_plan_tabs"],
+        "show_dual_tabs": plan_payload["show_dual_tabs"],
         "can_recalculate_drawing_plan": can_recalculate,
         "document_capabilities": {
             capability: capability in document_capabilities

@@ -23,9 +23,18 @@ class DrawingActionState:
 
 
 def is_at_drawing_stage(state: DrawingActionState) -> bool:
-    return state.status == "At Drawing" or (
-        state.production_path == "Drawing" and state.current_department == "رسم"
-    )
+    """Return whether the order is currently in a drawing/planning stage.
+
+    Configurable routes may use a planning stage whose ``stage_type`` is not the
+    literal ``Drawing`` value. In that case order status may become a generic
+    production status while ``current_department`` remains ``رسم``.
+    """
+
+    if state.status == "At Drawing":
+        return True
+    if str(state.current_department or "").strip() == "رسم":
+        return True
+    return state.production_path == "Drawing"
 
 
 def validate_assigned_drawing_action(
@@ -33,14 +42,27 @@ def validate_assigned_drawing_action(
     *,
     require_unlocked_plan: bool = True,
 ) -> None:
-    """Enforce the invariant that the assigned designer owns drawing changes."""
+    """Enforce stage and assignee ownership for designer-bound drawing actions."""
 
-    if not is_at_drawing_stage(state):
-        raise DrawingActionDenied("not_at_drawing")
+    validate_drawing_stage_action(
+        state,
+        require_unlocked_plan=require_unlocked_plan,
+    )
     if not state.current_assignee:
         raise DrawingActionDenied("designer_not_assigned")
     if state.current_assignee != state.session_user:
         raise DrawingActionDenied("not_assigned_designer")
+
+
+def validate_drawing_stage_action(
+    state: DrawingActionState,
+    *,
+    require_unlocked_plan: bool = True,
+) -> None:
+    """Enforce drawing-stage workflow without binding the action to one role/user."""
+
+    if not is_at_drawing_stage(state):
+        raise DrawingActionDenied("not_at_drawing")
     if require_unlocked_plan and state.approved_plan:
         raise DrawingActionDenied("plan_already_approved")
 
@@ -72,5 +94,6 @@ __all__ = [
     "is_at_drawing_stage",
     "required_upload_capability",
     "validate_assigned_drawing_action",
+    "validate_drawing_stage_action",
     "validate_plan_source",
 ]

@@ -116,7 +116,11 @@ def test_permission_queries_use_capabilities_and_assignment_not_role_names() -> 
 
 def test_cutting_plan_tabs_use_capability_not_role_names() -> None:
     source = PLAN_TABS_PATH.read_text(encoding="utf-8")
-    assert 'context.canDocument(frm, "view_cutting_plan")' in source
+    assert 'context.canDocument(frm, capability)' in source or 'canDocument(frm, capability)' in source
+    assert "view_system_cutting_plan" in source
+    assert "view_uploaded_cutting_plan" in source
+    assert "view_approved_cutting_plan" in source
+    assert "الخطة المعتمدة" in source
     assert "frappe.user_roles" not in source
     assert "DUAL_ROLES" not in source
     for role in ("Order Entry", "Production Manager", "System Manager", "عامل رسم"):

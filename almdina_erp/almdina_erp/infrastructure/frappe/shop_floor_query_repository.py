@@ -253,8 +253,10 @@ class FrappeShopFloorQueryRepository:
         return any(
             doctype_has_capability(capability)
             for capability in (
-                Capability.VIEW_DRAWING_WORKSPACE,
-                Capability.APPROVE_DXF,
+                Capability.VIEW_SYSTEM_CUTTING_PLAN,
+                Capability.VIEW_UPLOADED_CUTTING_PLAN,
+                Capability.VIEW_APPROVED_CUTTING_PLAN,
+                Capability.VIEW_CUTTING_PLAN,
             )
         )
 

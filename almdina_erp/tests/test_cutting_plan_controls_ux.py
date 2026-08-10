@@ -97,7 +97,9 @@ def test_cutting_plan_browser_authority_never_depends_on_cost_visibility():
         assert 'can(frm, "view_costs")' not in module
         assert 'can("view_costs")' not in module
 
-    assert '"view_cutting_plan"' in tabs
+    assert '"view_system_cutting_plan"' in tabs
+    assert '"view_uploaded_cutting_plan"' in tabs
+    assert '"view_approved_cutting_plan"' in tabs
     assert '"recalculate_plan"' in controls
     assert '"edit_optimizer_settings"' in controls
 

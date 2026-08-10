@@ -118,8 +118,17 @@
         if (controls && typeof controls.apply === "function") {
             controls.apply(frm);
         }
-        if (!tabs.afterRender(frm)) {
-            throw new Error("Cutting-plan tabs refused an authorized plan surface");
+        const tabsShown = tabs.afterRender(frm);
+        if (!tabsShown) {
+            // Keep plan commands visible even when no plan-tab grant is active.
+            const layout = wrapper(frm, "cutting_plan_html");
+            if (layout && !layout.children().length) {
+                layout.html(
+                    `<div class="dco-plan-tab-content" style="padding:16px;color:#666;text-align:center;border:1px dashed #ccd3da;border-radius:12px;background:#fafafa;">${__(
+                        "لا توجد صلاحية لعرض تبويبات خطة القص."
+                    )}</div>`
+                );
+            }
         }
         return surfaceReady(frm);
     }

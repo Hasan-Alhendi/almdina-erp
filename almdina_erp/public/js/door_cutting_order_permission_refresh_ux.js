@@ -67,11 +67,7 @@
 
         const plans = window.AlmdinaPlanTabsUX;
         if (plans && typeof plans.afterRender === "function") {
-            const shown = plans.afterRender(frm);
-            if (!shown) {
-                const field = frm.fields_dict.cutting_plan_html;
-                if (field && field.$wrapper) field.$wrapper.empty();
-            }
+            plans.afterRender(frm);
         }
 
         const tabs = window.AlmdinaOrderTabPermissionsUX;

@@ -30,6 +30,9 @@ class Capability:
 
     # Cutting plans, drawings, and DXF
     VIEW_CUTTING_PLAN = "view_cutting_plan"
+    VIEW_SYSTEM_CUTTING_PLAN = "view_system_cutting_plan"
+    VIEW_UPLOADED_CUTTING_PLAN = "view_uploaded_cutting_plan"
+    VIEW_APPROVED_CUTTING_PLAN = "view_approved_cutting_plan"
     RECALCULATE_PLAN = "recalculate_plan"
     EDIT_OPTIMIZER_SETTINGS = "edit_optimizer_settings"
     PRINT_CUTTING_PLAN = "print_cutting_plan"
@@ -136,6 +139,24 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.PRINT_CUSTOMER_INVOICE, Capability.PRINT_CUSTOMER_INVOICE, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_INTERNAL_COST_REPORT, Capability.PRINT_INTERNAL_COST_REPORT, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.VIEW_CUTTING_PLAN, Capability.VIEW_CUTTING_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(
+        Capability.VIEW_SYSTEM_CUTTING_PLAN,
+        Capability.VIEW_SYSTEM_CUTTING_PLAN,
+        _ORDER_DOCTYPE,
+        "cutting_plan",
+    ),
+    CapabilityDefinition(
+        Capability.VIEW_UPLOADED_CUTTING_PLAN,
+        Capability.VIEW_UPLOADED_CUTTING_PLAN,
+        _ORDER_DOCTYPE,
+        "cutting_plan",
+    ),
+    CapabilityDefinition(
+        Capability.VIEW_APPROVED_CUTTING_PLAN,
+        Capability.VIEW_APPROVED_CUTTING_PLAN,
+        _ORDER_DOCTYPE,
+        "cutting_plan",
+    ),
     CapabilityDefinition(Capability.RECALCULATE_PLAN, Capability.RECALCULATE_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.EDIT_OPTIMIZER_SETTINGS, Capability.EDIT_OPTIMIZER_SETTINGS, _ORDER_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.PRINT_CUTTING_PLAN, Capability.PRINT_CUTTING_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
