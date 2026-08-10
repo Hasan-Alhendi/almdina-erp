@@ -56,6 +56,21 @@
         return (page && page.querySelector(".page-head")) || document.querySelector(".page-head");
     }
 
+    function measurementRoot(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        return field && field.$wrapper ? field.$wrapper.get(0) : null;
+    }
+
+    function isArabic() {
+        const lang = String(
+            (frappe.boot && frappe.boot.lang) ||
+            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
+            document.documentElement.lang ||
+            ""
+        ).toLowerCase();
+        return lang === "ar" || lang.startsWith("ar-");
+    }
+
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
@@ -94,6 +109,15 @@
                 visibility:visible!important;
                 opacity:1!important;
             }
+
+            /* Measurement toolbar contract: title + print + separate-window only. */
+            .dco-fast-entry-toolbar > :not(.dco-fast-help):not(.dco-measurement-table-actions) {
+                display:none!important;
+            }
+            .dco-fast-entry-toolbar .dco-fast-help > :not(.dco-measurement-title) {
+                display:none!important;
+            }
+
             @media(max-width:1200px){
                 .page-head.dco-stable-actions-head .page-actions {
                     max-height:none!important;
@@ -103,6 +127,57 @@
             }
         `;
         document.head.appendChild(style);
+    }
+
+    function reconcileMeasurementToolbar(frm) {
+        const root = measurementRoot(frm);
+        const toolbar = root && root.querySelector(".dco-fast-entry-toolbar");
+        if (!toolbar) return;
+
+        const help = toolbar.querySelector(":scope > .dco-fast-help");
+        const actions = toolbar.querySelector(":scope > .dco-measurement-table-actions");
+        const titleText = isArabic() ? "جدول قياسات الدرف" : "Door Measurements Table";
+
+        if (help) {
+            const title = help.querySelector(":scope > .dco-measurement-title");
+            const isExactTitle = help.children.length === 1
+                && title
+                && text(title) === titleText;
+            if (!isExactTitle) {
+                help.innerHTML = `<b class="dco-measurement-title">${titleText}</b>`;
+            }
+        }
+
+        [...toolbar.children].forEach(child => {
+            if (child !== help && child !== actions) child.remove();
+        });
+
+        if (actions) {
+            [...actions.children].forEach(child => {
+                if (!child.matches(".dco-print-measurements,.dco-open-measurements-window")) {
+                    child.remove();
+                }
+            });
+        }
+    }
+
+    function observeMeasurementToolbar(frm) {
+        const root = measurementRoot(frm);
+        if (!root || frm._dcoMeasurementToolbarObservedRoot === root) return;
+        if (frm._dcoMeasurementToolbarObserver) frm._dcoMeasurementToolbarObserver.disconnect();
+
+        let scheduled = false;
+        const observer = new MutationObserver(() => {
+            if (scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(() => {
+                scheduled = false;
+                reconcileMeasurementToolbar(frm);
+            });
+        });
+        observer.observe(root, { childList: true, subtree: true });
+        frm._dcoMeasurementToolbarObserver = observer;
+        frm._dcoMeasurementToolbarObservedRoot = root;
     }
 
     function removeLegacyButtons(frm, head) {
@@ -173,6 +248,7 @@
 
     function reconcile(frm) {
         installStyles();
+        reconcileMeasurementToolbar(frm);
         const head = pageHead(frm);
         if (!head) return;
         if (!head.classList.contains("dco-stable-actions-head")) {
@@ -185,6 +261,7 @@
     }
 
     function observe(frm) {
+        observeMeasurementToolbar(frm);
         const head = pageHead(frm);
         if (!head || frm._dcoToolbarObservedHead === head) return;
         if (frm._dcoToolbarObserver) frm._dcoToolbarObserver.disconnect();
