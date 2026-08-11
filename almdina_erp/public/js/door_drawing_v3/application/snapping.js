@@ -6,15 +6,18 @@
     const D = root.DocumentModel;
     if (!G || !D) throw new Error("Door Drawing V3 domain must load before snapping");
 
-    const DEFAULT_SNAP_PX = 14;
+    const DEFAULT_SNAP_PX = 22;
+    const JOIN_SNAP_PX = 26;
+    const SNAP_RELEASE_FACTOR = 1.55;
     const AXIS_EPSILON_MM = 0.01;
 
-    function freezeAnchor(objectId, role, point, priority = 0) {
+    function freezeAnchor(objectId, role, point, priority = 0, kind = "reference") {
         return Object.freeze({
             objectId: String(objectId || ""),
             role: String(role || "point"),
             point: G.point(point && point.x, point && point.y),
             priority: Number(priority) || 0,
+            kind: String(kind || "reference"),
         });
     }
 
@@ -24,29 +27,29 @@
         const anchors = [];
 
         if (object.type === "line") {
-            anchors.push(freezeAnchor(object.id, "start", g.start, 50));
-            anchors.push(freezeAnchor(object.id, "end", g.end, 50));
+            anchors.push(freezeAnchor(object.id, "start", g.start, 100, "joint"));
+            anchors.push(freezeAnchor(object.id, "end", g.end, 100, "joint"));
         } else if (object.type === "rectangle") {
             const x = g.origin.x;
             const y = g.origin.y;
             const right = x + g.widthMm;
             const top = y + g.heightMm;
-            anchors.push(freezeAnchor(object.id, "bottom-left", G.point(x, y), 40));
-            anchors.push(freezeAnchor(object.id, "bottom-right", G.point(right, y), 40));
-            anchors.push(freezeAnchor(object.id, "top-right", G.point(right, top), 40));
-            anchors.push(freezeAnchor(object.id, "top-left", G.point(x, top), 40));
+            anchors.push(freezeAnchor(object.id, "bottom-left", G.point(x, y), 90, "joint"));
+            anchors.push(freezeAnchor(object.id, "bottom-right", G.point(right, y), 90, "joint"));
+            anchors.push(freezeAnchor(object.id, "top-right", G.point(right, top), 90, "joint"));
+            anchors.push(freezeAnchor(object.id, "top-left", G.point(x, top), 90, "joint"));
         } else if (object.type === "circle") {
             const c = g.center;
             const r = g.radiusMm;
-            anchors.push(freezeAnchor(object.id, "east", G.point(c.x + r, c.y), 30));
-            anchors.push(freezeAnchor(object.id, "north", G.point(c.x, c.y + r), 30));
-            anchors.push(freezeAnchor(object.id, "west", G.point(c.x - r, c.y), 30));
-            anchors.push(freezeAnchor(object.id, "south", G.point(c.x, c.y - r), 30));
-            anchors.push(freezeAnchor(object.id, "center", c, 10));
+            anchors.push(freezeAnchor(object.id, "east", G.point(c.x + r, c.y), 70, "joint"));
+            anchors.push(freezeAnchor(object.id, "north", G.point(c.x, c.y + r), 70, "joint"));
+            anchors.push(freezeAnchor(object.id, "west", G.point(c.x - r, c.y), 70, "joint"));
+            anchors.push(freezeAnchor(object.id, "south", G.point(c.x, c.y - r), 70, "joint"));
+            anchors.push(freezeAnchor(object.id, "center", c, 10, "reference"));
         } else if (object.type === "arc") {
-            anchors.push(freezeAnchor(object.id, "start", G.arcStart(object), 50));
-            anchors.push(freezeAnchor(object.id, "end", G.arcEnd(object), 50));
-            anchors.push(freezeAnchor(object.id, "center", g.center, 10));
+            anchors.push(freezeAnchor(object.id, "start", G.arcStart(object), 100, "joint"));
+            anchors.push(freezeAnchor(object.id, "end", G.arcEnd(object), 100, "joint"));
+            anchors.push(freezeAnchor(object.id, "center", g.center, 10, "reference"));
         }
 
         return Object.freeze(anchors);
@@ -90,6 +93,36 @@
         return best;
     }
 
+    function isJoint(anchor) {
+        return Boolean(anchor && anchor.kind === "joint");
+    }
+
+    function stickyAnchor(candidate, anchors, target, toleranceMm, predicate = null) {
+        if (!target) return null;
+        const found = (anchors || []).find(anchor => (
+            String(anchor.objectId) === String(target.objectId)
+            && String(anchor.role) === String(target.role)
+        ));
+        if (!found || (predicate && !predicate(found))) return null;
+        const distanceMm = G.distance(candidate, found.point);
+        return distanceMm <= toleranceMm * SNAP_RELEASE_FACTOR
+            ? { target: found, distanceMm }
+            : null;
+    }
+
+    function preferredAnchor(candidate, anchors, options = {}) {
+        const normalToleranceMm = Math.max(0, G.number(options.toleranceMm));
+        const joinToleranceMm = Math.max(normalToleranceMm, G.number(options.joinToleranceMm, normalToleranceMm));
+        const predicate = options.predicate || null;
+        const sticky = stickyAnchor(candidate, anchors, options.stickyTarget, joinToleranceMm, predicate);
+        if (sticky) return sticky;
+        const joint = nearestAnchor(candidate, anchors, joinToleranceMm, anchor => (
+            isJoint(anchor) && (!predicate || predicate(anchor))
+        ));
+        if (joint) return joint;
+        return nearestAnchor(candidate, anchors, normalToleranceMm, predicate);
+    }
+
     function axisLock(anchor, candidate, forcedAxis = null) {
         const start = G.point(anchor && anchor.x, anchor && anchor.y);
         const raw = G.point(candidate && candidate.x, candidate && candidate.y);
@@ -108,6 +141,7 @@
     function resolvePoint(document, candidate, options = {}) {
         const raw = G.point(candidate && candidate.x, candidate && candidate.y);
         const toleranceMm = worldTolerance(options.viewportScale, options.snapPx);
+        const joinToleranceMm = worldTolerance(options.viewportScale, options.joinSnapPx || JOIN_SNAP_PX);
         const anchors = options.anchors || collectAnchors(document, options);
         const reference = options.anchor ? G.point(options.anchor.x, options.anchor.y) : null;
         const forcedAxis = options.forcedAxis === "horizontal" || options.forcedAxis === "vertical"
@@ -125,9 +159,18 @@
             const compatible = target => axis === "horizontal"
                 ? Math.abs(target.point.y - reference.y) <= AXIS_EPSILON_MM
                 : Math.abs(target.point.x - reference.x) <= AXIS_EPSILON_MM;
-            snapped = nearestAnchor(point, anchors, toleranceMm, compatible);
+            snapped = preferredAnchor(point, anchors, {
+                toleranceMm,
+                joinToleranceMm,
+                predicate: compatible,
+                stickyTarget: options.stickyTarget,
+            });
         } else {
-            snapped = nearestAnchor(point, anchors, toleranceMm);
+            snapped = preferredAnchor(point, anchors, {
+                toleranceMm,
+                joinToleranceMm,
+                stickyTarget: options.stickyTarget,
+            });
         }
 
         if (snapped) {
@@ -145,8 +188,65 @@
             target: snapped ? snapped.target : null,
             distanceMm: snapped ? G.roundMm(snapped.distanceMm) : null,
             toleranceMm: G.roundMm(toleranceMm),
+            joinToleranceMm: G.roundMm(joinToleranceMm),
             axis,
             anchor: reference,
+            kind: snapped && isJoint(snapped.target) ? "joint" : "reference",
+        });
+    }
+
+    function resolveObjectMove(document, object, deltaX, deltaY, options = {}) {
+        const dx = G.number(deltaX);
+        const dy = G.number(deltaY);
+        const moved = G.translateObject(object, dx, dy);
+        const sourceAnchors = objectAnchors(moved).filter(isJoint);
+        const targetAnchors = collectAnchors(document, { excludeId: object && object.id }).filter(isJoint);
+        const toleranceMm = worldTolerance(options.viewportScale, options.joinSnapPx || JOIN_SNAP_PX);
+        let best = null;
+
+        for (const source of sourceAnchors) {
+            const candidate = nearestAnchor(source.point, targetAnchors, toleranceMm);
+            if (!candidate) continue;
+            if (
+                !best
+                || candidate.distanceMm < best.distanceMm - G.EPSILON_MM
+                || (Math.abs(candidate.distanceMm - best.distanceMm) <= G.EPSILON_MM && candidate.target.priority > best.target.priority)
+            ) {
+                best = { source, target: candidate.target, distanceMm: candidate.distanceMm };
+            }
+        }
+
+        if (!best) {
+            return Object.freeze({
+                object: moved,
+                point: null,
+                rawPoint: null,
+                snapped: false,
+                target: null,
+                source: null,
+                distanceMm: null,
+                toleranceMm: G.roundMm(toleranceMm),
+                axis: null,
+                anchor: null,
+                kind: "move",
+            });
+        }
+
+        const correctionX = best.target.point.x - best.source.point.x;
+        const correctionY = best.target.point.y - best.source.point.y;
+        const corrected = G.translateObject(object, dx + correctionX, dy + correctionY);
+        return Object.freeze({
+            object: corrected,
+            point: best.target.point,
+            rawPoint: best.source.point,
+            snapped: true,
+            target: best.target,
+            source: best.source,
+            distanceMm: G.roundMm(best.distanceMm),
+            toleranceMm: G.roundMm(toleranceMm),
+            axis: null,
+            anchor: best.source.point,
+            kind: "joint",
         });
     }
 
@@ -154,10 +254,10 @@
         const raw = G.point(candidate && candidate.x, candidate && candidate.y);
         const c = G.point(center && center.x, center && center.y);
         const radius = Math.max(G.EPSILON_MM, G.number(radiusMm));
-        const toleranceMm = worldTolerance(options.viewportScale, options.snapPx);
+        const toleranceMm = worldTolerance(options.viewportScale, options.joinSnapPx || JOIN_SNAP_PX);
         const anchors = options.anchors || collectAnchors(document, options);
         const nearest = nearestAnchor(raw, anchors, toleranceMm, target => (
-            Math.abs(G.distance(c, target.point) - radius) <= AXIS_EPSILON_MM
+            isJoint(target) && Math.abs(G.distance(c, target.point) - radius) <= AXIS_EPSILON_MM
         ));
         const point = nearest
             ? nearest.target.point
@@ -171,18 +271,24 @@
             toleranceMm: G.roundMm(toleranceMm),
             axis: null,
             anchor: c,
+            kind: nearest ? "joint" : "arc",
         });
     }
 
     root.Snapping = Object.freeze({
         DEFAULT_SNAP_PX,
+        JOIN_SNAP_PX,
+        SNAP_RELEASE_FACTOR,
         AXIS_EPSILON_MM,
         objectAnchors,
         collectAnchors,
         worldTolerance,
         nearestAnchor,
+        isJoint,
+        preferredAnchor,
         axisLock,
         resolvePoint,
+        resolveObjectMove,
         resolveArcEndpoint,
     });
 })();

@@ -4,6 +4,7 @@
     const STYLE_LINKS = Object.freeze([
         Object.freeze({ id: "almdina-door-drawing-v3-css", href: "/assets/almdina_erp/css/door_drawing_v3.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-precision-css", href: "/assets/almdina_erp/css/door_drawing_v3_precision.css" }),
+        Object.freeze({ id: "almdina-door-drawing-v3-magnetic-css", href: "/assets/almdina_erp/css/door_drawing_v3_magnetic.css" }),
     ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
@@ -15,6 +16,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/precision_input.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/magnetic_connection.js",
     ]);
 
     function ensureStyles() {
@@ -47,6 +49,7 @@
         __doorDrawingV3Snapping: true,
         __doorDrawingV3Handles: true,
         __doorDrawingV3PrecisionInput: true,
+        __doorDrawingV3MagneticConnection: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,

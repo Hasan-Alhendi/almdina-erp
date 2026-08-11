@@ -26,6 +26,9 @@ assert.ok(anchors.some(anchor => anchor.objectId === "L1" && anchor.role === "en
 assert.ok(anchors.some(anchor => anchor.objectId === "R1" && anchor.role === "top-right" && anchor.point.x === 280 && anchor.point.y === 160));
 assert.ok(anchors.some(anchor => anchor.objectId === "C1" && anchor.role === "east" && anchor.point.x === 450));
 assert.ok(anchors.some(anchor => anchor.objectId === "A1" && anchor.role === "end" && anchor.point.x === 600 && anchor.point.y === 300));
+assert.equal(anchors.find(anchor => anchor.objectId === "L1" && anchor.role === "end").kind, "joint");
+assert.ok(S.DEFAULT_SNAP_PX >= 20, "Default magnetic radius must be forgiving enough for normal mouse use");
+assert.ok(S.JOIN_SNAP_PX > S.DEFAULT_SNAP_PX, "Join endpoints should have a slightly larger magnetic capture radius");
 
 assert.equal(S.worldTolerance(2, 14), 7, "Snap radius must stay stable in screen pixels across zoom levels");
 
@@ -34,6 +37,11 @@ assert.equal(endpointSnap.snapped, true);
 assert.deepEqual(endpointSnap.point, G.point(100, 0));
 assert.equal(endpointSnap.target.objectId, "L1");
 assert.equal(endpointSnap.target.role, "end");
+assert.equal(endpointSnap.kind, "joint");
+
+const forgivingStart = S.resolvePoint(document, G.point(119, 0), { viewportScale: 1 });
+assert.equal(forgivingStart.snapped, true, "A new segment started near an endpoint should connect without pixel-perfect aiming");
+assert.deepEqual(forgivingStart.point, G.point(100, 0));
 
 const excluded = S.resolvePoint(document, G.point(106, 4), { viewportScale: 1, snapPx: 14, excludeId: "L1" });
 assert.equal(excluded.snapped, false, "Endpoint editing must be able to exclude the selected object from snap targets");
@@ -96,5 +104,18 @@ const exactArcSnap = S.resolveArcEndpoint(compatibleArcTargetDoc, G.point(603, 2
 });
 assert.equal(exactArcSnap.snapped, true);
 assert.deepEqual(exactArcSnap.point, G.point(600, 300));
+
+let moveDocument = D.create({ widthMm: 500, heightMm: 500 });
+const fixedHorizontal = G.line("fixed", G.point(0, 0), G.point(100, 0));
+const movingVertical = G.line("moving", G.point(125, 0), G.point(125, 100));
+moveDocument = D.addObject(moveDocument, fixedHorizontal);
+moveDocument = D.addObject(moveDocument, movingVertical);
+const moved = S.resolveObjectMove(moveDocument, movingVertical, -7, 0, { viewportScale: 1 });
+assert.equal(moved.snapped, true, "Moving an entire nearby piece should magnetically join endpoint-to-endpoint");
+assert.deepEqual(moved.object.geometry.start, G.point(100, 0));
+assert.deepEqual(moved.object.geometry.end, G.point(100, 100));
+assert.equal(G.lineLength(moved.object), 100, "Magnetic joining must translate the piece without changing its exact length");
+assert.equal(moved.target.objectId, "fixed");
+assert.equal(moved.target.role, "end");
 
 console.log("Door Drawing V3 snapping tests passed");
