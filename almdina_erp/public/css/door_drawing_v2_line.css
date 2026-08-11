@@ -1,0 +1,184 @@
+.dco-v2-editor-shell .dco-exact-line-hud,
+.dco-v2-editor-shell .dco-exact-line-inspector {
+    display: none !important;
+}
+
+.dco-v2-editor-shell.is-v2-line-drawing .dco-exact-shape-card,
+.dco-v2-editor-shell.is-v2-line-drawing .dco-exact-shape-chain-overlay {
+    display: none !important;
+}
+
+.dco-v2-editor-shell .dco-v2-chip.is-mm,
+.dco-v2-editor-shell .dco-v2-chip.is-hint,
+.dco-v2-editor-shell .dco-v2-viewport-hint {
+    display: none !important;
+}
+
+.dco-v2-editor-shell.is-v2-line-drawing .dco-figma-selection-properties {
+    display: none !important;
+}
+
+.dco-v2-line-draft-panel {
+    direction: rtl;
+    padding: 12px 0 10px;
+    border-bottom: 1px solid #444;
+    color: #f5f5f5;
+}
+
+.dco-v2-line-draft-panel[hidden] {
+    display: none !important;
+}
+
+.dco-v2-line-draft-title {
+    direction: ltr;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+    margin-bottom: 10px;
+    color: #f5f5f5;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.dco-v2-line-draft-title small {
+    color: #9da1a6;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.dco-v2-line-draft-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .72fr);
+    gap: 6px;
+}
+
+.dco-v2-line-draft-field > span {
+    display: block;
+    margin-bottom: 4px;
+    color: #aeb0b4;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.dco-v2-line-draft-input {
+    direction: ltr;
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    overflow: hidden;
+    border: 1px solid #454545;
+    border-radius: 4px;
+    background: #383838;
+}
+
+.dco-v2-line-draft-input:focus-within {
+    border-color: #0d99ff;
+    box-shadow: 0 0 0 1px #0d99ff;
+}
+
+.dco-v2-line-draft-input input {
+    min-width: 0;
+    width: 100%;
+    height: 30px;
+    padding: 0 7px;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #f5f5f5 !important;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.dco-v2-line-draft-input b {
+    padding: 0 7px;
+    color: #aeb0b4;
+    border-inline-start: 1px solid #4a4a4a;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.dco-v2-line-draft-hint {
+    min-height: 28px;
+    padding: 7px 1px 0;
+    color: #9ea1a5;
+    font-size: 8px;
+    line-height: 1.55;
+}
+
+.dco-v2-line-draft-hint strong {
+    color: #d8d8d8;
+    font-weight: 650;
+}
+
+.dco-v2-editor-shell.is-v2-line-drawing .dco-exact-line-preview {
+    stroke: #111 !important;
+    stroke-width: 1.7 !important;
+    stroke-dasharray: none !important;
+    stroke-linecap: square !important;
+}
+
+.dco-v2-editor-shell.is-v2-line-drawing .dco-exact-line-start,
+.dco-v2-editor-shell.is-v2-line-drawing .dco-exact-line-end {
+    fill: #fff !important;
+    stroke: #0d99ff !important;
+    stroke-width: 1.5 !important;
+}
+
+.dco-v2-line-draft-measurement,
+.dco-v2-selection-length {
+    pointer-events: none;
+}
+
+.dco-v2-line-draft-measurement rect,
+.dco-v2-editor-shell .dco-v2-selection-length rect {
+    fill: #0d99ff !important;
+    stroke: #0d99ff !important;
+    stroke-width: 1 !important;
+    vector-effect: non-scaling-stroke;
+}
+
+.dco-v2-line-draft-measurement text,
+.dco-v2-editor-shell .dco-v2-selection-length text {
+    fill: #fff !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 9px !important;
+    font-weight: 650 !important;
+    text-anchor: middle;
+    dominant-baseline: central;
+    font-variant-numeric: tabular-nums;
+}
+
+.dco-v2-editor-shell .dco-v2-endpoint-square {
+    fill: #fff !important;
+    stroke: #0d99ff !important;
+    stroke-width: 1.2 !important;
+}
+
+.dco-v2-editor-shell .dco-v2-inspector-apply,
+.dco-v2-editor-shell .dco-v2-inspector-hint {
+    display: none !important;
+}
+
+.dco-v2-editor-shell .dco-v2-inspector-section {
+    padding: 11px 0 !important;
+}
+
+.dco-v2-editor-shell .dco-v2-inspector-section-title {
+    margin-bottom: 8px !important;
+}
+
+.dco-v2-editor-shell .dco-v2-point-row {
+    min-height: 26px !important;
+    padding: 0 2px !important;
+}
+
+@media (max-width: 900px) {
+    .dco-v2-line-draft-panel {
+        padding-inline: 2px;
+    }
+}
