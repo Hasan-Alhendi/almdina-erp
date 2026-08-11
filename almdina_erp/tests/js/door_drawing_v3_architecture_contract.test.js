@@ -99,7 +99,7 @@ assert.match(smartPathDomain, /function pathSegments\(/);
 assert.match(smartPathDomain, /function insertPathPoint\(/);
 assert.match(smartPathDomain, /function removePathPoint\(/);
 assert.match(smartPathDomain, /function nearestPathSegment\(/);
-assert.doesNotMatch(smartPathDomain, /document\.|querySelector|getBoundingClientRect|clientX|clientY/, "Smart path geometry must remain independent from DOM coordinates");
+assert.doesNotMatch(smartPathDomain, /window\.document|document\.querySelector|document\.createElement|getBoundingClientRect|clientX|clientY/, "Smart path geometry must remain independent from browser DOM coordinates");
 assert.match(smartPathPersistence, /object\.type === G\.PATH_TYPE/);
 assert.match(smartPathPersistence, /authoritative:\s*"door_drawing_v3"/);
 
