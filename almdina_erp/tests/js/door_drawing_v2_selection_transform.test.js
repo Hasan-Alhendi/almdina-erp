@@ -52,7 +52,7 @@ let endpointEdited = transforms.setLineEndpoint(
     resized,
     "line-214",
     "end",
-    { x: 3450, y: -379.5 },
+    { x: 3450, y: -879.5 },
     { axisLock: "dominant" }
 );
 let editedLine = endpointEdited.objects.find(object => object.id === "line-214");
