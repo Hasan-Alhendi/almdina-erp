@@ -75,12 +75,58 @@
 
     function markOrderInputPlanStale(frm) {
         if (!editable(frm)) return;
+        // Distinguish persisted order-input edits from optimizer-only changes.
+        // Recalculation accepts optimizer values as explicit arguments, but piece
+        // rows and board inputs are loaded by the server from the saved order.
+        frm.__almdina_pending_order_input_persistence = true;
         markPlanStale(frm);
     }
 
     function markOptimizerPlanStale(frm) {
         if (!can(frm, "edit_optimizer_settings")) return;
         markPlanStale(frm);
+    }
+
+    function editSessionActive(frm) {
+        return Boolean(
+            window.frappe
+            && frappe.almdina
+            && typeof frappe.almdina.isOrderEditSessionActive === "function"
+            && frappe.almdina.isOrderEditSessionActive(frm)
+        );
+    }
+
+    async function persistPendingOrderInputs(frm) {
+        if (!frm || !frm.__almdina_pending_order_input_persistence) return true;
+        const dirty = Boolean(frm.is_dirty && frm.is_dirty());
+        if (!dirty) {
+            frm.__almdina_pending_order_input_persistence = false;
+            return true;
+        }
+        if (!editable(frm) || typeof frm.save !== "function") {
+            frappe.msgprint(__("تعذر حفظ تعديلات القياسات قبل حساب خطة القص. افتح الطلب للتعديل ثم حاول مرة أخرى."));
+            return false;
+        }
+
+        frappe.show_alert({
+            message: __("يتم حفظ تعديلات القياسات أولًا حتى لا تفقد عند إعادة حساب خطة القص."),
+            indicator: "blue",
+        }, 4);
+
+        // This is an internal persistence checkpoint, not the user's final Save.
+        // Keep the edit session open so returning from the plan does not relock
+        // the measurement table unexpectedly.
+        const keepEditing = editSessionActive(frm);
+        if (keepEditing) frm.__almdina_keep_edit_session_after_save = true;
+        try {
+            await frm.save();
+        } finally {
+            frm.__almdina_keep_edit_session_after_save = false;
+        }
+
+        const saved = !(frm.is_dirty && frm.is_dirty());
+        if (saved) frm.__almdina_pending_order_input_persistence = false;
+        return saved;
     }
 
     function renderStaleState(frm) {
@@ -113,9 +159,16 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
+        after_save(frm) {
+            if (!(frm.is_dirty && frm.is_dirty())) {
+                frm.__almdina_pending_order_input_persistence = false;
+            }
+            schedule(frm);
+        },
         board_description(frm) { markOrderInputPlanStale(frm); },
         board_length_cm(frm) { markOrderInputPlanStale(frm); },
         board_width_cm(frm) { markOrderInputPlanStale(frm); },
+        default_edge_type(frm) { markOrderInputPlanStale(frm); },
         kerf_mm(frm) { markOptimizerPlanStale(frm); },
         trim_margin_mm(frm) { markOptimizerPlanStale(frm); },
         packing_mode(frm) { markOptimizerPlanStale(frm); },
@@ -129,13 +182,23 @@
         width_cm(frm) { markOrderInputPlanStale(frm); },
         length_cm(frm) { markOrderInputPlanStale(frm); },
         qty(frm) { markOrderInputPlanStale(frm); },
+        piece_type(frm) { markOrderInputPlanStale(frm); },
         allow_rotation(frm) { markOrderInputPlanStale(frm); },
+        edge_long_right(frm) { markOrderInputPlanStale(frm); },
+        edge_long_left(frm) { markOrderInputPlanStale(frm); },
+        edge_width_top(frm) { markOrderInputPlanStale(frm); },
+        edge_width_bottom(frm) { markOrderInputPlanStale(frm); },
+        edge_long_right_type_override(frm) { markOrderInputPlanStale(frm); },
+        edge_long_left_type_override(frm) { markOrderInputPlanStale(frm); },
+        edge_width_top_type_override(frm) { markOrderInputPlanStale(frm); },
+        edge_width_bottom_type_override(frm) { markOrderInputPlanStale(frm); },
     });
 
     window.AlmdinaFastSaveUX = Object.freeze({
         planIsStale,
         markOrderInputPlanStale,
         markOptimizerPlanStale,
+        persistPendingOrderInputs,
         renderStaleState,
         validateCurrentPlanInputs,
     });
