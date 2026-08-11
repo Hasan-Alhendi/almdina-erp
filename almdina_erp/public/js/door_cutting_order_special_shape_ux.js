@@ -5,20 +5,26 @@
         Object.freeze({ id: "almdina-door-drawing-v3-css", href: "/assets/almdina_erp/css/door_drawing_v3.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-precision-css", href: "/assets/almdina_erp/css/door_drawing_v3_precision.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-magnetic-css", href: "/assets/almdina_erp/css/door_drawing_v3_magnetic.css" }),
+        Object.freeze({ id: "almdina-door-drawing-v3-smart-pen-css", href: "/assets/almdina_erp/css/door_drawing_v3_smart_pen.css" }),
     ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/document.js",
+        "/assets/almdina_erp/js/door_drawing_v3/domain/smart_path_domain.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/history.js",
         "/assets/almdina_erp/js/door_drawing_v3/infrastructure/persistence_adapter.js",
+        "/assets/almdina_erp/js/door_drawing_v3/infrastructure/smart_path_persistence.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/snapping.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/smart_path_snapping.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/move_snap_policy.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/shape_handles.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/precision_input.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_policy.js",
+        "/assets/almdina_erp/js/door_drawing_v3/presentation/smart_path_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/magnetic_connection.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/smart_pen.js",
     ]);
 
     function ensureStyles() {
@@ -54,6 +60,9 @@
         __doorDrawingV3MagneticConnection: true,
         __doorDrawingV3EasyMoveSnap: true,
         __doorDrawingV3CanvasPolicy: true,
+        __doorDrawingV3SmartPen: true,
+        __doorDrawingV3SmartPath: true,
+        __doorDrawingV3NodeEditing: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,
