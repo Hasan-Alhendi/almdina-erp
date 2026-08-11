@@ -7,6 +7,7 @@ const path = require("node:path");
 const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_ux.js"), "utf8");
 const geometry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"), "utf8");
 const snapping = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snapping.js"), "utf8");
+const moveSnapPolicy = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/move_snap_policy.js"), "utf8");
 const handles = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/shape_handles.js"), "utf8");
 const precision = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/precision_input.js"), "utf8");
 const view = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/canvas_view.js"), "utf8");
@@ -22,6 +23,7 @@ for (const modulePath of [
     "door_drawing_v3/application/history.js",
     "door_drawing_v3/infrastructure/persistence_adapter.js",
     "door_drawing_v3/application/snapping.js",
+    "door_drawing_v3/application/move_snap_policy.js",
     "door_drawing_v3/application/shape_handles.js",
     "door_drawing_v3/application/precision_input.js",
     "door_drawing_v3/presentation/canvas_view.js",
@@ -36,6 +38,7 @@ assert.match(entry, /__doorDrawingV3Snapping:\s*true/);
 assert.match(entry, /__doorDrawingV3Handles:\s*true/);
 assert.match(entry, /__doorDrawingV3PrecisionInput:\s*true/);
 assert.match(entry, /__doorDrawingV3MagneticConnection:\s*true/);
+assert.match(entry, /__doorDrawingV3EasyMoveSnap:\s*true/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
 
 for (const tool of ["line", "rectangle", "circle", "arc"]) assert.match(view, new RegExp(`data-ddv3-tool=\\"${tool}\\"`));
@@ -81,7 +84,8 @@ assert.match(snapping, /function preferredAnchor/);
 assert.match(snapping, /function resolvePoint/);
 assert.match(snapping, /function resolveObjectMove/);
 assert.match(snapping, /forcedAxis/);
-assert.doesNotMatch(snapping, /clientX|clientY|getBoundingClientRect/, "Snapping application policy must stay independent from DOM coordinates");
+assert.match(moveSnapPolicy, /const EASY_MOVE_JOIN_SNAP_PX = 60/);
+assert.doesNotMatch(snapping + moveSnapPolicy, /clientX|clientY|getBoundingClientRect/, "Snapping application policy must stay independent from DOM coordinates");
 assert.match(handles, /function handlesFor/);
 assert.match(handles, /function resizeRectangle/);
 assert.match(handles, /function resizeCircle/);
