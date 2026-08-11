@@ -5,6 +5,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_JS = ROOT / "public" / "js"
+PIECE_POLICY_ADAPTER = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "piece_policy_adapter.py"
+)
 
 
 def source(name: str) -> str:
@@ -13,10 +21,17 @@ def source(name: str) -> str:
 
 def test_special_door_pricing_does_not_block_ordinary_save() -> None:
     cost_permissions = source("door_cutting_order_cost_permissions_ux.js")
+    adapter = PIECE_POLICY_ADAPTER.read_text(encoding="utf-8")
+    validate_rows = adapter.split("def validate_rows(self)", 1)[1].split(
+        "def ensure_documented(self)", 1
+    )[0]
 
     assert "pendingCustomEdgePriceLabels" not in cost_permissions
     assert "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ" not in cost_permissions
     assert "frappe.validated = false" not in cost_permissions
+    assert "ensure_custom_edge_prices" not in validate_rows
+    # The explicit financial gate is retained for invoice/final-price flows.
+    assert "def ensure_custom_edge_prices(self)" in adapter
 
 
 def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
