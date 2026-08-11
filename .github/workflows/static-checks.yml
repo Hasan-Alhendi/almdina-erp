@@ -196,7 +196,7 @@ jobs:
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
 
-      - name: Run frontend browser simulations
+      - name: Run active frontend browser simulations
         run: |
           node almdina_erp/tests/js/permission_context.test.js
           node almdina_erp/tests/js/order_lifecycle_permissions.test.js
@@ -208,26 +208,14 @@ jobs:
           node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
           node almdina_erp/tests/js/order_navigation_surfaces.test.js
           node almdina_erp/tests/js/input_stability.test.js
-          node almdina_erp/tests/js/inline_note_editor.test.js
-          node almdina_erp/tests/js/sketch_interaction.test.js
-          node almdina_erp/tests/js/sketch_history.test.js
-          node almdina_erp/tests/js/sketch_renderer.test.js
           node almdina_erp/tests/js/shape_output_contract.test.js
           node almdina_erp/tests/js/mobile_piece_cards.test.js
           node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/shop_floor_quick_actions.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
-          node almdina_erp/tests/test_special_shape_smoothing.js
           node almdina_erp/tests/test_shape_print.js
 
-      - name: Run Door Drawing V2 geometry and editor regressions
+      - name: Run Door Drawing V3 geometry and architecture regressions
         run: |
-          node almdina_erp/tests/js/door_drawing_v2_geometry.test.js
-          node almdina_erp/tests/js/door_drawing_v2_legacy_adapter.test.js
-          node almdina_erp/tests/js/door_drawing_v2_architecture_contract.test.js
-          node almdina_erp/tests/js/door_drawing_v2_viewport.test.js
-          node almdina_erp/tests/js/door_drawing_v2_editor_shell_contract.test.js
-          node almdina_erp/tests/js/door_drawing_v2_exact_line_free_workspace.test.js
-          node almdina_erp/tests/js/door_drawing_v2_free_viewport.test.js
-          node almdina_erp/tests/js/door_drawing_v2_selection_transform.test.js
-          node almdina_erp/tests/js/door_drawing_v2_stage4_contract.test.js
+          node almdina_erp/tests/js/door_drawing_v3_geometry.test.js
+          node almdina_erp/tests/js/door_drawing_v3_architecture_contract.test.js

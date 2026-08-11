@@ -7,6 +7,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -31,22 +34,23 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             cls._ensure_role(role)
         cls._ensure_user(MANAGER_USER, MANAGER_ROLE, almdina=True)
         cls._ensure_user(VIEWER_USER, VIEWER_ROLE)
-        cls._replace_role_permissions(
+
+        repository = FrappePermissionMatrixRepository()
+        repository.save_role_state(
             MANAGER_ROLE,
             {
-                "read": 1,
-                Capability.VIEW_USERS: 1,
-                Capability.CREATE_USERS: 1,
-                Capability.EDIT_USERS: 1,
-                Capability.ASSIGN_USER_ROLES: 1,
-                Capability.ENABLE_USERS: 1,
-                Capability.DISABLE_USERS: 1,
-                Capability.RESET_USER_PASSWORD: 1,
+                Capability.VIEW_USERS: True,
+                Capability.CREATE_USERS: True,
+                Capability.EDIT_USERS: True,
+                Capability.ASSIGN_USER_ROLES: True,
+                Capability.ENABLE_USERS: True,
+                Capability.DISABLE_USERS: True,
+                Capability.RESET_USER_PASSWORD: True,
             },
         )
-        cls._replace_role_permissions(
+        repository.save_role_state(
             VIEWER_ROLE,
-            {"read": 1, Capability.VIEW_USERS: 1},
+            {Capability.VIEW_USERS: True},
         )
         frappe.clear_cache()
 
@@ -62,6 +66,7 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
         for role in (MANAGER_ROLE, VIEWER_ROLE, WORKER_ROLE_A, WORKER_ROLE_B):
             frappe.db.delete("Custom DocPerm", {"role": role})
+            frappe.db.delete("Almdina Role Capability State", {"role": role})
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
@@ -97,28 +102,6 @@ class TestWorkforceManagementIntegration(FrappeTestCase):
             user.default_app = "almdina_erp"
             user.default_workspace = "Almdina Settings"
         user.save(ignore_permissions=True)
-
-    @classmethod
-    def _replace_role_permissions(cls, role: str, values: dict[str, int]) -> None:
-        frappe.db.delete(
-            "Custom DocPerm",
-            {
-                "parent": "Almdina ERP Settings",
-                "role": role,
-                "permlevel": 0,
-            },
-        )
-        frappe.get_doc(
-            {
-                "doctype": "Custom DocPerm",
-                "parent": "Almdina ERP Settings",
-                "parenttype": "DocType",
-                "parentfield": "permissions",
-                "role": role,
-                "permlevel": 0,
-                **values,
-            }
-        ).insert(ignore_permissions=True)
 
     def setUp(self):
         super().setUp()

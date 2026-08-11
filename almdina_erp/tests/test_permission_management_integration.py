@@ -4,6 +4,12 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -34,6 +40,10 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             "Almdina ERP Settings",
             {"read": 1, Capability.MANAGE_PERMISSIONS: 1},
         )
+        FrappePermissionMatrixRepository().save_role_state(
+            ADMIN_ROLE,
+            {Capability.MANAGE_PERMISSIONS: True},
+        )
         frappe.clear_cache(user=ADMIN_USER)
         frappe.clear_cache(doctype="Almdina ERP Settings")
 
@@ -45,6 +55,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         for role in managed_roles:
             frappe.db.delete("Custom DocPerm", {"role": role})
             frappe.db.delete("DocPerm", {"role": role})
+            frappe.db.delete("Almdina Role Capability State", {"role": role})
         for user in (ADMIN_USER, TARGET_USER, PRESERVED_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
@@ -107,6 +118,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         frappe.set_user("Administrator")
         frappe.db.delete("Almdina Permission Audit", {"role": TARGET_ROLE})
         frappe.db.delete("Custom DocPerm", {"role": TARGET_ROLE})
+        frappe.db.delete("Almdina Role Capability State", {"role": TARGET_ROLE})
         frappe.clear_cache(user=TARGET_USER)
         for doctype in (
             "Door Cutting Order",
@@ -195,11 +207,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
         ):
             self.assertTrue(
-                frappe.has_permission(
-                    "Almdina ERP Settings",
-                    ptype=capability,
-                    user=TARGET_USER,
-                ),
+                doctype_has_capability(capability, user=TARGET_USER),
                 capability,
             )
         self.assertFalse(
@@ -233,10 +241,14 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             Capability.VIEW_COSTS,
             Capability.VIEW_CUTTING_PLAN,
             Capability.RECALCULATE_PLAN,
-            Capability.VIEW_CUSTOMERS,
-            Capability.VIEW_EDGE_BANDING_TYPES,
         ):
             self.assertTrue(result["capabilities"][capability], capability)
+
+        # Customer and edge-band reads are technical Link-field dependencies of
+        # order entry. They must not become business grants that expose the
+        # corresponding master-data administration surfaces.
+        self.assertFalse(result["capabilities"][Capability.VIEW_CUSTOMERS])
+        self.assertFalse(result["capabilities"][Capability.VIEW_EDGE_BANDING_TYPES])
 
         for doctype in ("Customer", "Edge Banding Type"):
             permission = frappe.db.get_value(
@@ -245,6 +257,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 ["read", "select"],
                 as_dict=True,
             )
+            self.assertIsNotNone(permission, doctype)
             self.assertEqual(int(permission.read), 1, doctype)
             self.assertEqual(int(permission.select), 1, doctype)
 
@@ -467,14 +480,32 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             get_production_settings,
         )
 
-        frappe.set_user(ADMIN_USER)
-        settings = get_production_settings()
-        self.assertIn("default_production_routing", settings)
-        self.assertIn("packing_options", settings)
+        repository = FrappePermissionMatrixRepository()
+        frappe.set_user("Administrator")
+        repository.save_role_state(
+            ADMIN_ROLE,
+            {
+                Capability.MANAGE_PERMISSIONS: True,
+                Capability.VIEW_FACTORY_SETTINGS: True,
+            },
+        )
+        try:
+            frappe.set_user(ADMIN_USER)
+            settings = get_production_settings()
+            self.assertIn("default_production_routing", settings)
+            self.assertIn("packing_options", settings)
 
-        frappe.set_user(TARGET_USER)
-        with self.assertRaises(frappe.PermissionError):
-            get_production_settings()
+            frappe.set_user(TARGET_USER)
+            with self.assertRaises(frappe.PermissionError):
+                get_production_settings()
+        finally:
+            frappe.set_user("Administrator")
+            repository.save_role_state(
+                ADMIN_ROLE,
+                {Capability.MANAGE_PERMISSIONS: True},
+            )
+            frappe.clear_cache(user=ADMIN_USER)
+            frappe.clear_cache(doctype="Almdina ERP Settings")
 
 
 if __name__ == "__main__":

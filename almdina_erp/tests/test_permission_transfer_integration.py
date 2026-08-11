@@ -10,6 +10,9 @@ from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_VERSION,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -49,10 +52,9 @@ class TestPermissionTransferIntegration(FrappeTestCase):
             cls._ensure_role(role)
         cls._ensure_user(ADMIN_USER, ADMIN_ROLE)
         cls._ensure_user(UNAUTHORIZED_USER, UNAUTHORIZED_ROLE)
-        cls._replace_role_permissions(
+        FrappePermissionMatrixRepository().save_role_state(
             ADMIN_ROLE,
-            "Almdina ERP Settings",
-            {"read": 1, Capability.MANAGE_PERMISSIONS: 1},
+            {Capability.MANAGE_PERMISSIONS: True},
         )
         frappe.clear_cache(user=ADMIN_USER)
         frappe.clear_cache(user=UNAUTHORIZED_USER)
@@ -61,16 +63,18 @@ class TestPermissionTransferIntegration(FrappeTestCase):
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
+        managed_roles = [ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE]
         frappe.db.delete(
             "Almdina Permission Audit",
-            {"role": ["in", [ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE]]},
+            {"role": ["in", managed_roles]},
         )
-        for role in (ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE):
+        for role in managed_roles:
             frappe.db.delete("Custom DocPerm", {"role": role})
+            frappe.db.delete("Almdina Role Capability State", {"role": role})
         for user in (ADMIN_USER, UNAUTHORIZED_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
-        for role in (ADMIN_ROLE, SOURCE_ROLE, TARGET_ROLE, UNAUTHORIZED_ROLE):
+        for role in managed_roles:
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
@@ -102,29 +106,6 @@ class TestPermissionTransferIntegration(FrappeTestCase):
             user.append("roles", {"role": role})
             user.save(ignore_permissions=True)
 
-    @classmethod
-    def _replace_role_permissions(
-        cls,
-        role: str,
-        doctype: str,
-        values: dict[str, int],
-    ) -> None:
-        frappe.db.delete(
-            "Custom DocPerm",
-            {"parent": doctype, "role": role, "permlevel": 0},
-        )
-        frappe.get_doc(
-            {
-                "doctype": "Custom DocPerm",
-                "parent": doctype,
-                "parenttype": "DocType",
-                "parentfield": "permissions",
-                "role": role,
-                "permlevel": 0,
-                **values,
-            }
-        ).insert(ignore_permissions=True)
-
     def tearDown(self):
         frappe.set_user("Administrator")
         frappe.db.delete(
@@ -133,6 +114,7 @@ class TestPermissionTransferIntegration(FrappeTestCase):
         )
         for role in (SOURCE_ROLE, TARGET_ROLE):
             frappe.db.delete("Custom DocPerm", {"role": role})
+            frappe.db.delete("Almdina Role Capability State", {"role": role})
         frappe.clear_cache()
         super().tearDown()
 
