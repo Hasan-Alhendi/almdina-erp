@@ -22,9 +22,15 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
 def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
     plan_controls = source("door_cutting_order_plan_controls_ux.js")
     fast_save = source("door_cutting_order_fast_save_ux.js")
+    revision = source("door_cutting_order_revision_ux.js")
 
     assert "async function persistPendingOrderInputs(frm)" in fast_save
-    assert "await frm.save();" in fast_save
+    assert "editPolicy.persistOrderEditCheckpoint(frm)" in fast_save
+    assert "frm.save" not in fast_save
+    assert "async function persistOrderEditCheckpoint(frm)" in revision
+    assert "await frm.save();" in revision
+    assert "frappe.almdina.persistOrderEditCheckpoint = persistOrderEditCheckpoint" in revision
+    assert "__almdina_preserve_edit_session_after_save" in revision
     assert "frm.__almdina_pending_order_input_persistence = true" in fast_save
     assert "piece_type(frm) { markOrderInputPlanStale(frm); }" in fast_save
     assert "fastSave.persistPendingOrderInputs(frm)" in plan_controls
