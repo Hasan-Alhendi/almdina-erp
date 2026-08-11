@@ -8,7 +8,9 @@
 
     const DEFAULT_SNAP_PX = 22;
     const JOIN_SNAP_PX = 26;
+    const MOVE_JOIN_SNAP_PX = 46;
     const SNAP_RELEASE_FACTOR = 1.55;
+    const MOVE_SNAP_RELEASE_FACTOR = 1.8;
     const AXIS_EPSILON_MM = 0.01;
 
     function freezeAnchor(objectId, role, point, priority = 0, kind = "reference") {
@@ -97,12 +99,15 @@
         return Boolean(anchor && anchor.kind === "joint");
     }
 
+    function sameAnchor(anchor, identity) {
+        return Boolean(anchor && identity
+            && String(anchor.objectId) === String(identity.objectId)
+            && String(anchor.role) === String(identity.role));
+    }
+
     function stickyAnchor(candidate, anchors, target, toleranceMm, predicate = null) {
         if (!target) return null;
-        const found = (anchors || []).find(anchor => (
-            String(anchor.objectId) === String(target.objectId)
-            && String(anchor.role) === String(target.role)
-        ));
+        const found = (anchors || []).find(anchor => sameAnchor(anchor, target));
         if (!found || (predicate && !predicate(found))) return null;
         const distanceMm = G.distance(candidate, found.point);
         return distanceMm <= toleranceMm * SNAP_RELEASE_FACTOR
@@ -201,18 +206,30 @@
         const moved = G.translateObject(object, dx, dy);
         const sourceAnchors = objectAnchors(moved).filter(isJoint);
         const targetAnchors = collectAnchors(document, { excludeId: object && object.id }).filter(isJoint);
-        const toleranceMm = worldTolerance(options.viewportScale, options.joinSnapPx || JOIN_SNAP_PX);
+        const toleranceMm = worldTolerance(options.viewportScale, options.moveJoinSnapPx || MOVE_JOIN_SNAP_PX);
+        const releaseToleranceMm = toleranceMm * MOVE_SNAP_RELEASE_FACTOR;
         let best = null;
 
-        for (const source of sourceAnchors) {
-            const candidate = nearestAnchor(source.point, targetAnchors, toleranceMm);
-            if (!candidate) continue;
-            if (
-                !best
-                || candidate.distanceMm < best.distanceMm - G.EPSILON_MM
-                || (Math.abs(candidate.distanceMm - best.distanceMm) <= G.EPSILON_MM && candidate.target.priority > best.target.priority)
-            ) {
-                best = { source, target: candidate.target, distanceMm: candidate.distanceMm };
+        if (options.stickySource && options.stickyTarget) {
+            const source = sourceAnchors.find(anchor => sameAnchor(anchor, options.stickySource));
+            const target = targetAnchors.find(anchor => sameAnchor(anchor, options.stickyTarget));
+            if (source && target) {
+                const distanceMm = G.distance(source.point, target.point);
+                if (distanceMm <= releaseToleranceMm) best = { source, target, distanceMm, sticky: true };
+            }
+        }
+
+        if (!best) {
+            for (const source of sourceAnchors) {
+                const candidate = nearestAnchor(source.point, targetAnchors, toleranceMm);
+                if (!candidate) continue;
+                if (
+                    !best
+                    || candidate.distanceMm < best.distanceMm - G.EPSILON_MM
+                    || (Math.abs(candidate.distanceMm - best.distanceMm) <= G.EPSILON_MM && candidate.target.priority > best.target.priority)
+                ) {
+                    best = { source, target: candidate.target, distanceMm: candidate.distanceMm, sticky: false };
+                }
             }
         }
 
@@ -226,9 +243,11 @@
                 source: null,
                 distanceMm: null,
                 toleranceMm: G.roundMm(toleranceMm),
+                releaseToleranceMm: G.roundMm(releaseToleranceMm),
                 axis: null,
                 anchor: null,
                 kind: "move",
+                sticky: false,
             });
         }
 
@@ -244,9 +263,11 @@
             source: best.source,
             distanceMm: G.roundMm(best.distanceMm),
             toleranceMm: G.roundMm(toleranceMm),
+            releaseToleranceMm: G.roundMm(releaseToleranceMm),
             axis: null,
             anchor: best.source.point,
             kind: "joint",
+            sticky: Boolean(best.sticky),
         });
     }
 
@@ -278,7 +299,9 @@
     root.Snapping = Object.freeze({
         DEFAULT_SNAP_PX,
         JOIN_SNAP_PX,
+        MOVE_JOIN_SNAP_PX,
         SNAP_RELEASE_FACTOR,
+        MOVE_SNAP_RELEASE_FACTOR,
         AXIS_EPSILON_MM,
         objectAnchors,
         collectAnchors,
