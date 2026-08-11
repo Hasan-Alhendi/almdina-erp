@@ -1,0 +1,588 @@
+.dco-special-shape-modal.dco-v2-modal {
+    --v2-bg: #e5e5e5;
+    --v2-panel: #2c2c2c;
+    --v2-panel-2: #383838;
+    --v2-panel-3: #444;
+    --v2-border: #464646;
+    --v2-text: #f5f5f5;
+    --v2-muted: #aeb0b4;
+    --v2-blue: #0d99ff;
+    --v2-blue-hover: #0b87e3;
+    --v2-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-content {
+    height: 100vh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    background: var(--v2-bg) !important;
+    box-shadow: none !important;
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-header {
+    position: relative;
+    z-index: 90;
+    min-height: 48px !important;
+    height: 48px;
+    padding: 0 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px;
+    color: var(--v2-text) !important;
+    background: var(--v2-panel) !important;
+    border: 0 !important;
+    border-bottom: 1px solid #1f1f1f !important;
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-header .modal-title {
+    min-width: 0;
+    margin: 0 !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    font-weight: 700 !important;
+    color: var(--v2-text) !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-header .btn-modal-close,
+.dco-special-shape-modal.dco-v2-modal .modal-header .close,
+.dco-special-shape-modal.dco-v2-modal .modal-header [data-dismiss="modal"] {
+    color: var(--v2-text) !important;
+    opacity: .88 !important;
+    filter: none !important;
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-body {
+    height: calc(100vh - 48px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: var(--v2-bg) !important;
+}
+
+.dco-special-shape-modal.dco-v2-modal .modal-footer {
+    display: none !important;
+}
+
+.dco-v2-header-context {
+    direction: ltr;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-inline-start: auto;
+    color: var(--v2-muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.dco-v2-header-context .dco-v2-mm-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid #4b4b4b;
+    border-radius: 5px;
+    color: #d8d8d8;
+    background: #353535;
+    font-weight: 700;
+}
+
+.dco-v2-header-actions {
+    direction: rtl;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dco-v2-header-actions .btn {
+    min-height: 30px !important;
+    height: 30px !important;
+    padding: 0 12px !important;
+    border-radius: 5px !important;
+    border-color: #4a4a4a !important;
+    background: #383838 !important;
+    color: #f3f3f3 !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+}
+
+.dco-v2-header-actions .btn-primary {
+    border-color: var(--v2-blue) !important;
+    background: var(--v2-blue) !important;
+    color: #fff !important;
+}
+
+.dco-v2-header-actions .btn-primary:hover {
+    border-color: var(--v2-blue-hover) !important;
+    background: var(--v2-blue-hover) !important;
+}
+
+.dco-special-shape-modal.dco-v2-modal .dco-special-sketch-shell.dco-v2-editor-shell {
+    position: relative;
+    direction: ltr !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 260px !important;
+    width: 100%;
+    height: 100% !important;
+    min-height: 0 !important;
+    background: var(--v2-bg) !important;
+    color: #1f2937;
+}
+
+.dco-v2-editor-shell > .dco-sketch-toolbar,
+.dco-v2-editor-shell > .dco-sketch-sidebar {
+    display: none !important;
+}
+
+.dco-v2-editor-shell > .dco-sketch-center {
+    position: relative;
+    grid-column: 1;
+    direction: rtl;
+    min-width: 0;
+    height: 100%;
+    padding: 0 !important;
+    display: block !important;
+    overflow: hidden !important;
+    background: var(--v2-bg) !important;
+}
+
+.dco-v2-editor-shell .dco-sketch-topbar,
+.dco-v2-editor-shell .dco-sketch-notice,
+.dco-v2-editor-shell .dco-sketch-key-hint {
+    display: none !important;
+}
+
+.dco-v2-editor-shell .dco-sketch-paper-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: var(--v2-bg) !important;
+    overflow: hidden !important;
+}
+
+.dco-v2-editor-shell .dco-sketch-paper {
+    position: absolute;
+    inset: 42px 20px 20px 20px;
+    width: calc(100% - 40px) !important;
+    height: calc(100% - 62px) !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    aspect-ratio: auto !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    touch-action: none;
+}
+
+.dco-v2-canvas-chrome {
+    position: absolute;
+    z-index: 58;
+    top: 10px;
+    left: 12px;
+    right: 12px;
+    direction: ltr;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.dco-v2-canvas-chrome > * {
+    pointer-events: auto;
+}
+
+.dco-v2-chrome-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.dco-v2-chip,
+.dco-v2-canvas-button {
+    height: 28px;
+    border: 1px solid rgba(0, 0, 0, .14);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, .96);
+    color: #333;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.dco-v2-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 9px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.dco-v2-chip.is-mm {
+    direction: ltr;
+}
+
+.dco-v2-canvas-button {
+    min-width: 30px;
+    padding: 0 8px;
+    cursor: pointer;
+}
+
+.dco-v2-canvas-button:hover,
+.dco-v2-canvas-button.is-active {
+    color: #fff;
+    border-color: var(--v2-blue);
+    background: var(--v2-blue);
+}
+
+.dco-v2-editor-shell .dco-sketch-zoom {
+    position: static !important;
+    direction: ltr;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0 !important;
+    height: 28px;
+    padding: 0 !important;
+    border: 1px solid rgba(0, 0, 0, .14) !important;
+    border-radius: 5px !important;
+    background: rgba(255, 255, 255, .96) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05) !important;
+}
+
+.dco-v2-editor-shell .dco-sketch-zoom button {
+    width: 28px !important;
+    height: 26px !important;
+    min-width: 28px !important;
+    border: 0 !important;
+    border-radius: 4px !important;
+    background: transparent !important;
+    color: #333 !important;
+    font-size: 13px !important;
+}
+
+.dco-v2-editor-shell .dco-sketch-zoom button:hover:not(:disabled) {
+    color: var(--v2-blue) !important;
+    background: #eef7ff !important;
+}
+
+.dco-v2-editor-shell .dco-sketch-zoom-value {
+    min-width: 46px !important;
+    padding: 0 4px;
+    color: #333;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+}
+
+.dco-v2-editor-shell .dco-reference-panel.dco-v2-reference-popover {
+    position: absolute !important;
+    z-index: 72 !important;
+    top: 46px !important;
+    left: 12px !important;
+    right: auto !important;
+    display: none !important;
+    width: min(680px, calc(100% - 24px)) !important;
+    max-height: min(360px, calc(100% - 70px));
+    overflow: auto;
+    margin: 0 !important;
+    padding: 12px !important;
+    border: 1px solid #cfcfcf !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: var(--v2-shadow) !important;
+}
+
+.dco-v2-editor-shell .dco-reference-panel.dco-v2-reference-popover.is-v2-open {
+    display: flex !important;
+}
+
+.dco-v2-editor-shell .dco-figma-properties {
+    position: relative !important;
+    grid-column: 2 !important;
+    direction: rtl !important;
+    width: 260px !important;
+    min-width: 260px !important;
+    height: 100% !important;
+    overflow: auto !important;
+    color: var(--v2-text) !important;
+    background: var(--v2-panel) !important;
+    border: 0 !important;
+    border-left: 1px solid #1f1f1f !important;
+    box-shadow: none !important;
+}
+
+.dco-v2-editor-shell .dco-figma-properties-head {
+    position: sticky !important;
+    top: 0;
+    z-index: 5;
+    display: block !important;
+    min-height: 72px !important;
+    padding: 0 !important;
+    color: var(--v2-text) !important;
+    background: var(--v2-panel) !important;
+    border-bottom: 1px solid var(--v2-border) !important;
+}
+
+.dco-v2-inspector-tabs {
+    direction: ltr;
+    display: flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 10px;
+    border-bottom: 1px solid #3d3d3d;
+}
+
+.dco-v2-inspector-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 8px;
+    color: #b9b9b9;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.dco-v2-inspector-tab.is-active {
+    color: #fff;
+}
+
+.dco-v2-inspector-tab.is-active::after {
+    content: "";
+    position: absolute;
+    right: 7px;
+    bottom: 0;
+    left: 7px;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    background: var(--v2-blue);
+}
+
+.dco-v2-inspector-heading {
+    direction: rtl;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 38px;
+    padding: 0 12px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.dco-v2-inspector-heading small {
+    color: #909090;
+    font-size: 9px;
+    font-weight: 500;
+}
+
+.dco-v2-editor-shell .dco-figma-tool-options,
+.dco-v2-editor-shell .dco-figma-selection-properties {
+    padding: 0 10px !important;
+    color: var(--v2-text) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-empty {
+    padding: 24px 8px !important;
+    color: #9f9f9f !important;
+    font-size: 10px !important;
+    line-height: 1.7 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-empty b {
+    color: #f4f4f4 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-section {
+    padding: 12px 0 !important;
+    border-bottom: 1px solid var(--v2-border) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-section-title {
+    margin-bottom: 9px !important;
+    color: #f2f2f2 !important;
+    font-size: 10px !important;
+}
+
+.dco-v2-editor-shell .dco-figma-section-title small,
+.dco-v2-editor-shell .dco-figma-field label {
+    color: #9a9a9a !important;
+}
+
+.dco-v2-editor-shell .dco-figma-input {
+    height: 30px !important;
+    border-color: #4b4b4b !important;
+    border-radius: 4px !important;
+    background: var(--v2-panel-2) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-input:focus-within {
+    border-color: var(--v2-blue) !important;
+    box-shadow: 0 0 0 1px var(--v2-blue) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-input input {
+    color: #fff !important;
+    background: transparent !important;
+    font-size: 10px !important;
+}
+
+.dco-v2-editor-shell .dco-figma-input span {
+    color: #aaa !important;
+    border-right-color: #4a4a4a !important;
+}
+
+.dco-v2-editor-shell .dco-figma-metric,
+.dco-v2-editor-shell .dco-figma-tip {
+    color: #aaa !important;
+    background: #353535 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-metric b {
+    color: #f2f2f2 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-primary {
+    min-height: 30px !important;
+    border-radius: 4px !important;
+    border-color: var(--v2-blue) !important;
+    background: var(--v2-blue) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-action {
+    min-height: 29px !important;
+    border-color: #4b4b4b !important;
+    border-radius: 4px !important;
+    color: #e7e7e7 !important;
+    background: #383838 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-action:hover {
+    border-color: #696969 !important;
+    color: #fff !important;
+    background: #444 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock {
+    position: absolute !important;
+    z-index: 64 !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: 16px !important;
+    transform: translateX(-50%) !important;
+    direction: ltr !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 2px !important;
+    padding: 5px !important;
+    border: 1px solid #1d1d1d !important;
+    border-radius: 8px !important;
+    background: var(--v2-panel) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .26) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock button,
+.dco-v2-editor-shell .dco-figma-dock .dco-figma-wide {
+    display: grid !important;
+    place-items: center !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    border-radius: 5px !important;
+    color: #f0f0f0 !important;
+    background: transparent !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock button:hover {
+    background: #444 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock button.is-active {
+    background: var(--v2-blue) !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock button b {
+    font-size: 15px !important;
+    font-weight: 500 !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock .dco-figma-wide > span:not(.dco-figma-shortcut),
+.dco-v2-editor-shell .dco-figma-shortcut {
+    display: none !important;
+}
+
+.dco-v2-editor-shell .dco-figma-dock-separator {
+    width: 1px !important;
+    height: 22px !important;
+    margin: 0 3px !important;
+    background: #4b4b4b !important;
+}
+
+.dco-v2-viewport-hint {
+    position: absolute;
+    z-index: 40;
+    left: 50%;
+    bottom: 62px;
+    transform: translateX(-50%);
+    direction: rtl;
+    padding: 5px 8px;
+    border-radius: 5px;
+    color: #666;
+    background: rgba(255, 255, 255, .88);
+    font-size: 9px;
+    pointer-events: none;
+    opacity: .82;
+}
+
+@media (max-width: 900px) {
+    .dco-special-shape-modal.dco-v2-modal .dco-special-sketch-shell.dco-v2-editor-shell {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .dco-v2-editor-shell .dco-figma-properties {
+        position: absolute !important;
+        z-index: 80;
+        top: 0;
+        right: 0;
+        width: min(280px, 86vw) !important;
+        min-width: 0 !important;
+        transform: translateX(102%);
+        transition: transform .16s ease;
+        box-shadow: -12px 0 28px rgba(0, 0, 0, .22) !important;
+    }
+
+    .dco-v2-editor-shell .dco-figma-properties.is-mobile-open {
+        transform: translateX(0);
+    }
+
+    .dco-v2-header-context {
+        display: none;
+    }
+
+    .dco-v2-editor-shell .dco-sketch-paper {
+        inset: 42px 8px 8px 8px;
+        width: calc(100% - 16px) !important;
+        height: calc(100% - 50px) !important;
+    }
+
+    .dco-v2-chip.is-hint {
+        display: none;
+    }
+}
