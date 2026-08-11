@@ -92,15 +92,15 @@
         return wrapper && wrapper.querySelector(".dco-fast-entry-shell");
     }
 
-    function disconnectCompetingEdgeObservers(root) {
-        if (!root) return;
+    function disconnectCompetingEdgeObservers(container) {
+        if (!container) return;
         [
             "_dcoSideEdgeObserver",
             "_dcoCompactEdgeProfileControlsObserver",
         ].forEach(key => {
-            const observer = root[key];
+            const observer = container[key];
             if (observer && typeof observer.disconnect === "function") observer.disconnect();
-            root[key] = null;
+            container[key] = null;
         });
     }
 
@@ -120,21 +120,26 @@
     }
 
     function refreshEdgeDecorations(frm) {
+        const wrapper = measurementWrapper(frm);
         const root = measurementRoot(frm);
-        if (!root) return;
-        disconnectCompetingEdgeObservers(root);
+        if (!wrapper || !root) return;
+
+        // The two legacy edge decorators bind their broad MutationObservers to the
+        // HTML field wrapper (rootFor()), not to .dco-fast-entry-shell. Disconnecting
+        // the shell therefore never stopped their mutual repaint loop. The wrapper
+        // is the real owner of those observers and must be the disconnect target.
+        disconnectCompetingEdgeObservers(wrapper);
 
         const multiEdge = window.AlmdinaMultiEdgeBanding;
         if (multiEdge && typeof multiEdge.schedule === "function") multiEdge.schedule(frm);
         const controls = window.AlmdinaEdgeProfileControls;
         if (controls && typeof controls.schedule === "function") controls.schedule(frm);
 
-        // Both legacy edge modules install their own broad MutationObservers.
-        // They decorate the same nodes and can trigger each other forever. Their
-        // explicit field-event schedules remain active, while this structural
-        // observer owns DOM replacement detection.
-        requestAnimationFrame(() => disconnectCompetingEdgeObservers(measurementRoot(frm)));
-        setTimeout(() => disconnectCompetingEdgeObservers(measurementRoot(frm)), 180);
+        // A module may bind its observer during the schedule call on first load.
+        // Disconnect again after rendering; its explicit field-event schedules stay
+        // active while the structural observer below owns actual table replacement.
+        requestAnimationFrame(() => disconnectCompetingEdgeObservers(measurementWrapper(frm)));
+        setTimeout(() => disconnectCompetingEdgeObservers(measurementWrapper(frm)), 180);
     }
 
     function stabilizeEdgeRendering(frm) {
