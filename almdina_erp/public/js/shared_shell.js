@@ -3,6 +3,8 @@
 
     const APP_NAME = "almdina_erp";
     const PERMISSION_CONTEXT_VERSION = 6;
+    const FACTORY_SETTINGS_CONSOLE_ROUTE = "factory-production-settings";
+    const LEGACY_FACTORY_SETTINGS_ROUTE = "almdina-erp-settings";
     const SURFACE_ROUTE_RULES = Object.freeze([
         { surface: "orders", routes: ["door-cutting-order"] },
         { surface: "customer_admin", routes: ["customer"] },
@@ -15,7 +17,7 @@
         { surface: "edge_banding_types", routes: ["edge-banding-type"] },
         {
             surface: "factory_settings",
-            routes: ["factory-production-settings", "almdina-erp-settings"],
+            routes: [FACTORY_SETTINGS_CONSOLE_ROUTE, LEGACY_FACTORY_SETTINGS_ROUTE],
         },
         { surface: "workforce", routes: ["factory-workforce"] },
         { surface: "permissions", routes: ["factory-permissions"] },
@@ -212,6 +214,32 @@
         }
         values.push(window.location.pathname || "");
         return [...new Set(values.map(canonicalRoute).filter(Boolean))];
+    }
+
+    function redirectLegacyFactorySettingsRoute() {
+        if (redirecting) return false;
+        const routes = currentRouteCandidates();
+        if (!routes.includes(LEGACY_FACTORY_SETTINGS_ROUTE)) return false;
+        if (routes.includes(FACTORY_SETTINGS_CONSOLE_ROUTE)) return false;
+
+        redirecting = true;
+        const navigationPromise = typeof frappe.set_route === "function"
+            ? Promise.resolve(frappe.set_route(FACTORY_SETTINGS_CONSOLE_ROUTE))
+            : Promise.resolve(window.location.replace(`/desk/${FACTORY_SETTINGS_CONSOLE_ROUTE}`));
+        navigationPromise.finally(() => {
+            window.setTimeout(() => {
+                redirecting = false;
+            }, 100);
+        });
+        return true;
+    }
+
+    function installFactorySettingsCanonicalRedirect() {
+        if (!frappe.router || frappe.router.__almdinaFactorySettingsCanonicalRedirect) return;
+        frappe.router.__almdinaFactorySettingsCanonicalRedirect = true;
+        frappe.router.on("change", () => {
+            window.setTimeout(redirectLegacyFactorySettingsRoute, 0);
+        });
     }
 
     function shortcutContainer(element) {
@@ -417,14 +445,17 @@
     function startShell() {
         applyShell();
         observeDeskMutations();
-        retryConfiguredHome();
-        window.setTimeout(guardCurrentRoute, 0);
+        if (!redirectLegacyFactorySettingsRoute()) {
+            retryConfiguredHome();
+            window.setTimeout(guardCurrentRoute, 0);
+        }
 
         if (frappe.router && !frappe.router.__almdinaSharedShell) {
             frappe.router.__almdinaSharedShell = true;
             frappe.router.on("change", () => {
                 applyShell();
                 window.setTimeout(() => {
+                    if (redirectLegacyFactorySettingsRoute()) return;
                     retryConfiguredHome();
                     guardCurrentRoute();
                 }, 0);
@@ -435,7 +466,7 @@
             window.__almdinaPermissionUpdateListener = true;
             window.addEventListener("almdina:permissions-updated", () => {
                 applyShell();
-                guardCurrentRoute();
+                if (!redirectLegacyFactorySettingsRoute()) guardCurrentRoute();
             });
         }
         [100, 300, 900, 1800].forEach(delay => setTimeout(applyShell, delay));
@@ -474,6 +505,8 @@
 
     function waitForDesk(attempt) {
         if (deskIsReady()) {
+            installFactorySettingsCanonicalRedirect();
+            redirectLegacyFactorySettingsRoute();
             init();
             return;
         }
