@@ -32,6 +32,10 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         return safe.replace(/\r?\n/g, "<br>");
     }
 
+    function yesNo(value) {
+        return Number(value || 0) ? __("نعم") : __("لا");
+    }
+
     function call(method, args = {}, freezeMessage = "") {
         return frappe.call({
             method,
@@ -46,9 +50,9 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         const style = document.createElement("style");
         style.id = "almdina-production-settings-style";
         style.textContent = `
-            .aps-shell{direction:rtl;display:grid;gap:14px;max-width:1120px;padding-bottom:30px}.aps-hero{padding:20px;border:1px solid var(--border-color,#e5e7eb);border-radius:16px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f7f9fb))}.aps-hero h2{margin:0 0 6px;font-size:21px;font-weight:800}.aps-hero p{margin:0;color:var(--text-muted,#6b7280);line-height:1.8}.aps-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.aps-section{display:flex;flex-direction:column;padding:16px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:var(--fg-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.035)}.aps-section-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.aps-section h3{margin:0;font-size:17px;font-weight:800}.aps-section-desc{margin:5px 0 13px;color:var(--text-muted,#6b7280);font-size:12px;line-height:1.7}.aps-permission{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#eef5ff;color:#285f9e}.aps-permission.readonly{background:#f2f3f5;color:#5b6570}.aps-values{display:grid;gap:8px;flex:1}.aps-value{padding:9px;border-radius:10px;background:var(--subtle-fg,#f7f8fa)}.aps-value span{display:block;color:var(--text-muted,#6b7280);font-size:10px;font-weight:700}.aps-value b{display:block;margin-top:4px;font-size:13px;line-height:1.65;overflow-wrap:anywhere}.aps-actions{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aps-actions .btn{min-height:39px;border-radius:9px;font-weight:700}.aps-note{padding:12px 14px;border-radius:12px;background:#f1f7ff;border:1px solid #cfe3ff;color:#28527a;font-size:12px;line-height:1.8}.aps-empty,.aps-error{padding:38px 18px;text-align:center;border:1px dashed var(--border-color,#d5dce3);border-radius:14px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}.aps-error{border-style:solid;border-color:#f5b7b1;background:#fff5f4;color:#9f2d20}.aps-audit{display:grid;gap:8px;max-height:480px;overflow:auto}.aps-audit-item{padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:11px}.aps-audit-head{display:flex;justify-content:space-between;gap:8px;font-weight:800}.aps-audit-meta{margin-top:5px;color:var(--text-muted,#6b7280);font-size:12px}
+            .aps-shell{direction:rtl;display:grid;gap:14px;max-width:1120px;padding-bottom:30px}.aps-hero{padding:20px;border:1px solid var(--border-color,#e5e7eb);border-radius:16px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f7f9fb))}.aps-hero h2{margin:0 0 6px;font-size:21px;font-weight:800}.aps-hero p{margin:0;color:var(--text-muted,#6b7280);line-height:1.8}.aps-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.aps-section{display:flex;flex-direction:column;padding:16px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:var(--fg-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.035)}.aps-section-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.aps-section h3{margin:0;font-size:17px;font-weight:800}.aps-section-desc{margin:5px 0 13px;color:var(--text-muted,#6b7280);font-size:12px;line-height:1.7}.aps-permission{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#eef5ff;color:#285f9e}.aps-permission.readonly{background:#f2f3f5;color:#5b6570}.aps-values{display:grid;gap:8px;flex:1}.aps-value{padding:9px;border-radius:10px;background:var(--subtle-fg,#f7f8fa)}.aps-value span{display:block;color:var(--text-muted,#6b7280);font-size:10px;font-weight:700}.aps-value b{display:block;margin-top:4px;font-size:13px;line-height:1.65;overflow-wrap:anywhere}.aps-actions{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aps-actions .btn{min-height:39px;border-radius:9px;font-weight:700}.aps-note{padding:12px 14px;border-radius:12px;background:#f1f7ff;border:1px solid #cfe3ff;color:#28527a;font-size:12px;line-height:1.8}.aps-empty,.aps-error{padding:38px 18px;text-align:center;border:1px dashed var(--border-color,#d5dce3);border-radius:14px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}.aps-error{border-style:solid;border-color:#f5b7b1;background:#fff5f4;color:#9f2d20}.aps-audit{display:grid;gap:8px;max-height:480px;overflow:auto}.aps-audit-item{padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:11px}.aps-audit-head{display:flex;justify-content:space-between;gap:8px;font-weight:800}.aps-audit-meta{margin-top:5px;color:var(--text-muted,#6b7280);font-size:12px}.aps-legacy{border:1px dashed var(--border-color,#d8dee4);border-radius:14px;background:var(--fg-color,#fff);overflow:hidden}.aps-legacy summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:800;display:flex;align-items:center;justify-content:space-between;gap:12px}.aps-legacy summary::-webkit-details-marker{display:none}.aps-legacy summary:after{content:"⌄";font-size:18px;color:var(--text-muted,#6b7280);transition:transform .15s}.aps-legacy[open] summary:after{transform:rotate(180deg)}.aps-legacy-copy{padding:0 16px 10px;color:var(--text-muted,#6b7280);font-size:12px;line-height:1.7}.aps-legacy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 16px}.aps-legacy .aps-value{border:1px solid var(--border-color,#edf0f2)}.aps-readonly-chip{display:inline-flex;margin-inline-start:8px;padding:3px 7px;border-radius:999px;background:#f2f3f5;color:#5b6570;font-size:10px;font-weight:800}
             @media(max-width:950px){.aps-sections{grid-template-columns:1fr 1fr}}
-            @media(max-width:620px){.aps-sections{grid-template-columns:1fr}.aps-section-head{display:block}.aps-permission{margin-top:8px}.aps-actions .btn{width:100%}}
+            @media(max-width:620px){.aps-sections,.aps-legacy-grid{grid-template-columns:1fr}.aps-section-head{display:block}.aps-permission{margin-top:8px}.aps-actions .btn{width:100%}}
         `;
         document.head.appendChild(style);
     }
@@ -75,13 +79,37 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         );
     }
 
+    function legacySettingsDetails(legacy) {
+        if (!legacy || typeof legacy !== "object") return "";
+        const rows = [
+            [__("التحكم القديم بالمخزون"), yesNo(legacy.enforce_stock_control)],
+            [__("المستودع الافتراضي القديم"), esc(legacy.default_warehouse || "—")],
+            [__("حجز المخزون عند الاعتماد"), yesNo(legacy.reserve_stock_on_approval)],
+            [__("نقطة استهلاك المخزون"), esc(legacy.stock_consumption_point || "—")],
+            [__("تفضيل بقايا الألواح قبل الألواح الكاملة"), yesNo(legacy.prefer_remnants_before_full_boards)],
+            [__("أدنى عرض للبقايا (مم)"), esc(legacy.min_remnant_width_mm)],
+            [__("أدنى طول للبقايا (مم)"), esc(legacy.min_remnant_length_mm)],
+            [__("أدنى مساحة للبقايا (م²)"), esc(legacy.min_remnant_area_m2)],
+            [__("سياسة تكلفة البقايا"), esc(legacy.remnant_cost_policy || "—")],
+            [__("سعر البقايا / م²"), `${esc(legacy.remnant_rate_usd_per_m2)} USD`],
+        ];
+        return `
+            <details class="aps-legacy">
+                <summary><span>${__("بيانات إعدادات قديمة محفوظة")}<span class="aps-readonly-chip">${__("للقراءة فقط")}</span></span></summary>
+                <div class="aps-legacy-copy">${__("هذه القيم كانت مستخدمة في وظائف مخزون وبقايا ألواح قديمة تم إيقافها تشغيليًا. لم نحذفها من قاعدة البيانات، وتظهر هنا فقط حتى تبقى جميع بيانات إعدادات المعمل في مكان واحد دون فقدان أي قيمة تاريخية.")}</div>
+                <div class="aps-legacy-grid">${rows.map(row => `<div class="aps-value"><span>${row[0]}</span><b>${row[1] === undefined || row[1] === null || row[1] === "" ? "—" : row[1]}</b></div>`).join("")}</div>
+            </details>
+        `;
+    }
+
     function render() {
         const values = current.values || current;
+        const legacy = current.legacy_values || {};
         $body.html(`
             <div class="aps-shell">
                 <section class="aps-hero">
                     <h2>${__("الإعدادات الافتراضية للمعمل")}</h2>
-                    <p>${__("تُطبق القيم على الطلبات الجديدة وعلى أوراق الطباعة حسب القسم. كل قسم له صلاحية مستقلة، وكل تعديل يُسجل مع المستخدم والحقول المتغيرة.")}</p>
+                    <p>${__("هذه هي الواجهة الموحدة الوحيدة لإعدادات المعمل. جميع الإعدادات النشطة موجودة هنا، والقيم القديمة المحفوظة تظهر في قسم منفصل للقراءة فقط. كل تعديل نشط يمر عبر الصلاحيات وسجل التغييرات.")}</p>
                 </section>
                 <section class="aps-sections">
                     ${sectionCard("cutting", __("القص والمحسّن"), __("الهندسة الافتراضية وخوارزمية التوزيع وحدود البحث."), [
@@ -111,7 +139,8 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
                         [__("أرقام التواصل"), multiline(values.print_factory_contacts)],
                     ])}
                 </section>
-                <div class="aps-note">${__("أرقام التواصل تقبل عدة أسطر؛ اكتب مثلًا: أرضي: … ثم موبايل: … ثم واتس اب: … . لا يمكن تعديل سجل الإعدادات مباشرة من Form، وجميع التغييرات تمر عبر سياسة الصلاحيات وسجل التدقيق.")}</div>
+                ${legacySettingsDetails(legacy)}
+                <div class="aps-note">${__("الرابط القديم لنموذج Almdina ERP Settings أصبح مسارًا تاريخيًا فقط وسيتم تحويله تلقائيًا إلى هذه الصفحة. لا يتم حذف أي قيمة من السجل عند التحويل، وأرقام التواصل تقبل عدة أسطر مثل: أرضي، موبايل، واتس اب.")}</div>
             </div>
         `);
         $body.find(".aps-edit").on("click", event => openSectionDialog(event.currentTarget.dataset.section));
