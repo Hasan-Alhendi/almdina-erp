@@ -80,7 +80,9 @@
             const first = index === 0 && draft.closeReady ? " is-close-ready" : "";
             return `<circle class="ddv3-pen-draft-node${first}" cx="${p.x}" cy="${p.y}" r="${first ? 6 : 3.5}"/>`;
         }).join("");
-        return `<g class="ddv3-pen-draft"><path d="${d}"/>${nodes}${draft.closeReady ? '<text class="ddv3-pen-close-label" x="12" y="-12">إغلاق</text>' : ""}</g>`;
+        const first = Base.worldToScreen(c, draft.points[0]);
+        const closeLabel = draft.closeReady ? `<text class="ddv3-pen-close-label" x="${first.x + 12}" y="${first.y - 12}">إغلاق</text>` : "";
+        return `<g class="ddv3-pen-draft"><path d="${d}"/>${nodes}${closeLabel}</g>`;
     }
 
     function insertPathLayer(c, markup) {
