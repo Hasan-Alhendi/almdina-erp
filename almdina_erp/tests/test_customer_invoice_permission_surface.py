@@ -30,10 +30,8 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
         toolbar = TOOLBAR.read_text(encoding="utf-8")
         financial = FINANCIAL.read_text(encoding="utf-8")
 
-        self.assertIn(
-            'permissions.canDocument(frm, "print_customer_invoice")', toolbar
-        )
-        self.assertNotIn('permissions.canDocument(frm, "view_costs")', toolbar)
+        self.assertIn('can(frm, "print_customer_invoice")', toolbar)
+        self.assertNotIn('can(frm, "view_costs") && can(frm, "print_customer_invoice")', toolbar)
         self.assertIn("AlmdinaFinancialDocuments", toolbar)
         self.assertIn("documents.printCustomerInvoice(frm)", toolbar)
         self.assertIn("get_customer_invoice_document", financial)
@@ -51,6 +49,15 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
         self.assertIn("requestAnimationFrame(() => ensureCostButton(frm))", source)
         self.assertNotIn("frm.add_custom_button", source)
         self.assertNotIn("get_customer_invoice_document", source)
+
+    def test_cost_snapshot_wins_after_async_edge_profile_preview(self) -> None:
+        source = TOOLBAR.read_text(encoding="utf-8")
+
+        self.assertIn("function reconcileAuthoritativeCost", source)
+        self.assertIn("edgeBanding.ensureProfiles(frm)", source)
+        self.assertIn("costPermissions.apply(frm)", source)
+        self.assertIn("isCurrent(frm, identity)", source)
+        self.assertIn("persisted server calculation", source)
 
     def test_order_form_loads_customer_invoice_toolbar_from_source(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
