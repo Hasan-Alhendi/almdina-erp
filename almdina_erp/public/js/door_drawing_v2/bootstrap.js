@@ -15,6 +15,7 @@
         "/assets/almdina_erp/js/door_drawing_v2/presentation/editor_shell_ux.js",
         "/assets/almdina_erp/js/door_drawing_v2/presentation/selection_overlay_ux.js",
         "/assets/almdina_erp/js/door_drawing_v2/presentation/line_tool_ux.js",
+        "/assets/almdina_erp/js/door_drawing_v2/presentation/figma_exact_shell_ux.js",
     ]);
 
     function alreadyLoaded(src) {
