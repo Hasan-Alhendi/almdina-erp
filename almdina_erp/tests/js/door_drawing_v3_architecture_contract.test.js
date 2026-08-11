@@ -14,8 +14,8 @@ assert.match(entry, /__doorDrawingV3:\s*true/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/, "V3 entry point must not depend on the retired sketch engine");
 
 assert.match(editor, /data-ddv3-tool="line"/);
-assert.match(editor, /data-ddv3-prop="length"/);
-assert.match(editor, /data-ddv3-prop="angle"/);
+assert.match(editor, /field\("Length",\s*"length"/);
+assert.match(editor, /field\("Rotation",\s*"angle"/);
 assert.match(editor, /measurementMarkup/);
 assert.match(editor, /worldToScreen/);
 assert.match(editor, /screenToWorld/);
