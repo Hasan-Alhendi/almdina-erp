@@ -29,3 +29,8 @@
 .ddv3-canvas.has-magnetic-snap .ddv3-snap-indicator path {
     stroke-width: 1.25;
 }
+
+/* Measurements live in the inspector; keep the canvas visually clean. */
+.ddv3-app .ddv3-measure {
+    display: none !important;
+}
