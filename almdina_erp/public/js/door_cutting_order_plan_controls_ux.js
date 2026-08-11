@@ -198,20 +198,20 @@
         return true;
     }
 
-    async function persistDirtyOrderBeforeRecalculation(frm) {
-        const dirty = Boolean(frm && frm.is_dirty && frm.is_dirty());
-        if (!dirty) return true;
-        if (!frm || typeof frm.save !== "function") {
-            frappe.msgprint(__("تعذر حفظ تعديلات الطلب قبل حساب خطة القص."));
-            return false;
+    async function persistPendingOrderInputs(frm) {
+        const fastSave = window.AlmdinaFastSaveUX;
+        if (fastSave && typeof fastSave.persistPendingOrderInputs === "function") {
+            return Boolean(await fastSave.persistPendingOrderInputs(frm));
         }
 
-        frappe.show_alert({
-            message: __("سيتم حفظ تعديلات القياسات أولًا حتى لا تفقد قبل إعادة حساب خطة القص."),
-            indicator: "blue",
-        }, 4);
-        await frm.save();
-        return !(frm.is_dirty && frm.is_dirty());
+        // FastSave is loaded before this module in the form contract. Fail closed
+        // only when an unexpected dirty form reaches us without that helper;
+        // clean plan-only sessions remain independent from order editability.
+        if (frm && frm.is_dirty && frm.is_dirty()) {
+            frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            return false;
+        }
+        return true;
     }
 
     async function runRecalculation(frm) {
@@ -220,7 +220,7 @@
             return false;
         }
         if (!(await preparePlanInputs(frm))) return false;
-        if (!(await persistDirtyOrderBeforeRecalculation(frm))) return false;
+        if (!(await persistPendingOrderInputs(frm))) return false;
 
         try {
             await frappe.call({
@@ -474,7 +474,7 @@
         apply,
         canCalculate,
         preparePlanInputs,
-        persistDirtyOrderBeforeRecalculation,
+        persistPendingOrderInputs,
         runRecalculation,
     });
 })();
