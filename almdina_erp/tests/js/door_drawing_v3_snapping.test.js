@@ -29,6 +29,8 @@ assert.ok(anchors.some(anchor => anchor.objectId === "A1" && anchor.role === "en
 assert.equal(anchors.find(anchor => anchor.objectId === "L1" && anchor.role === "end").kind, "joint");
 assert.ok(S.DEFAULT_SNAP_PX >= 20, "Default magnetic radius must be forgiving enough for normal mouse use");
 assert.ok(S.JOIN_SNAP_PX > S.DEFAULT_SNAP_PX, "Join endpoints should have a slightly larger magnetic capture radius");
+assert.ok(S.MOVE_JOIN_SNAP_PX >= 40, "Whole-object movement needs a larger capture radius than drawing a new segment");
+assert.ok(S.MOVE_SNAP_RELEASE_FACTOR > 1, "A joined moving object should use hysteresis instead of immediately falling off the joint");
 
 assert.equal(S.worldTolerance(2, 14), 7, "Snap radius must stay stable in screen pixels across zoom levels");
 
@@ -107,15 +109,32 @@ assert.deepEqual(exactArcSnap.point, G.point(600, 300));
 
 let moveDocument = D.create({ widthMm: 500, heightMm: 500 });
 const fixedHorizontal = G.line("fixed", G.point(0, 0), G.point(100, 0));
-const movingVertical = G.line("moving", G.point(125, 0), G.point(125, 100));
+const movingVertical = G.line("moving", G.point(150, 0), G.point(150, 100));
 moveDocument = D.addObject(moveDocument, fixedHorizontal);
 moveDocument = D.addObject(moveDocument, movingVertical);
-const moved = S.resolveObjectMove(moveDocument, movingVertical, -7, 0, { viewportScale: 1 });
-assert.equal(moved.snapped, true, "Moving an entire nearby piece should magnetically join endpoint-to-endpoint");
+const moved = S.resolveObjectMove(moveDocument, movingVertical, -8, 0, { viewportScale: 1 });
+assert.equal(moved.snapped, true, "Moving a whole piece should join even when its endpoint is still roughly 40px away");
 assert.deepEqual(moved.object.geometry.start, G.point(100, 0));
 assert.deepEqual(moved.object.geometry.end, G.point(100, 100));
 assert.equal(G.lineLength(moved.object), 100, "Magnetic joining must translate the piece without changing its exact length");
 assert.equal(moved.target.objectId, "fixed");
 assert.equal(moved.target.role, "end");
+
+const stickyMove = S.resolveObjectMove(moveDocument, movingVertical, 20, 0, {
+    viewportScale: 1,
+    stickySource: moved.source,
+    stickyTarget: moved.target,
+});
+assert.equal(stickyMove.snapped, true, "Once joined, normal hand jitter should not immediately detach the moved piece");
+assert.equal(stickyMove.sticky, true);
+assert.deepEqual(stickyMove.object.geometry.start, G.point(100, 0));
+assert.equal(G.lineLength(stickyMove.object), 100);
+
+const releasedMove = S.resolveObjectMove(moveDocument, movingVertical, 60, 0, {
+    viewportScale: 1,
+    stickySource: moved.source,
+    stickyTarget: moved.target,
+});
+assert.equal(releasedMove.snapped, false, "Pulling clearly beyond the release radius should detach the piece again");
 
 console.log("Door Drawing V3 snapping tests passed");
