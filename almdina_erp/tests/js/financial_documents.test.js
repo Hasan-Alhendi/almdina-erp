@@ -200,7 +200,7 @@ async function main() {
     runtime.capabilities.delete("print_internal_cost_report");
     await assert.rejects(
         runtime.fakeWindow.AlmdinaFinancialDocuments.printInternalCostReport(frm),
-        /Missing capability: print_internal_cost_report/
+        /Missing print capability/
     );
     assert.equal(runtime.calls.length, 2);
 
