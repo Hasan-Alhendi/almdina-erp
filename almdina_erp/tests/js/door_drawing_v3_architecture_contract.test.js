@@ -8,9 +8,11 @@ const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutt
 const geometry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"), "utf8");
 const snapping = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snapping.js"), "utf8");
 const handles = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/shape_handles.js"), "utf8");
+const precision = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/precision_input.js"), "utf8");
 const view = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/canvas_view.js"), "utf8");
 const editor = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/editor_stage2.js"), "utf8");
 const css = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3.css"), "utf8");
+const precisionCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_precision.css"), "utf8");
 
 for (const modulePath of [
     "door_drawing_v3/domain/geometry.js",
@@ -19,13 +21,16 @@ for (const modulePath of [
     "door_drawing_v3/infrastructure/persistence_adapter.js",
     "door_drawing_v3/application/snapping.js",
     "door_drawing_v3/application/shape_handles.js",
+    "door_drawing_v3/application/precision_input.js",
     "door_drawing_v3/presentation/canvas_view.js",
     "door_drawing_v3/application/editor_stage2.js",
 ]) assert.match(entry, new RegExp(modulePath.replaceAll("/", "\\/").replaceAll(".", "\\.")));
+assert.match(entry, /door_drawing_v3_precision\.css/);
 assert.match(entry, /__doorDrawingV3:\s*true/);
 assert.match(entry, /__doorDrawingV3Shapes:\s*true/);
 assert.match(entry, /__doorDrawingV3Snapping:\s*true/);
 assert.match(entry, /__doorDrawingV3Handles:\s*true/);
+assert.match(entry, /__doorDrawingV3PrecisionInput:\s*true/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
 
 for (const tool of ["line", "rectangle", "circle", "arc"]) assert.match(view, new RegExp(`data-ddv3-tool=\\"${tool}\\"`));
@@ -39,18 +44,28 @@ assert.match(view, /data-ddv3-handle/);
 assert.match(view, /function displayObject/);
 assert.match(view, /ddv3-snap-indicator/);
 assert.match(view, /Ctrl\+Shift\+Z/);
+
 assert.match(editor, /function handleArcClick/);
 assert.match(editor, /function handleCandidate/);
+assert.match(editor, /function updatePrecisionPreview/);
+assert.match(editor, /function commitPrecision/);
+assert.match(editor, /function handlePrecisionKey/);
+assert.match(editor, /clickDraft/);
+assert.match(editor, /Precision\.lineFromInput/);
+assert.match(editor, /Precision\.rectangleFromInput/);
+assert.match(editor, /Precision\.circleFromInput/);
+assert.match(editor, /Precision\.arcFromSweep/);
 assert.match(editor, /Handles\.resize/);
 assert.match(editor, /S\.resolvePoint/);
 assert.match(editor, /S\.resolveArcEndpoint/);
 assert.match(editor, /forcedAxis:/);
 assert.match(editor, /axisLock:\s*c\.tool === "line"/);
 assert.match(editor, /G\.translateObject/);
-assert.match(editor, /root\.EditorStage4/);
+assert.match(editor, /root\.EditorStage5/);
 assert.match(editor, /r:\s*"rectangle"/);
 assert.match(editor, /o:\s*"circle"/);
 assert.match(editor, /a:\s*"arc"/);
+
 assert.match(geometry, /function rectangle\(/);
 assert.match(geometry, /function circle\(/);
 assert.match(geometry, /function arc\(/);
@@ -64,6 +79,11 @@ assert.match(handles, /function resizeRectangle/);
 assert.match(handles, /function resizeCircle/);
 assert.match(handles, /function resizeArc/);
 assert.doesNotMatch(handles, /document\.|querySelector|getBoundingClientRect|clientX|clientY/, "Shape handle transforms must remain independent from DOM coordinates");
+assert.match(precision, /function parseLine/);
+assert.match(precision, /function parseRectangle/);
+assert.match(precision, /function parseCircle/);
+assert.match(precision, /function parseArc/);
+assert.doesNotMatch(precision, /document\.|querySelector|getBoundingClientRect|clientX|clientY|px\b/i, "Precision input must remain a world-mm application policy, not a screen coordinate feature");
 assert.doesNotMatch(editor + view, /special_shape_geometry_json\s*=/, "Drawing editor must not fabricate manufacturing geometry from visual output");
 
 assert.match(css, /\.ddv3-app/);
@@ -73,7 +93,8 @@ assert.match(css, /\.ddv3-measure/);
 assert.match(css, /\.ddv3-handle/);
 assert.match(css, /\.ddv3-snap-axis-guide/);
 assert.match(css, /\.ddv3-snap-indicator/);
-assert.doesNotMatch(css, /^body\s*\{/m);
-assert.doesNotMatch(css, /^\.form-layout\s*\{/m);
+assert.match(precisionCss, /\.ddv3-precision-entry/);
+assert.doesNotMatch(css + precisionCss, /^body\s*\{/m);
+assert.doesNotMatch(css + precisionCss, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 Stage 4 architecture contract passed");
+console.log("Door Drawing V3 Stage 5 architecture contract passed");

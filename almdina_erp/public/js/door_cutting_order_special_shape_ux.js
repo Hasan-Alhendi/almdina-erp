@@ -1,8 +1,10 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "almdina-door-drawing-v3-css";
-    const STYLE_HREF = "/assets/almdina_erp/css/door_drawing_v3.css";
+    const STYLE_LINKS = Object.freeze([
+        Object.freeze({ id: "almdina-door-drawing-v3-css", href: "/assets/almdina_erp/css/door_drawing_v3.css" }),
+        Object.freeze({ id: "almdina-door-drawing-v3-precision-css", href: "/assets/almdina_erp/css/door_drawing_v3_precision.css" }),
+    ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/document.js",
@@ -10,18 +12,25 @@
         "/assets/almdina_erp/js/door_drawing_v3/infrastructure/persistence_adapter.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/snapping.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/shape_handles.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/precision_input.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
     ]);
 
-    function ensureStyle() {
-        if (document.getElementById(STYLE_ID)) return;
-        const link = document.createElement("link"); link.id = STYLE_ID; link.rel = "stylesheet"; link.href = STYLE_HREF; document.head.appendChild(link);
+    function ensureStyles() {
+        STYLE_LINKS.forEach(item => {
+            if (document.getElementById(item.id)) return;
+            const link = document.createElement("link");
+            link.id = item.id;
+            link.rel = "stylesheet";
+            link.href = item.href;
+            document.head.appendChild(link);
+        });
     }
     function loaded(src) { return Boolean(document.querySelector(`script[data-door-drawing-v3="${src}"]`)); }
     function loadScript(src) { return new Promise((resolve, reject) => { if (loaded(src)) return resolve(); const script = document.createElement("script"); script.src = src; script.async = false; script.dataset.doorDrawingV3 = src; script.onload = resolve; script.onerror = () => reject(new Error(`Failed to load Door Drawing V3 module: ${src}`)); document.head.appendChild(script); }); }
     function boot() {
-        ensureStyle();
+        ensureStyles();
         if (window.__almdinaDoorDrawingV3BootPromise) return window.__almdinaDoorDrawingV3BootPromise;
         window.__almdinaDoorDrawingV3BootPromise = SCRIPTS.reduce((promise, src) => promise.then(() => loadScript(src)), Promise.resolve()).catch(error => { window.__almdinaDoorDrawingV3BootPromise = null; console.error("Door Drawing V3 bootstrap failed", error); throw error; });
         return window.__almdinaDoorDrawingV3BootPromise;
@@ -37,6 +46,7 @@
         __doorDrawingV3Shapes: true,
         __doorDrawingV3Snapping: true,
         __doorDrawingV3Handles: true,
+        __doorDrawingV3PrecisionInput: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,
@@ -56,6 +66,6 @@
         __doorDrawingV2FigmaExactIntegrated: true,
     };
     window.AlmdinaSpecialShapeEditor = Object.freeze(facade);
-    window.AlmdinaDoorDrawingV3Bootstrap = Object.freeze({ SCRIPTS, boot });
+    window.AlmdinaDoorDrawingV3Bootstrap = Object.freeze({ STYLE_LINKS, SCRIPTS, boot });
     window.AlmdinaDoorDrawingV2Bootstrap = Object.freeze({ SCRIPTS: Object.freeze([]), boot: () => Promise.resolve() });
 })();
