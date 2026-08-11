@@ -4,6 +4,9 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -25,11 +28,13 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
                 {"doctype": "Role", "role_name": ROLE, "desk_access": 1}
             ).insert(ignore_permissions=True)
         frappe.db.delete("Custom DocPerm", {"role": ROLE})
+        frappe.db.delete("Almdina Role Capability State", {"role": ROLE})
         sync_permission_types()
 
     def tearDown(self):
         frappe.set_user("Administrator")
         frappe.db.delete("Custom DocPerm", {"role": ROLE})
+        frappe.db.delete("Almdina Role Capability State", {"role": ROLE})
         legacy_name = frappe.db.get_value(
             "Permission Type",
             {"perm_type": LEGACY_MANAGE_USERS, "doc_type": "Almdina ERP Settings"},
@@ -125,20 +130,23 @@ class TestPermissionProjectionMigrationIntegration(FrappeTestCase):
         ):
             self.assertEqual(int(row.get(capability)), 0, capability)
 
-    def test_migrate_repairs_customer_and_edge_reads_for_order_editors(self) -> None:
-        frappe.get_doc(
+    def test_sync_repairs_customer_and_edge_reads_from_canonical_order_editor_state(self) -> None:
+        repository = FrappePermissionMatrixRepository()
+        repository.save_role_state(
+            ROLE,
             {
-                "doctype": "Custom DocPerm",
-                "parent": "Door Cutting Order",
-                "parenttype": "DocType",
-                "parentfield": "permissions",
-                "role": ROLE,
-                "permlevel": 0,
-                "read": 1,
-                "create": 1,
-                "write": 1,
-            }
-        ).insert(ignore_permissions=True)
+                Capability.CREATE_ORDER: True,
+                Capability.EDIT_ORDER: True,
+            },
+        )
+
+        # Simulate stale or accidentally removed Frappe projections. The
+        # canonical role capability state remains the sole business authority.
+        for doctype in ("Customer", "Edge Banding Type"):
+            frappe.db.delete(
+                "Custom DocPerm",
+                {"parent": doctype, "role": ROLE},
+            )
 
         sync_permission_types()
 
