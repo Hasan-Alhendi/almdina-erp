@@ -339,7 +339,7 @@
                     commitDraft(controller, metrics);
                     return;
                 }
-                controller.lengthInput.focus({ preventScroll: true });
+                scheduleRefresh(controller);
             }, 0);
         }, true);
 
