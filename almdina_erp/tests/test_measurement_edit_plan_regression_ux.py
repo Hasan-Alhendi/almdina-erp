@@ -79,3 +79,11 @@ def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observe
     assert "structuralMeasurementMutation" in operator_patch
     assert "__dcoEdgeStructureObserver" in operator_patch
     assert "observer.observe(wrapper, { childList: true, subtree: true })" in operator_patch
+
+    refresh_body = operator_patch.split("function refreshEdgeDecorations(frm)", 1)[1].split(
+        "function stabilizeEdgeRendering(frm)", 1
+    )[0]
+    assert "const wrapper = measurementWrapper(frm);" in refresh_body
+    assert "disconnectCompetingEdgeObservers(wrapper);" in refresh_body
+    assert "disconnectCompetingEdgeObservers(root);" not in refresh_body
+    assert "disconnectCompetingEdgeObservers(measurementRoot(frm))" not in refresh_body
