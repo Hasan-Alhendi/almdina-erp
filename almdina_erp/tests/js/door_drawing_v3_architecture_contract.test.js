@@ -13,6 +13,7 @@ const smartPathSnapping = fs.readFileSync(path.resolve(__dirname, "../../public/
 const moveSnapPolicy = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/move_snap_policy.js"), "utf8");
 const handles = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/shape_handles.js"), "utf8");
 const precision = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/precision_input.js"), "utf8");
+const freehand = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_freehand_policy.js"), "utf8");
 const view = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/canvas_view.js"), "utf8");
 const smartPathView = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/smart_path_view.js"), "utf8");
 const editor = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/editor_stage2.js"), "utf8");
@@ -35,6 +36,7 @@ for (const modulePath of [
     "door_drawing_v3/application/move_snap_policy.js",
     "door_drawing_v3/application/shape_handles.js",
     "door_drawing_v3/application/precision_input.js",
+    "door_drawing_v3/application/smart_freehand_policy.js",
     "door_drawing_v3/presentation/canvas_view.js",
     "door_drawing_v3/presentation/canvas_policy.js",
     "door_drawing_v3/presentation/smart_path_view.js",
@@ -53,6 +55,7 @@ assert.match(entry, /__doorDrawingV3PrecisionInput:\s*true/);
 assert.match(entry, /__doorDrawingV3MagneticConnection:\s*true/);
 assert.match(entry, /__doorDrawingV3EasyMoveSnap:\s*true/);
 assert.match(entry, /__doorDrawingV3SmartPen:\s*true/);
+assert.match(entry, /__doorDrawingV3SmartFreehand:\s*true/);
 assert.match(entry, /__doorDrawingV3SmartPath:\s*true/);
 assert.match(entry, /__doorDrawingV3NodeEditing:\s*true/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
@@ -126,6 +129,13 @@ assert.match(precision, /function parseRectangle/);
 assert.match(precision, /function parseCircle/);
 assert.match(precision, /function parseArc/);
 assert.doesNotMatch(precision, /document\.|querySelector|getBoundingClientRect|clientX|clientY|px\b/i, "Precision input must remain a world-mm application policy, not a screen coordinate feature");
+assert.match(freehand, /function appendSample/);
+assert.match(freehand, /function simplifyRdp/);
+assert.match(freehand, /function lineQuality/);
+assert.match(freehand, /function fittedCircle/);
+assert.match(freehand, /function unwrapSweep/);
+assert.match(freehand, /function recognize/);
+assert.doesNotMatch(freehand, /document\.|querySelector|getBoundingClientRect|clientX|clientY|pointerId/, "Freehand correction must remain geometry/application policy, independent from DOM/pointer events");
 
 assert.match(magnetic, /function magneticMove/);
 assert.match(magnetic, /S\.resolveObjectMove/);
@@ -134,16 +144,20 @@ assert.match(magnetic, /stickyTarget/);
 assert.match(smartPathView, /dataset\.ddv3Tool = "pen"/);
 assert.match(smartPathView, /data-ddv3-path-node/);
 assert.match(smartPathView, /data-ddv3-path-segment/);
+assert.match(smartPathView, /is-freehand/);
 assert.match(smartPathView, /function renderPathInspector/);
 assert.match(smartPen, /const CLOSE_CAPTURE_PX = 18/);
-assert.match(smartPen, /function resolvePenCandidate/);
-assert.match(smartPen, /Math\.round\(angle \/ 45\) \* 45/);
+assert.match(smartPen, /function beginFreehand/);
+assert.match(smartPen, /function moveFreehand/);
+assert.match(smartPen, /function finishFreehand/);
+assert.match(smartPen, /getCoalescedEvents/);
+assert.match(smartPen, /F\.appendSample/);
+assert.match(smartPen, /F\.recognize/);
 assert.match(smartPen, /function enterNodeEdit/);
 assert.match(smartPen, /function insertNodeAtEvent/);
 assert.match(smartPen, /G\.setPathPoint/);
 assert.match(smartPen, /G\.removePathPoint/);
-assert.match(smartPen, /event\.detail >= 2/);
-assert.match(smartPen, /event\.key === "Enter"/);
+assert.doesNotMatch(smartPen, /Math\.round\(angle \/ 45\) \* 45|event\.detail >= 2/, "The pen must be freehand, not click-to-place polygon drafting");
 assert.doesNotMatch(editor + view + magnetic + smartPen + smartPathView, /special_shape_geometry_json\s*=/, "Drawing editor must not fabricate manufacturing geometry from visual output");
 
 assert.match(css, /\.ddv3-app/);
@@ -158,8 +172,9 @@ assert.match(magneticCss, /\.ddv3-magnetic-badge/);
 assert.match(magneticCss, /has-magnetic-snap/);
 assert.match(smartPenCss, /\.ddv3-path-stroke/);
 assert.match(smartPenCss, /\.ddv3-path-node/);
-assert.match(smartPenCss, /\.ddv3-pen-draft/);
+assert.match(smartPenCss, /\.ddv3-pen-draft\.is-freehand/);
+assert.match(smartPenCss, /\.ddv3-freehand-tip/);
 assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss, /^body\s*\{/m);
 assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 smart pen architecture contract passed");
+console.log("Door Drawing V3 intelligent freehand architecture contract passed");

@@ -6,12 +6,16 @@
     const D = root.DocumentModel;
     const S = root.Snapping;
     const V = root.ShapeView;
+    const F = root.SmartFreehandPolicy;
     const Editor = root.Editor;
-    if (!G || !D || !S || !V || !Editor || !G.path) throw new Error("Door Drawing V3 smart path stack must load before smart pen");
+    if (!G || !D || !S || !V || !F || !Editor || !G.path) throw new Error("Door Drawing V3 intelligent freehand stack must load before smart pen");
 
     const CLOSE_CAPTURE_PX = 18;
+    const SAMPLE_SPACING_PX = 1.8;
+    const SIMPLIFY_TOLERANCE_PX = 1.8;
+    const STRAIGHT_TOLERANCE_PX = 2.8;
     let sequence = 0;
-    function nextId() { sequence += 1; return `path-${Date.now()}-${sequence}`; }
+    function nextId(type = "path") { sequence += 1; return `${type}-${Date.now()}-${sequence}`; }
 
     function selectedPath(c) {
         const object = D.objectById(c.history.current(), c.selectedId);
@@ -34,7 +38,8 @@
         c.snapState = null;
     }
 
-    function cancelPenDraft(c) {
+    function clearFreehand(c) {
+        c.penStroke = null;
         c.penDraft = null;
         c.snapState = null;
     }
@@ -50,84 +55,157 @@
         if (!c || c.readOnly) return false;
         cancelBaseDrafts(c);
         leaveNodeEdit(c);
+        clearFreehand(c);
         c.tool = "pen";
-        c.penDraft = null;
         render(c);
         return true;
     }
 
-    function finishPath(c, closed) {
-        const draft = c.penDraft;
-        if (!draft || draft.points.length < (closed ? 3 : 2)) return false;
-        const object = G.path(nextId(), draft.points, Boolean(closed));
-        const document = D.addObject(c.history.current(), object);
-        c.selectedId = object.id;
-        c.tool = "select";
-        c.penDraft = null;
-        c.snapState = null;
-        c.nodeEditId = object.id;
-        c.selectedNodeIndex = null;
-        execute(c, document, closed ? "Add closed smart path" : "Add smart path");
+    function pxToMm(c, px) {
+        return S.worldTolerance(c.viewport.scale, px);
+    }
+
+    function resolveEndpoint(c, raw, stickyTarget = null) {
+        return S.resolvePoint(c.history.current(), raw, {
+            viewportScale: c.viewport.scale,
+            stickyTarget,
+        });
+    }
+
+    function closeToleranceMm(c) { return pxToMm(c, CLOSE_CAPTURE_PX); }
+
+    function closeCandidate(c, point) {
+        const stroke = c.penStroke;
+        if (!stroke || stroke.rawPoints.length < 5) return false;
+        const travelled = F.polylineLength(stroke.rawPoints);
+        return travelled > closeToleranceMm(c) * 2.5 && G.distance(stroke.startPoint, point) <= closeToleranceMm(c);
+    }
+
+    function updateDraft(c, pointer, closeReady = false) {
+        const stroke = c.penStroke;
+        if (!stroke) return;
+        const previewPoints = stroke.rawPoints.slice();
+        if (pointer && (!previewPoints.length || G.distance(previewPoints[previewPoints.length - 1], pointer) >= G.EPSILON_MM)) previewPoints.push(pointer);
+        c.penDraft = {
+            points: previewPoints,
+            pointer: pointer || previewPoints[previewPoints.length - 1] || stroke.startPoint,
+            closeReady: Boolean(closeReady),
+            freehand: true,
+        };
+    }
+
+    function beginFreehand(c, event) {
+        if (c.tool !== "pen" || c.readOnly || c.spaceHeld || event.button !== 0) return false;
+        const raw = V.eventWorld(c, event);
+        const snap = resolveEndpoint(c, raw, c.snapState && c.snapState.target);
+        const start = snap.point;
+        c.penStroke = {
+            pointerId: event.pointerId,
+            rawPoints: [start],
+            startPoint: start,
+            startTarget: snap.target || null,
+            lastPoint: start,
+        };
+        c.snapState = snap;
+        updateDraft(c, start, false);
+        try { c.canvas.setPointerCapture(event.pointerId); } catch (error) { /* pointer capture is optional */ }
+        render(c);
         return true;
     }
 
-    function closeToleranceMm(c) { return S.worldTolerance(c.viewport.scale, CLOSE_CAPTURE_PX); }
-
-    function resolvePenCandidate(c, event) {
-        const raw = V.eventWorld(c, event);
-        const draft = c.penDraft;
-        const last = draft && draft.points.length ? draft.points[draft.points.length - 1] : null;
-        let candidate = raw;
-        let state = null;
-
-        if (last && event.shiftKey) {
-            const length = G.distance(last, raw);
-            const angle = G.angleDeg(last, raw);
-            const snappedAngle = Math.round(angle / 45) * 45;
-            candidate = G.pointAt(last, length, snappedAngle);
-            state = Object.freeze({ point: candidate, rawPoint: raw, snapped: false, target: null, distanceMm: null, toleranceMm: 0, joinToleranceMm: 0, axis: `angle-${snappedAngle}`, anchor: last, kind: "angle" });
-        } else {
-            state = S.resolvePoint(c.history.current(), raw, {
-                viewportScale: c.viewport.scale,
-                stickyTarget: c.snapState && c.snapState.target,
-            });
-            candidate = state.point;
+    function appendEventSamples(c, event) {
+        const stroke = c.penStroke;
+        if (!stroke || stroke.pointerId !== event.pointerId) return null;
+        const events = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [event];
+        const minSampleMm = Math.max(G.EPSILON_MM, pxToMm(c, SAMPLE_SPACING_PX));
+        for (const sampleEvent of events.length ? events : [event]) {
+            const point = V.eventWorld(c, sampleEvent);
+            stroke.rawPoints = F.appendSample(stroke.rawPoints, point, minSampleMm);
+            stroke.lastPoint = point;
         }
-
-        let closeReady = false;
-        if (draft && draft.points.length >= 3) {
-            const first = draft.points[0];
-            if (G.distance(candidate, first) <= closeToleranceMm(c)) {
-                candidate = first;
-                closeReady = true;
-                state = Object.freeze({ ...(state || {}), point: first, rawPoint: raw, snapped: true, target: Object.freeze({ objectId: "__draft__", role: "start", point: first, priority: 999, kind: "joint" }), kind: "joint" });
-            }
-        }
-        c.snapState = state;
-        return Object.freeze({ point: candidate, closeReady, state });
+        return stroke.lastPoint || V.eventWorld(c, event);
     }
 
-    function addPenPoint(c, event) {
-        const resolved = resolvePenCandidate(c, event);
-        if (!c.penDraft) {
-            c.penDraft = { points: [resolved.point], pointer: resolved.point, closeReady: false };
+    function moveFreehand(c, event) {
+        const stroke = c.penStroke;
+        if (!stroke || stroke.pointerId !== event.pointerId) return false;
+        const raw = appendEventSamples(c, event);
+        const snap = resolveEndpoint(c, raw, c.snapState && c.snapState.target);
+        const shouldClose = closeCandidate(c, raw);
+        const previewPoint = shouldClose ? stroke.startPoint : (snap.snapped ? snap.point : raw);
+        c.snapState = shouldClose
+            ? Object.freeze({ ...snap, point: stroke.startPoint, snapped: true, target: Object.freeze({ objectId: "__stroke__", role: "start", point: stroke.startPoint, priority: 1000, kind: "joint" }), kind: "joint" })
+            : snap;
+        updateDraft(c, previewPoint, shouldClose);
+        render(c);
+        return true;
+    }
+
+    function objectFromRecognition(result) {
+        if (!result || result.type === "none") return null;
+        if (result.type === "line") return G.line(nextId("line"), result.start, result.end);
+        if (result.type === "circle") return G.circle(nextId("circle"), result.center, result.radiusMm);
+        if (result.type === "arc") return G.arc(nextId("arc"), result.center, result.radiusMm, result.startAngleDeg, result.sweepAngleDeg);
+        if (result.type === "path") return G.path(nextId("path"), result.points, result.closed);
+        return null;
+    }
+
+    function finishFreehand(c, event) {
+        const stroke = c.penStroke;
+        if (!stroke || stroke.pointerId !== event.pointerId) return false;
+        const rawEnd = appendEventSamples(c, event) || stroke.lastPoint || stroke.startPoint;
+        const endSnap = resolveEndpoint(c, rawEnd, c.snapState && c.snapState.target);
+        const closed = closeCandidate(c, rawEnd);
+        let points = stroke.rawPoints.slice();
+        if (points.length < 2) {
+            clearFreehand(c);
             render(c);
             return true;
         }
-        if (resolved.closeReady) return finishPath(c, true);
-        const points = c.penDraft.points.slice();
-        const last = points[points.length - 1];
-        if (G.distance(last, resolved.point) < G.EPSILON_MM) return false;
-        points.push(resolved.point);
-        c.penDraft = { points, pointer: resolved.point, closeReady: false };
+        points[0] = stroke.startPoint;
+        points[points.length - 1] = closed ? stroke.startPoint : endSnap.point;
+        points = F.dedupe(points);
+        if (points.length < 2) {
+            clearFreehand(c);
+            render(c);
+            return true;
+        }
+
+        const result = F.recognize(points, {
+            closed,
+            simplifyToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, SIMPLIFY_TOLERANCE_PX)),
+            straightToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, STRAIGHT_TOLERANCE_PX)),
+            smoothingPasses: 2,
+        });
+        let object = null;
+        try { object = objectFromRecognition(result); } catch (error) { object = null; }
+        clearFreehand(c);
+        try { c.canvas.releasePointerCapture(event.pointerId); } catch (error) { /* optional */ }
+        if (!object) {
+            render(c);
+            return true;
+        }
+        const document = D.addObject(c.history.current(), object);
+        c.selectedId = object.id;
+        c.nodeEditId = "";
+        c.selectedNodeIndex = null;
+        c.tool = "pen";
+        execute(c, document, `Smart freehand ${object.type}`);
+        return true;
+    }
+
+    function cancelFreehandGesture(c, pointerId = null) {
+        if (!c.penStroke || (pointerId != null && c.penStroke.pointerId !== pointerId)) return false;
+        const activeId = c.penStroke.pointerId;
+        clearFreehand(c);
+        try { c.canvas.releasePointerCapture(activeId); } catch (error) { /* optional */ }
         render(c);
         return true;
     }
 
-    function updatePenPointer(c, event) {
-        if (c.tool !== "pen" || !c.penDraft || c.spaceHeld) return false;
-        const resolved = resolvePenCandidate(c, event);
-        c.penDraft = { ...c.penDraft, pointer: resolved.point, closeReady: resolved.closeReady };
+    function hoverSnap(c, event) {
+        if (c.tool !== "pen" || c.penStroke || c.spaceHeld) return false;
+        c.snapState = resolveEndpoint(c, V.eventWorld(c, event), c.snapState && c.snapState.target);
         render(c);
         return true;
     }
@@ -139,9 +217,8 @@
         c.selectedId = object.id;
         c.nodeEditId = object.id;
         c.selectedNodeIndex = Number.isInteger(nodeIndex) ? nodeIndex : null;
-        c.penDraft = null;
+        clearFreehand(c);
         c.previewObject = null;
-        c.snapState = null;
         render(c);
         return true;
     }
@@ -193,11 +270,8 @@
         c.previewObject = null;
         c.snapState = null;
         try { c.canvas.releasePointerCapture(event.pointerId); } catch (error) { /* optional */ }
-        if (next && JSON.stringify(next.geometry) !== JSON.stringify(gesture.object.geometry)) {
-            execute(c, D.replaceObject(c.history.current(), next), "Move path node");
-        } else {
-            render(c);
-        }
+        if (next && JSON.stringify(next.geometry) !== JSON.stringify(gesture.object.geometry)) execute(c, D.replaceObject(c.history.current(), next), "Move path node");
+        else render(c);
         return true;
     }
 
@@ -210,19 +284,15 @@
             if (window.frappe && frappe.show_alert) frappe.show_alert({ message: "لا يمكن حذف نقطة إضافية من هذا المسار", indicator: "orange" });
             return true;
         }
-        const document = D.replaceObject(c.history.current(), next);
         c.selectedNodeIndex = Math.min(index, next.geometry.points.length - 1);
-        execute(c, document, "Delete path node");
+        execute(c, D.replaceObject(c.history.current(), next), "Delete path node");
         return true;
     }
 
     function toggleClosed(c) {
         const object = selectedPath(c);
         if (!object || c.readOnly) return false;
-        if (!object.geometry.closed && object.geometry.points.length < 3) {
-            if (window.frappe && frappe.show_alert) frappe.show_alert({ message: "يلزم ثلاث نقاط على الأقل لإغلاق المسار", indicator: "orange" });
-            return true;
-        }
+        if (!object.geometry.closed && object.geometry.points.length < 3) return true;
         const next = G.path(object.id, object.geometry.points, !object.geometry.closed, object.style);
         execute(c, D.replaceObject(c.history.current(), next), object.geometry.closed ? "Open path" : "Close path");
         return true;
@@ -235,14 +305,14 @@
         const point = object.geometry.points[index];
         const value = G.number(input.value, input.dataset.ddv3PathNodeProp === "x" ? point.x : point.y);
         const nextPoint = input.dataset.ddv3PathNodeProp === "x" ? G.point(value, point.y) : G.point(point.x, value);
-        const next = G.setPathPoint(object, index, nextPoint);
-        execute(c, D.replaceObject(c.history.current(), next), "Edit path node");
+        execute(c, D.replaceObject(c.history.current(), G.setPathPoint(object, index, nextPoint)), "Edit path node");
         return true;
     }
 
     function install(c) {
         if (!c || !c.canvas || c.__smartPenInstalled) return c;
         c.__smartPenInstalled = true;
+        c.penStroke = null;
         c.penDraft = null;
         c.nodeEditId = "";
         c.selectedNodeIndex = null;
@@ -259,54 +329,41 @@
         const onRootToolCapture = event => {
             const button = event.target.closest && event.target.closest("[data-ddv3-tool]");
             if (!button || button.dataset.ddv3Tool === "pen") return;
-            cancelPenDraft(c);
+            clearFreehand(c);
             leaveNodeEdit(c);
         };
 
         const onPointerDownCapture = event => {
             if (c.readOnly) return;
             const node = event.target.closest && event.target.closest("[data-ddv3-path-node]");
-            if (node && c.nodeEditId) {
-                if (beginNodeDrag(c, event, node)) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                }
-                return;
+            if (node && c.nodeEditId && beginNodeDrag(c, event, node)) {
+                event.preventDefault(); event.stopImmediatePropagation(); return;
             }
-            if (c.tool !== "pen") return;
-            if (c.spaceHeld || event.button === 1) { c.smartPenSuppressClick = true; return; }
-            if (event.button !== 0) return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
+            if (beginFreehand(c, event)) {
+                event.preventDefault(); event.stopImmediatePropagation();
+            }
         };
 
         const onPointerMoveCapture = event => {
-            if (moveNode(c, event)) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                return;
-            }
-            if (updatePenPointer(c, event)) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
+            if (moveNode(c, event) || moveFreehand(c, event) || hoverSnap(c, event)) {
+                event.preventDefault(); event.stopImmediatePropagation();
             }
         };
 
         const onPointerUpCapture = event => {
-            if (endNodeDrag(c, event)) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
+            if (endNodeDrag(c, event) || finishFreehand(c, event)) {
+                event.preventDefault(); event.stopImmediatePropagation();
+            }
+        };
+
+        const onPointerCancelCapture = event => {
+            if (cancelFreehandGesture(c, event.pointerId)) {
+                event.preventDefault(); event.stopImmediatePropagation();
             }
         };
 
         const onCanvasClickCapture = event => {
             if (c.tool !== "pen" || c.readOnly) return;
-            if (c.smartPenSuppressClick) { c.smartPenSuppressClick = false; return; }
-            if (event.detail >= 2) {
-                finishPath(c, false);
-            } else {
-                addPenPoint(c, event);
-            }
             event.preventDefault();
             event.stopImmediatePropagation();
         };
@@ -318,66 +375,47 @@
             const object = D.objectById(c.history.current(), target.dataset.ddv3Object);
             if (!object || object.type !== G.PATH_TYPE) return;
             const segment = event.target.closest && event.target.closest("[data-ddv3-path-segment]");
-            if (String(c.nodeEditId) === String(object.id) && segment) {
-                insertNodeAtEvent(c, object, Number(segment.dataset.ddv3PathSegment), event);
-            } else {
-                enterNodeEdit(c, object.id);
-            }
+            if (String(c.nodeEditId) === String(object.id) && segment) insertNodeAtEvent(c, object, Number(segment.dataset.ddv3PathSegment), event);
+            else enterNodeEdit(c, object.id);
             event.preventDefault();
             event.stopImmediatePropagation();
         };
 
         const onInspectorClick = event => {
             const toggle = event.target.closest && event.target.closest("[data-ddv3-path-toggle]");
-            if (!toggle) return;
-            if (toggleClosed(c)) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
+            if (toggle && toggleClosed(c)) {
+                event.preventDefault(); event.stopImmediatePropagation();
             }
         };
         const onInspectorChange = event => {
             const input = event.target.closest && event.target.closest("[data-ddv3-path-node-prop]");
-            if (!input) return;
-            if (applyNodeInspector(c, input)) {
-                event.preventDefault();
-                event.stopImmediatePropagation();
+            if (input && applyNodeInspector(c, input)) {
+                event.preventDefault(); event.stopImmediatePropagation();
             }
         };
 
         const onKeyDownCapture = event => {
             if (c.readOnly) return;
             const target = event.target;
-            const editingText = target && (target.matches && target.matches("input, textarea, select") || target.isContentEditable);
+            const editingText = target && ((target.matches && target.matches("input, textarea, select")) || target.isContentEditable);
             if (editingText) return;
             if ((event.key === "p" || event.key === "P") && !event.ctrlKey && !event.metaKey && !event.altKey) {
                 activatePen(c);
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                return;
+                event.preventDefault(); event.stopImmediatePropagation(); return;
             }
-            if (c.tool === "pen") {
-                if (event.key === "Enter" && finishPath(c, false)) {
-                    event.preventDefault(); event.stopImmediatePropagation(); return;
-                }
-                if (event.key === "Backspace" && c.penDraft) {
-                    const points = c.penDraft.points.slice(0, -1);
-                    c.penDraft = points.length ? { points, pointer: points[points.length - 1], closeReady: false } : null;
-                    c.snapState = null;
-                    render(c);
-                    event.preventDefault(); event.stopImmediatePropagation(); return;
-                }
-                if (event.key === "Escape") {
-                    if (c.penDraft) cancelPenDraft(c); else c.tool = "select";
-                    render(c);
-                    event.preventDefault(); event.stopImmediatePropagation(); return;
-                }
+            if (event.key === "Escape" && c.penStroke) {
+                cancelFreehandGesture(c);
+                event.preventDefault(); event.stopImmediatePropagation(); return;
+            }
+            if (event.key === "Escape" && c.tool === "pen") {
+                clearFreehand(c); c.tool = "select"; render(c);
+                event.preventDefault(); event.stopImmediatePropagation(); return;
             }
             if ((event.key === "Delete" || event.key === "Backspace") && deleteSelectedNode(c)) {
                 event.preventDefault(); event.stopImmediatePropagation(); return;
             }
             if (event.key === "Escape" && c.nodeEditId) {
-                leaveNodeEdit(c);
-                render(c);
+                leaveNodeEdit(c); render(c);
                 event.preventDefault(); event.stopImmediatePropagation();
             }
         };
@@ -386,6 +424,7 @@
         c.canvas.addEventListener("pointerdown", onPointerDownCapture, true);
         c.canvas.addEventListener("pointermove", onPointerMoveCapture, true);
         c.canvas.addEventListener("pointerup", onPointerUpCapture, true);
+        c.canvas.addEventListener("pointercancel", onPointerCancelCapture, true);
         c.canvas.addEventListener("click", onCanvasClickCapture, true);
         c.canvas.addEventListener("dblclick", onDoubleClickCapture, true);
         c.inspector.addEventListener("click", onInspectorClick, true);
@@ -398,6 +437,7 @@
                 c.canvas.removeEventListener("pointerdown", onPointerDownCapture, true);
                 c.canvas.removeEventListener("pointermove", onPointerMoveCapture, true);
                 c.canvas.removeEventListener("pointerup", onPointerUpCapture, true);
+                c.canvas.removeEventListener("pointercancel", onPointerCancelCapture, true);
                 c.canvas.removeEventListener("click", onCanvasClickCapture, true);
                 c.canvas.removeEventListener("dblclick", onDoubleClickCapture, true);
                 c.inspector.removeEventListener("click", onInspectorClick, true);
@@ -415,5 +455,5 @@
         open(frm, row, options = {}) { return install(originalOpen(frm, row, options)); },
         view(frm, row) { return install(originalView(frm, row)); },
     });
-    root.SmartPen = Object.freeze({ activatePen, finishPath, resolvePenCandidate, enterNodeEdit, insertNodeAtEvent, install });
+    root.SmartPen = Object.freeze({ activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, install });
 })();

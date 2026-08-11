@@ -27,12 +27,12 @@
             button = document.createElement("button");
             button.type = "button";
             button.dataset.ddv3Tool = "pen";
-            button.title = "قلم ذكي P · انقر لإضافة نقطة · انقر أول نقطة للإغلاق · Enter للإنهاء";
             button.setAttribute("aria-label", "القلم الذكي");
             button.innerHTML = penIcon();
             const separator = toolbar.querySelector(".ddv3-separator");
             toolbar.insertBefore(button, separator || null);
         }
+        button.title = "القلم الذكي P · اضغط واسحب للرسم الحر · يصحح الاهتزاز ويستقيم الخط ويتعرف على الأقواس والدوائر";
         button.classList.toggle("is-active", c.tool === "pen");
         return button;
     }
@@ -71,10 +71,17 @@
     function draftMarkup(c) {
         const draft = c.penDraft;
         if (!draft || !Array.isArray(draft.points) || !draft.points.length) return "";
-        const points = [...draft.points];
-        if (draft.pointer && (!points.length || G.distance(points[points.length - 1], draft.pointer) >= G.EPSILON_MM)) points.push(draft.pointer);
+        const points = draft.freehand ? draft.points.slice() : [...draft.points];
+        if (!draft.freehand && draft.pointer && (!points.length || G.distance(points[points.length - 1], draft.pointer) >= G.EPSILON_MM)) points.push(draft.pointer);
         const screen = screenPoints(c, points);
         const d = screen.length ? [`M ${screen[0].x} ${screen[0].y}`, ...screen.slice(1).map(p => `L ${p.x} ${p.y}`)].join(" ") : "";
+        if (draft.freehand) {
+            const first = screen[0];
+            const last = screen[screen.length - 1] || first;
+            const closeClass = draft.closeReady ? " is-close-ready" : "";
+            const closeLabel = draft.closeReady ? `<text class="ddv3-pen-close-label" x="${first.x + 12}" y="${first.y - 12}">إغلاق</text>` : "";
+            return `<g class="ddv3-pen-draft is-freehand"><path d="${d}"/><circle class="ddv3-pen-draft-node${closeClass}" cx="${first.x}" cy="${first.y}" r="${draft.closeReady ? 6 : 3.5}"/><circle class="ddv3-freehand-tip" cx="${last.x}" cy="${last.y}" r="2.5"/>${closeLabel}</g>`;
+        }
         const nodes = draft.points.map((point, index) => {
             const p = Base.worldToScreen(c, point);
             const first = index === 0 && draft.closeReady ? " is-close-ready" : "";
