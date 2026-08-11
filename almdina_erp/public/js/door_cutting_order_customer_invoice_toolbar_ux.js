@@ -6,16 +6,20 @@
     const CUSTOMER_CLASS = "dco-secure-print-customer-invoice";
     const COST_API_FLAG = "__almdinaInvoiceButtonCoordinator";
 
-    function canPrint(frm) {
+    function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
             permissions
             && (
                 typeof permissions.canDocument === "function"
-                    ? permissions.canDocument(frm, "print_customer_invoice")
-                    : permissions.can("print_customer_invoice")
+                    ? permissions.canDocument(frm, capability)
+                    : permissions.can(capability)
             )
         );
+    }
+
+    function canPrint(frm) {
+        return can(frm, "print_customer_invoice");
     }
 
     function costWrapper(frm) {
@@ -25,6 +29,20 @@
 
     function costActions(frm) {
         return costWrapper(frm).find(".dco-cost-actions").first();
+    }
+
+    function currentIdentity(frm) {
+        const context = window.AlmdinaDocumentContext;
+        return context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : `${frm && frm.doctype || "Door Cutting Order"}::${frm && frm.doc && frm.doc.name || "__new__"}`;
+    }
+
+    function isCurrent(frm, identity) {
+        const context = window.AlmdinaDocumentContext;
+        return context && typeof context.isCurrent === "function"
+            ? context.isCurrent(frm, identity)
+            : currentIdentity(frm) === identity;
     }
 
     function bindSecurePresenter(frm, created) {
@@ -103,11 +121,61 @@
         });
     }
 
+    function reconcileAuthoritativeCost(frm) {
+        if (!frm || frm.is_new() || !can(frm, "view_costs")) return Promise.resolve(false);
+        const edgeBanding = window.AlmdinaMultiEdgeBanding;
+        const costPermissions = window.AlmdinaCostPermissionsUX;
+        if (
+            !edgeBanding
+            || typeof edgeBanding.ensureProfiles !== "function"
+            || !costPermissions
+            || typeof costPermissions.apply !== "function"
+        ) {
+            return Promise.resolve(false);
+        }
+
+        const identity = currentIdentity(frm);
+        if (
+            frm.__almdina_invoice_cost_reconcile_promise
+            && frm.__almdina_invoice_cost_reconcile_identity === identity
+        ) {
+            return frm.__almdina_invoice_cost_reconcile_promise;
+        }
+
+        // Edge Banding Type is loaded asynchronously by the entry UI. Its local
+        // preview renderer may run after the protected cost snapshot and write
+        // temporary preview values into the child rows. Always let that profile
+        // load/render settle first, then re-apply the server cost snapshot so the
+        // cost tab and invoice end with the persisted server calculation.
+        const promise = Promise.resolve(edgeBanding.ensureProfiles(frm))
+            .catch(error => {
+                console.error("Edge profile readiness failed before cost reconciliation", error);
+            })
+            .then(() => {
+                if (!isCurrent(frm, identity)) return false;
+                costPermissions.apply(frm);
+                return true;
+            })
+            .finally(() => {
+                if (frm.__almdina_invoice_cost_reconcile_promise === promise) {
+                    frm.__almdina_invoice_cost_reconcile_promise = null;
+                    frm.__almdina_invoice_cost_reconcile_identity = null;
+                }
+            });
+
+        frm.__almdina_invoice_cost_reconcile_identity = identity;
+        frm.__almdina_invoice_cost_reconcile_promise = promise;
+        return promise;
+    }
+
     function install(frm) {
         wrapCostPresenter();
         ensureCostButton(frm);
         observeCostActions(frm);
         requestAnimationFrame(() => ensureCostButton(frm));
+        reconcileAuthoritativeCost(frm).catch(error => {
+            console.error("Authoritative invoice cost reconciliation failed", error);
+        });
     }
 
     function printCustomerInvoice(frm) {
@@ -147,6 +215,7 @@
     window.AlmdinaCustomerInvoiceToolbarUX = Object.freeze({
         install,
         ensureCostButton,
+        reconcileAuthoritativeCost,
         printCustomerInvoice,
     });
 })();
