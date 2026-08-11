@@ -54,6 +54,7 @@ doctype_js = {
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
+        "public/js/door_cutting_order_measurement_toolbar_ux.js",
         "public/js/door_cutting_order_sketch_engine.js",
         "public/js/door_cutting_order_sketch_template_catalog.js",
         "public/js/door_cutting_order_sketch_interaction.js",
