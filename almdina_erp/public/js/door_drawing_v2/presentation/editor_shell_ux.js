@@ -4,8 +4,9 @@
     const rootV2 = window.AlmdinaDoorDrawingV2 = window.AlmdinaDoorDrawingV2 || Object.create(null);
     const precision = rootV2.Precision;
     const viewportModel = rootV2.ViewportModel;
+    const workspacePolicy = rootV2.WorkspacePolicy;
     const baseEditor = window.AlmdinaSpecialShapeEditor;
-    if (!precision || !viewportModel || !baseEditor) {
+    if (!precision || !viewportModel || !workspacePolicy || !baseEditor) {
         console.error("Door Drawing V2 viewport dependencies must load before EditorShellUX");
         return;
     }
@@ -74,7 +75,7 @@
         context.className = "dco-v2-header-context";
         context.innerHTML = `
             <span class="dco-v2-mm-badge">${formattedMm(dimensions.width)} × ${formattedMm(dimensions.height)} mm</span>
-            <span>Door Drawing V2</span>`;
+            <span>Free Drawing · mm</span>`;
         const actions = header.querySelector(".dco-v2-header-actions");
         header.insertBefore(context, actions || null);
     }
@@ -96,14 +97,13 @@
     function ensureCanvasChrome(controller) {
         let chrome = controller.paperWrap.querySelector(".dco-v2-canvas-chrome");
         if (chrome) return chrome;
-        const dimensions = rowDimensionsMm(controller.row);
         chrome = document.createElement("div");
         chrome.className = "dco-v2-canvas-chrome";
         chrome.innerHTML = `
             <div class="dco-v2-chrome-group">
                 <button type="button" class="dco-v2-canvas-button" data-v2-reference-toggle title="صورة الورقة المرجعية">▧</button>
-                <span class="dco-v2-chip is-mm">${formattedMm(dimensions.width)} × ${formattedMm(dimensions.height)} mm</span>
-                <span class="dco-v2-chip is-hint">Space + سحب للتحريك · Ctrl + عجلة للتكبير</span>
+                <span class="dco-v2-chip is-mm">mm · مساحة حرة</span>
+                <span class="dco-v2-chip is-hint">ارسم في أي مكان · Space + سحب للتحريك · Ctrl + عجلة للتكبير</span>
             </div>
             <div class="dco-v2-chrome-group dco-v2-zoom-host"></div>`;
         controller.paperWrap.appendChild(chrome);
@@ -113,9 +113,28 @@
         if (zoom && host) {
             host.appendChild(zoom);
             const reset = zoom.querySelector(".dco-sketch-zoom-reset");
-            if (reset) reset.title = "ملاءمة الرسم داخل الشاشة";
+            if (reset) reset.title = "إرجاع العرض الافتراضي";
         }
         return chrome;
+    }
+
+    function prepareExactLineUi(controller) {
+        const badge = controller.root.querySelector(".dco-exact-line-badge");
+        if (badge) badge.textContent = "MM · EXACT";
+        const lengthInput = controller.root.querySelector("[data-exact-length]");
+        if (lengthInput) {
+            lengthInput.placeholder = "214";
+            const suffix = lengthInput.parentElement && lengthInput.parentElement.querySelector("span");
+            if (suffix) suffix.textContent = "mm";
+        }
+        const maxMeta = controller.root.querySelector(".dco-exact-line-meta");
+        if (maxMeta) maxMeta.classList.add("dco-v2-obsolete-boundary-control");
+        const status = controller.root.querySelector(".dco-exact-line-status");
+        if (status) status.classList.add("dco-v2-obsolete-boundary-control");
+        const foot = controller.root.querySelector(".dco-exact-line-foot");
+        if (foot) {
+            foot.innerHTML = "انقر في أي مكان في مساحة الرسم، وجّه المؤشر ثم اكتب الطول بالـ <b>mm</b>. Shift يقفل أفقي/عمودي، ويمكن كتابة <b>214@30</b>.";
+        }
     }
 
     function prepareReferencePanel(controller) {
@@ -191,25 +210,28 @@
         controller.canvasObserver.observe(controller.svg, { childList: true });
     }
 
+    function freeReferenceSize(dimensions) {
+        return {
+            width: Math.max(900, Math.min(1800, dimensions.width || 1200)),
+            height: Math.max(700, Math.min(1200, dimensions.height || 900)),
+        };
+    }
+
     function updateViewportState(controller) {
         const dimensions = rowDimensionsMm(controller.row);
         const width = Math.max(1, controller.paperWrap.clientWidth || 1);
         const height = Math.max(1, controller.paperWrap.clientHeight || 1);
-        if (!dimensions.width || !dimensions.height) {
-            controller.viewport = null;
-            delete controller.root.dataset.v2ViewportScale;
-            controller.root.dataset.v2ViewportUnits = "mm";
-            return;
-        }
-        controller.viewport = viewportModel.create({
+        const reference = freeReferenceSize(dimensions);
+        controller.viewport = viewportModel.createFree({
             viewportWidthPx: width,
             viewportHeightPx: height,
-            worldWidthMm: dimensions.width,
-            worldHeightMm: dimensions.height,
+            referenceWidthMm: reference.width,
+            referenceHeightMm: reference.height,
             paddingPx: Math.max(42, Math.min(90, Math.min(width, height) * 0.08)),
         });
         controller.root.dataset.v2ViewportScale = String(controller.viewport.scale);
         controller.root.dataset.v2ViewportUnits = "mm";
+        controller.root.dataset.v2Workspace = workspacePolicy.MODE;
     }
 
     function bindResize(controller) {
@@ -223,11 +245,11 @@
         if (controller.paperWrap.querySelector(".dco-v2-viewport-hint")) return;
         const hint = document.createElement("div");
         hint.className = "dco-v2-viewport-hint";
-        hint.textContent = "العرض فقط يتغير مع Zoom؛ القياسات الهندسية تبقى بوحدة mm";
+        hint.textContent = "لا توجد حدود زرقاء للرسم؛ ضع أي نقطة في أي مكان، والقياسات تبقى mm";
         controller.paperWrap.appendChild(hint);
         window.setTimeout(() => {
             if (hint.isConnected) hint.style.opacity = "0";
-        }, 4500);
+        }, 5200);
     }
 
     function cleanup(controller) {
@@ -270,6 +292,7 @@
         ensureHeaderContext(controller);
         ensureInspectorHeader(controller);
         ensureCanvasChrome(controller);
+        prepareExactLineUi(controller);
         prepareReferencePanel(controller);
         bindChrome(controller);
         bindCanvasSurface(controller);
@@ -314,5 +337,6 @@
         rowDimensionsMm,
         updateViewportState,
         applyCanvasSurface,
+        prepareExactLineUi,
     });
 })();

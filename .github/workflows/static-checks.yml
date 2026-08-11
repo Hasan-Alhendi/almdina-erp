@@ -219,3 +219,15 @@ jobs:
           node almdina_erp/tests/js/order_tab_visibility.test.js
           node almdina_erp/tests/test_special_shape_smoothing.js
           node almdina_erp/tests/test_shape_print.js
+
+      - name: Run Door Drawing V2 geometry and editor regressions
+        run: |
+          node almdina_erp/tests/js/door_drawing_v2_geometry.test.js
+          node almdina_erp/tests/js/door_drawing_v2_legacy_adapter.test.js
+          node almdina_erp/tests/js/door_drawing_v2_architecture_contract.test.js
+          node almdina_erp/tests/js/door_drawing_v2_viewport.test.js
+          node almdina_erp/tests/js/door_drawing_v2_editor_shell_contract.test.js
+          node almdina_erp/tests/js/door_drawing_v2_exact_line_free_workspace.test.js
+          node almdina_erp/tests/js/door_drawing_v2_free_viewport.test.js
+          node almdina_erp/tests/js/door_drawing_v2_selection_transform.test.js
+          node almdina_erp/tests/js/door_drawing_v2_stage4_contract.test.js
