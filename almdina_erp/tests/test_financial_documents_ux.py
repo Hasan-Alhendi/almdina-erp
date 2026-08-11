@@ -12,6 +12,9 @@ APPLICATION_PATH = (
 )
 UX_PATH = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
 PRESENTER_PATH = ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
+COMPACTNESS_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_document_compactness_ux.js"
+)
 HOOKS_PATH = ROOT / "hooks.py"
 
 
@@ -63,10 +66,12 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "cutCornerDoorLabel(row)" in presenter
     assert "dco-invoice-total-card" in presenter
     assert "الإجمالي النهائي للفاتورة" in presenter
+    assert "الإجمالي الحالي قبل الأسعار غير المسعرة" in presenter
     assert "invoiceTotalCardHtml(frm)" in presenter
     assert "#Custom-" not in presenter
     assert "#CutCorner-" not in presenter
     assert "pendingCustomEdgePriceLabels" in presenter
+    assert "pending: !ready" in presenter
     assert "عرض الرسم" in presenter
     assert "غير مسعّر" in presenter
     assert "سعر القشاط" in presenter
@@ -84,7 +89,7 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "before_save(frm)" not in permissions
     assert "frappe.validated = false" not in permissions
     assert "pendingCustomEdgePriceLabels" in source
-    assert "أدخل أسعار قشاط" in source
+    assert "لا يمكن طباعة فاتورة غير مكتملة" in source
     assert "assert_order_editable(order)" in (
         ROOT / "almdina_erp" / "services" / "cost_permission_service.py"
     ).read_text(encoding="utf-8")
@@ -120,12 +125,23 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "canDocument" in source
     assert "Customer invoice HTML is server-authorized" in source
     assert "AlmdinaOrderCostUX" in source
+    assert "void costApi;" in source
+    assert "costApi.printInvoice =" not in source
     assert "AlmdinaOrderDocumentPrint" in source
     assert "dco-print-customer-invoice" in source
     assert "dco-secure-print-customer-invoice" in source
     assert "dco-secure-print-internal-cost-report" in source
     assert "buildPrintHtml" not in source
     assert "invoiceLines(frm)" not in source
+
+
+def test_invoice_waits_for_edge_profiles_before_final_screen_render() -> None:
+    source = COMPACTNESS_PATH.read_text(encoding="utf-8")
+    assert "function refreshInvoiceAfterProfiles(frm)" in source
+    assert "edgeApi.ensureProfiles(frm)" in source
+    assert "AlmdinaOrderCostUX.render(frm)" in source
+    assert "AlmdinaMultiEdgeDocuments.patch(frm)" in source
+    assert "requestAnimationFrame(refresh)" in source
 
 
 def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
