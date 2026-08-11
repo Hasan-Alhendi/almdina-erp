@@ -75,8 +75,9 @@
         if (parts.length > 2) return null;
         const widthMm = positive(parts[0]);
         if (widthMm == null) return null;
-        const heightMm = parts.length === 2 && parts[1] !== "" ? positive(parts[1]) : null;
-        if (parts.length === 2 && parts[1] !== "" && heightMm == null) return null;
+        if (parts.length === 2 && parts[1] === "") return null;
+        const heightMm = parts.length === 2 ? positive(parts[1]) : null;
+        if (parts.length === 2 && heightMm == null) return null;
         return Object.freeze({ widthMm: G.roundMm(widthMm), heightMm: heightMm == null ? null : G.roundMm(heightMm) });
     }
 
