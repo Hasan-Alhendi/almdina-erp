@@ -250,6 +250,33 @@
     fill: #fff;
 }
 
+.ddv3-snap-axis-guide {
+    fill: none;
+    stroke: #e34ba9;
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.ddv3-snap-indicator {
+    pointer-events: none;
+}
+
+.ddv3-snap-indicator circle {
+    fill: rgba(255, 255, 255, .94);
+    stroke: #e34ba9;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-snap-indicator path {
+    fill: none;
+    stroke: #e34ba9;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
 .ddv3-toolbar {
     position: absolute;
     z-index: 15;

@@ -218,4 +218,5 @@ jobs:
       - name: Run Door Drawing V3 geometry and architecture regressions
         run: |
           node almdina_erp/tests/js/door_drawing_v3_geometry.test.js
+          node almdina_erp/tests/js/door_drawing_v3_snapping.test.js
           node almdina_erp/tests/js/door_drawing_v3_architecture_contract.test.js
