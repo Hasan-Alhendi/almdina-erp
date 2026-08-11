@@ -78,9 +78,8 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "orderIsEditable(frm)" in permissions
     assert "frappe.almdina.orderCanEdit" in permissions
     assert "almdina_edit_session_changed(frm)" in permissions
-    # Pricing is a financial-document gate, not a prerequisite for persisting
-    # measurement edits. Saving a Special/CutCorner piece must therefore remain
-    # possible before its edge price is entered.
+    # Pricing remains a financial-document gate below, but it must not block
+    # persisting a Special/CutCorner measurement row itself.
     assert "أدخل أسعار قشاط" not in permissions
     assert "before_save(frm)" not in permissions
     assert "frappe.validated = false" not in permissions
@@ -114,67 +113,60 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     clipped_ux = (
         ROOT / "public" / "js" / "door_cutting_order_clipped_corner_ux.js"
     ).read_text(encoding="utf-8")
-    assert "clipped_corner_edge_price_usd" in clipped_ux
+    assert "function view(frm, row)" in clipped_ux
+    assert "view," in clipped_ux
+    assert 'can(frm, "print_customer_invoice")' in presenter
+    assert 'can(frm, "print_internal_cost_report")' in source
+    assert "canDocument" in source
+    assert "Customer invoice HTML is server-authorized" in source
+    assert "AlmdinaOrderCostUX" in source
+    assert "AlmdinaOrderDocumentPrint" in source
+    assert "dco-print-customer-invoice" in source
+    assert "dco-secure-print-customer-invoice" in source
+    assert "dco-secure-print-internal-cost-report" in source
+    assert "buildPrintHtml" not in source
+    assert "invoiceLines(frm)" not in source
 
 
-def test_financial_document_payloads_are_redacted_by_kind() -> None:
-    namespace = runpy.run_path(str(APPLICATION_PATH))
-    customer_builder = namespace["build_customer_invoice_document"]
-    internal_builder = namespace["build_internal_cost_report_document"]
-
-    summary = {
-        "order_name": "DCO-TEST",
-        "customer": "Customer",
-        "order_date": "2026-01-01",
-        "board_description": "MDF 18 mm White",
-        "board_length_cm": 244,
-        "board_width_cm": 122,
-        "boards_used": 2,
-        "total_pieces": 4,
-        "total_area_m2": 5.1,
-        "edge_meters": 13.2,
-        "customer_quote_total_usd": 500,
-        "total_cost_usd": 400,
-        "mdf_cost_usd": 250,
-        "cutting_cost_usd": 50,
-        "edge_cost_usd": 70,
-        "special_shapes_final_total_usd": 30,
-        "actual_cost_usd": 410,
-        "material_variance_cost_usd": 4,
-        "internal_loss_cost_usd": 6,
-    }
-    pieces = [
-        {
-            "name": "ROW-1",
-            "width_cm": 50,
-            "length_cm": 100,
-            "qty": 1,
-            "piece_type": "Normal",
-            "notes": "",
-            "edge_long_right": 1,
-            "edge_long_left": 0,
-            "edge_width_top": 0,
-            "edge_width_bottom": 0,
-        }
-    ]
-
-    customer = customer_builder(summary=summary, pieces=pieces)
-    internal = internal_builder(summary=summary, pieces=pieces)
-
-    assert customer["kind"] == "customer_invoice"
-    assert "cost_breakdown" not in customer
-    assert "special_prices" not in customer
-    assert "operations" not in customer
-    assert internal["kind"] == "internal_cost_report"
-    assert "cost_breakdown" in internal
-    assert "operations" in internal
+def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
+    source = UX_PATH.read_text(encoding="utf-8")
+    assert "let activeFrm = null" in source
+    assert "activeFrm = frm" in source
+    assert "function resolvedForm" in source
+    assert "function ensureActionButton" in source
+    assert "matches.slice(1).remove()" in source
+    assert ".off(\"click.almdinaFinancialDocuments\")" in source
+    assert "MutationObserver" in source
+    assert "__almdina_financial_observer.disconnect()" in source
+    assert "root.find(`.${CUSTOMER_CLASS},${INTERNAL_CLASS}`).remove()" not in source
 
 
-def test_customer_invoice_summary_uses_door_count_not_board_count() -> None:
-    source = APPLICATION_PATH.read_text(encoding="utf-8")
-    customer = source.split("def build_customer_invoice_document", 1)[1].split(
-        "def build_internal_cost_report_document", 1
+def test_customer_and_internal_reports_use_distinct_print_layouts() -> None:
+    source = UX_PATH.read_text(encoding="utf-8")
+    assert '@page{size:A4 ${internal ? "landscape" : "portrait"}' in source
+    assert "financial-summary.customer" in source
+    assert "financial-summary.internal" in source
+    measurements = source.split("function measurementsHtml", 1)[1].split(
+        "function invoiceLinesHtml", 1
     )[0]
-    assert '"عدد الدرف"' in customer
-    assert 'summary.get("total_pieces"' in customer
-    assert '"عدد الألواح"' not in customer
+    assert "متر القشاط" not in measurements
+
+
+def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:
+    hooks = runpy.run_path(str(HOOKS_PATH))
+    scripts = hooks["doctype_js"]["Door Cutting Order"]
+    permission_index = scripts.index(
+        "public/js/door_cutting_order_cost_permissions_ux.js"
+    )
+    secure_print_index = scripts.index(
+        "public/js/door_cutting_order_financial_documents_ux.js"
+    )
+    assert secure_print_index == permission_index + 1
+
+
+def test_internal_report_is_clearly_marked_confidential() -> None:
+    application = APPLICATION_PATH.read_text(encoding="utf-8")
+    ux = UX_PATH.read_text(encoding="utf-8")
+    assert "داخلي — لا يسلّم للزبون" in application
+    assert "classification" in ux
+    assert "تقرير التكلفة الداخلي" in ux
