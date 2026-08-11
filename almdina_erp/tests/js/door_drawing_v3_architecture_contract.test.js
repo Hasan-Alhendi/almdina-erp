@@ -11,8 +11,10 @@ const handles = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_dr
 const precision = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/precision_input.js"), "utf8");
 const view = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/canvas_view.js"), "utf8");
 const editor = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/editor_stage2.js"), "utf8");
+const magnetic = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/magnetic_connection.js"), "utf8");
 const css = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3.css"), "utf8");
 const precisionCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_precision.css"), "utf8");
+const magneticCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_magnetic.css"), "utf8");
 
 for (const modulePath of [
     "door_drawing_v3/domain/geometry.js",
@@ -24,13 +26,16 @@ for (const modulePath of [
     "door_drawing_v3/application/precision_input.js",
     "door_drawing_v3/presentation/canvas_view.js",
     "door_drawing_v3/application/editor_stage2.js",
+    "door_drawing_v3/application/magnetic_connection.js",
 ]) assert.match(entry, new RegExp(modulePath.replaceAll("/", "\\/").replaceAll(".", "\\.")));
 assert.match(entry, /door_drawing_v3_precision\.css/);
+assert.match(entry, /door_drawing_v3_magnetic\.css/);
 assert.match(entry, /__doorDrawingV3:\s*true/);
 assert.match(entry, /__doorDrawingV3Shapes:\s*true/);
 assert.match(entry, /__doorDrawingV3Snapping:\s*true/);
 assert.match(entry, /__doorDrawingV3Handles:\s*true/);
 assert.match(entry, /__doorDrawingV3PrecisionInput:\s*true/);
+assert.match(entry, /__doorDrawingV3MagneticConnection:\s*true/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
 
 for (const tool of ["line", "rectangle", "circle", "arc"]) assert.match(view, new RegExp(`data-ddv3-tool=\\"${tool}\\"`));
@@ -69,9 +74,12 @@ assert.match(editor, /a:\s*"arc"/);
 assert.match(geometry, /function rectangle\(/);
 assert.match(geometry, /function circle\(/);
 assert.match(geometry, /function arc\(/);
+assert.match(snapping, /const DEFAULT_SNAP_PX = 22/);
+assert.match(snapping, /const JOIN_SNAP_PX = 26/);
 assert.match(snapping, /function objectAnchors/);
-assert.match(snapping, /function worldTolerance/);
+assert.match(snapping, /function preferredAnchor/);
 assert.match(snapping, /function resolvePoint/);
+assert.match(snapping, /function resolveObjectMove/);
 assert.match(snapping, /forcedAxis/);
 assert.doesNotMatch(snapping, /clientX|clientY|getBoundingClientRect/, "Snapping application policy must stay independent from DOM coordinates");
 assert.match(handles, /function handlesFor/);
@@ -84,7 +92,11 @@ assert.match(precision, /function parseRectangle/);
 assert.match(precision, /function parseCircle/);
 assert.match(precision, /function parseArc/);
 assert.doesNotMatch(precision, /document\.|querySelector|getBoundingClientRect|clientX|clientY|px\b/i, "Precision input must remain a world-mm application policy, not a screen coordinate feature");
-assert.doesNotMatch(editor + view, /special_shape_geometry_json\s*=/, "Drawing editor must not fabricate manufacturing geometry from visual output");
+assert.match(magnetic, /function magneticMove/);
+assert.match(magnetic, /S\.resolveObjectMove/);
+assert.match(magnetic, /function hoverSnap/);
+assert.match(magnetic, /stickyTarget/);
+assert.doesNotMatch(editor + view + magnetic, /special_shape_geometry_json\s*=/, "Drawing editor must not fabricate manufacturing geometry from visual output");
 
 assert.match(css, /\.ddv3-app/);
 assert.match(css, /\.ddv3-inspector/);
@@ -94,7 +106,9 @@ assert.match(css, /\.ddv3-handle/);
 assert.match(css, /\.ddv3-snap-axis-guide/);
 assert.match(css, /\.ddv3-snap-indicator/);
 assert.match(precisionCss, /\.ddv3-precision-entry/);
-assert.doesNotMatch(css + precisionCss, /^body\s*\{/m);
-assert.doesNotMatch(css + precisionCss, /^\.form-layout\s*\{/m);
+assert.match(magneticCss, /\.ddv3-magnetic-badge/);
+assert.match(magneticCss, /has-magnetic-snap/);
+assert.doesNotMatch(css + precisionCss + magneticCss, /^body\s*\{/m);
+assert.doesNotMatch(css + precisionCss + magneticCss, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 Stage 5 architecture contract passed");
+console.log("Door Drawing V3 magnetic connection architecture contract passed");
