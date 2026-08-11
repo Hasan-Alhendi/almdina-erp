@@ -159,6 +159,19 @@
         surfaceNeedsRecovery,
     });
 
+    const documentContext = context();
+    if (documentContext && typeof documentContext.registerSurface === "function") {
+        documentContext.registerSurface("order-permission-surfaces", {
+            isReady(frm) {
+                return !surfaceNeedsRecovery(frm, window.AlmdinaPermissions);
+            },
+            recover(frm) {
+                applySurfaces(frm);
+                return true;
+            },
+        });
+    }
+
     window.setTimeout(() => {
         const frm = window.cur_frm;
         if (frm && frm.doctype === "Door Cutting Order") {

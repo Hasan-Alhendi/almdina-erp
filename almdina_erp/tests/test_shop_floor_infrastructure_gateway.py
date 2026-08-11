@@ -235,13 +235,12 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
         self.assertIn("production_stage_repository.create_stage", create_repository_source)
         self.assertNotIn("production_event_repository.log_event", create_repository_source)
 
-    def test_legacy_return_to_draft_is_a_revision_adapter_only(self) -> None:
+    def test_legacy_return_to_draft_is_an_in_place_lifecycle_adapter(self) -> None:
         source = COMMAND_ADAPTER_PATH.read_text(encoding="utf-8")
         function_source = source.split("def return_order_to_draft", 1)[1]
         self.assertIn("return_order_to_draft", function_source)
-        self.assertIn("create_controlled_return", function_source)
-        self.assertNotIn('"approved_plan": None', function_source)
-        self.assertNotIn('"status": "Draft"', function_source)
+        self.assertIn("reset_same_order", function_source)
+        self.assertNotIn("create_controlled_return", function_source)
 
 
 if __name__ == "__main__":

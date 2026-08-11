@@ -156,6 +156,14 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             context["production_routes"][1]["stages"][0],
         )
 
+        # A worker's queue is already limited to their own stages, so the page may
+        # append the work they finished. A supervisor sees the whole floor and
+        # must keep the list restricted to what is still active.
+        self.assertTrue(context["personal_inbox"])
+        repository.admin = True
+        self.assertFalse(queries.get_shop_floor_context(repository)["personal_inbox"])
+        repository.admin = False
+
         repository.global_grants.clear()
         with self.assertRaisesRegex(queries.ShopFloorPermissionDenied, "صلاحية الدخول"):
             queries.get_shop_floor_context(repository)
@@ -181,6 +189,16 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             },
         ]
         repository.current = {"DCO-1": "PST-CURRENT"}
+        repository.stage_summaries = {
+            "PST-CURRENT": {
+                "name": "PST-CURRENT",
+                "status": "In Progress",
+                "stage_type": "Drawing",
+                "department_label": "رسم",
+                "operational_role": "عامل رسم",
+                "assigned_to": repository.user,
+            }
+        }
         repository.orders = {
             "DCO-1": {
                 "customer": "Customer",
@@ -211,6 +229,159 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         rows = queries.get_my_inbox(repository)
         self.assertTrue(rows[0]["can_handoff_stage"])
         self.assertEqual(rows[0]["handoff_block_code"], "")
+        self.assertTrue(rows[0]["actor_holds_current_stage_role"])
+
+    def test_inbox_hides_foreign_role_assignments_for_workers(self) -> None:
+        repository = FakeRepository()
+        repository.roles = ("عامل رسم",)
+        repository.inbox = [
+            {
+                "name": "PST-CNC",
+                "door_cutting_order": "DCO-1",
+                "stage_type": "CNC",
+                "status": "Pending",
+                "assigned_to": repository.user,
+                "operational_role": "عامل CNC",
+            }
+        ]
+        repository.current = {"DCO-1": "PST-CNC"}
+        repository.stage_summaries = {
+            "PST-CNC": {
+                "name": "PST-CNC",
+                "status": "Pending",
+                "stage_type": "CNC",
+                "department_label": "CNC",
+                "operational_role": "عامل CNC",
+                "assigned_to": repository.user,
+            }
+        }
+        repository.orders = {
+            "DCO-1": {
+                "name": "DCO-1",
+                "status": "At CNC",
+                "production_path": "Drawing",
+                "current_production_stage": "PST-CNC",
+            }
+        }
+
+        self.assertEqual(queries.get_my_inbox(repository), [])
+
+    def test_archive_marks_orders_whose_current_stage_role_is_not_mine(self) -> None:
+        repository = FakeRepository()
+        repository.roles = ("عامل رسم",)
+        repository.archive = [
+            {
+                "name": "PST-DRAWING-DONE",
+                "door_cutting_order": "DCO-2",
+                "stage_type": "Drawing",
+                "status": "Completed",
+                "assigned_to": repository.user,
+                "operational_role": "عامل رسم",
+            }
+        ]
+        repository.orders = {
+            "DCO-2": {
+                "customer": "Customer",
+                "status": "At CNC",
+                "production_path": "Drawing",
+                "current_department": "CNC",
+                "current_production_stage": "PST-CNC",
+                "approved_plan": "PLAN-1",
+                "revision": 1,
+            }
+        }
+        repository.stage_summaries = {
+            "PST-CNC": {
+                "name": "PST-CNC",
+                "status": "In Progress",
+                "stage_type": "CNC",
+                "department_label": "CNC",
+                "operational_role": "عامل CNC",
+                "assigned_to": "cnc@example.com",
+            }
+        }
+
+        rows = queries.get_my_archive(repository)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["current_stage_type"], "CNC")
+        self.assertEqual(rows[0]["current_stage_operational_role"], "عامل CNC")
+        self.assertFalse(rows[0]["actor_holds_current_stage_role"])
+
+    def test_archive_hides_pre_production_orders_for_workers(self) -> None:
+        repository = FakeRepository()
+        repository.roles = ("عامل رسم",)
+        repository.archive = [
+            {
+                "name": "PST-DRAFT",
+                "door_cutting_order": "DCO-DRAFT",
+                "stage_type": "Drawing",
+                "status": "Completed",
+                "assigned_to": repository.user,
+                "operational_role": "عامل رسم",
+            }
+        ]
+        repository.orders = {
+            "DCO-DRAFT": {
+                "name": "DCO-DRAFT",
+                "status": "Draft",
+                "production_path": "Drawing",
+                "current_production_stage": None,
+            }
+        }
+
+        self.assertEqual(queries.get_my_archive(repository), [])
+
+    def test_list_operational_role_flags_mark_foreign_stages_for_workers(self) -> None:
+        repository = FakeRepository()
+        repository.roles = ("عامل رسم",)
+        repository.orders = {
+            "DCO-MINE": {
+                "name": "DCO-MINE",
+                "status": "At Drawing",
+                "production_path": "Drawing",
+                "current_production_stage": "PST-DRAW",
+            },
+            "DCO-OTHER": {
+                "name": "DCO-OTHER",
+                "status": "At CNC",
+                "production_path": "Drawing",
+                "current_production_stage": "PST-CNC",
+            },
+            "DCO-DONE": {
+                "name": "DCO-DONE",
+                "status": "Delivered",
+                "production_path": "Drawing",
+                "current_production_stage": None,
+            },
+        }
+        repository.stage_summaries = {
+            "PST-DRAW": {
+                "name": "PST-DRAW",
+                "stage_type": "Drawing",
+                "operational_role": "عامل رسم",
+            },
+            "PST-CNC": {
+                "name": "PST-CNC",
+                "stage_type": "CNC",
+                "operational_role": "عامل CNC",
+            },
+        }
+
+        payload = queries.get_order_operational_role_flags(
+            repository,
+            ["DCO-MINE", "DCO-OTHER", "DCO-DONE"],
+        )
+        self.assertTrue(payload["personal_view"])
+        self.assertTrue(payload["orders"]["DCO-MINE"]["actor_holds_current_stage_role"])
+        self.assertFalse(payload["orders"]["DCO-OTHER"]["actor_holds_current_stage_role"])
+        self.assertFalse(payload["orders"]["DCO-DONE"]["actor_holds_current_stage_role"])
+
+        repository.admin = True
+        self.assertFalse(
+            queries.get_order_operational_role_flags(repository, ["DCO-MINE"])[
+                "personal_view"
+            ]
+        )
 
     def test_guest_ungranted_and_unassigned_order_are_rejected(self) -> None:
         repository = FakeRepository()

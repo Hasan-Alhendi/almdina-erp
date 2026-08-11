@@ -18,6 +18,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
     injectStyles();
     page.add_inner_button(__("سجل التغييرات"), openAudit, null, "history");
     page.add_inner_button(__("تحديث"), load, null, "refresh");
+    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
     load();
 
     function esc(value) {

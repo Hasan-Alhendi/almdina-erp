@@ -151,3 +151,83 @@ def cancel_order(
         "cancelled_stages": cancelled_stages,
         "cancelled_replacements": cancelled_replacements,
     }
+
+
+_IN_PLACE_DRAFT_FIELDS: dict[str, Any] = {
+    "status": "Draft",
+    "production_path": None,
+    "current_department": None,
+    "current_assignee": None,
+    "department_status": None,
+    "current_production_stage": None,
+    "approved_plan": None,
+    "approved_plan_source": "System",
+    "production_dxf": None,
+    "drawing_dxf_status": "None",
+    "plan_needs_recalculation": 1,
+}
+
+
+@frappe.whitelist()
+def return_order_to_draft(
+    order_name: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Reset the same order to Draft so it can be edited again.
+
+    Cancels active production stages and clears the production route. Does not
+    create a revision copy — the original document is the editable draft.
+    """
+
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (order_name,),
+    )
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    order.check_permission("read")
+    require_lifecycle_action(order, OrderLifecycleAction.RETURN_TO_DRAFT)
+
+    reason = str(reason or "").strip() or _(
+        "Returned to draft for editing by {0}."
+    ).format(frappe.session.user)
+
+    cutting = _cutting_stage(order.name)
+    if cutting and cutting.status == "Completed":
+        frappe.throw(
+            _(
+                "Cutting is already completed. This order cannot be returned "
+                "to draft automatically."
+            )
+        )
+
+    cancelled_replacements = _cancel_unstarted_replacements(order.name, reason)
+    cancelled_stages = _cancel_stages(order.name, reason)
+
+    if order.approved_plan:
+        plan = frappe.get_doc("Cutting Plan", order.approved_plan)
+        if plan.status == "Approved":
+            plan.flags.allow_status_transition = True
+            plan.status = "Cancelled"
+            plan.save(ignore_permissions=True)
+
+    for fieldname, value in _IN_PLACE_DRAFT_FIELDS.items():
+        order.set(fieldname, value)
+    order.flags.allow_status_transition = True
+    order.flags.allow_approved_edit = True
+    order.save(ignore_permissions=True)
+    order.add_comment(
+        "Comment",
+        text=_("Order returned to draft by {0} on {1}. Reason: {2}").format(
+            frappe.session.user,
+            now_datetime(),
+            reason,
+        ),
+    )
+
+    return {
+        "name": order.name,
+        "status": order.status,
+        "cancelled_stages": cancelled_stages,
+        "cancelled_replacements": cancelled_replacements,
+        "in_place": True,
+    }

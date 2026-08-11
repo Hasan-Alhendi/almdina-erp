@@ -145,10 +145,11 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
     else:
         drawing_changed = _drawing_changed(doc, old)
 
-    # Once the order sits on a production stage, capability alone is not enough:
-    # the actor must also hold that stage's operational role.
-    if (optimizer_changed or drawing_changed) and getattr(
-        doc, "current_production_stage", None
+    # Once the order has entered (or left) a production route, capability alone
+    # is not enough: the actor must hold the current stage's operational role.
+    if (optimizer_changed or drawing_changed) and (
+        getattr(doc, "current_production_stage", None)
+        or getattr(doc, "production_path", None)
     ):
         require_stage_operational_access(doc)
 
@@ -189,7 +190,9 @@ def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
     )
-    if getattr(doc, "current_production_stage", None):
+    if getattr(doc, "current_production_stage", None) or getattr(
+        doc, "production_path", None
+    ):
         require_stage_operational_access(doc)
     for fieldname in changed:
         doc.set(fieldname, updates[fieldname])
@@ -203,9 +206,11 @@ def _assert_recalculation_state(doc: Any) -> None:
             frappe.ValidationError,
         )
 
-    # On an active production stage, recalculation is a stage-scoped mutation:
-    # capability + current stage operational role.
-    if getattr(doc, "current_production_stage", None):
+    # On a production route, recalculation is a stage-scoped mutation:
+    # capability + current stage operational role (denied after the route ends).
+    if getattr(doc, "current_production_stage", None) or getattr(
+        doc, "production_path", None
+    ):
         require_stage_operational_access(doc)
         return
 
@@ -297,7 +302,57 @@ def recalculate_order(
     return _recalculation_result(doc)
 
 
+@frappe.whitelist()
+def simulate_optimizer_plan(
+    order_name: str,
+    packing_mode: str | None = None,
+    cutting_machine_type: str | None = None,
+    kerf_mm: float | None = None,
+    trim_margin_mm: float | None = None,
+    optimization_time_limit_sec: float | None = None,
+) -> dict[str, Any]:
+    """Run the engine on a throwaway copy and return the result without saving.
+
+    Comparing algorithms is an inspection, not an edit, so this answers to
+    ``EDIT_OPTIMIZER_SETTINGS`` alone: no stage operational role, no lifecycle
+    state, and no approved-plan unlock. Nothing is persisted, which is what
+    keeps the wide audience safe on live production orders.
+    """
+
+    name = str(order_name or "").strip()
+    stored = frappe.get_doc("Door Cutting Order", name)
+    stored.check_permission("read")
+    require_document_capability(
+        stored,
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        message=_("لا تملك صلاحية تجربة خوارزمية القص على هذا الطلب."),
+    )
+
+    preview = frappe.copy_doc(stored)
+    preview.name = stored.name
+    for fieldname, value in _requested_optimizer_updates(
+        packing_mode=packing_mode,
+        cutting_machine_type=cutting_machine_type,
+        kerf_mm=kerf_mm,
+        trim_margin_mm=trim_margin_mm,
+        optimization_time_limit_sec=optimization_time_limit_sec,
+    ).items():
+        preview.set(fieldname, value)
+
+    settings = preview._get_settings()
+    preview._calculate_piece_rows()
+    preview._calculate_cutting_plan(
+        settings,
+        preview._plan_input_fingerprint(settings),
+    )
+
+    result = _recalculation_result(preview)
+    result["is_preview"] = True
+    return result
+
+
 __all__ = [
     "enforce_plan_and_drawing_permissions",
     "recalculate_order",
+    "simulate_optimizer_plan",
 ]

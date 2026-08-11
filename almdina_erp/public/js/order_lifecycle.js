@@ -52,16 +52,7 @@
 
         const context = frm.__almdina_lifecycle_context;
         const status = frm.doc.status || "Draft";
-        const cuttingOrLater = [
-            "At Sharyoun",
-            "At CNC",
-            "At Sanding",
-            "Ready for Delivery",
-            "Delivered",
-            "Cancelled",
-            "Completed",
-        ].includes(status);
-        if (cuttingOrLater) return false;
+        if (status !== "Draft") return false;
 
         let allowed = can(frm, "edit_order");
         if (context && context.order_name === frm.doc.name) {
@@ -155,8 +146,8 @@
             [{
                 fieldname: "reason",
                 fieldtype: "Small Text",
-                label: __("سبب إعادة الطلب للتعديل (اختياري)"),
-                description: __("سيتم إنشاء نسخة تعديل مستقلة مع الحفاظ على الطلب الأصلي."),
+                label: __("سبب إعادة الطلب للمسودة (اختياري)"),
+                description: __("سيتم إلغاء مراحل الإنتاج النشطة وإعادة نفس الطلب إلى المسودة حتى يمكن تعديله."),
                 reqd: 0,
             }],
             values => callAction(frm, {
@@ -165,12 +156,11 @@
                     order_name: frm.doc.name,
                     reason: String(values.reason || "").trim(),
                 },
-                freezeMessage: __("جاري إنشاء نسخة تعديل..."),
-                successMessage: __("تم إنشاء نسخة مسودة للتعديل."),
-                routeToResult: true,
+                freezeMessage: __("جاري إعادة الطلب للمسودة..."),
+                successMessage: __("تمت إعادة الطلب نفسه إلى المسودة."),
             }),
-            __("إعادة الطلب للتعديل"),
-            __("إنشاء النسخة المسودة")
+            __("إعادة الطلب للمسودة"),
+            __("تأكيد الإعادة")
         );
     }
 
@@ -207,20 +197,8 @@
         removeLifecycleButtons(frm);
         if (frm.is_new() || !context || context.order_name !== frm.doc.name) return;
 
-        if (actionAllowed(context, "submit_for_review")) {
-            frm.add_custom_button(
-                LABELS.submit_for_review,
-                () => submitForReview(frm),
-                ACTION_GROUP
-            );
-        }
-        if (actionAllowed(context, "approve")) {
-            frm.add_custom_button(
-                LABELS.approve,
-                () => approveOrder(frm),
-                ACTION_GROUP
-            );
-        }
+        // Review and order-approval were retired: orders go straight to production.
+        // Keep return-to-draft / cancel for stuck or in-flight documents.
         if (actionAllowed(context, "return_to_draft")) {
             frm.add_custom_button(
                 LABELS.return_to_draft,

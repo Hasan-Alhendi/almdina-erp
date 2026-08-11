@@ -92,9 +92,9 @@ class OrderLifecycleDomainTests(unittest.TestCase):
                     transition_stage(current, event)
 
     def test_order_transition_guards_preserve_existing_policy(self) -> None:
-        for status in ("Draft", "Rejected", "Approved"):
+        for status in ("Draft", "Rejected", "Pending Review", "Approved"):
             self.assertTrue(can_dispatch_from_status(status))
-        for status in ("Pending Review", "At Drawing", "Delivered", "Cancelled"):
+        for status in ("At Drawing", "Delivered", "Cancelled"):
             self.assertFalse(can_dispatch_from_status(status))
 
         self.assertFalse(is_order_dispatched(production_path=None, current_stage=None))

@@ -21,6 +21,7 @@ def current_stage_operational_access(order: Any, *, user: str | None = None) -> 
 
     actor = str(user or frappe.session.user or "").strip()
     stage_name = str(getattr(order, "current_production_stage", None) or "").strip()
+    production_path = str(getattr(order, "production_path", None) or "").strip()
     operational_role = ""
     if stage_name and frappe.db.exists("Production Stage", stage_name):
         operational_role = str(
@@ -31,10 +32,12 @@ def current_stage_operational_access(order: Any, *, user: str | None = None) -> 
         actor_roles=frappe.get_roles(actor) if actor else (),
         operational_role=operational_role or None,
         has_current_stage=bool(stage_name),
+        has_production_path=bool(production_path),
         is_admin=_is_admin(actor),
     )
     return {
         "has_current_stage": bool(stage_name),
+        "has_production_path": bool(production_path),
         "active_stage_name": stage_name or None,
         "operational_role": operational_role or None,
         "actor_holds_operational_role": allowed,

@@ -22,15 +22,27 @@ class TestStageOperationalAccessDomain(unittest.TestCase):
         self.assertTrue(allowed)
         self.assertEqual(code, "allowed")
 
-    def test_no_active_stage_denies_mutation(self) -> None:
+    def test_pre_production_allows_capability_layer(self) -> None:
+        allowed, code, reason = decide_stage_scoped_mutation(
+            actor_roles=("عامل رسم",),
+            operational_role=None,
+            has_current_stage=False,
+            has_production_path=False,
+        )
+        self.assertTrue(allowed)
+        self.assertEqual(code, "pre_production")
+        self.assertEqual(reason, "")
+
+    def test_finished_route_without_stage_denies_mutation(self) -> None:
         allowed, code, reason = decide_stage_scoped_mutation(
             actor_roles=("عامل رسم",),
             operational_role="عامل رسم",
             has_current_stage=False,
+            has_production_path=True,
         )
         self.assertFalse(allowed)
         self.assertEqual(code, "no_active_stage")
-        self.assertIn("مرحلة", reason)
+        self.assertIn("التسليم", reason)
 
     def test_missing_configured_role_denies_mutation(self) -> None:
         allowed, code, reason = decide_stage_scoped_mutation(
@@ -50,7 +62,8 @@ class TestStageOperationalAccessDomain(unittest.TestCase):
         )
         self.assertFalse(denied)
         self.assertEqual(code, "missing_operational_role")
-        self.assertIn("عامل رسم", reason)
+        self.assertIn("عرض", reason)
+        self.assertNotIn("عامل رسم", reason)
 
         allowed, code, _reason = decide_stage_scoped_mutation(
             actor_roles=("عامل رسم", "عامل CNC"),

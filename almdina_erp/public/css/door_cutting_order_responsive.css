@@ -49,6 +49,21 @@
     font-weight: 650;
 }
 
+/* Worker list: rows whose current stage operational role is not the actor's. */
+.dco-order-list .list-row-container.dco-list-row-other-role > .list-row {
+    background: #dcfce7 !important;
+    border-color: #86efac !important;
+}
+
+.dco-order-list .list-row-container.dco-list-row-other-role > .list-row:hover {
+    background: #bbf7d0 !important;
+}
+
+.dco-order-list .dco-mobile-order-card.dco-list-row-other-role {
+    background: #dcfce7 !important;
+    border-color: #86efac !important;
+}
+
 /* Mobile order cards are opt-in through the shared phone detector. */
 .dco-order-list.dco-order-card-layout .list-row-head {
     display: none !important;

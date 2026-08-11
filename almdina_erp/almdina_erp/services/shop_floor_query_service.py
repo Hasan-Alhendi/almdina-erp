@@ -105,11 +105,17 @@ def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
     return sanitize_shop_floor_detail(payload, document_capabilities)
 
 
+@frappe.whitelist()
+def get_order_operational_role_flags(order_names: Any = None) -> dict[str, Any]:
+    return _execute(queries.get_order_operational_role_flags, order_names)
+
+
 __all__ = [
     "get_dispatch_options",
     "get_current_stage_context",
     "get_my_archive",
     "get_my_inbox",
+    "get_order_operational_role_flags",
     "get_order_shop_floor_detail",
     "get_revert_targets",
     "get_shop_floor_context",

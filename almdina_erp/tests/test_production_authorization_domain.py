@@ -197,6 +197,13 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
             facts=self.facts(assigned_to="other@example.com"),
         )
         self.assertIn("عامل", denied.reason)
+        missing = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(actor_roles=("عامل رسم",)),
+        )
+        self.assertEqual(missing.code, "missing_operational_role")
+        self.assertIn("عرض", missing.reason)
 
 
 if __name__ == "__main__":

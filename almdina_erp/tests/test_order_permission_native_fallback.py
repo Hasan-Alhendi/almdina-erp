@@ -81,7 +81,7 @@ def test_locked_order_explains_the_controlled_revision_path() -> None:
 
 def test_drawing_recalculation_is_capability_driven_not_client_assignment_driven() -> None:
     drawing = source("door_cutting_order_drawing_plan_ux.js")
-    block = drawing.split("function canUseDrawingOptimizer(frm)", 1)[1].split(
+    block = drawing.split("function canTuneCuttingAlgorithm(frm)", 1)[1].split(
         "function canUseDrawingOptimizerInbox", 1
     )[0]
 

@@ -177,3 +177,15 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     assert "sf-quick-action" in inbox
     assert 'row.edge_color || "—"' in inbox
     assert 'row.board_description || "—"' in inbox
+
+
+def test_desk_list_paints_foreign_operational_role_rows_green():
+    css = source(RESPONSIVE_CSS)
+    list_source = source(LIST_UX)
+
+    assert "function applyOperationalRoleRows(listview)" in list_source
+    assert "get_order_operational_role_flags" in list_source
+    assert 'classList.toggle("dco-list-row-other-role"' in list_source
+    assert "[...mine, ...other].forEach(container => result.appendChild(container))" in list_source
+    assert ".list-row-container.dco-list-row-other-role > .list-row" in css
+    assert "background: #dcfce7 !important;" in css

@@ -4,7 +4,10 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
         title: __("المستخدمون والقوى العاملة"),
         single_column: true,
     });
-    new AlmdinaWorkforceConsole(page, wrapper);
+    const workforceConsole = new AlmdinaWorkforceConsole(page, wrapper);
+    if (window.AlmdinaPageRevisit) {
+        window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, () => workforceConsole.load());
+    }
 };
 
 class AlmdinaWorkforceConsole {

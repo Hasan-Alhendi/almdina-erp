@@ -729,6 +729,9 @@
         });
         const workflowPage = new ProductionRoutingWorkflowPage(wrapper, page);
         wrapper.__almdinaRoutingWorkflowPage = workflowPage;
+        if (window.AlmdinaPageRevisit) {
+            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, () => workflowPage.load());
+        }
         Promise.resolve(frappe.require(STYLE_ASSET))
             .catch(() => null)
             .then(() => workflowPage.init());

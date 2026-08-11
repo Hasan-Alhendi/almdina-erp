@@ -71,6 +71,9 @@ def test_recalculation_button_uses_focused_command_without_full_document_save():
     assert "preparePlanInputs" in controls
     assert 'can(frm, "recalculate_plan")' in controls
     assert 'can(frm, "edit_optimizer_settings")' in controls
+    assert "canMutateCurrentStage(frm)" in controls
+    assert "canTuneCuttingAlgorithm(frm)" in controls
+    assert "frm.doc.current_production_stage" in controls
 
 
 def test_legacy_helpers_never_intercept_or_save_cutting_plan_commands():

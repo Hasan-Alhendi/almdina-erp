@@ -52,12 +52,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
         return shop_floor_authorization.current_user()
 
     def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
-        import frappe
-
-        actor = str(user or self.current_user() or "").strip()
-        if not actor:
-            return ()
-        return tuple(str(role) for role in frappe.get_roles(actor) if role)
+        return shop_floor_authorization.roles_of(user or self.current_user())
 
     def is_admin(self, user: str | None = None) -> bool:
         return str(user or self.current_user() or "") == "Administrator"

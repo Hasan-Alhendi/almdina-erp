@@ -99,22 +99,56 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         });
     }
 
+    // A worker's inbox is already scoped to their own stages, so it can also
+    // show orders they previously touched that have moved to other roles. Those
+    // sit after the actionable queue and are painted green. Supervisors keep the
+    // active-only list.
+    function showsPersonalHistory() {
+        return Boolean(sessionContext && sessionContext.personal_inbox);
+    }
+
+    function isMyOperationalStage(row) {
+        return Boolean(row && row.actor_holds_current_stage_role === true);
+    }
+
+    function mergePersonalList(activeRows, historyRows) {
+        const mine = (activeRows || []).filter(isMyOperationalStage);
+        const seen = new Set(mine.map(row => row && row.door_cutting_order).filter(Boolean));
+        const other = [];
+        (historyRows || []).forEach(row => {
+            if (!row || !row.door_cutting_order || seen.has(row.door_cutting_order)) return;
+            if (isMyOperationalStage(row)) return;
+            seen.add(row.door_cutting_order);
+            other.push(row);
+        });
+        return { mine, other };
+    }
+
+    function workerBoardRows(activeRows) {
+        if (!showsPersonalHistory()) return activeRows || [];
+        return (activeRows || []).filter(isMyOperationalStage);
+    }
+
     function loadList() {
         const requestId = ++listRequest;
         const requestedMode = mode;
         selected = null;
         loading(__("جاري التحميل..."));
         const primaryMethod = requestedMode === "archive" ? METHODS.archive : METHODS.inbox;
-        const requests = [
-            loadSessionContext(),
-            frappe.call({ method: primaryMethod, freeze: false }),
-        ];
-        if (requestedMode === "board") {
-            requests.push(frappe.call({ method: METHODS.archive, freeze: false }));
-        }
-        return Promise.all(requests)
-            .then(([, response, archiveResponse]) => {
-                if (requestId !== listRequest || requestedMode !== mode) return;
+        return loadSessionContext()
+            .then(() => {
+                if (requestId !== listRequest || requestedMode !== mode) return null;
+                const withArchive = requestedMode === "board"
+                    || (requestedMode === "inbox" && showsPersonalHistory());
+                const requests = [frappe.call({ method: primaryMethod, freeze: false })];
+                if (withArchive) {
+                    requests.push(frappe.call({ method: METHODS.archive, freeze: false }));
+                }
+                return Promise.all(requests);
+            })
+            .then(responses => {
+                if (!responses || requestId !== listRequest || requestedMode !== mode) return;
+                const [response, archiveResponse] = responses;
                 boardRows = response.message || [];
                 boardArchiveRows = archiveResponse ? (archiveResponse.message || []) : [];
                 renderList(boardRows);
@@ -156,9 +190,17 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         };
     }
 
-    function orderCardHtml(row, { compact = false, terminal = false } = {}) {
+    function orderCardHtml(row, { compact = false, terminal = false, otherRole = false } = {}) {
         const canDrag = compact && !terminal && row.can_handoff_stage === true;
-        const cardClasses = compact ? " almdina-sf-kanban-card" : "";
+        const cardClasses = `${compact ? " almdina-sf-kanban-card" : ""}${otherRole ? " is-other-role" : ""}`;
+        const stageLabel = otherRole && row.current_department
+            ? row.current_department
+            : (row.department_label || row.stage_type);
+        const statusText = terminal
+            ? __("جاهز للتسليم")
+            : (otherRole && row.current_stage_type
+                ? statusLabel(row.status === "Completed" ? "Completed" : row.status)
+                : statusLabel(row.status));
         return `
             <div class="frappe-card almdina-sf-order-card shop-floor-order-card${cardClasses}"
                 data-order="${esc(row.door_cutting_order)}"
@@ -169,16 +211,17 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 data-can-start="${row.can_start_stage === true ? "1" : "0"}"
                 data-can-handoff="${row.can_handoff_stage === true ? "1" : "0"}"
                 data-terminal="${terminal ? "1" : "0"}"
+                data-other-role="${otherRole ? "1" : "0"}"
                 draggable="${canDrag ? "true" : "false"}">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
                     <div style="min-width:0;flex:1">
                         <div style="font-size:${compact ? ".96" : "1.05"}rem;font-weight:800">${esc(row.door_cutting_order)}</div>
                         <div class="text-muted" style="font-size:12px;margin:4px 0">${esc(row.customer || "")} ${row.order_date ? `· ${esc(row.order_date)}` : ""}</div>
-                        ${compact ? "" : `<div style="font-size:13px">${__("القسم")}: <b>${esc(row.department_label || row.stage_type)}</b></div>`}
-                        <div style="font-size:12px">${__("الحالة")}: <b>${esc(terminal ? __("جاهز للتسليم") : statusLabel(row.status))}</b></div>
+                        ${compact ? "" : `<div style="font-size:13px">${__("القسم")}: <b>${esc(stageLabel)}</b></div>`}
+                        <div style="font-size:12px">${__("الحالة")}: <b>${esc(statusText)}</b></div>
                         ${row.assigned_to ? `<div class="text-muted" style="font-size:11px;margin-top:3px">${__("العامل")}: ${esc(row.assigned_to)}</div>` : ""}
                     </div>
-                    <span class="indicator-pill ${terminal ? "green" : "blue"}">${esc(terminal ? __("جاهز") : statusLabel(row.status))}</span>
+                    <span class="indicator-pill ${terminal || otherRole ? "green" : "blue"}">${esc(terminal ? __("جاهز") : statusLabel(row.status))}</span>
                 </div>
                 <div class="almdina-sf-card-meta" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">
                     <div style="background:var(--subtle-fg,#f7f8fa);padding:9px 10px;border-radius:10px;min-width:0">
@@ -191,7 +234,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                     </div>
                 </div>
                 <div class="almdina-sf-card-actions" style="display:flex;gap:8px;margin-top:12px">
-                    ${terminal ? "" : quickActionHtml(row)}
+                    ${terminal || otherRole ? "" : quickActionHtml(row)}
                     <button type="button" class="btn btn-default sf-open-btn open-detail" style="flex:1">${__("التفاصيل")}</button>
                 </div>
                 ${canDrag ? `<div class="almdina-sf-drag-hint">${__("اسحب للمرحلة التالية")}</div>` : ""}
@@ -373,11 +416,11 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         bindBoardDragAndDrop($overview);
         $overview.find("#almdina-sf-route-filter").on("change", function () {
             boardRouteFilter = String($(this).val() || "");
-            renderBoard(boardRows);
+            renderBoard(workerBoardRows(boardRows));
         });
         $overview.find("#almdina-sf-board-search").on("input", function () {
             boardSearch = String($(this).val() || "").trim().toLocaleLowerCase();
-            renderBoard(boardRows);
+            renderBoard(workerBoardRows(boardRows));
             const input = document.getElementById("almdina-sf-board-search");
             if (input) {
                 input.focus();
@@ -424,20 +467,41 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         });
     }
 
+    function listSection(title, rows, { otherRole = false } = {}) {
+        if (!rows.length) return "";
+        const cards = rows.map(row => orderCardHtml(row, { otherRole })).join("");
+        return `
+            <div class="almdina-sf-list-title${otherRole ? " is-other-role" : ""}">${esc(title)}
+                <span class="almdina-sf-list-count">${rows.length}</span>
+            </div>
+            <div class="almdina-sf-list${otherRole ? " is-other-role" : ""}">${cards}</div>`;
+    }
+
     function renderList(rows) {
         if (mode === "board") {
-            renderBoard(rows);
+            renderBoard(workerBoardRows(rows));
             return;
         }
-        const title = mode === "archive" ? __("الطلبات المؤرشفة") : __("قائمة الطلبات الحالية");
-        const cards = rows.map(row => orderCardHtml(row)).join("");
+        let sections = "";
+        if (mode === "archive") {
+            sections = listSection(__("الطلبات المؤرشفة"), rows, { otherRole: true });
+        } else if (showsPersonalHistory()) {
+            const { mine, other } = mergePersonalList(rows, boardArchiveRows);
+            const title = __("قائمة الطلبات الحالية");
+            if (mine.length || other.length) {
+                sections = mine.length
+                    ? listSection(title, mine)
+                    : `<div class="almdina-sf-list-title">${esc(title)}</div>
+                       <div class="almdina-sf-empty">${__("لا توجد طلبات في مرحلة ضمن أدوارك التشغيلية حاليًا.")}</div>`;
+                sections += listSection(__("طلبات في مراحل أخرى"), other, { otherRole: true });
+            }
+        } else {
+            sections = listSection(__("قائمة الطلبات الحالية"), rows);
+        }
         $content.html(`
             <div class="almdina-sf-shell">
                 <div class="almdina-sf-overview">
-                    <div class="almdina-sf-list-title">${esc(title)}</div>
-                    ${rows.length
-                        ? `<div class="almdina-sf-list">${cards}</div>`
-                        : `<div class="almdina-sf-empty">${__("لا توجد طلبات في هذا القسم حاليًا.")}</div>`}
+                    ${sections || `<div class="almdina-sf-empty">${__("لا توجد طلبات في هذا القسم حاليًا.")}</div>`}
                 </div>
                 <div class="shop-floor-detail" style="display:none"></div>
             </div>`);
@@ -678,6 +742,11 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                     ${detail.active_stage_assigned_to ? `<div class="text-muted" style="font-size:12px;margin-top:3px">${__("العامل الحالي")}: ${esc(detail.active_stage_assigned_to)}</div>` : ""}
                 </div>
                 <div class="almdina-sf-actions">${buildActionsHtml(detail, context)}</div>
+                ${!holdsStageOperationalRole(detail) && detail.current_stage_type
+                    ? `<div class="text-muted" style="font-size:12px;margin:8px 0 12px">${__(
+                        "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية."
+                    )}</div>`
+                    : ""}
                 ${showDxf ? `<div style="margin-bottom:10px"><a class="btn btn-default" href="${esc(detail.production_dxf)}" target="_blank" rel="noopener">${__("تنزيل DXF الإنتاج")}</a><span class="text-muted"> · ${esc(__(detail.drawing_dxf_status || ""))}</span></div>` : ""}
                 ${detail.pieces_html ? `<div class="almdina-sf-pieces-wrap" style="margin:8px 0 14px">${detail.pieces_html}</div>` : `<div class="almdina-sf-empty" style="margin:8px 0 14px">${__("لا توجد قطع مسجّلة.")}</div>`}
                 ${showPlan ? `<div style="margin:8px 0 10px"><b>${__("خطة القص والرسومات")}</b></div><div class="almdina-sf-plan-wrap cutting-plan-wrap">${buildPlanTabsHtml(detail)}</div>` : ""}
@@ -726,8 +795,20 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         });
     }
 
+    function drawingPlanModule() {
+        if (window.AlmdinaDrawingPlanUX) return Promise.resolve(window.AlmdinaDrawingPlanUX);
+        if (!frappe.require) return Promise.resolve(null);
+        return Promise.resolve(
+            frappe.require("/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js")
+        )
+            .then(() => window.AlmdinaDrawingPlanUX || null)
+            .catch(error => {
+                console.error("Failed to load the drawing plan panel", error);
+                return null;
+            });
+    }
+
     function renderDrawingPanel($detail, detail, context, requestId) {
-        if (!window.AlmdinaDrawingPlanUX || !window.AlmdinaDrawingPlanUX.renderInboxPanel) return;
         const $host = $detail.find(".dco-drawing-plan-inbox-host");
         if (!$host.length) return;
         const refresh = preview => {
@@ -735,7 +816,14 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
             if (preview && preview.system_plan_json) detail.system_plan_json = preview.system_plan_json;
             return openDetail({ ...context });
         };
-        window.AlmdinaDrawingPlanUX.renderInboxPanel($host, context, detail, refresh);
+        // The panel module is shipped app-wide but can still be pending when the
+        // detail renders. Wait for it instead of leaving an empty placeholder
+        // that only a page reload would fill.
+        drawingPlanModule().then(module => {
+            if (!module || typeof module.renderInboxPanel !== "function") return;
+            if (requestId !== detailRequest || !$host.closest("body").length) return;
+            module.renderInboxPanel($host, context, detail, refresh);
+        });
     }
 
     function backToList() {
@@ -875,8 +963,16 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         // Frappe versions without these helpers can safely keep the empty toolbar.
     }
 
+    function reload() {
+        return loadSessionContext().then(loadList).catch(error => {
+            renderError(error && error.message ? error.message : __("لا تملك صلاحية الدخول إلى صالة الإنتاج."));
+        });
+    }
+
+    if (window.AlmdinaPageRevisit) {
+        window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, reload);
+    }
+
     syncTabs();
-    loadSessionContext().then(loadList).catch(error => {
-        renderError(error && error.message ? error.message : __("لا تملك صلاحية الدخول إلى صالة الإنتاج."));
-    });
+    reload();
 };

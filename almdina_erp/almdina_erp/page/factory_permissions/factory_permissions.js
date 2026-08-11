@@ -35,6 +35,12 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
     injectStyles();
     renderShell();
     bindEvents();
+    if (window.AlmdinaPageRevisit) {
+        // Unsaved matrix edits outrank freshness: only reload a clean console.
+        window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, () => (
+            state.saving || isDirty() ? null : loadConsole()
+        ));
+    }
     loadConsole();
 
     function esc(value) {

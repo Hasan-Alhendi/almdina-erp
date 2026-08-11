@@ -1,7 +1,28 @@
 (() => {
     "use strict";
 
+    // Registered from both entry points: this file ships in `app_include_js`
+    // (before the document context exists) and again in the order's `doctype_js`
+    // bundle, where the document context is available.
+    function registerProtectedModuleSurface(api) {
+        const documentContext = window.AlmdinaDocumentContext;
+        if (
+            !api
+            || !documentContext
+            || typeof documentContext.registerSurface !== "function"
+            || typeof api.orderModulesLoaded !== "function"
+            || typeof api.ensureOrderModules !== "function"
+        ) {
+            return false;
+        }
+        return documentContext.registerSurface("order-protected-modules", {
+            isReady() { return api.orderModulesLoaded(); },
+            recover() { return api.ensureOrderModules(); },
+        });
+    }
+
     if (window.AlmdinaPermissions) {
+        registerProtectedModuleSurface(window.AlmdinaPermissions);
         window.setTimeout(() => {
             window.AlmdinaPermissions.refresh()
                 .then(() => window.AlmdinaPermissions.loadOrderModules())
@@ -339,20 +360,50 @@
         loadOrderModules() {
             return loadOrderModules();
         },
+        orderModulesLoaded() {
+            return orderModulesLoaded();
+        },
+        ensureOrderModules() {
+            return ensureOrderModules();
+        },
     });
 
     window.AlmdinaPermissions = permissions;
     frappe.provide("frappe.almdina");
     frappe.almdina.permissions = permissions;
 
+    function orderModulesLoaded() {
+        return ORDER_MODULES.every(module => globalExists(module.global));
+    }
+
+    function ensureOrderModules() {
+        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
+            return null;
+        }
+        return loadOrderModules();
+    }
+
+    // The protected modules must be available on every visit to an order, not
+    // only when one happens to be open shortly after the desk booted. Without a
+    // router hook a later navigation would leave their surfaces unrendered until
+    // the user reloaded the page.
+    if (
+        window.frappe
+        && frappe.router
+        && typeof frappe.router.on === "function"
+        && !frappe.router.__almdinaPermissionModules
+    ) {
+        frappe.router.__almdinaPermissionModules = true;
+        frappe.router.on("change", () => {
+            window.setTimeout(ensureOrderModules, 0);
+        });
+    }
+
+    registerProtectedModuleSurface(permissions);
+
     let attempts = 0;
     const timer = window.setInterval(() => {
         attempts += 1;
-        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
-            if (attempts >= 100) window.clearInterval(timer);
-            return;
-        }
-        const loading = loadOrderModules();
-        if (loading || attempts >= 100) window.clearInterval(timer);
+        if (ensureOrderModules() || attempts >= 100) window.clearInterval(timer);
     }, 100);
 })();

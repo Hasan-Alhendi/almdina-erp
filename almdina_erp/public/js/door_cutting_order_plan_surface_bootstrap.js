@@ -184,6 +184,17 @@
         surfaceReady,
     });
 
+    const documentContext = window.AlmdinaDocumentContext;
+    if (documentContext && typeof documentContext.registerSurface === "function") {
+        documentContext.registerSurface("cutting-plan", {
+            isReady(frm) {
+                if (!isOrderForm(frm) || !canViewPlan(frm)) return true;
+                return surfaceReady(frm);
+            },
+            recover(frm) { return recover(frm); },
+        });
+    }
+
     // This file can be lazy-loaded after the current Form refresh already ran.
     // Recover the active order immediately instead of waiting for another event.
     window.setTimeout(() => schedule(window.cur_frm), 0);

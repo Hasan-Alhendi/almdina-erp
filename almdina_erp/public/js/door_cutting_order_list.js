@@ -400,11 +400,77 @@
             requestAnimationFrame(() => {
                 scheduled = false;
                 renderMobileCards(listview);
+                applyOperationalRoleRows(listview);
             });
         });
         observer.observe(result, { childList: true, subtree: true });
         listview._dcoRowsObserver = observer;
         listview._dcoRowsObserverInstalled = true;
+    }
+
+    function clearOperationalRoleRows(listview) {
+        const root = rootNode(listview);
+        if (!root) return;
+        root.querySelectorAll(".dco-list-row-other-role").forEach(node => {
+            node.classList.remove("dco-list-row-other-role");
+        });
+    }
+
+    function applyOperationalRolePresentation(listview, payload) {
+        const root = rootNode(listview);
+        const result = root && root.querySelector(".result");
+        if (!root || !result) return;
+
+        const personalView = Boolean(payload && payload.personal_view);
+        const flags = payload && payload.orders && typeof payload.orders === "object"
+            ? payload.orders
+            : {};
+        if (!personalView) {
+            clearOperationalRoleRows(listview);
+            return;
+        }
+
+        const mine = [];
+        const other = [];
+        [...result.querySelectorAll(".list-row-container")].forEach(container => {
+            const name = rowDocumentName(container);
+            const flag = flags[name];
+            // Missing flag (no current stage / unknown) counts as other-role so
+            // finished or foreign-stage orders still land in the green trailer.
+            const isOther = !(flag && flag.actor_holds_current_stage_role === true);
+            container.classList.toggle("dco-list-row-other-role", isOther);
+            const card = container.querySelector(".dco-mobile-order-card");
+            if (card) card.classList.toggle("dco-list-row-other-role", isOther);
+            (isOther ? other : mine).push(container);
+        });
+
+        // Own-role stages stay at the top; everything else closes the list in green.
+        [...mine, ...other].forEach(container => result.appendChild(container));
+    }
+
+    function applyOperationalRoleRows(listview) {
+        if (!listview || !window.frappe || typeof frappe.call !== "function") return;
+        const names = (listview.data || [])
+            .map(doc => String(doc && doc.name || "").trim())
+            .filter(Boolean);
+        if (!names.length) {
+            clearOperationalRoleRows(listview);
+            return;
+        }
+
+        const requestId = Number(listview._dcoRoleFlagRequestId || 0) + 1;
+        listview._dcoRoleFlagRequestId = requestId;
+        frappe.call({
+            method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
+            args: { order_names: names },
+            freeze: false,
+        }).then(response => {
+            if (listview._dcoRoleFlagRequestId !== requestId) return;
+            applyOperationalRolePresentation(listview, response && response.message);
+        }).catch(error => {
+            if (listview._dcoRoleFlagRequestId !== requestId) return;
+            console.debug("Could not classify Door Cutting Order list rows by operational role", error);
+        });
     }
 
     function schedule(listview) {
@@ -415,14 +481,20 @@
         installRowsObserver(listview);
         applySearchHint(listview);
         renderMobileCards(listview);
+        applyOperationalRoleRows(listview);
         requestAnimationFrame(() => {
             applySearchHint(listview);
             renderMobileCards(listview);
+            applyOperationalRoleRows(listview);
         });
-        setTimeout(() => renderMobileCards(listview), 100);
+        setTimeout(() => {
+            renderMobileCards(listview);
+            applyOperationalRoleRows(listview);
+        }, 100);
         setTimeout(() => {
             applySearchHint(listview);
             renderMobileCards(listview);
+            applyOperationalRoleRows(listview);
         }, 350);
     }
 

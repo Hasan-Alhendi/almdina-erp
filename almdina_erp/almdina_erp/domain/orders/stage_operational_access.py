@@ -45,18 +45,27 @@ def decide_stage_scoped_mutation(
     actor_roles: Iterable[str] | None,
     operational_role: str | None,
     has_current_stage: bool,
+    has_production_path: bool = False,
     is_admin: bool = False,
 ) -> tuple[bool, str, str]:
-    """Return ``(allowed, code, reason)`` for a stage-scoped worker mutation."""
+    """Return ``(allowed, code, reason)`` for a stage-scoped worker mutation.
+
+    Pre-production (no route yet) is left to the capability matrix. Once a
+    production path exists, mutations require an active stage whose operational
+    role the actor holds — including after the route has finished and the stage
+    was cleared (ready / delivered).
+    """
 
     if is_admin:
         return True, "allowed", ""
     if not has_current_stage:
-        return (
-            False,
-            "no_active_stage",
-            "لا يمكن التعديل إلا عندما يكون الطلب في مرحلة إنتاج نشطة ضمن المسار.",
-        )
+        if has_production_path:
+            return (
+                False,
+                "no_active_stage",
+                "لا يمكن التعديل لأن الطلب غادر مراحل الإنتاج النشطة (جاهز للتسليم أو تم التسليم).",
+            )
+        return True, "pre_production", ""
     role = str(operational_role or "").strip()
     if not role:
         return (
@@ -68,7 +77,7 @@ def decide_stage_scoped_mutation(
         return (
             False,
             "missing_operational_role",
-            f"هذا الإجراء متاح فقط لمن يملك الدور التشغيلي «{role}» للمرحلة الحالية.",
+            "لا يمكنك تنفيذ إجراءات على هذا الطلب لأن مرحلته الحالية ليست ضمن أدوارك التشغيلية. يمكنك العرض فقط.",
         )
     return True, "allowed", ""
 

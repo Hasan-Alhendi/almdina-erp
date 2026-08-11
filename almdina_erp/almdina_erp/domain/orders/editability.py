@@ -53,18 +53,13 @@ def can_edit_order(
 ) -> bool:
     """Decide whether an order document may be edited in place.
 
-    Editing is allowed only before cutting (Sharyoun/CNC). Draft-like statuses
-    stay editable. Approved / At Drawing / similar pre-cut statuses require a
-    privileged editor (capability or role signal from the adapter).
+    In-place editing is restricted to Draft only. Once the order leaves Draft
+    (dispatch, rejection leftovers, etc.) changes go through return-to-draft or
+    a controlled revision — never through a privileged edit session.
     """
 
-    if not is_before_cutting(status):
-        return False
-    if is_draft_like(status):
-        return True
-    if privileged is None:
-        privileged = bool(roles)
-    return bool(privileged)
+    del roles, privileged
+    return normalize_status(status) == "Draft"
 
 
 def is_drawing_stage(

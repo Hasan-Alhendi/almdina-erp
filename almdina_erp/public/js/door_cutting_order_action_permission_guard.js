@@ -246,6 +246,21 @@
                     deny("ليس لديك صلاحية إعادة حساب خطة القص.");
                     return;
                 }
+                const documentContext = window.AlmdinaDocumentContext;
+                if (
+                    documentContext
+                    && typeof documentContext.canMutateCurrentStage === "function"
+                    && !documentContext.canMutateCurrentStage(frm)
+                ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    const reason = typeof documentContext.stageMutationBlockReason === "function"
+                        ? documentContext.stageMutationBlockReason(frm)
+                        : "";
+                    deny(reason || "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية.");
+                    return;
+                }
                 if (planButton.matches(MODE_ACTION_SELECTOR) && !can(frm, "edit_optimizer_settings")) {
                     event.preventDefault();
                     event.stopPropagation();

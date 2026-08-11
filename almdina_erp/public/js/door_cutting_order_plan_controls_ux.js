@@ -1,6 +1,8 @@
 (() => {
     "use strict";
 
+    const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
+
     const ADVANCED_MODES = [
         { value: "Auto Pro", label: "أفضل توزيع متقدم" },
         { value: "Deep Search", label: "بحث معمق" },
@@ -34,6 +36,10 @@
             return Boolean(permissions.canDocument(frm, capability));
         }
         return typeof permissions.can === "function" && Boolean(permissions.can(capability));
+    }
+
+    function documentContext() {
+        return window.AlmdinaDocumentContext;
     }
 
     function setTextIfChanged(target, value) {
@@ -139,12 +145,13 @@
     }
 
     function applyOptimizerFieldAccess(frm) {
-        const editable = Boolean(
-            can(frm, "edit_optimizer_settings")
-            && !frm.is_new()
-            && !frm.doc.approved_plan
+        // Only the packing-algorithm fields open here, and they answer to the
+        // algorithm capability alone. Everything else on the form stays governed
+        // by the normal edit session.
+        const mayEdit = Boolean(
+            canTuneCuttingAlgorithm(frm) && can(frm, "edit_optimizer_settings")
         );
-        const desiredReadOnly = editable ? 0 : 1;
+        const desiredReadOnly = mayEdit ? 0 : 1;
         OPTIMIZER_FIELDS.forEach((fieldname) => {
             const field = frm.fields_dict && frm.fields_dict[fieldname];
             if (!field || !field.df) return;
@@ -166,31 +173,58 @@
     }
 
     function holdsStageOperationalRole(frm) {
+        const context = documentContext();
+        if (context && typeof context.holdsStageOperationalRole === "function") {
+            return context.holdsStageOperationalRole(frm);
+        }
         return Boolean(frm && frm.__almdina_actor_holds_stage_role);
     }
 
+    function canMutateCurrentStage(frm) {
+        const context = documentContext();
+        if (context && typeof context.canMutateCurrentStage === "function") {
+            return context.canMutateCurrentStage(frm);
+        }
+        return holdsStageOperationalRole(frm);
+    }
+
+    function canTuneCuttingAlgorithm(frm) {
+        const context = documentContext();
+        if (context && typeof context.canTuneCuttingAlgorithm === "function") {
+            return context.canTuneCuttingAlgorithm(frm);
+        }
+        if (!frm || frm.is_new() || frm.doc.approved_plan) return false;
+        if (!canMutateCurrentStage(frm)) return false;
+        if (frm.doc.current_production_stage) return true;
+        return EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft");
+    }
+
+    function stageMutationBlockReason(frm) {
+        const context = documentContext();
+        if (context && typeof context.stageMutationBlockReason === "function") {
+            return context.stageMutationBlockReason(frm) || "";
+        }
+        return "";
+    }
+
+    function isStageContextPending(frm) {
+        const context = documentContext();
+        if (context && typeof context.isStageContextPending === "function") {
+            return context.isStageContextPending(frm);
+        }
+        return false;
+    }
+
     function canCalculate(frm) {
-        if (
-            !frm
-            || frm.is_new()
-            || frm.doc.approved_plan
-            || !can(frm, "recalculate_plan")
-        ) {
-            return false;
-        }
-        if (frm.doc.current_production_stage) {
-            return holdsStageOperationalRole(frm);
-        }
-        return true;
+        return canTuneCuttingAlgorithm(frm) && can(frm, "recalculate_plan");
     }
 
     function recalculationDisabledReason(frm) {
         if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
         if (frm.doc.approved_plan) return __("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
         if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");
-        if (frm.doc.current_production_stage && !holdsStageOperationalRole(frm)) {
-            return __("إعادة الحساب متاحة فقط لمن يملك الدور التشغيلي للمرحلة الحالية.");
-        }
+        const stageReason = stageMutationBlockReason(frm);
+        if (stageReason) return __(stageReason);
         return "";
     }
 
@@ -274,8 +308,9 @@
             frappe.msgprint(__("ليست لديك صلاحية اعتماد خطة القص."));
             return;
         }
-        if (!holdsStageOperationalRole(frm)) {
-            frappe.msgprint(__("اعتماد خطة القص متاح فقط لمن يملك الدور التشغيلي للمرحلة الحالية."));
+        if (!canMutateCurrentStage(frm)) {
+            const reason = stageMutationBlockReason(frm);
+            if (reason) frappe.msgprint(__(reason));
             return;
         }
         if (!hasApprovalPlan(frm, source)) {
@@ -310,7 +345,7 @@
         const allowed = Boolean(
             can(frm, "approve_dxf")
             && !frm.is_new()
-            && holdsStageOperationalRole(frm)
+            && canMutateCurrentStage(frm)
             && hasApprovalPlan(frm, source)
             && !(source === "System" && Number(frm.doc.plan_needs_recalculation || 0) === 1)
         );
@@ -333,7 +368,7 @@
     }
 
     function installApprovalAction(frm, field) {
-        if (!can(frm, "approve_dxf")) {
+        if (!can(frm, "approve_dxf") || !canMutateCurrentStage(frm)) {
             field.$wrapper.find(".dco-approve-cutting-plan").remove();
             return;
         }
@@ -398,9 +433,9 @@
         const note = field.$wrapper.find(".dco-plan-note").first();
         if (note.length) {
             const message = can(frm, "edit_optimizer_settings")
-                ? "يمكنك تغيير الخوارزمية وإعدادات المحسّن ثم إعادة الحساب. لا تحتاج هذه العملية إلى صلاحية التكلفة أو تعديل الطلب."
+                ? "يمكنك تغيير خوارزمية القص وإعداداتها ثم إعادة الحساب ومشاهدة النتيجة. لا تحتاج هذه العملية إلى صلاحية التكلفة أو تعديل الطلب."
                 : can(frm, "recalculate_plan")
-                    ? "يمكنك إعادة حساب الخطة بالإعدادات الحالية. تغيير الخوارزمية يحتاج صلاحية «تعديل إعدادات المحسّن»."
+                    ? "يمكنك إعادة حساب الخطة بالإعدادات الحالية. تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص»."
                     : "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
             setTextIfChanged(note, message);
         }
@@ -434,9 +469,17 @@
     }
 
     function refresh(frm) {
-        apply(frm);
-        observeActions(frm);
-        requestAnimationFrame(() => apply(frm));
+        const context = documentContext();
+        const run = () => {
+            if (context && !context.isCurrent(frm, context.capture(frm))) return;
+            apply(frm);
+            observeActions(frm);
+        };
+        if (context && typeof context.ensureStageContext === "function") {
+            context.ensureStageContext(frm).then(run);
+            return;
+        }
+        run();
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -455,6 +498,11 @@
     window.addEventListener("almdina:permissions-updated", () => {
         const frm = window.cur_frm;
         if (frm && frm.doctype === "Door Cutting Order") refresh(frm);
+    });
+
+    window.addEventListener("almdina:stage-context-ready", (event) => {
+        const frm = event.detail && event.detail.frm;
+        if (frm && frm === window.cur_frm) refresh(frm);
     });
 
     window.AlmdinaPlanControlsUX = Object.freeze({

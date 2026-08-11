@@ -263,7 +263,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         doc: {
             doctype: "Door Cutting Order",
             name: "DCO-A",
-            status: "Approved",
+            status: "Draft",
             production_path: "",
             current_production_stage: "",
         },
@@ -296,7 +296,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     permissionRefresh.resolve({ version: 2 });
     await flushPromises();
     assert.equal(
-        added.some(button => button.label === "إرسال للإنتاج" && button.group === "صالة الإنتاج"),
+        added.some(button => button.label === "إرسال للإنتاج" && !button.group),
         true,
         "production actions must be rebuilt when the jqXHR-like permission refresh completes"
     );

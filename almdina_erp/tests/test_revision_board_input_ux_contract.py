@@ -42,19 +42,30 @@ class TestRevisionReasonUxContract(unittest.TestCase):
 
     def test_return_to_draft_dialog_keeps_reason_optional(self) -> None:
         source = LIFECYCLE_UX.read_text(encoding="utf-8")
-        self.assertIn("سبب إعادة الطلب للتعديل (اختياري)", source)
+        self.assertIn("سبب إعادة الطلب للمسودة (اختياري)", source)
         self.assertIn("reqd: 0", source)
         self.assertIn(
             "order_revision_service.return_order_to_draft",
             source,
         )
         self.assertIn('reason: String(values.reason || "").trim()', source)
+        self.assertIn("إعادة نفس الطلب إلى المسودة", source)
+        self.assertNotIn("routeToResult: true", source.split("function returnToDraft", 1)[1].split(
+            "function cancelOrder", 1
+        )[0])
+        self.assertNotIn("إنشاء نسخة", source.split("function returnToDraft", 1)[1].split(
+            "function cancelOrder", 1
+        )[0])
 
     def test_server_accepts_missing_reason_as_the_final_safety_boundary(self) -> None:
-        source = REVISION_SERVICE.read_text(encoding="utf-8")
-        self.assertIn('reason = str(reason or "").strip()', source)
-        self.assertNotIn("A revision reason is required.", source)
-        self.assertNotIn("if not reason:", source)
+        lifecycle = (
+            ROOT / "almdina_erp" / "services" / "order_lifecycle_service.py"
+        ).read_text(encoding="utf-8")
+        return_fn = lifecycle.split("def return_order_to_draft", 1)[1]
+        self.assertIn('reason = str(reason or "").strip()', return_fn)
+        self.assertNotIn("A revision reason is required.", return_fn)
+        # Missing reason is filled with a default audit message — never rejected.
+        self.assertNotIn("if not reason:", return_fn)
 
     def test_legacy_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
         source = LIFECYCLE_UX.read_text(encoding="utf-8")

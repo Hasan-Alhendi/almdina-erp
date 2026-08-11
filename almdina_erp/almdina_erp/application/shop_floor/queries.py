@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
@@ -9,6 +10,8 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_for_stage_type,
     department_status_for_stage_status,
+    normalize_order_status,
+    PRE_PRODUCTION_ORDER_STATUSES,
 )
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
@@ -17,6 +20,7 @@ from almdina_erp.almdina_erp.domain.orders.production_authorization import (
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import ProductionRoute
 from almdina_erp.almdina_erp.domain.orders.stage_operational_access import (
+    actor_holds_operational_role,
     decide_stage_scoped_mutation,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import (
@@ -153,6 +157,10 @@ def get_shop_floor_context(repository: ShopFloorQueryPort) -> dict[str, Any]:
         # The board needs the configured workflow order, but never needs role
         # names. Command authorization and worker selection remain server-side.
         "production_routes": routes,
+        # Workers only ever see their own stages, so their list can safely append
+        # what they already finished. A supervisor's inbox spans the whole floor
+        # and stays limited to the active work.
+        "personal_inbox": not repository.is_admin(),
         "capabilities": {
             capability: capability in capabilities
             for capability in sorted(SHOP_FLOOR_ACCESS_CAPABILITIES)
@@ -225,6 +233,15 @@ def _enrich_stage_rows(
         }
     )
     orders = repository.order_summaries(order_names)
+    actor = repository.current_user()
+    actor_roles = repository.actor_roles(actor)
+    is_admin = bool(repository.is_admin() or actor == "Administrator")
+    current_stages: dict[str, Any] = {}
+    for order in orders.values():
+        stage_name = str(_value(order, "current_production_stage") or "").strip()
+        if stage_name and stage_name not in current_stages:
+            current_stages[stage_name] = repository.get_stage_summary(stage_name)
+
     enriched: list[dict[str, Any]] = []
     for stage in stages:
         order_name = str(_value(stage, "door_cutting_order") or "")
@@ -257,6 +274,13 @@ def _enrich_stage_rows(
                 "code": handoff_code,
                 "reason": handoff_reason,
             }
+        current_stage_name = str(_value(order, "current_production_stage") or "").strip()
+        current_stage = current_stages.get(current_stage_name)
+        current_role = (
+            _resolve_operational_role(repository, order, current_stage)
+            if current_stage
+            else None
+        )
         enriched.append(
             {
                 **dict(stage),
@@ -276,6 +300,21 @@ def _enrich_stage_rows(
                 "department_label": _value(stage, "department_label")
                 or department_for_stage_type(stage_type)
                 or stage_type,
+                "operational_role": _resolve_operational_role(repository, order, stage),
+                "current_production_stage": current_stage_name or None,
+                "current_stage_type": (
+                    str(_value(current_stage, "stage_type") or "") or None
+                    if current_stage
+                    else None
+                ),
+                "current_stage_operational_role": current_role,
+                # True only while the order sits on a stage whose operational role
+                # the actor holds — that is the work they can still act on.
+                "actor_holds_current_stage_role": actor_holds_operational_role(
+                    actor_roles,
+                    current_role,
+                    is_admin=is_admin,
+                ),
                 "can_handoff_to": can_handoff_to,
                 "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
                 "can_handoff_stage": can_handoff,
@@ -289,15 +328,109 @@ def _enrich_stage_rows(
 def get_my_inbox(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     _assert_shop_floor_access(repository)
     user = repository.current_user()
-    stages = repository.list_inbox_stages(user=user, is_admin=repository.is_admin())
-    return _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
+    is_admin = repository.is_admin()
+    stages = repository.list_inbox_stages(user=user, is_admin=is_admin)
+    rows = _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
+    # Workers only see orders whose current stage matches their operational
+    # role. Completed work they touched stays in get_my_archive().
+    if not is_admin and user != "Administrator":
+        rows = [
+            row
+            for row in rows
+            if row.get("actor_holds_current_stage_role")
+        ]
+    return rows
 
 
 def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     _assert_shop_floor_access(repository)
     user = repository.current_user()
-    stages = repository.list_archive_stages(user=user, is_admin=repository.is_admin())
-    return _enrich_stage_rows(repository, stages)
+    is_admin = repository.is_admin()
+    stages = repository.list_archive_stages(user=user, is_admin=is_admin)
+    rows = _enrich_stage_rows(repository, stages)
+    if not is_admin and user != "Administrator":
+        rows = [
+            row
+            for row in rows
+            if normalize_order_status(row.get("order_status"))
+            not in PRE_PRODUCTION_ORDER_STATUSES
+        ]
+    return rows
+
+
+def _normalize_order_names(order_names: Any) -> list[str]:
+    if isinstance(order_names, str):
+        raw = order_names.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                order_names = json.loads(raw)
+            except ValueError:
+                order_names = [raw]
+        else:
+            order_names = [part.strip() for part in raw.split(",")]
+    if not isinstance(order_names, (list, tuple, set)):
+        return []
+    seen: set[str] = set()
+    names: list[str] = []
+    for value in order_names:
+        name = str(value or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
+def get_order_operational_role_flags(
+    repository: ShopFloorQueryPort,
+    order_names: Any = None,
+) -> dict[str, Any]:
+    """Return whether each listed order is on a stage matching the actor's roles.
+
+    Used by the Door Cutting Order list so workers can see their own-stage rows
+    normally and push every other visible order to a green trailer section.
+    Supervisors keep an unmarked list.
+    """
+
+    actor = str(repository.current_user() or "").strip()
+    if not actor or actor == "Guest":
+        return {"personal_view": False, "orders": {}}
+
+    personal_view = actor != "Administrator" and not repository.is_admin()
+    names = _normalize_order_names(order_names)
+    if not personal_view or not names:
+        return {"personal_view": personal_view, "orders": {}}
+
+    orders = repository.order_summaries(names)
+    actor_roles = repository.actor_roles(actor)
+    flags: dict[str, dict[str, Any]] = {}
+    current_stages: dict[str, Any] = {}
+    for name in names:
+        order = orders.get(name)
+        if not order:
+            continue
+        stage_name = str(_value(order, "current_production_stage") or "").strip()
+        current_stage = None
+        if stage_name:
+            if stage_name not in current_stages:
+                current_stages[stage_name] = repository.get_stage_summary(stage_name)
+            current_stage = current_stages.get(stage_name)
+        role = (
+            _resolve_operational_role(repository, order, current_stage)
+            if current_stage
+            else None
+        )
+        flags[name] = {
+            "actor_holds_current_stage_role": actor_holds_operational_role(
+                actor_roles,
+                role,
+                is_admin=False,
+            ),
+            "current_stage_operational_role": role,
+        }
+    return {"personal_view": True, "orders": flags}
 
 
 def _resolve_operational_role(
@@ -675,6 +808,7 @@ def get_order_detail(
         and Capability.RECALCULATE_PLAN in document_capabilities
         and not approved_plan
         and planning_stage_active
+        and stage_snapshot.get("actor_holds_operational_role")
     )
 
     return {

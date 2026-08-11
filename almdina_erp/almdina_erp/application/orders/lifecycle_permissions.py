@@ -60,31 +60,18 @@ def _state_reason(action: str, status: str, revision_state: str) -> str:
         return "This is a historical superseded revision and cannot be changed."
 
     if action == OrderLifecycleAction.EDIT:
-        if status in {"Delivered", "Cancelled", "Completed"}:
-            return "Delivered, cancelled, or completed orders cannot be edited."
-        if status in {
-            "At Sharyoun",
-            "At CNC",
-            "At Sanding",
-            "Ready for Delivery",
-            "Cutting In Progress",
-            "Cut Completed",
-            "Edge Banding In Progress",
-            "Quality Check",
-            "Partially Completed",
-        }:
-            return "Orders cannot be edited after cutting has started (Sharyoun or CNC)."
+        if status != "Draft":
+            return "يمكن تعديل الطلب فقط وهو في حالة المسودة."
         return ""
 
     if action == OrderLifecycleAction.SUBMIT_FOR_REVIEW:
-        if status not in {"Draft", "Rejected"}:
-            return "Only draft or rejected orders can be submitted for review."
-        return ""
+        # Review was retired: orders go straight from draft to production.
+        return "إرسال الطلب للمراجعة أُلغي. أرسل الطلب مباشرة إلى الإنتاج."
 
     if action == OrderLifecycleAction.APPROVE:
-        if status not in {"Draft", "Rejected", "Pending Review"}:
-            return "Only draft, rejected, or pending-review orders can be approved."
-        return ""
+        # Order approval was retired with the review step. Plan approval
+        # (اعتماد خطة القص) remains a separate shop-floor capability.
+        return "اعتماد الطلب أُلغي. أرسل الطلب مباشرة إلى الإنتاج."
 
     if action == OrderLifecycleAction.CREATE_REVISION:
         if not can_create_revision(status):
