@@ -15,6 +15,8 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 SUPPORTING_DOCTYPES = (
     "Cutting Plan",
     "Production Stage",
+    "Customer",
+    "Edge Banding Type",
 )
 
 _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
@@ -39,25 +41,42 @@ def supporting_standard_permission_projection(
 
     Frappe controller permission hooks can only deny an existing native grant;
     they cannot create a missing one. These projections provide the minimum
-    DocPerm grant while the existing query/has-permission hooks keep operator
-    visibility restricted to assigned work.
+    DocPerm grant while business authority remains exclusively in canonical
+    Almdina capability state.
+
+    Customer and Edge Banding Type are special here: order entry needs their
+    records as Link-field lookup data. ``normalize_capability_state`` derives
+    that technical read dependency from order-input capabilities, but the
+    canonical business state intentionally does not expose the corresponding
+    master-data administration surfaces.
     """
 
     normalized = normalize_capability_state(state)
     if doctype == "Cutting Plan":
         can_read = normalized[Capability.VIEW_CUTTING_PLAN]
-    elif doctype == "Production Stage":
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
+    if doctype == "Production Stage":
         can_read = _any_enabled(normalized, _STAGE_READ_CAPABILITIES)
-    else:
-        return {}
-
-    return {
-        "read": can_read,
-        "select": can_read,
-        "create": False,
-        "write": False,
-        "delete": False,
-    }
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
+    if doctype == "Customer":
+        can_read = normalized[Capability.VIEW_CUSTOMERS]
+        return {"read": can_read, "select": can_read}
+    if doctype == "Edge Banding Type":
+        can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
+        return {"read": can_read, "select": can_read}
+    return {}
 
 
 def supporting_field_permission_projection(
