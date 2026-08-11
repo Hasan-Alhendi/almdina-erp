@@ -8,6 +8,7 @@
     const SCHEMA = "almdina.door-drawing";
     const VERSION = 3;
     const UNITS = "mm";
+    const SUPPORTED_TYPES = Object.freeze(["line", "rectangle", "circle", "arc"]);
 
     function freezeDocument(document) {
         return Object.freeze({
@@ -32,21 +33,37 @@
         });
     }
 
+    function normalizeObject(item) {
+        if (!item || !SUPPORTED_TYPES.includes(item.type) || !item.geometry) return null;
+        const style = item.style || {};
+        if (item.type === "line") return geometry.line(item.id, item.geometry.start, item.geometry.end, style);
+        if (item.type === "rectangle") return geometry.rectangle(
+            item.id,
+            item.geometry.origin,
+            item.geometry.widthMm,
+            item.geometry.heightMm,
+            style
+        );
+        if (item.type === "circle") return geometry.circle(item.id, item.geometry.center, item.geometry.radiusMm, style);
+        if (item.type === "arc") return geometry.arc(
+            item.id,
+            item.geometry.center,
+            item.geometry.radiusMm,
+            item.geometry.startAngleDeg,
+            item.geometry.sweepAngleDeg,
+            style
+        );
+        return null;
+    }
+
     function normalize(raw, fallback = {}) {
         if (!raw || typeof raw !== "object") return create(fallback);
-        if (raw.schema !== SCHEMA || Number(raw.version) !== VERSION || raw.units !== UNITS) {
-            return create(fallback);
-        }
+        if (raw.schema !== SCHEMA || Number(raw.version) !== VERSION || raw.units !== UNITS) return create(fallback);
         const objects = [];
         (Array.isArray(raw.objects) ? raw.objects : []).forEach(item => {
-            if (!item || item.type !== "line" || !item.geometry) return;
             try {
-                objects.push(geometry.line(
-                    item.id,
-                    item.geometry.start,
-                    item.geometry.end,
-                    item.style || {}
-                ));
+                const object = normalizeObject(item);
+                if (object) objects.push(object);
             } catch (error) {
                 // Skip corrupt objects instead of compromising the whole document.
             }
@@ -79,10 +96,7 @@
     }
 
     function removeObject(document, id) {
-        return freezeDocument({
-            ...document,
-            objects: document.objects.filter(object => String(object.id) !== String(id)),
-        });
+        return freezeDocument({ ...document, objects: document.objects.filter(object => String(object.id) !== String(id)) });
     }
 
     function serialize(document) {
@@ -93,6 +107,7 @@
         SCHEMA,
         VERSION,
         UNITS,
+        SUPPORTED_TYPES,
         create,
         normalize,
         objectById,
