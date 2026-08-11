@@ -1,6 +1,7 @@
 (() => {
     "use strict";
 
+    const SPECIAL_EDGE_STYLE_ID = "dco-special-edge-visual-guard-css";
     const CHECK_FIELDS = new Set([
         "allow_rotation",
         "edge_long_right",
@@ -8,6 +9,39 @@
         "edge_width_top",
         "edge_width_bottom",
     ]);
+
+    function installSpecialEdgeVisualGuard() {
+        if (document.getElementById(SPECIAL_EDGE_STYLE_ID)) return;
+        const style = document.createElement("style");
+        style.id = SPECIAL_EDGE_STYLE_ID;
+        style.textContent = `
+            /* A missing/legacy edge profile must not repaint every selected edge.
+               Regular doors keep the normal selected-edge appearance. */
+            .dco-operator-form .dco-fast-table tbody tr:not(.dco-special-row)
+            .dco-check-toggle.dco-edge-profile-target.is-edge-missing.is-checked {
+                background:var(--primary,#2490ef)!important;
+                border-color:var(--primary,#2490ef)!important;
+                color:#fff!important;
+                box-shadow:0 2px 7px rgba(15,23,42,.16)!important;
+            }
+
+            /* The special-door distinction belongs only to the special row.
+               It wins even when the generic edge-profile decorator temporarily
+               marks the control as custom/missing while profiles are refreshed. */
+            .dco-operator-form .dco-fast-table tbody tr.dco-special-row
+            .dco-check-toggle.is-checked,
+            .dco-operator-form .dco-fast-table tbody tr.dco-special-row
+            .dco-check-toggle.dco-edge-profile-target.is-edge-custom.is-checked,
+            .dco-operator-form .dco-fast-table tbody tr.dco-special-row
+            .dco-check-toggle.dco-edge-profile-target.is-edge-missing.is-checked {
+                background:#b5701c!important;
+                border-color:#b5701c!important;
+                color:#fff!important;
+                box-shadow:0 2px 7px rgba(111,78,55,.18)!important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     function rowByName(frm, name) {
         return (frm.doc.pieces || []).find(row => row.name === name) || null;
@@ -120,6 +154,7 @@
     }
 
     function refreshEdgeDecorations(frm) {
+        installSpecialEdgeVisualGuard();
         const wrapper = measurementWrapper(frm);
         const root = measurementRoot(frm);
         if (!wrapper || !root) return;
@@ -143,6 +178,7 @@
     }
 
     function stabilizeEdgeRendering(frm) {
+        installSpecialEdgeVisualGuard();
         const wrapper = measurementWrapper(frm);
         if (!wrapper) return;
 
@@ -166,6 +202,7 @@
     }
 
     function install(frm) {
+        installSpecialEdgeVisualGuard();
         const field = frm.fields_dict.pieces_fast_entry;
         if (!field || !field.$wrapper) return;
         const root = field.$wrapper.get(0);
