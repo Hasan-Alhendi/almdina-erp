@@ -7,7 +7,9 @@
         throw new Error("Door Drawing V3 snapping must load before move snap policy");
     }
 
-    const EASY_MOVE_JOIN_SNAP_PX = 90;
+    // Tuned from live use: easier than the original 46px capture without
+    // pulling pieces together while they are still visibly far apart.
+    const EASY_MOVE_JOIN_SNAP_PX = 60;
 
     function resolveObjectMove(document, object, deltaX, deltaY, options = {}) {
         const requested = Number(options.moveJoinSnapPx);
