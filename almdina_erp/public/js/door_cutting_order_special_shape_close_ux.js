@@ -3,6 +3,7 @@
 
     const STYLE_ID = "dco-special-shape-close-fix-css";
     const MODAL_SELECTOR = ".dco-special-shape-modal";
+    const V2_BOOTSTRAP_SRC = "/assets/almdina_erp/js/door_drawing_v2/bootstrap.js";
     const CLOSE_SELECTOR = [
         ".modal-header .btn-modal-close",
         ".modal-header .btn-close",
@@ -28,6 +29,20 @@
             }
         `;
         document.head.appendChild(style);
+    }
+
+    function loadDoorDrawingV2Bootstrap() {
+        if (window.AlmdinaDoorDrawingV2Bootstrap) {
+            window.AlmdinaDoorDrawingV2Bootstrap.boot();
+            return;
+        }
+        if (document.querySelector(`script[data-dco-v2-bootstrap="${V2_BOOTSTRAP_SRC}"]`)) return;
+        const script = document.createElement("script");
+        script.src = V2_BOOTSTRAP_SRC;
+        script.async = false;
+        script.dataset.dcoV2Bootstrap = V2_BOOTSTRAP_SRC;
+        script.onerror = () => console.error("Door Drawing V2 bootstrap could not be loaded");
+        document.head.appendChild(script);
     }
 
     function requestModalHide(modal) {
@@ -100,5 +115,6 @@
     }
 
     installStyles();
+    loadDoorDrawingV2Bootstrap();
     document.addEventListener("click", handleCloseClick, true);
 })();
