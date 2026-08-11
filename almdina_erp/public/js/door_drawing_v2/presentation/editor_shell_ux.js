@@ -173,6 +173,24 @@
         document.addEventListener("keydown", controller.keyHandler, true);
     }
 
+    function applyCanvasSurface(controller) {
+        if (!controller.svg) return;
+        const directRects = Array.from(controller.svg.children || []).filter(node =>
+            String(node.tagName || "").toLowerCase() === "rect"
+        );
+        if (directRects[0]) directRects[0].setAttribute("fill", "transparent");
+        if (directRects[1] && String(directRects[1].getAttribute("fill") || "").toLowerCase() === "#fff") {
+            directRects[1].setAttribute("fill", "transparent");
+        }
+    }
+
+    function bindCanvasSurface(controller) {
+        applyCanvasSurface(controller);
+        if (!controller.svg || typeof MutationObserver === "undefined") return;
+        controller.canvasObserver = new MutationObserver(() => applyCanvasSurface(controller));
+        controller.canvasObserver.observe(controller.svg, { childList: true });
+    }
+
     function updateViewportState(controller) {
         const dimensions = rowDimensionsMm(controller.row);
         const width = Math.max(1, controller.paperWrap.clientWidth || 1);
@@ -214,6 +232,7 @@
 
     function cleanup(controller) {
         if (controller.resizeObserver) controller.resizeObserver.disconnect();
+        if (controller.canvasObserver) controller.canvasObserver.disconnect();
         if (controller.documentClickHandler) document.removeEventListener("pointerdown", controller.documentClickHandler, true);
         if (controller.keyHandler) document.removeEventListener("keydown", controller.keyHandler, true);
     }
@@ -224,7 +243,8 @@
         if (!modal) return false;
         const root = modal.querySelector(".dco-special-sketch-shell");
         const paperWrap = root && root.querySelector(".dco-sketch-paper-wrap");
-        if (!root || !paperWrap) return false;
+        const svg = root && root.querySelector(".dco-sketch-paper");
+        if (!root || !paperWrap || !svg) return false;
         if (root.dataset.dcoV2Shell === "1") return true;
 
         root.dataset.dcoV2Shell = "1";
@@ -236,9 +256,11 @@
             modal,
             root,
             paperWrap,
+            svg,
             viewport: null,
             referencePanel: null,
             resizeObserver: null,
+            canvasObserver: null,
             documentClickHandler: null,
             keyHandler: null,
         };
@@ -250,6 +272,7 @@
         ensureCanvasChrome(controller);
         prepareReferencePanel(controller);
         bindChrome(controller);
+        bindCanvasSurface(controller);
         bindResize(controller);
         addViewportHint(controller);
 
@@ -290,5 +313,6 @@
         mount,
         rowDimensionsMm,
         updateViewportState,
+        applyCanvasSurface,
     });
 })();
