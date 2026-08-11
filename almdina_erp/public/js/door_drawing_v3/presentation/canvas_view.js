@@ -38,7 +38,7 @@
         const pieceNo = row && (row.idx || row.piece_no || "");
         const tools = readOnly ? "" : `<nav class="ddv3-toolbar" aria-label="أدوات الرسم">
             <button type="button" data-ddv3-tool="select" title="تحديد V">${icon("select")}</button>
-            <button type="button" data-ddv3-tool="line" title="مستقيم L">${icon("line")}</button>
+            <button type="button" data-ddv3-tool="line" title="مستقيم L · Shift أفقي/عمودي">${icon("line")}</button>
             <button type="button" data-ddv3-tool="rectangle" title="مستطيل R · Shift للمربع">${icon("rectangle")}</button>
             <button type="button" data-ddv3-tool="circle" title="دائرة O">${icon("circle")}</button>
             <button type="button" data-ddv3-tool="arc" title="قوس A · المركز ثم نصف القطر ثم نهاية القوس">${icon("arc")}</button>
@@ -112,13 +112,27 @@
         return out.join("");
     }
 
+    function snapMarkup(c) {
+        const state = c.snapState;
+        if (!state || !state.point) return "";
+        const p = worldToScreen(c, state.point);
+        const out = [];
+        if (state.axis === "horizontal") out.push(`<line class="ddv3-snap-axis-guide" x1="0" y1="${p.y}" x2="${Math.max(0, c.viewport.widthPx)}" y2="${p.y}"/>`);
+        if (state.axis === "vertical") out.push(`<line class="ddv3-snap-axis-guide" x1="${p.x}" y1="0" x2="${p.x}" y2="${Math.max(0, c.viewport.heightPx)}"/>`);
+        if (state.snapped) {
+            const role = state.target && state.target.role ? ` data-ddv3-snap-role="${esc(state.target.role)}"` : "";
+            out.push(`<g class="ddv3-snap-indicator" transform="translate(${p.x} ${p.y})"${role}><circle r="6"></circle><path d="M -9 0 H 9 M 0 -9 V 9"></path></g>`);
+        }
+        return out.join("");
+    }
+
     function field(label, key, value, suffix, disabled = false) { return `<label class="ddv3-field"><span>${esc(label)}</span><div><input type="number" step="0.1" value="${esc(value)}" data-ddv3-prop="${esc(key)}"${disabled ? " disabled" : ""}><b>${esc(suffix || "")}</b></div></label>`; }
     function grid(...fields) { return `<div class="ddv3-field-grid${fields.length === 1 ? " is-single" : ""}">${fields.join("")}</div>`; }
     function section(title, body) { return `<section class="ddv3-panel-section"><div class="ddv3-section-title">${esc(title)}</div>${body}</section>`; }
 
     function renderInspector(c) {
         const object = D.objectById(c.history.current(), c.selectedId);
-        if (!object) { c.inspector.innerHTML = `<div class="ddv3-empty" dir="rtl"><b>الخصائص</b><span>${c.tool === "arc" ? "القوس: انقر المركز ثم نقطة نصف القطر ثم نهاية القوس." : "حدد عنصرًا لتعديل أبعاده وموقعه بدقة بالميليمتر."}</span></div>`; return; }
+        if (!object) { c.inspector.innerHTML = `<div class="ddv3-empty" dir="rtl"><b>الخصائص</b><span>${c.tool === "arc" ? "القوس: انقر المركز ثم نقطة نصف القطر ثم نهاية القوس." : "حدد عنصرًا لتعديل أبعاده وموقعه بدقة بالميليمتر. النقاط تنجذب تلقائيًا عند الاقتراب منها."}</span></div>`; return; }
         const g = object.geometry;
         let html = `<section class="ddv3-panel-section"><div class="ddv3-panel-title"><strong>${esc(object.type[0].toUpperCase() + object.type.slice(1))}</strong><span>⋯</span></div></section>`;
         if (object.type === "line") html += section("Position", grid(field("X", "x", fmt(g.start.x, 3), "mm"), field("Y", "y", fmt(g.start.y, 3), "mm")) + grid(field("Rotation", "angle", fmt(G.lineAngle(object), 2), "°"))) + section("Dimensions", grid(field("Length", "length", fmt(G.lineLength(object), 3), "mm")));
@@ -138,6 +152,7 @@
         doc.objects.forEach(item => { const object = previewId === item.id ? c.previewObject : item; parts.push(objectMarkup(c, object, String(item.id) === String(c.selectedId), false)); });
         if (c.draftObject) parts.push(objectMarkup(c, c.draftObject, false, true));
         if (c.arcDraft && c.arcDraft.center && c.arcDraft.pointer) { const a = worldToScreen(c, c.arcDraft.center), b = worldToScreen(c, c.arcDraft.pointer); parts.push(`<line class="ddv3-line is-draft" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`); }
+        parts.push(snapMarkup(c));
         c.canvas.innerHTML = parts.join("");
         c.canvas.dataset.tool = c.tool;
         c.canvas.style.cursor = c.spaceHeld ? "grab" : (c.tool === "select" ? "default" : "crosshair");
@@ -147,5 +162,5 @@
         renderInspector(c);
     }
 
-    root.ShapeView = Object.freeze({ MIN_SCALE, MAX_SCALE, shell, viewport, worldToScreen, screenToWorld, localPoint, eventWorld, render, renderInspector, arcPath });
+    root.ShapeView = Object.freeze({ MIN_SCALE, MAX_SCALE, shell, viewport, worldToScreen, screenToWorld, localPoint, eventWorld, render, renderInspector, arcPath, snapMarkup });
 })();
