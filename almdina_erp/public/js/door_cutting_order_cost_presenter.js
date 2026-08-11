@@ -3,7 +3,7 @@
 
     if (window.AlmdinaOrderCostUX) return;
 
-    const STYLE_ID = "dco-capability-cost-presenter-css-v3";
+    const STYLE_ID = "dco-capability-cost-presenter-css-v4";
 
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
@@ -72,6 +72,14 @@
             clippedWidth: number(source.clipped_corner_width_cm),
             clippedLength: number(source.clipped_corner_length_cm),
         }));
+    }
+
+    function specialPriceReady(row) {
+        return row.priceStatus === "Approved" && row.approvedUnit > 0;
+    }
+
+    function cutCornerPriceReady(row) {
+        return row.clippedEdgeStatus === "Priced" && row.clippedEdgePrice > 0;
     }
 
     function invoiceLines(frm) {
@@ -146,26 +154,30 @@
 
         allRows.forEach(row => {
             if (row.pieceType === "Special") {
+                const ready = specialPriceReady(row);
                 result.push({
                     type: "special",
                     description: `درفة خاصة رقم ${row.index}`,
                     quantity: row.qty,
                     unit: "درفة",
-                    rate: row.finalUnit,
-                    amount: row.finalUnit * row.qty,
-                    note: row.priceNote,
+                    rate: ready ? row.approvedUnit : null,
+                    amount: ready ? row.approvedUnit * row.qty : 0,
+                    pending: !ready,
+                    note: ready ? row.priceNote : "بانتظار إدخال سعر قشاط الدرفة الخاصة",
                 });
                 return;
             }
             if (row.pieceType === "Clipped Corner") {
+                const ready = cutCornerPriceReady(row);
                 result.push({
                     type: "cut_corner",
                     description: `درفة زاوية مقصوصة ${row.index}`,
                     quantity: row.qty,
                     unit: "درفة",
-                    rate: row.clippedEdgePrice,
-                    amount: row.clippedEdgePrice * row.qty,
-                    note: row.clippedEdgeNote,
+                    rate: ready ? row.clippedEdgePrice : null,
+                    amount: ready ? row.clippedEdgePrice * row.qty : 0,
+                    pending: !ready,
+                    note: ready ? row.clippedEdgeNote : "بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة",
                 });
             }
         });
@@ -175,10 +187,10 @@
 
     function pendingCustomEdgePriceLabels(frm) {
         return rows(frm).flatMap(row => {
-            if (row.pieceType === "Special" && row.priceStatus !== "Approved") {
+            if (row.pieceType === "Special" && !specialPriceReady(row)) {
                 return [`درفة خاصة رقم ${row.index}`];
             }
-            if (row.pieceType === "Clipped Corner" && row.clippedEdgeStatus !== "Priced") {
+            if (row.pieceType === "Clipped Corner" && !cutCornerPriceReady(row)) {
                 return [`درفة زاوية مقصوصة ${row.index}`];
             }
             return [];
@@ -217,14 +229,9 @@
         style.id = STYLE_ID;
         style.textContent = `
             .dco-cost-shell{direction:rtl;max-width:1440px;margin:0 auto;padding:4px 0 18px}
-            .dco-cost-actions-bar{display:flex;justify-content:flex-start;margin:0 0 12px}
+            .dco-cost-actions-bar{display:flex;justify-content:flex-start;margin:0 0 12px;min-height:32px}
             .dco-cost-actions{display:flex;gap:8px;flex-wrap:wrap}
             .dco-cost-actions .btn{border-radius:9px;font-weight:800}
-            .dco-cost-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
-            .dco-cost-kpi{padding:13px 14px;border:1px solid var(--border-color,#dfe4e8);border-radius:13px;background:var(--card-bg,#fff)}
-            .dco-cost-kpi span{display:block;color:var(--text-muted,#687481);font-size:10px;margin-bottom:4px}
-            .dco-cost-kpi b{display:block;font-size:18px;font-weight:900;direction:ltr;text-align:right}
-            .dco-cost-kpi.total{border-color:rgba(31,130,82,.3);background:rgba(31,130,82,.055)}
             .dco-cost-section{margin-top:12px;border:1px solid var(--border-color,#dfe4e8);border-radius:15px;background:var(--card-bg,#fff);overflow:hidden}
             .dco-cost-section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--border-color,#dfe4e8);background:var(--subtle-fg,#f8f9fa)}
             .dco-cost-section-title h4{margin:0;font-size:14px;font-weight:900}
@@ -235,6 +242,9 @@
             .dco-cost-table th{background:var(--subtle-fg,#f7f9fb);font-weight:900;white-space:nowrap}
             .dco-cost-table tr:last-child td{border-bottom:0}
             .dco-cost-table .text-start{text-align:right}
+            .dco-invoice-pending-row td{background:rgba(190,125,25,.055)}
+            .dco-invoice-pending-badge{display:inline-flex;margin-inline-start:7px;padding:2px 7px;border-radius:999px;background:#fff3d8;color:#875812;font-size:9px;font-weight:900}
+            .dco-invoice-pending-value{font-weight:900;color:#9a6a1d}
             .dco-special-price-list{display:grid;gap:9px;padding:12px}
             .dco-special-price-card{display:grid;grid-template-columns:minmax(150px,.9fr) minmax(160px,1fr) minmax(140px,.85fr) auto;align-items:center;gap:10px;padding:12px;border:1px solid var(--border-color,#e0e5e9);border-radius:13px;background:var(--card-bg,#fff)}
             .dco-special-price-id{font-size:14px;font-weight:900;letter-spacing:.02em}
@@ -246,11 +256,15 @@
             .dco-special-price-actions{display:flex;flex-direction:column;gap:6px;min-width:118px}
             .dco-special-price-note{grid-column:1/-1;font-size:10px;color:var(--text-muted,#687481)}
             .dco-invoice-total-card{margin:0;padding:18px 20px;border:1px solid rgba(31,130,82,.35);border-radius:0;border-top:0;background:linear-gradient(135deg,rgba(31,130,82,.12),rgba(31,130,82,.045));display:flex;align-items:center;justify-content:space-between;gap:16px}
+            .dco-invoice-total-card.is-pending{border-color:rgba(190,125,25,.4);background:linear-gradient(135deg,rgba(190,125,25,.11),rgba(190,125,25,.035))}
             .dco-invoice-total-card span{display:block;font-size:13px;font-weight:800;color:#1f8252}
+            .dco-invoice-total-card.is-pending span{color:#875812}
+            .dco-invoice-total-card small{display:block;margin-top:4px;font-size:10px;color:var(--text-muted,#687481);font-weight:700}
             .dco-invoice-total-card b{display:block;font-size:28px;font-weight:900;direction:ltr;text-align:left;color:#14653d;letter-spacing:.01em}
+            .dco-invoice-total-card.is-pending b{color:#875812}
             .dco-cost-empty{padding:24px;text-align:center;color:var(--text-muted,#687481)}
-            @media(max-width:900px){.dco-cost-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}
-            @media(max-width:560px){.dco-cost-kpis{grid-template-columns:1fr}.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{flex-direction:column;align-items:flex-start}.dco-invoice-total-card b{font-size:24px}}
+            @media(max-width:900px){.dco-special-price-card{grid-template-columns:1fr 1fr}.dco-special-price-actions,.dco-special-price-card>.dco-special-price-id,.dco-special-price-note{grid-column:1/-1}}
+            @media(max-width:560px){.dco-cost-actions .btn{width:100%}.dco-special-price-card{grid-template-columns:1fr}.dco-invoice-total-card{flex-direction:column;align-items:flex-start}.dco-invoice-total-card b{font-size:24px}}
         `;
         document.head.appendChild(style);
     }
@@ -276,16 +290,26 @@
         }
         return `<div class="dco-cost-table-wrap"><table class="dco-cost-table"><thead><tr>
             <th>#</th><th class="text-start">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة ($)</th><th>الإجمالي ($)</th>
-        </tr></thead><tbody>${lines.map((line, index) => `<tr>
-            <td>${index + 1}</td><td class="text-start"><b>${esc(line.description)}</b>${line.note ? `<small style="display:block">${esc(line.note)}</small>` : ""}</td>
-            <td>${quantity(line.quantity)}</td><td>${esc(line.unit)}</td><td>${money(line.rate)}</td><td><b>${money(line.amount)}</b></td>
+        </tr></thead><tbody>${lines.map((line, index) => `<tr class="${line.pending ? "dco-invoice-pending-row" : ""}">
+            <td>${index + 1}</td><td class="text-start"><b>${esc(line.description)}</b>${line.pending ? `<span class="dco-invoice-pending-badge">${__("غير مسعّر")}</span>` : ""}${line.note ? `<small style="display:block">${esc(line.note)}</small>` : ""}</td>
+            <td>${quantity(line.quantity)}</td><td>${esc(line.unit)}</td>
+            <td class="${line.pending ? "dco-invoice-pending-value" : ""}">${line.pending ? "—" : money(line.rate)}</td>
+            <td class="${line.pending ? "dco-invoice-pending-value" : ""}">${line.pending ? "—" : `<b>${money(line.amount)}</b>`}</td>
         </tr>`).join("")}</tbody></table></div>`;
     }
 
     function invoiceTotalCardHtml(frm) {
         const total = quoteTotal(frm);
-        return `<div class="dco-invoice-total-card">
-            <span>${__("الإجمالي النهائي للفاتورة")}</span>
+        const pending = pendingCustomEdgePriceLabels(frm);
+        const finalLabel = __("الإجمالي النهائي للفاتورة");
+        if (!pending.length) {
+            return `<div class="dco-invoice-total-card">
+                <span>${finalLabel}</span>
+                <b>$ ${money(total)}</b>
+            </div>`;
+        }
+        return `<div class="dco-invoice-total-card is-pending">
+            <span>${__("الإجمالي الحالي قبل الأسعار غير المسعرة")}<small>${__("لا يعتبر إجماليًا نهائيًا حتى تسعير: {0}").replace("{0}", pending.join("، "))}</small></span>
             <b>$ ${money(total)}</b>
         </div>`;
     }
@@ -299,15 +323,11 @@
     }
 
     function specialPriceLabel(row) {
-        const priced = row.priceStatus === "Approved" && number(row.approvedUnit) > 0;
-        if (priced) return `$ ${money(row.approvedUnit)}`;
-        return __("غير مسعّر");
+        return specialPriceReady(row) ? `$ ${money(row.approvedUnit)}` : __("غير مسعّر");
     }
 
     function cutCornerPriceLabel(row) {
-        const priced = row.clippedEdgeStatus === "Priced";
-        if (priced) return `$ ${money(row.clippedEdgePrice)}`;
-        return __("غير مسعّر");
+        return cutCornerPriceReady(row) ? `$ ${money(row.clippedEdgePrice)}` : __("غير مسعّر");
     }
 
     function specialPricingHtml(frm) {
@@ -317,7 +337,7 @@
             <h4>تسعير قشط الدرفات الخاصة</h4><span>سعر قشاط كل درفة خاصة مع إجراءات التعديل وعرض الرسم</span>
         </div><div class="dco-special-price-list">${specialRows.map(row => {
             const doorLabel = specialDoorLabel(row);
-            const priced = row.priceStatus === "Approved" && number(row.approvedUnit) > 0;
+            const priced = specialPriceReady(row);
             const documented = row.drawingStatus === "Documented"
                 || Boolean(String(row.source.special_shape_geometry_json || "").trim())
                 || Boolean(String(row.source.special_shape_drawing_json || "").trim());
@@ -325,9 +345,7 @@
                 <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
                 <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
                 <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}"><span>${__("سعر القشاط")}</span><b>${priced ? `$ ${money(row.approvedUnit)}` : "—"}</b>${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${esc(specialPriceLabel(row))}</small>`}</div>
-                <div class="dco-special-price-actions">
-                    <button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${__("عرض الرسم")}</button>
-                </div>
+                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${__("عرض الرسم")}</button></div>
                 ${row.priceNote ? `<div class="dco-special-price-note">${esc(row.priceNote)}</div>` : ""}
             </div>`;
         }).join("")}</div></div>`;
@@ -340,7 +358,7 @@
             <h4>تسعير قشاط درف الزاوية المقصوصة</h4><span>سعر معالجة قشاط كل درفة زاوية مقصوصة</span>
         </div><div class="dco-special-price-list">${cutRows.map(row => {
             const doorLabel = cutCornerDoorLabel(row);
-            const priced = row.clippedEdgeStatus === "Priced";
+            const priced = cutCornerPriceReady(row);
             const hasDrawing = Boolean(row.clippedPosition)
                 && number(row.clippedWidth) > 0
                 && number(row.clippedLength) > 0;
@@ -348,9 +366,7 @@
                 <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
                 <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
                 <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}"><span>${__("سعر القشاط")}</span><b>${priced ? `$ ${money(row.clippedEdgePrice)}` : "—"}</b>${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${esc(cutCornerPriceLabel(row))}</small>`}</div>
-                <div class="dco-special-price-actions">
-                    <button type="button" class="btn btn-default btn-xs dco-view-cut-corner-sketch" ${hasDrawing ? "" : "disabled"}>${__("عرض الرسم")}</button>
-                </div>
+                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-cut-corner-sketch" ${hasDrawing ? "" : "disabled"}>${__("عرض الرسم")}</button></div>
                 ${row.clippedEdgeNote ? `<div class="dco-special-price-note">${esc(row.clippedEdgeNote)}</div>` : ""}
             </div>`;
         }).join("")}</div></div>`;
@@ -359,9 +375,7 @@
     function bindViewDrawing(frm, wrapper) {
         wrapper.find(".dco-view-special-sketch").on("click", function onViewDrawing() {
             const card = this.closest("[data-special-row]");
-            const source = (frm.doc.pieces || []).find(
-                row => row.name === (card && card.dataset.specialRow)
-            );
+            const source = (frm.doc.pieces || []).find(row => row.name === (card && card.dataset.specialRow));
             if (!source || !window.AlmdinaSpecialShapeEditor || typeof window.AlmdinaSpecialShapeEditor.view !== "function") {
                 frappe.msgprint(__("تعذر تحميل رسم الدرفة الخاصة."));
                 return;
@@ -370,9 +384,7 @@
         });
         wrapper.find(".dco-view-cut-corner-sketch").on("click", function onViewCutCorner() {
             const card = this.closest("[data-cut-corner-row]");
-            const source = (frm.doc.pieces || []).find(
-                row => row.name === (card && card.dataset.cutCornerRow)
-            );
+            const source = (frm.doc.pieces || []).find(row => row.name === (card && card.dataset.cutCornerRow));
             if (!source || !window.AlmdinaClippedCornerEditor || typeof window.AlmdinaClippedCornerEditor.view !== "function") {
                 frappe.msgprint(__("تعذر تحميل رسم الزاوية المقصوصة."));
                 return;
@@ -393,19 +405,14 @@
         }
 
         installStyles();
+        const actionShell = '<div class="dco-cost-actions-bar"><div class="dco-cost-actions"></div></div>';
         if (!canView) {
-            field.$wrapper.html(`<div class="dco-cost-shell">
-                <div class="dco-cost-actions-bar">
-                    <div class="dco-cost-actions"><button type="button" class="btn btn-primary btn-sm dco-print-customer-invoice">${__("طباعة فاتورة الزبون")}</button></div>
-                </div>
-            </div>`);
+            field.$wrapper.html(`<div class="dco-cost-shell">${actionShell}</div>`);
             return true;
         }
 
         field.$wrapper.html(`<div class="dco-cost-shell">
-            <div class="dco-cost-actions-bar">
-                <div class="dco-cost-actions"><button type="button" class="btn btn-primary btn-sm dco-print-customer-invoice">${__("طباعة فاتورة الزبون")}</button></div>
-            </div>
+            ${actionShell}
             <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
             ${cutCornerPricingHtml(frm)}
