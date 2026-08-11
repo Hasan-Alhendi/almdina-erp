@@ -11,8 +11,10 @@
         "/assets/almdina_erp/js/door_drawing_v2/infrastructure/legacy_adapter.js",
         "/assets/almdina_erp/js/door_drawing_v2/infrastructure/legacy_runtime_bridge.js",
         "/assets/almdina_erp/js/door_drawing_v2/presentation/viewport_model.js",
+        "/assets/almdina_erp/js/door_drawing_v2/presentation/line_label_geometry.js",
         "/assets/almdina_erp/js/door_drawing_v2/presentation/editor_shell_ux.js",
         "/assets/almdina_erp/js/door_drawing_v2/presentation/selection_overlay_ux.js",
+        "/assets/almdina_erp/js/door_drawing_v2/presentation/line_tool_ux.js",
     ]);
 
     function alreadyLoaded(src) {
