@@ -198,12 +198,29 @@
         return true;
     }
 
+    async function persistDirtyOrderBeforeRecalculation(frm) {
+        const dirty = Boolean(frm && frm.is_dirty && frm.is_dirty());
+        if (!dirty) return true;
+        if (!frm || typeof frm.save !== "function") {
+            frappe.msgprint(__("تعذر حفظ تعديلات الطلب قبل حساب خطة القص."));
+            return false;
+        }
+
+        frappe.show_alert({
+            message: __("سيتم حفظ تعديلات القياسات أولًا حتى لا تفقد قبل إعادة حساب خطة القص."),
+            indicator: "blue",
+        }, 4);
+        await frm.save();
+        return !(frm.is_dirty && frm.is_dirty());
+    }
+
     async function runRecalculation(frm) {
         if (!canCalculate(frm)) {
             frappe.msgprint(recalculationDisabledReason(frm));
             return false;
         }
         if (!(await preparePlanInputs(frm))) return false;
+        if (!(await persistDirtyOrderBeforeRecalculation(frm))) return false;
 
         try {
             await frappe.call({
@@ -457,6 +474,7 @@
         apply,
         canCalculate,
         preparePlanInputs,
+        persistDirtyOrderBeforeRecalculation,
         runRecalculation,
     });
 })();
