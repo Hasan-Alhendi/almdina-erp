@@ -121,10 +121,10 @@ const angledLine = interaction.updateDraft({
     point: { x: 90, y: 40 },
     forceAngle: true,
 });
-const angle = Math.atan2(angledLine.draft.y2, angledLine.draft.x2);
-assert.ok(
-    Math.abs(angle - Math.PI / 6) < 0.001,
-    "Shift-constrained lines should snap to 15-degree intervals"
+assert.deepEqual(
+    { x2: angledLine.draft.x2, y2: angledLine.draft.y2 },
+    { x2: 90, y2: 0 },
+    "Shift-constrained lines should hard-lock to the dominant horizontal/vertical axis"
 );
 
 const reversedRectangle = interaction.updateDraft({
