@@ -32,17 +32,22 @@
         ) || null;
     }
 
+    function safeCmToMm(value) {
+        const numeric = precision.toNumber(value);
+        return Number.isFinite(numeric) ? Math.max(0, precision.cmToMm(numeric)) : 0;
+    }
+
     function rowDimensionsMm(row) {
         return {
-            width: Math.max(0, precision.cmToMm(row && row.width_cm)),
-            height: Math.max(0, precision.cmToMm(row && row.length_cm)),
+            width: safeCmToMm(row && row.width_cm),
+            height: safeCmToMm(row && row.length_cm),
         };
     }
 
     function formattedMm(value) {
         const number = Number(value);
         if (!Number.isFinite(number)) return "0";
-        return Number.isInteger(number) ? String(number) : String(precision.display(number));
+        return Number.isInteger(number) ? String(number) : String(precision.displayed(number));
     }
 
     function moveFooterActions(controller) {
@@ -174,6 +179,8 @@
         const height = Math.max(1, controller.paperWrap.clientHeight || 1);
         if (!dimensions.width || !dimensions.height) {
             controller.viewport = null;
+            delete controller.root.dataset.v2ViewportScale;
+            controller.root.dataset.v2ViewportUnits = "mm";
             return;
         }
         controller.viewport = viewportModel.create({
@@ -278,7 +285,7 @@
         view,
     });
 
-    root.EditorShellUX = Object.freeze({
+    rootV2.EditorShellUX = Object.freeze({
         ensureStylesheet,
         mount,
         rowDimensionsMm,
