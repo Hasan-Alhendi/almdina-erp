@@ -82,11 +82,92 @@
         next.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
 
+    function measurementWrapper(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        return field && field.$wrapper ? field.$wrapper.get(0) : null;
+    }
+
+    function measurementRoot(frm) {
+        const wrapper = measurementWrapper(frm);
+        return wrapper && wrapper.querySelector(".dco-fast-entry-shell");
+    }
+
+    function disconnectCompetingEdgeObservers(root) {
+        if (!root) return;
+        [
+            "_dcoSideEdgeObserver",
+            "_dcoCompactEdgeProfileControlsObserver",
+        ].forEach(key => {
+            const observer = root[key];
+            if (observer && typeof observer.disconnect === "function") observer.disconnect();
+            root[key] = null;
+        });
+    }
+
+    function structuralMeasurementMutation(mutation) {
+        const nodes = [
+            ...(mutation.addedNodes || []),
+            ...(mutation.removedNodes || []),
+        ];
+        return nodes.some(node => {
+            if (!node || node.nodeType !== 1) return false;
+            if (node.matches(".dco-fast-entry-shell,tbody,tr[data-row-name]")) return true;
+            if (node.matches("td") && node.querySelector("input[data-field],select[data-field]")) return true;
+            return Boolean(node.querySelector(
+                ".dco-fast-entry-shell,tbody tr[data-row-name],input[data-field='width_cm'],select[data-field='piece_type']"
+            ));
+        });
+    }
+
+    function refreshEdgeDecorations(frm) {
+        const root = measurementRoot(frm);
+        if (!root) return;
+        disconnectCompetingEdgeObservers(root);
+
+        const multiEdge = window.AlmdinaMultiEdgeBanding;
+        if (multiEdge && typeof multiEdge.schedule === "function") multiEdge.schedule(frm);
+        const controls = window.AlmdinaEdgeProfileControls;
+        if (controls && typeof controls.schedule === "function") controls.schedule(frm);
+
+        // Both legacy edge modules install their own broad MutationObservers.
+        // They decorate the same nodes and can trigger each other forever. Their
+        // explicit field-event schedules remain active, while this structural
+        // observer owns DOM replacement detection.
+        requestAnimationFrame(() => disconnectCompetingEdgeObservers(measurementRoot(frm)));
+        setTimeout(() => disconnectCompetingEdgeObservers(measurementRoot(frm)), 180);
+    }
+
+    function stabilizeEdgeRendering(frm) {
+        const wrapper = measurementWrapper(frm);
+        if (!wrapper) return;
+
+        if (frm.__dcoEdgeStructureObservedWrapper !== wrapper) {
+            if (frm.__dcoEdgeStructureObserver) frm.__dcoEdgeStructureObserver.disconnect();
+            let queued = false;
+            const observer = new MutationObserver(mutations => {
+                if (!mutations.some(structuralMeasurementMutation) || queued) return;
+                queued = true;
+                requestAnimationFrame(() => {
+                    queued = false;
+                    refreshEdgeDecorations(frm);
+                });
+            });
+            observer.observe(wrapper, { childList: true, subtree: true });
+            frm.__dcoEdgeStructureObserver = observer;
+            frm.__dcoEdgeStructureObservedWrapper = wrapper;
+        }
+
+        refreshEdgeDecorations(frm);
+    }
+
     function install(frm) {
         const field = frm.fields_dict.pieces_fast_entry;
         if (!field || !field.$wrapper) return;
         const root = field.$wrapper.get(0);
-        if (!root || root._dcoFastPatchInstalled) return;
+        if (!root || root._dcoFastPatchInstalled) {
+            stabilizeEdgeRendering(frm);
+            return;
+        }
         root._dcoFastPatchInstalled = true;
 
         // Capture the click before the original delegated handler. This avoids any
@@ -113,13 +194,24 @@
             if (row) triggerFieldLater(frm, row, "qty");
             focusNextWidth(tr);
         }, true);
+
+        requestAnimationFrame(() => stabilizeEdgeRendering(frm));
+        setTimeout(() => stabilizeEdgeRendering(frm), 220);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { install(frm); },
+        onload_post_render(frm) {
+            install(frm);
+            setTimeout(() => stabilizeEdgeRendering(frm), 0);
+        },
         refresh(frm) {
             install(frm);
             requestAnimationFrame(() => install(frm));
+            setTimeout(() => stabilizeEdgeRendering(frm), 220);
+        },
+        almdina_edit_session_changed(frm) {
+            requestAnimationFrame(() => stabilizeEdgeRendering(frm));
+            setTimeout(() => stabilizeEdgeRendering(frm), 180);
         },
     });
 })();
