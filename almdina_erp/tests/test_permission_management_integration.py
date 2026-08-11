@@ -4,6 +4,9 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
+    FrappePermissionMatrixRepository,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -34,6 +37,10 @@ class TestPermissionManagementIntegration(FrappeTestCase):
             "Almdina ERP Settings",
             {"read": 1, Capability.MANAGE_PERMISSIONS: 1},
         )
+        FrappePermissionMatrixRepository().save_role_state(
+            ADMIN_ROLE,
+            {Capability.MANAGE_PERMISSIONS: True},
+        )
         frappe.clear_cache(user=ADMIN_USER)
         frappe.clear_cache(doctype="Almdina ERP Settings")
 
@@ -45,6 +52,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         for role in managed_roles:
             frappe.db.delete("Custom DocPerm", {"role": role})
             frappe.db.delete("DocPerm", {"role": role})
+            frappe.db.delete("Almdina Role Capability State", {"role": role})
         for user in (ADMIN_USER, TARGET_USER, PRESERVED_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
@@ -107,6 +115,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         frappe.set_user("Administrator")
         frappe.db.delete("Almdina Permission Audit", {"role": TARGET_ROLE})
         frappe.db.delete("Custom DocPerm", {"role": TARGET_ROLE})
+        frappe.db.delete("Almdina Role Capability State", {"role": TARGET_ROLE})
         frappe.clear_cache(user=TARGET_USER)
         for doctype in (
             "Door Cutting Order",
