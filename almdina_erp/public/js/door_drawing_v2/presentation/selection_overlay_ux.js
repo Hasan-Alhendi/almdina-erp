@@ -2,21 +2,31 @@
     "use strict";
 
     const rootV2 = window.AlmdinaDoorDrawingV2 = window.AlmdinaDoorDrawingV2 || Object.create(null);
-    const documents = rootV2.DocumentModel;
     const geometry = rootV2.Geometry;
     const selectionManager = rootV2.SelectionManager;
     const transformManager = rootV2.TransformManager;
     const bridge = rootV2.LegacyRuntimeBridge;
     const baseEditor = window.AlmdinaSpecialShapeEditor;
     const history = window.AlmdinaSketchHistory;
-    if (!documents || !geometry || !selectionManager || !transformManager || !bridge || !baseEditor || !history) {
+    if (!geometry || !selectionManager || !transformManager || !bridge || !baseEditor || !history) {
         console.error("Door Drawing V2 selection dependencies are missing");
         return;
     }
     if (baseEditor.__doorDrawingV2SelectionIntegrated) return;
 
     const SVG_NS = "http://www.w3.org/2000/svg";
+    const STYLE_ID = "dco-door-drawing-v2-selection-css";
+    const STYLE_HREF = "/assets/almdina_erp/css/door_drawing_v2_selection.css";
     const MOUNT_RETRIES = 28;
+
+    function ensureStylesheet() {
+        if (document.getElementById(STYLE_ID)) return;
+        const link = document.createElement("link");
+        link.id = STYLE_ID;
+        link.rel = "stylesheet";
+        link.href = STYLE_HREF;
+        document.head.appendChild(link);
+    }
 
     function clone(value) {
         return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -37,16 +47,16 @@
     function runtime(controller) {
         const state = liveState(controller);
         if (!state) return null;
-        const document = bridge.documentFromLegacy(controller.row, state.elements, {
+        const drawing = bridge.documentFromLegacy(controller.row, state.elements, {
             orderId: controller.frm && controller.frm.doc && controller.frm.doc.name,
         });
         const selectedId = String(state.selectedId || "");
-        const object = document.objects.find(item => item.id === selectedId) || null;
+        const object = drawing.objects.find(item => item.id === selectedId) || null;
         controller.selection = selectionManager.prune(
-            document,
+            drawing,
             object ? selectionManager.selectOnly(controller.selection, object.id) : selectionManager.clear()
         );
-        return { state, document, object };
+        return { state, document: drawing, object };
     }
 
     function svgPoint(controller, event) {
@@ -66,8 +76,7 @@
         const number = Number(value);
         if (!Number.isFinite(number)) return "0";
         const factor = 10 ** decimals;
-        const rounded = Math.round(number * factor) / factor;
-        return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+        return String(Math.round(number * factor) / factor);
     }
 
     function currentPreviewObject(controller, fallback) {
@@ -120,6 +129,7 @@
         if (!object || object.type !== "line") {
             if (controller.inspector.dataset.v2Owned === "1") {
                 controller.inspector.innerHTML = `<div class="dco-figma-empty"><b>خصائص العنصر</b>حدد مستقيمًا دقيقًا لتعديل قياسه بالـ mm.</div>`;
+                delete controller.inspector.dataset.v2Owned;
             }
             return;
         }
@@ -162,6 +172,7 @@
             const end = canvasPoint(controller, object.geometry.end);
             const group = document.createElementNS(SVG_NS, "g");
             group.setAttribute("class", "dco-v2-selection-overlay");
+            group.setAttribute("data-v2-object-id", object.id);
 
             const hit = document.createElementNS(SVG_NS, "line");
             hit.setAttribute("x1", String(start[0]));
@@ -189,6 +200,17 @@
             controller.rendering = false;
             if (controller.observer) controller.observer.observe(controller.svg, { childList: true });
         }
+    }
+
+    function needsRender(controller) {
+        const state = liveState(controller);
+        const selectedId = String(state && state.selectedId || "");
+        const overlay = controller.svg.querySelector(".dco-v2-selection-overlay");
+        if (!selectedId) return Boolean(overlay);
+        const legacy = state && state.elements.find(item => String(item.id || "") === selectedId);
+        const object = bridge.toV2Object(legacy);
+        if (!object || object.type !== "line") return Boolean(overlay);
+        return !overlay || overlay.getAttribute("data-v2-object-id") !== selectedId;
     }
 
     function commitObject(controller, object, originalElements) {
@@ -334,17 +356,15 @@
             event.stopImmediatePropagation();
         }, true));
 
-        if (controller.inspector) {
-            controller.inspector.addEventListener("click", event => {
-                if (event.target.closest && event.target.closest("[data-v2-apply]")) applyInspector(controller);
-            });
-            controller.inspector.addEventListener("keydown", event => {
-                if (event.key !== "Enter") return;
-                if (!event.target.closest || !event.target.closest("[data-v2-length],[data-v2-angle]")) return;
-                event.preventDefault();
-                applyInspector(controller);
-            });
-        }
+        controller.inspector.addEventListener("click", event => {
+            if (event.target.closest && event.target.closest("[data-v2-apply]")) applyInspector(controller);
+        });
+        controller.inspector.addEventListener("keydown", event => {
+            if (event.key !== "Enter") return;
+            if (!event.target.closest || !event.target.closest("[data-v2-length],[data-v2-angle]")) return;
+            event.preventDefault();
+            applyInspector(controller);
+        });
     }
 
     function cleanup(controller) {
@@ -352,6 +372,7 @@
     }
 
     function mount(frm, row) {
+        ensureStylesheet();
         const modal = visibleModal();
         if (!modal) return false;
         const root = modal.querySelector(".dco-special-sketch-shell");
@@ -376,7 +397,7 @@
         root.__almdinaDoorDrawingV2SelectionController = controller;
         bind(controller);
         controller.observer = new MutationObserver(() => {
-            if (controller.rendering) return;
+            if (controller.rendering || !needsRender(controller)) return;
             window.setTimeout(() => render(controller), 0);
         });
         controller.observer.observe(svg, { childList: true });
@@ -412,5 +433,5 @@
         view,
     });
 
-    rootV2.SelectionOverlayUX = Object.freeze({ mount, render });
+    rootV2.SelectionOverlayUX = Object.freeze({ ensureStylesheet, mount, render });
 })();
