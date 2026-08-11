@@ -34,3 +34,8 @@
 .ddv3-app .ddv3-measure {
     display: none !important;
 }
+
+/* Keep the visual stroke thin, but make existing geometry much easier to grab and move. */
+.ddv3-app .ddv3-object-hit {
+    stroke-width: 30px !important;
+}
