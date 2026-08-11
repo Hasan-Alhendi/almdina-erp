@@ -14,12 +14,17 @@ const cssPath = path.resolve(
 );
 const bootstrapPath = path.resolve(
     __dirname,
+    "../../public/js/door_drawing_v2/bootstrap.js"
+);
+const closeUxPath = path.resolve(
+    __dirname,
     "../../public/js/door_cutting_order_special_shape_close_ux.js"
 );
 
 const shell = fs.readFileSync(shellPath, "utf8");
 const css = fs.readFileSync(cssPath, "utf8");
 const bootstrap = fs.readFileSync(bootstrapPath, "utf8");
+const closeUx = fs.readFileSync(closeUxPath, "utf8");
 
 assert.match(shell, /AlmdinaDoorDrawingV2/);
 assert.match(shell, /ViewportModel/);
@@ -40,9 +45,14 @@ const scriptOrder = [
     "precision_policy.js",
     "geometry_engine.js",
     "document_model.js",
+    "workspace_policy.js",
+    "selection_manager.js",
+    "transform_manager.js",
     "legacy_adapter.js",
+    "legacy_runtime_bridge.js",
     "viewport_model.js",
     "editor_shell_ux.js",
+    "selection_overlay_ux.js",
 ];
 let cursor = -1;
 scriptOrder.forEach(filename => {
@@ -50,5 +60,7 @@ scriptOrder.forEach(filename => {
     assert.ok(index > cursor, `${filename} must load after its Door Drawing V2 dependencies`);
     cursor = index;
 });
+assert.match(closeUx, /door_drawing_v2\/bootstrap\.js/, "The special-shape entry point should delegate V2 module ordering to one focused bootstrap");
+assert.doesNotMatch(closeUx, /geometry_engine\.js/, "The modal-close module must not own V2 dependency ordering");
 
 console.log("Door Drawing V2 editor-shell isolation contract passed");
