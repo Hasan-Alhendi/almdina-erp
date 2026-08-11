@@ -10,7 +10,10 @@
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
-    pointer-events: stroke;
+}
+
+.ddv3-path-stroke {
+    pointer-events: none;
 }
 
 .ddv3-path-stroke.is-selected {
