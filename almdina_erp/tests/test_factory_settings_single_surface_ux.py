@@ -9,6 +9,7 @@ SETTINGS_JSON = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "alm
 SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
+MAIN_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_erp" / "almdina_erp.json"
 
 LEGACY_PRESERVED_FIELDS = {
     "enforce_stock_control",
@@ -72,6 +73,19 @@ def test_old_native_settings_route_redirects_to_the_unified_console() -> None:
     assert "redirectLegacyFactorySettingsRoute" in shell_source
     assert "installFactorySettingsCanonicalRedirect" in shell_source
     assert "frappe.set_route(FACTORY_SETTINGS_CONSOLE_ROUTE)" in shell_source
+
+
+def test_main_workspace_factory_settings_shortcut_opens_unified_console() -> None:
+    workspace = json.loads(MAIN_WORKSPACE.read_text(encoding="utf-8"))
+    links = [row for row in workspace.get("links", []) if row.get("label") == "إعدادات المعمل"]
+    shortcuts = [row for row in workspace.get("shortcuts", []) if row.get("label") == "إعدادات المعمل"]
+
+    assert len(links) == 1
+    assert links[0]["link_type"] == "Page"
+    assert links[0]["link_to"] == "factory-production-settings"
+    assert len(shortcuts) == 1
+    assert shortcuts[0]["type"] == "Page"
+    assert shortcuts[0]["link_to"] == "factory-production-settings"
 
 
 def test_unified_console_does_not_delete_or_mutate_legacy_values() -> None:
