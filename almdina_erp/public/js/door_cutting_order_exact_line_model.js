@@ -13,6 +13,7 @@
     const MIN_LENGTH_CM = 0.1;
     const ENDPOINT_SNAP_CM = 0.6;
     const EPSILON = 0.001;
+    const FREE_WORKSPACE_MAX_LENGTH_CM = 1000000;
 
     function num(value) {
         const result = Number(String(value ?? "").trim().replace(",", "."));
@@ -26,6 +27,18 @@
 
     function clamp(value, minimum, maximum) {
         return Math.max(minimum, Math.min(maximum, num(value)));
+    }
+
+    function workspacePolicy() {
+        return window.AlmdinaDoorDrawingV2 && window.AlmdinaDoorDrawingV2.WorkspacePolicy
+            ? window.AlmdinaDoorDrawingV2.WorkspacePolicy
+            : null;
+    }
+
+    function resolveFreeWorkspace(options = {}) {
+        if (options.freeWorkspace !== undefined) return Boolean(options.freeWorkspace);
+        const policy = workspacePolicy();
+        return Boolean(policy && policy.isFree === true);
     }
 
     function pieceDimensions(row) {
@@ -67,6 +80,7 @@
             offsetY: (canvasHeight - drawnHeight) / 2,
             drawnWidth,
             drawnHeight,
+            freeWorkspace: resolveFreeWorkspace(options),
         });
     }
 
@@ -88,6 +102,7 @@
 
     function insidePiece(transform, point, tolerance = EPSILON) {
         if (!transform || !Array.isArray(point)) return false;
+        if (transform.freeWorkspace) return true;
         const x = num(point[0]);
         const y = num(point[1]);
         return x >= -tolerance
@@ -98,6 +113,7 @@
 
     function clampPointToPiece(transform, point) {
         if (!transform || !Array.isArray(point)) return [0, 0];
+        if (transform.freeWorkspace) return [rounded(point[0]), rounded(point[1])];
         return [
             rounded(clamp(point[0], 0, transform.widthCm)),
             rounded(clamp(point[1], 0, transform.lengthCm)),
@@ -136,7 +152,9 @@
     }
 
     function maxLengthFrom(transform, start, angleDeg) {
-        if (!transform || !insidePiece(transform, start, 0.01)) return 0;
+        if (!transform) return 0;
+        if (transform.freeWorkspace) return FREE_WORKSPACE_MAX_LENGTH_CM;
+        if (!insidePiece(transform, start, 0.01)) return 0;
         const radians = normalizeAngle(angleDeg) * Math.PI / 180;
         const dx = Math.cos(radians);
         const dy = Math.sin(radians);
@@ -193,13 +211,13 @@
 
     function buildElement(options = {}) {
         const transform = options.transform;
+        if (!transform) return { valid: false, reason: "missing-transform", element: null };
         const start = clampPointToPiece(transform, options.startCm || [0, 0]);
         const length = Math.max(0, num(options.lengthCm));
         const angle = normalizeAngle(options.angleDeg);
-        if (!transform) return { valid: false, reason: "missing-transform", element: null };
         if (length < MIN_LENGTH_CM) return { valid: false, reason: "length-too-small", element: null };
         const maximum = maxLengthFrom(transform, start, angle);
-        if (length > maximum + 0.001) {
+        if (!transform.freeWorkspace && length > maximum + 0.001) {
             return {
                 valid: false,
                 reason: "outside-piece",
@@ -234,6 +252,7 @@
                     angle_deg: angle,
                     blank_width_cm: rounded(transform.widthCm),
                     blank_length_cm: rounded(transform.lengthCm),
+                    workspace: transform.freeWorkspace ? "free" : "piece",
                 },
             },
         };
@@ -253,19 +272,24 @@
             angle_deg: angleBetween(start, end),
             blank_width_cm: rounded(transform.widthCm),
             blank_length_cm: rounded(transform.lengthCm),
+            workspace: transform.freeWorkspace ? "free" : (meta.workspace || "piece"),
         };
         return element;
     }
 
     function command(value) {
         const text = String(value ?? "").trim();
-        if (!text) return { valid: false, lengthCm: 0, angleDeg: null };
+        if (!text) return { valid: false, lengthCm: 0, angleDeg: null, inputLengthMm: 0 };
         const parts = text.split(/[@;\/]/).map(item => item.trim()).filter(Boolean);
-        const lengthCm = num(parts[0]);
+        const rawLength = num(parts[0]);
+        const policy = workspacePolicy();
+        const inputIsMm = Boolean(policy && policy.INPUT_UNITS === "mm");
+        const lengthCm = inputIsMm ? rawLength / 10 : rawLength;
         const angleDeg = parts.length > 1 ? normalizeAngle(parts[1]) : null;
         return {
             valid: lengthCm >= MIN_LENGTH_CM,
             lengthCm: rounded(lengthCm),
+            inputLengthMm: rounded(inputIsMm ? rawLength : rawLength * 10),
             angleDeg,
         };
     }
@@ -276,6 +300,7 @@
         DEFAULT_PADDING,
         MIN_LENGTH_CM,
         ENDPOINT_SNAP_CM,
+        FREE_WORKSPACE_MAX_LENGTH_CM,
         pieceDimensions,
         createTransform,
         cmToCanvas,
