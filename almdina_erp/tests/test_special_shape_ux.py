@@ -13,7 +13,8 @@ PLAN_RENDERER = APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_re
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
-V3_EDITOR = APP_ROOT / "public" / "js" / "door_drawing_v3" / "presentation" / "editor.js"
+V3_VIEW = APP_ROOT / "public" / "js" / "door_drawing_v3" / "presentation" / "canvas_view.js"
+V3_EDITOR = APP_ROOT / "public" / "js" / "door_drawing_v3" / "application" / "editor_stage2.js"
 V3_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v3" / "domain" / "geometry.js"
 V3_CSS = APP_ROOT / "public" / "css" / "door_drawing_v3.css"
 COST_UX = APP_ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
@@ -69,6 +70,7 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
 def test_operator_opens_only_clean_v3_editor_runtime():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     entry = EDITOR_ENTRY.read_text(encoding="utf-8")
+    view = V3_VIEW.read_text(encoding="utf-8")
     editor = V3_EDITOR.read_text(encoding="utf-8")
     geometry = V3_GEOMETRY.read_text(encoding="utf-8")
     css = V3_CSS.read_text(encoding="utf-8")
@@ -79,13 +81,18 @@ def test_operator_opens_only_clean_v3_editor_runtime():
     assert "AlmdinaSpecialShapeEditor.open" in operator
     assert '"public/js/door_cutting_order_special_shape_ux.js"' in hooks
     assert "__doorDrawingV3: true" in entry
+    assert "__doorDrawingV3Shapes: true" in entry
     assert "door_drawing_v3/domain/geometry.js" in entry
+    assert "door_drawing_v3/presentation/canvas_view.js" in entry
+    assert "door_drawing_v3/application/editor_stage2.js" in entry
     assert "AlmdinaSketchEngine" not in entry
-    assert 'data-ddv3-tool="line"' in editor
-    assert 'data-ddv3-tool="select"' in editor
-    assert "measurementMarkup" in editor
-    assert "worldToScreen" in editor
-    assert "screenToWorld" in editor
+    for tool in ("line", "select", "rectangle", "circle", "arc"):
+        assert f'data-ddv3-tool="{tool}"' in view
+    assert "function measure(" in view
+    assert "worldToScreen" in view
+    assert "screenToWorld" in view
+    assert "function handleArcClick" in editor
+    assert "G.translateObject" in editor
     assert 'const EPSILON_MM = 0.001' in geometry
     assert 'units: "mm"' not in geometry  # primitives are unit-agnostic functions named explicitly in mm
     assert ".ddv3-inspector" in css
