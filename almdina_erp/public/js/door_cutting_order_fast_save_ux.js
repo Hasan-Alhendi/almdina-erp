@@ -75,9 +75,9 @@
 
     function markOrderInputPlanStale(frm) {
         if (!editable(frm)) return;
-        // Distinguish persisted order-input edits from optimizer-only changes.
-        // Recalculation accepts optimizer values as explicit arguments, but piece
-        // rows and board inputs are loaded by the server from the saved order.
+        // Recalculation receives optimizer values explicitly, while piece rows and
+        // board inputs are loaded by the server from the persisted order. Track
+        // only the latter so plan-only users never inherit order-edit requirements.
         frm.__almdina_pending_order_input_persistence = true;
         markPlanStale(frm);
     }
@@ -87,15 +87,6 @@
         markPlanStale(frm);
     }
 
-    function editSessionActive(frm) {
-        return Boolean(
-            window.frappe
-            && frappe.almdina
-            && typeof frappe.almdina.isOrderEditSessionActive === "function"
-            && frappe.almdina.isOrderEditSessionActive(frm)
-        );
-    }
-
     async function persistPendingOrderInputs(frm) {
         if (!frm || !frm.__almdina_pending_order_input_persistence) return true;
         const dirty = Boolean(frm.is_dirty && frm.is_dirty());
@@ -103,8 +94,14 @@
             frm.__almdina_pending_order_input_persistence = false;
             return true;
         }
-        if (!editable(frm) || typeof frm.save !== "function") {
-            frappe.msgprint(__("تعذر حفظ تعديلات القياسات قبل حساب خطة القص. افتح الطلب للتعديل ثم حاول مرة أخرى."));
+        if (!editable(frm)) {
+            frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. افتح الطلب للتعديل ثم حاول مرة أخرى."));
+            return false;
+        }
+
+        const editPolicy = window.frappe && frappe.almdina;
+        if (!editPolicy || typeof editPolicy.persistOrderEditCheckpoint !== "function") {
+            frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
             return false;
         }
 
@@ -113,18 +110,7 @@
             indicator: "blue",
         }, 4);
 
-        // This is an internal persistence checkpoint, not the user's final Save.
-        // Keep the edit session open so returning from the plan does not relock
-        // the measurement table unexpectedly.
-        const keepEditing = editSessionActive(frm);
-        if (keepEditing) frm.__almdina_keep_edit_session_after_save = true;
-        try {
-            await frm.save();
-        } finally {
-            frm.__almdina_keep_edit_session_after_save = false;
-        }
-
-        const saved = !(frm.is_dirty && frm.is_dirty());
+        const saved = Boolean(await editPolicy.persistOrderEditCheckpoint(frm));
         if (saved) frm.__almdina_pending_order_input_persistence = false;
         return saved;
     }
