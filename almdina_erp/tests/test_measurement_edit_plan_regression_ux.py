@@ -19,18 +19,34 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
     assert "frappe.validated = false" not in cost_permissions
 
 
-def test_recalculation_persists_dirty_measurement_rows_before_server_plan_call() -> None:
+def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
     plan_controls = source("door_cutting_order_plan_controls_ux.js")
+    fast_save = source("door_cutting_order_fast_save_ux.js")
 
-    helper = "async function persistDirtyOrderBeforeRecalculation(frm)"
-    assert helper in plan_controls
-    assert "await frm.save();" in plan_controls
-    assert "await persistDirtyOrderBeforeRecalculation(frm)" in plan_controls
+    assert "async function persistPendingOrderInputs(frm)" in fast_save
+    assert "await frm.save();" in fast_save
+    assert "frm.__almdina_pending_order_input_persistence = true" in fast_save
+    assert "piece_type(frm) { markOrderInputPlanStale(frm); }" in fast_save
+    assert "fastSave.persistPendingOrderInputs(frm)" in plan_controls
+    assert "frm.save" not in plan_controls
 
     run_body = plan_controls.split("async function runRecalculation(frm)", 1)[1]
-    save_pos = run_body.index("await persistDirtyOrderBeforeRecalculation(frm)")
+    persist_pos = run_body.index("await persistPendingOrderInputs(frm)")
     recalc_pos = run_body.index("method: RECALCULATE_METHOD")
-    assert save_pos < recalc_pos
+    assert persist_pos < recalc_pos
+
+
+def test_optimizer_only_recalculation_does_not_require_order_save() -> None:
+    fast_save = source("door_cutting_order_fast_save_ux.js")
+
+    mark_order_body = fast_save.split("function markOrderInputPlanStale(frm)", 1)[1].split(
+        "function markOptimizerPlanStale(frm)", 1
+    )[0]
+    mark_optimizer_body = fast_save.split("function markOptimizerPlanStale(frm)", 1)[1].split(
+        "async function", 1
+    )[0]
+    assert "__almdina_pending_order_input_persistence = true" in mark_order_body
+    assert "__almdina_pending_order_input_persistence" not in mark_optimizer_body
 
 
 def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observers() -> None:
