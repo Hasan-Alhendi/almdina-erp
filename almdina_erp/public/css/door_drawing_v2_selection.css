@@ -1,0 +1,200 @@
+.dco-v2-editor-shell .dco-exact-frame,
+.dco-v2-editor-shell .dco-exact-frame-label,
+.dco-v2-editor-shell .dco-v2-obsolete-boundary-control,
+.dco-v2-editor-shell .dco-exact-saved-label,
+.dco-v2-editor-shell .dco-exact-line-label,
+.dco-v2-editor-shell .dco-figma-endpoints {
+    display: none !important;
+}
+
+.dco-v2-selection-overlay {
+    pointer-events: none;
+}
+
+.dco-v2-selected-line {
+    fill: none;
+    stroke: #0d99ff;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.dco-v2-selection-move-hit {
+    stroke: transparent;
+    stroke-width: 18;
+    vector-effect: non-scaling-stroke;
+    pointer-events: stroke;
+    cursor: move;
+}
+
+.dco-v2-endpoint-handle {
+    pointer-events: all;
+    cursor: crosshair;
+}
+
+.dco-v2-endpoint-hit {
+    fill: transparent;
+    stroke: transparent;
+    pointer-events: all;
+}
+
+.dco-v2-endpoint-square {
+    fill: #fff;
+    stroke: #0d99ff;
+    stroke-width: 1.6;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.dco-v2-endpoint-handle.is-active .dco-v2-endpoint-square {
+    fill: #0d99ff;
+    stroke: #fff;
+    stroke-width: 2;
+}
+
+.dco-v2-selection-length {
+    pointer-events: none;
+}
+
+.dco-v2-selection-length rect {
+    fill: #0d99ff;
+    stroke: #0d99ff;
+    vector-effect: non-scaling-stroke;
+}
+
+.dco-v2-selection-length text {
+    fill: #fff;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+.dco-v2-inspector-section {
+    padding: 12px 0;
+    border-bottom: 1px solid #444;
+}
+
+.dco-v2-inspector-section:last-child {
+    border-bottom: 0;
+}
+
+.dco-v2-inspector-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: #f5f5f5;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.dco-v2-inspector-section-title small {
+    color: #9da1a6;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.dco-v2-inspector-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.dco-v2-inspector-grid label > span {
+    display: block;
+    margin-bottom: 4px;
+    color: #aeb0b4;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.dco-v2-inspector-grid label > div {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    overflow: hidden;
+    border: 1px solid #454545;
+    border-radius: 4px;
+    background: #383838;
+}
+
+.dco-v2-inspector-grid label > div:focus-within {
+    border-color: #0d99ff;
+    box-shadow: 0 0 0 1px #0d99ff;
+}
+
+.dco-v2-inspector-grid input {
+    min-width: 0;
+    width: 100%;
+    height: 30px;
+    padding: 0 7px;
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #f5f5f5 !important;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.dco-v2-inspector-grid b {
+    padding: 0 7px;
+    color: #aeb0b4;
+    font-size: 8px;
+    font-weight: 600;
+    border-inline-start: 1px solid #4a4a4a;
+}
+
+.dco-v2-inspector-apply {
+    width: 100%;
+    min-height: 32px;
+    margin-top: 7px;
+    border: 0;
+    border-radius: 4px;
+    background: #0d99ff;
+    color: #fff;
+    cursor: pointer;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.dco-v2-inspector-apply:hover {
+    background: #0b87e3;
+}
+
+.dco-v2-point-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 30px;
+    padding: 0 7px;
+    border-radius: 4px;
+    color: #aeb0b4;
+    font-size: 8px;
+}
+
+.dco-v2-point-row:hover {
+    background: #383838;
+}
+
+.dco-v2-point-row b {
+    color: #f1f1f1;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.dco-v2-inspector-hint {
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    background: #383838;
+    color: #aeb0b4;
+    font-size: 8px;
+    line-height: 1.6;
+}
