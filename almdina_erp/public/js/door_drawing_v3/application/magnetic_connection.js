@@ -54,8 +54,21 @@
             gesture.object,
             pointer.x - gesture.startWorld.x,
             pointer.y - gesture.startWorld.y,
-            { viewportScale: c.viewport.scale }
+            {
+                viewportScale: c.viewport.scale,
+                stickySource: gesture.magneticSource || null,
+                stickyTarget: gesture.magneticTarget || null,
+            }
         );
+
+        if (result.snapped) {
+            gesture.magneticSource = result.source;
+            gesture.magneticTarget = result.target;
+        } else {
+            gesture.magneticSource = null;
+            gesture.magneticTarget = null;
+        }
+
         c.previewObject = result.object;
         c.snapState = result;
         V.render(c);
