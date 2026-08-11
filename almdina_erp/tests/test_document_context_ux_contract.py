@@ -233,12 +233,14 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("function documentContext()", source)
         self.assertIn("function captureIdentity(frm)", source)
         self.assertIn("function isCurrent(frm, identity)", source)
-        self.assertIn("const identity = captureIdentity(frm)", source)
+        self.assertIn("const documentIdentity = captureIdentity(frm)", source)
         self.assertGreaterEqual(
-            source.count("if (!isCurrent(frm, identity)) return false"),
+            source.count("if (!isCurrent(frm, documentIdentity)) return false"),
             2,
         )
-        self.assertIn("await ensureProfiles(frm)", source)
+        self.assertIn("await Promise.all([", source)
+        self.assertIn("ensureProfiles(frm)", source)
+        self.assertIn("resolvePrintIdentity()", source)
         self.assertIn("activeIdentity = captureIdentity(frm)", source)
         self.assertIn("const frm = activeFrm", source)
         self.assertIn("const identity = activeIdentity", source)

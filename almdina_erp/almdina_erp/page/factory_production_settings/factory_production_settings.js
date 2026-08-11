@@ -28,6 +28,11 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
             : $("<div>").text(text).html();
     }
 
+    function multiline(value) {
+        const safe = esc(value || "—");
+        return safe.replace(/\r?\n/g, "<br>");
+    }
+
     function call(method, args = {}, freezeMessage = "") {
         return frappe.call({
             method,
@@ -42,9 +47,9 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         const style = document.createElement("style");
         style.id = "almdina-production-settings-style";
         style.textContent = `
-            .aps-shell{direction:rtl;display:grid;gap:14px;max-width:1120px;padding-bottom:30px}.aps-hero{padding:20px;border:1px solid var(--border-color,#e5e7eb);border-radius:16px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f7f9fb))}.aps-hero h2{margin:0 0 6px;font-size:21px;font-weight:800}.aps-hero p{margin:0;color:var(--text-muted,#6b7280);line-height:1.8}.aps-sections{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.aps-section{display:flex;flex-direction:column;padding:16px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:var(--fg-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.035)}.aps-section-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.aps-section h3{margin:0;font-size:17px;font-weight:800}.aps-section-desc{margin:5px 0 13px;color:var(--text-muted,#6b7280);font-size:12px;line-height:1.7}.aps-permission{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#eef5ff;color:#285f9e}.aps-permission.readonly{background:#f2f3f5;color:#5b6570}.aps-values{display:grid;gap:8px;flex:1}.aps-value{padding:9px;border-radius:10px;background:var(--subtle-fg,#f7f8fa)}.aps-value span{display:block;color:var(--text-muted,#6b7280);font-size:10px;font-weight:700}.aps-value b{display:block;margin-top:4px;font-size:13px;overflow-wrap:anywhere}.aps-actions{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aps-actions .btn{min-height:39px;border-radius:9px;font-weight:700}.aps-note{padding:12px 14px;border-radius:12px;background:#f1f7ff;border:1px solid #cfe3ff;color:#28527a;font-size:12px;line-height:1.8}.aps-empty,.aps-error{padding:38px 18px;text-align:center;border:1px dashed var(--border-color,#d5dce3);border-radius:14px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}.aps-error{border-style:solid;border-color:#f5b7b1;background:#fff5f4;color:#9f2d20}.aps-audit{display:grid;gap:8px;max-height:480px;overflow:auto}.aps-audit-item{padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:11px}.aps-audit-head{display:flex;justify-content:space-between;gap:8px;font-weight:800}.aps-audit-meta{margin-top:5px;color:var(--text-muted,#6b7280);font-size:12px}
-            @media(max-width:950px){.aps-sections{grid-template-columns:1fr 1fr}.aps-section:last-child{grid-column:span 2}}
-            @media(max-width:620px){.aps-sections{grid-template-columns:1fr}.aps-section:last-child{grid-column:span 1}.aps-section-head{display:block}.aps-permission{margin-top:8px}.aps-actions .btn{width:100%}}
+            .aps-shell{direction:rtl;display:grid;gap:14px;max-width:1120px;padding-bottom:30px}.aps-hero{padding:20px;border:1px solid var(--border-color,#e5e7eb);border-radius:16px;background:linear-gradient(135deg,var(--fg-color,#fff),var(--subtle-fg,#f7f9fb))}.aps-hero h2{margin:0 0 6px;font-size:21px;font-weight:800}.aps-hero p{margin:0;color:var(--text-muted,#6b7280);line-height:1.8}.aps-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.aps-section{display:flex;flex-direction:column;padding:16px;border:1px solid var(--border-color,#e5e7eb);border-radius:15px;background:var(--fg-color,#fff);box-shadow:0 2px 8px rgba(0,0,0,.035)}.aps-section-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.aps-section h3{margin:0;font-size:17px;font-weight:800}.aps-section-desc{margin:5px 0 13px;color:var(--text-muted,#6b7280);font-size:12px;line-height:1.7}.aps-permission{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#eef5ff;color:#285f9e}.aps-permission.readonly{background:#f2f3f5;color:#5b6570}.aps-values{display:grid;gap:8px;flex:1}.aps-value{padding:9px;border-radius:10px;background:var(--subtle-fg,#f7f8fa)}.aps-value span{display:block;color:var(--text-muted,#6b7280);font-size:10px;font-weight:700}.aps-value b{display:block;margin-top:4px;font-size:13px;line-height:1.65;overflow-wrap:anywhere}.aps-actions{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#edf0f2)}.aps-actions .btn{min-height:39px;border-radius:9px;font-weight:700}.aps-note{padding:12px 14px;border-radius:12px;background:#f1f7ff;border:1px solid #cfe3ff;color:#28527a;font-size:12px;line-height:1.8}.aps-empty,.aps-error{padding:38px 18px;text-align:center;border:1px dashed var(--border-color,#d5dce3);border-radius:14px;color:var(--text-muted,#6b7280);background:var(--subtle-fg,#fafafa)}.aps-error{border-style:solid;border-color:#f5b7b1;background:#fff5f4;color:#9f2d20}.aps-audit{display:grid;gap:8px;max-height:480px;overflow:auto}.aps-audit-item{padding:11px;border:1px solid var(--border-color,#e5e7eb);border-radius:11px}.aps-audit-head{display:flex;justify-content:space-between;gap:8px;font-weight:800}.aps-audit-meta{margin-top:5px;color:var(--text-muted,#6b7280);font-size:12px}
+            @media(max-width:950px){.aps-sections{grid-template-columns:1fr 1fr}}
+            @media(max-width:620px){.aps-sections{grid-template-columns:1fr}.aps-section-head{display:block}.aps-permission{margin-top:8px}.aps-actions .btn{width:100%}}
         `;
         document.head.appendChild(style);
     }
@@ -77,7 +82,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
             <div class="aps-shell">
                 <section class="aps-hero">
                     <h2>${__("الإعدادات الافتراضية للمعمل")}</h2>
-                    <p>${__("تُطبق القيم على الطلبات الجديدة. كل قسم له صلاحية مستقلة، وكل تعديل يُسجل مع المستخدم والحقول المتغيرة.")}</p>
+                    <p>${__("تُطبق القيم على الطلبات الجديدة وعلى أوراق الطباعة حسب القسم. كل قسم له صلاحية مستقلة، وكل تعديل يُسجل مع المستخدم والحقول المتغيرة.")}</p>
                 </section>
                 <section class="aps-sections">
                     ${sectionCard("cutting", __("القص والمحسّن"), __("الهندسة الافتراضية وخوارزمية التوزيع وحدود البحث."), [
@@ -100,8 +105,14 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
                         [__("تجاوز تسلسل المراحل"), values.allow_stage_override ? __("مسموح") : __("غير مسموح")],
                         [__("اعتماد قطع غير موزعة"), values.allow_unplaced_approval ? __("مسموح") : __("غير مسموح")],
                     ])}
+                    ${sectionCard("print_identity", __("هوية أوراق الطباعة"), __("تظهر هذه البيانات تلقائيًا في طباعة القياسات وخطة القص وفاتورة الزبون."), [
+                        [__("اسم المعمل"), esc(values.print_factory_name || "—")],
+                        [__("لمحة عن المعمل"), esc(values.print_factory_description || "—")],
+                        [__("العنوان"), esc(values.print_factory_address || "—")],
+                        [__("أرقام التواصل"), multiline(values.print_factory_contacts)],
+                    ])}
                 </section>
-                <div class="aps-note">${__("لا يمكن تعديل سجل الإعدادات مباشرة من Form. جميع التغييرات تمر عبر هذه الواجهة وسياسة الصلاحيات وسجل التدقيق.")}</div>
+                <div class="aps-note">${__("أرقام التواصل تقبل عدة أسطر؛ اكتب مثلًا: أرضي: … ثم موبايل: … ثم واتس اب: … . لا يمكن تعديل سجل الإعدادات مباشرة من Form، وجميع التغييرات تمر عبر سياسة الصلاحيات وسجل التدقيق.")}</div>
             </div>
         `);
         $body.find(".aps-edit").on("click", event => openSectionDialog(event.currentTarget.dataset.section));
@@ -137,13 +148,25 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
             {fieldname:"default_special_cnc_fee_usd",fieldtype:"Currency",label:__("رسم CNC الخاص / قطعة"),default:values.default_special_cnc_fee_usd,reqd:1},
             {fieldname:"default_special_manual_edge_fee_usd",fieldtype:"Currency",label:__("رسم القشاط اليدوي / قطعة"),default:values.default_special_manual_edge_fee_usd,reqd:1},
             {fieldname:"default_special_margin_percent",fieldtype:"Percent",label:__("هامش الدرف الخاصة"),default:values.default_special_margin_percent,reqd:1},
+        ] : section === "print_identity" ? [
+            {fieldname:"print_factory_name",fieldtype:"Data",label:__("اسم المعمل"),default:values.print_factory_name,reqd:1},
+            {fieldname:"print_factory_description",fieldtype:"Small Text",label:__("لمحة مختصرة عن المعمل"),default:values.print_factory_description,reqd:1},
+            {fieldname:"print_factory_address",fieldtype:"Small Text",label:__("العنوان"),default:values.print_factory_address,reqd:1},
+            {fieldname:"print_factory_contacts",fieldtype:"Small Text",label:__("أرقام التواصل"),description:__("سطر مستقل لكل رقم: أرضي / موبايل / واتس اب."),default:values.print_factory_contacts || ""},
         ] : [
             {fieldname:"default_production_routing",fieldtype:"Select",label:__("مسار الإنتاج الافتراضي (اختياري)"),options:["", ...(current.routing_options || [])].join("\n"),default:values.default_production_routing || "",reqd:0},
             {fieldname:"allow_stage_override",fieldtype:"Check",label:__("السماح بتجاوز تسلسل المراحل"),default:values.allow_stage_override},
             {fieldname:"allow_unplaced_approval",fieldtype:"Check",label:__("السماح الاستثنائي باعتماد قطع غير موزعة"),default:values.allow_unplaced_approval},
         ];
+        const dialogTitle = section === "cutting"
+            ? __("تعديل القص والمحسّن")
+            : section === "costing"
+                ? __("تعديل التكلفة الافتراضية")
+                : section === "print_identity"
+                    ? __("تعديل هوية أوراق الطباعة")
+                    : __("تعديل ضوابط الإنتاج");
         const dialog = new frappe.ui.Dialog({
-            title: section === "cutting" ? __("تعديل القص والمحسّن") : section === "costing" ? __("تعديل التكلفة الافتراضية") : __("تعديل ضوابط الإنتاج"),
+            title: dialogTitle,
             fields,
             primary_action_label: __("حفظ التغييرات"),
             primary_action(payload) {

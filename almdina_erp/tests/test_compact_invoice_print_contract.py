@@ -76,7 +76,9 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("function sharedHeader", source)
         self.assertIn("function sharedInfo", source)
         self.assertIn("function measurementTable", source)
-        self.assertIn("function documentHtml(frm, mode)", source)
+        self.assertIn("function documentHtml(frm, mode, printIdentity = null)", source)
+        self.assertIn("function factoryIdentityHtml", source)
+        self.assertIn("AlmdinaFactoryPrintIdentity", source)
         self.assertIn('mode === "invoice" ? invoiceSummary(frm) : ""', source)
         self.assertIn('mode === "invoice" ? invoiceLines(frm) : []', source)
         self.assertIn(

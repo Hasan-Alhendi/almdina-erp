@@ -149,7 +149,7 @@ def test_measurement_table_fits_the_form_without_horizontal_scrolling():
         "scrollbar-gutter:stable",
         ".dco-fast-table .dco-col-notes",
         "width:auto !important",
-        ".dco-fast-table .dco-col-edges { width:188px !important; }",
+        ".dco-fast-table .dco-col-edges{width:188px !important;}",
         "@media (max-width:900px)",
         "@media (max-width:720px)",
     ]
@@ -178,7 +178,6 @@ def test_edge_cells_use_compact_visual_side_indicators_and_accessibility_labels(
         "border-top:3px solid currentColor",
         "border-bottom:3px solid currentColor",
         'button.setAttribute("aria-label", label)',
-        "القشاط والتدوير بنقرة واحدة",
     ]
     missing = [fragment for fragment in required if fragment not in source]
     assert not missing, f"Missing compact visual edge-control fragments: {missing}"

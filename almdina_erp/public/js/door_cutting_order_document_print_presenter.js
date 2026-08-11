@@ -58,6 +58,18 @@
         return window.AlmdinaOrderDocumentPrintTheme || null;
     }
 
+    function printIdentityApi() {
+        return window.AlmdinaFactoryPrintIdentity || null;
+    }
+
+    async function resolvePrintIdentity() {
+        const api = printIdentityApi();
+        if (api && typeof api.get === "function") {
+            return Promise.resolve(api.get());
+        }
+        return api && typeof api.fallback === "function" ? api.fallback() : {};
+    }
+
     async function ensureProfiles(frm) {
         const module = edgeBandingApi();
         if (module && typeof module.ensureProfiles === "function") {
@@ -209,11 +221,33 @@
         }).join("");
     }
 
-    function sharedHeader(frm, mode) {
+    function contactsHtml(value) {
+        const lines = String(value || "")
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+        if (!lines.length) return "";
+        return `<div class="factory-contacts">${lines.map(line => `<span>${esc(line)}</span>`).join("")}</div>`;
+    }
+
+    function factoryIdentityHtml(printIdentity) {
+        const identity = printIdentity || {};
+        return `<div class="factory-identity">
+            <div class="factory-name">${esc(identity.print_factory_name || "")}</div>
+            <div class="factory-description">${esc(identity.print_factory_description || "")}</div>
+            <div class="factory-address">${esc(identity.print_factory_address || "")}</div>
+            ${contactsHtml(identity.print_factory_contacts)}
+        </div>`;
+    }
+
+    function sharedHeader(frm, mode, printIdentity) {
         const title = mode === "invoice" ? "عرض سعر الطلب" : "جدول قياسات الطلب";
         return `<div class="header">
-            <div><h1>${title}</h1><div class="muted">يظهر في عمود القشاط التخصيص الاستثنائي فقط</div></div>
-            <div class="header-order"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div>
+            ${factoryIdentityHtml(printIdentity)}
+            <div class="document-heading">
+                <h1>${title}</h1>
+                <div class="header-order"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div>
+            </div>
         </div>`;
     }
 
@@ -255,12 +289,14 @@
             : shapePrintCss();
     }
 
-    function documentHtml(frm, mode) {
+    function documentHtml(frm, mode, printIdentity = null) {
+        const api = printIdentityApi();
+        const identity = printIdentity || (api && typeof api.fallback === "function" ? api.fallback() : {});
         const lines = mode === "invoice" ? invoiceLines(frm) : [];
         const total = mode === "invoice" ? invoiceTotal(frm, lines) : 0;
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${mode === "invoice" ? "فاتورة" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss(mode)}</style></head><body>
-            ${sharedHeader(frm, mode)}
+            ${sharedHeader(frm, mode, identity)}
             ${sharedInfo(frm)}
             ${mode === "invoice" ? invoiceSummary(frm) : ""}
             <div class="title">جدول القياسات</div>
@@ -304,11 +340,14 @@
     }
 
     async function printDocument(frm, mode) {
-        const identity = captureIdentity(frm);
-        if (!isCurrent(frm, identity)) return false;
-        await ensureProfiles(frm);
-        if (!isCurrent(frm, identity)) return false;
-        printHtml(documentHtml(frm, mode));
+        const documentIdentity = captureIdentity(frm);
+        if (!isCurrent(frm, documentIdentity)) return false;
+        const [, printIdentity] = await Promise.all([
+            ensureProfiles(frm),
+            resolvePrintIdentity(),
+        ]);
+        if (!isCurrent(frm, documentIdentity)) return false;
+        printHtml(documentHtml(frm, mode, printIdentity));
         return true;
     }
 

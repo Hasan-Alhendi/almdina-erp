@@ -2,6 +2,7 @@
     "use strict";
 
     const DEFAULT_HISTORY_LIMIT = 80;
+    let activeState = null;
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -20,16 +21,38 @@
     }
 
     function createState(elements = []) {
-        return {
+        activeState = {
             elements: clone(elementsOf(elements)),
             undo: [],
             redo: [],
             selectedId: "",
             hasChanges: false,
         };
+        return activeState;
+    }
+
+    function activateState(state) {
+        activeState = state && typeof state === "object" ? state : null;
+        return activeState;
+    }
+
+    function publishState(state) {
+        if (state && typeof state === "object" && activeState !== state) {
+            activeState = state;
+        }
+        return state;
+    }
+
+    function getActiveState() {
+        return activeState;
+    }
+
+    function clearActiveState(state = null) {
+        if (!state || activeState === state) activeState = null;
     }
 
     function snapshot(state, elements = state && state.elements, limit = DEFAULT_HISTORY_LIMIT) {
+        publishState(state);
         const safeLimit = Math.max(1, Math.floor(Number(limit) || DEFAULT_HISTORY_LIMIT));
         const undo = historyOf(state && state.undo).slice();
         undo.push(clone(elementsOf(elements)));
@@ -42,6 +65,7 @@
     }
 
     function addElement(state, element, limit = DEFAULT_HISTORY_LIMIT) {
+        publishState(state);
         if (!element || typeof element !== "object" || !element.id) {
             return result(false);
         }
@@ -58,6 +82,7 @@
     }
 
     function selectElement(state, elementId) {
+        publishState(state);
         const selected = elementsOf(state && state.elements).find(
             element => String(element && element.id) === String(elementId || "")
         ) || null;
@@ -67,6 +92,7 @@
     }
 
     function deleteSelected(state, limit = DEFAULT_HISTORY_LIMIT) {
+        publishState(state);
         const selectedId = String(state && state.selectedId || "");
         const elements = elementsOf(state && state.elements);
         const index = elements.findIndex(
@@ -84,6 +110,7 @@
     }
 
     function clear(state, limit = DEFAULT_HISTORY_LIMIT) {
+        publishState(state);
         const elements = elementsOf(state && state.elements);
         if (!elements.length) return result(false);
         const history = snapshot(state, elements, limit);
@@ -103,6 +130,7 @@
     }
 
     function undo(state) {
+        publishState(state);
         const past = historyOf(state && state.undo).slice();
         if (!past.length) return result(false);
         const elements = clone(elementsOf(past.pop()));
@@ -118,6 +146,7 @@
     }
 
     function redo(state) {
+        publishState(state);
         const future = historyOf(state && state.redo).slice();
         if (!future.length) return result(false);
         const elements = clone(elementsOf(future.pop()));
@@ -135,6 +164,9 @@
     window.AlmdinaSketchHistory = Object.freeze({
         DEFAULT_HISTORY_LIMIT,
         createState,
+        activateState,
+        getActiveState,
+        clearActiveState,
         snapshot,
         addElement,
         selectElement,
