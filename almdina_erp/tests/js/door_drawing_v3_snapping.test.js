@@ -64,6 +64,20 @@ assert.equal(strictNoBreak.axis, "horizontal");
 assert.equal(strictNoBreak.snapped, false, "A nearby target must never break the strict Shift axis constraint");
 assert.equal(strictNoBreak.point.y, 0);
 
+const forcedVerticalDocument = D.addObject(
+    D.create({ widthMm: 500, heightMm: 500 }),
+    G.line("vertical-target", G.point(50, 175), G.point(100, 175))
+);
+const forcedVertical = S.resolvePoint(forcedVerticalDocument, G.point(56, 171), {
+    anchor: G.point(50, 50),
+    forcedAxis: "vertical",
+    viewportScale: 1,
+    snapPx: 14,
+});
+assert.equal(forcedVertical.axis, "vertical");
+assert.equal(forcedVertical.snapped, true, "Shape radius handles may force an axis without requiring Shift");
+assert.deepEqual(forcedVertical.point, G.point(50, 175));
+
 const arcEndpoint = S.resolveArcEndpoint(document, G.point(600.5, 299.5), G.point(600, 200), 100, {
     viewportScale: 1,
     snapPx: 14,

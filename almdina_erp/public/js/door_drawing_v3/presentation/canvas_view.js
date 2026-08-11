@@ -4,7 +4,8 @@
     const root = window.AlmdinaDoorDrawingV3 = window.AlmdinaDoorDrawingV3 || Object.create(null);
     const G = root.Geometry;
     const D = root.DocumentModel;
-    if (!G || !D) throw new Error("Door Drawing V3 domain must load before canvas view");
+    const Handles = root.ShapeHandles;
+    if (!G || !D || !Handles) throw new Error("Door Drawing V3 application modules must load before canvas view");
 
     const MIN_SCALE = 0.02;
     const MAX_SCALE = 20;
@@ -82,6 +83,13 @@
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} ${sweep} ${end.x} ${end.y}`;
     }
 
+    function handlesMarkup(c, object) {
+        return Handles.handlesFor(object).map(handle => {
+            const p = worldToScreen(c, handle.point);
+            return `<g data-ddv3-handle="${esc(handle.role)}" data-ddv3-handle-kind="${esc(handle.kind)}" class="ddv3-handle ddv3-handle-${esc(handle.kind)}"><circle cx="${p.x}" cy="${p.y}" r="11" class="ddv3-handle-hit"/><rect x="${p.x - 3.5}" y="${p.y - 3.5}" width="7" height="7" rx="${handle.kind === "move" ? 3.5 : 1}" class="ddv3-handle-square"/></g>`;
+        }).join("");
+    }
+
     function objectMarkup(c, object, selected = false, draft = false) {
         const cls = `ddv3-line${selected ? " is-selected" : ""}${draft ? " is-draft" : ""}`;
         const data = draft ? "" : ` data-ddv3-object="${esc(object.id)}"`;
@@ -92,7 +100,6 @@
             if (!draft) out.push(`<line class="${hit}"${data} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${HIT_PX}"/>`);
             out.push(`<line class="${cls}"${data} x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`);
             if (selected || draft) out.push(measure((a.x + b.x) / 2, (a.y + b.y) / 2 + 18, `${fmt(G.lineLength(object), 3)} mm`, selected));
-            if (selected) for (const [role, p] of [["start", a], ["end", b]]) out.push(`<g data-ddv3-handle="${role}" class="ddv3-handle"><circle cx="${p.x}" cy="${p.y}" r="10" class="ddv3-handle-hit"/><rect x="${p.x - 3}" y="${p.y - 3}" width="6" height="6" class="ddv3-handle-square"/></g>`);
         } else if (object.type === "rectangle") {
             const g = object.geometry, p = worldToScreen(c, g.origin), w = g.widthMm * c.viewport.scale, h = g.heightMm * c.viewport.scale;
             if (!draft) out.push(`<rect class="${hit}"${data} x="${p.x}" y="${p.y - h}" width="${w}" height="${h}" stroke-width="${HIT_PX}"/>`);
@@ -109,6 +116,7 @@
             out.push(`<path class="${cls}"${data} d="${path}"/>`);
             if (selected || draft) out.push(measure(mid.x, mid.y + 18, `R ${fmt(object.geometry.radiusMm, 3)} · L ${fmt(G.arcLength(object), 3)} mm`, selected));
         }
+        if (selected && !draft) out.push(handlesMarkup(c, object));
         return out.join("");
     }
 
@@ -130,9 +138,14 @@
     function grid(...fields) { return `<div class="ddv3-field-grid${fields.length === 1 ? " is-single" : ""}">${fields.join("")}</div>`; }
     function section(title, body) { return `<section class="ddv3-panel-section"><div class="ddv3-section-title">${esc(title)}</div>${body}</section>`; }
 
+    function displayObject(c) {
+        if (c.previewObject && String(c.previewObject.id) === String(c.selectedId)) return c.previewObject;
+        return D.objectById(c.history.current(), c.selectedId);
+    }
+
     function renderInspector(c) {
-        const object = D.objectById(c.history.current(), c.selectedId);
-        if (!object) { c.inspector.innerHTML = `<div class="ddv3-empty" dir="rtl"><b>الخصائص</b><span>${c.tool === "arc" ? "القوس: انقر المركز ثم نقطة نصف القطر ثم نهاية القوس." : "حدد عنصرًا لتعديل أبعاده وموقعه بدقة بالميليمتر. النقاط تنجذب تلقائيًا عند الاقتراب منها."}</span></div>`; return; }
+        const object = displayObject(c);
+        if (!object) { c.inspector.innerHTML = `<div class="ddv3-empty" dir="rtl"><b>الخصائص</b><span>${c.tool === "arc" ? "القوس: انقر المركز ثم نقطة نصف القطر ثم نهاية القوس." : "حدد عنصرًا لتعديل أبعاده وموقعه بدقة بالميليمتر. النقاط الزرقاء تغيّر العنصر مباشرة وتظهر القياسات هنا لحظيًا."}</span></div>`; return; }
         const g = object.geometry;
         let html = `<section class="ddv3-panel-section"><div class="ddv3-panel-title"><strong>${esc(object.type[0].toUpperCase() + object.type.slice(1))}</strong><span>⋯</span></div></section>`;
         if (object.type === "line") html += section("Position", grid(field("X", "x", fmt(g.start.x, 3), "mm"), field("Y", "y", fmt(g.start.y, 3), "mm")) + grid(field("Rotation", "angle", fmt(G.lineAngle(object), 2), "°"))) + section("Dimensions", grid(field("Length", "length", fmt(G.lineLength(object), 3), "mm")));
@@ -162,5 +175,5 @@
         renderInspector(c);
     }
 
-    root.ShapeView = Object.freeze({ MIN_SCALE, MAX_SCALE, shell, viewport, worldToScreen, screenToWorld, localPoint, eventWorld, render, renderInspector, arcPath, snapMarkup });
+    root.ShapeView = Object.freeze({ MIN_SCALE, MAX_SCALE, shell, viewport, worldToScreen, screenToWorld, localPoint, eventWorld, render, renderInspector, arcPath, snapMarkup, handlesMarkup, displayObject });
 })();

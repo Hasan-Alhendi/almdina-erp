@@ -90,15 +90,19 @@
         return best;
     }
 
-    function axisLock(anchor, candidate) {
+    function axisLock(anchor, candidate, forcedAxis = null) {
         const start = G.point(anchor && anchor.x, anchor && anchor.y);
         const raw = G.point(candidate && candidate.x, candidate && candidate.y);
         const dx = raw.x - start.x;
         const dy = raw.y - start.y;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            return Object.freeze({ axis: "horizontal", anchor: start, point: G.point(raw.x, start.y) });
-        }
-        return Object.freeze({ axis: "vertical", anchor: start, point: G.point(start.x, raw.y) });
+        const axis = forcedAxis === "horizontal" || forcedAxis === "vertical"
+            ? forcedAxis
+            : (Math.abs(dx) >= Math.abs(dy) ? "horizontal" : "vertical");
+        return Object.freeze({
+            axis,
+            anchor: start,
+            point: axis === "horizontal" ? G.point(raw.x, start.y) : G.point(start.x, raw.y),
+        });
     }
 
     function resolvePoint(document, candidate, options = {}) {
@@ -106,13 +110,16 @@
         const toleranceMm = worldTolerance(options.viewportScale, options.snapPx);
         const anchors = options.anchors || collectAnchors(document, options);
         const reference = options.anchor ? G.point(options.anchor.x, options.anchor.y) : null;
-        const useAxisLock = Boolean(options.axisLock && options.shiftKey && reference);
+        const forcedAxis = options.forcedAxis === "horizontal" || options.forcedAxis === "vertical"
+            ? options.forcedAxis
+            : null;
+        const useAxisLock = Boolean(reference && (forcedAxis || (options.axisLock && options.shiftKey)));
         let point = raw;
         let axis = null;
         let snapped = null;
 
         if (useAxisLock) {
-            const locked = axisLock(reference, raw);
+            const locked = axisLock(reference, raw, forcedAxis);
             point = locked.point;
             axis = locked.axis;
             const compatible = target => axis === "horizontal"

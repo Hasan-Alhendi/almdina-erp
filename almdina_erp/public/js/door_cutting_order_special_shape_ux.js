@@ -9,6 +9,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/history.js",
         "/assets/almdina_erp/js/door_drawing_v3/infrastructure/persistence_adapter.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/snapping.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/shape_handles.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
     ]);
@@ -35,6 +36,7 @@
         __doorDrawingV3: true,
         __doorDrawingV3Shapes: true,
         __doorDrawingV3Snapping: true,
+        __doorDrawingV3Handles: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,
