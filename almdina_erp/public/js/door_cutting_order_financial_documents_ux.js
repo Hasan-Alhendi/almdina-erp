@@ -166,16 +166,11 @@
                     <th>اعتمده</th><th>تاريخ الاعتماد</th><th class="right">ملاحظة</th>
                 </tr></thead><tbody>
                     ${rows.map(row => `<tr>
-                        <td>${esc(row.piece_no)}</td>
-                        <td>${qty(row.quantity)}</td>
-                        <td>${money(row.estimated_unit_usd)}</td>
-                        <td>${money(row.approved_unit_usd)}</td>
-                        <td>${money(row.final_unit_usd)}</td>
-                        <td>${money(row.variance_total_usd)}</td>
-                        <td>${esc(row.status)}</td>
-                        <td>${esc(row.approved_by)}</td>
-                        <td>${esc(row.approved_on)}</td>
-                        <td class="right">${esc(row.note)}</td>
+                        <td>${esc(row.piece_no)}</td><td>${qty(row.quantity)}</td>
+                        <td>${money(row.estimated_unit_usd)}</td><td>${money(row.approved_unit_usd)}</td>
+                        <td>${money(row.final_unit_usd)}</td><td>${money(row.variance_total_usd)}</td>
+                        <td>${esc(row.status)}</td><td>${esc(row.approved_by)}</td>
+                        <td>${esc(row.approved_on)}</td><td class="right">${esc(row.note)}</td>
                     </tr>`).join("")}
                 </tbody></table>
             </section>`;
@@ -194,8 +189,7 @@
             *{box-sizing:border-box}
             body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:rtl;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
             header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:10px;border-bottom:2px solid #172033}
-            header h1{font-size:21px;margin:0 0 5px;font-weight:900}
-            header p{margin:0;color:#66717d;line-height:1.6}
+            header h1{font-size:21px;margin:0 0 5px;font-weight:900} header p{margin:0;color:#66717d;line-height:1.6}
             .classification{padding:7px 10px;border:1px solid #9f2d2d;background:#fff0f0;color:#8c1d1d;border-radius:7px;font-weight:900;white-space:nowrap}
             .financial-meta,.financial-summary{display:grid;gap:7px;margin-top:10px}
             .financial-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -205,20 +199,14 @@
             .financial-meta-item span,.financial-summary-card span,.operations-grid span{display:block;color:#697582;font-size:8px;margin-bottom:3px}
             .financial-meta-item b,.financial-summary-card b,.operations-grid b{font-size:11px;word-break:break-word}
             .financial-summary-card{background:#f7fafc}
-            section{margin-top:12px;break-inside:avoid}
-            h2{font-size:13px;margin:0 0 6px;padding:6px 8px;background:#eef2f6;border-right:3px solid #273b50}
-            table{width:100%;border-collapse:collapse;font-size:9px}
-            th,td{border:1px solid #aeb8c2;padding:4.5px;text-align:center;vertical-align:middle}
-            th{background:#edf1f5;font-weight:900}
-            td.right,th.right{text-align:right}
-            td small{display:block;color:#66717d;font-size:7.5px;margin-top:2px;line-height:1.5}
-            tr.strong td{font-weight:900;background:#f5f7f9}
-            table.compact{max-width:620px}
+            section{margin-top:12px;break-inside:avoid} h2{font-size:13px;margin:0 0 6px;padding:6px 8px;background:#eef2f6;border-right:3px solid #273b50}
+            table{width:100%;border-collapse:collapse;font-size:9px} th,td{border:1px solid #aeb8c2;padding:4.5px;text-align:center;vertical-align:middle}
+            th{background:#edf1f5;font-weight:900} td.right,th.right{text-align:right} td small{display:block;color:#66717d;font-size:7.5px;margin-top:2px;line-height:1.5}
+            tr.strong td{font-weight:900;background:#f5f7f9} table.compact{max-width:620px}
             .operations-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
             .financial-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
             .financial-totals>div{padding:10px;border:1px solid #273b50;border-radius:8px;background:#f4f7fa}
-            .financial-totals span{display:block;font-size:8px;color:#66717d;margin-bottom:4px}
-            .financial-totals b{font-size:14px;direction:ltr;display:block;text-align:right}
+            .financial-totals span{display:block;font-size:8px;color:#66717d;margin-bottom:4px}.financial-totals b{font-size:14px;direction:ltr;display:block;text-align:right}
             .notes{margin-top:10px;border:1px solid #cfd6de;border-radius:7px;padding:8px;min-height:34px;line-height:1.7}
             footer{display:flex;justify-content:space-between;gap:12px;margin-top:12px;padding-top:6px;border-top:1px solid #b9c1ca;color:#687481;font-size:8px}
             @media print{section{break-inside:auto}thead{display:table-header-group}tr{break-inside:avoid}}
@@ -228,22 +216,14 @@
     function documentHtml(payload) {
         const internal = payload.kind === "internal_cost_report";
         return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss(internal)}</style></head><body>
-            <header>
-                <div><h1>${esc(payload.title)}</h1><p>${esc(payload.subtitle || "")}</p></div>
-                ${internal ? `<div class="classification">${esc(payload.classification || "داخلي")}</div>` : ""}
-            </header>
-            ${metaHtml(payload)}
-            ${summaryHtml(payload)}
+            <header><div><h1>${esc(payload.title)}</h1><p>${esc(payload.subtitle || "")}</p></div>${internal ? `<div class="classification">${esc(payload.classification || "داخلي")}</div>` : ""}</header>
+            ${metaHtml(payload)}${summaryHtml(payload)}
             ${internal ? costBreakdownHtml(payload.cost_breakdown) : measurementsHtml(payload.measurements)}
             ${internal ? operationsHtml(payload.operations) : invoiceLinesHtml(payload.lines)}
             ${internal ? specialPricesHtml(payload.special_prices) : ""}
             ${totalsHtml(payload.totals)}
             ${payload.notes ? `<div class="notes"><b>ملاحظات الطلب:</b> ${esc(payload.notes)}</div>` : ""}
-            <footer>
-                <span>أنشئ بواسطة: ${esc(payload.generated_by || "—")}</span>
-                <span>تاريخ الإنشاء: ${esc(payload.generated_on || "—")}</span>
-                <span>المراجعة: ${esc(payload.source_revision || "1")}</span>
-            </footer>
+            <footer><span>أنشئ بواسطة: ${esc(payload.generated_by || "—")}</span><span>تاريخ الإنشاء: ${esc(payload.generated_on || "—")}</span><span>المراجعة: ${esc(payload.source_revision || "1")}</span></footer>
         </body></html>`;
     }
 
@@ -279,6 +259,12 @@
         setTimeout(cleanup, 120000);
     }
 
+    function handledRejection(message) {
+        const error = new Error(message);
+        error.__almdinaHandled = true;
+        return Promise.reject(error);
+    }
+
     function printFinancialDocument(frm, kind) {
         const capability = requiredCapability(kind);
         const canPrint = kind === "customer_invoice"
@@ -286,22 +272,22 @@
             : can(frm, "view_costs") && can(frm, capability);
         if (!canPrint) {
             frappe.msgprint(__("ليس لديك صلاحية طباعة هذا المستند."));
-            return Promise.reject(new Error(`Missing capability: ${capability}`));
+            return handledRejection("Missing print capability");
         }
         if (frm.is_new()) {
             frappe.msgprint(__("احفظ الطلب قبل طباعة المستند."));
-            return Promise.reject(new Error("Unsaved order"));
+            return handledRejection("Unsaved order");
         }
         if (kind === "customer_invoice") {
             const costApi = window.AlmdinaOrderCostUX;
-            const pending = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
+            const pendingCustomEdgePriceLabels = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
                 ? costApi.pendingCustomEdgePriceLabels(frm)
                 : [];
-            if (pending.length) {
+            if (pendingCustomEdgePriceLabels.length) {
                 frappe.msgprint(__(
-                    "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل طباعة الفاتورة. المتبقي: {0}."
-                ).replace("{0}", pending.join("، ")));
-                return Promise.reject(new Error("Missing custom edge prices"));
+                    "لا يمكن طباعة فاتورة غير مكتملة. أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة أولًا. المتبقي: {0}."
+                ).replace("{0}", pendingCustomEdgePriceLabels.join("، ")));
+                return handledRejection("Missing custom edge prices");
             }
         }
 
@@ -361,7 +347,11 @@
             primary: true,
             visible: !frm.is_new() && can(frm, "print_customer_invoice"),
             handler: () => {
-                printFinancialDocument(frm, "customer_invoice").catch(() => undefined);
+                printFinancialDocument(frm, "customer_invoice").catch(error => {
+                    if (!error || !error.__almdinaHandled) {
+                        console.error("Customer invoice action failed", error);
+                    }
+                });
             },
         });
         ensureActionButton(actions, {
@@ -370,7 +360,11 @@
             primary: false,
             visible: can(frm, "view_costs") && !frm.is_new() && can(frm, "print_internal_cost_report"),
             handler: () => {
-                printFinancialDocument(frm, "internal_cost_report").catch(() => undefined);
+                printFinancialDocument(frm, "internal_cost_report").catch(error => {
+                    if (!error || !error.__almdinaHandled) {
+                        console.error("Internal cost report action failed", error);
+                    }
+                });
             },
         });
     }
@@ -402,10 +396,10 @@
     }
 
     function secureLegacyGlobals(frm) {
+        // AlmdinaOrderCostUX is intentionally Object.freeze()'d. Never mutate it:
+        // doing so in strict mode aborts this module before the secure buttons bind.
         const costApi = window.AlmdinaOrderCostUX;
-        if (costApi && typeof costApi === "object") {
-            costApi.printInvoice = targetFrm => printFinancialDocument(resolvedForm(targetFrm) || frm, "customer_invoice");
-        }
+        void costApi;
 
         const previous = window.AlmdinaOrderDocumentPrint;
         if (previous && typeof previous === "object" && !previous.__secureFinancialDocuments) {
