@@ -87,3 +87,14 @@ def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observe
     assert "disconnectCompetingEdgeObservers(wrapper);" in refresh_body
     assert "disconnectCompetingEdgeObservers(root);" not in refresh_body
     assert "disconnectCompetingEdgeObservers(measurementRoot(frm))" not in refresh_body
+
+
+def test_special_edge_visual_highlight_is_scoped_to_special_rows() -> None:
+    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+
+    assert 'SPECIAL_EDGE_STYLE_ID = "dco-special-edge-visual-guard-css"' in operator_patch
+    assert "tr:not(.dco-special-row)" in operator_patch
+    assert ".is-edge-missing.is-checked" in operator_patch
+    assert "tr.dco-special-row" in operator_patch
+    assert "background:#b5701c!important" in operator_patch
+    assert "background:var(--primary,#2490ef)!important" in operator_patch
