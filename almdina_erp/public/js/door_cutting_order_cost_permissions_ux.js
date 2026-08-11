@@ -211,7 +211,7 @@
                     fieldname: "note",
                     fieldtype: "Small Text",
                     label: __("ملاحظة التسعير (اختياري)"),
-                    default: piece.clipped_corner_edge_price_note || "",
+                    default: piece.special_shape_price_note || "",
                 },
             ],
             (values) => {
@@ -419,18 +419,6 @@
         },
         almdina_edit_session_changed(frm) {
             setTimeout(() => apply(frm), 0);
-        },
-        before_save(frm) {
-            if (frm.is_new()) return;
-            const costApi = window.AlmdinaOrderCostUX;
-            const pending = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
-                ? costApi.pendingCustomEdgePriceLabels(frm)
-                : [];
-            if (!pending.length) return;
-            frappe.validated = false;
-            frappe.throw(__(
-                "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ. المتبقي: {0}."
-            ).replace("{0}", pending.join("، ")));
         },
     });
 
