@@ -173,6 +173,7 @@
         frappe.almdina.markOrderEditSessionRecalculated = markEditSessionRecalculated;
         frappe.almdina.invalidateOrderEditSessionRecalculation = invalidateEditSessionRecalculation;
         frappe.almdina.lockOrderEditSession = lockEditSession;
+        frappe.almdina.persistOrderEditCheckpoint = persistOrderEditCheckpoint;
     }
 
     function applyEditableFields(frm) {
@@ -184,7 +185,6 @@
     function syncPrimaryAction(frm) {
         if (!frm || !frm.page) return;
 
-        // New documents use ordinary Save without locking an edit session.
         if (frm.is_new()) {
             frm.save_disabled = false;
             if (frm.toolbar && typeof frm.toolbar.set_primary_action === "function") {
@@ -195,7 +195,6 @@
             return;
         }
 
-        // Active edit session: primary Save also locks/confirms the session.
         if (orderCanEdit(frm)) {
             frm.save_disabled = false;
             if (frm.toolbar) frm.toolbar.current_status = null;
@@ -204,7 +203,6 @@
             return;
         }
 
-        // Locked but eligible: put «تعديل» exactly where Save would be.
         if (canOfferEditSession(frm)) {
             frm.save_disabled = true;
             if (frm.toolbar) frm.toolbar.current_status = null;
@@ -223,8 +221,6 @@
 
     function schedulePrimaryActionSync(frm) {
         syncPrimaryAction(frm);
-        // Frappe's toolbar refresh can clear custom primary actions after our
-        // refresh handler; re-apply once the page actions settle.
         window.requestAnimationFrame(() => syncPrimaryAction(frm));
         window.setTimeout(() => syncPrimaryAction(frm), 0);
         window.setTimeout(() => syncPrimaryAction(frm), 120);
@@ -244,16 +240,12 @@
     function refreshDependentUx(frm) {
         const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         if (field && field.$wrapper) {
-            // Bypass the save-render HTML guard so lock/unlock actually replaces
-            // disabled inputs on already-entered piece rows.
             field.$wrapper._dcoForceHtmlReplace = true;
         }
         if (typeof frm.trigger === "function") {
             frm.trigger("almdina_edit_session_changed");
             frm.trigger("refresh_plan_controls");
         }
-        // Re-render custom HTML UIs after the session gate flips. Do not call
-        // refresh_field on pieces_fast_entry: it wipes the operator table.
         if (field && field.$wrapper) {
             field.$wrapper._dcoForceHtmlReplace = true;
         }
@@ -312,7 +304,6 @@
             return;
         }
 
-        // Save persists changes; after_save locks the session (Save = confirm).
         if (frm.is_dirty && frm.is_dirty()) {
             frm.__almdina_lock_after_save = true;
             return frm.save();
@@ -320,13 +311,29 @@
         lockEditSession(frm);
     }
 
-    // Backward-compatible alias used by older callers/tests.
+    async function persistOrderEditCheckpoint(frm) {
+        if (!frm || frm.is_new() || !orderCanEdit(frm)) return false;
+        if (!(frm.is_dirty && frm.is_dirty())) return true;
+        if (typeof frm.save !== "function") return false;
+
+        // Plan recalculation needs current piece rows in the database, but this
+        // automatic checkpoint must not mean "finish editing". The ordinary Save
+        // button still locks the session; only this explicit internal checkpoint
+        // preserves it across the save/reload cycle.
+        frm.__almdina_preserve_edit_session_after_save = true;
+        try {
+            await frm.save();
+        } finally {
+            frm.__almdina_preserve_edit_session_after_save = false;
+        }
+        return !(frm.is_dirty && frm.is_dirty());
+    }
+
     function confirmEditSession(frm) {
         return lockEditSession(frm);
     }
 
     function installEditSessionButtons(frm) {
-        // Primary action owns Edit/Save. Remove any leftover Confirm Edit buttons.
         removeEditSessionButtons(frm);
     }
 
@@ -408,7 +415,6 @@
 
     frappe.ui.form.on("Door Cutting Order", {
         onload(frm) {
-            // Restore an in-progress edit session for this order after reload/recalc.
             const entry = frm.doc && sessionEntry(frm.doc.name);
             if (entry && entry.active) {
                 frm.__almdina_edit_session = true;
@@ -419,7 +425,16 @@
             }
         },
         after_save(frm) {
-            // Any successful Save during an edit session confirms/locks it.
+            const preserveSession = Boolean(frm.__almdina_preserve_edit_session_after_save);
+            frm.__almdina_preserve_edit_session_after_save = false;
+            if (preserveSession && isEditSessionActive(frm)) {
+                frm.__almdina_lock_after_save = false;
+                applyEditableFields(frm);
+                schedulePrimaryActionSync(frm);
+                requestAnimationFrame(() => refreshDependentUx(frm));
+                return;
+            }
+
             const shouldLock = Boolean(frm.__almdina_lock_after_save)
                 || (isEditSessionActive(frm) && !frm.is_new() && canOfferEditSession(frm));
             frm.__almdina_lock_after_save = false;
@@ -470,7 +485,6 @@
             }
 
             if (isEditSessionActive(frm)) {
-                // After reload_doc (e.g. recalc), re-enable the piece grid.
                 requestAnimationFrame(() => refreshDependentUx(frm));
             }
         },
@@ -496,6 +510,7 @@
         isEditSessionActive,
         markEditSessionRecalculated,
         invalidateEditSessionRecalculation,
+        persistOrderEditCheckpoint,
         openRevision,
         enterEditSession,
         confirmEditSession,
