@@ -3,8 +3,8 @@
 
     const root = window.AlmdinaDoorDrawingV3 = window.AlmdinaDoorDrawingV3 || Object.create(null);
     const G = root.Geometry, D = root.DocumentModel, H = root.History, P = root.PersistenceAdapter;
-    const S = root.Snapping, Handles = root.ShapeHandles, V = root.ShapeView;
-    if (!G || !D || !H || !P || !S || !Handles || !V) throw new Error("Door Drawing V3 modules must load before editor stage 4");
+    const S = root.Snapping, Handles = root.ShapeHandles, Precision = root.PrecisionInput, V = root.ShapeView;
+    if (!G || !D || !H || !P || !S || !Handles || !Precision || !V) throw new Error("Door Drawing V3 modules must load before editor stage 5");
 
     const DRAG_PX = 4;
     let activeController = null, sequence = 0, clipboard = null;
@@ -12,11 +12,95 @@
     function nextId(prefix) { sequence += 1; return `${prefix}-${Date.now()}-${sequence}`; }
     function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
     function selected(c) { return D.objectById(c.history.current(), c.selectedId); }
-    function execute(c, doc, label) { c.history.execute(doc, label); c.dirty = true; V.render(c); }
     function clearSnap(c) { c.snapState = null; }
-    function select(c, id) { c.selectedId = id ? String(id) : ""; c.previewObject = null; clearSnap(c); V.render(c); }
-    function clearDraft(c) { c.draftStart = null; c.draftObject = null; c.arcDraft = null; clearSnap(c); }
-    function setTool(c, tool) { if (c.readOnly) return; c.tool = ["line", "rectangle", "circle", "arc"].includes(tool) ? tool : "select"; clearDraft(c); V.render(c); }
+
+    function precisionContext(c) {
+        if (c.clickDraft) return Object.freeze({ tool: c.clickDraft.tool, stage: "size" });
+        if (c.arcDraft) return Object.freeze({ tool: "arc", stage: c.arcDraft.stage === "center" ? "radius" : "sweep" });
+        return null;
+    }
+
+    function ensurePrecisionHud(c) {
+        if (c.precisionHud) return c.precisionHud;
+        const workspace = c.root.querySelector(".ddv3-workspace");
+        if (!workspace) return null;
+        const hud = document.createElement("div");
+        hud.className = "ddv3-precision-entry";
+        const value = document.createElement("span");
+        value.className = "ddv3-precision-value";
+        const enter = document.createElement("span");
+        enter.className = "ddv3-precision-enter";
+        enter.textContent = "Enter";
+        hud.appendChild(value);
+        hud.appendChild(enter);
+        workspace.appendChild(hud);
+        c.precisionHud = hud;
+        return hud;
+    }
+
+    function precisionAnchor(c) {
+        if (c.clickDraft && c.clickDraft.pointer) return c.clickDraft.pointer;
+        if (c.arcDraft && c.arcDraft.pointer) return c.arcDraft.pointer;
+        if (c.pointerWorld) return c.pointerWorld;
+        if (c.clickDraft && c.clickDraft.start) return c.clickDraft.start;
+        if (c.arcDraft && c.arcDraft.center) return c.arcDraft.center;
+        return null;
+    }
+
+    function syncPrecisionHud(c) {
+        const hud = ensurePrecisionHud(c);
+        const context = precisionContext(c);
+        const anchor = precisionAnchor(c);
+        if (!hud || !context || !c.precision || !anchor) {
+            if (hud) hud.classList.remove("is-visible");
+            return;
+        }
+        const point = V.worldToScreen(c, anchor);
+        const left = Math.max(8, Math.min(Math.max(8, c.viewport.widthPx - 170), point.x));
+        const top = Math.max(8, Math.min(Math.max(8, c.viewport.heightPx - 52), point.y));
+        hud.style.left = `${left}px`;
+        hud.style.top = `${top}px`;
+        hud.dataset.ddv3PrecisionTool = context.tool;
+        hud.classList.toggle("is-empty", !c.precision.buffer);
+        hud.querySelector(".ddv3-precision-value").textContent = Precision.display(c.precision);
+        hud.classList.add("is-visible");
+    }
+
+    function render(c) {
+        V.render(c);
+        syncPrecisionHud(c);
+    }
+
+    function execute(c, doc, label) {
+        c.history.execute(doc, label);
+        c.dirty = true;
+        render(c);
+    }
+
+    function select(c, id) {
+        c.selectedId = id ? String(id) : "";
+        c.previewObject = null;
+        clearSnap(c);
+        render(c);
+    }
+
+    function resetPrecision(c) { c.precision = null; }
+
+    function clearDraft(c) {
+        c.draftStart = null;
+        c.draftObject = null;
+        c.arcDraft = null;
+        c.clickDraft = null;
+        resetPrecision(c);
+        clearSnap(c);
+    }
+
+    function setTool(c, tool) {
+        if (c.readOnly) return;
+        c.tool = ["line", "rectangle", "circle", "arc"].includes(tool) ? tool : "select";
+        clearDraft(c);
+        render(c);
+    }
 
     function resolvedCandidate(c, event, anchor = null, options = {}) {
         const result = S.resolvePoint(c.history.current(), V.eventWorld(c, event), {
@@ -46,7 +130,7 @@
     function makeDraft(c, start, end, event) {
         try {
             if (c.tool === "line") return G.line("draft", start, end);
-            if (c.tool === "rectangle") return G.rectangleFromPoints("draft", start, end, Boolean(event.shiftKey));
+            if (c.tool === "rectangle") return G.rectangleFromPoints("draft", start, end, Boolean(event && event.shiftKey));
             if (c.tool === "circle") return G.circle("draft", start, G.distance(start, end));
         } catch (error) { return null; }
         return null;
@@ -56,24 +140,130 @@
         if (!c.draftObject) return false;
         const object = G.cloneObject(c.draftObject, nextId(c.draftObject.type));
         const nextDocument = D.addObject(c.history.current(), object);
-        c.selectedId = object.id; clearDraft(c); c.tool = "select";
+        c.selectedId = object.id;
+        clearDraft(c);
+        c.tool = "select";
         execute(c, nextDocument, `Add ${object.type}`);
         return true;
     }
 
+    function updatePrecisionPreview(c) {
+        const context = precisionContext(c);
+        if (!context || !c.precision) return false;
+        try {
+            if (c.clickDraft) {
+                const start = c.clickDraft.start;
+                const pointer = c.clickDraft.pointer || c.pointerWorld || start;
+                if (context.tool === "line") c.draftObject = Precision.lineFromInput(start, pointer, c.precision.buffer);
+                else if (context.tool === "rectangle") c.draftObject = Precision.rectangleFromInput(start, pointer, c.precision.buffer);
+                else if (context.tool === "circle") c.draftObject = Precision.circleFromInput(start, c.precision.buffer);
+                return Boolean(c.draftObject);
+            }
+            if (c.arcDraft && c.arcDraft.stage === "center") {
+                const parsed = Precision.parseArc(c.precision.buffer, "radius");
+                if (!parsed) return false;
+                const pointer = c.arcDraft.pointer || c.pointerWorld || G.pointAt(c.arcDraft.center, parsed.radiusMm, 0);
+                const angle = G.distance(c.arcDraft.center, pointer) >= G.EPSILON_MM ? G.angleDeg(c.arcDraft.center, pointer) : 0;
+                c.arcDraft.pointer = G.pointAt(c.arcDraft.center, parsed.radiusMm, angle);
+                c.draftObject = null;
+                return true;
+            }
+            if (c.arcDraft && c.arcDraft.stage === "radius") {
+                c.draftObject = Precision.arcFromSweep(
+                    c.arcDraft.center,
+                    c.arcDraft.radiusMm,
+                    c.arcDraft.startAngleDeg,
+                    c.precision.buffer
+                );
+                return Boolean(c.draftObject);
+            }
+        } catch (error) {
+            c.draftObject = null;
+        }
+        return false;
+    }
+
+    function commitPrecision(c) {
+        const context = precisionContext(c);
+        if (!context || !c.precision) return false;
+        if (c.clickDraft) {
+            updatePrecisionPreview(c);
+            return commitDraft(c);
+        }
+        if (c.arcDraft && c.arcDraft.stage === "center") {
+            const parsed = Precision.parseArc(c.precision.buffer, "radius");
+            if (!parsed) return false;
+            const pointer = c.arcDraft.pointer || c.pointerWorld || G.pointAt(c.arcDraft.center, parsed.radiusMm, 0);
+            const startAngleDeg = G.distance(c.arcDraft.center, pointer) >= G.EPSILON_MM ? G.angleDeg(c.arcDraft.center, pointer) : 0;
+            const exactPointer = G.pointAt(c.arcDraft.center, parsed.radiusMm, startAngleDeg);
+            c.arcDraft = {
+                stage: "radius",
+                center: c.arcDraft.center,
+                radiusMm: parsed.radiusMm,
+                startAngleDeg,
+                pointer: exactPointer,
+            };
+            c.precision = Precision.state("arc", "sweep", "");
+            c.draftObject = null;
+            render(c);
+            return true;
+        }
+        if (c.arcDraft && c.arcDraft.stage === "radius") {
+            updatePrecisionPreview(c);
+            return commitDraft(c);
+        }
+        return false;
+    }
+
+    function handlePrecisionKey(c, event) {
+        const context = precisionContext(c);
+        if (!context || c.readOnly) return false;
+        if (!c.precision || c.precision.tool !== context.tool || c.precision.stage !== context.stage) {
+            c.precision = Precision.state(context.tool, context.stage, "");
+        }
+        if (event.key === "Enter") {
+            const handled = commitPrecision(c);
+            if (handled) event.preventDefault();
+            return handled;
+        }
+        if (event.key === "Backspace") {
+            c.precision = Precision.backspace(c.precision);
+            updatePrecisionPreview(c);
+            render(c);
+            event.preventDefault();
+            return true;
+        }
+        if (!Precision.isInputCharacter(event.key, context)) return false;
+        c.precision = Precision.append(c.precision, event.key);
+        updatePrecisionPreview(c);
+        render(c);
+        event.preventDefault();
+        return true;
+    }
+
     function handleArcClick(c, event) {
+        c.pointerWorld = V.eventWorld(c, event);
         if (!c.arcDraft) {
             const center = resolvedCandidate(c, event);
             c.arcDraft = { stage: "center", center, pointer: center };
-            V.render(c);
+            c.precision = Precision.state("arc", "radius", "");
+            render(c);
             return;
         }
         if (c.arcDraft.stage === "center") {
             const p = resolvedCandidate(c, event);
             const radius = G.distance(c.arcDraft.center, p);
             if (radius < G.EPSILON_MM) return;
-            c.arcDraft = { stage: "radius", center: c.arcDraft.center, radiusMm: radius, startAngleDeg: G.angleDeg(c.arcDraft.center, p), pointer: p };
-            V.render(c);
+            c.arcDraft = {
+                stage: "radius",
+                center: c.arcDraft.center,
+                radiusMm: radius,
+                startAngleDeg: G.angleDeg(c.arcDraft.center, p),
+                pointer: p,
+            };
+            c.precision = Precision.state("arc", "sweep", "");
+            c.draftObject = null;
+            render(c);
             return;
         }
         const p = resolvedArcEndpoint(c, event, c.arcDraft.center, c.arcDraft.radiusMm);
@@ -82,7 +272,9 @@
         if (Math.abs(sweep) < G.MIN_ARC_SWEEP_DEG) return;
         const object = G.arc(nextId("arc"), c.arcDraft.center, c.arcDraft.radiusMm, c.arcDraft.startAngleDeg, sweep);
         const nextDocument = D.addObject(c.history.current(), object);
-        c.selectedId = object.id; clearDraft(c); c.tool = "select";
+        c.selectedId = object.id;
+        clearDraft(c);
+        c.tool = "select";
         execute(c, nextDocument, "Add arc");
     }
 
@@ -95,16 +287,32 @@
     }
 
     function pointerDown(c, event) {
+        c.pointerWorld = V.eventWorld(c, event);
         if (c.readOnly && !c.spaceHeld) return;
         if (c.spaceHeld || event.button === 1) { beginPan(c, event); event.preventDefault(); return; }
         if (event.button !== 0) return;
+
         if (c.tool === "arc") { handleArcClick(c, event); event.preventDefault(); return; }
+
         if (["line", "rectangle", "circle"].includes(c.tool)) {
+            if (c.clickDraft && c.clickDraft.tool === c.tool) {
+                const end = resolvedCandidate(c, event, c.clickDraft.start, { axisLock: c.tool === "line" });
+                c.clickDraft.pointer = end;
+                if (c.precision && c.precision.buffer) updatePrecisionPreview(c);
+                else c.draftObject = makeDraft(c, c.clickDraft.start, end, event);
+                commitDraft(c);
+                event.preventDefault();
+                return;
+            }
             const p = V.localPoint(c, event), start = resolvedCandidate(c, event);
             c.gesture = { type: "draw", pointerId: event.pointerId, start, x: p.x, y: p.y };
-            c.draftStart = start; c.draftObject = null;
+            c.draftStart = start;
+            c.draftObject = null;
+            resetPrecision(c);
             try { c.canvas.setPointerCapture(event.pointerId); } catch (error) { /* optional */ }
-            V.render(c); event.preventDefault(); return;
+            render(c);
+            event.preventDefault();
+            return;
         }
 
         const handle = event.target.closest && event.target.closest("[data-ddv3-handle]");
@@ -123,7 +331,7 @@
             c.selectedId = object.id;
             c.gesture = { type: "move", pointerId: event.pointerId, object, startWorld: V.eventWorld(c, event) };
             c.previewObject = object;
-            V.render(c);
+            render(c);
         } else {
             select(c, "");
             return;
@@ -159,17 +367,45 @@
     }
 
     function pointerMove(c, event) {
+        c.pointerWorld = V.eventWorld(c, event);
+
         if (!c.gesture) {
+            if (c.clickDraft) {
+                const end = resolvedCandidate(c, event, c.clickDraft.start, { axisLock: c.clickDraft.tool === "line" });
+                c.clickDraft.pointer = end;
+                if (c.precision && c.precision.buffer) updatePrecisionPreview(c);
+                else c.draftObject = makeDraft(c, c.clickDraft.start, end, event);
+                render(c);
+                return;
+            }
             if (c.tool === "arc" && c.arcDraft) {
                 if (c.arcDraft.stage === "radius") {
-                    const end = resolvedArcEndpoint(c, event, c.arcDraft.center, c.arcDraft.radiusMm);
-                    c.arcDraft.pointer = end;
-                    const sweep = G.normalizeAngle(G.angleDeg(c.arcDraft.center, end) - c.arcDraft.startAngleDeg);
-                    try { c.draftObject = G.arc("draft", c.arcDraft.center, c.arcDraft.radiusMm, c.arcDraft.startAngleDeg, Math.abs(sweep) < G.MIN_ARC_SWEEP_DEG ? G.MIN_ARC_SWEEP_DEG : sweep); } catch (error) { c.draftObject = null; }
+                    if (c.precision && c.precision.buffer) {
+                        updatePrecisionPreview(c);
+                    } else {
+                        const end = resolvedArcEndpoint(c, event, c.arcDraft.center, c.arcDraft.radiusMm);
+                        c.arcDraft.pointer = end;
+                        const sweep = G.normalizeAngle(G.angleDeg(c.arcDraft.center, end) - c.arcDraft.startAngleDeg);
+                        try {
+                            c.draftObject = G.arc(
+                                "draft",
+                                c.arcDraft.center,
+                                c.arcDraft.radiusMm,
+                                c.arcDraft.startAngleDeg,
+                                Math.abs(sweep) < G.MIN_ARC_SWEEP_DEG ? G.MIN_ARC_SWEEP_DEG : sweep
+                            );
+                        } catch (error) { c.draftObject = null; }
+                    }
                 } else {
-                    c.arcDraft.pointer = resolvedCandidate(c, event);
+                    if (c.precision && c.precision.buffer) {
+                        const raw = resolvedCandidate(c, event);
+                        c.arcDraft.pointer = raw;
+                        updatePrecisionPreview(c);
+                    } else {
+                        c.arcDraft.pointer = resolvedCandidate(c, event);
+                    }
                 }
-                V.render(c);
+                render(c);
             }
             return;
         }
@@ -180,26 +416,32 @@
             const p = V.localPoint(c, event);
             c.viewport.offsetX = g.ox + p.x - g.x;
             c.viewport.offsetY = g.oy + p.y - g.y;
-            V.render(c); event.preventDefault(); return;
+            render(c);
+            event.preventDefault();
+            return;
         }
         if (g.type === "draw") {
             const end = resolvedCandidate(c, event, g.start, { axisLock: c.tool === "line" });
             c.draftObject = makeDraft(c, g.start, end, event);
-            V.render(c); event.preventDefault(); return;
+            render(c);
+            event.preventDefault();
+            return;
         }
         if (g.type === "handle") {
             try {
                 const candidate = handleCandidate(c, g, event);
                 c.previewObject = Handles.resize(g.object, g.role, candidate, { square: Boolean(event.shiftKey) });
-                V.render(c);
+                render(c);
             } catch (error) { /* keep last valid preview */ }
-            event.preventDefault(); return;
+            event.preventDefault();
+            return;
         }
         if (g.type === "move") {
             clearSnap(c);
             const p = V.eventWorld(c, event);
             c.previewObject = G.translateObject(g.object, p.x - g.startWorld.x, p.y - g.startWorld.y);
-            V.render(c); event.preventDefault();
+            render(c);
+            event.preventDefault();
         }
     }
 
@@ -209,20 +451,36 @@
         c.gesture = null;
         try { c.canvas.releasePointerCapture(event.pointerId); } catch (error) { /* optional */ }
         c.canvas.classList.remove("is-panning");
-        if (event.type === "pointercancel") { c.previewObject = null; clearDraft(c); V.render(c); return; }
+
+        if (event.type === "pointercancel") {
+            c.previewObject = null;
+            clearDraft(c);
+            render(c);
+            return;
+        }
         if (g.type === "draw") {
             const p = V.localPoint(c, event);
-            if (Math.hypot(p.x - g.x, p.y - g.y) >= DRAG_PX) commitDraft(c);
-            else { clearDraft(c); V.render(c); }
+            if (Math.hypot(p.x - g.x, p.y - g.y) >= DRAG_PX) {
+                commitDraft(c);
+            } else {
+                c.clickDraft = { tool: c.tool, start: g.start, pointer: g.start };
+                c.draftStart = g.start;
+                c.draftObject = null;
+                c.precision = Precision.state(c.tool, "size", "");
+                clearSnap(c);
+                render(c);
+            }
             return;
         }
         if ((g.type === "handle" || g.type === "move") && c.previewObject) {
             const nextObject = c.previewObject;
-            c.previewObject = null; clearSnap(c);
+            c.previewObject = null;
+            clearSnap(c);
             execute(c, D.replaceObject(c.history.current(), nextObject), g.type === "handle" ? `Resize ${g.object.type}` : "Move object");
             return;
         }
-        clearSnap(c); V.render(c);
+        clearSnap(c);
+        render(c);
     }
 
     function applyInspector(c, input) {
@@ -251,9 +509,9 @@
     }
 
     function copySelected(c) { const object = selected(c); if (!object) return false; clipboard = clone(object); return true; }
-    function paste(c) { if (c.readOnly || !clipboard) return false; try { const copy = G.translateObject(G.cloneObject(clipboard, nextId(clipboard.type)), 20, 20); clearSnap(c); execute(c, D.addObject(c.history.current(), copy), "Paste object"); c.selectedId = copy.id; V.render(c); return true; } catch (error) { return false; } }
+    function paste(c) { if (c.readOnly || !clipboard) return false; try { const copy = G.translateObject(G.cloneObject(clipboard, nextId(clipboard.type)), 20, 20); clearSnap(c); execute(c, D.addObject(c.history.current(), copy), "Paste object"); c.selectedId = copy.id; render(c); return true; } catch (error) { return false; } }
     function duplicate(c) { return copySelected(c) && paste(c); }
-    function deleteSelected(c) { if (c.readOnly || !c.selectedId) return false; clearSnap(c); execute(c, D.removeObject(c.history.current(), c.selectedId), "Delete object"); c.selectedId = ""; V.render(c); return true; }
+    function deleteSelected(c) { if (c.readOnly || !c.selectedId) return false; clearSnap(c); execute(c, D.removeObject(c.history.current(), c.selectedId), "Delete object"); c.selectedId = ""; render(c); return true; }
 
     function zoomAt(c, factor, x, y) {
         clearSnap(c);
@@ -263,15 +521,23 @@
         c.viewport.scale = next;
         c.viewport.offsetX = x - world.x * next;
         c.viewport.offsetY = y + world.y * next;
-        V.render(c);
+        render(c);
     }
-    function fit(c) { clearSnap(c); c.viewport = V.viewport(c.canvas, c.history.current()); V.render(c); }
+
+    function fit(c) {
+        clearSnap(c);
+        c.viewport = V.viewport(c.canvas, c.history.current());
+        render(c);
+    }
+
     function save(c) {
         const doc = c.history.current();
         if (!doc.objects.length) { frappe.msgprint("ارسم عنصرًا واحدًا على الأقل قبل الحفظ."); return; }
         c.row.special_shape_drawing_json = P.toStored(doc, c.row);
         c.row.special_shape_status = "Documented";
-        c.frm.dirty(); c.dirty = false; c.allowClose = true;
+        c.frm.dirty();
+        c.dirty = false;
+        c.allowClose = true;
         Promise.resolve(c.frm.script_manager.trigger("piece_type", c.row.doctype, c.row.name)).catch(console.error);
         c.dialog.hide();
         if (window.AlmdinaDoorCuttingFastEntry && window.AlmdinaDoorCuttingFastEntry.render) window.AlmdinaDoorCuttingFastEntry.render(c.frm);
@@ -284,73 +550,193 @@
             if (tool) return setTool(c, tool.dataset.ddv3Tool);
             if (event.target.closest && event.target.closest("[data-ddv3-close]")) return c.dialog.hide();
             if (event.target.closest && event.target.closest("[data-ddv3-save]")) return save(c);
-            if (event.target.closest && event.target.closest("[data-ddv3-undo]")) { clearSnap(c); c.history.undo(); c.dirty = true; return V.render(c); }
-            if (event.target.closest && event.target.closest("[data-ddv3-redo]")) { clearSnap(c); c.history.redo(); c.dirty = true; return V.render(c); }
+            if (event.target.closest && event.target.closest("[data-ddv3-undo]")) { clearDraft(c); c.history.undo(); c.dirty = true; return render(c); }
+            if (event.target.closest && event.target.closest("[data-ddv3-redo]")) { clearDraft(c); c.history.redo(); c.dirty = true; return render(c); }
             const out = event.target.closest && event.target.closest("[data-ddv3-zoom-out]");
             const inside = event.target.closest && event.target.closest("[data-ddv3-zoom-in]");
             const reset = event.target.closest && event.target.closest("[data-ddv3-zoom-reset]");
             if (out || inside) return zoomAt(c, inside ? 1.2 : 1 / 1.2, c.viewport.widthPx / 2, c.viewport.heightPx / 2);
             if (reset) fit(c);
         });
+
         c.inspector.addEventListener("change", e => applyInspector(c, e.target.closest && e.target.closest("[data-ddv3-prop]")));
-        c.inspector.addEventListener("keydown", e => { if (e.key !== "Enter") return; const input = e.target.closest && e.target.closest("[data-ddv3-prop]"); if (input) { e.preventDefault(); applyInspector(c, input); input.blur(); } });
+        c.inspector.addEventListener("keydown", e => {
+            if (e.key !== "Enter") return;
+            const input = e.target.closest && e.target.closest("[data-ddv3-prop]");
+            if (input) { e.preventDefault(); applyInspector(c, input); input.blur(); }
+        });
+
         c.canvas.addEventListener("pointerdown", e => pointerDown(c, e));
         c.canvas.addEventListener("pointermove", e => pointerMove(c, e));
         c.canvas.addEventListener("pointerup", e => pointerUp(c, e));
         c.canvas.addEventListener("pointercancel", e => pointerUp(c, e));
-        c.canvas.addEventListener("wheel", e => { e.preventDefault(); clearSnap(c); const p = V.localPoint(c, e); if (e.ctrlKey || e.metaKey) zoomAt(c, e.deltaY < 0 ? 1.12 : 1 / 1.12, p.x, p.y); else { c.viewport.offsetX -= e.deltaX; c.viewport.offsetY -= e.deltaY; V.render(c); } }, { passive: false });
+        c.canvas.addEventListener("wheel", e => {
+            e.preventDefault();
+            clearSnap(c);
+            const p = V.localPoint(c, e);
+            if (e.ctrlKey || e.metaKey) zoomAt(c, e.deltaY < 0 ? 1.12 : 1 / 1.12, p.x, p.y);
+            else {
+                c.viewport.offsetX -= e.deltaX;
+                c.viewport.offsetY -= e.deltaY;
+                render(c);
+            }
+        }, { passive: false });
 
         c.keyDown = e => {
             if (!c.dialog.$wrapper.is(":visible")) return;
             const t = e.target;
             if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return;
-            const mod = e.ctrlKey || e.metaKey, key = String(e.key || "").toLowerCase();
-            if (e.code === "Space") { c.spaceHeld = true; clearSnap(c); V.render(c); e.preventDefault(); return; }
-            if (mod && key === "z") { e.preventDefault(); clearSnap(c); e.shiftKey ? c.history.redo() : c.history.undo(); c.dirty = true; V.render(c); return; }
+            const mod = e.ctrlKey || e.metaKey;
+            const key = String(e.key || "").toLowerCase();
+
+            if (!mod && handlePrecisionKey(c, e)) return;
+            if (e.code === "Space") { c.spaceHeld = true; clearSnap(c); render(c); e.preventDefault(); return; }
+            if (mod && key === "z") { e.preventDefault(); clearDraft(c); e.shiftKey ? c.history.redo() : c.history.undo(); c.dirty = true; render(c); return; }
             if (mod && key === "c") { if (copySelected(c)) e.preventDefault(); return; }
             if (mod && key === "v") { if (paste(c)) e.preventDefault(); return; }
             if (mod && key === "d") { if (duplicate(c)) e.preventDefault(); return; }
             if (mod) return;
+
             const shortcuts = { v: "select", l: "line", r: "rectangle", o: "circle", a: "arc" };
             if (shortcuts[key]) { setTool(c, shortcuts[key]); e.preventDefault(); return; }
             if ((e.key === "Delete" || e.key === "Backspace") && deleteSelected(c)) { e.preventDefault(); return; }
-            if (e.key === "Escape") { if (c.draftObject || c.arcDraft) { clearDraft(c); V.render(c); } else if (c.selectedId) select(c, ""); else setTool(c, "select"); e.preventDefault(); }
+            if (e.key === "Escape") {
+                if (c.draftObject || c.arcDraft || c.clickDraft || c.precision) {
+                    clearDraft(c);
+                    render(c);
+                } else if (c.selectedId) select(c, "");
+                else setTool(c, "select");
+                e.preventDefault();
+            }
         };
-        c.keyUp = e => { if (e.code === "Space") { c.spaceHeld = false; V.render(c); } };
+
+        c.keyUp = e => {
+            if (e.code === "Space") {
+                c.spaceHeld = false;
+                render(c);
+            }
+        };
+
         document.addEventListener("keydown", c.keyDown, true);
         document.addEventListener("keyup", c.keyUp, true);
+
         c.resizeObserver = new ResizeObserver(() => {
             const r = c.canvas.getBoundingClientRect();
             if (!r.width || !r.height) return;
             clearSnap(c);
-            if (!c.viewportReady) { c.viewport = V.viewport(c.canvas, c.history.current()); c.viewportReady = true; }
-            else { c.viewport.offsetX += (r.width - c.viewport.widthPx) / 2; c.viewport.offsetY += (r.height - c.viewport.heightPx) / 2; c.viewport.widthPx = r.width; c.viewport.heightPx = r.height; }
-            V.render(c);
+            if (!c.viewportReady) {
+                c.viewport = V.viewport(c.canvas, c.history.current());
+                c.viewportReady = true;
+            } else {
+                c.viewport.offsetX += (r.width - c.viewport.widthPx) / 2;
+                c.viewport.offsetY += (r.height - c.viewport.heightPx) / 2;
+                c.viewport.widthPx = r.width;
+                c.viewport.heightPx = r.height;
+            }
+            render(c);
         });
         c.resizeObserver.observe(c.canvas);
-        c.dialog.$wrapper.on("hide.bs.modal.ddv3-guard", e => { if (!c.dirty || c.allowClose) return; e.preventDefault(); frappe.confirm("لديك تعديلات غير محفوظة. هل تريد إغلاق الرسم؟", () => { c.allowClose = true; c.dialog.hide(); }); });
-        c.dialog.$wrapper.one("hidden.bs.modal.ddv3-cleanup", () => { document.removeEventListener("keydown", c.keyDown, true); document.removeEventListener("keyup", c.keyUp, true); if (c.resizeObserver) c.resizeObserver.disconnect(); if (activeController === c) activeController = null; });
+
+        c.dialog.$wrapper.on("hide.bs.modal.ddv3-guard", e => {
+            if (!c.dirty || c.allowClose) return;
+            e.preventDefault();
+            frappe.confirm("لديك تعديلات غير محفوظة. هل تريد إغلاق الرسم؟", () => { c.allowClose = true; c.dialog.hide(); });
+        });
+        c.dialog.$wrapper.one("hidden.bs.modal.ddv3-cleanup", () => {
+            document.removeEventListener("keydown", c.keyDown, true);
+            document.removeEventListener("keyup", c.keyUp, true);
+            if (c.resizeObserver) c.resizeObserver.disconnect();
+            if (activeController === c) activeController = null;
+        });
     }
 
     function open(frm, row, options = {}) {
         if (!window.frappe || !frappe.ui || !frappe.ui.Dialog) throw new Error("Frappe dialog API is required for Door Drawing V3");
         if ((row && row.piece_type || "Regular") !== "Special") { frappe.msgprint("حوّل نوع الدرفة إلى «خاصة» أولًا."); return null; }
-        if (activeController) { activeController.allowClose = true; try { activeController.dialog.hide(); } catch (error) { /* optional */ } activeController = null; }
-        const readOnly = Boolean(options.readOnly), initial = P.fromStored(row.special_shape_drawing_json, row);
-        const dialog = new frappe.ui.Dialog({ title: "Door Drawing", size: "extra-large", fields: [{ fieldname: "door_drawing_v3", fieldtype: "HTML", options: V.shell(row, readOnly) }] });
-        dialog.$wrapper.addClass("dco-special-shape-modal ddv3-modal"); if (readOnly) dialog.$wrapper.addClass("dco-special-shape-readonly"); dialog.show();
+        if (activeController) {
+            activeController.allowClose = true;
+            try { activeController.dialog.hide(); } catch (error) { /* optional */ }
+            activeController = null;
+        }
+
+        const readOnly = Boolean(options.readOnly);
+        const initial = P.fromStored(row.special_shape_drawing_json, row);
+        const dialog = new frappe.ui.Dialog({
+            title: "Door Drawing",
+            size: "extra-large",
+            fields: [{ fieldname: "door_drawing_v3", fieldtype: "HTML", options: V.shell(row, readOnly) }],
+        });
+        dialog.$wrapper.addClass("dco-special-shape-modal ddv3-modal");
+        if (readOnly) dialog.$wrapper.addClass("dco-special-shape-readonly");
+        dialog.show();
+
         const rootElement = dialog.fields_dict.door_drawing_v3.$wrapper.find(".ddv3-app").get(0);
-        const canvas = rootElement && rootElement.querySelector(".ddv3-canvas"), inspector = rootElement && rootElement.querySelector("[data-ddv3-inspector]");
-        if (!rootElement || !canvas || !inspector) { dialog.hide(); frappe.msgprint("تعذر فتح محرر الرسم الجديد."); return null; }
-        const c = { frm, row, dialog, root: rootElement, canvas, inspector, readOnly, history: H.create(initial, () => {}), selectedId: "", tool: "select", draftStart: null, draftObject: null, arcDraft: null, previewObject: null, snapState: null, gesture: null, spaceHeld: false, viewport: { scale: 1, baseScale: 1, offsetX: 0, offsetY: 0, widthPx: 1, heightPx: 1 }, viewportReady: false, resizeObserver: null, keyDown: null, keyUp: null, dirty: false, allowClose: false };
-        activeController = c; bind(c);
-        window.requestAnimationFrame(() => { c.viewport = V.viewport(canvas, c.history.current()); c.viewportReady = true; V.render(c); });
+        const canvas = rootElement && rootElement.querySelector(".ddv3-canvas");
+        const inspector = rootElement && rootElement.querySelector("[data-ddv3-inspector]");
+        if (!rootElement || !canvas || !inspector) {
+            dialog.hide();
+            frappe.msgprint("تعذر فتح محرر الرسم الجديد.");
+            return null;
+        }
+
+        const c = {
+            frm,
+            row,
+            dialog,
+            root: rootElement,
+            canvas,
+            inspector,
+            readOnly,
+            history: H.create(initial, () => {}),
+            selectedId: "",
+            tool: "select",
+            draftStart: null,
+            draftObject: null,
+            arcDraft: null,
+            clickDraft: null,
+            precision: null,
+            precisionHud: null,
+            pointerWorld: null,
+            previewObject: null,
+            snapState: null,
+            gesture: null,
+            spaceHeld: false,
+            viewport: { scale: 1, baseScale: 1, offsetX: 0, offsetY: 0, widthPx: 1, heightPx: 1 },
+            viewportReady: false,
+            resizeObserver: null,
+            keyDown: null,
+            keyUp: null,
+            dirty: false,
+            allowClose: false,
+        };
+
+        activeController = c;
+        bind(c);
+        window.requestAnimationFrame(() => {
+            c.viewport = V.viewport(canvas, c.history.current());
+            c.viewportReady = true;
+            render(c);
+        });
         return c;
     }
 
-    const publicApi = Object.freeze({ setTool, handleArcClick, applyInspector, copySelected, paste, duplicate, deleteSelected, handleCandidate });
+    const publicApi = Object.freeze({
+        setTool,
+        handleArcClick,
+        applyInspector,
+        copySelected,
+        paste,
+        duplicate,
+        deleteSelected,
+        handleCandidate,
+        updatePrecisionPreview,
+        commitPrecision,
+        handlePrecisionKey,
+    });
+
     root.Editor = Object.freeze({ open, view(frm, row) { return open(frm, row, { readOnly: true }); } });
     root.EditorStage2 = publicApi;
     root.EditorStage3 = publicApi;
     root.EditorStage4 = publicApi;
+    root.EditorStage5 = publicApi;
 })();
