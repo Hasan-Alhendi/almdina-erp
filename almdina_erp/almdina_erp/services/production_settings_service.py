@@ -58,6 +58,32 @@ _SETTINGS_FIELDS = (
     "allow_unplaced_approval",
     *_PRINT_IDENTITY_FIELDS,
 )
+LEGACY_PRESERVED_FIELDS = (
+    "enforce_stock_control",
+    "default_warehouse",
+    "reserve_stock_on_approval",
+    "stock_consumption_point",
+    "prefer_remnants_before_full_boards",
+    "min_remnant_width_mm",
+    "min_remnant_length_mm",
+    "min_remnant_area_m2",
+    "remnant_cost_policy",
+    "remnant_rate_usd_per_m2",
+)
+_LEGACY_BOOLEAN_FIELDS = frozenset(
+    {
+        "enforce_stock_control",
+        "reserve_stock_on_approval",
+        "prefer_remnants_before_full_boards",
+    }
+)
+_LEGACY_TEXT_FIELDS = frozenset(
+    {
+        "default_warehouse",
+        "stock_consumption_point",
+        "remnant_cost_policy",
+    }
+)
 
 
 def _granted() -> frozenset[str]:
@@ -226,6 +252,22 @@ def _settings_values(settings: Any) -> dict[str, Any]:
     return values
 
 
+def _legacy_settings_values(settings: Any) -> dict[str, Any]:
+    """Expose retired values read-only so upgrades never make stored data invisible."""
+
+    values: dict[str, Any] = {}
+    for fieldname in LEGACY_PRESERVED_FIELDS:
+        value = settings.get(fieldname)
+        if fieldname in _LEGACY_BOOLEAN_FIELDS:
+            value = int(value or 0)
+        elif fieldname in _LEGACY_TEXT_FIELDS:
+            value = str(value or "")
+        else:
+            value = flt(value)
+        values[fieldname] = value
+    return values
+
+
 @frappe.whitelist()
 def get_print_identity() -> dict[str, str]:
     """Return only the public-facing factory identity needed by authorized print actions."""
@@ -252,6 +294,7 @@ def get_production_settings() -> dict[str, Any]:
     return {
         **values,
         "values": values,
+        "legacy_values": _legacy_settings_values(settings),
         "permissions": context,
         "packing_options": list(PACKING_OPTIONS),
         "machine_options": list(MACHINE_OPTIONS),
@@ -302,6 +345,7 @@ def get_factory_settings_audit(limit: int = 30) -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "LEGACY_PRESERVED_FIELDS",
     "MACHINE_OPTIONS",
     "PRINT_IDENTITY_DEFAULTS",
     "get_factory_settings_audit",
