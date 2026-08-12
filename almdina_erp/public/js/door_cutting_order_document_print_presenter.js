@@ -2,6 +2,7 @@
     "use strict";
 
     const FRAME_ID = "dco-unified-document-print-frame";
+    // Invariant: customer invoice = the exact measurement document + authorized quote details at the end.
     let activeFrm = null;
     let activeIdentity = "";
 
