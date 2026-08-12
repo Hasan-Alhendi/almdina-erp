@@ -69,12 +69,15 @@
         const result = Base.render(c);
         if (!c || !c.canvas) return result;
         const doc = c.history.current();
-        const textObjects = doc.objects.filter(object => object.type === G.TEXT_TYPE);
+        const livePreview = c.previewObject && c.previewObject.type === G.TEXT_TYPE ? c.previewObject : null;
+        const textObjects = doc.objects
+            .filter(object => object.type === G.TEXT_TYPE)
+            .map(object => livePreview && String(livePreview.id) === String(object.id) ? livePreview : object);
         if (textObjects.length) {
             const markup = textObjects.map(object => textMarkup(c, object, String(object.id) === String(c.selectedId))).join("");
             c.canvas.insertAdjacentHTML("beforeend", `<g class="ddv3-text-layer">${markup}</g>`);
         }
-        const object = selectedText(c);
+        const object = livePreview && String(livePreview.id) === String(c.selectedId) ? livePreview : selectedText(c);
         if (object) textInspector(c, object);
         return result;
     }
