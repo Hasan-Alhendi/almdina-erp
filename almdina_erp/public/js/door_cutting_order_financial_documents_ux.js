@@ -43,6 +43,22 @@
         return window.AlmdinaDocumentContext;
     }
 
+    function printThemeApi() {
+        return window.AlmdinaOrderDocumentPrintTheme || null;
+    }
+
+    function printIdentityApi() {
+        return window.AlmdinaFactoryPrintIdentity || null;
+    }
+
+    async function resolvePrintIdentity() {
+        const api = printIdentityApi();
+        if (api && typeof api.get === "function") {
+            return Promise.resolve(api.get());
+        }
+        return api && typeof api.fallback === "function" ? api.fallback() : {};
+    }
+
     function formRoot(frm) {
         return $(frm.wrapper || frm.page?.wrapper || document.body);
     }
@@ -183,14 +199,33 @@
         `).join("")}</div>`;
     }
 
+    function printHeaderHtml(payload, printIdentity) {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerHtml !== "function") {
+            throw new Error("Unified factory print header is unavailable");
+        }
+        const internal = payload.kind === "internal_cost_report";
+        const metaParts = [payload.order_name, payload.subtitle]
+            .map(value => String(value || "").trim())
+            .filter(Boolean);
+        return theme.headerHtml(printIdentity, {
+            title: payload.title,
+            meta: metaParts.join(" · "),
+            badge: internal ? (payload.classification || "داخلي") : "",
+            badgeClass: internal ? "internal" : "",
+        });
+    }
+
     function printCss(internal) {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerCss !== "function") {
+            throw new Error("Unified factory print header styles are unavailable");
+        }
         return `
             @page{size:A4 ${internal ? "landscape" : "portrait"};margin:11mm}
             *{box-sizing:border-box}
             body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:rtl;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-            header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding-bottom:10px;border-bottom:2px solid #172033}
-            header h1{font-size:21px;margin:0 0 5px;font-weight:900} header p{margin:0;color:#66717d;line-height:1.6}
-            .classification{padding:7px 10px;border:1px solid #9f2d2d;background:#fff0f0;color:#8c1d1d;border-radius:7px;font-weight:900;white-space:nowrap}
+            ${theme.headerCss()}
             .financial-meta,.financial-summary{display:grid;gap:7px;margin-top:10px}
             .financial-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
             .financial-summary.internal{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -213,10 +248,16 @@
         `;
     }
 
-    function documentHtml(payload) {
+    function documentHtml(payload, printIdentity = null) {
         const internal = payload.kind === "internal_cost_report";
+        const identityApi = printIdentityApi();
+        const identity = printIdentity || (
+            identityApi && typeof identityApi.fallback === "function"
+                ? identityApi.fallback()
+                : {}
+        );
         return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss(internal)}</style></head><body>
-            <header><div><h1>${esc(payload.title)}</h1><p>${esc(payload.subtitle || "")}</p></div>${internal ? `<div class="classification">${esc(payload.classification || "داخلي")}</div>` : ""}</header>
+            ${printHeaderHtml(payload, identity)}
             ${metaHtml(payload)}${summaryHtml(payload)}
             ${internal ? costBreakdownHtml(payload.cost_breakdown) : measurementsHtml(payload.measurements)}
             ${internal ? operationsHtml(payload.operations) : invoiceLinesHtml(payload.lines)}
@@ -291,19 +332,21 @@
             }
         }
 
-        return frappe.call({
+        const documentRequest = frappe.call({
             method: documentMethod(kind),
             args: { order_name: frm.doc.name },
             freeze: true,
             freeze_message: kind === "internal_cost_report"
                 ? __("جاري تجهيز تقرير التكلفة الداخلي...")
                 : __("جاري تجهيز فاتورة الزبون..."),
-        }).then(response => {
+        });
+
+        return Promise.all([documentRequest, resolvePrintIdentity()]).then(([response, printIdentity]) => {
             const payload = response.message || {};
             if (payload.kind !== kind || payload.order_name !== frm.doc.name) {
                 throw new Error("Financial document response does not match the active order");
             }
-            printHtml(documentHtml(payload));
+            printHtml(documentHtml(payload, printIdentity));
             return payload;
         }).catch(error => {
             console.error("Financial document preparation failed", error);
