@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
+
+
+_ADAPTIVE_TRIM_PRECISION_CM = 0.01
 
 
 class CuttingPlanEngine(Protocol):
@@ -86,13 +90,68 @@ def optimize_order_plan(
     *,
     engine: CuttingPlanEngine,
 ) -> OptimizationOutcome:
-    """Expand pieces, run the injected engine, validate, and build the persisted snapshot."""
+    """Optimize with the configured trim, relaxing it only when production improves."""
 
-    board = command.board
     rows = [dict(row) for row in command.piece_rows]
     expanded = engine.expand_pieces(rows)
+    configured = _optimize_with_board(
+        command,
+        expanded_pieces=expanded,
+        board=command.board,
+        engine=engine,
+    )
+
+    if not _should_probe_smaller_trim(
+        command.board,
+        expanded_pieces=expanded,
+        outcome=configured,
+    ):
+        return configured
+
+    zero_trim_board = _board_with_trim(command.board, 0.0)
+    zero_trim = _optimize_with_board(
+        command,
+        expanded_pieces=expanded,
+        board=zero_trim_board,
+        engine=engine,
+    )
+    target_key = _production_key(zero_trim)
+    if target_key >= _production_key(configured):
+        return configured
+
+    best = zero_trim
+    low_units = 1
+    high_units = _trim_units(command.board.trim_cm)
+
+    while low_units <= high_units:
+        mid_units = (low_units + high_units) // 2
+        candidate = _optimize_with_board(
+            command,
+            expanded_pieces=expanded,
+            board=_board_with_trim(
+                command.board,
+                mid_units * _ADAPTIVE_TRIM_PRECISION_CM,
+            ),
+            engine=engine,
+        )
+        if _production_key(candidate) <= target_key:
+            best = candidate
+            low_units = mid_units + 1
+        else:
+            high_units = mid_units - 1
+
+    return best
+
+
+def _optimize_with_board(
+    command: OptimizeOrderPlanCommand,
+    *,
+    expanded_pieces: list[dict[str, Any]],
+    board: BoardGeometry,
+    engine: CuttingPlanEngine,
+) -> OptimizationOutcome:
     plan = engine.optimize(
-        expanded,
+        expanded_pieces,
         board.usable_width_cm,
         board.usable_length_cm,
         board.kerf_cm,
@@ -106,7 +165,7 @@ def optimize_order_plan(
     )
     validation_errors = engine.validate(
         plan,
-        expanded,
+        expanded_pieces,
         board.usable_width_cm,
         board.usable_length_cm,
     )
@@ -147,10 +206,15 @@ def optimize_order_plan(
         "usable_board_length_cm": board.usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "trim_cm": board.trim_cm,
+        "configured_trim_cm": command.board.trim_cm,
+        "trim_adjusted": board.trim_cm < command.board.trim_cm,
         "used_area_m2": plan.get("used_area_m2"),
         "total_board_area_m2": plan.get("total_board_area_m2"),
         "waste_area_m2": plan.get("waste_area_m2"),
-        "special_shape_raw_summary": summarize_special_shapes(expanded, plan),
+        "special_shape_raw_summary": summarize_special_shapes(
+            expanded_pieces,
+            plan,
+        ),
         "sheets": plan.get("sheets") or [],
         "unplaced": plan.get("unplaced") or [],
         "validation": {
@@ -172,7 +236,77 @@ def optimize_order_plan(
         packing_score=packing_score,
         required_boards=required_boards,
         method_label=method_label,
-        expanded_pieces=tuple(expanded),
+        expanded_pieces=tuple(expanded_pieces),
+    )
+
+
+def _should_probe_smaller_trim(
+    board: BoardGeometry,
+    *,
+    expanded_pieces: list[dict[str, Any]],
+    outcome: OptimizationOutcome,
+) -> bool:
+    if board.trim_cm <= 0:
+        return False
+
+    validation = outcome.snapshot.get("validation") or {}
+    if not validation.get("is_valid") or outcome.snapshot.get("unplaced"):
+        return True
+
+    if outcome.required_boards <= 1:
+        return False
+
+    lower_bound = _regular_piece_board_lower_bound(
+        board,
+        expanded_pieces=expanded_pieces,
+    )
+    return lower_bound is None or outcome.required_boards > lower_bound
+
+
+def _regular_piece_board_lower_bound(
+    board: BoardGeometry,
+    *,
+    expanded_pieces: list[dict[str, Any]],
+) -> int | None:
+    """Return a safe area lower bound, or None for non-rectangular demand."""
+
+    full_board_area_cm2 = board.full_width_cm * board.full_length_cm
+    if full_board_area_cm2 <= 0:
+        return None
+
+    demanded_area_cm2 = 0.0
+    for piece in expanded_pieces:
+        if (piece.get("piece_type") or "Regular") != "Regular":
+            return None
+        demanded_area_cm2 += max(0.0, _number(piece.get("width_cm"))) * max(
+            0.0,
+            _number(piece.get("length_cm")),
+        )
+
+    if demanded_area_cm2 <= 0:
+        return None
+    return max(1, math.ceil(demanded_area_cm2 / full_board_area_cm2))
+
+
+def _production_key(outcome: OptimizationOutcome) -> tuple[int, int, int]:
+    validation = outcome.snapshot.get("validation") or {}
+    return (
+        0 if validation.get("is_valid") else 1,
+        len(outcome.snapshot.get("unplaced") or []),
+        outcome.required_boards,
+    )
+
+
+def _trim_units(trim_cm: float) -> int:
+    return max(0, int(math.floor((trim_cm / _ADAPTIVE_TRIM_PRECISION_CM) + 1e-9)))
+
+
+def _board_with_trim(board: BoardGeometry, trim_cm: float) -> BoardGeometry:
+    return BoardGeometry(
+        full_width_cm=board.full_width_cm,
+        full_length_cm=board.full_length_cm,
+        trim_cm=max(0.0, trim_cm),
+        kerf_cm=board.kerf_cm,
     )
 
 
