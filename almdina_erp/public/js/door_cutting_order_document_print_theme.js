@@ -1,6 +1,60 @@
 (() => {
     "use strict";
 
+    function esc(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function contactLines(value) {
+        return String(value || "")
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+    }
+
+    function headerHtml(identity = {}, options = {}) {
+        const contacts = contactLines(identity.print_factory_contacts);
+        const title = String(options.title || "").trim();
+        const meta = String(options.meta || "").trim();
+        const badge = String(options.badge || "").trim();
+        const badgeClass = String(options.badgeClass || "").trim();
+
+        return `<header class="dco-unified-print-header">
+            <div class="dco-unified-print-brand">
+                <div class="dco-unified-print-factory-name">${esc(identity.print_factory_name || "")}</div>
+                <div class="dco-unified-print-factory-description">${esc(identity.print_factory_description || "")}</div>
+                <div class="dco-unified-print-factory-address">${esc(identity.print_factory_address || "")}</div>
+                ${contacts.length ? `<div class="dco-unified-print-factory-contacts">${contacts.map(line => `<span>${esc(line)}</span>`).join("")}</div>` : ""}
+            </div>
+            <div class="dco-unified-print-document">
+                <h1>${esc(title)}</h1>
+                ${meta ? `<div class="dco-unified-print-meta">${esc(meta)}</div>` : ""}
+                ${badge ? `<div class="dco-unified-print-badge ${esc(badgeClass)}">${esc(badge)}</div>` : ""}
+            </div>
+        </header>`;
+    }
+
+    function headerCss() {
+        return `
+            .dco-unified-print-header{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(42mm,.62fr);align-items:start;gap:5mm;padding-bottom:1.5mm;margin-bottom:1.6mm;border-bottom:1.2pt solid #172033}
+            .dco-unified-print-brand{min-width:0;text-align:right;line-height:1.25;overflow-wrap:anywhere}
+            .dco-unified-print-factory-name{font-size:12.8pt;font-weight:950;line-height:1.05;color:#172033}
+            .dco-unified-print-factory-description{margin-top:.55mm;font-size:6.8pt;font-weight:800;line-height:1.35;color:#394550}
+            .dco-unified-print-factory-address{margin-top:.42mm;font-size:6.35pt;font-weight:650;line-height:1.35;color:#5d6874}
+            .dco-unified-print-factory-contacts{display:flex;flex-wrap:wrap;gap:.4mm 2.3mm;margin-top:.45mm;font-size:6.1pt;font-weight:700;line-height:1.3;color:#4f5a65}
+            .dco-unified-print-factory-contacts span{white-space:nowrap}
+            .dco-unified-print-document{min-width:0;text-align:left}
+            .dco-unified-print-document h1{margin:0;font-size:14.8pt;font-weight:950;line-height:1.06;letter-spacing:-.1pt;color:#172033}
+            .dco-unified-print-meta{margin-top:.8mm;font-size:6.5pt;font-weight:700;line-height:1.4;color:#5d6874;overflow-wrap:anywhere}
+            .dco-unified-print-badge{display:inline-block;margin-top:1.2mm;padding:.8mm 1.6mm;border:.75pt solid #8c1d1d;border-radius:1.6mm;background:#fff0f0;color:#8c1d1d;font-size:6.3pt;font-weight:900;line-height:1.2}
+        `;
+    }
+
     function css(mode, shapeCss = "") {
         const measurements = mode === "measurements";
         const pageMargin = measurements ? "6mm" : "7mm";
@@ -15,17 +69,7 @@
             *{box-sizing:border-box}
             html,body{margin:0;padding:0;background:#fff;color:#172033;direction:rtl;font-family:Tahoma,"Segoe UI",Arial,sans-serif}
             body{font-size:${bodySize};line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
-            .header{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(42mm,.75fr);align-items:start;gap:6mm;padding-bottom:2.2mm;margin-bottom:2.2mm;border-bottom:1.6pt solid #172033}
-            .factory-identity{min-width:0;text-align:right;line-height:1.3}
-            .factory-name{font-size:${measurements ? "13.5pt" : "14.3pt"};font-weight:950;line-height:1.05;margin-bottom:.7mm}
-            .factory-description{font-size:${measurements ? "7pt" : "7.35pt"};font-weight:800;line-height:1.35;color:#394550}
-            .factory-address{margin-top:.65mm;font-size:${measurements ? "6.7pt" : "7pt"};font-weight:650;color:#5d6874}
-            .factory-contacts{display:flex;flex-wrap:wrap;gap:.45mm 2.4mm;margin-top:.55mm;color:#4f5a65;font-size:${measurements ? "6.45pt" : "6.75pt"};font-weight:700}
-            .factory-contacts span{white-space:nowrap}
-            .document-heading{text-align:left;min-width:0}
-            .header h1{margin:0 0 1mm;font-size:${measurements ? "15.5pt" : "16.5pt"};line-height:1.05;font-weight:900;letter-spacing:-.15pt}
-            .header-order{text-align:left;white-space:nowrap;font-size:8.2pt;line-height:1.35}
-            .muted{color:#65717d;font-size:${measurements ? "6.9pt" : "7.2pt"};line-height:1.35}
+            ${headerCss()}
             .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
             .shared-info{grid-template-columns:repeat(6,minmax(0,1fr))}
             .financial-info{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:1.2mm}
@@ -83,5 +127,9 @@
         `;
     }
 
-    window.AlmdinaOrderDocumentPrintTheme = Object.freeze({ css });
+    window.AlmdinaOrderDocumentPrintTheme = Object.freeze({
+        css,
+        headerCss,
+        headerHtml,
+    });
 })();
