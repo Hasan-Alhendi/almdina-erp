@@ -14,15 +14,24 @@
     stroke-dasharray: 2 3;
 }
 
-.ddv3-smart-guide-surface circle:first-child {
+.ddv3-smart-guide-surface circle:first-child,
+.ddv3-smart-guide-point.is-endpoint circle:first-child {
     fill: #fff;
     stroke: #ff4fd8;
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;
 }
 
-.ddv3-smart-guide-surface circle:last-child {
+.ddv3-smart-guide-surface circle:last-child,
+.ddv3-smart-guide-point.is-endpoint circle:last-child {
     fill: #ff4fd8;
+}
+
+.ddv3-smart-guide-point.is-midpoint rect {
+    fill: #fff;
+    stroke: #ff4fd8;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
 }
 
 .ddv3-smart-guide-label rect {
