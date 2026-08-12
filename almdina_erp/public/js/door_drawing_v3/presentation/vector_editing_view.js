@@ -152,12 +152,29 @@
         }
     }
 
+    function snapMarkup(c, layer) {
+        const state = c.vectorSnapState;
+        if (!state || !state.point || !state.snapped) return;
+        const point = BaseView.worldToScreen(c, state.point);
+        if (state.axis === "horizontal") layer.appendChild(svgElement("line", {
+            class: "ddv3-vector-snap-guide", x1: 0, y1: point.y, x2: Math.max(0, c.viewport.widthPx), y2: point.y,
+        }));
+        if (state.axis === "vertical") layer.appendChild(svgElement("line", {
+            class: "ddv3-vector-snap-guide", x1: point.x, y1: 0, x2: point.x, y2: Math.max(0, c.viewport.heightPx),
+        }));
+        const marker = svgElement("g", { class: "ddv3-vector-snap-marker", transform: `translate(${point.x} ${point.y})` });
+        marker.appendChild(svgElement("circle", { r: 5.5 }));
+        marker.appendChild(svgElement("path", { d: "M -8 0 H 8 M 0 -8 V 8" }));
+        layer.appendChild(marker);
+    }
+
     function ensureSvgOverlay(c) {
         c.canvas.querySelectorAll(".ddv3-vector-overlay").forEach(element => element.remove());
         const layer = svgElement("g", { class: "ddv3-vector-overlay", "pointer-events": "none" });
         selectionBoundsMarkup(c, layer);
         marqueeMarkup(c, layer);
         pathDraftMarkup(c, layer);
+        snapMarkup(c, layer);
         c.canvas.appendChild(layer);
         return layer;
     }
@@ -236,6 +253,8 @@
     function decorate(c) {
         if (!c || !c.canvas || c.__vectorDecorating) return;
         c.__vectorDecorating = true;
+        const observer = c.__vectorMutationObserver;
+        if (observer) observer.disconnect();
         try {
             clearObjectClasses(c);
             decorateObjectSelection(c);
@@ -247,6 +266,7 @@
             c.canvas.dataset.vectorTool = c.tool === "path" ? "path" : "";
         } finally {
             c.__vectorDecorating = false;
+            if (observer && c.canvas.isConnected) observer.observe(c.canvas, { childList: true, subtree: true, attributes: false });
         }
     }
 
