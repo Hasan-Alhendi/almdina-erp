@@ -37,6 +37,9 @@ const context = {
             if (options.method.endsWith("get_handoff_context")) {
                 return Promise.resolve({ message: handoffContext });
             }
+            if (options.method.endsWith("get_current_stage_context")) {
+                return Promise.resolve({ message: { actor_holds_operational_role: true } });
+            }
             return Promise.resolve({ message: { ok: true } });
         },
         confirm(message, yes) { yes(); },
@@ -58,11 +61,16 @@ vm.runInContext(source, context);
         "إنهاء وإرسال"
     );
 
-    await api.perform({ stage: "PST-1", canStart: true }, { button });
-    assert(calls[0].method.endsWith("start_my_stage"));
-    assert.strictEqual(calls[0].args.stage_name, "PST-1");
+    await api.perform({ order: "DCO-1", stage: "PST-1", canStart: true }, { button });
+    const stageGuard = calls.find(call => call.method.endsWith("get_current_stage_context"));
+    const startCall = calls.find(call => call.method.endsWith("start_my_stage"));
+    assert(stageGuard, "quick actions must authorize the current production stage before mutation");
+    assert.strictEqual(stageGuard.args.order_name, "DCO-1");
+    assert(startCall, "authorized start action must call start_my_stage");
+    assert.strictEqual(startCall.args.stage_name, "PST-1");
 
     await api.perform({
+        order: "DCO-2",
         stage: "PST-2",
         stageType: "Drawing",
         canHandoff: true,
@@ -83,6 +91,7 @@ vm.runInContext(source, context);
         workers: [],
     };
     await api.perform({
+        order: "DCO-FINAL",
         stage: "PST-FINAL",
         stageType: "Packing",
         canHandoff: true,
