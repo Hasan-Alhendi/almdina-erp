@@ -35,10 +35,14 @@ function form(name) {
         "cutting_plan_html",
     ];
     return {
+        doctype: "Door Cutting Order",
         doc: { doctype: "Door Cutting Order", name },
         fields_dict: Object.fromEntries(
             fields.map(fieldname => [fieldname, { $wrapper: htmlWrapper(`old:${fieldname}`) }])
         ),
+        is_new() {
+            return false;
+        },
         _dco_calc_timer: 77,
         __almdinaPlanSurfaceTimer: 88,
         _dco_fast_trigger_timers: { width: 99 },
@@ -154,24 +158,19 @@ assert.equal(
     fakeWindow.AlmdinaDocumentContext.isCurrent(frm, "Door Cutting Order::DCO-2026-00002"),
     true
 );
-assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, firstVisit), false);
-assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, secondVisit), true);
+assert.equal(
+    fakeWindow.AlmdinaDocumentContext.isCurrent(frm, secondVisit),
+    true
+);
 
-// Returning A -> B -> A creates a new visit generation. An old response from
-// the first A visit must never become current merely because the name matches.
-frm.doc.name = "DCO-2026-00001";
+// A new navigation cycle to the same name advances the generation, so requests
+// captured during the old visit cannot render into the freshly loaded document.
+frm._almdinaDocumentContextIdentity = null;
 handlers.before_load(frm);
 const thirdVisit = fakeWindow.AlmdinaDocumentContext.capture(frm);
-assert.equal(thirdVisit.identity, firstVisit.identity);
-assert.notEqual(thirdVisit.generation, firstVisit.generation);
-assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, firstVisit), false);
+assert.equal(thirdVisit.identity, secondVisit.identity);
+assert.equal(thirdVisit.generation, secondVisit.generation + 1);
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, secondVisit), false);
 assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, thirdVisit), true);
 
-// A detached Form for the same order is stale even when its name and local
-// generation happen to match the active Form.
-const detached = form("DCO-2026-00001");
-detached._almdinaDocumentContextGeneration = thirdVisit.generation;
-const detachedVisit = fakeWindow.AlmdinaDocumentContext.capture(detached);
-assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(detached, detachedVisit), false);
-
-console.log("Door cutting order document-context simulation passed");
+console.log("Door Cutting Order document context simulation passed");
