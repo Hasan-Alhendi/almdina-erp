@@ -62,6 +62,7 @@ function payload(kind, orderName) {
 function load() {
     const calls = [];
     const prints = [];
+    const customerDocuments = [];
     const capabilities = new Set([
         "view_costs",
         "print_customer_invoice",
@@ -90,7 +91,7 @@ function load() {
                     addEventListener() {},
                     focus() {},
                     print() {
-                        prints.push("printed");
+                        prints.push("internal");
                     },
                 },
             };
@@ -117,6 +118,13 @@ function load() {
             },
             fallback() {
                 return factoryIdentity();
+            },
+        },
+        AlmdinaOrderDocumentPrint: {
+            printAuthorizedInvoice(frm, authorizedPayload) {
+                customerDocuments.push({ frm, payload: authorizedPayload });
+                prints.push("customer");
+                return Promise.resolve(true);
             },
         },
     };
@@ -184,7 +192,7 @@ function load() {
         filename: "door_cutting_order_financial_documents_ux.js",
     });
 
-    return { fakeWindow, calls, prints, capabilities, handlers };
+    return { fakeWindow, calls, prints, customerDocuments, capabilities, handlers };
 }
 
 function nextImmediate() {
@@ -204,6 +212,10 @@ async function main() {
     assert.equal(runtime.calls.length, 1);
     assert.match(runtime.calls[0].method, /get_customer_invoice_document$/);
     assert.equal(runtime.calls[0].args.order_name, frm.doc.name);
+    assert.equal(runtime.customerDocuments.length, 1);
+    assert.equal(runtime.customerDocuments[0].frm, frm);
+    assert.equal(runtime.customerDocuments[0].payload.kind, "customer_invoice");
+    assert.equal(runtime.customerDocuments[0].payload.order_name, frm.doc.name);
 
     await runtime.fakeWindow.AlmdinaFinancialDocuments.printInternalCostReport(frm);
     assert.equal(runtime.calls.length, 2);
@@ -213,20 +225,23 @@ async function main() {
     await nextImmediate();
     await nextImmediate();
     await nextImmediate();
-    assert.equal(runtime.prints.length, 2);
+    assert.deepEqual(runtime.prints.sort(), ["customer", "internal"]);
 
-    const customerHtml = runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
-        payload("customer_invoice", frm.doc.name)
+    assert.throws(
+        () => runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
+            payload("customer_invoice", frm.doc.name)
+        ),
+        /Customer invoice layout belongs to AlmdinaOrderDocumentPrint/
     );
+
     const internalHtml = runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
         payload("internal_cost_report", frm.doc.name)
     );
-    assert.match(customerHtml, /dco-unified-print-header/);
-    assert.match(customerHtml, /مجمع الاختبار/);
-    assert.match(customerHtml, /قص وتجهيز الألواح/);
-    assert.match(customerHtml, /دمشق/);
-    assert.match(customerHtml, /0999000000/);
-    assert.doesNotMatch(customerHtml, /لا يسلّم للزبون/);
+    assert.match(internalHtml, /dco-unified-print-header/);
+    assert.match(internalHtml, /مجمع الاختبار/);
+    assert.match(internalHtml, /قص وتجهيز الألواح/);
+    assert.match(internalHtml, /دمشق/);
+    assert.match(internalHtml, /0999000000/);
     assert.match(internalHtml, /لا يسلّم للزبون/);
 
     runtime.capabilities.delete("print_internal_cost_report");
@@ -236,7 +251,7 @@ async function main() {
     );
     assert.equal(runtime.calls.length, 2);
 
-    console.log("Secure financial document simulation passed");
+    console.log("Secure financial document delegation simulation passed");
 }
 
 main().catch(error => {
