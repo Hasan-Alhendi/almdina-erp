@@ -22,11 +22,13 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_freehand_policy.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_stroke_intelligence.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_stroke_corner_guard.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/tool_modifier_policy.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_policy.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/smart_path_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/magnetic_connection.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/tool_modifiers.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_pen.js",
     ]);
 
@@ -68,6 +70,9 @@
         __doorDrawingV3LiveStabilizer: true,
         __doorDrawingV3MixedStrokeRecognition: true,
         __doorDrawingV3SharpCornerRecognition: true,
+        __doorDrawingV3PersistentTools: true,
+        __doorDrawingV3ModifierConstraints: true,
+        __doorDrawingV3TemporarySelect: true,
         __doorDrawingV3SmartPath: true,
         __doorDrawingV3NodeEditing: true,
         __referenceImageIntegrated: true,
