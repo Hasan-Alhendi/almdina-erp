@@ -66,7 +66,14 @@ CUTTING_LIKE_STAGE_TYPES = frozenset({"Sharyoun", "CNC", "Cutting"})
 ACTIVE_STAGE_STATUSES = frozenset({"Pending", "In Progress", "Paused"})
 TERMINAL_STAGE_STATUSES = frozenset({"Completed", "Cancelled"})
 LOCKED_ORDER_STATUSES = frozenset({"Delivered", "Cancelled"})
-DISPATCHABLE_ORDER_STATUSES = frozenset({"Draft", "Rejected", "Approved"})
+# Review/approve were retired: draft-like and leftover review/approved orders
+# may all be sent straight to production.
+DISPATCHABLE_ORDER_STATUSES = frozenset(
+    {"Draft", "Rejected", "Pending Review", "Approved"}
+)
+PRE_PRODUCTION_ORDER_STATUSES = frozenset(
+    {"Draft", "Pending Review", "Rejected", "Approved"}
+)
 
 STAGE_TRANSITIONS: dict[str, tuple[frozenset[str], str]] = {
     "start": (frozenset({"Pending"}), "In Progress"),

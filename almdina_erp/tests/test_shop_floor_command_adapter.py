@@ -114,6 +114,7 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             status="Approved",
             cutting_plan_json="{}",
             plan_needs_recalculation=0,
+            approved_plan=None,
             drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: calls.append("validated"),
         )
@@ -127,12 +128,13 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             status="On Hold",
             cutting_plan_json="{}",
             plan_needs_recalculation=0,
+            approved_plan=None,
             drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: None,
         )
         with self.assertRaisesRegex(
             RuntimeError,
-            "status does not allow production dispatch",
+            "حالة الطلب الحالية لا تسمح بإرساله إلى الإنتاج",
         ):
             adapter.assert_order_ready_for_dispatch(invalid)
 

@@ -15,9 +15,7 @@ from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
     decide_production_action,
 )
-from almdina_erp.almdina_erp.domain.orders.production_routing import (
-    ProductionRoute,
-)
+from almdina_erp.almdina_erp.domain.orders.production_routing import ProductionRoute
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
@@ -37,6 +35,7 @@ class OrderState:
     current_stage: str | None
     has_cutting_plan: bool
     plan_needs_recalculation: bool
+    has_approved_plan: bool = False
     drawing_dxf_status: str | None = None
 
 
@@ -59,6 +58,14 @@ class ShopFloorCommandPort(Protocol):
     def current_user(self) -> str: ...
 
     def capabilities_for_order(self, order_name: str) -> frozenset[str]: ...
+
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]: ...
+
+    def is_admin(self, user: str | None = None) -> bool: ...
+
+    def lock_order(self, order_name: str) -> None: ...
+
+    def lock_stage(self, stage_name: str) -> None: ...
 
     def get_order_state(self, order_name: str) -> OrderState: ...
 
@@ -156,19 +163,23 @@ def _transition(current_status: str, event: str, message: str) -> str:
 
 
 def _next_stage(path: str, stage_type: str) -> str | None:
+    """Legacy path helper retained only for compatibility callers."""
+
     try:
         return next_stage_type(path, stage_type)
     except ValueError as error:
         raise ShopFloorCommandError(
-            f"Stage {stage_type} is not part of path {path}."
+            f"المرحلة {stage_type} ليست ضمن المسار {path}."
         ) from error
 
 
 def _validate_path(path: str) -> None:
+    """Legacy path helper retained only for compatibility callers."""
+
     try:
         production_path_sequence(path)
     except ValueError as error:
-        raise ShopFloorCommandError(f"Invalid production path: {path}") from error
+        raise ShopFloorCommandError(f"مسار الإنتاج غير صالح: {path}") from error
 
 
 def _production_route(
@@ -181,12 +192,42 @@ def _production_route(
         raise ShopFloorCommandError(str(error)) from error
 
 
+def _locked_order(
+    repository: ShopFloorCommandPort,
+    order_name: str,
+) -> OrderState:
+    repository.lock_order(order_name)
+    return repository.get_order_state(order_name)
+
+
+def _locked_stage_scope(
+    repository: ShopFloorCommandPort,
+    stage_name: str,
+) -> tuple[StageState, OrderState]:
+    """Lock mutations in a stable order: order row first, then stage row.
+
+    The preliminary stage read is used only to resolve its immutable parent order.
+    All authorization and state decisions use the post-lock snapshots.
+    """
+
+    probe = repository.get_stage_state(stage_name)
+    repository.lock_order(probe.order_name)
+    repository.lock_stage(stage_name)
+    stage = repository.get_stage_state(stage_name)
+    if stage.order_name != probe.order_name:
+        raise ShopFloorCommandError("تغيّر ارتباط المرحلة بالطلب أثناء التنفيذ. أعد المحاولة.")
+    order = repository.get_order_state(stage.order_name)
+    return stage, order
+
+
 def _facts(
+    repository: ShopFloorCommandPort,
     order: OrderState,
     *,
     stage: StageState | None = None,
     actor: str | None = None,
 ) -> ProductionActionFacts:
+    resolved_actor = actor or None
     return ProductionActionFacts(
         order_status=order.status,
         production_path=order.production_path,
@@ -197,8 +238,11 @@ def _facts(
         stage_type=stage.stage_type if stage else None,
         stage_status=stage.status if stage else None,
         assigned_to=stage.assigned_to if stage else None,
-        actor=actor,
+        actor=resolved_actor,
         drawing_dxf_status=order.drawing_dxf_status,
+        operational_role=stage.operational_role if stage else None,
+        actor_roles=repository.actor_roles(resolved_actor) if resolved_actor else (),
+        is_admin=repository.is_admin(resolved_actor) if resolved_actor else False,
     )
 
 
@@ -213,7 +257,7 @@ def _assert_action_allowed(
     decision = decide_production_action(
         action,
         capabilities=repository.capabilities_for_order(order.name),
-        facts=_facts(order, stage=stage, actor=actor),
+        facts=_facts(repository, order, stage=stage, actor=actor),
     )
     if decision.allowed:
         return
@@ -222,13 +266,52 @@ def _assert_action_allowed(
     raise ShopFloorCommandError(decision.reason)
 
 
+def _assert_route_dispatch_gate(route: ProductionRoute, order: OrderState) -> None:
+    if route.requires_approved_plan_before_dispatch and not order.has_approved_plan:
+        raise ShopFloorCommandError(
+            "يجب اعتماد خطة القص قبل إرسال الطلب إلى مسار يبدأ بالتنفيذ الفعلي."
+        )
+
+
+def _assert_planning_handoff_gate(
+    route: ProductionRoute,
+    stage: StageState,
+    order: OrderState,
+) -> None:
+    try:
+        route_stage = route.stage(stage.stage_type)
+    except ValueError as error:
+        raise ShopFloorCommandError(str(error)) from error
+    if not route_stage.is_planning_stage:
+        return
+    if not order.has_approved_plan:
+        raise ShopFloorCommandError(
+            "اعتمد خطة القص بعد مراجعتها قبل تسليم مرحلة التخطيط إلى القسم التالي."
+        )
+    if order.plan_needs_recalculation:
+        raise ShopFloorCommandError(
+            "خطة القص تغيّرت وتحتاج إلى إعادة حساب واعتماد جديد قبل مغادرة مرحلة التخطيط."
+        )
+
+
 def assert_order_ready_for_dispatch(order: OrderState) -> None:
-    """Compatibility validator that evaluates state without an authorization port."""
+    """Compatibility validator that evaluates generic state only.
+
+    Route-specific approval requirements are enforced by ``dispatch_order`` after
+    loading the selected configurable route.
+    """
 
     decision = decide_production_action(
         Capability.DISPATCH_ORDER,
         capabilities={Capability.DISPATCH_ORDER},
-        facts=_facts(order),
+        facts=ProductionActionFacts(
+            order_status=order.status,
+            production_path=order.production_path,
+            current_stage_name=order.current_stage,
+            has_cutting_plan=order.has_cutting_plan,
+            plan_needs_recalculation=order.plan_needs_recalculation,
+            drawing_dxf_status=order.drawing_dxf_status,
+        ),
     )
     if not decision.allowed:
         raise ShopFloorCommandError(decision.reason)
@@ -248,8 +331,9 @@ def get_handoff_context(
         actor=repository.current_user(),
     )
     if not order.production_path:
-        raise ShopFloorCommandError("Order has no production path.")
+        raise ShopFloorCommandError("الطلب لا يحتوي على مسار إنتاج.")
     route = _production_route(repository, order.production_path)
+    _assert_planning_handoff_gate(route, stage, order)
     try:
         target_stage = route.next_stage(stage.stage_type)
     except ValueError as error:
@@ -304,11 +388,12 @@ def dispatch_order(
     path: str,
     assignee: str,
 ) -> dict[str, Any]:
-    order = repository.get_order_state(order_name)
+    order = _locked_order(repository, order_name)
     _assert_action_allowed(repository, Capability.DISPATCH_ORDER, order)
     repository.validate_special_shapes(order_name)
 
     route = _production_route(repository, path)
+    _assert_route_dispatch_gate(route, order)
     first = route.first_stage
     repository.assert_worker_for_role(assignee, first.operational_role)
     repository.cancel_active_order_stages(order_name)
@@ -342,8 +427,7 @@ def start_my_stage(
     repository: ShopFloorCommandPort,
     stage_name: str,
 ) -> dict[str, Any]:
-    stage = repository.get_stage_state(stage_name)
-    order = repository.get_order_state(stage.order_name)
+    stage, order = _locked_stage_scope(repository, stage_name)
     actor = repository.current_user()
     _assert_action_allowed(
         repository,
@@ -355,7 +439,7 @@ def start_my_stage(
     target_status = _transition(
         stage.status,
         "start",
-        "Only a stage that needs work can be started.",
+        "يمكن بدء المرحلة فقط عندما تكون بحالة بحاجة للعمل.",
     )
     updated = repository.start_stage(
         stage_name,
@@ -381,8 +465,7 @@ def handoff_to_next(
     stage_name: str,
     next_assignee: str | None = None,
 ) -> dict[str, Any]:
-    stage = repository.get_stage_state(stage_name)
-    order = repository.get_order_state(stage.order_name)
+    stage, order = _locked_stage_scope(repository, stage_name)
     actor = repository.current_user()
     _assert_action_allowed(
         repository,
@@ -394,20 +477,21 @@ def handoff_to_next(
     target_status = _transition(
         stage.status,
         "finish",
-        "Start the stage before sending it to the next department.",
+        "ابدأ المرحلة أولًا قبل تسليمها إلى القسم التالي.",
     )
     path = order.production_path
     if not path:
-        raise ShopFloorCommandError("Order has no production path.")
+        raise ShopFloorCommandError("الطلب لا يحتوي على مسار إنتاج.")
 
     route = _production_route(repository, path)
+    _assert_planning_handoff_gate(route, stage, order)
     try:
         target_stage = route.next_stage(stage.stage_type)
     except ValueError as error:
         raise ShopFloorCommandError(str(error)) from error
     if target_stage:
         if not next_assignee:
-            raise ShopFloorCommandError("Select the next worker.")
+            raise ShopFloorCommandError("اختر العامل الذي سيستلم المرحلة التالية.")
         repository.assert_worker_for_role(
             next_assignee,
             target_stage.operational_role,
@@ -474,8 +558,7 @@ def reassign_worker(
     stage_name: str,
     assignee: str,
 ) -> dict[str, Any]:
-    stage = repository.get_stage_state(stage_name)
-    order = repository.get_order_state(stage.order_name)
+    stage, order = _locked_stage_scope(repository, stage_name)
     _assert_action_allowed(
         repository,
         Capability.REASSIGN_WORKER,
@@ -521,7 +604,7 @@ def mark_delivered(
     repository: ShopFloorCommandPort,
     order_name: str,
 ) -> dict[str, Any]:
-    order = repository.get_order_state(order_name)
+    order = _locked_order(repository, order_name)
     _assert_action_allowed(repository, Capability.MARK_DELIVERED, order)
     repository.track_order_delivered(order_name)
     return {"name": order_name, "status": "Delivered"}
@@ -533,14 +616,14 @@ def revert_department(
     target_stage: str | None = None,
     target_stage_type: str | None = None,
 ) -> dict[str, Any]:
-    order = repository.get_order_state(order_name)
+    order = _locked_order(repository, order_name)
     _assert_action_allowed(repository, Capability.REVERT_DEPARTMENT, order)
 
     raw_target = target_stage_type or target_stage
     try:
         stage_type = resolve_shop_floor_stage_type(raw_target)
     except ValueError as error:
-        raise ShopFloorCommandError("Select a stage to revert to.") from error
+        raise ShopFloorCommandError("اختر مرحلة إنتاج للرجوع إليها.") from error
 
     candidates = repository.list_revert_candidates(order_name, stage_type)
     stage_name = next(
@@ -551,23 +634,30 @@ def revert_department(
         stage_name = target_stage
     if not stage_name:
         raise ShopFloorCommandError(
-            f"No shop-floor stage found for {stage_type or target_stage or ''}."
+            f"لا توجد مرحلة إنتاج محفوظة من النوع {stage_type or target_stage or ''} لهذا الطلب."
         )
 
+    repository.lock_stage(stage_name)
     stage = repository.get_stage_state(stage_name)
     if stage.order_name != order_name:
-        raise ShopFloorCommandError("Stage does not belong to this order.")
+        raise ShopFloorCommandError("المرحلة المحددة لا تتبع هذا الطلب.")
     route = _production_route(repository, order.production_path or "")
     if not route.contains(stage.stage_type):
-        raise ShopFloorCommandError("Only stages in the selected production route can be restored.")
+        raise ShopFloorCommandError("يمكن الرجوع فقط إلى مرحلة موجودة في مسار الإنتاج المحدد.")
 
-    for later in repository.list_later_stages(order_name, stage.sequence):
-        if later.piece_label:
-            continue
+    later_stages = [
+        later
+        for later in repository.list_later_stages(order_name, stage.sequence)
+        if not later.piece_label
+    ]
+    for later in later_stages:
+        repository.lock_stage(later.name)
+    for later in later_stages:
+        later = repository.get_stage_state(later.name)
         cancelled_status = _transition(
             later.status,
             "cancel",
-            "Later production stage cannot be cancelled.",
+            "تعذر إلغاء إحدى المراحل اللاحقة أثناء الرجوع.",
         )
         repository.cancel_stage(later.name, target_status=cancelled_status)
         repository.log_stage_event(
@@ -579,7 +669,7 @@ def revert_department(
     reopened_status = _transition(
         stage.status,
         "reopen",
-        "Target production stage cannot be reopened.",
+        "تعذر إعادة فتح مرحلة الإنتاج المحددة.",
     )
     reopened = repository.reopen_stage(stage.name, target_status=reopened_status)
     repository.log_stage_event(

@@ -1,0 +1,765 @@
+/*
+ * Almdina shop-floor responsive presentation.
+ *
+ * This file owns visual hierarchy, touch sizing, and viewport adaptation for
+ * the worker inbox. Production state and authorization remain server-driven.
+ */
+
+.almdina-sf-content,
+.almdina-sf-shell,
+.almdina-sf-list,
+.almdina-sf-order-card,
+.almdina-sf-boards,
+.almdina-sf-route-board,
+.almdina-sf-kanban,
+.almdina-sf-kanban-column,
+.shop-floor-detail {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.almdina-sf-shell {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+    padding-bottom: 24px;
+}
+
+.almdina-sf-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 8px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .05);
+}
+
+.almdina-sf-tab,
+.almdina-sf-refresh {
+    min-height: 42px;
+    border-radius: 10px !important;
+    font-weight: 700;
+}
+
+.almdina-sf-tab {
+    flex: 0 0 auto;
+    padding-inline: 14px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted, #64748b);
+}
+
+.almdina-sf-tab.is-active {
+    border-color: rgba(36, 144, 239, .18);
+    background: rgba(36, 144, 239, .09);
+    color: var(--text-color, #0f172a);
+}
+
+.almdina-sf-refresh {
+    margin-inline-start: auto;
+}
+
+.almdina-sf-list-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: var(--text-color, #0f172a);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.almdina-sf-list-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    min-height: 22px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--subtle-fg, #f1f3f5);
+    color: var(--text-muted, #64748b);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* Orders whose current stage operational role is not the worker's sit after
+   the actionable queue and are clearly separated. */
+.almdina-sf-list-title.is-other-role {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+    color: #15803d;
+}
+
+.almdina-sf-list-title.is-other-role .almdina-sf-list-count {
+    background: rgba(22, 163, 74, .12);
+    color: #15803d;
+}
+
+.almdina-sf-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.almdina-sf-board-shell {
+    max-width: 100%;
+}
+
+.almdina-sf-board-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, .7fr) minmax(240px, 1fr) minmax(420px, 1.8fr);
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .045);
+}
+
+.almdina-sf-board-toolbar label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-board-toolbar .form-control {
+    min-height: 42px;
+    border-radius: 9px;
+}
+
+.almdina-sf-board-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.almdina-sf-board-metric {
+    --sf-metric: #64748b;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid color-mix(in srgb, var(--sf-metric) 20%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--sf-metric) 7%, transparent);
+}
+
+.almdina-sf-board-metric[data-tone="pending"] { --sf-metric: #d97706; }
+.almdina-sf-board-metric[data-tone="progress"] { --sf-metric: #2563eb; }
+.almdina-sf-board-metric[data-tone="paused"] { --sf-metric: #dc2626; }
+.almdina-sf-board-metric[data-tone="ready"] { --sf-metric: #16a34a; }
+
+.almdina-sf-board-metric span {
+    display: block;
+    overflow: hidden;
+    color: var(--text-muted, #64748b);
+    font-size: 10px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-board-metric b {
+    display: block;
+    margin-top: 1px;
+    color: var(--sf-metric);
+    font-size: 18px;
+    line-height: 1.15;
+}
+
+.almdina-sf-board-help {
+    margin-bottom: 12px;
+    padding: 9px 11px;
+    border-inline-start: 3px solid var(--primary, #2490ef);
+    border-radius: 8px;
+    background: rgba(36, 144, 239, .07);
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+.almdina-sf-boards {
+    display: grid;
+    gap: 16px;
+}
+
+.almdina-sf-route-board {
+    overflow: hidden;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 15px;
+    background: var(--subtle-fg, #f7f8fa);
+    box-shadow: 0 3px 14px rgba(15, 23, 42, .055);
+}
+
+.almdina-sf-route-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-color, #dfe3e8);
+    background: var(--card-bg, var(--fg-color, #fff));
+}
+
+.almdina-sf-route-heading > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.almdina-sf-route-heading h3 {
+    margin: 0;
+    color: var(--text-color, #0f172a);
+    font-size: 15px;
+    font-weight: 850;
+}
+
+.almdina-sf-route-heading span,
+.almdina-sf-route-heading small {
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+}
+
+.almdina-sf-kanban {
+    display: grid;
+    grid-auto-columns: minmax(270px, 1fr);
+    grid-auto-flow: column;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    scroll-snap-type: inline proximity;
+}
+
+.almdina-sf-kanban-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--card-bg, #fff) 82%, transparent);
+    scroll-snap-align: start;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.almdina-sf-kanban-column.is-ready {
+    background: rgba(22, 163, 74, .045);
+}
+
+.almdina-sf-kanban-column.is-drag-over {
+    border-color: var(--primary, #2490ef);
+    background: rgba(36, 144, 239, .09);
+    box-shadow: inset 0 0 0 2px rgba(36, 144, 239, .13);
+}
+
+.almdina-sf-kanban-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 45px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.almdina-sf-kanban-column-header > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.almdina-sf-kanban-column-header b {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-kanban-column-header > div > span {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.almdina-sf-column-count {
+    display: inline-grid;
+    flex: 0 0 auto;
+    min-width: 24px;
+    min-height: 24px;
+    padding-inline: 6px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--subtle-fg, #eef2f7);
+    color: var(--text-muted, #64748b);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-kanban-cards {
+    display: grid;
+    align-content: start;
+    gap: 9px;
+    min-height: 172px;
+    padding: 9px;
+}
+
+.almdina-sf-kanban-empty {
+    display: grid;
+    min-height: 86px;
+    place-items: center;
+    border: 1px dashed var(--border-color, #dfe3e8);
+    border-radius: 9px;
+    color: var(--text-muted, #94a3b8);
+    font-size: 11px;
+}
+
+.almdina-sf-order-card {
+    --sf-accent: var(--primary, #2490ef);
+    position: relative;
+    width: 100%;
+    margin: 0 !important;
+    padding: 15px !important;
+    border: 1px solid var(--border-color, #dfe3e8) !important;
+    border-inline-start: 4px solid var(--sf-accent) !important;
+    border-radius: 15px !important;
+    background: var(--card-bg, var(--fg-color, #fff)) !important;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .065) !important;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.almdina-sf-order-card[data-status="Pending"] {
+    --sf-accent: #d97706;
+}
+
+.almdina-sf-order-card[data-status="In Progress"] {
+    --sf-accent: var(--primary, #2490ef);
+}
+
+.almdina-sf-order-card[data-status="Paused"] {
+    --sf-accent: #dc2626;
+}
+
+.almdina-sf-order-card[data-status="Completed"] {
+    --sf-accent: #16a34a;
+}
+
+/* Full-row green fill for orders outside the worker's current operational role.
+   Placed after status accents so those colors cannot override it. */
+.almdina-sf-order-card.is-other-role,
+.almdina-sf-order-card.is-other-role[data-status] {
+    --sf-accent: #16a34a;
+    border-color: #86efac !important;
+    border-inline-start-color: #16a34a !important;
+    background: #dcfce7 !important;
+    box-shadow: 0 2px 12px rgba(22, 163, 74, .12) !important;
+}
+
+.almdina-sf-order-card.is-other-role::before {
+    background: #16a34a;
+}
+
+.almdina-sf-order-card.is-other-role .indicator-pill,
+.almdina-sf-order-card.is-other-role[data-status] .indicator-pill {
+    background: #16a34a !important;
+    color: #fff !important;
+}
+
+.almdina-sf-order-card.is-other-role > div:nth-child(2) > div {
+    border-color: #bbf7d0 !important;
+    background: rgba(255, 255, 255, .55) !important;
+}
+
+.almdina-sf-order-card.is-other-role .sf-open-btn {
+    border-color: #86efac !important;
+    background: #fff !important;
+    color: #15803d !important;
+}
+
+.almdina-sf-order-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--sf-accent);
+    opacity: .14;
+    pointer-events: none;
+}
+
+.almdina-sf-order-card .indicator-pill {
+    flex: 0 0 auto;
+    min-height: 28px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.almdina-sf-order-card[data-status="Pending"] .indicator-pill {
+    background: rgba(217, 119, 6, .11) !important;
+    color: #92400e !important;
+}
+
+.almdina-sf-order-card[data-status="In Progress"] .indicator-pill {
+    background: rgba(36, 144, 239, .11) !important;
+    color: #1d4ed8 !important;
+}
+
+.almdina-sf-order-card[data-status="Paused"] .indicator-pill {
+    background: rgba(220, 38, 38, .10) !important;
+    color: #b91c1c !important;
+}
+
+.almdina-sf-order-card[data-status="Completed"] .indicator-pill {
+    background: rgba(22, 163, 74, .11) !important;
+    color: #15803d !important;
+}
+
+.almdina-sf-order-card > div:first-child {
+    min-width: 0;
+}
+
+.almdina-sf-order-card > div:nth-child(2) {
+    gap: 8px !important;
+    margin-top: 12px !important;
+}
+
+.almdina-sf-order-card > div:nth-child(2) > div {
+    min-height: 58px;
+    padding: 9px 10px !important;
+    border: 1px solid var(--border-color, #edf0f2);
+    background: var(--subtle-fg, #f8fafc) !important;
+}
+
+.almdina-sf-order-card > .almdina-sf-card-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 8px !important;
+    margin-top: 13px !important;
+}
+
+.almdina-sf-order-card :where(.sf-quick-action, .sf-open-btn) {
+    width: 100% !important;
+    min-width: 0;
+    min-height: 46px !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+    font-size: 13px;
+    font-weight: 800 !important;
+    touch-action: manipulation;
+}
+
+.almdina-sf-order-card .sf-quick-action {
+    position: relative;
+}
+
+.almdina-sf-order-card .sf-quick-action.is-loading {
+    padding-inline-end: 38px !important;
+    opacity: .78;
+    pointer-events: none;
+}
+
+.almdina-sf-order-card .sf-quick-action.is-loading::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 14px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    margin-top: -8px;
+    border: 2px solid currentColor;
+    border-inline-start-color: transparent;
+    border-radius: 50%;
+    animation: almdina-sf-spin .65s linear infinite;
+}
+
+.almdina-sf-order-card .sf-quick-action[aria-busy="true"] {
+    cursor: progress;
+}
+
+.almdina-sf-kanban-card {
+    padding: 11px !important;
+    border-radius: 11px !important;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, .055) !important;
+}
+
+.almdina-sf-kanban-card[draggable="true"] {
+    cursor: grab;
+}
+
+.almdina-sf-kanban-card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.almdina-sf-kanban-card.is-dragging {
+    opacity: .48;
+    transform: rotate(.4deg) scale(.99);
+}
+
+.almdina-sf-kanban-card > .almdina-sf-card-meta {
+    margin-top: 8px !important;
+}
+
+.almdina-sf-kanban-card > .almdina-sf-card-meta > div {
+    min-height: 48px;
+    padding: 7px 8px !important;
+}
+
+.almdina-sf-kanban-card > .almdina-sf-card-actions {
+    margin-top: 9px !important;
+}
+
+.almdina-sf-kanban-card :where(.sf-quick-action, .sf-open-btn) {
+    min-height: 38px !important;
+    padding-inline: 8px;
+    font-size: 11px;
+}
+
+.almdina-sf-drag-hint {
+    margin-top: 7px;
+    color: var(--text-muted, #94a3b8);
+    font-size: 9px;
+    text-align: center;
+}
+
+.almdina-sf-empty {
+    width: 100%;
+    padding: 24px 16px;
+    border: 1px dashed var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--subtle-fg, #fafbfc);
+    color: var(--text-muted, #64748b);
+    text-align: center;
+}
+
+.almdina-sf-account-card {
+    width: min(100%, 640px);
+    margin-inline: auto;
+    padding: 18px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 15px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .06);
+}
+
+.almdina-sf-account-row {
+    display: grid;
+    grid-template-columns: minmax(110px, .7fr) minmax(0, 1.3fr);
+    gap: 10px;
+    padding-block: 9px;
+    border-bottom: 1px solid var(--border-color, #edf0f2);
+}
+
+.almdina-sf-account-row:last-of-type {
+    border-bottom: 0;
+}
+
+.shop-floor-detail > .frappe-card {
+    max-width: 100%;
+    border: 1px solid var(--border-color, #dfe3e8) !important;
+    border-radius: 15px !important;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .06);
+}
+
+.almdina-sf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.almdina-sf-actions .btn {
+    min-height: 42px;
+    border-radius: 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .almdina-sf-order-card:hover {
+        border-color: color-mix(in srgb, var(--sf-accent) 36%, var(--border-color, #dfe3e8)) !important;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .09) !important;
+        transform: translateY(-1px);
+    }
+}
+
+@media (max-width: 900px) {
+    .almdina-sf-shell {
+        max-width: 100%;
+    }
+
+    .almdina-sf-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .almdina-sf-board-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-board-metrics {
+        grid-column: 1 / -1;
+    }
+
+    .almdina-sf-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .almdina-sf-tab,
+    .almdina-sf-refresh {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 720px) {
+    .almdina-sf-shell {
+        padding-inline: 2px;
+        padding-bottom: 18px;
+    }
+
+    .almdina-sf-tabs {
+        gap: 6px;
+        margin-bottom: 10px;
+        padding: 6px;
+        border-radius: 12px;
+    }
+
+    .almdina-sf-tab,
+    .almdina-sf-refresh {
+        min-height: 46px;
+        padding-inline: 13px;
+        font-size: 12px;
+    }
+
+    .almdina-sf-list {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .almdina-sf-board-toolbar {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .almdina-sf-board-metrics {
+        grid-column: auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-route-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 12px;
+    }
+
+    .almdina-sf-kanban {
+        grid-auto-columns: minmax(82vw, 82vw);
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .almdina-sf-kanban-column {
+        min-height: 200px;
+    }
+
+    .almdina-sf-board-help,
+    .almdina-sf-drag-hint {
+        display: none;
+    }
+
+    .almdina-sf-order-card {
+        padding: 13px !important;
+        border-radius: 14px !important;
+    }
+
+    .almdina-sf-order-card > div:nth-child(2) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .almdina-sf-order-card :where(.sf-quick-action, .sf-open-btn) {
+        min-height: 48px !important;
+        font-size: 13px;
+    }
+
+    .almdina-sf-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-actions .btn {
+        width: 100%;
+        min-width: 0;
+        min-height: 46px;
+    }
+
+    .almdina-sf-account-card {
+        padding: 14px;
+    }
+
+    .almdina-sf-account-row {
+        grid-template-columns: 1fr;
+        gap: 3px;
+    }
+}
+
+@media (max-width: 420px) {
+    .almdina-sf-order-card > .almdina-sf-card-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-order-card > div:nth-child(2) {
+        gap: 7px !important;
+    }
+
+    .almdina-sf-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-kanban {
+        grid-auto-columns: minmax(88vw, 88vw);
+    }
+}
+
+@media (max-width: 340px) {
+    .almdina-sf-order-card > div:nth-child(2) {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-sf-order-card,
+    .almdina-sf-order-card *,
+    .almdina-sf-tabs *,
+    .almdina-sf-kanban-column {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+@keyframes almdina-sf-spin {
+    to { transform: rotate(360deg); }
+}

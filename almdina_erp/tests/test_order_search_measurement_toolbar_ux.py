@@ -7,7 +7,7 @@ DOCTYPE_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_c
 HOOKS = ROOT / "hooks.py"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-COST_INVOICE_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
 TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
 
@@ -46,7 +46,9 @@ def test_measurement_table_has_print_and_editable_full_screen_actions():
     assert "host.appendChild(root)" in source
     assert "placeholder.parentNode.insertBefore(state.root, state.placeholder)" in source
     assert "window.open(" not in source
-    assert "dco-measurements-print-frame" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "dco-measurements-print-frame" not in source
 
 
 def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_behaviour():
@@ -63,25 +65,30 @@ def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_b
     assert "max-height:none!important" in source
 
 
-def test_measurement_print_has_invoice_measurement_columns_without_invoice_totals():
-    source = text(MEASUREMENT_UX)
-    for label in ("النوع", "العرض (سم)", "الطول (سم)", "العدد", "نوع القشاط", "ملاحظات"):
+def test_measurement_print_is_the_shared_base_and_invoice_only_appends_quote():
+    source = text(PRINT_PRESENTER)
+    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
         assert label in source
-    assert "الإجمالي النهائي" not in source
-    assert "تفاصيل الفاتورة" not in source
+    assert "function measurementTable(frm)" in source
+    assert "function measurementDocumentBody(frm)" in source
+    assert 'printHtml(documentHtml(frm, "measurements", printIdentity))' in source
+    assert "function quoteDetailsHtml(payload)" in source
+    assert "${measurementDocumentBody(frm)}" in source
+    assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in source
+    assert source.index("${measurementDocumentBody(frm)}") < source.index(
+        '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'
+    )
+    assert "function invoiceSummary" not in source
+    assert "function invoiceLines(frm)" not in source
 
 
-def test_customer_invoice_prints_edge_color_once_in_header_without_table_columns():
-    invoice = text(COST_INVOICE_UX)
-    print_section = invoice.split("function buildPrintHtml(frm)", 1)[1].split(
-        "function printInvoice(frm)", 1
-    )[0]
+def test_customer_invoice_keeps_edge_color_once_in_shared_measurement_header():
+    print_source = text(PRINT_PRESENTER)
     edge_color_patch = text(EDGE_COLOR_UX)
 
-    assert "grid-template-columns:repeat(3" in print_section
-    assert "<th>نوع القشاط</th>" in print_section
-    assert print_section.count("<b>لون القشاط</b>") == 1
-    assert "<th>لون القشاط</th>" not in print_section
+    assert print_source.count("<b>لون القشاط</b>") == 1
+    assert "<th>لون القشاط</th>" not in print_source
+    assert "<b>نوع القشاط</b>" in print_source
     assert "patchMeasurementTable" not in edge_color_patch
     assert "patchInvoiceLines" not in edge_color_patch
     assert "patchInvoiceMeta" not in edge_color_patch

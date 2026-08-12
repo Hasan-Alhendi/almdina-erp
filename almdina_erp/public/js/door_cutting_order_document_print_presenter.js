@@ -2,6 +2,7 @@
     "use strict";
 
     const FRAME_ID = "dco-unified-document-print-frame";
+    // Invariant: customer invoice = the exact measurement document + authorized quote details at the end.
     let activeFrm = null;
     let activeIdentity = "";
 
@@ -56,6 +57,18 @@
 
     function printThemeApi() {
         return window.AlmdinaOrderDocumentPrintTheme || null;
+    }
+
+    function printIdentityApi() {
+        return window.AlmdinaFactoryPrintIdentity || null;
+    }
+
+    async function resolvePrintIdentity() {
+        const api = printIdentityApi();
+        if (api && typeof api.get === "function") {
+            return Promise.resolve(api.get());
+        }
+        return api && typeof api.fallback === "function" ? api.fallback() : {};
     }
 
     async function ensureProfiles(frm) {
@@ -165,56 +178,17 @@
         }).join("");
     }
 
-    function invoiceLines(frm) {
-        const documents = window.AlmdinaMultiEdgeDocuments;
-        if (documents && typeof documents.invoiceLines === "function") {
-            return documents.invoiceLines(frm);
+    function sharedHeader(frm, printIdentity) {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerHtml !== "function") {
+            throw new Error("Unified factory print header is unavailable");
         }
-        const costing = window.AlmdinaOrderCostUX;
-        return costing && typeof costing.invoiceLines === "function"
-            ? costing.invoiceLines(frm)
-            : [];
-    }
-
-    function invoiceTotal(frm, lines) {
-        const documents = window.AlmdinaMultiEdgeDocuments;
-        if (documents && typeof documents.invoiceTotal === "function") {
-            return documents.invoiceTotal(frm);
-        }
-        return lines.reduce((sum, line) => sum + number(line.amount), 0);
-    }
-
-    function customerLineNote(line) {
-        const note = String(line.note || "").trim();
-        if (!note) return "";
-        if (line.type !== "edge") return note;
-        if (note.includes("من القشاط الافتراضي")) return "";
-        return note.replace("يتضمن أطرافًا مخصصة", "تخصيص استثنائي");
-    }
-
-    function invoiceRowsHtml(lines) {
-        if (!lines.length) {
-            return '<tr><td colspan="6">احفظ الطلب واحسب خطة القص لتظهر تفاصيل الفاتورة.</td></tr>';
-        }
-        return lines.map((line, index) => {
-            const note = customerLineNote(line);
-            return `<tr>
-                <td>${index + 1}</td>
-                <td class="right invoice-description"><b>${esc(line.description)}</b>${note ? `<span class="line-note">${esc(note)}</span>` : ""}</td>
-                <td>${quantity(line.quantity)}</td>
-                <td>${esc(line.unit)}</td>
-                <td>${line.rate || line.rate === 0 ? money(line.rate) : "—"}</td>
-                <td><b>${money(line.amount)}</b></td>
-            </tr>`;
-        }).join("");
-    }
-
-    function sharedHeader(frm, mode) {
-        const title = mode === "invoice" ? "عرض سعر الطلب" : "جدول قياسات الطلب";
-        return `<div class="header">
-            <div><h1>${title}</h1><div class="muted">يظهر في عمود القشاط التخصيص الاستثنائي فقط</div></div>
-            <div class="header-order"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div>
-        </div>`;
+        const reference = frm.doc.name || "مسودة";
+        const date = String(frm.doc.order_date || "").trim();
+        return theme.headerHtml(printIdentity, {
+            title: "جدول قياسات الطلب",
+            meta: date ? `${reference} · ${date}` : reference,
+        });
     }
 
     function sharedInfo(frm) {
@@ -232,15 +206,6 @@
         </div>`;
     }
 
-    function invoiceSummary(frm) {
-        return `<div class="info financial-info">
-            <div><b>عدد الألواح</b>${quantity(frm.doc.required_boards)}</div>
-            <div><b>سعر اللوح</b>$ ${money(frm.doc.board_rate_usd)}</div>
-            <div><b>أجور القص / لوح</b>$ ${money(frm.doc.cutting_cost_per_board_usd)}</div>
-            <div><b>إجمالي القشاط</b>$ ${money(frm.doc.edge_cost_usd)}</div>
-        </div>`;
-    }
-
     function measurementTable(frm) {
         return `<table class="table measurements">
             <thead><tr><th>#</th><th>النوع</th><th>العرض</th><th>الطول</th><th>العدد</th><th>القشاط المخصص</th><th>ملاحظات</th></tr></thead>
@@ -248,28 +213,79 @@
         </table>`;
     }
 
-    function printCss(mode) {
+    function orderNotesHtml(frm) {
+        return frm.doc.order_notes
+            ? `<div class="order-note"><b>ملاحظات الطلب:</b> ${esc(frm.doc.order_notes)}</div>`
+            : "";
+    }
+
+    function measurementDocumentBody(frm) {
+        return `
+            ${sharedInfo(frm)}
+            <div class="title">جدول القياسات</div>
+            ${measurementTable(frm)}
+            ${orderNotesHtml(frm)}`;
+    }
+
+    function quoteLineNote(line) {
+        const note = String(line.note || "").trim();
+        if (!note) return "";
+        if (line.type !== "edge") return note;
+        if (note.includes("من القشاط الافتراضي")) return "";
+        return note.replace("يتضمن أطرافًا مخصصة", "تخصيص استثنائي");
+    }
+
+    function quoteRowsHtml(payload) {
+        const lines = Array.isArray(payload && payload.lines) ? payload.lines : [];
+        if (!lines.length) {
+            return '<tr><td colspan="6">لا توجد بنود سعر متاحة لهذا الطلب.</td></tr>';
+        }
+        return lines.map((line, index) => {
+            const note = quoteLineNote(line);
+            const rate = line.rate_usd;
+            return `<tr>
+                <td>${index + 1}</td>
+                <td class="right invoice-description"><b>${esc(line.description)}</b>${note ? `<span class="line-note">${esc(note)}</span>` : ""}</td>
+                <td>${quantity(line.quantity)}</td>
+                <td>${esc(line.unit)}</td>
+                <td>${rate || rate === 0 ? money(rate) : "—"}</td>
+                <td><b>${money(line.amount_usd)}</b></td>
+            </tr>`;
+        }).join("");
+    }
+
+    function quoteTotal(payload) {
+        const totals = Array.isArray(payload && payload.totals) ? payload.totals : [];
+        const explicit = totals.find(item => item && item.value_usd !== undefined && item.value_usd !== null);
+        if (explicit) return number(explicit.value_usd);
+        const lines = Array.isArray(payload && payload.lines) ? payload.lines : [];
+        return lines.reduce((sum, line) => sum + number(line.amount_usd), 0);
+    }
+
+    function quoteDetailsHtml(payload) {
+        return `<section class="quote-details">
+            <div class="title quote-title">تفاصيل عرض السعر</div>
+            <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>${quoteRowsHtml(payload)}</tbody></table>
+            <div class="total"><span>الإجمالي النهائي</span><span>$ ${money(quoteTotal(payload))}</span></div>
+        </section>`;
+    }
+
+    function printCss() {
         const theme = printThemeApi();
         return theme && typeof theme.css === "function"
-            ? theme.css(mode, shapePrintCss())
+            ? theme.css("measurements", shapePrintCss())
             : shapePrintCss();
     }
 
-    function documentHtml(frm, mode) {
-        const lines = mode === "invoice" ? invoiceLines(frm) : [];
-        const total = mode === "invoice" ? invoiceTotal(frm, lines) : 0;
+    function documentHtml(frm, mode = "measurements", printIdentity = null, quotePayload = null) {
+        const api = printIdentityApi();
+        const identity = printIdentity || (api && typeof api.fallback === "function" ? api.fallback() : {});
+        const invoice = mode === "invoice";
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${mode === "invoice" ? "فاتورة" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss(mode)}</style></head><body>
-            ${sharedHeader(frm, mode)}
-            ${sharedInfo(frm)}
-            ${mode === "invoice" ? invoiceSummary(frm) : ""}
-            <div class="title">جدول القياسات</div>
-            ${measurementTable(frm)}
-            ${mode === "invoice" ? `
-                <div class="title">تفاصيل الفاتورة</div>
-                <table class="table invoice"><thead><tr><th>#</th><th class="right">البيان</th><th>الكمية</th><th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th></tr></thead><tbody>${invoiceRowsHtml(lines)}</tbody></table>
-                <div class="total"><span>الإجمالي النهائي</span><span>$ ${money(total)}</span></div>` : ""}
-            ${frm.doc.order_notes ? `<div class="order-note"><b>ملاحظات الطلب:</b> ${esc(frm.doc.order_notes)}</div>` : ""}
+        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${invoice ? "فاتورة الزبون" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
+            ${sharedHeader(frm, identity)}
+            ${measurementDocumentBody(frm)}
+            ${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}
             <div class="footer"><span>رقم الطلب: ${esc(frm.doc.name || "مسودة")}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
         </body></html>`;
     }
@@ -303,13 +319,44 @@
         setTimeout(cleanup, 120000);
     }
 
-    async function printDocument(frm, mode) {
-        const identity = captureIdentity(frm);
-        if (!isCurrent(frm, identity)) return false;
-        await ensureProfiles(frm);
-        if (!isCurrent(frm, identity)) return false;
-        printHtml(documentHtml(frm, mode));
+    async function printMeasurements(frm) {
+        const documentIdentity = captureIdentity(frm);
+        if (!isCurrent(frm, documentIdentity)) return false;
+        const [, printIdentity] = await Promise.all([
+            ensureProfiles(frm),
+            resolvePrintIdentity(),
+        ]);
+        if (!isCurrent(frm, documentIdentity)) return false;
+        printHtml(documentHtml(frm, "measurements", printIdentity));
         return true;
+    }
+
+    async function printAuthorizedInvoice(frm, payload) {
+        const documentIdentity = captureIdentity(frm);
+        if (!isCurrent(frm, documentIdentity)) return false;
+        if (!payload || payload.kind !== "customer_invoice" || payload.order_name !== frm.doc.name) {
+            throw new Error("Authorized customer invoice payload does not match the active order");
+        }
+        const [, printIdentity] = await Promise.all([
+            ensureProfiles(frm),
+            resolvePrintIdentity(),
+        ]);
+        if (!isCurrent(frm, documentIdentity)) return false;
+        printHtml(documentHtml(frm, "invoice", printIdentity, payload));
+        return true;
+    }
+
+    function requestAuthorizedInvoice(frm) {
+        const financial = window.AlmdinaFinancialDocuments;
+        if (financial && typeof financial.printCustomerInvoice === "function") {
+            return financial.printCustomerInvoice(frm);
+        }
+        frappe.msgprint("تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+        return Promise.resolve(false);
+    }
+
+    function printInvoice(frm) {
+        return requestAuthorizedInvoice(frm);
     }
 
     function bindPrintInterception() {
@@ -324,7 +371,8 @@
             if (!invoiceButton && !measurementButton) return;
             event.preventDefault();
             event.stopImmediatePropagation();
-            printDocument(frm, invoiceButton ? "invoice" : "measurements").catch(error => {
+            const action = invoiceButton ? printInvoice(frm) : printMeasurements(frm);
+            Promise.resolve(action).catch(error => {
                 console.error("Order document preparation failed", error);
                 frappe.msgprint("تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
             });
@@ -343,8 +391,9 @@
     });
 
     window.AlmdinaOrderDocumentPrint = Object.freeze({
-        printInvoice(frm) { return printDocument(frm, "invoice"); },
-        printMeasurements(frm) { return printDocument(frm, "measurements"); },
+        printInvoice,
+        printAuthorizedInvoice,
+        printMeasurements,
         html: documentHtml,
     });
 })();

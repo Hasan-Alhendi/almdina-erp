@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / "almdina_erp" / "domain" / "security" / "factory_settings.py"
+SURFACE_POLICY = ROOT / "almdina_erp" / "application" / "security" / "surface_access.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 MASTER_SERVICE = ROOT / "almdina_erp" / "services" / "master_data_service.py"
 AUDIT_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "master_data_audit.py"
@@ -20,6 +21,7 @@ AUDIT_JSON = ROOT / "almdina_erp" / "doctype" / "almdina_master_data_audit" / "a
 SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
 MASTER_PAGE = ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js"
 MASTER_PAGE_JSON = MASTER_PAGE.with_suffix(".json")
+ROUTING_WORKFLOW_CSS = ROOT / "public" / "css" / "factory_routing_workflow.css"
 WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "almdina_settings.json"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 
@@ -77,6 +79,8 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("_MASTER_DEFINITIONS", source)
         self.assertIn("require_doctype_capability", source)
         self.assertIn("delete_master_data_record", source)
+        self.assertIn("Capability.DELETE_PRODUCTION_ROUTINGS", source)
+        self.assertIn("Capability.DELETE_EDGE_BANDING_TYPES", source)
         self.assertNotIn("frappe.user_roles", source)
         for role in ("Production Manager", "System Manager", "Stock Manager", "Order Entry"):
             self.assertNotIn(role, source)
@@ -84,15 +88,19 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
     def test_pages_are_arabic_responsive_and_do_not_read_roles(self) -> None:
         master_metadata = json.loads(MASTER_PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(master_metadata["roles"], [])
+        settings_source = SETTINGS_PAGE.read_text(encoding="utf-8")
+        self.assertIn("@media", settings_source)
         for page in (SETTINGS_PAGE, MASTER_PAGE):
             source = page.read_text(encoding="utf-8")
-            self.assertIn("@media", source)
             self.assertIn("requestId", source)
             self.assertNotIn("frappe.user_roles", source)
         master = MASTER_PAGE.read_text(encoding="utf-8")
-        self.assertIn("get_master_data_console", master)
+        css = ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
+        self.assertIn("get_production_routing_console", master)
+        self.assertIn("save_production_routing", master)
         self.assertIn("سجل التغييرات", master)
         self.assertIn("سيُرفض الحذف", master)
+        self.assertIn("@media", css)
 
     def test_settings_workspace_uses_consoles_not_raw_single_doctype(self) -> None:
         metadata = json.loads(WORKSPACE.read_text(encoding="utf-8"))
@@ -101,18 +109,23 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("factory-master-data", targets)
         self.assertNotIn("Almdina ERP Settings", targets)
 
-    def test_shared_shell_has_granular_configuration_routes(self) -> None:
-        source = SHARED_SHELL.read_text(encoding="utf-8")
-        for capability in (
-            "view_factory_settings",
-            "edit_factory_cost_defaults",
-            "view_production_routings",
-            "delete_production_routings",
-            "view_edge_banding_types",
-            "delete_edge_banding_types",
-        ):
-            self.assertIn(capability, source)
-        self.assertIn("factory-master-data", source)
+    def test_shared_shell_uses_granular_configuration_surfaces(self) -> None:
+        shell = SHARED_SHELL.read_text(encoding="utf-8")
+        surface_policy = SURFACE_POLICY.read_text(encoding="utf-8")
+
+        self.assertIn('surface: "factory_master_data"', shell)
+        self.assertIn('surface: "production_routings"', shell)
+        self.assertIn('surface: "edge_banding_types"', shell)
+        self.assertIn('surface: "factory_settings"', shell)
+        self.assertIn("factory-master-data", shell)
+        self.assertIn("production-routing", shell)
+        self.assertIn("edge-banding-type", shell)
+        self.assertIn("factory-production-settings", shell)
+
+        self.assertIn("Capability.VIEW_PRODUCTION_ROUTINGS", surface_policy)
+        self.assertIn("Capability.VIEW_EDGE_BANDING_TYPES", surface_policy)
+        self.assertIn('sections.get("factory_settings")', surface_policy)
+        self.assertIn("can_open_master_data", surface_policy)
 
 
 if __name__ == "__main__":

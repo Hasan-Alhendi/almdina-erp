@@ -14,10 +14,7 @@
 
     function order_can_edit(frm) {
         if (!frm || !frm.doc || frm.doc.docstatus !== 0) return false;
-        const status = frm.doc.status || "Draft";
-        if (LOCKED.has(status)) return false;
-        if (DRAFT_LIKE.has(status)) return true;
-        return is_order_editor();
+        return (frm.doc.status || "Draft") === "Draft";
     }
 
     frappe.provide("frappe.almdina");
@@ -122,7 +119,7 @@
         ) {
             frm.add_custom_button(__("إعادة للمسودة"), () => {
                 frappe.confirm(
-                    __("سيتم إلغاء مراحل الإنتاج الحالية وإعادة الطلب للمسودة حتى تستطيع تعديله بالكامل. هل تريد المتابعة؟"),
+                    __("سيتم إلغاء مراحل الإنتاج الحالية وإعادة نفس الطلب للمسودة حتى تستطيع تعديله. هل تريد المتابعة؟"),
                     () => call_action(
                         "almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft",
                         { order_name: frm.doc.name },

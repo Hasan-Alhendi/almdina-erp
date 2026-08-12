@@ -51,6 +51,12 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
     def current_user(self) -> str:
         return shop_floor_authorization.current_user()
 
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        return shop_floor_authorization.roles_of(user or self.current_user())
+
+    def is_admin(self, user: str | None = None) -> bool:
+        return str(user or self.current_user() or "") == "Administrator"
+
     def capabilities_for_order(self, order_name: str) -> frozenset[str]:
         order = order_tracking_repository.get_order(order_name)
         return frozenset(
@@ -58,6 +64,12 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             for capability in PRODUCTION_ACTIONS
             if document_has_capability(order, capability)
         )
+
+    def lock_order(self, order_name: str) -> None:
+        order_tracking_repository.lock_order(order_name)
+
+    def lock_stage(self, stage_name: str) -> None:
+        production_stage_repository.lock_stage(stage_name)
 
     def get_order_state(self, order_name: str) -> OrderState:
         order = order_tracking_repository.get_order(order_name)
@@ -68,6 +80,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             current_stage=order.current_production_stage or None,
             has_cutting_plan=bool(order.cutting_plan_json),
             plan_needs_recalculation=bool(_as_int(order.plan_needs_recalculation)),
+            has_approved_plan=bool(order.approved_plan),
             drawing_dxf_status=order.drawing_dxf_status or None,
         )
 

@@ -67,11 +67,7 @@
 
         const plans = window.AlmdinaPlanTabsUX;
         if (plans && typeof plans.afterRender === "function") {
-            const shown = plans.afterRender(frm);
-            if (!shown) {
-                const field = frm.fields_dict.cutting_plan_html;
-                if (field && field.$wrapper) field.$wrapper.empty();
-            }
+            plans.afterRender(frm);
         }
 
         const tabs = window.AlmdinaOrderTabPermissionsUX;
@@ -83,13 +79,21 @@
         if (revision && typeof revision.applyImmutableFields === "function") {
             revision.applyImmutableFields(frm);
         }
+
+        const production = window.AlmdinaShopFloorOrderUX;
+        if (production && typeof production.reconcileProductionActions === "function") {
+            production.reconcileProductionActions(frm);
+        }
     }
 
     function refreshPermissions(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") {
             return Promise.resolve(false);
         }
-        if (frm.__almdinaPermissionRefreshPromise) {
+        if (
+            frm.__almdinaPermissionRefreshPromise
+            && isCurrent(frm, frm.__almdinaPermissionRefreshContext)
+        ) {
             return frm.__almdinaPermissionRefreshPromise;
         }
 
@@ -100,7 +104,7 @@
             ? permissions.refresh()
             : Promise.resolve();
 
-        frm.__almdinaPermissionRefreshPromise = Promise.resolve(operation)
+        const refreshPromise = Promise.resolve(operation)
             .then(() => {
                 if (!isCurrent(frm, identity)) return false;
                 const changed = permissionSignature(permissions) !== beforeSignature;
@@ -111,14 +115,21 @@
                 return false;
             })
             .catch(error => {
-                console.error("Failed to refresh Almdina permissions", error);
+                if (isCurrent(frm, identity)) {
+                    console.error("Failed to refresh Almdina permissions", error);
+                }
                 return false;
             })
             .finally(() => {
-                frm.__almdinaPermissionRefreshPromise = null;
+                if (frm.__almdinaPermissionRefreshPromise === refreshPromise) {
+                    frm.__almdinaPermissionRefreshPromise = null;
+                    frm.__almdinaPermissionRefreshContext = null;
+                }
             });
 
-        return frm.__almdinaPermissionRefreshPromise;
+        frm.__almdinaPermissionRefreshContext = identity;
+        frm.__almdinaPermissionRefreshPromise = refreshPromise;
+        return refreshPromise;
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -147,6 +158,19 @@
         refreshPermissions,
         surfaceNeedsRecovery,
     });
+
+    const documentContext = context();
+    if (documentContext && typeof documentContext.registerSurface === "function") {
+        documentContext.registerSurface("order-permission-surfaces", {
+            isReady(frm) {
+                return !surfaceNeedsRecovery(frm, window.AlmdinaPermissions);
+            },
+            recover(frm) {
+                applySurfaces(frm);
+                return true;
+            },
+        });
+    }
 
     window.setTimeout(() => {
         const frm = window.cur_frm;

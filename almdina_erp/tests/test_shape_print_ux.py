@@ -5,7 +5,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
-MEASUREMENTS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 EDGE_COLOR = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
 
@@ -44,13 +45,16 @@ def test_renderer_delegates_selection_to_the_shared_shape_output_contract():
 
 
 def test_measurement_print_places_drawing_inside_notes_without_adding_a_column():
-    source = text(MEASUREMENTS)
+    actions = text(MEASUREMENT_ACTIONS)
+    source = text(PRINT_PRESENTER)
+    assert "window.AlmdinaOrderDocumentPrint" in actions
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in actions
+    assert "...source" in source
     assert "renderer.notesCell(row, row.notes" in source
-    assert "row.special_shape_drawing_json" in source
-    assert "row.special_shape_geometry_json" in source
-    assert "dco-notes-has-sketch" in source
-    assert "${shapePrintCss()}" in source
-    assert source.count("<th class=\"notes\">ملاحظات</th>") == 1
+    assert "rowHasDrawing(row)" in source
+    assert "notes-with-drawing" in source
+    assert "shapePrintCss()" in source
+    assert source.count("<th>ملاحظات</th>") == 1
     assert "<th>الرسم</th>" not in source
 
 

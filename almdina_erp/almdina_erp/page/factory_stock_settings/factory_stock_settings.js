@@ -90,5 +90,6 @@ frappe.pages["factory-stock-settings"].on_page_load = function (wrapper) {
         dialog.show();
     }
 
+    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
     load();
 };

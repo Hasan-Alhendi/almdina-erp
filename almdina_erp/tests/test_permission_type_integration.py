@@ -160,6 +160,44 @@ class TestPermissionTypeIntegration(unittest.TestCase):
             with self.subTest(permission_type=permission_type):
                 self._assert_arbitrary_role_grant(permission_type, suffix)
 
+    def test_permission_type_sync_repairs_existing_custom_field_metadata(self) -> None:
+        custom_field = frappe.db.get_value(
+            "Custom Field",
+            {
+                "dt": "Custom DocPerm",
+                "fieldname": Capability.UPLOAD_DXF,
+            },
+            ["name", "depends_on"],
+            as_dict=True,
+        )
+        self.assertIsNotNone(custom_field)
+        original_depends_on = custom_field.depends_on
+        try:
+            frappe.db.set_value(
+                "Custom Field",
+                custom_field.name,
+                "depends_on",
+                "eval:false",
+                update_modified=False,
+            )
+            sync_permission_types()
+            repaired = frappe.db.get_value(
+                "Custom Field",
+                custom_field.name,
+                "depends_on",
+            )
+            self.assertNotEqual(repaired, "eval:false")
+            self.assertIn("Door Cutting Order", repaired or "")
+        finally:
+            frappe.db.set_value(
+                "Custom Field",
+                custom_field.name,
+                "depends_on",
+                original_depends_on,
+                update_modified=False,
+            )
+            frappe.clear_cache(doctype="Custom DocPerm")
+
     def test_permission_type_sync_is_idempotent(self) -> None:
         before = frappe.db.count("Permission Type")
         sync_permission_types()

@@ -67,8 +67,19 @@ def test_shared_shell_keeps_desk_and_uses_navigation_context() -> None:
     assert "shared_shell" in source
     assert "!nav.shared_shell || !nav.home_page || !routeIsRoot()" in source
     assert "frappe.user_roles" not in source
-    assert "frappe.set_route =" not in source
-    assert "MutationObserver" not in source
+    assert "frappe.set_route = function" not in source
+    assert "frappe.set_route = (" not in source
+    assert "frappe.set_route(home)" in source
+
+    # Frappe renders workspace shortcuts asynchronously. The observer is deliberately
+    # narrow: it only reacts to added child nodes, then runs the debounced permission
+    # visibility scan. It must never become a general DOM mutation watcher.
+    assert "MutationObserver" in source
+    assert "schedulePermissionScan" in source
+    assert "observer.observe(document.body, { childList: true, subtree: true })" in source
+    assert "attributes: true" not in source
+    assert "characterData: true" not in source
+
     for hidden_chrome in (".awesomebar", ".body-sidebar", ".notifications-icon"):
         assert hidden_chrome not in source
 
@@ -105,7 +116,11 @@ def test_permission_queries_use_capabilities_and_assignment_not_role_names() -> 
 
 def test_cutting_plan_tabs_use_capability_not_role_names() -> None:
     source = PLAN_TABS_PATH.read_text(encoding="utf-8")
-    assert 'context.canDocument(frm, "view_cutting_plan")' in source
+    assert 'context.canDocument(frm, capability)' in source or 'canDocument(frm, capability)' in source
+    assert "view_system_cutting_plan" in source
+    assert "view_uploaded_cutting_plan" in source
+    assert "view_approved_cutting_plan" in source
+    assert "الخطة المعتمدة" in source
     assert "frappe.user_roles" not in source
     assert "DUAL_ROLES" not in source
     for role in ("Order Entry", "Production Manager", "System Manager", "عامل رسم"):

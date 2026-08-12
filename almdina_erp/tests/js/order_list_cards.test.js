@@ -13,6 +13,8 @@ const source = fs.readFileSync(
     "utf8"
 );
 
+let coarsePointer = false;
+let noHover = false;
 const context = {
     console,
     document: { documentElement: { clientWidth: 390 } },
@@ -29,6 +31,11 @@ const context = {
     window: {
         innerWidth: 390,
         screen: { width: 390, height: 844 },
+        matchMedia(query) {
+            if (query === "(pointer: coarse)") return { matches: coarsePointer };
+            if (query === "(hover: none)") return { matches: noHover };
+            return { matches: false };
+        },
         AlmdinaShopFloorQuickActions: {
             actionFor(actionContext) {
                 return actionContext.canStart
@@ -44,6 +51,7 @@ vm.createContext(context);
 vm.runInContext(responsiveSource, context);
 vm.runInContext(source, context);
 
+const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
 const doc = {
     name: "DCO-2026-00010",
@@ -60,7 +68,7 @@ const doc = {
 };
 
 const html = api.buildCard(doc, true);
-assert(html.includes('class="dco-mobile-order-card"'), "the mobile row must be a real card");
+assert(html.includes('class="dco-mobile-order-card"'), "the compact row must be a real card");
 assert(html.includes('class="dco-card-workflow"'), "production state must have a dedicated visual group");
 assert(html.includes("أسود"), "the card must show edge color");
 assert(html.includes("MDF أبيض 18 مم"), "the card must show the board description");
@@ -68,16 +76,48 @@ assert(html.includes("بدء العمل"), "the assigned worker must get the val
 assert(html.includes("فتح الطلب"), "the card must retain a clear detail action");
 assert(!html.includes("<select"), "the card must not expose an arbitrary status selector");
 
-const narrowRoot = { getBoundingClientRect: () => ({ width: 340 }) };
-assert.strictEqual(api.isPhoneLayout(narrowRoot), true, "a real phone must use order cards");
-context.document.documentElement.clientWidth = 700;
-context.window.innerWidth = 700;
+const phoneRoot = { getBoundingClientRect: () => ({ width: 340 }) };
+assert.strictEqual(api.isPhoneLayout(phoneRoot), true, "a real phone must use order cards");
+assert.strictEqual(responsive.usesCardLayout(phoneRoot), true);
+
+// Narrow live viewports get cards even when screen.* still reports a desktop monitor.
+context.document.documentElement.clientWidth = 390;
+context.window.innerWidth = 390;
+context.window.screen.width = 1440;
+context.window.screen.height = 900;
+coarsePointer = false;
+noHover = false;
+const narrowViewportRoot = { getBoundingClientRect: () => ({ width: 390 }) };
+assert.strictEqual(
+    api.isPhoneLayout(narrowViewportRoot),
+    true,
+    "a phone-sized viewport must use order cards without relying on screen.*"
+);
+
+// A portrait touch-first tablet uses cards even though its viewport is below 900px.
+context.document.documentElement.clientWidth = 820;
+context.window.innerWidth = 820;
+context.window.screen.width = 820;
+context.window.screen.height = 1180;
+coarsePointer = true;
+noHover = true;
+const tabletRoot = { getBoundingClientRect: () => ({ width: 820 }) };
+assert.strictEqual(responsive.isTabletDevice(tabletRoot), true, "a portrait touch tablet must be detected as a tablet");
+assert.strictEqual(api.isPhoneLayout(tabletRoot), true, "a tablet must use order cards");
+
+// A laptop keeps the original Frappe table even at a similar viewport width.
+context.document.documentElement.clientWidth = 1024;
+context.window.innerWidth = 1024;
 context.window.screen.width = 1366;
 context.window.screen.height = 768;
-assert.strictEqual(api.isPhoneLayout(narrowRoot), false, "a laptop must retain the original list table");
+coarsePointer = false;
+noHover = false;
+const laptopRoot = { getBoundingClientRect: () => ({ width: 1024 }) };
+assert.strictEqual(responsive.isTabletDevice(laptopRoot), false, "a laptop must not be treated as a tablet");
+assert.strictEqual(api.isPhoneLayout(laptopRoot), false, "a laptop must retain the original list table");
 
 const otherWorker = { ...doc, current_assignee: "other@example.com" };
 assert.strictEqual(api.quickActionContext(otherWorker).canStart, false);
 assert(!api.buildCard(otherWorker, false).includes("dco-card-production-action"));
 
-console.log("Door Cutting Order list-card simulation passed");
+console.log("Door Cutting Order responsive list-card simulation passed");

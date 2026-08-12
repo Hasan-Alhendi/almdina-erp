@@ -310,11 +310,19 @@
         }
     }
 
+    let activeDialog = null;
+
     function open(frm, row, options = {}) {
         if (!frm || !row || row.piece_type !== CLIPPED_TYPE) return;
         installStyles();
         prepareRow(row);
         const readOnly = Boolean(options.readOnly);
+
+        // Prevent stacked corner dialogs from duplicate click handlers.
+        if (activeDialog) {
+            try { activeDialog.hide(); } catch (error) { /* closing previous dialog */ }
+            activeDialog = null;
+        }
 
         const dialog = new frappe.ui.Dialog({
             title: isArabic()
@@ -354,6 +362,10 @@
             },
         });
         dialog.$wrapper.addClass("dco-clipped-corner-modal");
+        activeDialog = dialog;
+        dialog.$wrapper.on("hidden.bs.modal.dco-clipped-corner-active", () => {
+            if (activeDialog === dialog) activeDialog = null;
+        });
         dialog.show();
 
         const field = dialog.fields_dict.corner_editor;

@@ -11,6 +11,7 @@ class FactorySettingsSection:
     CUTTING = "cutting"
     COSTING = "costing"
     PRODUCTION = "production"
+    PRINT_IDENTITY = "print_identity"
 
 
 SECTION_FIELDS = MappingProxyType(
@@ -41,6 +42,14 @@ SECTION_FIELDS = MappingProxyType(
                 "allow_unplaced_approval",
             }
         ),
+        FactorySettingsSection.PRINT_IDENTITY: frozenset(
+            {
+                "print_factory_name",
+                "print_factory_description",
+                "print_factory_address",
+                "print_factory_contacts",
+            }
+        ),
     }
 )
 SECTION_CAPABILITIES = MappingProxyType(
@@ -48,6 +57,7 @@ SECTION_CAPABILITIES = MappingProxyType(
         FactorySettingsSection.CUTTING: Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
         FactorySettingsSection.COSTING: Capability.EDIT_FACTORY_COST_DEFAULTS,
         FactorySettingsSection.PRODUCTION: Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
+        FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
     }
 )
 ALL_SETTINGS_FIELDS = frozenset().union(*SECTION_FIELDS.values())
@@ -63,10 +73,9 @@ class FactorySettingsDecision:
 def expand_factory_settings_capabilities(
     capabilities: Iterable[str] | None,
 ) -> frozenset[str]:
+    """Apply only safe dependencies between granular factory-setting grants."""
+
     granted = set(normalize_capabilities(capabilities))
-    if Capability.MANAGE_FACTORY_SETTINGS in granted:
-        granted.add(Capability.VIEW_FACTORY_SETTINGS)
-        granted.update(SECTION_CAPABILITIES.values())
     if any(capability in granted for capability in SECTION_CAPABILITIES.values()):
         granted.add(Capability.VIEW_FACTORY_SETTINGS)
     return frozenset(granted)
@@ -101,7 +110,11 @@ def decide_settings_update(
             f"Unsupported factory setting fields: {', '.join(sorted(unknown))}",
         )
     if not supplied:
-        return FactorySettingsDecision(False, "empty_update", "No factory setting changes were supplied.")
+        return FactorySettingsDecision(
+            False,
+            "empty_update",
+            "No factory setting changes were supplied.",
+        )
     for section, fields in SECTION_FIELDS.items():
         if supplied.intersection(fields) and SECTION_CAPABILITIES[section] not in granted:
             return FactorySettingsDecision(

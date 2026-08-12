@@ -579,32 +579,43 @@
         const root = field.$wrapper.get(0);
         if (!root) return;
 
+        // Keep the live form identity even when this root is rebound after refresh.
+        // Listeners must stay singular: html() replaces children, not this wrapper, so
+        // re-attaching on every render would open stacked shape/corner dialogs.
+        root._dcoFastEntryForm = frm;
+        if (root._dcoFastMeasurementsBound) return;
+        root._dcoFastMeasurementsBound = true;
+
         root.addEventListener("input", event => {
+            const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest(".dco-fast-input[data-field]");
-            if (!input || !root.contains(input)) return;
-            syncInputToModel(frm, input, false);
+            if (!input || !root.contains(input) || !currentFrm) return;
+            syncInputToModel(currentFrm, input, false);
         });
 
         root.addEventListener("change", event => {
+            const currentFrm = root._dcoFastEntryForm;
             const control = event.target.closest("[data-field]");
-            if (!control || !root.contains(control)) return;
-            const row = syncInputToModel(frm, control, false);
+            if (!control || !root.contains(control) || !currentFrm) return;
+            const row = syncInputToModel(currentFrm, control, false);
             if (row) {
-                triggerChildField(frm, row, control.dataset.field, 0);
-                if (control.dataset.field === "piece_type") renderFastMeasurements(frm);
+                triggerChildField(currentFrm, row, control.dataset.field, 0);
+                if (control.dataset.field === "piece_type") renderFastMeasurements(currentFrm);
             }
         });
 
         root.addEventListener("blur", event => {
+            const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
-            if (!input || !root.contains(input)) return;
-            const row = syncInputToModel(frm, input, false);
-            if (row) triggerChildField(frm, row, input.dataset.field, 180);
+            if (!input || !root.contains(input) || !currentFrm) return;
+            const row = syncInputToModel(currentFrm, input, false);
+            if (row) triggerChildField(currentFrm, row, input.dataset.field, 180);
         }, true);
 
         root.addEventListener("keydown", event => {
+            const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest("input[data-field]");
-            if (!input || !root.contains(input)) return;
+            if (!input || !root.contains(input) || !currentFrm) return;
             const fieldname = input.dataset.field;
             const tr = input.closest("tr[data-row-name]");
 
@@ -622,9 +633,9 @@
             if (event.key === "Enter" && fieldname === "length_cm") {
                 event.preventDefault();
                 event.stopPropagation();
-                const row = syncInputToModel(frm, input, false);
-                if (row) triggerChildField(frm, row, "length_cm", 0);
-                moveToNextWidth(frm, tr);
+                const row = syncInputToModel(currentFrm, input, false);
+                if (row) triggerChildField(currentFrm, row, "length_cm", 0);
+                moveToNextWidth(currentFrm, tr);
             }
         });
 
@@ -637,18 +648,20 @@
         }, true);
 
         root.addEventListener("click", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            if (!currentFrm) return;
             const check = event.target.closest(".dco-check-toggle[data-check-field]");
             if (check && root.contains(check)) {
                 event.preventDefault();
                 event.stopPropagation();
-                toggleCheck(frm, check);
+                toggleCheck(currentFrm, check);
                 return;
             }
             const del = event.target.closest(".dco-delete-row");
             if (del && root.contains(del)) {
                 event.preventDefault();
                 event.stopPropagation();
-                deleteRow(frm, del.closest("tr[data-row-name]"));
+                deleteRow(currentFrm, del.closest("tr[data-row-name]"));
                 return;
             }
             const sketch = event.target.closest(".dco-special-sketch-button");
@@ -656,11 +669,11 @@
                 event.preventDefault();
                 event.stopPropagation();
                 const tr = sketch.closest("tr[data-row-name]");
-                const row = rowByName(frm, tr && tr.dataset.rowName);
+                const row = rowByName(currentFrm, tr && tr.dataset.rowName);
                 if (row && row.piece_type === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
-                    window.AlmdinaClippedCornerEditor.open(frm, row);
+                    window.AlmdinaClippedCornerEditor.open(currentFrm, row);
                 } else if (row && window.AlmdinaSpecialShapeEditor) {
-                    window.AlmdinaSpecialShapeEditor.open(frm, row);
+                    window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
                 }
             }
         });

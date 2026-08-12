@@ -317,9 +317,15 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         self.assertNotIn("rate_usd_per_meter *", print_source)
 
-        self.assertIn("قشاط الأطراف", document_source)
-        self.assertIn("يتضمن أطرافًا مخصصة", document_source)
+        # Edge/customization UX may decorate the invoice, but persisted server
+        # costing is the only monetary authority. Never rebuild invoice money from
+        # the asynchronous Edge Banding Type browser cache.
+        self.assertIn("const costing = window.AlmdinaOrderCostUX", document_source)
+        self.assertIn("costing.invoiceLines(frm)", document_source)
+        self.assertIn("persisted server-cost snapshot", document_source)
         self.assertIn("سطر مستقل لكل نوع قشاط", document_source)
+        self.assertNotIn("tbody.innerHTML = invoiceRowsHtml", document_source)
+        self.assertNotIn("group.amount += num(detail.amount)", document_source)
         self.assertIn("سماكة القشاط (مم)", edge_source)
 
 

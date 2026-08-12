@@ -27,6 +27,8 @@ const setValues = [];
 const fakeWindow = {
     cur_frm: null,
     clearTimeout() {},
+    addEventListener() {},
+    dispatchEvent() {},
 };
 const fakeDocument = {
     documentElement: { lang: "en" },
@@ -74,6 +76,12 @@ const context = vm.createContext({
     Set,
     String,
     Number,
+    CustomEvent: class CustomEvent {
+        constructor(type, options = {}) {
+            this.type = type;
+            this.detail = options.detail;
+        }
+    },
     __: value => value,
 });
 vm.runInContext(source("door_cutting_order_document_context.js"), context);
@@ -111,11 +119,14 @@ async function flushPromises() {
     };
     fakeWindow.cur_frm = frm;
 
-    // The defaults response belongs to the first order and must not update the
-    // same Form instance after navigation changes its document identity.
+    // The defaults response belongs to the first visit and must not update the
+    // same Form instance after an A -> B -> A navigation cycle. Comparing only
+    // the document name would incorrectly accept this stale response.
     trigger("onload", frm);
     assert.equal(calls.length, 1);
     frm.doc.name = "DCO-2026-00002";
+    fakeWindow.AlmdinaDocumentContext.synchronize(frm);
+    frm.doc.name = "DCO-2026-00001";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
     calls[0].resolve({ message: { kerf_mm: 9 } });
     await flushPromises();
@@ -136,11 +147,10 @@ async function flushPromises() {
     // the order opened while that lookup was in flight.
     frm.doc.current_production_stage = "STAGE-DRAWING";
     const stageLookup = fakeWindow.AlmdinaDrawingPlanUX.ensureStageType(frm);
-    assert.equal(calls.length, 2);
-    assert.equal(databaseCalls.length, 1);
+    const stageCall = calls[calls.length - 1];
     frm.doc.name = "DCO-2026-00004";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    calls[1].resolve({ message: { active_stage_type: "Drawing" } });
+    stageCall.resolve({ message: { active_stage_type: "Drawing" } });
     assert.equal(await stageLookup, false);
     assert.equal(frm.__almdina_stage_type, null);
 

@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from almdina_erp.almdina_erp.application.security.report_access import (
+    build_report_access,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CONTROL_CENTER_CAPABILITIES,
     COSTING_CAPABILITIES,
@@ -32,10 +35,7 @@ WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
 
 _CUSTOMER_DOCUMENT_CAPABILITIES = frozenset(
-    {
-        Capability.PRINT_MEASUREMENTS,
-        Capability.PRINT_CUSTOMER_INVOICE,
-    }
+    {Capability.PRINT_MEASUREMENTS, Capability.PRINT_CUSTOMER_INVOICE}
 )
 _FINANCIAL_CAPABILITIES = frozenset(
     COSTING_CAPABILITIES.difference(_CUSTOMER_DOCUMENT_CAPABILITIES)
@@ -57,18 +57,20 @@ _CONTROL_CENTER_MANAGEMENT_CAPABILITIES = frozenset(
 _CONFIGURATION_CAPABILITIES = frozenset(
     FACTORY_SETTINGS_CAPABILITIES | MASTER_DATA_CAPABILITIES
 )
-_ORDER_INPUT_CAPABILITIES = frozenset(
-    {
-        Capability.CREATE_ORDER,
-        Capability.EDIT_ORDER,
-        Capability.CREATE_ORDER_REVISION,
-    }
+
+# ``approve_dxf`` is retained as a persisted compatibility key, but it now
+# represents approval of the selected production cutting plan. Navigation must
+# therefore treat it as planning authority and never as implicit drawing/control
+# center access.
+_PLAN_APPROVAL_CAPABILITIES = frozenset({Capability.APPROVE_DXF})
+_PLANNING_NAV_CAPABILITIES = frozenset(
+    PLANNING_CAPABILITIES | _PLAN_APPROVAL_CAPABILITIES
 )
-_ORDER_SUPPORTING_MASTER_DATA = frozenset(
-    {
-        Capability.VIEW_CUSTOMERS,
-        Capability.VIEW_EDGE_BANDING_TYPES,
-    }
+_DRAWING_NAV_CAPABILITIES = frozenset(
+    DRAWING_CAPABILITIES.difference(_PLAN_APPROVAL_CAPABILITIES)
+)
+_CONTROL_CENTER_NAV_CAPABILITIES = frozenset(
+    CONTROL_CENTER_CAPABILITIES.difference(_PLAN_APPROVAL_CAPABILITIES)
 )
 
 
@@ -77,12 +79,14 @@ def _intersects(granted: frozenset[str], requested: Iterable[str]) -> bool:
 
 
 def _visible_configuration_capabilities(granted: frozenset[str]) -> frozenset[str]:
-    """Exclude read dependencies that exist only to complete order entry UX."""
+    """Return explicit business configuration grants only.
 
-    visible = set(granted.intersection(_CONFIGURATION_CAPABILITIES))
-    if _intersects(granted, _ORDER_INPUT_CAPABILITIES):
-        visible.difference_update(_ORDER_SUPPORTING_MASTER_DATA)
-    return frozenset(visible)
+    Order-entry Customer/Edge lookup dependencies no longer live in canonical
+    business state, so every master-data capability present here is explicit and
+    may safely influence navigation visibility.
+    """
+
+    return frozenset(granted.intersection(_CONFIGURATION_CAPABILITIES))
 
 
 def _profile(granted: frozenset[str]) -> str:
@@ -116,10 +120,10 @@ def _profile(granted: frozenset[str]) -> str:
     if _intersects(granted, order_entry_actions) and not _intersects(
         granted,
         _FINANCIAL_CAPABILITIES
-        | PLANNING_CAPABILITIES
-        | DRAWING_CAPABILITIES
+        | _PLANNING_NAV_CAPABILITIES
+        | _DRAWING_NAV_CAPABILITIES
         | PRODUCTION_CAPABILITIES
-        | CONTROL_CENTER_CAPABILITIES
+        | _CONTROL_CENTER_NAV_CAPABILITIES
         | REPORTING_CAPABILITIES
         | WORKFORCE_CAPABILITIES
         | visible_configuration
@@ -138,11 +142,15 @@ def build_navigation_context(
     active = bool(granted) or system_administrator
     has_orders = _intersects(granted, ORDER_CAPABILITIES)
     has_costing = _intersects(granted, _FINANCIAL_CAPABILITIES)
-    has_planning = _intersects(granted, PLANNING_CAPABILITIES)
-    has_drawing = _intersects(granted, DRAWING_CAPABILITIES)
+    has_planning = _intersects(granted, _PLANNING_NAV_CAPABILITIES)
+    has_drawing = _intersects(granted, _DRAWING_NAV_CAPABILITIES)
     has_production = _intersects(granted, PRODUCTION_CAPABILITIES)
-    has_quality = _intersects(granted, CONTROL_CENTER_CAPABILITIES)
-    has_reports = _intersects(granted, REPORTING_CAPABILITIES)
+    has_quality = _intersects(granted, _CONTROL_CENTER_NAV_CAPABILITIES)
+    report_access = build_report_access(granted)
+    # Every current Almdina Script Report is registered against Door Cutting
+    # Order. Without VIEW_ORDERS Frappe rejects the report before execute(), so
+    # the workspace must not advertise an action the user cannot open.
+    has_reports = report_access.operational and Capability.VIEW_ORDERS in granted
     has_workforce = _intersects(granted, WORKFORCE_CAPABILITIES)
     has_factory_settings = _intersects(granted, FACTORY_SETTINGS_CAPABILITIES)
     visible_configuration = _visible_configuration_capabilities(granted)
@@ -150,12 +158,7 @@ def build_navigation_context(
     has_permissions_admin = Capability.MANAGE_PERMISSIONS in granted
     has_supervision = _intersects(granted, PRODUCTION_SUPERVISOR_CAPABILITIES)
     has_shop_floor = _intersects(granted, SHOP_FLOOR_ACCESS_CAPABILITIES)
-    has_control_center = (
-        has_quality
-        or has_supervision
-        or Capability.APPROVE_DXF in granted
-        or has_permissions_admin
-    )
+    has_control_center = has_quality or has_supervision or has_permissions_admin
 
     operator_only = (
         active
@@ -208,8 +211,6 @@ def build_navigation_context(
 
     return {
         "shared_shell": active,
-        # The built-in Administrator keeps the complete Frappe Desktop, apps and
-        # workspace registry. Every other Almdina profile stays inside the factory app.
         "app_only": active and not system_administrator,
         "profile": _profile(granted),
         "home_page": home_page if active else "",

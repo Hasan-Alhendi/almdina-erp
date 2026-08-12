@@ -12,6 +12,12 @@ APPLICATION_PATH = (
 )
 UX_PATH = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
 PRESENTER_PATH = ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
+DOCUMENT_PRINT_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+)
+COMPACTNESS_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_document_compactness_ux.js"
+)
 HOOKS_PATH = ROOT / "hooks.py"
 
 
@@ -63,10 +69,12 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "cutCornerDoorLabel(row)" in presenter
     assert "dco-invoice-total-card" in presenter
     assert "الإجمالي النهائي للفاتورة" in presenter
+    assert "الإجمالي الحالي قبل الأسعار غير المسعرة" in presenter
     assert "invoiceTotalCardHtml(frm)" in presenter
     assert "#Custom-" not in presenter
     assert "#CutCorner-" not in presenter
     assert "pendingCustomEdgePriceLabels" in presenter
+    assert "pending: !ready" in presenter
     assert "عرض الرسم" in presenter
     assert "غير مسعّر" in presenter
     assert "سعر القشاط" in presenter
@@ -78,10 +86,13 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "orderIsEditable(frm)" in permissions
     assert "frappe.almdina.orderCanEdit" in permissions
     assert "almdina_edit_session_changed(frm)" in permissions
-    assert "أدخل أسعار قشاط" in permissions
-    assert "before_save(frm)" in permissions
+    # Pricing remains a financial-document gate below, but it must not block
+    # persisting a Special/CutCorner measurement row itself.
+    assert "أدخل أسعار قشاط" not in permissions
+    assert "before_save(frm)" not in permissions
+    assert "frappe.validated = false" not in permissions
     assert "pendingCustomEdgePriceLabels" in source
-    assert "أدخل أسعار قشاط" in source
+    assert "لا يمكن طباعة فاتورة غير مكتملة" in source
     assert "assert_order_editable(order)" in (
         ROOT / "almdina_erp" / "services" / "cost_permission_service.py"
     ).read_text(encoding="utf-8")
@@ -117,12 +128,27 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "canDocument" in source
     assert "Customer invoice HTML is server-authorized" in source
     assert "AlmdinaOrderCostUX" in source
+    assert 'typeof costApi.pendingCustomEdgePriceLabels === "function"' in source
+    assert "costApi.pendingCustomEdgePriceLabels(frm)" in source
+    assert "costApi.printInvoice =" not in source
     assert "AlmdinaOrderDocumentPrint" in source
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in source
     assert "dco-print-customer-invoice" in source
     assert "dco-secure-print-customer-invoice" in source
     assert "dco-secure-print-internal-cost-report" in source
     assert "buildPrintHtml" not in source
     assert "invoiceLines(frm)" not in source
+    assert "function measurementsHtml" not in source
+    assert "function invoiceLinesHtml" not in source
+
+
+def test_invoice_waits_for_edge_profiles_before_final_screen_render() -> None:
+    source = COMPACTNESS_PATH.read_text(encoding="utf-8")
+    assert "function refreshInvoiceAfterProfiles(frm)" in source
+    assert "edgeApi.ensureProfiles(frm)" in source
+    assert "AlmdinaOrderCostUX.render(frm)" in source
+    assert "AlmdinaMultiEdgeDocuments.patch(frm)" in source
+    assert "requestAnimationFrame(refresh)" in source
 
 
 def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
@@ -135,18 +161,28 @@ def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
     assert ".off(\"click.almdinaFinancialDocuments\")" in source
     assert "MutationObserver" in source
     assert "__almdina_financial_observer.disconnect()" in source
-    assert "root.find(`.${CUSTOMER_CLASS},.${INTERNAL_CLASS}`).remove()" not in source
+    assert "root.find(`.${CUSTOMER_CLASS},${INTERNAL_CLASS}`).remove()" not in source
 
 
-def test_customer_and_internal_reports_use_distinct_print_layouts() -> None:
+def test_customer_invoice_delegates_layout_and_internal_report_stays_distinct() -> None:
     source = UX_PATH.read_text(encoding="utf-8")
-    assert '@page{size:A4 ${internal ? "landscape" : "portrait"}' in source
-    assert "financial-summary.customer" in source
+    customer_print = DOCUMENT_PRINT_PATH.read_text(encoding="utf-8")
+
+    # The confidential internal report owns its landscape layout here.
+    assert "@page{size:A4 landscape;margin:11mm}" in source
     assert "financial-summary.internal" in source
-    measurements = source.split("function measurementsHtml", 1)[1].split(
-        "function invoiceLinesHtml", 1
-    )[0]
-    assert "متر القشاط" not in measurements
+
+    # Customer invoice layout is not duplicated in the financial adapter.
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in source
+    assert 'throw new Error("Customer invoice layout belongs to AlmdinaOrderDocumentPrint")' in source
+    assert "function measurementsHtml" not in source
+    assert "function invoiceLinesHtml" not in source
+    assert "financial-summary.customer" not in source
+
+    # Customer invoice inherits the exact measurement print theme/body.
+    assert 'theme.css("measurements", shapePrintCss())' in customer_print
+    assert "function measurementDocumentBody(frm)" in customer_print
+    assert "function quoteDetailsHtml(payload)" in customer_print
 
 
 def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:

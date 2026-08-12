@@ -166,7 +166,7 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertFalse(summary.pieces[0].applicable)
         self.assertEqual(summary.pieces[0].price_status, "Not Applicable")
 
-    def test_estimated_special_price_allocates_board_cost_by_area(self) -> None:
+    def test_estimated_special_price_is_additive_and_not_final(self) -> None:
         summary = calculate_special_pricing(
             [
                 SpecialPricingPieceInput(
@@ -195,13 +195,15 @@ class TestOrderCostingDomain(unittest.TestCase):
         )
 
         special = summary.pieces[1]
-        self.assertEqual(special.estimated_unit_price_usd, 19.25)
-        self.assertEqual(special.final_unit_price_usd, 19.25)
+        # The estimate covers the special door's own edge/service surcharge only.
+        # MDF and cutting are already charged once on the invoice base lines.
+        self.assertEqual(special.estimated_unit_price_usd, 8.25)
+        self.assertEqual(special.final_unit_price_usd, 0)
         self.assertEqual(special.price_status, "Estimated")
         self.assertEqual(summary.baseline_cost_usd, 23)
-        self.assertEqual(summary.estimated_total_usd, 38.5)
-        self.assertEqual(summary.final_total_usd, 38.5)
-        self.assertEqual(summary.customer_quote_total_usd, 80.5)
+        self.assertEqual(summary.estimated_total_usd, 16.5)
+        self.assertEqual(summary.final_total_usd, 0)
+        self.assertEqual(summary.customer_quote_total_usd, 42)
         self.assertEqual(summary.customer_quote_status, "Estimated")
 
     def test_approved_special_price_is_preserved(self) -> None:

@@ -122,18 +122,7 @@
   "name":"Door Cutting Order",
   "naming_rule":"By naming series field",
   "search_fields":"customer,board_description",
-  "permissions":[
-    {"create":1,"read":1,"report":1,"print":1,"email":1,"role":"Order Entry","write":1},
-    {"read":1,"report":1,"print":1,"role":"Cutting Operator"},
-    {"read":1,"report":1,"print":1,"role":"Edge Operator"},
-    {"print":1,"read":1,"report":1,"role":"عامل رسم"},
-    {"print":1,"read":1,"report":1,"role":"عامل شريون"},
-    {"print":1,"read":1,"report":1,"role":"عامل CNC"},
-    {"print":1,"read":1,"report":1,"role":"عامل تقشيط"},
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
-    {"read":1,"report":1,"print":1,"export":1,"role":"Accounts Management"},
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}
-  ],
+  "permissions": [],
   "sort_field":"modified",
   "sort_order":"DESC",
   "track_changes":1

@@ -5,6 +5,9 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.services.report_permission_service import (
+    require_operational_report_access,
+)
 from almdina_erp.almdina_erp.services.stock_service import validate_stock_for_order
 
 
@@ -21,6 +24,7 @@ ACTIVE_PRE_CONSUMPTION_STATUSES = (
 
 
 def execute(filters: dict[str, Any] | None = None):
+    require_operational_report_access()
     filters = frappe._dict(filters or {})
     order_filters: dict[str, Any] = {
         "approved_plan": ["is", "set"],
@@ -40,9 +44,6 @@ def execute(filters: dict[str, Any] | None = None):
 
     rows: list[dict[str, Any]] = []
     for order in orders:
-        # Once the approved-plan material issue is submitted, current Bin levels
-        # no longer represent a shortage for that order; the material is already
-        # physically consumed and should not appear in a pending-shortage report.
         consumed = frappe.db.exists(
             "Material Consumption Log",
             {

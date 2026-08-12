@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-
-from almdina_erp.almdina_erp.domain.security.workforce import PROFILES, profile_for_key
 
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 SUPPORTED_LANGUAGES = frozenset({"ar", "en"})
+MAX_USER_ROLES = 100
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,13 +32,13 @@ def normalize_identity(
     normalized_language = str(language or "ar").strip().lower()
 
     if not _EMAIL_PATTERN.match(normalized_email):
-        raise ValueError("A valid user email is required.")
+        raise ValueError("يجب إدخال بريد إلكتروني صالح للمستخدم.")
     if not normalized_first:
-        raise ValueError("First name is required.")
+        raise ValueError("الاسم الأول للمستخدم مطلوب.")
     if len(normalized_first) > 140 or len(normalized_last) > 140:
-        raise ValueError("User name is too long.")
+        raise ValueError("اسم المستخدم أطول من الحد المسموح.")
     if normalized_language not in SUPPORTED_LANGUAGES:
-        raise ValueError("Unsupported user language.")
+        raise ValueError("لغة المستخدم المحددة غير مدعومة.")
 
     return WorkforceIdentity(
         email=normalized_email,
@@ -48,38 +48,43 @@ def normalize_identity(
     )
 
 
+def normalize_role_selection(roles: Iterable[str] | None) -> tuple[str, ...]:
+    if roles is None:
+        return ()
+    if isinstance(roles, (str, bytes)):
+        raise ValueError("يجب إرسال أدوار المستخدم على شكل قائمة.")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_role in roles:
+        role = str(raw_role or "").strip()
+        if not role:
+            raise ValueError("لا يجوز أن تحتوي قائمة أدوار المستخدم على قيمة فارغة.")
+        if role in seen:
+            continue
+        seen.add(role)
+        normalized.append(role)
+    if len(normalized) > MAX_USER_ROLES:
+        raise ValueError(f"لا يمكن إسناد أكثر من {MAX_USER_ROLES} دور للمستخدم.")
+    return tuple(normalized)
+
+
 def validate_temporary_password(password: str, *, email: str = "") -> str:
     value = str(password or "")
     if len(value) < 10:
-        raise ValueError("Temporary password must contain at least 10 characters.")
+        raise ValueError("يجب أن تتكون كلمة المرور المؤقتة من 10 محارف على الأقل.")
     if not any(character.isalpha() for character in value):
-        raise ValueError("Temporary password must contain at least one letter.")
+        raise ValueError("يجب أن تحتوي كلمة المرور المؤقتة على حرف واحد على الأقل.")
     if not any(character.isdigit() for character in value):
-        raise ValueError("Temporary password must contain at least one number.")
+        raise ValueError("يجب أن تحتوي كلمة المرور المؤقتة على رقم واحد على الأقل.")
     local_part = str(email or "").split("@", 1)[0].strip().lower()
     if local_part and len(local_part) >= 4 and local_part in value.lower():
-        raise ValueError("Temporary password must not contain the email name.")
+        raise ValueError("يجب ألا تحتوي كلمة المرور المؤقتة على اسم البريد الإلكتروني قبل علامة @.")
     return value
-
-
-def profile_catalog_payload() -> list[dict[str, Any]]:
-    return [
-        {
-            "key": profile.key,
-            "label": profile.label,
-            "description": profile.description,
-            "default_workspace": profile.default_workspace,
-        }
-        for profile in PROFILES.values()
-    ]
-
-
-def validate_profile(profile_key: str) -> str:
-    return profile_for_key(profile_key).key
 
 
 def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
     source = dict(user or {})
+    roles = normalize_role_selection(source.get("roles") or ())
     return {
         "email": str(source.get("email") or source.get("name") or ""),
         "first_name": str(source.get("first_name") or ""),
@@ -87,18 +92,18 @@ def audit_snapshot(user: dict[str, Any] | None) -> dict[str, Any]:
         "full_name": str(source.get("full_name") or ""),
         "enabled": bool(source.get("enabled")),
         "language": str(source.get("language") or ""),
-        "profile": str(source.get("profile") or ""),
+        "roles": list(roles),
         "default_workspace": str(source.get("default_workspace") or ""),
         "default_app": str(source.get("default_app") or ""),
     }
 
 
 __all__ = [
+    "MAX_USER_ROLES",
     "SUPPORTED_LANGUAGES",
     "WorkforceIdentity",
     "audit_snapshot",
     "normalize_identity",
-    "profile_catalog_payload",
-    "validate_profile",
+    "normalize_role_selection",
     "validate_temporary_password",
 ]

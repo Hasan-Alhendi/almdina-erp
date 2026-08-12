@@ -10,7 +10,6 @@ from almdina_erp.almdina_erp.domain.orders.editability import (
     LOCKED_ORDER_STATUSES,
     can_edit_order,
     can_recalculate_drawing_system_plan,
-    is_before_cutting,
     is_draft_like as domain_is_draft_like,
     is_drawing_stage,
     is_locked_status as domain_is_locked_status,
@@ -94,22 +93,16 @@ def user_can_edit_order(
     *,
     revision_state: str | None = None,
 ) -> bool:
-    """Editors with ``edit_order`` may change the same document before cutting.
+    """In-place edits are allowed only while the order is still a Draft.
 
-    Superseded revisions and orders that reached Sharyoun/CNC (or later) stay
-    read-only. Draft-like statuses remain editable under normal write access.
+    Superseded revisions stay read-only. Leaving Draft requires return-to-draft
+    or a controlled revision — ``edit_order`` never unlocks production states.
     """
 
+    del user
     if str(revision_state or "Current") == "Superseded":
         return False
-    if not is_before_cutting(status):
-        return False
-    if is_draft_like(status):
-        return can_edit_order(status, privileged=False)
-    return can_edit_order(
-        status,
-        privileged=doctype_has_capability(Capability.EDIT_ORDER, user=user),
-    )
+    return can_edit_order(status)
 
 
 def assert_order_editable(order: Any) -> None:
@@ -118,7 +111,7 @@ def assert_order_editable(order: Any) -> None:
         return
     frappe.throw(
         _(
-            "Order {0} cannot be edited after cutting has started, or in its current state."
+            "يمكن تعديل الطلب {0} فقط وهو في حالة المسودة."
         ).format(order_display_name(order))
     )
 

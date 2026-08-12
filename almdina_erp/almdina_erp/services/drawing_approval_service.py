@@ -4,6 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     DrawingActionDenied,
@@ -13,20 +14,21 @@ from almdina_erp.almdina_erp.application.security.drawing_approval_policy import
     DrawingApprovalDenied,
     DrawingApprovalState,
     approval_warning,
-    validate_drawing_approval,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
+    require_stage_operational_access,
+)
 
 
 _POLICY_MESSAGES = {
-    "not_at_drawing": "Drawing approval is only available while the order is at Drawing.",
-    "unsupported_plan_source": "Unsupported drawing plan source.",
-    "system_plan_missing": "The system cutting plan is not available for approval.",
-    "custom_plan_missing": "Upload and validate a DXF plan before approving it.",
+    "unsupported_plan_source": "مصدر خطة القص المحدد غير مدعوم.",
+    "system_plan_missing": "لا توجد خطة قص من النظام صالحة للاعتماد.",
+    "custom_plan_missing": "ارفع خطة DXF صالحة وتحقق منها قبل اعتمادها.",
 }
 
 
@@ -41,20 +43,51 @@ def _state(order: Any) -> DrawingApprovalState:
 
 def _throw_policy_error(error: DrawingApprovalDenied | DrawingActionDenied) -> None:
     frappe.throw(
-        _(_POLICY_MESSAGES.get(error.code, "Drawing approval is not allowed.")),
+        _(_POLICY_MESSAGES.get(error.code, "لا يمكن اعتماد خطة القص في الحالة الحالية.")),
         frappe.PermissionError,
     )
 
 
 def _authorized_order(order_name: str) -> Any:
-    order = shop_floor_gateway.get_order(order_name)
+    """Lock and authorize one order before any approval decision is made."""
+
+    name = str(order_name or "").strip()
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (name,),
+    )
+    order = shop_floor_gateway.get_order(name)
     order.check_permission("read")
-    require_document_capability(order, Capability.APPROVE_DXF)
-    try:
-        validate_drawing_approval(_state(order))
-    except DrawingApprovalDenied as error:
-        _throw_policy_error(error)
+
+    # ``approve_dxf`` is the historical capability key. It authorizes approval
+    # of the selected production cutting plan (system or validated DXF) and is
+    # intentionally independent from cost visibility/editing capabilities.
+    require_document_capability(
+        order,
+        Capability.APPROVE_DXF,
+        message=_("لا تملك صلاحية اعتماد خطة القص لهذا الطلب."),
+    )
+    # Approval is matrix-capability gated and additionally limited to actors who
+    # hold the current production stage's operational role.
+    require_stage_operational_access(order)
     return order
+
+
+def _assert_reviewed_system_plan(order: Any) -> None:
+    """Approval must freeze exactly the plan the approver reviewed.
+
+    Recalculating inside the approval transaction can silently change board count,
+    waste, rotations, and layout after the user has reviewed the plan. A stale or
+    missing system plan therefore has to be recalculated explicitly first.
+    """
+
+    if cint(order.plan_needs_recalculation) or not order.cutting_plan_json:
+        frappe.throw(
+            _(
+                "خطة القص بحاجة إلى إعادة حساب قبل الاعتماد. أعد حساب الخطة، راجع النتيجة الجديدة، ثم اعتمدها."
+            ),
+            frappe.ValidationError,
+        )
 
 
 @frappe.whitelist()
@@ -62,11 +95,12 @@ def approve_production_dxf(
     order_name: str,
     plan_source: str = "System",
 ) -> dict[str, Any]:
-    """Approve or replace the selected drawing plan through a role capability.
+    """Approve or replace the selected production cutting plan.
 
-    The administrator decides which roles own ``approve_dxf``. Assignment to the
-    drawing stage is intentionally not part of this command. A previous approval
-    is accepted and superseded; callers receive a warning flag for transparent UX.
+    Approval is capability-driven, row-locked, independent from cost permissions,
+    and never recalculates a system plan implicitly. Assignment to the drawing
+    stage is intentionally not an authorization requirement; the configurable
+    approval capability is the business authority.
     """
 
     order = _authorized_order(order_name)
@@ -87,6 +121,9 @@ def approve_production_dxf(
     except DrawingActionDenied as error:
         _throw_policy_error(error)
 
+    if validated_source == "System":
+        _assert_reviewed_system_plan(order)
+
     from almdina_erp.almdina_erp.services.cutting_plan_service import (
         _lock_order_for_production,
     )
@@ -106,8 +143,8 @@ def approve_production_dxf(
     )
     order.add_comment(
         "Info",
-        text=_("Drawing plan {0} by {1} using {2}.").format(
-            _("re-approved") if state.approved_plan else _("approved"),
+        text=_("تم {0} خطة القص بواسطة {1} من المصدر {2}.").format(
+            _("إعادة اعتماد") if state.approved_plan else _("اعتماد"),
             frappe.session.user,
             validated_source,
         ),

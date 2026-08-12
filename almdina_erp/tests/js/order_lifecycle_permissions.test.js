@@ -10,11 +10,11 @@ const source = fs.readFileSync(
     "utf8"
 );
 
-function makeForm(name = "DCO-TEST-001") {
+function makeForm(name = "DCO-TEST-001", status = "Draft") {
     const added = [];
     const removed = [];
     return {
-        doc: { name, status: "Pending Review", docstatus: 0 },
+        doc: { name, status, docstatus: 0 },
         __almdina_lifecycle_context: null,
         added,
         removed,
@@ -123,7 +123,7 @@ function load(capabilities, responseFactory) {
         order_name: "DCO-TEST-001",
         editable: true,
         actions: {
-            submit_for_review: { allowed: false },
+            submit_for_review: { allowed: true },
             approve: { allowed: true },
             return_to_draft: { allowed: true },
             cancel: { allowed: false },
@@ -138,25 +138,20 @@ function load(capabilities, responseFactory) {
     });
 
     const frm = makeForm();
+    assert.equal(loaded.api.orderCanEdit(frm), false);
+    frm.__almdina_edit_session = { active: true };
     assert.equal(loaded.api.orderCanEdit(frm), true);
     await loaded.api.loadContext(frm);
     assert.equal(frm.__almdina_lifecycle_context.order_name, "DCO-TEST-001");
+    assert.equal(loaded.api.orderCanEdit(frm), true);
+    // Review/approve were retired: even a permissive context must not install them.
     assert.deepEqual(
         frm.added.map(item => item.label).sort(),
-        ["اعتماد الطلب", "إعادة للمسودة"].sort()
+        ["إعادة للمسودة"].sort()
     );
     assert.equal(
         loaded.calls[0].method,
         "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context"
-    );
-
-    const approve = frm.added.find(item => item.label === "اعتماد الطلب");
-    approve.handler();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    assert.ok(
-        loaded.calls.some(call =>
-            call.method.endsWith("order_approval_service.approve_order")
-        )
     );
 
     const returned = frm.added.find(item => item.label === "إعادة للمسودة");
@@ -167,10 +162,12 @@ function load(capabilities, responseFactory) {
             call.method.endsWith("order_revision_service.return_order_to_draft")
         )
     );
-    assert.deepEqual(loaded.routes.at(-1), ["Form", "Door Cutting Order", "DCO-TEST-002"]);
+    // In-place reset: stay on the same order (reload), never route to a copy.
+    assert.equal(loaded.routes.length, 0);
 
     const denied = load(new Set(), () => lifecycle);
     const deniedForm = makeForm();
+    deniedForm.__almdina_edit_session = { active: true };
     deniedForm.__almdina_lifecycle_context = lifecycle;
     assert.equal(denied.api.orderCanEdit(deniedForm), true);
     deniedForm.__almdina_lifecycle_context = null;

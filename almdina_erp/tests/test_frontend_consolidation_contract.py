@@ -14,8 +14,12 @@ CANONICAL_FORM = (
     / "door_cutting_order.js"
 )
 PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+PLAN_CONTENT = ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
+DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 MEASUREMENT_ACTIONS = (
     ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 )
@@ -84,33 +88,93 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("print_measurements_table", source)
         self.assertNotIn("export_cutting_plan_dxf", source)
         self.assertNotIn("setup_pieces_excel_ux", source)
-        # Single A4 print: screen header + all sheet boards scaled to one page.
-        self.assertIn("size: A4 portrait", source)
+
+        # Workshop print stays inside the renderer but is now a separate compact
+        # landscape document: up to ten boards per page, preserving board ratio.
+        self.assertIn("size: A4 landscape", source)
+        self.assertIn("MAX_SHEETS_PER_PAGE = 10", source)
         self.assertIn("planRootFromVisibleDom", source)
-        self.assertIn("dco-print-plan-single", source)
-        self.assertIn("layoutPlanForSingleA4", source)
-        self.assertIn("dco-summary-grid", source)
+        self.assertIn("buildPrintPages", source)
+        self.assertIn("boardAspectFromCards", source)
+        self.assertIn("dco-print-sheets-grid", source)
+        self.assertIn("page-break-after: always", source)
         self.assertIn("render_plan_header_cards", source)
         self.assertIn("dco-plan-header-cards", source)
         self.assertIn("رقم الطلب", source)
         self.assertIn("اسم الزبون", source)
-        self.assertIn("تاريخ الطلب", source)
-        self.assertIn("نوع اللوح", source)
-        self.assertIn("لون القشاط", source)
+        self.assertIn("لون اللوح", source)
+        self.assertIn("عدد الألواح", source)
+        self.assertIn("عدد القطع", source)
+        self.assertIn("قياس اللوح", source)
         self.assertIn('round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>', source)
         self.assertNotIn("piece.label)}</b>", source)
-        self.assertNotIn(" سم</span>", source)
-        self.assertNotIn("page-break-after: always", source)
-        self.assertNotIn("print-header", source)
         self.assertNotIn("ERPNext Cutting Plan", source)
+
+        # Printed boards are workshop-first: only the primary piece number is
+        # printed, banding marks stay thin/red, and dense pages use explicit
+        # balanced rows (7 => 4+3) rather than leaving a lone board below.
+        self.assertIn("dco-piece-number", source)
+        self.assertIn("dco-piece-size { display: none !important; }", source)
+        self.assertIn('label.split(".")[0]', source)
+        self.assertIn("border-color: #e00000 !important", source)
+        self.assertIn("border-width: .45pt !important", source)
+        self.assertIn("function printRowSizes(count)", source)
+        self.assertIn("if (count <= 6) return [count]", source)
+        self.assertIn("if (count === 7) return [4, 3]", source)
+        self.assertIn("if (count === 8) return [4, 4]", source)
+        self.assertIn("if (count === 9) return [5, 4]", source)
+        self.assertIn("dco-print-sheets-row", source)
+        self.assertIn("flex-wrap: nowrap", source)
+        self.assertIn("justify-content: center", source)
+        self.assertIn("pageGridHeightMm = 164", source)
+
+    def test_plan_page_has_one_control_surface_and_no_duplicate_summary(self) -> None:
+        source = PLAN_CONTENT.read_text(encoding="utf-8")
+        drawing = DRAWING_PLAN.read_text(encoding="utf-8")
+
+        # Order metadata, aggregate cards and the measurement list already live on
+        # other order surfaces. Keep only the actual board layout on this screen.
+        self.assertIn("dco-plan-header-cards", source)
+        self.assertIn("dco-summary-grid", source)
+        self.assertIn("dco-piece-groups", source)
+        self.assertIn("cleanRenderedPlan", source)
+
+        # The form has one authoritative optimizer/action deck above the layout.
+        # The drawing optimizer panel stays available only for inbox/shop-floor use.
+        self.assertIn("movePlanActionsToFullWidth", source)
+        self.assertIn("dco-plan-action-row", source)
+        self.assertIn("dco-drawing-plan-panel-host", source)
+        self.assertIn("dco-drawing-plan-panel", source)
+        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
+        self.assertIn("renderInboxPanel", drawing)
+        self.assertIn("buildDrawingPanelHtml", drawing)
 
     def test_modern_modules_own_recalculation_printing_and_dxf(self) -> None:
         fast_save = FAST_SAVE.read_text(encoding="utf-8")
+        text_board = TEXT_BOARD_PLAN.read_text(encoding="utf-8")
+        plan_controls = PLAN_CONTROLS.read_text(encoding="utf-8")
         measurements = MEASUREMENT_ACTIONS.read_text(encoding="utf-8")
         document_print = DOCUMENT_PRINT.read_text(encoding="utf-8")
         secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
 
-        self.assertIn("door_cutting_order.recalculate_order", fast_save)
+        self.assertIn(
+            "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
+            plan_controls,
+        )
+        self.assertIn('can(frm, "recalculate_plan")', plan_controls)
+        self.assertIn('can(frm, "edit_optimizer_settings")', plan_controls)
+        self.assertNotIn("frm.save", plan_controls)
+
+        # These modules may validate inputs or mark a plan stale, but they must
+        # never intercept or execute cutting-plan commands themselves.
+        for helper in (fast_save, text_board):
+            self.assertNotIn("door_cutting_order.recalculate_order", helper)
+            self.assertNotIn("order_plan_permission_service.recalculate_order", helper)
+            self.assertNotIn(".dco-recalculate-plan", helper)
+            self.assertNotIn('addEventListener("click"', helper)
+            self.assertNotIn("stopImmediatePropagation", helper)
+            self.assertNotIn("frm.save", helper)
+
         self.assertIn("dco-print-measurements", measurements)
         self.assertIn("window.AlmdinaOrderDocumentPrint", document_print)
         self.assertIn("printInvoice(frm)", document_print)

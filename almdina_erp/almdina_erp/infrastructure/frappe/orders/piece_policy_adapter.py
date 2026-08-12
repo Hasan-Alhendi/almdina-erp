@@ -207,9 +207,6 @@ class FrappeOrderPiecePolicyAdapter:
                 ).items():
                     setattr(row, fieldname, value)
 
-        if not self.document.is_new():
-            self.ensure_custom_edge_prices()
-
     def ensure_documented(self) -> None:
         missing = [
             str(row.piece_no or row.idx)

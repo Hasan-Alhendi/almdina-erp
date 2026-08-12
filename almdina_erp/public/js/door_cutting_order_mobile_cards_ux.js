@@ -9,11 +9,26 @@
 
     function shouldUseCardLayout(root) {
         const responsiveDevice = window.AlmdinaResponsiveDevice;
-        return Boolean(
+        if (
+            responsiveDevice
+            && typeof responsiveDevice.usesCardLayout === "function"
+        ) {
+            return responsiveDevice.usesCardLayout(root);
+        }
+        if (
             responsiveDevice
             && typeof responsiveDevice.isPhoneLayout === "function"
-            && responsiveDevice.isPhoneLayout(root)
-        );
+        ) {
+            return responsiveDevice.isPhoneLayout(root);
+        }
+        try {
+            return Boolean(
+                window.matchMedia
+                && window.matchMedia("(max-width: 600px)").matches
+            );
+        } catch (error) {
+            return false;
+        }
     }
 
     function apply(frm) {

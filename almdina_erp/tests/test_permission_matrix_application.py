@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import unittest
 
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     capability_catalog_payload,
     changed_capabilities,
@@ -35,6 +38,21 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             )
         )
 
+    def test_cutting_plan_approval_is_presented_in_plan_group(self) -> None:
+        groups = capability_catalog_payload()
+        plan_group = next(group for group in groups if group["key"] == "cutting_plan")
+        approval = next(
+            item
+            for item in plan_group["capabilities"]
+            if item["key"] == Capability.APPROVE_DXF
+        )
+        self.assertEqual(approval["label"], "اعتماد خطة القص")
+        drawing_group = next(group for group in groups if group["key"] == "drawing")
+        self.assertNotIn(
+            Capability.APPROVE_DXF,
+            {item["key"] for item in drawing_group["capabilities"]},
+        )
+
     def test_order_actions_automatically_require_order_read(self) -> None:
         state = normalize_capability_state({Capability.APPROVE_DXF: True})
         self.assertTrue(state[Capability.APPROVE_DXF])
@@ -43,15 +61,52 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         empty = normalize_capability_state({Capability.VIEW_ORDERS: False})
         self.assertFalse(empty[Capability.VIEW_ORDERS])
 
-    def test_order_input_actions_include_required_customer_and_edge_reads(self) -> None:
+    def test_order_input_projection_includes_required_customer_and_edge_reads(self) -> None:
         for action in (
             Capability.CREATE_ORDER,
             Capability.EDIT_ORDER,
             Capability.CREATE_ORDER_REVISION,
         ):
             with self.subTest(action=action):
-                state = normalize_capability_state({action: True})
-                self.assertTrue(state[Capability.VIEW_CUSTOMERS])
+                technical = normalize_capability_state({action: True})
+                self.assertTrue(technical[Capability.VIEW_CUSTOMERS])
+                self.assertTrue(technical[Capability.VIEW_EDGE_BANDING_TYPES])
+
+                customer = standard_permission_projection("Customer", {action: True})
+                edge = standard_permission_projection("Edge Banding Type", {action: True})
+                self.assertTrue(customer["read"])
+                self.assertTrue(customer["select"])
+                self.assertTrue(edge["read"])
+                self.assertTrue(edge["select"])
+
+    def test_order_input_lookup_dependencies_are_not_business_grants(self) -> None:
+        state = normalize_business_capability_state(
+            {
+                Capability.CREATE_ORDER: True,
+                Capability.EDIT_ORDER: True,
+            }
+        )
+        self.assertTrue(state[Capability.VIEW_ORDERS])
+        self.assertFalse(state[Capability.VIEW_CUSTOMERS])
+        self.assertFalse(state[Capability.VIEW_EDGE_BANDING_TYPES])
+
+    def test_explicit_edge_view_and_edge_crud_remain_business_grants(self) -> None:
+        explicit = normalize_business_capability_state(
+            {
+                Capability.CREATE_ORDER: True,
+                Capability.VIEW_EDGE_BANDING_TYPES: True,
+            }
+        )
+        self.assertTrue(explicit[Capability.VIEW_EDGE_BANDING_TYPES])
+
+        for action in (
+            Capability.CREATE_EDGE_BANDING_TYPES,
+            Capability.EDIT_EDGE_BANDING_TYPES,
+            Capability.DELETE_EDGE_BANDING_TYPES,
+        ):
+            with self.subTest(action=action):
+                state = normalize_business_capability_state({action: True})
+                self.assertTrue(state[action])
                 self.assertTrue(state[Capability.VIEW_EDGE_BANDING_TYPES])
 
     def test_plan_actions_automatically_require_plan_view(self) -> None:
@@ -59,10 +114,91 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             Capability.RECALCULATE_PLAN,
             Capability.EDIT_OPTIMIZER_SETTINGS,
             Capability.PRINT_CUTTING_PLAN,
+            Capability.APPROVE_DXF,
         ):
             with self.subTest(action=action):
                 state = normalize_capability_state({action: True})
                 self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+
+    def test_optimizer_editing_implies_recalculation_without_cost_or_order_edit(self) -> None:
+        state = normalize_capability_state(
+            {Capability.EDIT_OPTIMIZER_SETTINGS: True}
+        )
+        self.assertTrue(state[Capability.EDIT_OPTIMIZER_SETTINGS])
+        self.assertTrue(state[Capability.RECALCULATE_PLAN])
+        self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_ORDERS])
+        self.assertFalse(state[Capability.EDIT_ORDER])
+        self.assertFalse(state[Capability.VIEW_COSTS])
+        self.assertFalse(state[Capability.EDIT_COST_SETTINGS])
+        self.assertFalse(state[Capability.VIEW_DRAWING_WORKSPACE])
+
+        business = normalize_business_capability_state(
+            {Capability.EDIT_OPTIMIZER_SETTINGS: True}
+        )
+        self.assertTrue(business[Capability.RECALCULATE_PLAN])
+        self.assertFalse(business[Capability.VIEW_COSTS])
+        self.assertFalse(business[Capability.EDIT_ORDER])
+
+    def test_editing_the_cutting_algorithm_always_shows_its_result(self) -> None:
+        # Tuning the algorithm is pointless without reading the plan it produces,
+        # so the system-plan tab stays granted even when tabs are configured off.
+        state = normalize_capability_state(
+            {
+                Capability.EDIT_OPTIMIZER_SETTINGS: True,
+                Capability.VIEW_SYSTEM_CUTTING_PLAN: False,
+                Capability.VIEW_UPLOADED_CUTTING_PLAN: False,
+                Capability.VIEW_APPROVED_CUTTING_PLAN: False,
+            }
+        )
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
+
+    def test_order_editing_never_grants_cutting_algorithm_authority(self) -> None:
+        state = normalize_capability_state({Capability.EDIT_ORDER: True})
+        self.assertTrue(state[Capability.EDIT_ORDER])
+        self.assertFalse(state[Capability.EDIT_OPTIMIZER_SETTINGS])
+        self.assertFalse(state[Capability.RECALCULATE_PLAN])
+        self.assertFalse(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+
+    def test_plan_approval_does_not_require_drawing_workspace(self) -> None:
+        state = normalize_capability_state({Capability.APPROVE_DXF: True})
+        self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_DRAWING_WORKSPACE])
+
+    def test_plan_tab_views_imply_cutting_plan_section(self) -> None:
+        for capability in (
+            Capability.VIEW_SYSTEM_CUTTING_PLAN,
+            Capability.VIEW_UPLOADED_CUTTING_PLAN,
+            Capability.VIEW_APPROVED_CUTTING_PLAN,
+        ):
+            with self.subTest(capability=capability):
+                state = normalize_capability_state({capability: True})
+                self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+                self.assertTrue(state[capability])
+
+    def test_legacy_cutting_plan_view_expands_to_all_plan_tabs(self) -> None:
+        state = normalize_capability_state({Capability.VIEW_CUTTING_PLAN: True})
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertTrue(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
+
+    def test_explicit_plan_tab_denials_are_respected(self) -> None:
+        state = normalize_capability_state(
+            {
+                Capability.VIEW_CUTTING_PLAN: True,
+                Capability.VIEW_SYSTEM_CUTTING_PLAN: True,
+                Capability.VIEW_UPLOADED_CUTTING_PLAN: False,
+                Capability.VIEW_APPROVED_CUTTING_PLAN: False,
+            }
+        )
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
 
     def test_drawing_actions_automatically_require_drawing_workspace(self) -> None:
         for action in (
@@ -70,7 +206,6 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             Capability.EXPORT_DXF,
             Capability.UPLOAD_DXF,
             Capability.REPLACE_DXF,
-            Capability.APPROVE_DXF,
         ):
             with self.subTest(action=action):
                 state = normalize_capability_state({action: True})

@@ -42,8 +42,12 @@ def test_server_actions_use_one_lifecycle_policy_without_role_names():
     assert "document_has_capability" in context_service
     assert "OrderLifecycleAction.APPROVE" in approval_service
     assert "OrderLifecycleAction.CANCEL" in cancel_service
+    assert "OrderLifecycleAction.RETURN_TO_DRAFT" in cancel_service
+    assert '"in_place": True' in cancel_service
     assert "Capability.CREATE_ORDER_REVISION" in revision_service
-    assert "Capability.RETURN_ORDER_TO_DRAFT" in revision_service
+    assert "order_lifecycle_service" in revision_service.split(
+        "def return_order_to_draft", 1
+    )[1]
     assert "Capability.EDIT_ORDER" not in revision_service.split("def create_order_revision", 1)[1].split(
         "def return_order_to_draft", 1
     )[0]

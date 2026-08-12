@@ -8,16 +8,26 @@ from typing import Any
 import frappe
 from frappe.permissions import setup_custom_perms
 
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    changed_business_capabilities,
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
-    changed_capabilities,
     field_permission_projection,
-    normalize_capability_state,
     standard_permission_projection,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import CAPABILITY_CATALOG
+from almdina_erp.almdina_erp.infrastructure.frappe.canonical_permission_state_repository import (
+    CanonicalPermissionStateRepository,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
+)
 
 
-PROTECTED_ROLES = frozenset({"All", "Guest", "Desk User"})
+# Backward-compatible public alias. The protected-role policy has one source of
+# truth so System Manager can never drift back into factory business authority.
+PROTECTED_ROLES = PROTECTED_SYSTEM_ROLES
 _IDENTITY_FIELDS = frozenset(
     {
         "name",
@@ -35,6 +45,11 @@ _IDENTITY_FIELDS = frozenset(
         "permlevel",
     }
 )
+_BUSINESS_PERMISSION_FIELDS = frozenset(
+    definition.permission_type
+    for definition in CAPABILITY_CATALOG.values()
+    if definition.custom
+)
 
 
 def _definitions_by_doctype() -> dict[str, list[tuple[str, Any]]]:
@@ -48,19 +63,26 @@ _DEFINITIONS_BY_DOCTYPE = _definitions_by_doctype()
 
 
 class FrappePermissionMatrixRepository:
-    """Read and write Almdina capability fields through Custom DocPerm."""
+    """Canonical Almdina business state plus Frappe permission projections.
+
+    ``Almdina Role Capability State`` is the sole source of business authority.
+    DocPerm and Custom DocPerm are write-only projections for Frappe runtime
+    compatibility and are never read back as factory capability grants.
+    """
+
+    def __init__(self) -> None:
+        self._canonical = CanonicalPermissionStateRepository()
 
     def ensure_custom_permission_baseline(
         self,
         doctypes: Sequence[str] | None = None,
     ) -> None:
-        """Preserve every standard role rule before custom permissions take over.
+        """Preserve native Frappe role rows without importing business authority.
 
         Frappe switches an entire DocType from ``DocPerm`` to ``Custom DocPerm``
-        as soon as the first custom row exists. Creating an override for only the
-        edited role would therefore revoke the untouched roles at runtime. Keep a
-        complete custom baseline, including repairs for sites affected by older
-        releases that created only a partial override set.
+        when custom rows exist, so untouched native roles still need a baseline.
+        Baseline rows are implementation detail only: ``role_state`` never reads
+        them as Almdina business permission state.
         """
 
         selected = tuple(doctypes or _DEFINITIONS_BY_DOCTYPE)
@@ -88,20 +110,18 @@ class FrappePermissionMatrixRepository:
         return resolved
 
     def role_state(self, role: str) -> dict[str, Any]:
+        """Read only canonical business state; never infer from Frappe grants."""
+
         resolved = self.validate_role(role)
-        state = {capability: False for capability in sorted(CAPABILITY_CATALOG)}
-        source_by_doctype: dict[str, str] = {}
-        for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
-            rows, source = self._effective_rows(doctype, resolved, definitions)
-            source_by_doctype[doctype] = source
-            for capability, definition in definitions:
-                state[capability] = any(
-                    bool(row.get(definition.permission_type)) for row in rows
-                )
+        exists = self._canonical.exists(resolved)
+        state = self._canonical.read(resolved)
+        source = "canonical" if exists else "none"
         return {
             "role": resolved,
-            "capabilities": normalize_capability_state(state),
-            "source_by_doctype": source_by_doctype,
+            "capabilities": normalize_business_capability_state(state),
+            "source_by_doctype": {
+                doctype: source for doctype in sorted(_DEFINITIONS_BY_DOCTYPE)
+            },
         }
 
     def role_states(
@@ -130,14 +150,20 @@ class FrappePermissionMatrixRepository:
         self,
         role_states: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, dict[str, Any]]:
-        """Persist multiple roles atomically after validating the complete bundle."""
+        """Persist canonical business state first, then project it to Frappe.
+
+        Order-entry lookup dependencies are intentionally excluded from the
+        canonical business state. ``standard_permission_projection`` may still
+        derive read/select rights for Frappe Link-field UX, but those rights can
+        never expose Customer/Edge administration surfaces by themselves.
+        """
 
         prepared: dict[str, dict[str, bool]] = {}
         for role, state in role_states.items():
             resolved = self.validate_role(role)
             if resolved in prepared:
                 raise ValueError(f"Duplicate role state: {resolved}")
-            prepared[resolved] = normalize_capability_state(state)
+            prepared[resolved] = normalize_business_capability_state(state)
         if not prepared:
             raise ValueError("At least one role state is required.")
 
@@ -146,12 +172,18 @@ class FrappePermissionMatrixRepository:
                 "select name from `tabRole` where name = %s for update",
                 (role,),
             )
+
+        # Preserve Frappe's baseline first. Any legacy values copied here are
+        # immediately overwritten by canonical projections below and can never
+        # become business authority because role_state does not read them.
         self.ensure_custom_permission_baseline(tuple(_DEFINITIONS_BY_DOCTYPE))
+
         for role in sorted(prepared):
-            desired = prepared[role]
+            desired = self._canonical.save(role, prepared[role])
             for doctype, definitions in _DEFINITIONS_BY_DOCTYPE.items():
                 self._save_doctype_state(doctype, role, definitions, desired)
                 self._save_field_permission_state(doctype, role, desired)
+
         for role in sorted(prepared):
             self.clear_role_cache(role)
         return {role: self.role_state(role) for role in sorted(prepared)}
@@ -165,7 +197,7 @@ class FrappePermissionMatrixRepository:
         changed_by: str,
         source: str = "Almdina Permission Console",
     ) -> str | None:
-        changes = changed_capabilities(before, after)
+        changes = changed_business_capabilities(before, after)
         if not changes:
             return None
         document = frappe.get_doc(
@@ -180,12 +212,12 @@ class FrappePermissionMatrixRepository:
                     change["key"] for change in changes
                 ),
                 "before_json": json.dumps(
-                    normalize_capability_state(before),
+                    normalize_business_capability_state(before),
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
                 "after_json": json.dumps(
-                    normalize_capability_state(after),
+                    normalize_business_capability_state(after),
                     ensure_ascii=False,
                     sort_keys=True,
                 ),
@@ -257,55 +289,6 @@ class FrappePermissionMatrixRepository:
                 request_cache.pop(str(user), None)
             frappe.clear_cache(user=user)
 
-    def _effective_rows(
-        self,
-        doctype: str,
-        role: str,
-        definitions: list[tuple[str, Any]],
-    ) -> tuple[list[dict[str, Any]], str]:
-        fields = self._available_fields("Custom DocPerm", definitions)
-        custom = frappe.get_all(
-            "Custom DocPerm",
-            filters={
-                "parent": doctype,
-                "role": role,
-                "permlevel": 0,
-                "if_owner": 0,
-            },
-            fields=fields,
-            order_by="creation asc",
-        )
-        if custom or frappe.db.exists("Custom DocPerm", {"parent": doctype}):
-            return [dict(row) for row in custom], "custom"
-        fields = self._available_fields("DocPerm", definitions)
-        standard = frappe.get_all(
-            "DocPerm",
-            filters={
-                "parent": doctype,
-                "role": role,
-                "permlevel": 0,
-                "if_owner": 0,
-            },
-            fields=fields,
-            order_by="idx asc",
-        )
-        return [dict(row) for row in standard], "standard" if standard else "none"
-
-    def _available_fields(
-        self,
-        permission_doctype: str,
-        definitions: list[tuple[str, Any]],
-    ) -> list[str]:
-        meta = frappe.get_meta(permission_doctype)
-        requested = ["name", "read", "create", "write", "delete"] + [
-            definition.permission_type for _, definition in definitions
-        ]
-        return [
-            field
-            for field in dict.fromkeys(requested)
-            if meta.has_field(field)
-        ]
-
     def _new_override_documents(self, doctype: str, role: str) -> list[Any]:
         standard_names = frappe.get_all(
             "DocPerm",
@@ -367,6 +350,8 @@ class FrappePermissionMatrixRepository:
         )
 
     def _override_from_standard(self, doctype: str, name: str) -> Any:
+        """Copy native Frappe rights while dropping legacy business fields."""
+
         standard = frappe.get_doc("DocPerm", name)
         custom_meta = frappe.get_meta("Custom DocPerm")
         payload: dict[str, Any] = {
@@ -380,6 +365,9 @@ class FrappePermissionMatrixRepository:
         for field in custom_meta.fields:
             fieldname = str(field.fieldname or "")
             if not fieldname or fieldname in _IDENTITY_FIELDS:
+                continue
+            if fieldname in _BUSINESS_PERMISSION_FIELDS:
+                payload[fieldname] = 0
                 continue
             if standard.meta.has_field(fieldname):
                 payload[fieldname] = standard.get(fieldname)
@@ -461,12 +449,7 @@ class FrappePermissionMatrixRepository:
         role: str,
         desired: Mapping[str, bool],
     ) -> None:
-        """Keep higher field levels aligned with capability grants.
-
-        These rows contain only Frappe's native read/write projection. Custom
-        capability columns remain on level zero, which is the sole source used
-        by the permission console and authorization gateway.
-        """
+        """Keep higher field levels aligned with canonical capability grants."""
 
         for permlevel, rights in field_permission_projection(
             doctype,

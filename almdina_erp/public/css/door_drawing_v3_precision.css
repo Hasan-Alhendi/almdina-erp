@@ -1,0 +1,57 @@
+.ddv3-precision-entry {
+    position: absolute;
+    z-index: 17;
+    display: none;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+    padding: 0 8px 0 10px;
+    border: 1px solid rgba(13, 153, 255, .72);
+    border-radius: 5px;
+    color: #1f1f1f;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+    transform: translate(14px, 14px);
+    pointer-events: none;
+    white-space: nowrap;
+    font-size: 10px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.ddv3-precision-entry.is-visible {
+    display: inline-flex;
+}
+
+.ddv3-precision-entry .ddv3-precision-value {
+    color: #0d99ff;
+    letter-spacing: .01em;
+}
+
+.ddv3-precision-entry .ddv3-precision-enter {
+    display: inline-grid;
+    place-items: center;
+    min-width: 31px;
+    height: 18px;
+    padding: 0 5px;
+    border: 1px solid #d7d7d7;
+    border-radius: 3px;
+    color: #777;
+    background: #f6f6f6;
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.ddv3-precision-entry.is-empty .ddv3-precision-value {
+    color: #6f6f6f;
+}
+
+.ddv3-precision-entry[data-ddv3-precision-tool="arc"] .ddv3-precision-value {
+    color: #8a5cf6;
+}
+
+@media (max-width: 850px) {
+    .ddv3-precision-entry {
+        transform: translate(10px, 10px);
+    }
+}

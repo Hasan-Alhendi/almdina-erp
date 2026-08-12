@@ -65,9 +65,16 @@
     }
 
     function setCostTabVisibility(frm, visible) {
-        frm.set_df_property("cost_tab", "hidden", visible ? 0 : 1);
         const wrapper = costWrapper(frm);
         if (!visible && wrapper) wrapper.empty();
+
+        // Tab navigation is owned by AlmdinaOrderTabPermissionsUX. Never mutate
+        // the cost Tab Break df here: changing a Tab Break's hidden property can
+        // rebuild the Frappe layout and erase already-rendered plan HTML.
+        const tabs = window.AlmdinaOrderTabPermissionsUX;
+        if (tabs && typeof tabs.apply === "function") {
+            tabs.apply(frm);
+        }
     }
 
     function scrubCostData(frm) {
@@ -204,7 +211,7 @@
                     fieldname: "note",
                     fieldtype: "Small Text",
                     label: __("ملاحظة التسعير (اختياري)"),
-                    default: piece.clipped_corner_edge_price_note || "",
+                    default: piece.special_shape_price_note || "",
                 },
             ],
             (values) => {
@@ -298,6 +305,10 @@
     function installActionsAfterRender(frm) {
         const wrapper = costWrapper(frm);
         if (!wrapper || !wrapper[0]) return;
+        if (frm.__almdina_cost_actions_observer) {
+            frm.__almdina_cost_actions_observer.disconnect();
+            frm.__almdina_cost_actions_observer = null;
+        }
         if (wrapper.find(".dco-cost-shell").length) {
             installActionPermissions(frm);
             return;
@@ -307,15 +318,25 @@
         const observer = new MutationObserver(() => {
             if (!documentContext().isCurrent(frm, identity)) {
                 observer.disconnect();
+                if (frm.__almdina_cost_actions_observer === observer) {
+                    frm.__almdina_cost_actions_observer = null;
+                }
                 return;
             }
             if (!wrapper.find(".dco-cost-shell").length) return;
             observer.disconnect();
+            if (frm.__almdina_cost_actions_observer === observer) {
+                frm.__almdina_cost_actions_observer = null;
+            }
             installActionPermissions(frm);
         });
         observer.observe(wrapper[0], { childList: true, subtree: true });
+        frm.__almdina_cost_actions_observer = observer;
         setTimeout(() => {
             observer.disconnect();
+            if (frm.__almdina_cost_actions_observer === observer) {
+                frm.__almdina_cost_actions_observer = null;
+            }
             if (documentContext().isCurrent(frm, identity)) {
                 installActionPermissions(frm);
             }
@@ -335,15 +356,32 @@
             return Promise.resolve();
         }
         const context = documentContext();
+        if (
+            frm.__almdinaCostSnapshotPromise
+            && context.isCurrent(frm, frm.__almdinaCostSnapshotContext)
+        ) {
+            return frm.__almdinaCostSnapshotPromise;
+        }
+
         const identity = context.capture(frm);
-        return frappe.call({
+        const orderName = frm.doc.name;
+        const snapshotPromise = Promise.resolve(frappe.call({
             method: "almdina_erp.almdina_erp.services.cost_permission_service.get_order_cost_snapshot",
-            args: { order_name: frm.doc.name },
-        }).then((response) => {
+            args: { order_name: orderName },
+        })).then((response) => {
             if (!context.isCurrent(frm, identity)) return;
             mergeSnapshot(frm, response.message || {});
             renderAuthorizedCost(frm);
+        }).finally(() => {
+            if (frm.__almdinaCostSnapshotPromise === snapshotPromise) {
+                frm.__almdinaCostSnapshotPromise = null;
+                frm.__almdinaCostSnapshotContext = null;
+            }
         });
+
+        frm.__almdinaCostSnapshotContext = identity;
+        frm.__almdinaCostSnapshotPromise = snapshotPromise;
+        return snapshotPromise;
     }
 
     function apply(frm) {
@@ -358,7 +396,10 @@
         setCostTabVisibility(frm, true);
 
         if (can(frm, "view_costs")) {
+            const context = documentContext();
+            const identity = context.capture(frm);
             loadCostSnapshot(frm).catch((error) => {
+                if (!context.isCurrent(frm, identity)) return;
                 console.error("Failed to load protected cost snapshot", error);
                 scrubCostData(frm);
                 setCostTabVisibility(frm, false);
@@ -378,18 +419,6 @@
         },
         almdina_edit_session_changed(frm) {
             setTimeout(() => apply(frm), 0);
-        },
-        before_save(frm) {
-            if (frm.is_new()) return;
-            const costApi = window.AlmdinaOrderCostUX;
-            const pending = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
-                ? costApi.pendingCustomEdgePriceLabels(frm)
-                : [];
-            if (!pending.length) return;
-            frappe.validated = false;
-            frappe.throw(__(
-                "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ. المتبقي: {0}."
-            ).replace("{0}", pending.join("، ")));
         },
     });
 

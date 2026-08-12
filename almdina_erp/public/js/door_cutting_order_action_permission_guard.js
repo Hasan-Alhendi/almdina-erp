@@ -27,7 +27,6 @@
         ".dco-entry-window-print",
     ].join(",");
     const CUSTOMER_INVOICE_SELECTOR = ".dco-print-customer-invoice";
-    const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     let observerFrame = null;
 
     function permissions() {
@@ -43,16 +42,8 @@
         return typeof api.can === "function" && api.can(capability);
     }
 
-    function orderEditable(frm) {
-        if (window.frappe && frappe.almdina && typeof frappe.almdina.orderCanEdit === "function") {
-            return Boolean(frappe.almdina.orderCanEdit(frm));
-        }
-        return Boolean(
-            frm
-            && frm.doc
-            && Number(frm.doc.docstatus || 0) === 0
-            && EDITABLE_STATUSES.has(frm.doc.status || "Draft")
-        );
+    function planIsLocked(frm) {
+        return Boolean(frm && frm.doc && frm.doc.approved_plan);
     }
 
     function deny(message) {
@@ -78,18 +69,18 @@
 
         const mayRecalculate = can(frm, "recalculate_plan");
         const mayEditOptimizer = can(frm, "edit_optimizer_settings");
-        const editable = orderEditable(frm);
+        const locked = planIsLocked(frm);
         root.querySelectorAll(PLAN_ACTION_SELECTOR).forEach(button => {
             const modeButton = button.matches(MODE_ACTION_SELECTOR);
-            const allowed = editable && mayRecalculate && (!modeButton || mayEditOptimizer);
+            const allowed = !locked && mayRecalculate && (!modeButton || mayEditOptimizer);
             if (button.disabled === allowed) button.disabled = !allowed;
             const ariaValue = allowed ? "false" : "true";
             if (button.getAttribute("aria-disabled") !== ariaValue) {
                 button.setAttribute("aria-disabled", ariaValue);
             }
             if (!allowed) {
-                button.title = !editable
-                    ? "لا يمكن تعديل خطة طلب معتمد أو دخل الإنتاج"
+                button.title = locked
+                    ? "الخطة معتمدة ومقفلة"
                     : modeButton && !mayEditOptimizer
                         ? "لا تملك صلاحية تعديل إعدادات المحسّن"
                         : "لا تملك صلاحية إعادة حساب خطة القص";
@@ -98,7 +89,9 @@
             }
         });
 
-        const desiredReadOnly = mayEditOptimizer && editable ? 0 : 1;
+        // Optimizer authority is independent from full order editing and from
+        // cost permissions. The server remains the final lifecycle/state guard.
+        const desiredReadOnly = mayEditOptimizer && !locked ? 0 : 1;
         OPTIMIZER_FIELDS.forEach(fieldname => {
             const field = frm.fields_dict && frm.fields_dict[fieldname];
             if (!field || !field.df) return;
@@ -239,11 +232,33 @@
         root.addEventListener("click", event => {
             const planButton = event.target.closest && event.target.closest(PLAN_ACTION_SELECTOR);
             if (planButton && root.contains(planButton)) {
+                if (planIsLocked(frm)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    deny("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
+                    return;
+                }
                 if (!can(frm, "recalculate_plan")) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
                     deny("ليس لديك صلاحية إعادة حساب خطة القص.");
+                    return;
+                }
+                const documentContext = window.AlmdinaDocumentContext;
+                if (
+                    documentContext
+                    && typeof documentContext.canMutateCurrentStage === "function"
+                    && !documentContext.canMutateCurrentStage(frm)
+                ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    const reason = typeof documentContext.stageMutationBlockReason === "function"
+                        ? documentContext.stageMutationBlockReason(frm)
+                        : "";
+                    deny(reason || "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية.");
                     return;
                 }
                 if (planButton.matches(MODE_ACTION_SELECTOR) && !can(frm, "edit_optimizer_settings")) {

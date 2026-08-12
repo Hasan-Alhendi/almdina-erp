@@ -13,16 +13,20 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_references import
     find_link_references,
     reference_summary,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    is_protected_system_role,
+)
 
 
 class ProductionRouting(Document):
     def validate(self) -> None:
         if not self.stages:
-            frappe.throw(_("Production Routing requires at least one stage."))
+            frappe.throw(_("يجب أن يحتوي مسار الإنتاج على مرحلة واحدة على الأقل."))
 
         sequences: set[int] = set()
         stage_types: set[str] = set()
-        required_count = 0
+        required_rows = []
+        planning_rows = []
         ordered = sorted(self.stages, key=lambda row: cint(row.sequence))
         for index, row in enumerate(ordered, start=1):
             row.stage_type = str(row.stage_type or "").strip()
@@ -30,34 +34,80 @@ class ProductionRouting(Document):
             row.operational_role = str(row.operational_role or "").strip()
             sequence = cint(row.sequence)
             if sequence <= 0:
-                frappe.throw(_("Routing stage sequence must be greater than zero."))
+                frappe.throw(_("ترتيب مرحلة الإنتاج يجب أن يكون أكبر من الصفر."))
             if sequence in sequences:
-                frappe.throw(_("Routing stage sequence {0} is duplicated.").format(sequence))
+                frappe.throw(_("ترتيب المرحلة رقم {0} مكرر داخل المسار.").format(sequence))
             if not row.stage_type:
-                frappe.throw(_("Routing stage code is required."))
+                frappe.throw(_("رمز مرحلة الإنتاج مطلوب."))
             if row.stage_type in stage_types:
-                frappe.throw(_("Routing stage {0} is duplicated.").format(row.stage_type))
-            if cint(row.required):
-                required_count += 1
-                if not str(row.department_label or "").strip():
+                frappe.throw(_("مرحلة الإنتاج {0} مكررة داخل المسار.").format(row.stage_type))
+
+            is_required = bool(cint(row.required))
+            is_planning = bool(cint(getattr(row, "is_planning_stage", 0)))
+            if is_planning and not is_required:
+                frappe.throw(
+                    _("مرحلة التخطيط يجب أن تكون ضمن المسار وفعالة."),
+                    frappe.ValidationError,
+                )
+            if is_required:
+                required_rows.append(row)
+                if not row.department_label:
                     frappe.throw(
-                        _("Department label is required for stage {0}.").format(
-                            row.stage_type
-                        )
+                        _("الاسم الظاهر مطلوب للمرحلة {0}.").format(row.stage_type)
                     )
-                if not str(row.operational_role or "").strip():
+                if not row.operational_role:
                     frappe.throw(
-                        _("Operational role is required for stage {0}.").format(
-                            row.stage_type
-                        )
+                        _("يجب تحديد الدور التشغيلي للمرحلة {0}.").format(row.stage_type)
                     )
+                self._validate_operational_role(row.operational_role, row.stage_type)
+                if is_planning:
+                    planning_rows.append(row)
+
             sequences.add(sequence)
             stage_types.add(row.stage_type)
             row.idx = index
-        if not required_count:
-            frappe.throw(_("Production Routing requires at least one required stage."))
+
+        if not required_rows:
+            frappe.throw(_("يجب أن يحتوي مسار الإنتاج على مرحلة فعالة واحدة على الأقل."))
+        if len(planning_rows) > 1:
+            frappe.throw(
+                _("يمكن تحديد مرحلة تخطيط واحدة فقط داخل مسار الإنتاج."),
+                frappe.ValidationError,
+            )
+        if planning_rows and planning_rows[0] is not required_rows[0]:
+            frappe.throw(
+                _("مرحلة التخطيط يجب أن تكون أول مرحلة فعالة في مسار الإنتاج."),
+                frappe.ValidationError,
+            )
 
         self._prevent_active_route_mutation()
+
+    @staticmethod
+    def _validate_operational_role(role: str, stage_type: str) -> None:
+        if is_protected_system_role(role):
+            frappe.throw(
+                _("لا يمكن استخدام الدور المحمي {0} كدور تشغيلي للمرحلة {1}.").format(
+                    role,
+                    stage_type,
+                ),
+                frappe.ValidationError,
+            )
+        if not frappe.db.exists("Role", role):
+            frappe.throw(
+                _("الدور التشغيلي {0} المحدد للمرحلة {1} غير موجود.").format(
+                    role,
+                    stage_type,
+                ),
+                frappe.ValidationError,
+            )
+        role_meta = frappe.get_meta("Role")
+        if role_meta.has_field("disabled") and cint(
+            frappe.db.get_value("Role", role, "disabled")
+        ):
+            frappe.throw(
+                _("الدور التشغيلي {0} معطّل ولا يمكن إسناد مرحلة إنتاج إليه.").format(role),
+                frappe.ValidationError,
+            )
 
     def _prevent_active_route_mutation(self) -> None:
         """Keep an in-flight order on the route definition it was dispatched with."""
@@ -76,6 +126,7 @@ class ProductionRouting(Document):
                 "department_label",
                 "operational_role",
                 "required",
+                "is_planning_stage",
             ],
             order_by="sequence asc, idx asc",
         )
@@ -86,6 +137,7 @@ class ProductionRouting(Document):
                 str(row.department_label or ""),
                 str(row.operational_role or ""),
                 cint(row.required),
+                cint(row.is_planning_stage),
             )
             for row in previous_rows
         ]
@@ -96,6 +148,7 @@ class ProductionRouting(Document):
                 str(row.department_label or ""),
                 str(row.operational_role or ""),
                 cint(row.required),
+                cint(getattr(row, "is_planning_stage", 0)),
             )
             for row in sorted(self.stages or (), key=lambda item: cint(item.sequence))
         ]
@@ -113,7 +166,7 @@ class ProductionRouting(Document):
         if active:
             frappe.throw(
                 _(
-                    "This route is used by active orders. Finish, cancel, or return those orders before changing its stages."
+                    "هذا المسار مستخدم حاليًا في طلبات قيد الإنتاج. أنهِ هذه الطلبات أو ألغها أو أعدها قبل تعديل مراحل المسار."
                 ),
                 frappe.ValidationError,
             )
@@ -122,7 +175,7 @@ class ProductionRouting(Document):
         references = find_link_references(self.doctype, self.name)
         if references:
             frappe.throw(
-                _("This production routing is in use and cannot be deleted: {0}").format(
+                _("مسار الإنتاج مستخدم ولا يمكن حذفه: {0}").format(
                     reference_summary(references)
                 ),
                 frappe.ValidationError,

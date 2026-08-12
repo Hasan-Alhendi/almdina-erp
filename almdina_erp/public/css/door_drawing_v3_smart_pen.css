@@ -1,0 +1,141 @@
+.ddv3-canvas[data-tool="pen"] {
+    cursor: crosshair !important;
+    touch-action: none;
+}
+
+.ddv3-path-stroke,
+.ddv3-pen-draft path {
+    fill: none;
+    stroke: #1e1e1e;
+    stroke-width: 1.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-path-stroke {
+    pointer-events: none;
+}
+
+.ddv3-path-stroke.is-selected {
+    stroke: var(--dd-blue);
+    stroke-width: 1.4;
+}
+
+.ddv3-path-segment-hit {
+    fill: none;
+    stroke: transparent;
+    pointer-events: stroke;
+    cursor: move;
+}
+
+.ddv3-path-node {
+    cursor: crosshair;
+}
+
+.ddv3-path-node-hit {
+    fill: transparent;
+    pointer-events: all;
+}
+
+.ddv3-path-node-dot {
+    fill: #fff;
+    stroke: var(--dd-blue);
+    stroke-width: 1.35;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.ddv3-path-node.is-selected .ddv3-path-node-dot {
+    fill: var(--dd-blue);
+}
+
+.ddv3-pen-draft {
+    pointer-events: none;
+}
+
+.ddv3-pen-draft path {
+    stroke: var(--dd-blue);
+    stroke-width: 1.3;
+}
+
+.ddv3-pen-draft.is-freehand path {
+    stroke-width: 1.45;
+    opacity: .82;
+}
+
+.ddv3-pen-draft-node {
+    fill: #fff;
+    stroke: var(--dd-blue);
+    stroke-width: 1.35;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-pen-draft-node.is-close-ready {
+    fill: #fff;
+    stroke-width: 2.2;
+    filter: drop-shadow(0 0 2px rgba(13, 153, 255, .35));
+}
+
+.ddv3-freehand-tip {
+    fill: var(--dd-blue);
+    stroke: #fff;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-pen-close-label {
+    fill: var(--dd-blue);
+    font-size: 9px;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.ddv3-path-stats {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 9px;
+}
+
+.ddv3-path-stats span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 28px;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: #383838;
+    color: #aaa;
+    font-size: 9px;
+}
+
+.ddv3-path-stats b {
+    color: #f4f4f4;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.ddv3-path-toggle {
+    width: 100%;
+    height: 30px;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    color: #e8e8e8;
+    background: #383838;
+    cursor: pointer;
+    font-size: 9px;
+    font-weight: 650;
+}
+
+.ddv3-path-toggle:hover {
+    border-color: #666;
+    background: #424242;
+}
+
+.ddv3-path-help p {
+    margin: 0;
+    color: #aaa;
+    font-size: 9px;
+    line-height: 1.7;
+}

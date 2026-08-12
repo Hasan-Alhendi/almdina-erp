@@ -247,6 +247,7 @@ def present_order_detail(
     stage_snapshot = query_result["stage_snapshot"]
     system_snapshot = query_result["system_snapshot"]
     custom_snapshot = query_result["custom_snapshot"]
+    approved_snapshot = query_result.get("approved_snapshot") or {}
     active_snapshot = query_result["active_snapshot"]
 
     system_html = render_plan_html(
@@ -265,6 +266,17 @@ def present_order_detail(
             escape=escape,
         )
         if custom_snapshot.get("sheets")
+        else ""
+    )
+    approved_html = (
+        render_plan_html(
+            order_name=str(_value(order, "name") or ""),
+            customer=_value(order, "customer"),
+            snapshot=approved_snapshot,
+            translate=translate,
+            escape=escape,
+        )
+        if approved_snapshot.get("sheets")
         else ""
     )
     active_html = render_plan_html(
@@ -286,6 +298,12 @@ def present_order_detail(
         "current_production_stage": _value(order, "current_production_stage"),
         "active_stage_name": stage_snapshot.get("active_stage_name"),
         "active_stage_status": stage_snapshot.get("active_stage_status"),
+        "active_stage_operational_role": stage_snapshot.get(
+            "active_stage_operational_role"
+        ),
+        "actor_holds_operational_role": stage_snapshot.get(
+            "actor_holds_operational_role"
+        ),
         "can_start_stage": stage_snapshot.get("can_start_stage"),
         "can_handoff_stage": stage_snapshot.get("can_handoff_stage"),
         "can_handoff_to": stage_snapshot.get("can_handoff_to"),
@@ -298,12 +316,14 @@ def present_order_detail(
         "cutting_plan_html": active_html,
         "system_plan_html": system_html,
         "custom_plan_html": custom_html,
+        "approved_plan_html": approved_html,
         "system_plan_json": dumps(system_snapshot) if system_snapshot else "",
         "custom_plan_json": (
             dumps(custom_snapshot) if custom_snapshot.get("sheets") else ""
         ),
         "approved_plan_source": query_result["approved_plan_source"],
         "active_plan_source": query_result["active_plan_source"],
+        "visible_plan_tabs": list(query_result.get("visible_plan_tabs") or []),
         "show_dual_tabs": query_result["show_dual_tabs"],
         "packing_mode": _value(order, "packing_mode"),
         "kerf_mm": _value(order, "kerf_mm"),

@@ -5,6 +5,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const themeSource = fs.readFileSync(
+    path.resolve(
+        __dirname,
+        "../../public/js/door_cutting_order_document_print_theme.js"
+    ),
+    "utf8"
+);
 const source = fs.readFileSync(
     path.resolve(
         __dirname,
@@ -20,6 +27,15 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+}
+
+function factoryIdentity() {
+    return {
+        print_factory_name: "مجمع الاختبار",
+        print_factory_description: "قص وتجهيز الألواح",
+        print_factory_address: "دمشق",
+        print_factory_contacts: "0999000000\n0110000000",
+    };
 }
 
 function payload(kind, orderName) {
@@ -46,6 +62,7 @@ function payload(kind, orderName) {
 function load() {
     const calls = [];
     const prints = [];
+    const customerDocuments = [];
     const capabilities = new Set([
         "view_costs",
         "print_customer_invoice",
@@ -74,7 +91,7 @@ function load() {
                     addEventListener() {},
                     focus() {},
                     print() {
-                        prints.push("printed");
+                        prints.push("internal");
                     },
                 },
             };
@@ -93,6 +110,21 @@ function load() {
             },
             isCurrent(frm, identity) {
                 return frm.doc.name === identity;
+            },
+        },
+        AlmdinaFactoryPrintIdentity: {
+            get() {
+                return Promise.resolve(factoryIdentity());
+            },
+            fallback() {
+                return factoryIdentity();
+            },
+        },
+        AlmdinaOrderDocumentPrint: {
+            printAuthorizedInvoice(frm, authorizedPayload) {
+                customerDocuments.push({ frm, payload: authorizedPayload });
+                prints.push("customer");
+                return Promise.resolve(true);
             },
         },
     };
@@ -153,11 +185,14 @@ function load() {
         },
     });
 
+    vm.runInContext(themeSource, context, {
+        filename: "door_cutting_order_document_print_theme.js",
+    });
     vm.runInContext(source, context, {
         filename: "door_cutting_order_financial_documents_ux.js",
     });
 
-    return { fakeWindow, calls, prints, capabilities, handlers };
+    return { fakeWindow, calls, prints, customerDocuments, capabilities, handlers };
 }
 
 function nextImmediate() {
@@ -177,6 +212,10 @@ async function main() {
     assert.equal(runtime.calls.length, 1);
     assert.match(runtime.calls[0].method, /get_customer_invoice_document$/);
     assert.equal(runtime.calls[0].args.order_name, frm.doc.name);
+    assert.equal(runtime.customerDocuments.length, 1);
+    assert.equal(runtime.customerDocuments[0].frm, frm);
+    assert.equal(runtime.customerDocuments[0].payload.kind, "customer_invoice");
+    assert.equal(runtime.customerDocuments[0].payload.order_name, frm.doc.name);
 
     await runtime.fakeWindow.AlmdinaFinancialDocuments.printInternalCostReport(frm);
     assert.equal(runtime.calls.length, 2);
@@ -186,25 +225,33 @@ async function main() {
     await nextImmediate();
     await nextImmediate();
     await nextImmediate();
-    assert.equal(runtime.prints.length, 2);
+    assert.deepEqual(runtime.prints.sort(), ["customer", "internal"]);
 
-    const customerHtml = runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
-        payload("customer_invoice", frm.doc.name)
+    assert.throws(
+        () => runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
+            payload("customer_invoice", frm.doc.name)
+        ),
+        /Customer invoice layout belongs to AlmdinaOrderDocumentPrint/
     );
+
     const internalHtml = runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
         payload("internal_cost_report", frm.doc.name)
     );
-    assert.doesNotMatch(customerHtml, /لا يسلّم للزبون/);
+    assert.match(internalHtml, /dco-unified-print-header/);
+    assert.match(internalHtml, /مجمع الاختبار/);
+    assert.match(internalHtml, /قص وتجهيز الألواح/);
+    assert.match(internalHtml, /دمشق/);
+    assert.match(internalHtml, /0999000000/);
     assert.match(internalHtml, /لا يسلّم للزبون/);
 
     runtime.capabilities.delete("print_internal_cost_report");
     await assert.rejects(
         runtime.fakeWindow.AlmdinaFinancialDocuments.printInternalCostReport(frm),
-        /Missing capability: print_internal_cost_report/
+        /Missing print capability/
     );
     assert.equal(runtime.calls.length, 2);
 
-    console.log("Secure financial document simulation passed");
+    console.log("Secure financial document delegation simulation passed");
 }
 
 main().catch(error => {

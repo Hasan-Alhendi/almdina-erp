@@ -7,7 +7,8 @@
     "stock_section","enforce_stock_control","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
     "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
     "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
-    "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval"
+    "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval",
+    "print_identity_section","print_factory_name","print_factory_description","print_factory_address","print_factory_contacts"
   ],
   "fields": [
     {"fieldname":"cutting_defaults_section","fieldtype":"Section Break","label":"Cutting Defaults"},
@@ -38,7 +39,12 @@
     {"fieldname":"production_section","fieldtype":"Section Break","label":"Production Controls"},
     {"fieldname":"default_production_routing","fieldtype":"Link","label":"Default Production Routing","options":"Production Routing"},
     {"default":"0","fieldname":"allow_stage_override","fieldtype":"Check","label":"Allow Authorized Stage Sequence Override"},
-    {"default":"0","fieldname":"allow_unplaced_approval","fieldtype":"Check","label":"Allow Exceptional Approval With Unplaced Pieces"}
+    {"default":"0","fieldname":"allow_unplaced_approval","fieldtype":"Check","label":"Allow Exceptional Approval With Unplaced Pieces"},
+    {"fieldname":"print_identity_section","fieldtype":"Section Break","label":"Print Identity"},
+    {"default":"مجمع المدينة المنورة التجاري","fieldname":"print_factory_name","fieldtype":"Data","label":"Print Factory Name","reqd":1},
+    {"default":"الواح هايغلوس - فورميكا - cnc - ليزر - قشر","fieldname":"print_factory_description","fieldtype":"Small Text","label":"Print Factory Description","reqd":1},
+    {"default":"دمشق - ببيلا - طريق السيدة زينب","fieldname":"print_factory_address","fieldtype":"Small Text","label":"Print Factory Address","reqd":1},
+    {"description":"One contact per line, for example: أرضي: ... / موبايل: ... / واتس اب: ...","fieldname":"print_factory_contacts","fieldtype":"Small Text","label":"Print Factory Contacts"}
   ],
   "issingle":1,
   "links":[],

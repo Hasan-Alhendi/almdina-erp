@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     can_transition_stage,
     is_order_dispatched,
 )
+from almdina_erp.almdina_erp.domain.orders.stage_operational_access import (
+    decide_stage_scoped_mutation,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
@@ -46,6 +49,9 @@ class ProductionActionFacts:
     assigned_to: str | None = None
     actor: str | None = None
     drawing_dxf_status: str | None = None
+    operational_role: str | None = None
+    actor_roles: tuple[str, ...] = ()
+    is_admin: bool = False
 
 
 def _decision(
@@ -78,7 +84,7 @@ def decide_production_action(
     facts: ProductionActionFacts,
 ) -> ProductionActionDecision:
     if action not in PRODUCTION_ACTIONS:
-        raise ValueError(f"Unknown production action: {action}")
+        raise ValueError(f"إجراء الإنتاج غير معروف: {action}")
 
     granted = frozenset(str(value) for value in (capabilities or ()) if value)
     if action not in granted:
@@ -86,7 +92,7 @@ def decide_production_action(
             action,
             False,
             "missing_capability",
-            "You do not have permission for this production action.",
+            "لا تملك الصلاحية المطلوبة لتنفيذ هذا الإجراء الإنتاجي.",
         )
 
     if action == Capability.DISPATCH_ORDER:
@@ -98,28 +104,28 @@ def decide_production_action(
                 action,
                 False,
                 "already_dispatched",
-                "The order is already assigned to production.",
+                "الطلب مُرسل إلى الإنتاج مسبقًا.",
             )
         if not can_dispatch_from_status(facts.order_status):
             return _decision(
                 action,
                 False,
                 "invalid_order_status",
-                "The order status does not allow production dispatch.",
+                "حالة الطلب الحالية لا تسمح بإرساله إلى الإنتاج.",
             )
         if not facts.has_cutting_plan:
             return _decision(
                 action,
                 False,
                 "missing_cutting_plan",
-                "Calculate a cutting plan before sending the order to production.",
+                "احسب خطة القص قبل إرسال الطلب إلى الإنتاج.",
             )
         if facts.plan_needs_recalculation:
             return _decision(
                 action,
                 False,
                 "stale_cutting_plan",
-                "Recalculate the cutting plan before sending the order to production.",
+                "أعد حساب خطة القص قبل إرسال الطلب إلى الإنتاج.",
             )
         return _decision(action, True, "allowed", "")
 
@@ -129,7 +135,7 @@ def decide_production_action(
                 action,
                 False,
                 "not_ready_for_delivery",
-                "Only orders ready for delivery can be marked as delivered.",
+                "يمكن تأكيد التسليم فقط للطلبات الجاهزة للتسليم.",
             )
         return _decision(action, True, "allowed", "")
 
@@ -142,7 +148,7 @@ def decide_production_action(
                 action,
                 False,
                 "not_on_production_path",
-                "The order cannot be returned to an earlier production stage.",
+                "لا يمكن إعادة الطلب إلى مرحلة إنتاج سابقة في حالته الحالية.",
             )
         return _decision(action, True, "allowed", "")
 
@@ -151,8 +157,27 @@ def decide_production_action(
             action,
             False,
             "inactive_stage",
-            "The selected stage is not the current production stage.",
+            "المرحلة المحددة ليست مرحلة الإنتاج الحالية للطلب.",
         )
+
+    if action in {
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+        Capability.REASSIGN_WORKER,
+    }:
+        allowed, code, reason = decide_stage_scoped_mutation(
+            actor_roles=facts.actor_roles,
+            operational_role=facts.operational_role,
+            has_current_stage=True,
+            is_admin=facts.is_admin,
+        )
+        # Reassignment is a supervisory override: only require that the stage
+        # has an operational role configured, not that the supervisor holds it.
+        if action == Capability.REASSIGN_WORKER:
+            if code == "missing_stage_role":
+                return _decision(action, False, code, reason)
+        elif not allowed:
+            return _decision(action, False, code, reason)
 
     if action == Capability.REASSIGN_WORKER:
         if facts.stage_status not in ACTIVE_STAGE_STATUSES:
@@ -160,7 +185,7 @@ def decide_production_action(
                 action,
                 False,
                 "closed_stage",
-                "Only an active production stage can be reassigned.",
+                "يمكن تغيير العامل فقط لمرحلة إنتاج نشطة.",
             )
         return _decision(action, True, "allowed", "")
 
@@ -169,7 +194,7 @@ def decide_production_action(
             action,
             False,
             "not_assigned",
-            "This production stage is assigned to another worker.",
+            "هذه المرحلة مسندة إلى عامل آخر.",
         )
 
     if action == Capability.START_ASSIGNED_STAGE:
@@ -181,7 +206,7 @@ def decide_production_action(
                 action,
                 False,
                 "stage_not_startable",
-                "Only a stage that needs work can be started.",
+                "يمكن بدء المرحلة فقط عندما تكون بحالة بحاجة للعمل.",
             )
         return _decision(action, True, "allowed", "")
 
@@ -194,21 +219,11 @@ def decide_production_action(
                 action,
                 False,
                 "stage_not_handoff_ready",
-                "Start the stage before sending it to the next department.",
-            )
-        if (
-            facts.stage_type == "Drawing"
-            and (facts.drawing_dxf_status or "None") != "Approved by Drawing"
-        ):
-            return _decision(
-                action,
-                False,
-                "dxf_not_approved",
-                "Approve the production DXF before sending the order to CNC.",
+                "ابدأ المرحلة أولًا قبل تسليمها إلى القسم التالي.",
             )
         return _decision(action, True, "allowed", "")
 
-    raise AssertionError(f"Unhandled production action: {action}")
+    raise AssertionError(f"إجراء إنتاج غير معالج: {action}")
 
 
 def build_production_action_context(

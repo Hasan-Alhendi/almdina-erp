@@ -8,42 +8,52 @@ from frappe import _
 from frappe.utils import cint
 
 from almdina_erp import __version__
+from almdina_erp.almdina_erp.application.security.business_capability_state import (
+    business_permission_impact,
+    changed_business_capabilities,
+    normalize_business_capability_state,
+)
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
     capability_catalog_payload,
-    changed_capabilities,
-    normalize_capability_state,
-    permission_impact,
 )
-from almdina_erp.almdina_erp.application.security.permission_templates import (
+from almdina_erp.almdina_erp.application.security.permission_transfer import (
     PERMISSION_TRANSFER_SCHEMA,
     PERMISSION_TRANSFER_VERSION,
     build_permission_bundle,
     build_permission_export,
     parse_permission_bundle,
     parse_permission_export,
-    permission_template_catalog,
     preview_permission_bundle,
-    template_state,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_doctype_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
-    FrappePermissionMatrixRepository,
     PROTECTED_ROLES,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
+    ProjectedPermissionMatrixRepository,
 )
 
 
-_repository = FrappePermissionMatrixRepository()
+_repository = ProjectedPermissionMatrixRepository()
 _MAX_TRANSFER_BYTES = 128 * 1024
 
 
 def _require_permission_management() -> None:
     require_doctype_capability(
         Capability.MANAGE_PERMISSIONS,
-        message=_("You do not have permission to manage Almdina permissions."),
+        message=_("لا تملك صلاحية إدارة أدوار وصلاحيات المعمل."),
     )
+
+
+def _validation_error(message: str) -> None:
+    frappe.throw(_(message), frappe.ValidationError)
+
+
+def _role_error() -> None:
+    _validation_error("تعذر قراءة الدور أو صلاحياته. تأكد من أن الدور موجود وقابل للإدارة من Almdina.")
 
 
 def _parse_json_object(
@@ -53,54 +63,50 @@ def _parse_json_object(
 ) -> dict[str, Any]:
     if isinstance(values, str):
         if len(values.encode("utf-8")) > _MAX_TRANSFER_BYTES:
-            frappe.throw(_("Permission payload is too large."))
+            _validation_error("حجم بيانات الصلاحيات أكبر من الحد المسموح.")
         parsed = frappe.parse_json(values)
     elif isinstance(values, Mapping):
         parsed = dict(values)
     else:
         parsed = None
     if not isinstance(parsed, dict):
-        frappe.throw(_(error_message))
+        _validation_error(error_message)
     return parsed
 
 
-def _parse_capabilities(
-    values: str | Mapping[str, Any] | None,
-) -> dict[str, bool]:
+def _parse_capabilities(values: str | Mapping[str, Any] | None) -> dict[str, bool]:
     parsed = _parse_json_object(
         values,
-        error_message="Permission values must be an object.",
+        error_message="يجب أن تكون قيم الصلاحيات كائن JSON صحيحًا.",
     )
     try:
-        return normalize_capability_state(parsed)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+        return normalize_business_capability_state(parsed)
+    except ValueError:
+        _validation_error("تحتوي بيانات الصلاحيات على صلاحية غير معروفة أو قيمة غير صالحة.")
     raise AssertionError("frappe.throw must interrupt execution")
 
 
 def _parse_transfer(values: str | Mapping[str, Any] | None) -> dict[str, Any]:
     parsed = _parse_json_object(
         values,
-        error_message="Permission import must be a JSON object.",
+        error_message="يجب أن يكون ملف استيراد الصلاحيات كائن JSON صحيحًا.",
     )
     try:
         return parse_permission_export(parsed)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _validation_error("ملف استيراد الصلاحيات غير صالح أو لا يطابق الإصدار المدعوم.")
     raise AssertionError("frappe.throw must interrupt execution")
 
 
-def _parse_bundle(
-    values: str | Mapping[str, Any] | None,
-) -> dict[str, dict[str, bool]]:
+def _parse_bundle(values: str | Mapping[str, Any] | None) -> dict[str, dict[str, bool]]:
     parsed = _parse_json_object(
         values,
-        error_message="Permission bundle must be a JSON object.",
+        error_message="يجب أن تكون حزمة الصلاحيات كائن JSON صحيحًا.",
     )
     try:
         return parse_permission_bundle(parsed)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _validation_error("حزمة الصلاحيات غير صالحة أو تحتوي أدوارًا أو قيمًا غير مدعومة.")
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -125,9 +131,7 @@ def _self_lockout_warning(
     )
 
 
-def _bulk_self_lockout_warning(
-    imported_states: Mapping[str, Mapping[str, Any]],
-) -> bool:
+def _bulk_self_lockout_warning(imported_states: Mapping[str, Mapping[str, Any]]) -> bool:
     actor = str(frappe.session.user)
     if actor == "Administrator":
         return False
@@ -148,9 +152,7 @@ def _bulk_self_lockout_warning(
 
     for role, current in current_states.items():
         effective = imported_states.get(role, current)
-        if normalize_capability_state(effective).get(
-            Capability.MANAGE_PERMISSIONS
-        ) is True:
+        if normalize_business_capability_state(effective).get(Capability.MANAGE_PERMISSIONS) is True:
             return False
     return True
 
@@ -160,7 +162,7 @@ def _role_payload(role: str) -> dict[str, Any]:
     capabilities = state["capabilities"]
     return {
         **state,
-        "impact": permission_impact(capabilities),
+        "impact": business_permission_impact(capabilities),
         "audit": _repository.list_audit(role, limit=20),
     }
 
@@ -172,21 +174,16 @@ def _preview_payload(
     after: Mapping[str, Any],
     source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    normalized = normalize_capability_state(after)
-    changes = changed_capabilities(before, normalized)
+    normalized = normalize_business_capability_state(after)
+    changes = changed_business_capabilities(before, normalized)
     result: dict[str, Any] = {
         "role": role,
         "capabilities": normalized,
         "changes": changes,
-        "impact": permission_impact(normalized),
-        "requires_self_lockout_confirmation": _self_lockout_warning(
-            role,
-            before,
-            normalized,
-        ),
+        "impact": business_permission_impact(normalized),
+        "requires_self_lockout_confirmation": _self_lockout_warning(role, before, normalized),
         "has_sensitive_changes": any(
-            change["risk"] in {"sensitive", "critical"}
-            for change in changes
+            change["risk"] in {"sensitive", "critical"} for change in changes
         ),
     }
     if source:
@@ -200,16 +197,15 @@ def _bundle_preview(
     imported = _parse_bundle(payload)
     try:
         current = _repository.role_states(list(imported))
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
     preview = preview_permission_bundle(current, imported)
     preview.update(
         {
             "schema": PERMISSION_TRANSFER_SCHEMA,
             "version": PERMISSION_TRANSFER_VERSION,
-            "requires_self_lockout_confirmation": (
-                _bulk_self_lockout_warning(imported)
-            ),
+            "requires_self_lockout_confirmation": _bulk_self_lockout_warning(imported),
             "has_sensitive_changes": any(
                 change["risk"] in {"sensitive", "critical"}
                 for row in preview["roles"]
@@ -222,15 +218,16 @@ def _bundle_preview(
 
 @frappe.whitelist()
 def get_permission_console(role: str | None = None) -> dict[str, Any]:
-    """Return the complete, least-privilege permission console payload."""
-
     _require_permission_management()
     roles = _repository.list_roles()
     selected_role = str(role or "").strip()
-    selected = _role_payload(selected_role) if selected_role else None
+    try:
+        selected = _role_payload(selected_role) if selected_role else None
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
     return {
         "catalog": capability_catalog_payload(),
-        "templates": permission_template_catalog(),
         "transfer": {
             "schema": PERMISSION_TRANSFER_SCHEMA,
             "version": PERMISSION_TRANSFER_VERSION,
@@ -250,66 +247,38 @@ def get_role_permissions(role: str) -> dict[str, Any]:
     _require_permission_management()
     try:
         return _role_payload(role)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
     raise AssertionError("frappe.throw must interrupt execution")
 
 
 @frappe.whitelist()
-def preview_role_permissions(
-    role: str,
-    capabilities: str | Mapping[str, Any],
-) -> dict[str, Any]:
+def preview_role_permissions(role: str, capabilities: str | Mapping[str, Any]) -> dict[str, Any]:
     _require_permission_management()
     try:
         before = _repository.role_state(role)["capabilities"]
         after = _parse_capabilities(capabilities)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
     return _preview_payload(role=role, before=before, after=after)
 
 
 @frappe.whitelist()
-def preview_permission_template(role: str, template_key: str) -> dict[str, Any]:
-    """Preview an optional least-privilege template without persisting it."""
-
-    _require_permission_management()
-    try:
-        before = _repository.role_state(role)["capabilities"]
-        after = template_state(template_key)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
-    return _preview_payload(
-        role=role,
-        before=before,
-        after=after,
-        source={"kind": "template", "key": str(template_key)},
-    )
-
-
-@frappe.whitelist()
 def export_role_permissions(role: str) -> dict[str, Any]:
-    """Export one role matrix as a versioned, checksummed JSON document."""
-
     _require_permission_management()
     try:
         state = _repository.role_state(role)["capabilities"]
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
     document = build_permission_export(role=role, state=state)
-    document.update(
-        {
-            "exported_at": frappe.utils.now(),
-            "exported_by": str(frappe.session.user),
-        }
-    )
+    document.update({"exported_at": frappe.utils.now(), "exported_by": str(frappe.session.user)})
     return document
 
 
 @frappe.whitelist()
 def export_permission_bundle(role: str | None = None) -> dict[str, Any]:
-    """Export one or all role matrices without users, passwords, or audit data."""
-
     _require_permission_management()
     selected = str(role or "").strip()
     try:
@@ -320,24 +289,20 @@ def export_permission_bundle(role: str | None = None) -> dict[str, Any]:
             exported_at=str(frappe.utils.now()),
             app_version=__version__,
         )
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
     raise AssertionError("frappe.throw must interrupt execution")
 
 
 @frappe.whitelist()
-def preview_permission_import(
-    role: str,
-    payload: str | Mapping[str, Any],
-) -> dict[str, Any]:
-    """Validate and preview a single-role import; saving remains explicit."""
-
+def preview_permission_import(role: str, payload: str | Mapping[str, Any]) -> dict[str, Any]:
     _require_permission_management()
     try:
         before = _repository.role_state(role)["capabilities"]
         imported = _parse_transfer(payload)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
     return _preview_payload(
         role=role,
         before=before,
@@ -352,11 +317,7 @@ def preview_permission_import(
 
 
 @frappe.whitelist()
-def preview_permission_bundle_import(
-    payload: str | Mapping[str, Any],
-) -> dict[str, Any]:
-    """Validate all target roles and preview a matrix import without writes."""
-
+def preview_permission_bundle_import(payload: str | Mapping[str, Any]) -> dict[str, Any]:
     _require_permission_management()
     _, preview = _bundle_preview(payload)
     return preview
@@ -372,40 +333,30 @@ def update_role_permissions(
     try:
         before = _repository.role_state(role)["capabilities"]
         after = _parse_capabilities(capabilities)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
 
-    changes = changed_capabilities(before, after)
+    changes = changed_business_capabilities(before, after)
     if not changes:
-        # A no-op console save is also a safe repair operation. Older releases
-        # could persist capability columns without their native create/write or
-        # higher field-level projection, leaving the switches enabled while the
-        # form stayed read-only or empty.
         try:
             _repository.save_role_state(role, after)
-        except ValueError as error:
-            frappe.throw(_(str(error)))
-        return {
-            **_role_payload(role),
-            "changed": False,
-            "audit_name": None,
-        }
+        except ValueError:
+            _role_error()
+            raise AssertionError("frappe.throw must interrupt execution")
+        return {**_role_payload(role), "changed": False, "audit_name": None}
 
-    if _self_lockout_warning(role, before, after) and not cint(
-        confirm_self_lockout
-    ):
+    if _self_lockout_warning(role, before, after) and not cint(confirm_self_lockout):
         frappe.throw(
-            _(
-                "This change removes your last permission-management grant. "
-                "Confirm the self-lockout explicitly to continue."
-            ),
+            _("هذا التغيير سيزيل آخر صلاحية لديك لإدارة الصلاحيات. فعّل تأكيد منع قفل حسابك ثم أعد الحفظ إذا كنت متأكدًا."),
             frappe.PermissionError,
         )
 
     try:
         saved = _repository.save_role_state(role, after)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
     audit_name = _repository.record_audit(
         role=role,
         before=before,
@@ -426,36 +377,27 @@ def import_permission_bundle(
     confirm_sensitive: int | str = 0,
     confirm_self_lockout: int | str = 0,
 ) -> dict[str, Any]:
-    """Atomically import a complete matrix into existing roles only."""
-
     _require_permission_management()
     imported, preview = _bundle_preview(payload)
     if not preview["summary"]["change_count"]:
         return {**preview, "changed": False, "audit_names": []}
     if preview["has_sensitive_changes"] and not cint(confirm_sensitive):
         frappe.throw(
-            _(
-                "This import contains sensitive or critical permission changes. "
-                "Confirm them explicitly to continue."
-            ),
+            _("تحتوي الحزمة على تغييرات صلاحيات حساسة أو حرجة. يجب تأكيد هذه التغييرات صراحةً قبل المتابعة."),
             frappe.PermissionError,
         )
-    if preview["requires_self_lockout_confirmation"] and not cint(
-        confirm_self_lockout
-    ):
+    if preview["requires_self_lockout_confirmation"] and not cint(confirm_self_lockout):
         frappe.throw(
-            _(
-                "This import removes your last permission-management grant. "
-                "Confirm the self-lockout explicitly to continue."
-            ),
+            _("سيؤدي هذا الاستيراد إلى إزالة آخر صلاحية لديك لإدارة الصلاحيات. يجب تأكيد المتابعة صراحةً."),
             frappe.PermissionError,
         )
 
     before_states = _repository.role_states(list(imported))
     try:
         saved = _repository.save_role_states(imported)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
+        raise AssertionError("frappe.throw must interrupt execution")
 
     audit_names: list[str] = []
     for role in sorted(imported):
@@ -468,31 +410,24 @@ def import_permission_bundle(
         )
         if audit_name:
             audit_names.append(audit_name)
-    final_states = {
-        role: saved[role]["capabilities"] for role in sorted(saved)
-    }
+    final_states = {role: saved[role]["capabilities"] for role in sorted(saved)}
     result = preview_permission_bundle(before_states, final_states)
     return {
         **result,
         "changed": True,
         "audit_names": audit_names,
         "has_sensitive_changes": preview["has_sensitive_changes"],
-        "requires_self_lockout_confirmation": preview[
-            "requires_self_lockout_confirmation"
-        ],
+        "requires_self_lockout_confirmation": preview["requires_self_lockout_confirmation"],
     }
 
 
 @frappe.whitelist()
-def get_permission_audit(
-    role: str | None = None,
-    limit: int = 20,
-) -> list[dict[str, Any]]:
+def get_permission_audit(role: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
     _require_permission_management()
     try:
         return _repository.list_audit(role or None, limit=limit)
-    except ValueError as error:
-        frappe.throw(_(str(error)))
+    except ValueError:
+        _role_error()
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -505,7 +440,6 @@ __all__ = [
     "import_permission_bundle",
     "preview_permission_bundle_import",
     "preview_permission_import",
-    "preview_permission_template",
     "preview_role_permissions",
     "update_role_permissions",
 ]

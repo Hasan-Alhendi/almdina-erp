@@ -3,14 +3,14 @@
   "doctype": "DocType",
   "editable_grid": 1,
   "engine": "InnoDB",
-  "field_order": ["sequence", "stage_type", "department_label", "operational_role", "required", "auto_complete_if_not_applicable"],
+  "field_order": ["sequence", "stage_type", "department_label", "operational_role", "required", "is_planning_stage"],
   "fields": [
-    {"fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"Sequence","reqd":1},
-    {"description":"معرّف ثابت للمرحلة، مثل CNC أو Sharyoun أو PVC.","fieldname":"stage_type","fieldtype":"Data","in_list_view":1,"label":"Stage Code","reqd":1},
-    {"description":"الاسم الذي يظهر للعامل، مثل CNC أو الشريون.","fieldname":"department_label","fieldtype":"Data","in_list_view":1,"label":"Department Label","reqd":1},
-    {"description":"لا يمنح صلاحيات؛ يحدد المستخدمين المؤهلين لاستلام هذه المرحلة.","fieldname":"operational_role","fieldtype":"Link","in_list_view":1,"label":"Operational Role","options":"Role","reqd":1},
-    {"default":"1","fieldname":"required","fieldtype":"Check","in_list_view":1,"label":"Required"},
-    {"default":"1","fieldname":"auto_complete_if_not_applicable","fieldtype":"Check","label":"Auto Complete If Not Applicable"}
+    {"fieldname":"sequence","fieldtype":"Int","in_list_view":1,"label":"الترتيب","reqd":1},
+    {"description":"معرّف ثابت للمرحلة، مثل CNC أو Sharyoun أو PVC. لا تغيّره بعد بدء استخدام المسار.","fieldname":"stage_type","fieldtype":"Data","in_list_view":1,"label":"رمز المرحلة","reqd":1},
+    {"description":"الاسم العربي/التشغيلي الذي يظهر للعامل في الواجهة.","fieldname":"department_label","fieldtype":"Data","in_list_view":1,"label":"اسم القسم الظاهر","reqd":1},
+    {"description":"يحدد المستخدمين المؤهلين لاستلام المرحلة فقط، ولا يمنحهم صلاحيات تنفيذ تلقائيًا.","fieldname":"operational_role","fieldtype":"Link","in_list_view":1,"label":"الدور التشغيلي","options":"Role","reqd":1},
+    {"default":"1","description":"إذا ألغيت هذا الخيار تُستبعد المرحلة من المسار التشغيلي.","fieldname":"required","fieldtype":"Check","in_list_view":1,"label":"ضمن المسار"},
+    {"default":"0","description":"مرحلة مراجعة/تخطيط تسبق التنفيذ الفعلي. يجب اعتماد خطة القص قبل مغادرتها، ويجب أن تكون أول مرحلة فعالة في المسار.","fieldname":"is_planning_stage","fieldtype":"Check","in_list_view":1,"label":"مرحلة تخطيط"}
   ],
   "istable": 1,
   "links": [],

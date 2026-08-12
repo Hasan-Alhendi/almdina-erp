@@ -3,22 +3,9 @@
 
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
     const TERMINAL = new Set(["Delivered", "Cancelled"]);
-    const CUTTING_OR_LATER = new Set([
-        "At Sharyoun",
-        "At CNC",
-        "At Sanding",
-        "Ready for Delivery",
-        "Delivered",
-        "Cancelled",
-        "Completed",
-        "Cutting In Progress",
-        "Cut Completed",
-        "Edge Banding In Progress",
-        "Quality Check",
-        "Partially Completed",
-    ]);
     const EDIT_LABEL = __("تعديل");
-    const CONFIRM_EDIT_LABEL = __("اعتماد التعديل");
+    const SAVE_LABEL = __("حفظ");
+    const CONFIRM_EDIT_LABEL = __("اعتماد التعديل"); // legacy label removed from UI; kept for cleanup
     const ORDER_INPUT_FIELDS = [
         "customer",
         "order_date",
@@ -52,12 +39,6 @@
 
     function revisionState(frm) {
         return (frm && frm.doc && frm.doc.revision_state) || "Current";
-    }
-
-    function isBeforeCutting(status) {
-        const normalized = status || "Draft";
-        if (TERMINAL.has(normalized)) return false;
-        return !CUTTING_OR_LATER.has(normalized);
     }
 
     function sessionStore() {
@@ -148,22 +129,14 @@
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if (revisionState(frm) === "Superseded") return false;
         if (!can(frm, "edit_order")) return false;
-        return isBeforeCutting(frm.doc.status || "Draft");
+        // In-place editing is Draft-only; other states need return-to-draft or a revision.
+        return (frm.doc.status || "Draft") === "Draft";
     }
 
     function orderCanEdit(frm) {
         if (!frm || !frm.doc || Number(frm.doc.docstatus || 0) !== 0) return false;
         if (frm.is_new()) return can(frm, "create_order");
         return canOfferEditSession(frm) && isEditSessionActive(frm);
-    }
-
-    function planReadyForConfirm(frm) {
-        if (!frm || !frm.doc) return false;
-        if (!editSessionRecalculated(frm)) return false;
-        if (Number(frm.doc.plan_needs_recalculation || 0) === 1) return false;
-        if (!frm.doc.cutting_plan_json) return false;
-        if (frm.is_dirty && frm.is_dirty()) return false;
-        return true;
     }
 
     function canCreateRevision(frm) {
@@ -180,20 +153,58 @@
         frappe.almdina.canOfferOrderEditSession = canOfferEditSession;
         frappe.almdina.markOrderEditSessionRecalculated = markEditSessionRecalculated;
         frappe.almdina.invalidateOrderEditSessionRecalculation = invalidateEditSessionRecalculation;
+        frappe.almdina.lockOrderEditSession = lockEditSession;
+        frappe.almdina.persistOrderEditCheckpoint = persistOrderEditCheckpoint;
     }
 
     function applyEditableFields(frm) {
         const editable = orderCanEdit(frm);
         frm.toggle_enable(ORDER_INPUT_FIELDS, editable);
+        syncPrimaryAction(frm);
+    }
+
+    function syncPrimaryAction(frm) {
+        if (!frm || !frm.page) return;
+
         if (frm.is_new()) {
-            frm.enable_save();
+            frm.save_disabled = false;
+            if (frm.toolbar && typeof frm.toolbar.set_primary_action === "function") {
+                frm.toolbar.set_primary_action();
+            } else if (typeof frm.enable_save === "function") {
+                frm.enable_save();
+            }
             return;
         }
-        if (editable) {
-            frm.enable_save();
-        } else {
-            frm.disable_save();
+
+        if (orderCanEdit(frm)) {
+            frm.save_disabled = false;
+            if (frm.toolbar) frm.toolbar.current_status = null;
+            frm.page.clear_primary_action();
+            frm.page.set_primary_action(SAVE_LABEL, () => commitEditSession(frm));
+            return;
         }
+
+        if (canOfferEditSession(frm)) {
+            frm.save_disabled = true;
+            if (frm.toolbar) frm.toolbar.current_status = null;
+            frm.page.clear_primary_action();
+            frm.page.set_primary_action(EDIT_LABEL, () => enterEditSession(frm));
+            return;
+        }
+
+        if (typeof frm.disable_save === "function") {
+            frm.disable_save();
+        } else {
+            frm.save_disabled = true;
+            frm.page.clear_primary_action();
+        }
+    }
+
+    function schedulePrimaryActionSync(frm) {
+        syncPrimaryAction(frm);
+        window.requestAnimationFrame(() => syncPrimaryAction(frm));
+        window.setTimeout(() => syncPrimaryAction(frm), 0);
+        window.setTimeout(() => syncPrimaryAction(frm), 120);
     }
 
     function removeEditSessionButtons(frm) {
@@ -203,21 +214,19 @@
         frm.remove_custom_button(CONFIRM_EDIT_LABEL, __("دورة الطلب"));
         frm.remove_custom_button(__("تعديل الطلب"));
         frm.remove_custom_button(__("تعديل الطلب"), __("دورة الطلب"));
+        frm.remove_custom_button(SAVE_LABEL);
+        frm.remove_custom_button(SAVE_LABEL, __("دورة الطلب"));
     }
 
     function refreshDependentUx(frm) {
         const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         if (field && field.$wrapper) {
-            // Bypass the save-render HTML guard so lock/unlock actually replaces
-            // disabled inputs on already-entered piece rows.
             field.$wrapper._dcoForceHtmlReplace = true;
         }
         if (typeof frm.trigger === "function") {
             frm.trigger("almdina_edit_session_changed");
             frm.trigger("refresh_plan_controls");
         }
-        // Re-render custom HTML UIs after the session gate flips. Do not call
-        // refresh_field on pieces_fast_entry: it wipes the operator table.
         if (field && field.$wrapper) {
             field.$wrapper._dcoForceHtmlReplace = true;
         }
@@ -234,57 +243,79 @@
 
     function enterEditSession(frm) {
         if (!canOfferEditSession(frm)) {
-            frappe.msgprint(__("لا يمكن تعديل هذا الطلب بعد بدء مرحلة القص (شريون أو CNC)."));
+            frappe.msgprint(__("يمكن تعديل الطلب فقط وهو في حالة المسودة."));
             return;
         }
         setEditSession(frm, true, { resetRecalc: true });
-        // Edits are not confirmed until an explicit recalculation runs in this session.
         frm.doc.plan_needs_recalculation = 1;
         frm.__almdina_recalc_after_edit = false;
         applyEditableFields(frm);
         installEditSessionButtons(frm);
+        schedulePrimaryActionSync(frm);
         refreshDependentUx(frm);
         frappe.show_alert({
-            message: __("وضع التعديل مفعّل. عدّل الدرف والحقول، ثم أعد حساب الخطة قبل «اعتماد التعديل»."),
+            message: __("وضع التعديل مفعّل. عدّل الدرف والحقول، ثم اضغط «حفظ» لاعتماد التعديل وإعادة قفل الحقول."),
             indicator: "blue",
         }, 6);
     }
 
-    function confirmEditSession(frm) {
-        if (!planReadyForConfirm(frm)) {
-            frappe.msgprint(
-                __("لا يمكن اعتماد التعديل قبل إعادة حساب خطة القص بالبيانات الجديدة. احفظ التغييرات إن لزم، ثم اضغط «إعادة الحساب».")
-            );
-            return;
-        }
-
-        // Confirming an edit only locks the form. It never approves the order/plan.
+    function lockEditSession(frm, options = {}) {
+        if (!frm || !isEditSessionActive(frm) || frm.is_new()) return false;
         setEditSession(frm, false);
         applyEditableFields(frm);
         installEditSessionButtons(frm);
+        schedulePrimaryActionSync(frm);
         refreshDependentUx(frm);
-        frappe.show_alert({
-            message: __("تم اعتماد التعديل بعد إعادة الحساب، وأُعيد قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم."),
-            indicator: "green",
-        }, 6);
+        if (options.silent !== true) {
+            frappe.show_alert({
+                message: __("تم حفظ التعديل وإعادة قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم."),
+                indicator: "green",
+            }, 6);
+        }
+        return true;
+    }
+
+    function commitEditSession(frm) {
+        if (!frm || frm.is_new()) {
+            if (frm && typeof frm.save === "function") return frm.save();
+            return;
+        }
+        if (!isEditSessionActive(frm)) {
+            if (typeof frm.save === "function") return frm.save();
+            return;
+        }
+
+        if (frm.is_dirty && frm.is_dirty()) {
+            frm.__almdina_lock_after_save = true;
+            return frm.save();
+        }
+        lockEditSession(frm);
+    }
+
+    async function persistOrderEditCheckpoint(frm) {
+        if (!frm || frm.is_new() || !orderCanEdit(frm)) return false;
+        if (!(frm.is_dirty && frm.is_dirty())) return true;
+        if (typeof frm.save !== "function") return false;
+
+        // Plan recalculation needs current piece rows in the database, but this
+        // automatic checkpoint must not mean "finish editing". The ordinary Save
+        // button still locks the session; only this explicit internal checkpoint
+        // preserves it across the save/reload cycle.
+        frm.__almdina_preserve_edit_session_after_save = true;
+        try {
+            await frm.save();
+        } finally {
+            frm.__almdina_preserve_edit_session_after_save = false;
+        }
+        return !(frm.is_dirty && frm.is_dirty());
+    }
+
+    function confirmEditSession(frm) {
+        return lockEditSession(frm);
     }
 
     function installEditSessionButtons(frm) {
         removeEditSessionButtons(frm);
-        if (!canOfferEditSession(frm)) return;
-
-        if (isEditSessionActive(frm)) {
-            const button = frm.add_custom_button(CONFIRM_EDIT_LABEL, () => confirmEditSession(frm));
-            if (button && typeof button.addClass === "function") {
-                button.addClass("btn-primary");
-            }
-            return;
-        }
-
-        const button = frm.add_custom_button(EDIT_LABEL, () => enterEditSession(frm));
-        if (button && typeof button.addClass === "function") {
-            button.addClass("btn-primary");
-        }
     }
 
     function renderRevisionState(frm) {
@@ -316,7 +347,7 @@
             && !DRAFT_LIKE.has(frm.doc.status || "Draft")
         ) {
             frm.set_intro(
-                __("الحقول مقفلة. استخدم «تعديل» لتغيير الدرف والبيانات على نفس الطلب قبل القص، ثم أعد الحساب واضغط «اعتماد التعديل»."),
+                __("الحقول مقفلة. اضغط «تعديل» لفتح الحقول، ثم «حفظ» لاعتماد التعديل وإعادة القفل."),
                 "blue"
             );
         }
@@ -365,7 +396,6 @@
 
     frappe.ui.form.on("Door Cutting Order", {
         onload(frm) {
-            // Restore an in-progress edit session for this order after reload/recalc.
             const entry = frm.doc && sessionEntry(frm.doc.name);
             if (entry && entry.active) {
                 frm.__almdina_edit_session = true;
@@ -373,6 +403,24 @@
             } else if (!frm.is_new()) {
                 frm.__almdina_edit_session = false;
                 frm.__almdina_recalc_after_edit = false;
+            }
+        },
+        after_save(frm) {
+            const preserveSession = Boolean(frm.__almdina_preserve_edit_session_after_save);
+            frm.__almdina_preserve_edit_session_after_save = false;
+            if (preserveSession && isEditSessionActive(frm)) {
+                frm.__almdina_lock_after_save = false;
+                applyEditableFields(frm);
+                schedulePrimaryActionSync(frm);
+                requestAnimationFrame(() => refreshDependentUx(frm));
+                return;
+            }
+
+            const shouldLock = Boolean(frm.__almdina_lock_after_save)
+                || (isEditSessionActive(frm) && !frm.is_new() && canOfferEditSession(frm));
+            frm.__almdina_lock_after_save = false;
+            if (shouldLock && isEditSessionActive(frm)) {
+                lockEditSession(frm);
             }
         },
         refresh(frm) {
@@ -402,10 +450,12 @@
                 frm.add_custom_button(__("فتح نسخة التعديل"), () => {
                     frappe.set_route("Form", "Door Cutting Order", frm.doc.superseded_by);
                 }, __("دورة الطلب"));
+                schedulePrimaryActionSync(frm);
                 return;
             }
 
             installEditSessionButtons(frm);
+            schedulePrimaryActionSync(frm);
 
             if (canCreateRevision(frm) && !canOfferEditSession(frm)) {
                 frm.add_custom_button(
@@ -416,7 +466,6 @@
             }
 
             if (isEditSessionActive(frm)) {
-                // After reload_doc (e.g. recalc), re-enable the piece grid.
                 requestAnimationFrame(() => refreshDependentUx(frm));
             }
         },
@@ -430,6 +479,7 @@
         }
         applyEditableFields(frm);
         installEditSessionButtons(frm);
+        schedulePrimaryActionSync(frm);
     });
 
     window.AlmdinaOrderRevisionUX = Object.freeze({
@@ -441,8 +491,12 @@
         isEditSessionActive,
         markEditSessionRecalculated,
         invalidateEditSessionRecalculation,
+        persistOrderEditCheckpoint,
         openRevision,
         enterEditSession,
         confirmEditSession,
+        lockEditSession,
+        commitEditSession,
+        syncPrimaryAction,
     });
 })();

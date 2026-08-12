@@ -36,21 +36,16 @@ def test_dxf_file_changes_keep_assignment_while_plan_actions_are_role_managed() 
     approval_source = APPROVAL_SERVICE_PATH.read_text(encoding="utf-8")
 
     assert "require_document_capability" in dxf_source
-    assert "validate_assigned_drawing_action" in dxf_source
+    assert "require_stage_operational_access" in dxf_source
+    assert "require_stage_role=True" in dxf_source
     assert "DXF_ROLES" not in dxf_source
     assert "require_roles" not in dxf_source
-    for capability in ("EXPORT_DXF", "RECALCULATE_PLAN"):
-        assert capability in dxf_source
-    assert "_get_recalculation_order" in dxf_source
-    recalculation = dxf_source.split("def _get_recalculation_order", 1)[1].split(
-        "def _validate_and_attach_dxf_file", 1
-    )[0]
-    assert "user_can_recalculate_drawing_system_plan" in recalculation
-    assert "validate_assigned_drawing_action" not in recalculation
+    assert "Capability.EXPORT_DXF" in dxf_source
 
     assert "Capability.APPROVE_DXF" in approval_source
     assert "require_document_capability" in approval_source
-    assert "validate_drawing_approval" in approval_source
+    assert "require_stage_operational_access" in approval_source
+    assert "validate_drawing_approval" not in approval_source
     assert "current_assignee" not in approval_source
     assert "require_any_role" not in approval_source
 

@@ -36,16 +36,20 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
             "assigned_to": "worker@example.com",
             "actor": "worker@example.com",
             "drawing_dxf_status": "Approved by Drawing",
+            "operational_role": "عامل CNC",
+            "actor_roles": ("عامل CNC",),
         }
         values.update(overrides)
         return ProductionActionFacts(**values)
 
-    def test_policy_has_no_framework_dependency(self) -> None:
+    def test_policy_has_no_framework_or_route_name_dependency(self) -> None:
         source = POLICY_PATH.read_text(encoding="utf-8")
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
         self.assertNotIn("services", source)
         self.assertNotIn("infrastructure", source)
+        self.assertNotIn('stage_type == "Drawing"', source)
+        self.assertNotIn("dxf_not_approved", source)
 
     def test_every_action_fails_closed_without_its_capability(self) -> None:
         for action in PRODUCTION_ACTIONS:
@@ -57,8 +61,9 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
                 )
                 self.assertFalse(decision.allowed)
                 self.assertEqual(decision.code, "missing_capability")
+                self.assertTrue(decision.reason)
 
-    def test_dispatch_requires_ready_plan_and_undispatched_order(self) -> None:
+    def test_dispatch_requires_fresh_plan_and_undispatched_order(self) -> None:
         allowed = decide_production_action(
             Capability.DISPATCH_ORDER,
             capabilities={Capability.DISPATCH_ORDER},
@@ -90,6 +95,22 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
         )
         self.assertEqual(missing_plan.code, "missing_cutting_plan")
 
+        stale = decide_production_action(
+            Capability.DISPATCH_ORDER,
+            capabilities={Capability.DISPATCH_ORDER},
+            facts=self.facts(
+                order_status="Approved",
+                production_path=None,
+                current_stage_name=None,
+                plan_needs_recalculation=True,
+                stage_name=None,
+                stage_type=None,
+                stage_status=None,
+                assigned_to=None,
+            ),
+        )
+        self.assertEqual(stale.code, "stale_cutting_plan")
+
         already_dispatched = decide_production_action(
             Capability.DISPATCH_ORDER,
             capabilities={Capability.DISPATCH_ORDER},
@@ -119,29 +140,29 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
         )
         self.assertTrue(allowed.allowed)
 
-    def test_drawing_handoff_requires_approved_dxf(self) -> None:
-        denied = decide_production_action(
-            Capability.HANDOFF_ASSIGNED_STAGE,
-            capabilities={Capability.HANDOFF_ASSIGNED_STAGE},
-            facts=self.facts(
-                order_status="At Drawing",
-                stage_type="Drawing",
-                stage_status="In Progress",
-                drawing_dxf_status="Uploaded",
-            ),
+        missing_role = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(actor_roles=("عامل رسم",)),
         )
-        self.assertEqual(denied.code, "dxf_not_approved")
+        self.assertEqual(missing_role.code, "missing_operational_role")
 
-        allowed = decide_production_action(
-            Capability.HANDOFF_ASSIGNED_STAGE,
-            capabilities={Capability.HANDOFF_ASSIGNED_STAGE},
-            facts=self.facts(
-                order_status="At Drawing",
-                stage_type="Drawing",
-                stage_status="In Progress",
-            ),
-        )
-        self.assertTrue(allowed.allowed)
+    def test_handoff_policy_is_independent_from_drawing_and_dxf_metadata(self) -> None:
+        for dxf_status in (None, "Uploaded", "Approved by Drawing"):
+            with self.subTest(dxf_status=dxf_status):
+                decision = decide_production_action(
+                    Capability.HANDOFF_ASSIGNED_STAGE,
+                    capabilities={Capability.HANDOFF_ASSIGNED_STAGE},
+                    facts=self.facts(
+                        order_status="At Drawing",
+                        stage_type="Drawing",
+                        stage_status="In Progress",
+                        drawing_dxf_status=dxf_status,
+                        operational_role="عامل رسم",
+                        actor_roles=("عامل رسم",),
+                    ),
+                )
+                self.assertTrue(decision.allowed)
 
     def test_reassignment_is_independent_from_worker_assignment(self) -> None:
         allowed = decide_production_action(
@@ -158,7 +179,7 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
         )
         self.assertEqual(closed.code, "closed_stage")
 
-    def test_context_is_complete_and_json_safe(self) -> None:
+    def test_context_is_complete_arabic_and_json_safe(self) -> None:
         context = build_production_action_context(
             capabilities=PRODUCTION_ACTIONS,
             facts=self.facts(stage_status="In Progress"),
@@ -169,6 +190,20 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
             self.assertIsInstance(item["allowed"], bool)
             self.assertIsInstance(item["code"], str)
             self.assertIsInstance(item["reason"], str)
+
+        denied = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(assigned_to="other@example.com"),
+        )
+        self.assertIn("عامل", denied.reason)
+        missing = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(actor_roles=("عامل رسم",)),
+        )
+        self.assertEqual(missing.code, "missing_operational_role")
+        self.assertIn("عرض", missing.reason)
 
 
 if __name__ == "__main__":

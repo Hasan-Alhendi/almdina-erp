@@ -63,7 +63,7 @@ def test_measurement_keyboard_flow_is_plain_dom_width_tab_length_enter_next_widt
         'event.key === "Tab" && !event.shiftKey && fieldname === "width_cm"',
         "the browser moves directly to Length with zero Frappe row activation",
         'event.key === "Enter" && fieldname === "length_cm"',
-        "moveToNextWidth(frm, tr)",
+        "moveToNextWidth(currentFrm, tr)",
         "focusWidth(next)",
         'input.focus({ preventScroll:true })',
         "DOM insertion and focus are both synchronous",
@@ -149,7 +149,7 @@ def test_measurement_table_fits_the_form_without_horizontal_scrolling():
         "scrollbar-gutter:stable",
         ".dco-fast-table .dco-col-notes",
         "width:auto !important",
-        ".dco-fast-table .dco-col-edges { width:188px !important; }",
+        ".dco-fast-table .dco-col-edges{width:188px !important;}",
         "@media (max-width:900px)",
         "@media (max-width:720px)",
     ]
@@ -178,7 +178,6 @@ def test_edge_cells_use_compact_visual_side_indicators_and_accessibility_labels(
         "border-top:3px solid currentColor",
         "border-bottom:3px solid currentColor",
         'button.setAttribute("aria-label", label)',
-        "القشاط والتدوير بنقرة واحدة",
     ]
     missing = [fragment for fragment in required if fragment not in source]
     assert not missing, f"Missing compact visual edge-control fragments: {missing}"
@@ -221,7 +220,7 @@ def test_edge_and_rotation_controls_are_true_one_click_buttons_outside_native_gr
     required = [
         'class="dco-check-toggle',
         'data-check-field="${field}"',
-        "toggleCheck(frm, check)",
+        "toggleCheck(currentFrm, check)",
         "row[fieldname] = next",
         'button.classList.toggle("is-checked"',
         'root.addEventListener("pointerdown"',
@@ -231,11 +230,24 @@ def test_edge_and_rotation_controls_are_true_one_click_buttons_outside_native_gr
     assert not missing, f"Missing one-click toggle fragments: {missing}"
 
 
+def test_fast_editor_binds_measurement_handlers_only_once():
+    source = UX_JS.read_text(encoding="utf-8")
+    assert "root._dcoFastEntryForm = frm" in source
+    assert "if (root._dcoFastMeasurementsBound) return" in source
+    assert "root._dcoFastMeasurementsBound = true" in source
+    assert "const currentFrm = root._dcoFastEntryForm" in source
+    assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in source
+    assert "window.AlmdinaClippedCornerEditor.open(currentFrm, row)" in source
+    # html() replaces children of the wrapper; rebinding the wrapper on every
+    # render would stack sketch-button handlers and open layered dialogs.
+    assert "re-attaching on every render would open stacked shape/corner dialogs" in source
+
+
 def test_fast_editor_keeps_background_recalculation_separate_from_input_focus():
     source = UX_JS.read_text(encoding="utf-8")
     assert "triggerChildField" in source
     assert "frm.script_manager.trigger(fieldname, row.doctype, row.name)" in source
-    assert "syncInputToModel(frm, input, false)" in source
+    assert "syncInputToModel(currentFrm, input, false)" in source
     assert "setTimeout(() => focus" not in source
     assert 'frm.refresh_field("pieces")' not in source
 

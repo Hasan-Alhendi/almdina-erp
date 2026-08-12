@@ -81,21 +81,29 @@
         return html;
     }
 
+    function print_piece_number(value) {
+        const label = String(value || "—").trim();
+        const primary = label.split(".")[0].trim();
+        return primary || "—";
+    }
+
     function render_piece_label(piece) {
         const shape_output = window.AlmdinaShapeOutputContract;
         const exact_special = piece.piece_type === "Special"
             && shape_output
             && shape_output.hasExactCutPath(piece);
         const special = piece.piece_type === "Special"
-            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#7a4c13;color:#fff;font-size:9px;font-weight:900">${exact_special ? "◆ درفة خاصة · مسار هندسي" : "✦ درفة خاصة · خام CNC"}</span><br>`
             : "";
         const clipped = piece.piece_type === "Clipped Corner"
-            ? `<span style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
             : "";
+        const piece_number = print_piece_number(piece.label);
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
                 ${special}${clipped}
-                <span>${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
+                <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
+                <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
         `;
     }
@@ -294,8 +302,10 @@
     }
 
     // =====================================================
-    // Print cutting plan — screen header + all sheets on one A4
+    // Print cutting plan — dynamic A4 landscape, max 10 boards per page
     // =====================================================
+
+    const MAX_SHEETS_PER_PAGE = 10;
 
     function planRootFromVisibleDom(frm) {
         const field = frm.fields_dict && frm.fields_dict.cutting_plan_html;
@@ -312,169 +322,309 @@
         return holder.querySelector(".dco-cutting-plan");
     }
 
-    function layoutPlanForSingleA4(planRoot) {
-        const sheets = [...planRoot.querySelectorAll(".dco-sheet-card")];
-        const count = sheets.length;
-        if (!count) return planRoot;
-
-        const sheetsWrap = document.createElement("div");
-        sheetsWrap.className = "dco-print-sheets-grid";
-
-        sheets.forEach(card => {
-            if (card.parentNode) card.parentNode.removeChild(card);
-            sheetsWrap.appendChild(card);
-        });
-        planRoot.appendChild(sheetsWrap);
-
-        const cols = count === 1 ? 1 : count <= 4 ? 2 : count <= 9 ? 3 : 4;
-        sheetsWrap.style.setProperty("--print-cols", String(cols));
-
-        const firstBoard = sheets[0].querySelector(".dco-sheet-board");
-        const origW = parseFloat(firstBoard && firstBoard.style.width) || 560;
-        const origH = parseFloat(firstBoard && firstBoard.style.height) || 260;
-        const aspect = origH / Math.max(origW, 1);
-
-        const gridMaxW = 194;
-        const gridMaxH = 138;
-        const gap = 3;
-        const rows = Math.ceil(count / cols);
-
-        let boardWmm = (gridMaxW - (cols - 1) * gap) / cols - 6;
-        let boardHmm = boardWmm * aspect;
-        const rowHmm = boardHmm + 14;
-        let totalHmm = rows * rowHmm + (rows - 1) * gap;
-
-        if (totalHmm > gridMaxH) {
-            const shrink = gridMaxH / totalHmm;
-            boardWmm *= shrink;
-            boardHmm *= shrink;
-        }
-
-        sheets.forEach(card => {
-            const board = card.querySelector(".dco-sheet-board");
-            if (!board) return;
-            board.style.width = `${boardWmm}mm`;
-            board.style.height = `${boardHmm}mm`;
-            board.style.maxWidth = "100%";
-            board.style.margin = "0 auto";
-            card.style.margin = "0";
-            card.style.padding = "2mm";
-        });
-
-        return planRoot;
+    function printRowSizes(count) {
+        if (count <= 0) return [];
+        if (count <= 6) return [count];
+        if (count === 7) return [4, 3];
+        if (count === 8) return [4, 4];
+        if (count === 9) return [5, 4];
+        return [5, Math.max(0, count - 5)].filter(Boolean);
     }
 
-    function buildPrintDocument(title, planRoot) {
-        layoutPlanForSingleA4(planRoot);
-        planRoot.classList.add("dco-print-plan-single");
+    function printGridColumns(count) {
+        const rows = printRowSizes(count);
+        return rows.length ? Math.max(...rows) : 1;
+    }
 
+    function requestedPieceCount(frm) {
+        return (frm.doc.pieces || []).reduce(
+            (total, row) => total + Math.max(0, Math.floor(num(row.qty))),
+            0
+        );
+    }
+
+    function printBoardSize(frm, plan) {
+        const width = num(plan && plan.full_board_width_cm) || num(frm.doc.board_width_cm);
+        const length = num(plan && plan.full_board_length_cm) || num(frm.doc.board_length_cm);
+        if (!width || !length) return "—";
+        return `${round(width, 1)} × ${round(length, 1)} سم`;
+    }
+
+    function printThemeApi() {
+        return window.AlmdinaOrderDocumentPrintTheme || null;
+    }
+
+    function printHeaderHtml(identity, title, meta) {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerHtml !== "function") {
+            throw new Error("Unified factory print header is unavailable");
+        }
+        return theme.headerHtml(identity, { title, meta });
+    }
+
+    function printHeaderCss() {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerCss !== "function") {
+            throw new Error("Unified factory print header styles are unavailable");
+        }
+        return theme.headerCss();
+    }
+
+    function printOrderMetaHtml(frm, plan, totalSheets) {
+        const items = [
+            ["رقم الطلب", frm.doc.name || "—"],
+            ["اسم الزبون", frm.doc.customer || "—"],
+            ["لون اللوح", frm.doc.board_description || "—"],
+            ["عدد الألواح", totalSheets],
+            ["عدد القطع", requestedPieceCount(frm)],
+            ["قياس اللوح", printBoardSize(frm, plan)],
+        ];
+        return `<div class="dco-print-order-meta">${items.map(([label, value]) => `
+            <div><b>${escape_html(label)}</b><span>${escape_html(value)}</span></div>
+        `).join("")}</div>`;
+    }
+
+    function boardAspectFromCards(cards, frm, plan) {
+        const firstBoard = cards[0] && cards[0].querySelector(".dco-sheet-board");
+        const renderedW = parseFloat(firstBoard && firstBoard.style.width);
+        const renderedH = parseFloat(firstBoard && firstBoard.style.height);
+        if (renderedW > 0 && renderedH > 0) return renderedH / renderedW;
+
+        const width = num(plan && plan.usable_board_width_cm)
+            || num(plan && plan.full_board_width_cm)
+            || num(frm.doc.board_width_cm);
+        const length = num(plan && plan.usable_board_length_cm)
+            || num(plan && plan.full_board_length_cm)
+            || num(frm.doc.board_length_cm);
+        return width > 0 && length > 0 ? length / width : 2;
+    }
+
+    function sizeBoardsForPage(cards, frm, plan) {
+        const count = cards.length;
+        const rowSizes = printRowSizes(count);
+        const cols = printGridColumns(count);
+        const rows = rowSizes.length;
+        const aspect = Math.max(0.15, boardAspectFromCards(cards, frm, plan));
+        const pageGridWidthMm = 281;
+        const pageGridHeightMm = 164;
+        const columnGapMm = 2.2;
+        const rowGapMm = 2.2;
+        const titleHeightMm = 4.2;
+        const cardHorizontalSpaceMm = 1;
+
+        const widthLimit = (
+            pageGridWidthMm
+            - (cols - 1) * columnGapMm
+            - cols * cardHorizontalSpaceMm
+        ) / cols;
+        const heightPerRow = (
+            pageGridHeightMm
+            - (rows - 1) * rowGapMm
+        ) / Math.max(rows, 1);
+        const heightLimit = Math.max(12, heightPerRow - titleHeightMm);
+        const boardWmm = Math.max(8, Math.min(widthLimit, heightLimit / aspect));
+        const boardHmm = boardWmm * aspect;
+        const cardWmm = boardWmm + cardHorizontalSpaceMm;
+
+        cards.forEach((card, index) => {
+            const board = card.querySelector(".dco-sheet-board");
+            const title = card.querySelector(".dco-sheet-title");
+            if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${index + 1}</div>`;
+            if (board) {
+                board.style.width = `${boardWmm}mm`;
+                board.style.height = `${boardHmm}mm`;
+                board.style.maxWidth = "100%";
+                board.style.margin = "0 auto";
+            }
+            card.style.setProperty("--print-card-width", `${cardWmm}mm`);
+            card.style.margin = "0";
+            card.style.padding = ".4mm";
+        });
+        return { cols, rows, rowSizes };
+    }
+
+    function pageChunks(cards) {
+        const chunks = [];
+        for (let index = 0; index < cards.length; index += MAX_SHEETS_PER_PAGE) {
+            chunks.push(cards.slice(index, index + MAX_SHEETS_PER_PAGE));
+        }
+        return chunks;
+    }
+
+    function buildPrintPages(frm, planRoot, plan, identity) {
+        const sourceCards = [...planRoot.querySelectorAll(".dco-sheet-card")]
+            .map(card => card.cloneNode(true));
+        const totalSheets = sourceCards.length;
+        const chunks = pageChunks(sourceCards);
+        let globalBoardIndex = 0;
+
+        return chunks.map((cards, pageIndex) => {
+            const layout = sizeBoardsForPage(cards, frm, plan);
+            let cardOffset = 0;
+            const gridRows = layout.rowSizes.map(rowSize => {
+                const rowCards = cards.slice(cardOffset, cardOffset + rowSize);
+                cardOffset += rowSize;
+                const rowHtml = rowCards.map(card => {
+                    const title = card.querySelector(".dco-sheet-title");
+                    globalBoardIndex += 1;
+                    if (title) title.innerHTML = `<div class="dco-print-sheet-number">لوح ${globalBoardIndex}</div>`;
+                    return card.outerHTML;
+                }).join("");
+                return `<div class="dco-print-sheets-row">${rowHtml}</div>`;
+            }).join("");
+            return `<section class="dco-print-page" data-page="${pageIndex + 1}">
+                ${printHeaderHtml(identity, "خطة القص", `صفحة ${pageIndex + 1} من ${chunks.length}`)}
+                ${printOrderMetaHtml(frm, plan, totalSheets)}
+                <div class="dco-print-sheets-grid">${gridRows}</div>
+            </section>`;
+        }).join("");
+    }
+
+    function buildPrintDocument(title, frm, planRoot, plan, identity) {
+        const pages = buildPrintPages(frm, planRoot, plan, identity);
         return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <title>${escape_html(title)}</title>
 <style>
-@page { size: A4 portrait; margin: 8mm; }
-* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box !important; }
+@page { size: A4 landscape; margin: 6mm; }
+* { box-sizing: border-box !important; }
 html, body {
     margin: 0;
     padding: 0;
     background: #fff !important;
     color: #111 !important;
-    font-family: Arial, Tahoma, sans-serif;
+    font-family: Tahoma, Arial, sans-serif;
     direction: rtl;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
 }
-.dco-print-plan-single {
+${printHeaderCss()}
+.dco-print-page {
     width: 100%;
-    margin: 0;
-    padding: 0;
-    background: #fff;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    min-height: 198mm;
+    display: flex;
+    flex-direction: column;
+    break-after: page;
+    page-break-after: always;
 }
-.dco-print-plan-single h2 {
-    margin: 0 0 4px 0 !important;
-    font-size: 16px !important;
+.dco-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
 }
-.dco-print-plan-single .dco-plan-header-cards {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-    gap: 2mm !important;
-    margin: 2mm 0 3mm 0 !important;
-}
-.dco-print-plan-single .dco-plan-header-card {
-    padding: 2mm 2.5mm !important;
-    border-radius: 6px !important;
-}
-.dco-print-plan-single .dco-plan-header-card b {
-    font-size: 7.5px !important;
-    margin-bottom: 1mm !important;
-}
-.dco-print-plan-single .dco-plan-header-card span {
-    font-size: 9px !important;
-    line-height: 1.25 !important;
-}
-.dco-print-plan-single .dco-summary-grid {
-    gap: 4px !important;
-    margin: 4px 0 6px 0 !important;
-}
-.dco-print-plan-single .dco-summary-card {
-    padding: 4px 6px !important;
-    font-size: 10px !important;
-}
-.dco-print-plan-single .dco-piece-groups,
-.dco-print-plan-single .dco-special-raw-coverage {
-    margin: 4px 0 6px 0 !important;
-    padding: 4px 6px !important;
-    font-size: 10px !important;
-    line-height: 1.5 !important;
-}
-.dco-print-sheets-grid {
+.dco-print-order-meta {
     display: grid;
-    grid-template-columns: repeat(var(--print-cols, 1), 1fr);
-    gap: 3mm;
-    align-items: start;
-    margin-top: 4px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 1mm;
+    margin: 1.25mm 0 1.4mm;
+}
+.dco-print-order-meta > div {
+    min-width: 0;
+    padding: .8mm 1mm;
+    border: .45pt solid #aab0b6;
+    border-radius: 1mm;
+    background: #fff;
+    line-height: 1.1;
+}
+.dco-print-order-meta b { display: block; margin-bottom: .35mm; font-size: 5.4pt; color: #4d555c; }
+.dco-print-order-meta span { display: block; font-size: 6.9pt; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dco-print-sheets-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-content: stretch;
+    align-items: stretch;
+    gap: 2.2mm;
+    padding-top: .8mm;
+}
+.dco-print-sheets-row {
+    width: 100%;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 2.2mm;
 }
 .dco-sheet-card {
-    width: 100%;
-    max-width: 100%;
+    flex: 0 0 var(--print-card-width, auto);
+    width: var(--print-card-width, auto) !important;
+    max-width: var(--print-card-width, 100%) !important;
     margin: 0 !important;
-    border: 1px solid #bbb !important;
-    border-radius: 8px !important;
+    padding: .4mm !important;
+    border: 0 !important;
+    border-radius: 0 !important;
     background: #fff !important;
-    page-break-inside: avoid !important;
+    box-shadow: none !important;
     break-inside: avoid !important;
+    page-break-inside: avoid !important;
 }
 .dco-sheet-title {
-    display: flex !important;
-    justify-content: space-between !important;
-    gap: 6px !important;
-    margin-bottom: 4px !important;
-    font-size: 10px !important;
-    font-weight: bold !important;
+    display: block !important;
+    margin: 0 0 .6mm !important;
+    text-align: center !important;
+    font-size: 8.5pt !important;
+    font-weight: 950 !important;
+    line-height: 1 !important;
 }
+.dco-print-sheet-number { text-align: center; }
 .dco-sheet-board {
     position: relative !important;
     direction: ltr !important;
     display: block !important;
-    border: 2px solid #111 !important;
-    background:
-        linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px),
-        linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
-        #fff !important;
-    background-size: 32px 32px !important;
+    border: 1.05pt solid #111 !important;
+    background: #fff !important;
     overflow: hidden !important;
+    box-shadow: none !important;
 }
-.dco-piece { overflow: hidden !important; }
-.dco-piece-label { direction: ltr !important; text-align: center !important; font-size: 8px !important; line-height: 1.1 !important; }
-.dco-edge-line { border-color: #d00000 !important; }
+.dco-piece {
+    overflow: hidden !important;
+    background: #fff !important;
+    border-color: #111 !important;
+    color: #111 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+.dco-special-exact-piece,
+.dco-clipped-corner-piece { background: transparent !important; border: 0 !important; }
+.dco-shaped-piece-outline polygon { fill: #fff !important; stroke: #111 !important; }
+.dco-piece-label {
+    direction: ltr !important;
+    text-align: center !important;
+    line-height: 1 !important;
+    color: #111 !important;
+    white-space: nowrap !important;
+}
+.dco-piece-kind-badge,
+.dco-piece-size { display: none !important; }
+.dco-piece-number {
+    display: block !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #111 !important;
+    font-size: 6.6pt !important;
+    font-weight: 950 !important;
+    line-height: 1 !important;
+}
+.dco-edge-line {
+    border-color: #e00000 !important;
+    border-width: .45pt !important;
+}
+@media print {
+    a { color: inherit !important; text-decoration: none !important; }
+}
 </style>
 </head>
-<body>${planRoot.outerHTML}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},400);};<\/script></body>
+<body>${pages}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},350);};<\/script></body>
 </html>`;
     }
 
-    function print_cutting_plan(frm, planOverride = null) {
+    async function print_cutting_plan(frm, planOverride = null) {
+        const plan = planOverride || parse_plan(frm) || {};
         let planRoot = null;
         if (planOverride) {
             planRoot = planRootFromPlan(frm, planOverride);
@@ -483,23 +633,39 @@ html, body {
             planRoot = planRootFromVisibleDom(frm);
         }
         if (!planRoot) {
-            planRoot = planRootFromPlan(frm, parse_plan(frm));
+            planRoot = planRootFromPlan(frm, plan);
         }
         if (!planRoot || !planRoot.querySelector(".dco-sheet-card")) {
             frappe.msgprint("لا يوجد مخطط قص للطباعة. اضغط أولًا على إعادة حساب خطة القص.");
-            return;
+            return false;
         }
 
         const title = "خطة قص - " + (frm.doc.name || "");
         const print_window = window.open("", "_blank");
         if (!print_window) {
             frappe.msgprint("المتصفح منع فتح نافذة الطباعة. اسمح بالنوافذ المنبثقة ثم جرّب مرة أخرى.");
-            return;
+            return false;
         }
 
         print_window.document.open();
-        print_window.document.write(buildPrintDocument(title, planRoot));
+        print_window.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز خطة القص…</title></head><body style="font-family:Tahoma,Arial,sans-serif;direction:rtl;padding:24px">جاري تجهيز خطة القص للطباعة…</body></html>');
         print_window.document.close();
+
+        try {
+            const identityApi = window.AlmdinaFactoryPrintIdentity;
+            const identity = identityApi && typeof identityApi.get === "function"
+                ? await identityApi.get()
+                : (identityApi && typeof identityApi.fallback === "function" ? identityApi.fallback() : {});
+            print_window.document.open();
+            print_window.document.write(buildPrintDocument(title, frm, planRoot, plan, identity));
+            print_window.document.close();
+            return true;
+        } catch (error) {
+            console.error("Cutting plan print preparation failed", error);
+            try { print_window.close(); } catch (closeError) { /* ignored */ }
+            frappe.msgprint("تعذر تجهيز خطة القص للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+            return false;
+        }
     }
 
     window.AlmdinaCuttingPlanRender = {

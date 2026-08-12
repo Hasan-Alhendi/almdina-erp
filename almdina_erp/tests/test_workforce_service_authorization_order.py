@@ -15,6 +15,18 @@ def function_block(source: str, name: str, next_name: str | None) -> str:
 
 
 class TestWorkforceServiceAuthorizationOrder(unittest.TestCase):
+    def test_adoption_authorizes_before_lock_and_lookup(self) -> None:
+        source = SERVICE.read_text(encoding="utf-8")
+        block = function_block(
+            source,
+            "adopt_workforce_user",
+            "update_workforce_user",
+        )
+        authorization = block.index("_require_action(WorkforceAction.CREATE)")
+        self.assertLess(authorization, block.index("_repository.lock_user"))
+        self.assertLess(authorization, block.index("_repository.get_user"))
+        self.assertLess(authorization, block.index("_repository.adopt_user"))
+
     def test_update_authorizes_before_lock_and_lookup(self) -> None:
         source = SERVICE.read_text(encoding="utf-8")
         block = function_block(

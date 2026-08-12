@@ -73,7 +73,10 @@ jobs:
             almdina_erp.tests.test_authorization_gateway_matrix_fallback \
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
+            almdina_erp.tests.test_canonical_permission_state_architecture \
+            almdina_erp.tests.test_canonical_permission_reset_patch \
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
+            almdina_erp.tests.test_resource_permission_hooks \
             almdina_erp.tests.test_permission_management_architecture \
             almdina_erp.tests.test_permission_templates \
             almdina_erp.tests.test_permission_personas_e2e \
@@ -82,8 +85,13 @@ jobs:
             almdina_erp.tests.test_workforce_management_architecture \
             almdina_erp.tests.test_factory_master_data_authorization \
             almdina_erp.tests.test_factory_master_data_architecture \
+            almdina_erp.tests.test_production_routing_management_application \
+            almdina_erp.tests.test_production_routing_workflow_ux \
             almdina_erp.tests.test_control_center_authorization \
-            almdina_erp.tests.test_control_center_architecture
+            almdina_erp.tests.test_control_center_architecture \
+            almdina_erp.tests.test_permission_surface_policy \
+            almdina_erp.tests.test_report_permission_contract \
+            almdina_erp.tests.test_permission_visibility_and_arabic_ux
 
       - name: Run configurable lifecycle and production architecture tests
         run: |
@@ -188,7 +196,7 @@ jobs:
           done < <(find almdina_erp -type f -name '*.js' -print0)
           echo "Validated ${count} JavaScript files"
 
-      - name: Run frontend browser simulations
+      - name: Run active frontend browser simulations
         run: |
           node almdina_erp/tests/js/permission_context.test.js
           node almdina_erp/tests/js/order_lifecycle_permissions.test.js
@@ -196,14 +204,23 @@ jobs:
           node almdina_erp/tests/js/cutting_plan_renderer.test.js
           node almdina_erp/tests/js/document_context.test.js
           node almdina_erp/tests/js/document_context_async.test.js
+          node almdina_erp/tests/js/approved_plan_navigation.test.js
+          node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
+          node almdina_erp/tests/js/order_navigation_surfaces.test.js
           node almdina_erp/tests/js/input_stability.test.js
-          node almdina_erp/tests/js/inline_note_editor.test.js
-          node almdina_erp/tests/js/sketch_interaction.test.js
-          node almdina_erp/tests/js/sketch_history.test.js
-          node almdina_erp/tests/js/sketch_renderer.test.js
           node almdina_erp/tests/js/shape_output_contract.test.js
           node almdina_erp/tests/js/mobile_piece_cards.test.js
           node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/shop_floor_quick_actions.test.js
-          node almdina_erp/tests/test_special_shape_smoothing.js
+          node almdina_erp/tests/js/order_tab_visibility.test.js
           node almdina_erp/tests/test_shape_print.js
+
+      - name: Run Door Drawing V3 geometry and architecture regressions
+        run: |
+          node almdina_erp/tests/js/door_drawing_v3_geometry.test.js
+          node almdina_erp/tests/js/door_drawing_v3_snapping.test.js
+          node almdina_erp/tests/js/door_drawing_v3_handles.test.js
+          node almdina_erp/tests/js/door_drawing_v3_precision_input.test.js
+          node almdina_erp/tests/js/door_drawing_v3_freehand.test.js
+          node almdina_erp/tests/js/door_drawing_v3_stroke_intelligence.test.js
+          node almdina_erp/tests/js/door_drawing_v3_architecture_contract.test.js

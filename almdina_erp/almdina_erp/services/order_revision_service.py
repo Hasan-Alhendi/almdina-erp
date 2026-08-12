@@ -187,14 +187,17 @@ def return_order_to_draft(
     order_name: str,
     reason: str | None = None,
 ) -> dict[str, Any]:
-    """Create an editable successor for actors granted ``return_order_to_draft``."""
+    """Return the same order to Draft (no revision copy).
 
-    return _create_revision(
-        order_name,
-        reason=reason
-        or _("Order returned for controlled editing through the lifecycle action."),
-        capabilities=(Capability.RETURN_ORDER_TO_DRAFT,),
+    Kept on this module so existing whitelists and hooks keep working while the
+    authoritative in-place reset lives in the lifecycle service.
+    """
+
+    from almdina_erp.almdina_erp.services.order_lifecycle_service import (
+        return_order_to_draft as reset_same_order,
     )
+
+    return reset_same_order(order_name, reason=reason)
 
 
 __all__ = [

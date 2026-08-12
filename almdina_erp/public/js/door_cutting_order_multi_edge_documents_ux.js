@@ -16,17 +16,6 @@
         return Number.isFinite(result) ? result : 0;
     }
 
-    function money(value) {
-        return num(value).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        });
-    }
-
-    function quantity(value) {
-        return num(value).toLocaleString("en-US", { maximumFractionDigits: 3 });
-    }
-
     function rows(frm) {
         const module = api();
         return (frm.doc.pieces || []).map((row, index) => ({
@@ -69,86 +58,26 @@
         }).join("")}</div>`;
     }
 
-    function edgeInvoiceLines(frm) {
-        const data = rows(frm);
-        const hasSpecial = data.some(row => row.piece_type === "Special");
-        const sourceRows = hasSpecial
-            ? data.filter(row => row.piece_type !== "Special")
-            : data;
-        const groups = new Map();
-
-        sourceRows.forEach(row => {
-            row.details.forEach(detail => {
-                if (!detail.meters) return;
-                const key = `${detail.edge_type}::${detail.rate}::${detail.thickness_mm}`;
-                if (!groups.has(key)) {
-                    groups.set(key, {
-                        type: "edge",
-                        description: `قشاط — ${detail.edge_type || "غير محدد"}`,
-                        quantity: 0,
-                        unit: "متر",
-                        rate: detail.rate,
-                        amount: 0,
-                        thickness: detail.thickness_mm,
-                        sides: new Set(),
-                        hasCustom: false,
-                    });
-                }
-                const group = groups.get(key);
-                group.quantity += num(detail.meters);
-                group.amount += num(detail.amount);
-                group.sides.add(detail.side_label);
-                group.hasCustom = group.hasCustom || Boolean(detail.custom);
-            });
-        });
-
-        return [...groups.values()].map(group => ({
-            type: group.type,
-            description: group.description,
-            quantity: Math.round(group.quantity * 1000) / 1000,
-            unit: group.unit,
-            rate: group.rate,
-            amount: Math.round(group.amount * 1000) / 1000,
-            note: `السماكة ${quantity(group.thickness)} مم — ${group.hasCustom ? "يتضمن أطرافًا مخصصة" : "من القشاط الافتراضي"} — ${[...group.sides].join("، ")}`,
-        }));
+    /*
+     * Invoice money is authoritative only after the order has been saved and the
+     * server costing adapter has persisted its result.  This module may decorate
+     * the cost screen, but it must never rebuild invoice rows from the asynchronous
+     * browser Edge Banding Type cache.  Doing that used to replace valid persisted
+     * prices with temporary 0.00 values while profiles were still loading.
+     */
+    function invoiceLines(frm) {
+        const costing = window.AlmdinaOrderCostUX;
+        return costing && typeof costing.invoiceLines === "function"
+            ? costing.invoiceLines(frm)
+            : [];
     }
 
-    function invoiceLines(frm) {
-        const originalApi = window.AlmdinaOrderCostUX;
-        const original = originalApi && typeof originalApi.invoiceLines === "function"
-            ? originalApi.invoiceLines(frm)
-            : [];
-        const nonEdge = original.filter(line => line.type !== "edge");
-        const detailedEdges = edgeInvoiceLines(frm);
-        const firstCustom = nonEdge.findIndex(line =>
-            line.type === "special" || line.type === "cut_corner"
-        );
-        if (firstCustom < 0) return [...nonEdge, ...detailedEdges];
-        return [
-            ...nonEdge.slice(0, firstCustom),
-            ...detailedEdges,
-            ...nonEdge.slice(firstCustom),
-        ];
+    function edgeInvoiceLines(frm) {
+        return invoiceLines(frm).filter(line => line.type === "edge");
     }
 
     function invoiceTotal(frm) {
         return invoiceLines(frm).reduce((sum, line) => sum + num(line.amount), 0);
-    }
-
-    function invoiceRowsHtml(frm) {
-        const lines = invoiceLines(frm);
-        if (!lines.length) {
-            return '<tr><td colspan="6" class="dco-cost-empty-row">احفظ الطلب واحسب خطة القص لتظهر تفاصيل الفاتورة.</td></tr>';
-        }
-        return lines.map((line, index) => `
-            <tr>
-                <td>${index + 1}</td>
-                <td class="text-start"><b>${esc(line.description)}</b>${line.note ? `<span class="dco-invoice-line-note">${esc(line.note)}</span>` : ""}</td>
-                <td>${quantity(line.quantity)}</td>
-                <td>${esc(line.unit)}</td>
-                <td>${line.rate || line.rate === 0 ? money(line.rate) : "—"}</td>
-                <td><b>${money(line.amount)}</b></td>
-            </tr>`).join("");
     }
 
     function installStyles() {
@@ -173,8 +102,6 @@
             .dco-cost-table .dco-row-index{display:inline-grid;place-items:center;min-width:27px;height:27px;padding:0 7px;border-radius:8px;background:var(--subtle-fg,#eef2f5);font-weight:900;color:var(--text-color,#26313b)}
             .dco-cost-table .dco-piece-type{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:4px 9px;border-radius:999px;background:var(--subtle-fg,#eef2f5);font-size:10px;font-weight:900;color:var(--text-muted,#5e6a75)}
             .dco-cost-table .dco-piece-type.is-special{background:#fff3d8;color:#875812}
-            .dco-cost-table .dco-dimension-value{font-size:13px;font-weight:900}
-            .dco-cost-table .dco-dimension-edge-line{width:31px;height:1.4px}
             .dco-cost-table .dco-edge-detail-cell{width:30%;min-width:250px;white-space:normal}
             .dco-edge-default-note{color:var(--text-muted,#7a858f);font-size:16px;line-height:1}
             .dco-custom-edge-list{display:grid;gap:6px}
@@ -185,7 +112,6 @@
             .dco-cost-table .dco-notes-col{width:27%!important;min-width:220px!important;line-height:1.6!important;color:var(--text-color,#313b45)}
             .dco-cost-table .dco-notes-col.is-empty{color:var(--text-muted,#8b949d);text-align:center!important}
             .dco-cost-table--invoice td:nth-last-child(-n+2){direction:ltr;font-weight:800}
-            .dco-cost-empty-row{padding:26px!important;color:var(--text-muted,#6b7680);text-align:center!important}
             .dco-edge-pricing-note{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;background:rgba(31,130,82,.09);color:#17643f;font-weight:850}
             @media(max-width:900px){
                 .dco-cost-section-title{align-items:flex-start!important;flex-direction:column}
@@ -223,7 +149,9 @@
         const headers = [...table.querySelectorAll("thead th")].map(th => th.textContent.trim());
         table.querySelectorAll("tbody tr").forEach(row => {
             [...row.children].forEach((cell, index) => {
-                cell.dataset.label = headers[index] || "";
+                if (cell.dataset.label !== (headers[index] || "")) {
+                    cell.dataset.label = headers[index] || "";
+                }
             });
             const cells = row.querySelectorAll(":scope > td");
             if (cells[0] && !cells[0].querySelector(".dco-row-index")) {
@@ -236,7 +164,7 @@
                 }
                 if (cells[6]) {
                     cells[6].classList.add("dco-cell-notes");
-                    if (cells[6].textContent.trim() === "—") cells[6].classList.add("is-empty");
+                    cells[6].classList.toggle("is-empty", cells[6].textContent.trim() === "—");
                 }
             }
         });
@@ -247,7 +175,9 @@
         const table = section && section.querySelector("table.dco-cost-table");
         if (!table) return;
         const headerCells = table.querySelectorAll("thead th");
-        if (headerCells[5]) headerCells[5].textContent = "القشاط المخصص";
+        if (headerCells[5] && headerCells[5].textContent !== "القشاط المخصص") {
+            headerCells[5].textContent = "القشاط المخصص";
+        }
         const data = rows(frm);
         table.querySelectorAll("tbody tr").forEach((row, index) => {
             const cells = row.querySelectorAll(":scope > td");
@@ -260,28 +190,22 @@
             }
         });
         const subtitle = section.querySelector(".dco-cost-section-title span");
-        if (subtitle) {
-            subtitle.textContent = "التخصيص الاستثنائي فقط؛ قشاط الأطراف الافتراضي محدد في بيانات الطلب";
-        }
+        const text = "التخصيص الاستثنائي فقط؛ قشاط الأطراف الافتراضي محدد في بيانات الطلب";
+        if (subtitle && subtitle.textContent !== text) subtitle.textContent = text;
         decorateTable(table, "measurements");
     }
 
-    function patchInvoice(frm, wrapper) {
-        const section = findSection(wrapper, "تفاصيل الفاتورة");
+    function patchInvoice(_frm, wrapper) {
+        const section = findSection(wrapper, "تفاصيل عرض السعر")
+            || findSection(wrapper, "تفاصيل الفاتورة");
         const table = section && section.querySelector("table.dco-cost-table");
-        const tbody = table && table.querySelector("tbody");
-        if (!tbody) return;
-        const signature = JSON.stringify(invoiceLines(frm));
-        if (tbody.dataset.sideEdgeInvoiceSignature !== signature) {
-            tbody.dataset.sideEdgeInvoiceSignature = signature;
-            tbody.innerHTML = invoiceRowsHtml(frm);
-        }
+        if (!table) return;
+
+        // Presentation only.  The tbody and total remain owned by
+        // AlmdinaOrderCostUX and therefore by the persisted server-cost snapshot.
         const subtitle = section.querySelector(".dco-cost-section-title span");
-        if (subtitle) {
-            subtitle.innerHTML = '<span class="dco-edge-pricing-note">سطر مستقل لكل نوع قشاط وسعره</span>';
-        }
-        const amount = section.querySelector(".dco-grand-total .amount");
-        if (amount) amount.textContent = `$ ${money(invoiceTotal(frm))}`;
+        const markup = '<span class="dco-edge-pricing-note">سطر مستقل لكل نوع قشاط وسعره — من تكلفة الطلب المحفوظة</span>';
+        if (subtitle && subtitle.innerHTML !== markup) subtitle.innerHTML = markup;
         decorateTable(table, "invoice");
     }
 
@@ -293,6 +217,7 @@
         patchMeasurements(frm, wrapper);
         patchInvoice(frm, wrapper);
         if (wrapper._dcoSideEdgeDocumentsObserver) return;
+
         let queued = false;
         const observer = new MutationObserver(() => {
             if (queued) return;

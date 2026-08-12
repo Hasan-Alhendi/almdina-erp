@@ -31,16 +31,7 @@
   "module":"Almdina ERP",
   "name":"Production Stage",
   "naming_rule":"By naming series field",
-  "permissions":[
-    {"read":1,"report":1,"role":"Cutting Operator"},
-    {"read":1,"report":1,"role":"Edge Operator"},
-    {"read":1,"report":1,"role":"عامل رسم"},
-    {"read":1,"report":1,"role":"عامل شريون"},
-    {"read":1,"report":1,"role":"عامل CNC"},
-    {"read":1,"report":1,"role":"عامل تقشيط"},
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
-    {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
-  ],
+  "permissions": [],
   "sort_field":"sequence",
   "sort_order":"ASC",
   "track_changes":1

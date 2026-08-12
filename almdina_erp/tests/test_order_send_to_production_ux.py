@@ -50,6 +50,42 @@ def test_dispatch_uses_capability_and_calculated_plan_policy():
     assert '"already_dispatched"' in policy
 
 
+def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
+    lifecycle_ux = _source(ROOT / "public" / "js" / "order_lifecycle.js")
+    shop_floor_ux = _source(ROOT / "public" / "js" / "shop_floor_order_ux.js")
+    permissions = _source(
+        ROOT / "almdina_erp" / "application" / "orders" / "lifecycle_permissions.py"
+    )
+    domain = _source(ROOT / "almdina_erp" / "domain" / "orders" / "lifecycle.py")
+
+    # Form never installs the retired review/approve buttons.
+    install = lifecycle_ux.split("function installButtons(frm, context)", 1)[1].split(
+        "function loadContext", 1
+    )[0]
+    assert "submit_for_review" not in install
+    assert 'LABELS.approve' not in install
+    assert "return_to_draft" in install
+
+    # Domain + UI both allow draft (and leftover review) to go to production.
+    assert '"Pending Review"' in domain.split("DISPATCHABLE_ORDER_STATUSES", 1)[1].split(
+        "PRE_PRODUCTION_ORDER_STATUSES", 1
+    )[0]
+    assert "DISPATCHABLE_STATUSES" in shop_floor_ux
+    assert '"Draft"' in shop_floor_ux.split("const DISPATCHABLE_STATUSES", 1)[1].split(
+        "function addDispatchButton", 1
+    )[0]
+    assert 'status !== "Approved"' not in shop_floor_ux
+    # Direct toolbar button — never nested under «صالة الإنتاج».
+    dispatch_btn = shop_floor_ux.split("function addDispatchButton", 1)[1].split(
+        "function addDeliveryButtons", 1
+    )[0]
+    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in dispatch_btn
+    assert "PRODUCTION_ACTION_GROUP" not in dispatch_btn
+
+    assert "إرسال الطلب للمراجعة أُلغي" in permissions
+    assert "اعتماد الطلب أُلغي" in permissions
+
+
 def test_role_managed_drawing_approval_preserves_shop_floor_status():
     plan_service = _source(PLAN_SERVICE)
     approval_service = _source(DRAWING_APPROVAL_SERVICE)
@@ -60,7 +96,7 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
 
     assert "Capability.APPROVE_DXF" in approval_service
     assert "require_document_capability" in approval_service
-    assert "validate_drawing_approval" in approval_service
+    assert "require_stage_operational_access" in approval_service
     assert "current_assignee" not in policy
     assert "session_user" not in policy
     assert "approval_warning" in policy

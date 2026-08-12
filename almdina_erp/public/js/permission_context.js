@@ -1,7 +1,28 @@
 (() => {
     "use strict";
 
+    // Registered from both entry points: this file ships in `app_include_js`
+    // (before the document context exists) and again in the order's `doctype_js`
+    // bundle, where the document context is available.
+    function registerProtectedModuleSurface(api) {
+        const documentContext = window.AlmdinaDocumentContext;
+        if (
+            !api
+            || !documentContext
+            || typeof documentContext.registerSurface !== "function"
+            || typeof api.orderModulesLoaded !== "function"
+            || typeof api.ensureOrderModules !== "function"
+        ) {
+            return false;
+        }
+        return documentContext.registerSurface("order-protected-modules", {
+            isReady() { return api.orderModulesLoaded(); },
+            recover() { return api.ensureOrderModules(); },
+        });
+    }
+
     if (window.AlmdinaPermissions) {
+        registerProtectedModuleSurface(window.AlmdinaPermissions);
         window.setTimeout(() => {
             window.AlmdinaPermissions.refresh()
                 .then(() => window.AlmdinaPermissions.loadOrderModules())
@@ -25,6 +46,7 @@
         profile: "shared",
         capabilities: Object.freeze({}),
         navigation: EMPTY_NAVIGATION,
+        surfaces: Object.freeze({}),
     });
 
     const STANDARD_CAPABILITY_PERMISSION_TYPES = Object.freeze({
@@ -43,20 +65,22 @@
         delete_edge_banding_types: "delete",
     });
 
+    // Protected form modules normally arrive through Frappe's DocType source
+    // bundle. Keep this compatibility loader for the permission/security layer.
     const ORDER_MODULES = Object.freeze([
-        Object.freeze({
-            global: "AlmdinaOrderCostUX",
-        }),
-        Object.freeze({
-            global: "AlmdinaOrderPermissionRefreshUX",
-        }),
-        Object.freeze({
-            global: "AlmdinaOrderTabPermissionsUX",
-        }),
-        Object.freeze({
-            global: "AlmdinaCustomerInvoiceToolbarUX",
-        }),
+        Object.freeze({ global: "AlmdinaOrderCostUX" }),
+        Object.freeze({ global: "AlmdinaOrderPermissionRefreshUX" }),
+        Object.freeze({ global: "AlmdinaOrderTabPermissionsUX" }),
+        Object.freeze({ global: "AlmdinaCustomerInvoiceToolbarUX" }),
     ]);
+
+    // Cutting-plan presentation is intentionally loaded independently from the
+    // cost/financial chain. A failure or delay in an unrelated protected module
+    // must never leave an authorized cutting-plan surface empty.
+    const PLAN_SURFACE_MODULE = Object.freeze({
+        global: "AlmdinaCuttingPlanSurfaceBootstrap",
+        asset: "/assets/almdina_erp/js/door_cutting_order_plan_surface_bootstrap.js",
+    });
 
     function normalizeNavigation(raw) {
         if (!raw || typeof raw !== "object") return EMPTY_NAVIGATION;
@@ -81,23 +105,25 @@
         });
     }
 
-    function normalize(raw) {
-        if (!raw || typeof raw !== "object") return EMPTY_CONTEXT;
-
-        const source = raw.capabilities;
-        const capabilities = {};
-        if (source && typeof source === "object") {
-            Object.keys(source).forEach(capability => {
-                capabilities[String(capability)] = source[capability] === true;
+    function normalizeBooleanMap(raw) {
+        const result = {};
+        if (raw && typeof raw === "object") {
+            Object.keys(raw).forEach(key => {
+                result[String(key)] = raw[key] === true;
             });
         }
-        const navigation = normalizeNavigation(raw.navigation);
+        return Object.freeze(result);
+    }
 
+    function normalize(raw) {
+        if (!raw || typeof raw !== "object") return EMPTY_CONTEXT;
+        const navigation = normalizeNavigation(raw.navigation);
         return Object.freeze({
             version: Number.isFinite(Number(raw.version)) ? Number(raw.version) : 0,
             profile: String(raw.profile || navigation.profile || "shared"),
-            capabilities: Object.freeze(capabilities),
+            capabilities: normalizeBooleanMap(raw.capabilities),
             navigation,
+            surfaces: normalizeBooleanMap(raw.surfaces),
         });
     }
 
@@ -121,15 +147,22 @@
         }
     }
 
+    function nativeDocumentNarrowingAllows(frm, capability) {
+        const key = String(capability || "");
+        if (!Object.prototype.hasOwnProperty.call(STANDARD_CAPABILITY_PERMISSION_TYPES, key)) {
+            return true;
+        }
+        return nativeDocumentPermission(frm, key);
+    }
+
     let context = normalize(frappe.boot && frappe.boot.almdina_permissions);
     let refreshPromise = null;
     let modulesPromise = null;
+    let planSurfacePromise = null;
 
     function emitUpdatedContext() {
         window.dispatchEvent(
-            new CustomEvent("almdina:permissions-updated", {
-                detail: context,
-            })
+            new CustomEvent("almdina:permissions-updated", { detail: context })
         );
     }
 
@@ -142,16 +175,19 @@
         }
         if (refreshPromise) return refreshPromise;
 
-        refreshPromise = frappe.call({
-            method: "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
-        }).then(response => {
-            context = normalize(response && response.message);
-            emitUpdatedContext();
-            return context;
-        }).finally(() => {
-            refreshPromise = null;
-        });
-
+        refreshPromise = Promise.resolve(
+            frappe.call({
+                method: "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
+            })
+        )
+            .then(response => {
+                context = normalize(response && response.message);
+                emitUpdatedContext();
+                return context;
+            })
+            .finally(() => {
+                refreshPromise = null;
+            });
         return refreshPromise;
     }
 
@@ -161,7 +197,6 @@
 
     function waitForGlobal(name, timeoutMs = 12000) {
         if (globalExists(name)) return Promise.resolve(window[name]);
-
         return new Promise((resolve, reject) => {
             const started = Date.now();
             const timer = window.setInterval(() => {
@@ -179,12 +214,16 @@
     }
 
     function requireModule(module) {
-        if (globalExists(module.global)) {
-            return Promise.resolve(window[module.global]);
+        if (globalExists(module.global)) return Promise.resolve(window[module.global]);
+        if (module.asset && window.frappe && typeof frappe.require === "function") {
+            return Promise.resolve(frappe.require(module.asset))
+                .then(() => {
+                    if (!globalExists(module.global)) {
+                        throw new Error(`Module did not initialize: ${module.global}`);
+                    }
+                    return window[module.global];
+                });
         }
-        // Protected order modules are registered through doctype_js/FormMeta.
-        // Waiting for their globals keeps the runtime independent from the
-        // mutable sites/assets volume used by container deployments.
         return waitForGlobal(module.global);
     }
 
@@ -202,8 +241,46 @@
         return Promise.resolve(recovery.refreshPermissions(frm));
     }
 
+    function loadPlanSurfaceModule() {
+        if (
+            !window.cur_frm
+            || window.cur_frm.doctype !== "Door Cutting Order"
+            || !window.frappe
+            || typeof frappe.require !== "function"
+        ) {
+            return Promise.resolve(false);
+        }
+        if (planSurfacePromise) return planSurfacePromise;
+
+        planSurfacePromise = requireModule(PLAN_SURFACE_MODULE)
+            .then(module => {
+                const frm = window.cur_frm;
+                if (
+                    !frm
+                    || frm.doctype !== "Door Cutting Order"
+                    || !module
+                    || typeof module.recover !== "function"
+                ) {
+                    return false;
+                }
+                return module.recover(frm);
+            })
+            .catch(error => {
+                console.error("Failed to load Almdina cutting-plan surface", error);
+                return false;
+            })
+            .finally(() => {
+                planSurfacePromise = null;
+            });
+
+        return planSurfacePromise;
+    }
+
     function loadOrderModules() {
-        if (modulesPromise) return modulesPromise;
+        if (modulesPromise) {
+            loadPlanSurfaceModule();
+            return modulesPromise;
+        }
         if (
             !window.cur_frm
             || window.cur_frm.doctype !== "Door Cutting Order"
@@ -214,6 +291,10 @@
         ) {
             return null;
         }
+
+        // Start the plan surface independently. Do not put it behind the serial
+        // cost/permission compatibility chain below.
+        loadPlanSurfaceModule();
 
         modulesPromise = ORDER_MODULES.reduce(
             (promise, module) => promise.then(() => requireModule(module)),
@@ -233,8 +314,11 @@
         },
         canDocument(frm, capability) {
             const key = String(capability || "");
-            return context.capabilities[key] === true
-                || nativeDocumentPermission(frm, key);
+            // The factory matrix is the sole authority source. Native Frappe
+            // permissions may only narrow standard document rights; they can
+            // never widen an absent Almdina business capability.
+            if (context.capabilities[key] !== true) return false;
+            return nativeDocumentNarrowingAllows(frm, key);
         },
         permissionType(capability) {
             return permissionTypeFor(capability);
@@ -248,6 +332,9 @@
         },
         section(sectionName) {
             return context.navigation.sections[String(sectionName || "")] === true;
+        },
+        surface(surfaceName) {
+            return context.surfaces[String(surfaceName || "")] === true;
         },
         profile() {
             return context.profile;
@@ -273,22 +360,50 @@
         loadOrderModules() {
             return loadOrderModules();
         },
+        orderModulesLoaded() {
+            return orderModulesLoaded();
+        },
+        ensureOrderModules() {
+            return ensureOrderModules();
+        },
     });
 
     window.AlmdinaPermissions = permissions;
     frappe.provide("frappe.almdina");
     frappe.almdina.permissions = permissions;
 
+    function orderModulesLoaded() {
+        return ORDER_MODULES.every(module => globalExists(module.global));
+    }
+
+    function ensureOrderModules() {
+        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
+            return null;
+        }
+        return loadOrderModules();
+    }
+
+    // The protected modules must be available on every visit to an order, not
+    // only when one happens to be open shortly after the desk booted. Without a
+    // router hook a later navigation would leave their surfaces unrendered until
+    // the user reloaded the page.
+    if (
+        window.frappe
+        && frappe.router
+        && typeof frappe.router.on === "function"
+        && !frappe.router.__almdinaPermissionModules
+    ) {
+        frappe.router.__almdinaPermissionModules = true;
+        frappe.router.on("change", () => {
+            window.setTimeout(ensureOrderModules, 0);
+        });
+    }
+
+    registerProtectedModuleSurface(permissions);
+
     let attempts = 0;
     const timer = window.setInterval(() => {
         attempts += 1;
-        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
-            if (attempts >= 100) window.clearInterval(timer);
-            return;
-        }
-        const loading = loadOrderModules();
-        if (loading || attempts >= 100) {
-            window.clearInterval(timer);
-        }
+        if (ensureOrderModules() || attempts >= 100) window.clearInterval(timer);
     }, 100);
 })();

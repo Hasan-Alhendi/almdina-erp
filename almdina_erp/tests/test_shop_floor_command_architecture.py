@@ -79,13 +79,12 @@ class TestShopFloorCommandArchitecture(unittest.TestCase):
             new = f"almdina_erp.almdina_erp.services.shop_floor_commands.{method}"
             self.assertEqual(overrides.get(old), new)
 
-    def test_legacy_return_to_draft_remains_revision_only(self) -> None:
+    def test_legacy_return_to_draft_delegates_to_in_place_reset(self) -> None:
         source = ADAPTER_PATH.read_text(encoding="utf-8")
         function_source = source.split("def return_order_to_draft", 1)[1]
         self.assertIn("return_order_to_draft", function_source)
-        self.assertIn("create_controlled_return", function_source)
-        self.assertNotIn('"approved_plan": None', function_source)
-        self.assertNotIn('"status": "Draft"', function_source)
+        self.assertIn("reset_same_order", function_source)
+        self.assertNotIn("create_controlled_return", function_source)
 
 
 if __name__ == "__main__":

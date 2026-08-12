@@ -68,28 +68,26 @@ class AdapterHarness:
 
 
 class TestOrderEditPolicyAdapter(unittest.TestCase):
-    def test_editability_checks_edit_capability_for_non_draft_orders(self) -> None:
+    def test_editability_checks_are_draft_only(self) -> None:
         denied = AdapterHarness(can_recalculate=False)
         denied_policy = denied.load()
 
         self.assertTrue(denied_policy.user_can_edit_order("Draft"))
+        self.assertFalse(denied_policy.user_can_edit_order("Rejected"))
         self.assertFalse(denied_policy.user_can_edit_order("Approved"))
+        self.assertFalse(denied_policy.user_can_edit_order("At Drawing", "editor@example.com"))
         self.assertFalse(denied_policy.user_can_edit_order("Cutting In Progress", "worker@example.com"))
         self.assertFalse(denied_policy.user_can_edit_order("Delivered"))
-        self.assertEqual(
-            denied.capability_calls,
-            [
-                ("edit_order", None),
-            ],
-        )
+        self.assertEqual(denied.capability_calls, [])
 
         allowed = AdapterHarness(can_recalculate=True)
         allowed_policy = allowed.load()
-        self.assertTrue(allowed_policy.user_can_edit_order("Approved"))
-        self.assertTrue(allowed_policy.user_can_edit_order("At Drawing", "editor@example.com"))
+        self.assertTrue(allowed_policy.user_can_edit_order("Draft"))
+        self.assertFalse(allowed_policy.user_can_edit_order("Approved"))
+        self.assertFalse(allowed_policy.user_can_edit_order("At Drawing", "editor@example.com"))
         self.assertFalse(allowed_policy.user_can_edit_order("At Sharyoun", "editor@example.com"))
         self.assertFalse(allowed_policy.user_can_edit_order("At CNC", "editor@example.com"))
-        self.assertFalse(allowed_policy.user_can_edit_order("Approved", revision_state="Superseded"))
+        self.assertFalse(allowed_policy.user_can_edit_order("Draft", revision_state="Superseded"))
 
     def test_drawing_recalculation_short_circuits_before_database_lookup(self) -> None:
         denied = AdapterHarness(can_recalculate=False)

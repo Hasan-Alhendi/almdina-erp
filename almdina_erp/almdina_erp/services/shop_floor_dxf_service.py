@@ -16,14 +16,17 @@ from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
+    require_stage_operational_access,
+)
 
 MAX_DXF_FILE_SIZE = 10 * 1024 * 1024
 
 _POLICY_MESSAGES = {
-    "not_at_drawing": "DXF actions are only available while the order is at Drawing.",
-    "designer_not_assigned": "Assign a designer to this order before using drawing actions.",
-    "not_assigned_designer": "Only the designer assigned to this order can perform this drawing action.",
-    "plan_already_approved": "This order already has a locked cutting plan.",
+    "not_at_drawing": "هذا الإجراء متاح فقط عندما يكون الطلب في مرحلة الرسم.",
+    "designer_not_assigned": "أسند الطلب إلى مصمم قبل تنفيذ هذا الإجراء.",
+    "not_assigned_designer": "فقط المصمم المسند لهذا الطلب يمكنه تنفيذ هذا الإجراء.",
+    "plan_already_approved": "الخطة معتمدة ومقفلة ولا يمكن استبدال ملف DXF.",
 }
 
 
@@ -51,43 +54,24 @@ def _get_authorized_order(
     capability: str,
     *,
     require_unlocked_plan: bool = True,
+    require_assigned_designer: bool = True,
+    require_stage_role: bool = False,
 ) -> Any:
     order = shop_floor_gateway.get_order(order_name)
     order.check_permission("read")
     require_document_capability(order, capability)
-    try:
-        validate_assigned_drawing_action(
-            _drawing_state(order),
-            require_unlocked_plan=require_unlocked_plan,
-        )
-    except DrawingActionDenied as error:
-        _throw_policy_error(error)
-    return order
-
-
-def _get_recalculation_order(order_name: str) -> Any:
-    """Authorize plan calculation without turning it into an assignment grant.
-
-    Exporting or replacing the production DXF belongs to the assigned designer.
-    Recalculation is a separately configurable business capability and is allowed
-    for any role that owns it while the order is at Drawing and still unlocked.
-    """
-
-    order = shop_floor_gateway.get_order(order_name)
-    order.check_permission("read")
-    require_document_capability(order, Capability.RECALCULATE_PLAN)
-
-    from almdina_erp.almdina_erp.services.order_edit_policy import (
-        user_can_recalculate_drawing_system_plan,
-    )
-
-    if not user_can_recalculate_drawing_system_plan(order):
-        frappe.throw(
-            _(
-                "The system plan can only be recalculated while the order is at Drawing and before a plan is approved."
-            ),
-            frappe.PermissionError,
-        )
+    if require_stage_role:
+        require_stage_operational_access(order)
+    if require_assigned_designer:
+        try:
+            validate_assigned_drawing_action(
+                _drawing_state(order),
+                require_unlocked_plan=require_unlocked_plan,
+            )
+        except DrawingActionDenied as error:
+            _throw_policy_error(error)
+    elif require_unlocked_plan and order.approved_plan:
+        _throw_policy_error(DrawingActionDenied("plan_already_approved"))
     return order
 
 
@@ -136,7 +120,13 @@ def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
 
 @frappe.whitelist()
 def mark_dxf_exported(order_name: str) -> dict[str, Any]:
-    order = _get_authorized_order(order_name, Capability.EXPORT_DXF)
+    order = _get_authorized_order(
+        order_name,
+        Capability.EXPORT_DXF,
+        require_assigned_designer=False,
+        require_stage_role=True,
+        require_unlocked_plan=False,
+    )
     current = order.drawing_dxf_status or "None"
     if current in {"None", "Exported"}:
         frappe.db.set_value(
@@ -160,7 +150,14 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     order = shop_floor_gateway.get_order(order_name)
     upload_capability = required_upload_capability(_drawing_state(order))
-    order = _get_authorized_order(order_name, upload_capability)
+    # Upload/replace is capability-gated from the matrix and additionally
+    # restricted to actors who hold the current stage's operational role.
+    order = _get_authorized_order(
+        order_name,
+        upload_capability,
+        require_assigned_designer=False,
+        require_stage_role=True,
+    )
     replacing_existing_file = bool(order.production_dxf)
     _validate_and_attach_dxf_file(order, file_url)
 
@@ -196,7 +193,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     )
     order.add_comment(
         "Info",
-        text=_("DXF file {0} by assigned designer {1}.").format(
+        text=_("DXF file {0} by {1}.").format(
             _("replaced") if replacing_existing_file else _("uploaded"),
             frappe.session.user,
         ),
@@ -217,25 +214,22 @@ def recalculate_drawing_plan(
     cutting_machine_type: str | None = None,
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
+    optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
-    """Recalculate the system plan without granting full order-edit access."""
+    """Compatibility facade for the canonical focused cutting-plan command."""
 
-    order = _get_recalculation_order(order_name)
-    if packing_mode:
-        order.packing_mode = packing_mode
-    if cutting_machine_type:
-        order.cutting_machine_type = cutting_machine_type
-    if kerf_mm is not None:
-        order.kerf_mm = kerf_mm
-    if trim_margin_mm is not None:
-        order.trim_margin_mm = trim_margin_mm
+    from almdina_erp.almdina_erp.services.order_plan_permission_service import (
+        recalculate_order,
+    )
 
-    order.flags.force_cutting_plan_recalculation = True
-    order.save(ignore_permissions=True)
-
-    from almdina_erp.almdina_erp.api import _serialize_order_preview
-
-    return _serialize_order_preview(order)
+    return recalculate_order(
+        order_name=order_name,
+        packing_mode=packing_mode,
+        cutting_machine_type=cutting_machine_type,
+        kerf_mm=kerf_mm,
+        trim_margin_mm=trim_margin_mm,
+        optimization_time_limit_sec=optimization_time_limit_sec,
+    )
 
 
 @frappe.whitelist()

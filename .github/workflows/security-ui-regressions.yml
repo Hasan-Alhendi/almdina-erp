@@ -29,7 +29,11 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_permission_matrix_application \
             almdina_erp.tests.test_permission_custom_docperm_baseline \
+            almdina_erp.tests.test_canonical_permission_state_architecture \
+            almdina_erp.tests.test_canonical_permission_reset_patch \
+            almdina_erp.tests.test_legacy_audit_capability_migration \
             almdina_erp.tests.test_frappe_v16_permission_hook_contract \
+            almdina_erp.tests.test_resource_permission_hooks \
             almdina_erp.tests.test_order_edit_policy_adapter \
             almdina_erp.tests.test_legacy_permission_bootstrap \
             almdina_erp.tests.test_order_tab_permissions_ux \
@@ -56,4 +60,9 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order_permission_refresh_ux.js
           node --check almdina_erp/public/js/door_cutting_order_tab_permissions_ux.js
           node --check almdina_erp/public/js/door_cutting_order_customer_invoice_toolbar_ux.js
+          node --check almdina_erp/public/js/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/secure_dxf_export.js
+          node almdina_erp/tests/js/plan_surface_isolation.test.js
+          node almdina_erp/tests/js/approved_plan_navigation.test.js
+          node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
+          node almdina_erp/tests/js/order_navigation_surfaces.test.js

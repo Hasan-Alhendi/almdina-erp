@@ -8,7 +8,6 @@ HOOKS = ROOT / "hooks.py"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
-COST_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 PRINT_PRESENTER = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 )
@@ -33,36 +32,42 @@ def test_measurement_table_has_print_and_full_window_actions():
     assert "فتح جدول الإدخال في نافذة مستقلة" in source
     assert "function openEditableMeasurements(frm)" in source
     assert 'const EDITOR_CLASS = "dco-measurement-entry-window"' in source
-    assert "dco-measurements-print-frame" in source
-    assert "تفاصيل الأسعار والفاتورة" in source
-    assert "dco-measurement-print-table" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "dco-measurements-print-frame" not in source
+    assert "function printDocumentHtml" not in source
 
 
-def test_measurement_print_has_invoice_measurement_columns_without_invoice_totals():
-    source = text(MEASUREMENT_UX)
-    for label in ("النوع", "العرض (سم)", "الطول (سم)", "العدد", "نوع القشاط", "ملاحظات"):
+def test_measurement_print_is_shared_base_without_quote_details():
+    source = text(PRINT_PRESENTER)
+    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
         assert label in source
-    assert "الإجمالي النهائي" not in source
-    assert "تفاصيل الفاتورة" not in source
+    assert "function measurementTable(frm)" in source
+    assert "function measurementDocumentBody(frm)" in source
+    assert 'printHtml(documentHtml(frm, "measurements", printIdentity))' in source
+    assert "function quoteDetailsHtml(payload)" in source
+    assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in source
+    assert "function invoiceSummary" not in source
+    assert "function invoiceLines(frm)" not in source
 
 
-def test_edge_color_is_kept_in_print_headers_without_duplicate_table_columns():
+def test_edge_color_is_kept_in_shared_print_header_without_duplicate_columns():
     edge_source = text(EDGE_COLOR_UX)
-    invoice_source = text(COST_UX)
     print_source = text(PRINT_PRESENTER)
     measurement_source = text(MEASUREMENT_UX)
 
-    assert "grid-template-columns:repeat(5" in invoice_source
     assert "<b>نوع القشاط</b>" in print_source
-    assert "<b>لون القشاط</b>" in print_source
+    assert print_source.count("<b>لون القشاط</b>") == 1
+    assert "<th>لون القشاط</th>" not in print_source
     assert "patchMeasurementTable" not in edge_source
     assert "patchInvoiceLines" not in edge_source
     assert "patchInvoiceMeta" not in edge_source
     assert "removeLegacyColorDuplicates" in edge_source
 
-    assert "grid-template-columns:repeat(5" in measurement_source
-    assert "<b>لون القشاط</b>" in measurement_source
     assert "orderEdgeColor(frm)" in measurement_source
+    assert "لون القشاط:" in measurement_source
+    assert "function printDocumentHtml" not in measurement_source
+    assert "dco-measurements-print-frame" not in measurement_source
 
 
 def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_actions():
@@ -73,6 +78,9 @@ def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_ac
     assert "max-height:none!important" in source
     assert "overflow:visible!important" in source
     assert "MutationObserver" in source
+    assert "removeEmptyGroups" not in source
+    assert '".custom-actions > button,.custom-actions > a"' in source
+    assert 'ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"])' in source
 
 
 def test_all_new_ux_layers_are_loaded_in_the_required_order():

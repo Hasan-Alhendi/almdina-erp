@@ -65,6 +65,32 @@
         document.head.appendChild(style);
     }
 
+    function refreshInvoiceAfterProfiles(frm) {
+        const edgeApi = window.AlmdinaMultiEdgeBanding;
+        const refresh = () => {
+            if (window.AlmdinaOrderCostUX && typeof window.AlmdinaOrderCostUX.render === "function") {
+                window.AlmdinaOrderCostUX.render(frm);
+            }
+            if (window.AlmdinaMultiEdgeDocuments && typeof window.AlmdinaMultiEdgeDocuments.patch === "function") {
+                window.AlmdinaMultiEdgeDocuments.patch(frm);
+            }
+        };
+
+        const ready = edgeApi && typeof edgeApi.ensureProfiles === "function"
+            ? Promise.resolve(edgeApi.ensureProfiles(frm))
+            : Promise.resolve();
+        ready.finally(() => {
+            requestAnimationFrame(refresh);
+            setTimeout(refresh, 180);
+        });
+    }
+
     installPrintPolicy();
     installCostScreenStyles();
+
+    frappe.ui.form.on("Door Cutting Order", {
+        onload_post_render(frm) { refreshInvoiceAfterProfiles(frm); },
+        refresh(frm) { refreshInvoiceAfterProfiles(frm); },
+        default_edge_type(frm) { refreshInvoiceAfterProfiles(frm); },
+    });
 })();

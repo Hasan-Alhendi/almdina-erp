@@ -24,6 +24,8 @@ after_migrate = "almdina_erp.lifecycle.after_migrate"
 
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
+    "/assets/almdina_erp/js/page_revisit_refresh.js",
+    "/assets/almdina_erp/js/permission_action_visibility_guard.js",
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
@@ -38,13 +40,13 @@ app_include_js = [
 
 doctype_js = {
     "Door Cutting Order": [
-        # Keep the authorization context inside FormMeta as well as the global
-        # Desk include.  Frappe reads these files from the app source, so order
-        # access does not fail when a Docker sites/assets volume is stale.
-        "public/js/permission_context.js",
+        # The document context owns the surface-readiness registry, so it must be
+        # evaluated before any module that registers a probe with it.
         "public/js/door_cutting_order_document_context.js",
+        "public/js/permission_context.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_output_contract.js",
+        "public/js/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order_defaults.js",
         "public/js/door_cutting_order_clipped_corner_ux.js",
@@ -55,13 +57,8 @@ doctype_js = {
         "public/js/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order_measurement_actions_ux.js",
-        "public/js/door_cutting_order_sketch_engine.js",
-        "public/js/door_cutting_order_sketch_interaction.js",
-        "public/js/door_cutting_order_sketch_history.js",
-        "public/js/door_cutting_order_sketch_renderer.js",
-        "public/js/door_cutting_order_inline_note_editor.js",
+        "public/js/door_cutting_order_measurement_toolbar_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_special_shape_close_ux.js",
         "public/js/door_cutting_order_action_permission_guard.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
@@ -86,6 +83,7 @@ doctype_js = {
         "public/js/door_cutting_order_plan_controls_ux.js",
         "public/js/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order_plan_tabs_ux.js",
+        "public/js/door_cutting_order_plan_surface_bootstrap.js",
         "public/js/door_cutting_order_tab_permissions_ux.js",
         "public/js/door_cutting_order_permission_refresh_ux.js",
         "public/js/door_cutting_order_drawing_plan_ux.js",
@@ -132,21 +130,32 @@ doc_events = {
 permission_query_conditions = {
     "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_query",
     "Production Stage": "almdina_erp.permissions.production_stage_query",
+    "Production Incident": "almdina_erp.permissions.production_incident_query",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_query",
+    "Customer": "almdina_erp.resource_permissions.customer_query",
+    "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_query",
+    "Production Routing": "almdina_erp.resource_permissions.production_routing_query",
 }
 
 has_permission = {
     "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_has_permission",
     "Production Stage": "almdina_erp.permissions.production_stage_has_permission",
+    "Production Incident": "almdina_erp.permissions.production_incident_has_permission",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_has_permission",
     "Replacement Piece": "almdina_erp.permissions.replacement_piece_has_permission",
+    "Customer": "almdina_erp.resource_permissions.customer_has_permission",
+    "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_has_permission",
+    "Production Routing": "almdina_erp.resource_permissions.production_routing_has_permission",
+    "Almdina ERP Settings": "almdina_erp.resource_permissions.factory_settings_has_permission",
 }
 
 boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
 
 override_whitelisted_methods = {
+    "frappe.desk.desktop.get_desktop_page":
+        "almdina_erp.workspace_api.get_desktop_page",
     "almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order":
         "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
     "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review":

@@ -22,7 +22,7 @@ def test_order_has_editable_text_edge_color_below_default_edge_type():
     assert fields["edge_color"]["fieldtype"] == "Data"
     assert not fields["edge_color"].get("read_only")
     assert doc["field_order"].index("default_edge_type") < doc["field_order"].index("edge_color")
-    assert doc["field_order"].index("edge_color") < doc["field_order"].index("cutting_settings_column")
+    assert doc["field_order"].index("edge_color") < doc["field_order"].index("pieces_section")
 
 
 def test_edge_color_is_defaulted_from_selected_edge_type_but_remains_editable():
@@ -44,26 +44,34 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
     assert "patchInvoiceMeta" not in source
 
 
-def test_financial_documents_use_the_server_document_and_edge_color_does_not_fork_it():
+def test_financial_documents_use_server_payload_and_shared_customer_presenter():
     financial = _source(ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js")
     presenter = _source(ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js")
     edge = _source(EDGE_COLOR_UX)
     assert "get_customer_invoice_document" in financial
     assert "get_internal_cost_report_document" in financial
     assert "window.AlmdinaFinancialDocuments = Object.freeze" in financial
-    assert "printHtml(documentHtml(payload))" in financial
-    assert 'printDocument(frm, "invoice")' in presenter
-    assert 'printDocument(frm, "measurements")' in presenter
+    assert "resolvePrintIdentity()" in financial
+    assert "AlmdinaFactoryPrintIdentity" in financial
+    assert "printHtml(documentHtml(payload, printIdentity))" in financial
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
+    assert "function printAuthorizedInvoice(frm, payload)" in presenter
+    assert 'documentHtml(frm, "invoice", printIdentity, payload)' in presenter
+    assert 'documentHtml(frm, "measurements", printIdentity)' in presenter
     assert "function printHtml(frm)" not in edge
     assert "event.stopImmediatePropagation()" not in edge
 
 
-def test_measurement_print_and_standalone_header_contain_edge_color():
+def test_measurement_entry_print_delegates_to_unified_document_presenter():
     source = _source(MEASUREMENT_UX)
     assert "function orderEdgeColor(frm)" in source
-    assert 'const edgeColor = orderEdgeColor(frm)' in source
-    assert '<div><b>لون القشاط</b>${esc(edgeColor)}</div>' in source
-    assert "grid-template-columns:repeat(5" in source
+    assert "لون القشاط:" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert 'typeof documents.printMeasurements !== "function"' in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "function printDocumentHtml" not in source
+    assert "dco-measurements-print-frame" not in source
+    assert "dco-measurement-print-table" not in source
 
 
 def test_edge_profiles_use_compact_double_click_popover_without_extra_row():

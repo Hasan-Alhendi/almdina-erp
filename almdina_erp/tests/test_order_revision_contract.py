@@ -28,14 +28,34 @@ class TestOrderRevisionContract(unittest.TestCase):
         source = EDIT_POLICY_PATH.read_text(encoding="utf-8")
         self.assertNotIn("unlock_frozen_plan_for_editor", source)
         self.assertNotIn("order.approved_plan = None", source)
-        self.assertIn("cannot be edited after cutting has started", source)
+        self.assertIn("يمكن تعديل الطلب", source)
 
-    def test_legacy_return_to_draft_routes_to_dedicated_revision_use_case(self) -> None:
+    def test_legacy_return_to_draft_routes_to_in_place_lifecycle_reset(self) -> None:
         hooks = HOOKS_PATH.read_text(encoding="utf-8")
         target = "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft"
         self.assertGreaterEqual(hooks.count(target), 2)
         self.assertIn('"public/js/door_cutting_order_revision_ux.js"', hooks)
         self.assertIn('"public/js/order_lifecycle.js"', hooks)
+
+        revision = REVISION_SERVICE_PATH.read_text(encoding="utf-8")
+        return_fn = revision.split("def return_order_to_draft", 1)[1]
+        self.assertIn("order_lifecycle_service", return_fn)
+        self.assertIn("reset_same_order", return_fn)
+        self.assertNotIn("_create_revision", return_fn)
+
+        lifecycle = (
+            APP_ROOT
+            / "almdina_erp"
+            / "services"
+            / "order_lifecycle_service.py"
+        ).read_text(encoding="utf-8")
+        in_place = lifecycle.split("def return_order_to_draft", 1)[1]
+        self.assertIn("_IN_PLACE_DRAFT_FIELDS", lifecycle)
+        self.assertIn('"status": "Draft"', lifecycle)
+        self.assertIn('"in_place": True', in_place)
+        self.assertIn("_cancel_stages", in_place)
+        self.assertIn("OrderLifecycleAction.RETURN_TO_DRAFT", in_place)
+        self.assertNotIn("frappe.copy_doc", in_place)
 
     def test_revision_service_resets_new_copy_without_mutating_source_plan(self) -> None:
         source = REVISION_SERVICE_PATH.read_text(encoding="utf-8")
@@ -55,17 +75,26 @@ class TestOrderRevisionContract(unittest.TestCase):
         self.assertIn('can(frm, "edit_order")', revision_source)
         self.assertIn("canOfferEditSession", revision_source)
         self.assertIn('__("تعديل")', revision_source)
-        self.assertIn('__("اعتماد التعديل")', revision_source)
+        self.assertIn('__("حفظ")', revision_source)
+        self.assertIn("commitEditSession", revision_source)
+        self.assertIn("lockEditSession", revision_source)
+        self.assertIn("after_save(frm)", revision_source)
+        self.assertIn("__almdina_lock_after_save", revision_source)
+        self.assertNotIn("frm.add_custom_button(CONFIRM_EDIT_LABEL", revision_source)
         self.assertIn("__almdina_edit_session", revision_source)
-        self.assertIn("planReadyForConfirm", revision_source)
+        self.assertIn("syncPrimaryAction", revision_source)
+        self.assertIn("schedulePrimaryActionSync", revision_source)
+        self.assertIn("set_primary_action(EDIT_LABEL", revision_source)
+        self.assertIn("set_primary_action(SAVE_LABEL", revision_source)
         self.assertIn("editSessionRecalculated", revision_source)
         self.assertIn("markEditSessionRecalculated", revision_source)
-        self.assertIn("At Sharyoun", revision_source)
-        self.assertIn("At CNC", revision_source)
+        self.assertIn("markEditSessionRecalculated", revision_source)
+        self.assertIn('=== "Draft"', revision_source)
         self.assertIn("order_revision_service.create_order_revision", revision_source)
         self.assertIn('LABELS.return_to_draft', lifecycle_source)
         self.assertIn("order_revision_service.return_order_to_draft", lifecycle_source)
         self.assertIn("removeLifecycleButtons(frm)", lifecycle_source)
+        self.assertIn("إعادة نفس الطلب إلى المسودة", lifecycle_source)
 
 
 if __name__ == "__main__":
