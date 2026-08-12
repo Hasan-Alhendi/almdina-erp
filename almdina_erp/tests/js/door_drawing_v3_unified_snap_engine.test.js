@@ -67,17 +67,17 @@ assert.equal(midpointSnap.smartGuide.type, "midpoint");
 // an anchor must not disable snapping to the body of another segment.
 let handleDoc = D.create({ widthMm: 500, heightMm: 500 });
 const lower = G.line("lower", G.point(0, 0), G.point(300, 0));
-const edited = G.line("edited", G.point(150, 100), G.point(150, 200));
+const edited = G.line("edited", G.point(130, 100), G.point(130, 200));
 handleDoc = D.addObject(handleDoc, lower);
 handleDoc = D.addObject(handleDoc, edited);
-const handleSurface = S.resolvePoint(handleDoc, G.point(151, 7), {
+const handleSurface = S.resolvePoint(handleDoc, G.point(131, 7), {
     anchor: edited.geometry.end,
     viewportScale: 1,
     excludeId: edited.id,
 });
 assert.equal(handleSurface.snapped, true);
 assert.equal(handleSurface.kind, "surface");
-assert.deepEqual(handleSurface.point, G.point(151, 0));
+assert.deepEqual(handleSurface.point, G.point(131, 0));
 
 // 5) Hysteresis keeps a deliberate connection stable beyond the capture
 // radius, but only for the same geometric intent.
