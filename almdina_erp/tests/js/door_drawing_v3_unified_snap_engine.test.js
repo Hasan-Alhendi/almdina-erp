@@ -69,8 +69,9 @@ assert.equal(midpointSnap.kind, "midpoint");
 assert.deepEqual(midpointSnap.object.geometry.start, G.point(100, 0));
 assert.equal(midpointSnap.smartGuide.type, "midpoint");
 
-// 4) Endpoint editing uses the same engine. Supplying an opposite endpoint as
-// an anchor must not disable snapping to the body of another segment.
+// 4) Endpoint editing uses the same engine. When the dragged endpoint is close
+// to the exact perpendicular foot on another segment, the stronger geometric
+// intent wins over a generic surface placement.
 let handleDoc = D.create({ widthMm: 500, heightMm: 500 });
 const lower = G.line("lower", G.point(0, 0), G.point(300, 0));
 const edited = G.line("edited", G.point(130, 100), G.point(130, 200));
@@ -82,8 +83,8 @@ const handleSurface = S.resolvePoint(handleDoc, G.point(131, 7), {
     excludeId: edited.id,
 });
 assert.equal(handleSurface.snapped, true);
-assert.equal(handleSurface.kind, "surface");
-assert.deepEqual(handleSurface.point, G.point(131, 0));
+assert.equal(handleSurface.kind, "perpendicular");
+assert.deepEqual(handleSurface.point, G.point(130, 0));
 
 // 5) Hysteresis keeps a deliberate connection stable beyond the capture
 // radius, but only for the same geometric intent.
