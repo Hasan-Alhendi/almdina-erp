@@ -13,6 +13,12 @@ PRESENTER_PATH = (
 THEME_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_theme.js"
 )
+PLAN_RENDERER_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+)
+FINANCIAL_DOCUMENTS_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+)
 SHAPE_PRINT_PATH = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
 COST_DOCUMENTS_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
@@ -77,7 +83,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("function sharedInfo", source)
         self.assertIn("function measurementTable", source)
         self.assertIn("function documentHtml(frm, mode, printIdentity = null)", source)
-        self.assertIn("function factoryIdentityHtml", source)
+        self.assertIn("theme.headerHtml(printIdentity", source)
         self.assertIn("AlmdinaFactoryPrintIdentity", source)
         self.assertIn('mode === "invoice" ? invoiceSummary(frm) : ""', source)
         self.assertIn('mode === "invoice" ? invoiceLines(frm) : []', source)
@@ -92,6 +98,36 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("notesCellHtml", source)
         self.assertIn("shapePrintCss", source)
         self.assertIn("AlmdinaOrderDocumentPrintTheme", source)
+
+    def test_factory_header_has_one_markup_and_style_owner(self) -> None:
+        theme = THEME_PATH.read_text(encoding="utf-8")
+        presenter = PRESENTER_PATH.read_text(encoding="utf-8")
+        financial = FINANCIAL_DOCUMENTS_PATH.read_text(encoding="utf-8")
+        renderer = PLAN_RENDERER_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("function headerHtml", theme)
+        self.assertIn("function headerCss", theme)
+        self.assertIn('class="dco-unified-print-header"', theme)
+        self.assertIn("dco-unified-print-factory-name", theme)
+        self.assertIn("dco-unified-print-factory-description", theme)
+        self.assertIn("dco-unified-print-factory-address", theme)
+        self.assertIn("dco-unified-print-factory-contacts", theme)
+        self.assertIn("headerHtml,", theme)
+        self.assertIn("headerCss,", theme)
+
+        self.assertIn("theme.headerHtml(printIdentity", presenter)
+        self.assertIn("theme.headerHtml(printIdentity", financial)
+        self.assertIn("return theme.headerHtml(identity, { title, meta })", renderer)
+        self.assertIn("return theme.headerCss()", renderer)
+        self.assertIn("AlmdinaFactoryPrintIdentity", financial)
+        self.assertIn("AlmdinaFactoryPrintIdentity", renderer)
+
+        for consumer in (presenter, financial, renderer):
+            self.assertNotIn("function factoryIdentityHtml", consumer)
+            self.assertNotIn("function printFactoryIdentityHtml", consumer)
+            self.assertNotIn("dco-print-factory-name", consumer)
+            self.assertNotIn("print_factory_description ||", consumer)
+            self.assertNotIn("print_factory_address ||", consumer)
 
     def test_print_theme_uses_readable_pt_scale_without_wasting_a4_space(self) -> None:
         source = THEME_PATH.read_text(encoding="utf-8")
@@ -115,6 +151,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn(
             'const sketchHeight = measurements ? "27mm" : "31mm"', source
         )
+        self.assertIn("${headerCss()}", source)
         self.assertNotIn("body{font-size:7.4px", source)
 
     def test_printed_drawing_notes_respect_font_size_and_have_no_box(self) -> None:
