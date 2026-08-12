@@ -7,6 +7,7 @@ global.window = {};
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_freehand_policy.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_stroke_intelligence.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_stroke_corner_guard.js"));
 
 const V3 = global.window.AlmdinaDoorDrawingV3;
 const G = V3.Geometry;
@@ -45,6 +46,7 @@ assert.equal(mixed.type, "compound", "One mouse drag containing a clear corner s
 assert.equal(mixed.segments.length, 2);
 assert.deepEqual(mixed.segments.map(segment => segment.type), ["line", "line"]);
 assert.deepEqual(mixed.segments[0].end, mixed.segments[1].start, "Split runs must share the exact same world-mm junction");
+assert.ok(mixed.cornerTurnDeg > 70, "The corner guard should only activate for a clearly deliberate change in direction");
 
 const arcPoints = [];
 for (let angle = -90; angle <= 10; angle += 5) {
