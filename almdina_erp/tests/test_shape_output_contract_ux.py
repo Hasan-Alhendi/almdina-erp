@@ -13,7 +13,8 @@ WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
 OPERATOR = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 TABLE = ROOT / "public" / "js" / "door_cutting_order_table_performance_ux.js"
-MEASUREMENTS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 
 
@@ -97,12 +98,14 @@ def test_v3_persistence_keeps_server_compatibility_and_mm_document_authoritative
 
 def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     shape_print = _source(SHAPE_PRINT)
-    measurements = _source(MEASUREMENTS)
+    measurement_actions = _source(MEASUREMENT_ACTIONS)
+    presenter = _source(PRINT_PRESENTER)
     invoice = _source(INVOICE)
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in shape_print
     assert "const selected = shapeOutput.visual(piece);" in shape_print
     assert 'selected.kind === "drawing"' in shape_print
-    assert "renderer.notesCell(row, row.notes" in measurements
+    assert "renderer.notesCell(row, row.notes" in presenter
+    assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
     assert "renderer.notesCell(row, row.notes" in invoice
 
 
