@@ -12,6 +12,7 @@ require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/sma
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/move_snap_policy.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_guides.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/unified_snap_engine.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snap_axis_policy.js"));
 
 const V3 = global.window.AlmdinaDoorDrawingV3;
 const G = V3.Geometry;
@@ -92,5 +93,20 @@ assert.equal(stickySurface.snapped, true);
 assert.equal(stickySurface.kind, "surface");
 assert.equal(stickySurface.sticky, true);
 assert.equal(stickySurface.object.geometry.start.y, 0);
+
+// 6) Shift/axis constraints never report a false exact joint. A nearby point
+// off the constrained axis may still produce a guide, but the constrained
+// geometry must stay on its exact X/Y axis.
+let axisDoc = D.create({ widthMm: 500, heightMm: 500 });
+axisDoc = D.addObject(axisDoc, G.line("off-axis", G.point(110, 10), G.point(110, 100)));
+const axisSafe = S.resolvePoint(axisDoc, G.point(109, 10), {
+    anchor: G.point(100, 0),
+    axisLock: true,
+    shiftKey: true,
+    viewportScale: 1,
+});
+assert.equal(axisSafe.axis, "vertical");
+assert.equal(axisSafe.point.x, 100);
+assert.notEqual(axisSafe.kind, "joint");
 
 console.log("Door Drawing V3 unified snap engine tests passed");
