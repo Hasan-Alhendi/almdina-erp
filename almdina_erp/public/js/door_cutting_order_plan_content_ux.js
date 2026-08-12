@@ -1,7 +1,9 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-plan-content-layout-css-v2";
+    const STYLE_ID = "dco-plan-content-layout-css-v3";
+    const BOARD_GAP_PX = 12;
+    const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
 
     function isArabic() {
         const lang = String(
@@ -186,6 +188,200 @@
                 font-weight:850 !important;
                 white-space:nowrap;
             }
+
+            /* Responsive board gallery: screen presentation only. Workshop print
+               remains owned by door_cutting_order_cutting_plan_renderer.js. */
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery {
+                display:grid !important;
+                grid-template-columns:1fr;
+                gap:${BOARD_GAP_PX}px !important;
+                width:100%;
+                margin:0;
+                padding:0;
+                align-items:start;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="2"] .dco-board-gallery {
+                grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+            [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="3"] .dco-board-gallery {
+                grid-template-columns:repeat(3,minmax(0,1fr));
+            }
+            [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="4"] .dco-board-gallery {
+                grid-template-columns:repeat(4,minmax(0,1fr));
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card {
+                min-width:0 !important;
+                width:100% !important;
+                max-width:100% !important;
+                margin:0 !important;
+                padding:9px !important;
+                border:1px solid var(--border-color,#dfe3e8) !important;
+                border-radius:13px !important;
+                background:var(--card-bg,#fff) !important;
+                box-shadow:0 3px 12px rgba(24,36,48,.045) !important;
+                page-break-inside:avoid;
+                break-inside:avoid;
+                overflow:hidden;
+                transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card:hover {
+                border-color:#b9c3cd !important;
+                box-shadow:0 7px 20px rgba(24,36,48,.08) !important;
+                transform:translateY(-1px);
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title {
+                display:grid !important;
+                grid-template-columns:auto minmax(0,1fr) auto;
+                align-items:center !important;
+                gap:7px !important;
+                min-height:31px;
+                margin:0 0 7px !important;
+                padding:0 1px 7px !important;
+                border-bottom:1px solid var(--border-color,#edf0f3);
+                font-size:11px !important;
+                line-height:1.35 !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :first-child {
+                font-size:12px !important;
+                font-weight:900 !important;
+                white-space:nowrap;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :nth-child(2) {
+                min-width:0;
+                color:var(--text-muted,#68737d);
+                font-size:9.5px !important;
+                font-weight:750 !important;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger {
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                min-width:31px;
+                min-height:29px;
+                padding:4px 7px;
+                border:1px solid var(--border-color,#dce2e7);
+                border-radius:8px;
+                background:var(--subtle-fg,#f6f8fa);
+                color:var(--text-color,#26313b);
+                font-size:10px;
+                font-weight:850;
+                line-height:1;
+                cursor:pointer;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger:hover,
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger:focus-visible {
+                border-color:#9caab6;
+                background:var(--card-bg,#fff);
+                outline:none;
+                box-shadow:0 0 0 2px rgba(80,105,130,.12);
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-board {
+                width:min(100%,var(--dco-board-screen-max-width,100%)) !important;
+                height:auto !important;
+                max-width:none !important;
+                aspect-ratio:var(--dco-board-aspect,1 / 2) !important;
+                margin:0 auto !important;
+                background-size:20px 20px !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-piece {
+                padding:1px !important;
+                font-size:clamp(7px,.62vw,10px) !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-piece-kind-badge {
+                padding:1px 3px !important;
+                font-size:7px !important;
+                line-height:1.2 !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-cutting-plan[data-board-columns="4"] .dco-board-gallery .dco-sheet-title > :nth-child(2) {
+                font-size:8.5px !important;
+            }
+
+            body.dco-board-focus-open { overflow:hidden !important; }
+            .dco-board-focus {
+                position:fixed;
+                inset:0;
+                z-index:10050;
+                display:grid;
+                place-items:center;
+                padding:18px;
+                background:rgba(20,27,34,.68);
+                backdrop-filter:blur(3px);
+            }
+            .dco-board-focus__dialog {
+                width:min(1080px,96vw);
+                max-height:94vh;
+                display:flex;
+                flex-direction:column;
+                overflow:hidden;
+                border:1px solid rgba(255,255,255,.45);
+                border-radius:16px;
+                background:var(--card-bg,#fff);
+                box-shadow:0 24px 80px rgba(0,0,0,.28);
+                direction:rtl;
+            }
+            .dco-board-focus__header {
+                flex:0 0 auto;
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                padding:11px 13px;
+                border-bottom:1px solid var(--border-color,#dfe3e8);
+            }
+            .dco-board-focus__header strong { font-size:13px;font-weight:900; }
+            .dco-board-focus__close {
+                width:34px;
+                height:34px;
+                display:inline-grid;
+                place-items:center;
+                border:1px solid var(--border-color,#dfe3e8);
+                border-radius:9px;
+                background:var(--subtle-fg,#f6f8fa);
+                color:var(--text-color,#202a33);
+                font-size:20px;
+                line-height:1;
+                cursor:pointer;
+            }
+            .dco-board-focus__body {
+                min-height:0;
+                flex:1 1 auto;
+                overflow:auto;
+                display:grid;
+                place-items:start center;
+                padding:14px;
+                background:var(--subtle-fg,#f7f9fb);
+            }
+            .dco-board-focus .dco-sheet-card {
+                width:100% !important;
+                max-width:100% !important;
+                margin:0 !important;
+                padding:10px !important;
+                border:0 !important;
+                background:transparent !important;
+                box-shadow:none !important;
+            }
+            .dco-board-focus .dco-sheet-title {
+                display:flex !important;
+                align-items:center !important;
+                justify-content:space-between !important;
+                gap:12px !important;
+                margin:0 0 9px !important;
+                font-size:12px !important;
+            }
+            .dco-board-focus .dco-board-focus-trigger { display:none !important; }
+            .dco-board-focus .dco-sheet-board {
+                width:var(--dco-focus-board-width,420px) !important;
+                height:auto !important;
+                max-width:100% !important;
+                aspect-ratio:var(--dco-board-aspect,1 / 2) !important;
+                margin:0 auto !important;
+            }
+            .dco-board-focus .dco-piece { font-size:10px !important; }
+            .dco-board-focus .dco-piece-kind-badge { font-size:8px !important;padding:2px 5px !important; }
+
             @media (max-width:760px) {
                 .dco-plan-action-row { padding-inline:8px !important; }
                 [data-fieldname="plan_control_actions"] .dco-plan-actions {
@@ -214,6 +410,12 @@
                     gap:8px !important;
                     padding:10px !important;
                 }
+                [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card {
+                    padding:8px !important;
+                }
+                [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title {
+                    grid-template-columns:auto minmax(0,1fr) auto;
+                }
             }
             @media (max-width:520px) {
                 [data-fieldname="plan_control_actions"] .dco-plan-document-actions .btn {
@@ -231,6 +433,19 @@
                 [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edge {
                     justify-content:center;
                 }
+                [data-fieldname="cutting_plan_html"] .dco-board-gallery {
+                    gap:10px !important;
+                }
+                [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-board {
+                    width:100% !important;
+                }
+                [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :nth-child(2) {
+                    white-space:normal;
+                    line-height:1.45 !important;
+                }
+                .dco-board-focus { padding:6px; }
+                .dco-board-focus__dialog { width:100%;max-height:97vh;border-radius:12px; }
+                .dco-board-focus__body { padding:8px; }
             }
         `;
         document.head.appendChild(style);
@@ -364,10 +579,160 @@
         }
 
         const firstSheet = planRoot.querySelector(":scope > .dco-sheet-card");
-        if (firstSheet) {
-            planRoot.insertBefore(alert, firstSheet);
+        const gallery = planRoot.querySelector(":scope > .dco-board-gallery");
+        const anchor = firstSheet || gallery;
+        if (anchor) {
+            planRoot.insertBefore(alert, anchor);
         } else {
             planRoot.appendChild(alert);
+        }
+    }
+
+    function desiredBoardColumns(width) {
+        const available = Number(width || 0);
+        if (available >= 1400) return 4;
+        if (available >= 980) return 3;
+        if (available >= 620) return 2;
+        return 1;
+    }
+
+    function boardAspect(board) {
+        if (!board) return 0.5;
+        const width = parseFloat(board.style.width) || board.clientWidth || 0;
+        const height = parseFloat(board.style.height) || board.clientHeight || 0;
+        if (width > 0 && height > 0) return width / height;
+        return 0.5;
+    }
+
+    function ensureBoardFocusButton(card) {
+        const title = card && card.querySelector(":scope > .dco-sheet-title");
+        if (!title || title.querySelector(":scope > .dco-board-focus-trigger")) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "dco-board-focus-trigger";
+        button.setAttribute("aria-label", "تكبير اللوح");
+        button.setAttribute("title", "تكبير اللوح");
+        button.innerHTML = '<span aria-hidden="true">⤢</span>';
+        title.appendChild(button);
+    }
+
+    function ensureBoardGallery(planRoot) {
+        if (!planRoot) return null;
+        let gallery = planRoot.querySelector(":scope > .dco-board-gallery");
+        const directCards = [...planRoot.querySelectorAll(":scope > .dco-sheet-card")];
+
+        if (!gallery && directCards.length) {
+            gallery = document.createElement("div");
+            gallery.className = "dco-board-gallery";
+            planRoot.insertBefore(gallery, directCards[0]);
+        }
+
+        if (!gallery) return null;
+        directCards.forEach(card => gallery.appendChild(card));
+        return gallery;
+    }
+
+    function layoutBoardGallery(planRoot) {
+        const gallery = ensureBoardGallery(planRoot);
+        if (!gallery) return;
+
+        const rootWidth = planRoot.clientWidth || gallery.clientWidth || 0;
+        const columns = desiredBoardColumns(rootWidth);
+        planRoot.dataset.boardColumns = String(columns);
+
+        const availableColumnWidth = rootWidth > 0
+            ? Math.max(160, (rootWidth - BOARD_GAP_PX * Math.max(0, columns - 1)) / columns - 20)
+            : 320;
+        const viewportHeight = Math.max(480, window.innerHeight || 720);
+
+        gallery.querySelectorAll(":scope > .dco-sheet-card").forEach(card => {
+            const board = card.querySelector(":scope > .dco-sheet-board");
+            if (!board) return;
+            const aspect = boardAspect(board);
+            board.style.setProperty("--dco-board-aspect", `${aspect} / 1`);
+
+            if (columns === 1) {
+                board.style.removeProperty("--dco-board-screen-max-width");
+            } else {
+                const viewportWidthCap = viewportHeight * BOARD_VIEWPORT_HEIGHT_RATIO * aspect;
+                const widthCap = Math.max(150, Math.min(availableColumnWidth, viewportWidthCap));
+                board.style.setProperty("--dco-board-screen-max-width", `${Math.round(widthCap)}px`);
+            }
+            ensureBoardFocusButton(card);
+        });
+    }
+
+    function closeBoardFocus() {
+        const overlay = document.querySelector(".dco-board-focus");
+        if (overlay) overlay.remove();
+        if (document.body && document.body.classList) {
+            document.body.classList.remove("dco-board-focus-open");
+        }
+    }
+
+    function openBoardFocus(card) {
+        if (!card) return;
+        closeBoardFocus();
+
+        const clone = card.cloneNode(true);
+        clone.querySelectorAll(".dco-board-focus-trigger").forEach(button => button.remove());
+        const board = clone.querySelector(".dco-sheet-board");
+        const sourceBoard = card.querySelector(".dco-sheet-board");
+        const aspect = boardAspect(sourceBoard);
+        const maxByViewport = Math.max(220, (window.innerHeight || 720) * 0.72 * aspect);
+        const maxByWidth = Math.max(220, (window.innerWidth || 1280) * 0.72);
+        const focusWidth = Math.min(maxByViewport, maxByWidth);
+        if (board) {
+            board.style.setProperty("--dco-board-aspect", `${aspect} / 1`);
+            board.style.setProperty("--dco-focus-board-width", `${Math.round(focusWidth)}px`);
+        }
+
+        const titleText = (card.querySelector(".dco-sheet-title > :first-child")?.textContent || "تفاصيل اللوح").trim();
+        const overlay = document.createElement("div");
+        overlay.className = "dco-board-focus";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.setAttribute("aria-label", titleText);
+        overlay.innerHTML = `
+            <div class="dco-board-focus__dialog">
+                <div class="dco-board-focus__header">
+                    <strong>${escapeHtml(titleText)}</strong>
+                    <button type="button" class="dco-board-focus__close" aria-label="إغلاق">×</button>
+                </div>
+                <div class="dco-board-focus__body"></div>
+            </div>
+        `;
+        overlay.querySelector(".dco-board-focus__body").appendChild(clone);
+        overlay.addEventListener("click", event => {
+            if (event.target === overlay || event.target.closest(".dco-board-focus__close")) {
+                closeBoardFocus();
+            }
+        });
+        document.body.appendChild(overlay);
+        document.body.classList.add("dco-board-focus-open");
+        overlay.querySelector(".dco-board-focus__close")?.focus();
+    }
+
+    function installBoardInteractions(root) {
+        if (!root || root._dcoBoardGalleryInteractions) return;
+        root.addEventListener("click", event => {
+            const trigger = event.target.closest(".dco-board-focus-trigger");
+            if (!trigger || !root.contains(trigger)) return;
+            const card = trigger.closest(".dco-sheet-card");
+            if (!card) return;
+            event.preventDefault();
+            event.stopPropagation();
+            openBoardFocus(card);
+        });
+        root._dcoBoardGalleryInteractions = true;
+
+        if (!document._dcoBoardFocusEscapeHandler) {
+            document.addEventListener("keydown", event => {
+                if (event.key === "Escape" && document.querySelector(".dco-board-focus")) {
+                    closeBoardFocus();
+                }
+            });
+            document._dcoBoardFocusEscapeHandler = true;
         }
     }
 
@@ -388,6 +753,7 @@
             [...planRoot.children].forEach(child => {
                 if (!(child instanceof HTMLElement)) return;
                 if (child.classList.contains("dco-sheet-card")) return;
+                if (child.classList.contains("dco-board-gallery")) return;
                 if (child.classList.contains("dco-special-raw-coverage")) return;
                 if (child.classList.contains("dco-margin-policy-alert")) return;
                 const text = (child.textContent || "").replace(/\s+/g, " ").trim();
@@ -399,6 +765,7 @@
             });
 
             ensureMarginPolicyAlert(frm, planRoot);
+            layoutBoardGallery(planRoot);
         });
 
         // The normal order form already has one authoritative optimizer/control
@@ -407,6 +774,7 @@
         root.querySelectorAll(
             ".dco-drawing-plan-panel-host, .dco-drawing-plan-panel"
         ).forEach(el => el.remove());
+        installBoardInteractions(root);
     }
 
     function installObserver(frm) {
@@ -428,12 +796,39 @@
         root._dcoPlanContentObserver = observer;
     }
 
+    function installResizeObserver(frm) {
+        const field = frm.fields_dict.cutting_plan_html;
+        if (!field || !field.$wrapper) return;
+        const root = field.$wrapper.get(0);
+        if (!root || root._dcoPlanContentResizeObserver) return;
+
+        let scheduled = false;
+        const relayout = () => {
+            if (scheduled) return;
+            scheduled = true;
+            requestAnimationFrame(() => {
+                scheduled = false;
+                root.querySelectorAll(".dco-cutting-plan").forEach(layoutBoardGallery);
+            });
+        };
+
+        if (typeof ResizeObserver === "function") {
+            const observer = new ResizeObserver(relayout);
+            observer.observe(root);
+            root._dcoPlanContentResizeObserver = observer;
+        } else {
+            window.addEventListener("resize", relayout);
+            root._dcoPlanContentResizeObserver = { disconnect() {} };
+        }
+    }
+
     function apply(frm) {
         installStyles();
         localizePlanSections(frm);
         movePlanActionsToFullWidth(frm);
         cleanRenderedPlan(frm);
         installObserver(frm);
+        installResizeObserver(frm);
         requestAnimationFrame(() => {
             movePlanActionsToFullWidth(frm);
             cleanRenderedPlan(frm);
