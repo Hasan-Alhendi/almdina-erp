@@ -7,14 +7,14 @@
         throw new Error("Door Drawing V3 snapping must load before move snap policy");
     }
 
-    // Tuned from live use: easier than the original 46px capture without
-    // pulling pieces together while they are still visibly far apart.
-    const EASY_MOVE_JOIN_SNAP_PX = 60;
+    // Live tuning: whole-object magnetic joining should help only when edges are
+    // genuinely close. Drawing-start/endpoint snapping uses separate tolerances.
+    const EASY_MOVE_JOIN_SNAP_PX = 20;
 
     function resolveObjectMove(document, object, deltaX, deltaY, options = {}) {
         const requested = Number(options.moveJoinSnapPx);
         const moveJoinSnapPx = Number.isFinite(requested) && requested > 0
-            ? Math.max(requested, EASY_MOVE_JOIN_SNAP_PX)
+            ? requested
             : EASY_MOVE_JOIN_SNAP_PX;
         return Base.resolveObjectMove(document, object, deltaX, deltaY, {
             ...options,
