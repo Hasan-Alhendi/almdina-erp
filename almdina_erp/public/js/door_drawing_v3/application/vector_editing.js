@@ -46,7 +46,10 @@
         const id = c.selectedId && supportedObject(c, c.selectedId) ? String(c.selectedId) : "";
         if (!id) setObjectSelection(c, []);
         else setObjectSelection(c, [id], id, { keepPathSubselection: true });
-        if (Number.isInteger(c.selectedNodeIndex)) c.selectedNodeIndices = [Number(c.selectedNodeIndex)];
+        if (Number.isInteger(c.selectedNodeIndex)) {
+            c.selectedNodeIndices = [Number(c.selectedNodeIndex)];
+            c.selectedSegmentIndices = [];
+        }
         View.schedule(c);
     }
     function deferLegacySync(c) { const run = () => syncFromLegacySelection(c); if (typeof queueMicrotask === "function") queueMicrotask(run); else Promise.resolve().then(run); }
@@ -164,11 +167,27 @@
     function alignObjects(c, alignment) { const objects = selectedObjects(c); return objects.length >= 2 && replaceTranslated(c, Selection.alignOffsets(objects, alignment), `Align ${objects.length} objects ${alignment}`); }
     function distributeObjects(c, axis) { const objects = selectedObjects(c); return objects.length >= 3 && replaceTranslated(c, Selection.distributeOffsets(objects, axis), `Distribute ${objects.length} objects ${axis}`); }
     function addSegmentMidpoints(c) {
-        const object = selectedPath(c), indices = Array.isArray(c.selectedSegmentIndices) ? c.selectedSegmentIndices.slice().map(Number).sort((a, b) => b - a) : [];
+        const object = selectedPath(c);
+        const indices = Array.isArray(c.selectedSegmentIndices)
+            ? [...new Set(c.selectedSegmentIndices.map(Number).filter(Number.isInteger))].sort((a, b) => a - b)
+            : [];
         if (!object || !indices.length) return false;
-        let next = object; const inserted = [];
-        indices.forEach(segmentIndex => { const midpoint = Selection.midpointOfSegment(next, segmentIndex); if (!midpoint) return; next = G.insertPathPoint(next, segmentIndex, midpoint); inserted.push(Math.min(next.geometry.points.length - 1, segmentIndex + 1)); });
-        c.selectedSegmentIndices = []; setNodeSelection(c, inserted); execute(c, D.replaceObject(c.history.current(), next), `Insert ${inserted.length} segment midpoint nodes`); return true;
+        const targets = indices.map(segmentIndex => ({
+            segmentIndex,
+            midpoint: Selection.midpointOfSegment(object, segmentIndex),
+        })).filter(target => target.midpoint);
+        if (!targets.length) return false;
+        let next = object;
+        const inserted = [];
+        targets.forEach((target, offset) => {
+            const adjustedSegmentIndex = target.segmentIndex + offset;
+            next = G.insertPathPoint(next, adjustedSegmentIndex, target.midpoint);
+            inserted.push(adjustedSegmentIndex + 1);
+        });
+        c.selectedSegmentIndices = [];
+        execute(c, D.replaceObject(c.history.current(), next), `Insert ${inserted.length} segment midpoint nodes`);
+        setNodeSelection(c, inserted);
+        return true;
     }
     function transformSelectedNodes(c, axis, distribute = false) {
         const object = selectedPath(c), indices = Array.isArray(c.selectedNodeIndices) ? c.selectedNodeIndices.map(Number) : [];
