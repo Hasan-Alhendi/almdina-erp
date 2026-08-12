@@ -1,0 +1,69 @@
+.ddv3-app .ddv3-text-layer,
+.ddv3-app .ddv3-text-annotation {
+    pointer-events: none;
+}
+
+.ddv3-app .ddv3-text-object,
+.ddv3-app .ddv3-text-hit {
+    pointer-events: all;
+    cursor: move;
+}
+
+.ddv3-app .ddv3-text-object {
+    font-family: Inter, "Noto Sans Arabic", Arial, sans-serif;
+    dominant-baseline: alphabetic;
+    user-select: none;
+}
+
+.ddv3-app .ddv3-text-hit {
+    fill: transparent;
+    stroke: transparent;
+}
+
+.ddv3-app .ddv3-text-selection {
+    fill: none;
+    stroke: #0d99ff;
+    stroke-width: 1.3;
+    stroke-dasharray: 3 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-app .ddv3-inline-text-editor {
+    position: absolute;
+    z-index: 18;
+    min-width: 180px;
+    max-width: min(420px, calc(100% - 24px));
+    min-height: 38px;
+    padding: 7px 9px;
+    border: 1.5px solid #0d99ff;
+    border-radius: 5px;
+    outline: none;
+    resize: both;
+    overflow: auto;
+    background: rgba(255, 255, 255, 0.96);
+    color: #1e1e1e;
+    line-height: 1.3;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+}
+
+.ddv3-app .ddv3-text-inspector-input {
+    width: 100%;
+    min-height: 74px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color, #d8d8d8);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.ddv3-app .ddv3-text-inspector-input:focus {
+    border-color: #0d99ff;
+    box-shadow: 0 0 0 1px #0d99ff;
+    outline: none;
+}
+
+.ddv3-app.is-readonly .ddv3-text-object {
+    cursor: default;
+}
