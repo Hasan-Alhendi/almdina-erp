@@ -9,11 +9,13 @@
         Object.freeze({ id: "almdina-door-drawing-v3-smart-guides-css", href: "/assets/almdina_erp/css/door_drawing_v3_smart_guides.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-advanced-snap-css", href: "/assets/almdina_erp/css/door_drawing_v3_advanced_snap.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-text-css", href: "/assets/almdina_erp/css/door_drawing_v3_text.css" }),
+        Object.freeze({ id: "almdina-door-drawing-v3-vector-editing-css", href: "/assets/almdina_erp/css/door_drawing_v3_vector_editing.css" }),
     ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/document.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/smart_path_domain.js",
+        "/assets/almdina_erp/js/door_drawing_v3/domain/vector_selection.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/text_annotation_domain.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/history.js",
         "/assets/almdina_erp/js/door_drawing_v3/infrastructure/persistence_adapter.js",
@@ -37,11 +39,13 @@
         "/assets/almdina_erp/js/door_drawing_v3/presentation/smart_guides_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/advanced_snap_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/text_annotation_view.js",
+        "/assets/almdina_erp/js/door_drawing_v3/presentation/vector_editing_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/text_annotation_editor.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/magnetic_connection.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/tool_modifiers.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_pen.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/vector_editing.js",
     ]);
 
     function ensureStyles() {
@@ -101,6 +105,11 @@
         __doorDrawingV3TemporarySelect: true,
         __doorDrawingV3SmartPath: true,
         __doorDrawingV3NodeEditing: true,
+        __doorDrawingV3MultiSelect: true,
+        __doorDrawingV3AlignmentDistribution: true,
+        __doorDrawingV3MultiNodeEditing: true,
+        __doorDrawingV3MultiSegmentEditing: true,
+        __doorDrawingV3VectorPathPen: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,
