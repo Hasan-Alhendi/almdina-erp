@@ -14,6 +14,8 @@ CANONICAL_FORM = (
     / "door_cutting_order.js"
 )
 PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+PLAN_CONTENT = ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
+DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
@@ -125,6 +127,27 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("flex-wrap: nowrap", source)
         self.assertIn("justify-content: center", source)
         self.assertIn("pageGridHeightMm = 164", source)
+
+    def test_plan_page_has_one_control_surface_and_no_duplicate_summary(self) -> None:
+        source = PLAN_CONTENT.read_text(encoding="utf-8")
+        drawing = DRAWING_PLAN.read_text(encoding="utf-8")
+
+        # Order metadata, aggregate cards and the measurement list already live on
+        # other order surfaces. Keep only the actual board layout on this screen.
+        self.assertIn("dco-plan-header-cards", source)
+        self.assertIn("dco-summary-grid", source)
+        self.assertIn("dco-piece-groups", source)
+        self.assertIn("cleanRenderedPlan", source)
+
+        # The form has one authoritative optimizer/action deck above the layout.
+        # The drawing optimizer panel stays available only for inbox/shop-floor use.
+        self.assertIn("movePlanActionsToFullWidth", source)
+        self.assertIn("dco-plan-action-row", source)
+        self.assertIn("dco-drawing-plan-panel-host", source)
+        self.assertIn("dco-drawing-plan-panel", source)
+        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
+        self.assertIn("renderInboxPanel", drawing)
+        self.assertIn("buildDrawingPanelHtml", drawing)
 
     def test_modern_modules_own_recalculation_printing_and_dxf(self) -> None:
         fast_save = FAST_SAVE.read_text(encoding="utf-8")
