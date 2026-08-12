@@ -11,9 +11,24 @@
         return `<line class="ddv3-smart-guide ${cls}" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;
     }
 
-    function labelMarkup(c, point, text) {
+    function labelMarkup(c, point, text, cls = "") {
         const p = Base.worldToScreen(c, point);
-        return `<g class="ddv3-smart-guide-label" transform="translate(${p.x + 10} ${p.y - 10})"><rect x="0" y="-14" width="${Math.max(28, String(text).length * 7 + 12)}" height="20" rx="4"/><text x="6" y="0">${String(text)}</text></g>`;
+        return `<g class="ddv3-smart-guide-label ${cls}" transform="translate(${p.x + 10} ${p.y - 10})"><rect x="0" y="-14" width="${Math.max(28, String(text).length * 7 + 12)}" height="20" rx="4"/><text x="6" y="0">${String(text)}</text></g>`;
+    }
+
+    function markerMarkup(c, point, type, symbol) {
+        const p = Base.worldToScreen(c, point);
+        if (type === "endpoint" || type === "surface") {
+            return `<g class="ddv3-smart-guide-marker is-${type}" transform="translate(${p.x} ${p.y})"><circle r="5"/><circle r="2"/></g>`;
+        }
+        if (type === "midpoint") {
+            return `<g class="ddv3-smart-guide-marker is-midpoint" transform="translate(${p.x} ${p.y}) rotate(45)"><rect x="-4" y="-4" width="8" height="8"/></g>`;
+        }
+        if (type === "intersection") {
+            return `<g class="ddv3-smart-guide-marker is-intersection" transform="translate(${p.x} ${p.y})"><path d="M -5 -5 L 5 5 M 5 -5 L -5 5"/></g>`;
+        }
+        if (symbol) return labelMarkup(c, point, symbol, `is-${type}`);
+        return "";
     }
 
     function alignmentMarkup(c, guide) {
@@ -45,12 +60,17 @@
         const state = c && c.snapState;
         const guide = state && state.smartGuide;
         if (!guide || !guide.point) return "";
-        if (guide.type === "surface") {
-            const p = Base.worldToScreen(c, guide.point);
-            return `<g class="ddv3-smart-guide-surface" transform="translate(${p.x} ${p.y})"><circle r="5"/><circle r="2"/></g>`;
+        if (["surface", "endpoint", "midpoint", "intersection"].includes(guide.type)) {
+            return markerMarkup(c, guide.point, guide.type, guide.symbol);
+        }
+        if (guide.type === "perpendicular") {
+            return `${guide.targetPoint ? lineMarkup(c, guide.point, guide.targetPoint, "is-angle") : ""}${markerMarkup(c, guide.point, guide.type, guide.symbol || "⊥")}`;
+        }
+        if (guide.type === "parallel" || guide.type === "collinear") {
+            return `${guide.targetPoint ? lineMarkup(c, guide.point, guide.targetPoint, "is-angle") : ""}${markerMarkup(c, guide.point, guide.type, guide.symbol || "∥")}`;
         }
         if (guide.type === "equal-length") {
-            return `${guide.targetPoint ? lineMarkup(c, guide.point, guide.targetPoint, "is-equal-length") : ""}${labelMarkup(c, guide.point, "=")}`;
+            return `${guide.targetPoint ? lineMarkup(c, guide.point, guide.targetPoint, "is-equal-length") : ""}${labelMarkup(c, guide.point, "=", "is-equal-length")}`;
         }
         return alignmentMarkup(c, guide);
     }
@@ -63,5 +83,5 @@
     }
 
     root.ShapeView = Object.freeze({ ...Base, render, smartGuideMarkup: guideMarkup });
-    root.SmartGuidesView = Object.freeze({ guideMarkup, alignmentMarkup });
+    root.SmartGuidesView = Object.freeze({ guideMarkup, alignmentMarkup, markerMarkup });
 })();

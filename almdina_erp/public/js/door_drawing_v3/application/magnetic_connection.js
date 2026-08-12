@@ -8,11 +8,20 @@
     if (!S || !V || !Editor) throw new Error("Door Drawing V3 editor must load before magnetic connection UX");
 
     const DRAW_TOOLS = new Set(["line", "rectangle", "circle", "arc"]);
+    const MAGNETIC_KINDS = new Set(["joint", "surface", "intersection", "midpoint"]);
+    const MAGNETIC_LABELS = Object.freeze({
+        joint: "وصل",
+        surface: "على الضلع",
+        intersection: "تقاطع",
+        midpoint: "منتصف",
+    });
 
     function updateBadge(c, state) {
         if (!c || !c.root) return;
         let badge = c.root.querySelector(".ddv3-magnetic-badge");
-        if (!state || !state.snapped || !state.point) {
+        const kind = state && state.kind;
+        const visible = Boolean(state && state.snapped && state.point && MAGNETIC_KINDS.has(kind));
+        if (!visible) {
             if (badge) badge.classList.remove("is-visible");
             c.canvas.classList.remove("has-magnetic-snap");
             return;
@@ -20,13 +29,13 @@
         if (!badge) {
             badge = document.createElement("div");
             badge.className = "ddv3-magnetic-badge";
-            badge.textContent = "وصل";
             const workspace = c.root.querySelector(".ddv3-workspace");
             if (workspace) workspace.appendChild(badge);
         }
         if (!badge) return;
+        badge.textContent = MAGNETIC_LABELS[kind] || "وصل";
         const p = V.worldToScreen(c, state.point);
-        badge.style.left = `${Math.max(8, Math.min(c.viewport.widthPx - 56, p.x + 12))}px`;
+        badge.style.left = `${Math.max(8, Math.min(c.viewport.widthPx - 76, p.x + 12))}px`;
         badge.style.top = `${Math.max(8, Math.min(c.viewport.heightPx - 34, p.y - 26))}px`;
         badge.classList.add("is-visible");
         c.canvas.classList.add("has-magnetic-snap");
@@ -61,7 +70,7 @@
             }
         );
 
-        if (result.snapped) {
+        if (result.snapped && MAGNETIC_KINDS.has(result.kind)) {
             gesture.magneticSource = result.source;
             gesture.magneticTarget = result.target;
         } else {
@@ -115,5 +124,5 @@
         view(frm, row) { return install(originalView(frm, row)); },
     });
 
-    root.MagneticConnection = Object.freeze({ install, hoverSnap, magneticMove, updateBadge });
+    root.MagneticConnection = Object.freeze({ install, hoverSnap, magneticMove, updateBadge, MAGNETIC_KINDS });
 })();
