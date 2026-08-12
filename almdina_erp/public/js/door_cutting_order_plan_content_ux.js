@@ -285,8 +285,10 @@
         refresh_plan_controls(frm) { requestAnimationFrame(() => apply(frm)); },
     });
 
-    window.addEventListener("almdina:permissions-updated", () => {
-        const frm = window.cur_frm;
-        if (frm && frm.doctype === "Door Cutting Order") apply(frm);
-    });
+    if (window && typeof window.addEventListener === "function") {
+        window.addEventListener("almdina:permissions-updated", () => {
+            const frm = window.cur_frm;
+            if (frm && frm.doctype === "Door Cutting Order") apply(frm);
+        });
+    }
 })();
