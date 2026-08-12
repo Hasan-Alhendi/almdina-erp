@@ -8,143 +8,17 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
-    function number(value) {
-        const parsed = Number(value || 0);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
-
     function orderEdgeColor(frm) {
         return String(frm.doc.edge_color || "").trim() || "غير محدد";
     }
 
-    function shapePrint() {
-        return window.AlmdinaShapePrint || null;
-    }
-
-    function rowHasDrawing(row) {
-        const renderer = shapePrint();
-        return Boolean(renderer && renderer.hasVisual(row));
-    }
-
-    function notesCellHtml(row) {
-        const renderer = shapePrint();
-        return renderer
-            ? renderer.notesCell(row, row.notes, { label: `رسمة الدرفة رقم ${row.index}` })
-            : esc(row.notes || "—");
-    }
-
-    function shapePrintCss() {
-        const renderer = shapePrint();
-        return renderer ? renderer.css : "";
-    }
-
-    function pieceTypeLabel(row) {
-        if (row.piece_type === "Special") return "خاصة";
-        if (row.piece_type === "Clipped Corner") return "زاوية مقصوصة";
-        return "عادية";
-    }
-
-    function dimensionMark(value, edgeCount) {
-        const count = Math.max(0, Math.min(2, Number(edgeCount || 0)));
-        const lines = Array.from({ length: count }, () => '<span class="dco-measurement-edge-line"></span>').join("");
-        return `
-            <span class="dco-measurement-dimension">
-                <span class="dco-measurement-value">${esc(number(value).toLocaleString("en-US", { maximumFractionDigits: 3 }))}</span>
-                <span class="dco-measurement-lines dco-measurement-lines-${count}">${lines}</span>
-            </span>`;
-    }
-
-    function rows(frm) {
-        return (frm.doc.pieces || []).map((row, index) => ({
-            index: index + 1,
-            type: pieceTypeLabel(row),
-            width: row.width_cm,
-            length: row.length_cm,
-            qty: Math.max(1, Math.trunc(number(row.qty) || 1)),
-            widthEdges: Number(Boolean(row.edge_width_top)) + Number(Boolean(row.edge_width_bottom)),
-            lengthEdges: Number(Boolean(row.edge_long_right)) + Number(Boolean(row.edge_long_left)),
-            edgeType: row.edge_type || frm.doc.default_edge_type || "—",
-            notes: row.notes || "",
-            drawing_json: row.special_shape_drawing_json || "",
-            geometry_json: row.special_shape_geometry_json || "",
-            piece_type: row.piece_type || "Regular",
-        }));
-    }
-
-    function measurementsTable(frm) {
-        const data = rows(frm);
-        if (!data.length) return '<div class="dco-measurement-empty">لا توجد قياسات في هذا الطلب.</div>';
-        return `
-            <table class="dco-measurement-print-table">
-                <thead><tr>
-                    <th>#</th>
-                    <th>النوع</th>
-                    <th>العرض (سم)</th>
-                    <th>الطول (سم)</th>
-                    <th>العدد</th>
-                    <th>نوع القشاط</th>
-                    <th class="notes">ملاحظات</th>
-                </tr></thead>
-                <tbody>${data.map(row => `
-                    <tr class="${rowHasDrawing(row) ? "dco-row-with-sketch" : ""}">
-                        <td>${row.index}</td>
-                        <td>${esc(row.type)}</td>
-                        <td>${dimensionMark(row.width, row.widthEdges)}</td>
-                        <td>${dimensionMark(row.length, row.lengthEdges)}</td>
-                        <td>${row.qty}</td>
-                        <td>${esc(row.edgeType)}</td>
-                        <td class="notes ${rowHasDrawing(row) ? "dco-notes-has-sketch" : ""}">${notesCellHtml(row)}</td>
-                    </tr>`).join("")}</tbody>
-            </table>`;
-    }
-
-    function printDocumentHtml(frm) {
-        const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
-        const orderName = frm.doc.name || "مسودة";
-        const edgeColor = orderEdgeColor(frm);
-        return `<!doctype html>
-<html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>قياسات الطلب ${esc(orderName)}</title>
-<style>
-@page{size:A4 portrait;margin:11mm}*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Tahoma,Arial,sans-serif;color:#111;direction:rtl;background:#fff}body{font-size:10.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{max-width:100%;margin:0 auto}.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:10px}.header h1{font-size:21px;margin:0 0 4px}.muted{color:#666;font-size:9px}.info{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:9px 0 11px}.info>div{border:1px solid #aaa;border-radius:5px;padding:7px;min-width:0;word-break:break-word}.info b{display:block;font-size:8px;color:#555;margin-bottom:2px}.section-title{font-size:13px;font-weight:900;margin:12px 0 5px}.dco-measurement-print-table{width:100%;border-collapse:collapse;font-size:9px}.dco-measurement-print-table th,.dco-measurement-print-table td{border:1px solid #999;padding:4px;text-align:center;vertical-align:middle}.dco-measurement-print-table th{background:#eee;font-weight:900}.dco-measurement-print-table .notes{width:32%;text-align:right;white-space:normal;line-height:1.5}.dco-measurement-dimension{display:inline-flex;min-width:38px;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}.dco-measurement-value{font-weight:800}.dco-measurement-lines{display:flex;flex-direction:column;align-items:center;gap:1px;min-height:5px;margin-top:1px}.dco-measurement-edge-line{display:block;width:28px;height:1px;background:#111}.dco-measurement-lines-0{visibility:hidden}.dco-measurement-empty{padding:24px;text-align:center;border:1px solid #bbb;color:#666}.footer{margin-top:12px;border-top:1px solid #aaa;padding-top:5px;font-size:8px;color:#666;display:flex;justify-content:space-between}
-${shapePrintCss()}
-</style></head><body>
-<div class="sheet">
-<div class="header"><div><h1>جدول قياسات الطلب</h1><div class="muted">نفس تنسيق قياسات فاتورة الطلب دون تفاصيل الأسعار والفاتورة</div></div><div style="text-align:left"><b>${esc(orderName)}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div></div>
-<div class="info"><div><b>رقم الطلب</b>${esc(orderName)}</div><div><b>الزبون</b>${esc(frm.doc.customer || "—")}</div><div><b>اللوح</b>${esc(frm.doc.board_description || "—")}</div><div><b>نوع القشاط</b>${esc(frm.doc.default_edge_type || "—")}</div><div><b>لون القشاط</b>${esc(edgeColor)}</div></div>
-<div class="section-title">جدول القياسات</div>${measurementsTable(frm)}
-${frm.doc.order_notes ? `<div style="margin-top:10px;padding:7px;border:1px solid #aaa;min-height:32px"><b>ملاحظات الطلب:</b> ${esc(frm.doc.order_notes)}</div>` : ""}
-<div class="footer"><span>رقم الطلب: ${esc(orderName)}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
-</div></body></html>`;
-    }
-
     function printMeasurements(frm) {
-        const oldFrame = document.getElementById("dco-measurements-print-frame");
-        if (oldFrame) oldFrame.remove();
-        const frame = document.createElement("iframe");
-        frame.id = "dco-measurements-print-frame";
-        frame.setAttribute("aria-hidden", "true");
-        frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;z-index:-1";
-        let cleaned = false;
-        const cleanup = () => {
-            if (cleaned) return;
-            cleaned = true;
-            if (frame.parentNode) frame.parentNode.removeChild(frame);
-        };
-        frame.onload = () => {
-            try {
-                const win = frame.contentWindow;
-                if (!win) throw new Error("Print frame unavailable");
-                win.addEventListener("afterprint", cleanup, { once: true });
-                setTimeout(() => { win.focus(); win.print(); }, 100);
-            } catch (error) {
-                console.error("Measurement print failed", error);
-                cleanup();
-                frappe.msgprint("تعذر تشغيل طباعة القياسات. أعد تحميل الصفحة ثم حاول مرة أخرى.");
-            }
-        };
-        frame.srcdoc = printDocumentHtml(frm);
-        document.body.appendChild(frame);
-        setTimeout(cleanup, 120000);
+        const documents = window.AlmdinaOrderDocumentPrint;
+        if (!documents || typeof documents.printMeasurements !== "function") {
+            frappe.msgprint("تعذر تجهيز طباعة القياسات. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+            return Promise.resolve(false);
+        }
+        return Promise.resolve(documents.printMeasurements(frm));
     }
 
     function measurementRoot(frm) {
