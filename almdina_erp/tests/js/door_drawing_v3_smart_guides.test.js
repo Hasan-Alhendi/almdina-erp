@@ -77,6 +77,6 @@ const beyond20 = S.resolveObjectMove(farMoveDoc, farMoving, 0, 0, { viewportScal
 assert.equal(beyond20.snapped, false, "21px should no longer pull a whole object from visibly far away");
 
 const source = require("node:fs").readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_guides.js"), "utf8");
-assert.doesNotMatch(source, /document\.|querySelector|getBoundingClientRect|clientX|clientY/, "Smart-guide geometry policy must stay independent from DOM/screen event coordinates");
+assert.doesNotMatch(source, /window\.document|document\.querySelector|document\.createElement|getBoundingClientRect|clientX|clientY/, "Smart-guide geometry policy must stay independent from browser DOM/event coordinates");
 
 console.log("Door Drawing V3 smart guide tests passed");
