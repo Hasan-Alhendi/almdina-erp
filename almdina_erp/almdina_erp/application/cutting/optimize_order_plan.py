@@ -217,7 +217,7 @@ def optimize_order_plan(
         f"محاولات: {_integer(plan.get('attempts'))} | الخوارزمية: {method_label}"
     )
     if margin_notes:
-        packing_score += " | ⚠ تم تعديل هامش التشذيب تلقائيًا"
+        packing_score += " | ⚠ " + " ".join(margin_notes)
 
     return OptimizationOutcome(
         snapshot=snapshot,
@@ -257,7 +257,6 @@ def _resolve_adaptive_margins(
         AppliedMargins(0.0, 0.0),
     ]
     best_margins = preferred_margins
-    best_probe = preferred_plan
     best_quality = preferred_quality
 
     for margins in probes:
@@ -274,7 +273,6 @@ def _resolve_adaptive_margins(
             and _retained_margin(margins) > _retained_margin(best_margins)
         ):
             best_margins = margins
-            best_probe = probe
             best_quality = quality
 
     if best_quality >= preferred_quality:
