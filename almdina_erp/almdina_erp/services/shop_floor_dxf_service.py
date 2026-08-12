@@ -197,8 +197,8 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     replacing_existing_file = bool(order.production_dxf)
     normalized_url, file_row = _validate_dxf_file_metadata(order, file_url)
 
-    from almdina_erp.almdina_erp.services.dxf_import_service import (
-        DxfImportError,
+    from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
+    from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
         parse_production_dxf,
     )
 
