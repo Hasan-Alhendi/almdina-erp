@@ -17,12 +17,20 @@ class CuttingPlan(Document):
         if self.plan_kind == "Replacement" and not self.replacement_piece:
             frappe.throw(_("A Replacement cutting plan must reference its Replacement Piece."))
         self.score = max(-MAX_STORED_SCORE, min(MAX_STORED_SCORE, flt(self.score)))
+        self._sync_effective_trim_margin_from_snapshot()
         self._populate_source_identity_snapshots()
         if self.plan_kind == "Replacement":
             self._validate_replacement_plan()
         if self.validation_status in {"Valid", "Invalid"} and not self.validated_on:
             self.validated_on = now_datetime()
         self._enforce_approved_immutability()
+
+    def _sync_effective_trim_margin_from_snapshot(self) -> None:
+        """Keep the persisted plan geometry aligned with its authoritative snapshot."""
+
+        snapshot = frappe.parse_json(self.snapshot_json or "{}") or {}
+        if "trim_cm" in snapshot:
+            self.trim_margin_mm = flt(snapshot.get("trim_cm")) * 10
 
     def _populate_source_identity_snapshots(self) -> None:
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)
