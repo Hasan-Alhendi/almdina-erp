@@ -33,17 +33,20 @@ def test_measurement_table_has_print_and_full_window_actions():
     assert "فتح جدول الإدخال في نافذة مستقلة" in source
     assert "function openEditableMeasurements(frm)" in source
     assert 'const EDITOR_CLASS = "dco-measurement-entry-window"' in source
-    assert "dco-measurements-print-frame" in source
-    assert "تفاصيل الأسعار والفاتورة" in source
-    assert "dco-measurement-print-table" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "dco-measurements-print-frame" not in source
+    assert "function printDocumentHtml" not in source
 
 
-def test_measurement_print_has_invoice_measurement_columns_without_invoice_totals():
-    source = text(MEASUREMENT_UX)
-    for label in ("النوع", "العرض (سم)", "الطول (سم)", "العدد", "نوع القشاط", "ملاحظات"):
+def test_measurement_print_uses_shared_presenter_without_invoice_totals():
+    source = text(PRINT_PRESENTER)
+    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
         assert label in source
-    assert "الإجمالي النهائي" not in source
-    assert "تفاصيل الفاتورة" not in source
+    assert "function measurementTable(frm)" in source
+    assert 'printDocument(frm, "measurements")' in source
+    assert 'mode === "invoice" ? invoiceSummary(frm) : ""' in source
+    assert 'mode === "invoice" ? invoiceLines(frm) : []' in source
 
 
 def test_edge_color_is_kept_in_print_headers_without_duplicate_table_columns():
@@ -60,9 +63,10 @@ def test_edge_color_is_kept_in_print_headers_without_duplicate_table_columns():
     assert "patchInvoiceMeta" not in edge_source
     assert "removeLegacyColorDuplicates" in edge_source
 
-    assert "grid-template-columns:repeat(5" in measurement_source
-    assert "<b>لون القشاط</b>" in measurement_source
     assert "orderEdgeColor(frm)" in measurement_source
+    assert "لون القشاط:" in measurement_source
+    assert "function printDocumentHtml" not in measurement_source
+    assert "dco-measurements-print-frame" not in measurement_source
 
 
 def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_actions():
