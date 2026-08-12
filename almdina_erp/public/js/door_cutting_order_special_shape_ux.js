@@ -6,6 +6,7 @@
         Object.freeze({ id: "almdina-door-drawing-v3-precision-css", href: "/assets/almdina_erp/css/door_drawing_v3_precision.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-magnetic-css", href: "/assets/almdina_erp/css/door_drawing_v3_magnetic.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-smart-pen-css", href: "/assets/almdina_erp/css/door_drawing_v3_smart_pen.css" }),
+        Object.freeze({ id: "almdina-door-drawing-v3-smart-guides-css", href: "/assets/almdina_erp/css/door_drawing_v3_smart_guides.css" }),
     ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
@@ -17,6 +18,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/snapping.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_path_snapping.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/move_snap_policy.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/smart_guides.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/shape_handles.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/precision_input.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_freehand_policy.js",
@@ -26,6 +28,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/canvas_policy.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/smart_path_view.js",
+        "/assets/almdina_erp/js/door_drawing_v3/presentation/smart_guides_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/magnetic_connection.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/tool_modifiers.js",
@@ -64,6 +67,9 @@
         __doorDrawingV3PrecisionInput: true,
         __doorDrawingV3MagneticConnection: true,
         __doorDrawingV3EasyMoveSnap: true,
+        __doorDrawingV3SmartGuides: true,
+        __doorDrawingV3SurfaceSnap: true,
+        __doorDrawingV3EqualLengthSnap: true,
         __doorDrawingV3CanvasPolicy: true,
         __doorDrawingV3SmartPen: true,
         __doorDrawingV3SmartFreehand: true,
