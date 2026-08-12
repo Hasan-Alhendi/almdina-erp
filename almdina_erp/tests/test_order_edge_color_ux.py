@@ -60,12 +60,16 @@ def test_financial_documents_use_the_server_document_and_edge_color_does_not_for
     assert "event.stopImmediatePropagation()" not in edge
 
 
-def test_measurement_print_and_standalone_header_contain_edge_color():
+def test_measurement_entry_print_delegates_to_unified_document_presenter():
     source = _source(MEASUREMENT_UX)
     assert "function orderEdgeColor(frm)" in source
-    assert 'const edgeColor = orderEdgeColor(frm)' in source
-    assert '<div><b>لون القشاط</b>${esc(edgeColor)}</div>' in source
-    assert "grid-template-columns:repeat(5" in source
+    assert "لون القشاط:" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert 'typeof documents.printMeasurements !== "function"' in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "function printDocumentHtml" not in source
+    assert "dco-measurements-print-frame" not in source
+    assert "dco-measurement-print-table" not in source
 
 
 def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
