@@ -91,11 +91,19 @@
         const start = input[0];
         const end = input[input.length - 1];
         if (G.distance(start, end) < G.EPSILON_MM) return null;
+
+        // A very large-radius circle can mathematically fit a slightly wobbly line.
+        // Preserve user intent by giving a run that already satisfies our straight-line
+        // contract precedence over arc recognition.
+        const straightToleranceMm = Math.max(G.EPSILON_MM, Number(options.straightToleranceMm) || F.DEFAULTS.straightToleranceMm);
+        const straightRatio = Number(options.straightRatio) || F.DEFAULTS.straightRatio;
+        const quality = F.lineQuality(input);
+        if (quality.eligible && quality.maxDeviationMm <= straightToleranceMm && quality.ratio <= straightRatio) return null;
+
         const mid = midpointByLength(input);
         const circle = F.circumcircle(start, mid, end);
         if (!circle) return null;
         const residualMm = F.radialResidual(input, circle);
-        const straightToleranceMm = Math.max(G.EPSILON_MM, Number(options.straightToleranceMm) || F.DEFAULTS.straightToleranceMm);
         const residualRatio = Number(options.arcResidualRatio) || F.DEFAULTS.arcResidualRatio;
         const residualLimit = Math.max(straightToleranceMm, circle.radiusMm * residualRatio);
         if (residualMm > residualLimit) return null;
