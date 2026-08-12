@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 
 global.window = {};
@@ -8,10 +9,12 @@ require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_freehand_policy.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_stroke_intelligence.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_stroke_corner_guard.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/tool_modifier_policy.js"));
 
 const V3 = global.window.AlmdinaDoorDrawingV3;
 const G = V3.Geometry;
 const I = V3.SmartStrokeIntelligence;
+const M = V3.ToolModifierPolicy;
 
 const mouseState = I.createStabilizer("mouse", G.point(0, 0));
 const penState = I.createStabilizer("pen", G.point(0, 0));
@@ -78,4 +81,33 @@ const irregularResult = I.interpret(irregular, {
 });
 assert.notEqual(irregularResult.type, "line", "Intelligence must not force genuinely irregular mouse gestures into a straight primitive");
 
-console.log("Door Drawing V3 smart stroke intelligence tests passed");
+assert.equal(M.penConstraint({ altKey: true }), M.PEN_CONSTRAINTS.STRAIGHT, "Alt should request a perfectly straight pen gesture");
+assert.equal(M.penConstraint({ shiftKey: true }), M.PEN_CONSTRAINTS.AXIS, "Shift should request an axis-constrained pen gesture");
+assert.equal(M.penConstraint({ altKey: true, shiftKey: true }), M.PEN_CONSTRAINTS.AXIS, "Shift axis constraint should win when both modifiers are held");
+assert.deepEqual(M.constrainEndpoint(G.point(0, 0), G.point(100, 12), M.PEN_CONSTRAINTS.AXIS), G.point(100, 0));
+assert.deepEqual(M.constrainEndpoint(G.point(0, 0), G.point(12, 100), M.PEN_CONSTRAINTS.AXIS), G.point(0, 100));
+assert.deepEqual(M.constrainEndpoint(G.point(0, 0), G.point(100, 12), M.PEN_CONSTRAINTS.STRAIGHT), G.point(100, 12));
+assert.equal(M.effectiveTool("pen", true), "select", "Ctrl selection is temporary and must not overwrite the chosen pen tool");
+assert.equal(M.effectiveTool("pen", false), "pen", "Releasing Ctrl must restore the chosen tool");
+assert.equal(M.normalizeTool("rectangle"), "rectangle");
+
+const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const modifiers = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/tool_modifiers.js"), "utf8");
+assert.match(entry, /application\/tool_modifier_policy\.js/);
+assert.match(entry, /application\/tool_modifiers\.js/);
+assert.ok(entry.indexOf("application/tool_modifier_policy.js") < entry.indexOf("presentation/canvas_view.js"), "Pure modifier policy must load before presentation/controllers");
+assert.ok(entry.indexOf("application/magnetic_connection.js") < entry.indexOf("application/tool_modifiers.js"));
+assert.ok(entry.indexOf("application/tool_modifiers.js") < entry.indexOf("application/smart_pen.js"), "Modifier controller must install before smart-pen capture handlers");
+assert.match(entry, /__doorDrawingV3PersistentTools:\s*true/);
+assert.match(entry, /__doorDrawingV3ModifierConstraints:\s*true/);
+assert.match(entry, /__doorDrawingV3TemporarySelect:\s*true/);
+assert.match(modifiers, /function beginConstrainedPen/);
+assert.match(modifiers, /function promoteFreehandToConstraint/);
+assert.match(modifiers, /options\.axisLock = true/);
+assert.match(modifiers, /c\.persistentTool/);
+assert.match(modifiers, /event\.key === "Control"/);
+assert.match(modifiers, /G\.line\(nextId\("line"\)/);
+assert.match(modifiers, /event\.stopImmediatePropagation\(\)/);
+assert.doesNotMatch(modifiers, /special_shape_geometry_json\s*=/, "Modifier shortcuts must not fabricate manufacturing geometry");
+
+console.log("Door Drawing V3 smart stroke intelligence and modifier-key tests passed");
