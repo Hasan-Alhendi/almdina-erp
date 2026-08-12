@@ -67,15 +67,17 @@ assert.deepEqual(intersection.point, G.point(150, 100));
 assert.equal(intersection.smartGuide.type, "intersection");
 
 // 5) Endpoint editing can acquire a true perpendicular foot on an existing edge.
+// Use x=230 so the perpendicular foot is not also the line midpoint; midpoint is
+// intentionally a higher-priority intent and must not make this test ambiguous.
 let perpendicularDoc = D.create({ widthMm: 1000, heightMm: 1000 });
 perpendicularDoc = D.addObject(perpendicularDoc, G.line("target", G.point(0, 0), G.point(400, 0)));
-const perpendicular = S.resolvePoint(perpendicularDoc, G.point(201, 4), {
-    anchor: G.point(200, 200),
+const perpendicular = S.resolvePoint(perpendicularDoc, G.point(231, 4), {
+    anchor: G.point(230, 200),
     viewportScale: 1,
 });
 assert.equal(perpendicular.snapped, true);
 assert.equal(perpendicular.kind, "perpendicular");
-assert.deepEqual(perpendicular.point, G.point(200, 0));
+assert.deepEqual(perpendicular.point, G.point(230, 0));
 assert.equal(perpendicular.smartGuide.symbol, "⊥");
 
 // 6) Parallel intent changes the angle, not the requested length.
