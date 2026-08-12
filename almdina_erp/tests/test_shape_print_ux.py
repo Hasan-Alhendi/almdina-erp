@@ -48,9 +48,10 @@ def test_measurement_print_places_drawing_inside_notes_without_adding_a_column()
     actions = text(MEASUREMENT_ACTIONS)
     source = text(PRINT_PRESENTER)
     assert "window.AlmdinaOrderDocumentPrint" in actions
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in actions
+    assert "...source" in source
     assert "renderer.notesCell(row, row.notes" in source
-    assert "drawing_json: row.special_shape_drawing_json" in source
-    assert "geometry_json: row.special_shape_geometry_json" in source
+    assert "rowHasDrawing(row)" in source
     assert "notes-with-drawing" in source
     assert "shapePrintCss()" in source
     assert source.count("<th>ملاحظات</th>") == 1
