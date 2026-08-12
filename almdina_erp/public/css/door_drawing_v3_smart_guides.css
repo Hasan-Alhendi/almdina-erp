@@ -14,15 +14,38 @@
     stroke-dasharray: 2 3;
 }
 
-.ddv3-smart-guide-surface circle:first-child {
+.ddv3-smart-guide.is-angle {
+    stroke-dasharray: 4 3;
+}
+
+.ddv3-smart-guide-surface circle:first-child,
+.ddv3-smart-guide-marker.is-surface circle:first-child,
+.ddv3-smart-guide-marker.is-endpoint circle:first-child {
     fill: #fff;
     stroke: #ff4fd8;
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;
 }
 
-.ddv3-smart-guide-surface circle:last-child {
+.ddv3-smart-guide-surface circle:last-child,
+.ddv3-smart-guide-marker.is-surface circle:last-child,
+.ddv3-smart-guide-marker.is-endpoint circle:last-child {
     fill: #ff4fd8;
+}
+
+.ddv3-smart-guide-marker.is-midpoint rect {
+    fill: #fff;
+    stroke: #ff4fd8;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-smart-guide-marker.is-intersection path {
+    fill: none;
+    stroke: #ff4fd8;
+    stroke-width: 1.7;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
 }
 
 .ddv3-smart-guide-label rect {
@@ -34,4 +57,10 @@
     font-size: 11px;
     font-family: Inter, system-ui, sans-serif;
     dominant-baseline: middle;
+}
+
+.ddv3-smart-guide-label.is-perpendicular rect,
+.ddv3-smart-guide-label.is-parallel rect,
+.ddv3-smart-guide-label.is-collinear rect {
+    rx: 5px;
 }
