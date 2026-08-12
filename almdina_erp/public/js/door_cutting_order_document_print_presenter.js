@@ -221,34 +221,18 @@
         }).join("");
     }
 
-    function contactsHtml(value) {
-        const lines = String(value || "")
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(Boolean);
-        if (!lines.length) return "";
-        return `<div class="factory-contacts">${lines.map(line => `<span>${esc(line)}</span>`).join("")}</div>`;
-    }
-
-    function factoryIdentityHtml(printIdentity) {
-        const identity = printIdentity || {};
-        return `<div class="factory-identity">
-            <div class="factory-name">${esc(identity.print_factory_name || "")}</div>
-            <div class="factory-description">${esc(identity.print_factory_description || "")}</div>
-            <div class="factory-address">${esc(identity.print_factory_address || "")}</div>
-            ${contactsHtml(identity.print_factory_contacts)}
-        </div>`;
-    }
-
     function sharedHeader(frm, mode, printIdentity) {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerHtml !== "function") {
+            throw new Error("Unified factory print header is unavailable");
+        }
         const title = mode === "invoice" ? "عرض سعر الطلب" : "جدول قياسات الطلب";
-        return `<div class="header">
-            ${factoryIdentityHtml(printIdentity)}
-            <div class="document-heading">
-                <h1>${title}</h1>
-                <div class="header-order"><b>${esc(frm.doc.name || "مسودة")}</b><div class="muted">${esc(frm.doc.order_date || "")}</div></div>
-            </div>
-        </div>`;
+        const reference = frm.doc.name || "مسودة";
+        const date = String(frm.doc.order_date || "").trim();
+        return theme.headerHtml(printIdentity, {
+            title,
+            meta: date ? `${reference} · ${date}` : reference,
+        });
     }
 
     function sharedInfo(frm) {
