@@ -1,9 +1,15 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-plan-content-layout-css-v5";
-    const BOARD_GAP_PX = 12;
+    const STYLE_ID = "dco-plan-content-layout-css-v6";
+    const BOARD_GAP_PX = 8;
+    const BOARD_CARD_CHROME_PX = 12;
     const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
+    const MOBILE_VIEWPORT_MAX_PX = 600;
+    const TABLET_VIEWPORT_MAX_PX = 1024;
+    const TWO_COLUMN_MIN_PX = 520;
+    const THREE_COLUMN_MIN_PX = 760;
+    const FOUR_COLUMN_MIN_PX = 1180;
     const FOCUS_INITIAL_ZOOM = 1.25;
     const FOCUS_MIN_ZOOM = 1;
     const FOCUS_MAX_ZOOM = 2;
@@ -293,11 +299,11 @@
                 width:100% !important;
                 max-width:100% !important;
                 margin:0 !important;
-                padding:9px !important;
-                border:1px solid var(--border-color,#dfe3e8) !important;
-                border-radius:13px !important;
+                padding:5px !important;
+                border:1px solid var(--border-color,#e2e6ea) !important;
+                border-radius:10px !important;
                 background:var(--card-bg,#fff) !important;
-                box-shadow:0 3px 12px rgba(24,36,48,.045) !important;
+                box-shadow:none !important;
                 page-break-inside:avoid;
                 break-inside:avoid;
                 overflow:hidden;
@@ -305,30 +311,30 @@
             }
             [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card:hover {
                 border-color:#b9c3cd !important;
-                box-shadow:0 7px 20px rgba(24,36,48,.08) !important;
+                box-shadow:0 3px 10px rgba(24,36,48,.055) !important;
                 transform:translateY(-1px);
             }
             [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title {
                 display:grid !important;
                 grid-template-columns:auto minmax(0,1fr) auto;
                 align-items:center !important;
-                gap:7px !important;
-                min-height:31px;
-                margin:0 0 7px !important;
-                padding:0 1px 7px !important;
+                gap:5px !important;
+                min-height:27px;
+                margin:0 0 4px !important;
+                padding:0 0 5px !important;
                 border-bottom:1px solid var(--border-color,#edf0f3);
-                font-size:11px !important;
-                line-height:1.35 !important;
+                font-size:10.5px !important;
+                line-height:1.3 !important;
             }
             [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :first-child {
-                font-size:12px !important;
+                font-size:11.5px !important;
                 font-weight:900 !important;
                 white-space:nowrap;
             }
             [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :nth-child(2) {
                 min-width:0;
                 color:var(--text-muted,#68737d);
-                font-size:9.5px !important;
+                font-size:9px !important;
                 font-weight:750 !important;
                 white-space:nowrap;
                 overflow:hidden;
@@ -338,14 +344,14 @@
                 display:inline-flex;
                 align-items:center;
                 justify-content:center;
-                min-width:31px;
-                min-height:29px;
-                padding:4px 7px;
+                min-width:27px;
+                min-height:25px;
+                padding:3px 6px;
                 border:1px solid var(--border-color,#dce2e7);
-                border-radius:8px;
+                border-radius:7px;
                 background:var(--subtle-fg,#f6f8fa);
                 color:var(--text-color,#26313b);
-                font-size:10px;
+                font-size:9.5px;
                 font-weight:850;
                 line-height:1;
                 cursor:pointer;
@@ -555,7 +561,7 @@
                     padding:8px 9px !important;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card {
-                    padding:8px !important;
+                    padding:5px !important;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title {
                     grid-template-columns:auto minmax(0,1fr) auto;
@@ -597,7 +603,7 @@
                     justify-content:center;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-board-gallery {
-                    gap:10px !important;
+                    gap:8px !important;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-board {
                     width:100% !important;
@@ -818,10 +824,11 @@
 
     function desiredBoardColumns(width) {
         const available = Number(width || 0);
-        if (available >= 1400) return 4;
-        if (available >= 980) return 3;
-        if (available >= 620) return 2;
-        return 1;
+        const viewport = Number(window.innerWidth || available || 0);
+        if (viewport <= MOBILE_VIEWPORT_MAX_PX || available < TWO_COLUMN_MIN_PX) return 1;
+        if (viewport <= TABLET_VIEWPORT_MAX_PX || available < THREE_COLUMN_MIN_PX) return 2;
+        if (available >= FOUR_COLUMN_MIN_PX) return 4;
+        return 3;
     }
 
     function boardAspect(board) {
@@ -869,8 +876,8 @@
         planRoot.dataset.boardColumns = String(columns);
 
         const availableColumnWidth = rootWidth > 0
-            ? Math.max(160, (rootWidth - BOARD_GAP_PX * Math.max(0, columns - 1)) / columns - 20)
-            : 320;
+            ? Math.max(150, (rootWidth - BOARD_GAP_PX * Math.max(0, columns - 1)) / columns - BOARD_CARD_CHROME_PX)
+            : 300;
         const viewportHeight = Math.max(480, window.innerHeight || 720);
 
         gallery.querySelectorAll(":scope > .dco-sheet-card").forEach(card => {
@@ -883,7 +890,7 @@
                 board.style.removeProperty("--dco-board-screen-max-width");
             } else {
                 const viewportWidthCap = viewportHeight * BOARD_VIEWPORT_HEIGHT_RATIO * aspect;
-                const widthCap = Math.max(150, Math.min(availableColumnWidth, viewportWidthCap));
+                const widthCap = Math.max(145, Math.min(availableColumnWidth, viewportWidthCap));
                 board.style.setProperty("--dco-board-screen-max-width", `${Math.round(widthCap)}px`);
             }
             ensureBoardFocusButton(card);
