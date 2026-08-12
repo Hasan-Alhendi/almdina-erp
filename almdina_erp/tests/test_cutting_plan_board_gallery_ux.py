@@ -14,9 +14,15 @@ class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
         source = PLAN_CONTENT.read_text(encoding="utf-8")
 
         self.assertIn("function desiredBoardColumns", source)
-        self.assertIn("if (available >= 1400) return 4", source)
-        self.assertIn("if (available >= 980) return 3", source)
-        self.assertIn("if (available >= 620) return 2", source)
+        self.assertIn("MOBILE_VIEWPORT_MAX_PX = 600", source)
+        self.assertIn("TABLET_VIEWPORT_MAX_PX = 1024", source)
+        self.assertIn("TWO_COLUMN_MIN_PX = 520", source)
+        self.assertIn("THREE_COLUMN_MIN_PX = 760", source)
+        self.assertIn("FOUR_COLUMN_MIN_PX = 1180", source)
+        self.assertIn("viewport <= MOBILE_VIEWPORT_MAX_PX", source)
+        self.assertIn("viewport <= TABLET_VIEWPORT_MAX_PX", source)
+        self.assertIn("available >= FOUR_COLUMN_MIN_PX", source)
+        self.assertIn("return 3", source)
         self.assertIn("dco-board-gallery", source)
         self.assertIn('data-board-columns="4"', source)
         self.assertIn('data-board-columns="3"', source)
@@ -24,6 +30,17 @@ class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
         self.assertIn("BOARD_VIEWPORT_HEIGHT_RATIO", source)
         self.assertIn("--dco-board-screen-max-width", source)
         self.assertIn("ResizeObserver", source)
+
+    def test_gallery_uses_compact_cards_to_fit_more_boards(self) -> None:
+        source = PLAN_CONTENT.read_text(encoding="utf-8")
+
+        self.assertIn("BOARD_GAP_PX = 8", source)
+        self.assertIn("BOARD_CARD_CHROME_PX = 12", source)
+        self.assertIn("padding:5px !important", source)
+        self.assertIn("border-radius:10px !important", source)
+        self.assertIn("box-shadow:none !important", source)
+        self.assertIn("min-height:27px", source)
+        self.assertIn("- BOARD_CARD_CHROME_PX", source)
 
     def test_gallery_preserves_board_ratio_and_has_focus_view(self) -> None:
         source = PLAN_CONTENT.read_text(encoding="utf-8")
