@@ -7,6 +7,7 @@ DOCTYPE_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_c
 HOOKS = ROOT / "hooks.py"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 COST_INVOICE_UX = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
 TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
@@ -46,7 +47,9 @@ def test_measurement_table_has_print_and_editable_full_screen_actions():
     assert "host.appendChild(root)" in source
     assert "placeholder.parentNode.insertBefore(state.root, state.placeholder)" in source
     assert "window.open(" not in source
-    assert "dco-measurements-print-frame" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "dco-measurements-print-frame" not in source
 
 
 def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_behaviour():
@@ -63,12 +66,14 @@ def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_b
     assert "max-height:none!important" in source
 
 
-def test_measurement_print_has_invoice_measurement_columns_without_invoice_totals():
-    source = text(MEASUREMENT_UX)
-    for label in ("النوع", "العرض (سم)", "الطول (سم)", "العدد", "نوع القشاط", "ملاحظات"):
+def test_measurement_print_uses_the_shared_document_layout_without_invoice_totals():
+    source = text(PRINT_PRESENTER)
+    for label in ("النوع", "العرض", "الطول", "العدد", "القشاط المخصص", "ملاحظات"):
         assert label in source
-    assert "الإجمالي النهائي" not in source
-    assert "تفاصيل الفاتورة" not in source
+    assert "function measurementTable(frm)" in source
+    assert 'mode === "invoice" ? invoiceSummary(frm) : ""' in source
+    assert 'mode === "invoice" ? invoiceLines(frm) : []' in source
+    assert 'printDocument(frm, "measurements")' in source
 
 
 def test_customer_invoice_prints_edge_color_once_in_header_without_table_columns():
