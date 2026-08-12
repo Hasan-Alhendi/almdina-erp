@@ -51,6 +51,10 @@
         return window.AlmdinaFactoryPrintIdentity || null;
     }
 
+    function customerPrintApi() {
+        return window.AlmdinaOrderDocumentPrint || null;
+    }
+
     async function resolvePrintIdentity() {
         const api = printIdentityApi();
         if (api && typeof api.get === "function") {
@@ -96,55 +100,11 @@
     }
 
     function summaryHtml(payload) {
-        const modeClass = payload.kind === "internal_cost_report" ? "internal" : "customer";
-        return `<div class="financial-summary ${modeClass}">${(payload.summary || []).map(item => `
+        return `<div class="financial-summary internal">${(payload.summary || []).map(item => `
             <div class="financial-summary-card">
                 <span>${esc(item.label)}</span>
                 <b>${formatSummaryValue(item)}</b>
             </div>`).join("")}</div>`;
-    }
-
-    function measurementsHtml(rows) {
-        if (!rows || !rows.length) return "";
-        return `
-            <section>
-                <h2>جدول القياسات</h2>
-                <table><thead><tr>
-                    <th>#</th><th>النوع</th><th>العرض سم</th><th>الطول سم</th>
-                    <th>العدد</th><th>نوع القشاط</th><th class="right">ملاحظات</th>
-                </tr></thead><tbody>
-                    ${rows.map(row => `<tr>
-                        <td>${esc(row.piece_no || row.index)}</td>
-                        <td>${esc(row.piece_type)}</td>
-                        <td>${qty(row.width_cm)}</td>
-                        <td>${qty(row.length_cm)}</td>
-                        <td>${qty(row.quantity)}</td>
-                        <td>${esc(row.edge_type || "—")}</td>
-                        <td class="right">${esc(row.notes || "—")}</td>
-                    </tr>`).join("")}
-                </tbody></table>
-            </section>`;
-    }
-
-    function invoiceLinesHtml(lines) {
-        if (!lines || !lines.length) return "";
-        return `
-            <section>
-                <h2>تفاصيل عرض السعر</h2>
-                <table><thead><tr>
-                    <th>#</th><th class="right">البيان</th><th>الكمية</th>
-                    <th>الوحدة</th><th>سعر الوحدة $</th><th>الإجمالي $</th>
-                </tr></thead><tbody>
-                    ${lines.map((line, index) => `<tr>
-                        <td>${index + 1}</td>
-                        <td class="right"><b>${esc(line.description)}</b>${line.note ? `<small>${esc(line.note)}</small>` : ""}</td>
-                        <td>${qty(line.quantity)}</td>
-                        <td>${esc(line.unit)}</td>
-                        <td>${money(line.rate_usd)}</td>
-                        <td><b>${money(line.amount_usd)}</b></td>
-                    </tr>`).join("")}
-                </tbody></table>
-            </section>`;
     }
 
     function costBreakdownHtml(rows) {
@@ -204,32 +164,30 @@
         if (!theme || typeof theme.headerHtml !== "function") {
             throw new Error("Unified factory print header is unavailable");
         }
-        const internal = payload.kind === "internal_cost_report";
         const metaParts = [payload.order_name, payload.subtitle]
             .map(value => String(value || "").trim())
             .filter(Boolean);
         return theme.headerHtml(printIdentity, {
             title: payload.title,
             meta: metaParts.join(" · "),
-            badge: internal ? (payload.classification || "داخلي") : "",
-            badgeClass: internal ? "internal" : "",
+            badge: payload.classification || "داخلي",
+            badgeClass: "internal",
         });
     }
 
-    function printCss(internal) {
+    function printCss() {
         const theme = printThemeApi();
         if (!theme || typeof theme.headerCss !== "function") {
             throw new Error("Unified factory print header styles are unavailable");
         }
         return `
-            @page{size:A4 ${internal ? "landscape" : "portrait"};margin:11mm}
+            @page{size:A4 landscape;margin:11mm}
             *{box-sizing:border-box}
             body{font-family:Tahoma,Arial,sans-serif;color:#172033;margin:0;direction:rtl;font-size:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
             ${theme.headerCss()}
             .financial-meta,.financial-summary{display:grid;gap:7px;margin-top:10px}
             .financial-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
             .financial-summary.internal{grid-template-columns:repeat(5,minmax(0,1fr))}
-            .financial-summary.customer{grid-template-columns:repeat(3,minmax(0,1fr))}
             .financial-meta-item,.financial-summary-card,.operations-grid>div{border:1px solid #cfd6de;border-radius:7px;padding:7px 8px;background:#fff}
             .financial-meta-item span,.financial-summary-card span,.operations-grid span{display:block;color:#697582;font-size:8px;margin-bottom:3px}
             .financial-meta-item b,.financial-summary-card b,.operations-grid b{font-size:11px;word-break:break-word}
@@ -249,19 +207,21 @@
     }
 
     function documentHtml(payload, printIdentity = null) {
-        const internal = payload.kind === "internal_cost_report";
+        if (!payload || payload.kind !== "internal_cost_report") {
+            throw new Error("Customer invoice layout belongs to AlmdinaOrderDocumentPrint");
+        }
         const identityApi = printIdentityApi();
         const identity = printIdentity || (
             identityApi && typeof identityApi.fallback === "function"
                 ? identityApi.fallback()
                 : {}
         );
-        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss(internal)}</style></head><body>
+        return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${esc(payload.title)} — ${esc(payload.order_name)}</title><style>${printCss()}</style></head><body>
             ${printHeaderHtml(payload, identity)}
             ${metaHtml(payload)}${summaryHtml(payload)}
-            ${internal ? costBreakdownHtml(payload.cost_breakdown) : measurementsHtml(payload.measurements)}
-            ${internal ? operationsHtml(payload.operations) : invoiceLinesHtml(payload.lines)}
-            ${internal ? specialPricesHtml(payload.special_prices) : ""}
+            ${costBreakdownHtml(payload.cost_breakdown)}
+            ${operationsHtml(payload.operations)}
+            ${specialPricesHtml(payload.special_prices)}
             ${totalsHtml(payload.totals)}
             ${payload.notes ? `<div class="notes"><b>ملاحظات الطلب:</b> ${esc(payload.notes)}</div>` : ""}
             <footer><span>أنشئ بواسطة: ${esc(payload.generated_by || "—")}</span><span>تاريخ الإنشاء: ${esc(payload.generated_on || "—")}</span><span>المراجعة: ${esc(payload.source_revision || "1")}</span></footer>
@@ -306,6 +266,32 @@
         return Promise.reject(error);
     }
 
+    function validateCustomerPrices(frm) {
+        const costApi = window.AlmdinaOrderCostUX;
+        const pending = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
+            ? costApi.pendingCustomEdgePriceLabels(frm)
+            : [];
+        if (!pending.length) return true;
+        frappe.msgprint(__(
+            "لا يمكن طباعة فاتورة غير مكتملة. أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة أولًا. المتبقي: {0}."
+        ).replace("{0}", pending.join("، ")));
+        return false;
+    }
+
+    function renderAuthorizedDocument(frm, kind, payload) {
+        if (kind === "customer_invoice") {
+            const presenter = customerPrintApi();
+            if (!presenter || typeof presenter.printAuthorizedInvoice !== "function") {
+                throw new Error("Unified customer invoice presenter is unavailable");
+            }
+            return Promise.resolve(presenter.printAuthorizedInvoice(frm, payload)).then(() => payload);
+        }
+        return resolvePrintIdentity().then(printIdentity => {
+            printHtml(documentHtml(payload, printIdentity));
+            return payload;
+        });
+    }
+
     function printFinancialDocument(frm, kind) {
         const capability = requiredCapability(kind);
         const canPrint = kind === "customer_invoice"
@@ -319,35 +305,23 @@
             frappe.msgprint(__("احفظ الطلب قبل طباعة المستند."));
             return handledRejection("Unsaved order");
         }
-        if (kind === "customer_invoice") {
-            const costApi = window.AlmdinaOrderCostUX;
-            const pendingCustomEdgePriceLabels = costApi && typeof costApi.pendingCustomEdgePriceLabels === "function"
-                ? costApi.pendingCustomEdgePriceLabels(frm)
-                : [];
-            if (pendingCustomEdgePriceLabels.length) {
-                frappe.msgprint(__(
-                    "لا يمكن طباعة فاتورة غير مكتملة. أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة أولًا. المتبقي: {0}."
-                ).replace("{0}", pendingCustomEdgePriceLabels.join("، ")));
-                return handledRejection("Missing custom edge prices");
-            }
+        if (kind === "customer_invoice" && !validateCustomerPrices(frm)) {
+            return handledRejection("Missing custom edge prices");
         }
 
-        const documentRequest = frappe.call({
+        return frappe.call({
             method: documentMethod(kind),
             args: { order_name: frm.doc.name },
             freeze: true,
             freeze_message: kind === "internal_cost_report"
                 ? __("جاري تجهيز تقرير التكلفة الداخلي...")
                 : __("جاري تجهيز فاتورة الزبون..."),
-        });
-
-        return Promise.all([documentRequest, resolvePrintIdentity()]).then(([response, printIdentity]) => {
+        }).then(response => {
             const payload = response.message || {};
             if (payload.kind !== kind || payload.order_name !== frm.doc.name) {
                 throw new Error("Financial document response does not match the active order");
             }
-            printHtml(documentHtml(payload, printIdentity));
-            return payload;
+            return renderAuthorizedDocument(frm, kind, payload);
         }).catch(error => {
             console.error("Financial document preparation failed", error);
             throw error;
@@ -439,11 +413,6 @@
     }
 
     function secureLegacyGlobals(frm) {
-        // AlmdinaOrderCostUX is intentionally Object.freeze()'d. Never mutate it:
-        // doing so in strict mode aborts this module before the secure buttons bind.
-        const costApi = window.AlmdinaOrderCostUX;
-        void costApi;
-
         const previous = window.AlmdinaOrderDocumentPrint;
         if (previous && typeof previous === "object" && !previous.__secureFinancialDocuments) {
             window.AlmdinaOrderDocumentPrint = Object.freeze({
@@ -457,7 +426,7 @@
                 },
                 html(targetFrm, mode) {
                     if (mode === "invoice") {
-                        throw new Error("Customer invoice HTML is server-authorized and cannot be built locally.");
+                        throw new Error("Customer invoice HTML is server-authorized and cannot be built without its quote payload.");
                     }
                     return previous.html(targetFrm, mode);
                 },
