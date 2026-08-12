@@ -5,6 +5,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const themeSource = fs.readFileSync(
+    path.resolve(
+        __dirname,
+        "../../public/js/door_cutting_order_document_print_theme.js"
+    ),
+    "utf8"
+);
 const source = fs.readFileSync(
     path.resolve(
         __dirname,
@@ -20,6 +27,15 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+}
+
+function factoryIdentity() {
+    return {
+        print_factory_name: "مجمع الاختبار",
+        print_factory_description: "قص وتجهيز الألواح",
+        print_factory_address: "دمشق",
+        print_factory_contacts: "0999000000\n0110000000",
+    };
 }
 
 function payload(kind, orderName) {
@@ -95,6 +111,14 @@ function load() {
                 return frm.doc.name === identity;
             },
         },
+        AlmdinaFactoryPrintIdentity: {
+            get() {
+                return Promise.resolve(factoryIdentity());
+            },
+            fallback() {
+                return factoryIdentity();
+            },
+        },
     };
 
     const fakeFrappe = {
@@ -153,6 +177,9 @@ function load() {
         },
     });
 
+    vm.runInContext(themeSource, context, {
+        filename: "door_cutting_order_document_print_theme.js",
+    });
     vm.runInContext(source, context, {
         filename: "door_cutting_order_financial_documents_ux.js",
     });
@@ -194,6 +221,11 @@ async function main() {
     const internalHtml = runtime.fakeWindow.AlmdinaFinancialDocuments.documentHtml(
         payload("internal_cost_report", frm.doc.name)
     );
+    assert.match(customerHtml, /dco-unified-print-header/);
+    assert.match(customerHtml, /مجمع الاختبار/);
+    assert.match(customerHtml, /قص وتجهيز الألواح/);
+    assert.match(customerHtml, /دمشق/);
+    assert.match(customerHtml, /0999000000/);
     assert.doesNotMatch(customerHtml, /لا يسلّم للزبون/);
     assert.match(internalHtml, /لا يسلّم للزبون/);
 
