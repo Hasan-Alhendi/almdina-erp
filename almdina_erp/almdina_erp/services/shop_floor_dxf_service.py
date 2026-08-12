@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from typing import Any
 
 import frappe
@@ -44,7 +45,7 @@ def _drawing_state(order: Any) -> DrawingActionState:
 
 def _throw_policy_error(error: DrawingActionDenied) -> None:
     frappe.throw(
-        _(_POLICY_MESSAGES.get(error.code, "Drawing action is not allowed.")),
+        _(_POLICY_MESSAGES.get(error.code, "لا يسمح سير العمل الحالي بتنفيذ إجراء الرسم هذا.")),
         frappe.PermissionError,
     )
 
@@ -75,12 +76,15 @@ def _get_authorized_order(
     return order
 
 
-def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
+def _validate_dxf_file_metadata(order: Any, file_url: str) -> tuple[str, Any]:
     normalized_url = str(file_url or "").strip()
     if not normalized_url:
-        frappe.throw(_("Attach a DXF file."))
+        frappe.throw(_("اختر ملف DXF ثم أعد المحاولة."), title=_("ملف DXF مطلوب"))
     if not normalized_url.lower().split("?", 1)[0].endswith(".dxf"):
-        frappe.throw(_("Production file must be a .dxf attachment."))
+        frappe.throw(
+            _("نوع الملف غير صحيح. ارفع ملفًا بامتداد .dxf فقط."),
+            title=_("ملف غير مدعوم"),
+        )
 
     file_row = frappe.db.get_value(
         "File",
@@ -95,15 +99,32 @@ def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
         as_dict=True,
     )
     if not file_row:
-        frappe.throw(_("The uploaded DXF file could not be found."))
-    if int(file_row.file_size or 0) > MAX_DXF_FILE_SIZE:
-        frappe.throw(_("DXF file size cannot exceed 10 MB."))
+        frappe.throw(
+            _("تعذر العثور على الملف المرفوع داخل النظام. أعد اختيار ملف DXF ورفعه مرة أخرى."),
+            title=_("الملف غير موجود"),
+        )
+    file_size = int(file_row.file_size or 0)
+    if file_size > MAX_DXF_FILE_SIZE:
+        frappe.throw(
+            _("حجم ملف DXF هو {0:.1f} MB، والحد الأقصى المسموح هو 10 MB.").format(
+                file_size / (1024 * 1024)
+            ),
+            title=_("ملف DXF كبير جدًا"),
+        )
     if file_row.attached_to_doctype and (
         file_row.attached_to_doctype != order.doctype
         or file_row.attached_to_name != order.name
     ):
-        frappe.throw(_("The uploaded DXF file belongs to another document."))
+        frappe.throw(
+            _("ملف DXF المرفوع مرتبط بمستند آخر ولا يمكن استخدامه لهذا الطلب. ارفع نسخة مخصصة لهذا الطلب."),
+            title=_("الملف مرتبط بمستند آخر"),
+        )
+    return normalized_url, file_row
 
+
+def _attach_validated_dxf_file(order: Any, file_row: Any) -> None:
+    # FileUploader already uploads privately; enforcing the metadata here protects
+    # API callers and keeps every accepted production DXF private and order-scoped.
     frappe.db.set_value(
         "File",
         file_row.name,
@@ -115,7 +136,22 @@ def _validate_and_attach_dxf_file(order: Any, file_url: str) -> Any:
         },
         update_modified=False,
     )
-    return file_row
+
+
+def _throw_dxf_validation_errors(errors: list[str]) -> None:
+    clean_errors = [str(error).strip() for error in errors if str(error).strip()]
+    if not clean_errors:
+        clean_errors = ["تعذر التحقق من ملف DXF بسبب خطأ غير معروف."]
+    visible = clean_errors[:10]
+    items = "".join(f"<li>{html.escape(error)}</li>" for error in visible)
+    remaining = len(clean_errors) - len(visible)
+    extra = f"<p>وهناك {remaining} أخطاء إضافية. صحح الأخطاء الظاهرة أولًا ثم أعد الرفع.</p>" if remaining > 0 else ""
+    message = (
+        "<p><strong>لم يتم قبول ملف DXF لأن فحص خطة القص وجد الأخطاء التالية:</strong></p>"
+        f"<ul>{items}</ul>{extra}"
+        "<p>صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب.</p>"
+    )
+    frappe.throw(message, title=_("تعذر قبول ملف DXF"))
 
 
 @frappe.whitelist()
@@ -150,8 +186,8 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     order = shop_floor_gateway.get_order(order_name)
     upload_capability = required_upload_capability(_drawing_state(order))
-    # Upload/replace is capability-gated from the matrix and additionally
-    # restricted to actors who hold the current stage's operational role.
+    # Upload/replace remains governed by the existing capability matrix and
+    # current production-stage operational role. This change does not alter workflow policy.
     order = _get_authorized_order(
         order_name,
         upload_capability,
@@ -159,28 +195,31 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
         require_stage_role=True,
     )
     replacing_existing_file = bool(order.production_dxf)
-    _validate_and_attach_dxf_file(order, file_url)
+    normalized_url, file_row = _validate_dxf_file_metadata(order, file_url)
 
     from almdina_erp.almdina_erp.services.dxf_import_service import (
+        DxfImportError,
         parse_production_dxf,
-        validate_imported_plan,
     )
 
-    custom_snapshot = parse_production_dxf(file_url, order)
-    validation = validate_imported_plan(custom_snapshot, order)
+    try:
+        custom_snapshot = parse_production_dxf(normalized_url, order)
+    except DxfImportError as error:
+        _throw_dxf_validation_errors(error.errors)
+
+    validation = custom_snapshot.get("validation") or {}
     if not validation.get("is_valid"):
-        frappe.throw(
-            _("Imported DXF plan is invalid:\n{0}").format(
-                "\n".join(validation.get("errors") or [])
-            )
-        )
+        _throw_dxf_validation_errors(validation.get("errors") or [])
+
+    # Only accepted geometry becomes the order's production DXF attachment.
+    _attach_validated_dxf_file(order, file_row)
 
     from almdina_erp.almdina_erp.services.dual_plan_fields import (
         has_dual_plan_field,
     )
 
     update_values: dict[str, Any] = {
-        "production_dxf": file_url,
+        "production_dxf": normalized_url,
         "drawing_dxf_status": "Uploaded",
     }
     if has_dual_plan_field("custom_plan_json"):
@@ -200,7 +239,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     )
     return {
         "name": order.name,
-        "production_dxf": file_url,
+        "production_dxf": normalized_url,
         "drawing_dxf_status": "Uploaded",
         "custom_plan_json": frappe.as_json(custom_snapshot),
         "required_capability": upload_capability,
