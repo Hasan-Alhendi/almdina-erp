@@ -350,23 +350,24 @@
         return `${round(width, 1)} × ${round(length, 1)} سم`;
     }
 
-    function printContactsHtml(value) {
-        const contacts = String(value || "")
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(Boolean);
-        if (!contacts.length) return "";
-        return `<div class="dco-print-factory-contacts">${contacts.map(contact => `<span>${escape_html(contact)}</span>`).join("")}</div>`;
+    function printThemeApi() {
+        return window.AlmdinaOrderDocumentPrintTheme || null;
     }
 
-    function printFactoryIdentityHtml(identity) {
-        const resolved = identity || {};
-        return `<div class="dco-print-factory-identity">
-            <div class="dco-print-factory-name">${escape_html(resolved.print_factory_name || "")}</div>
-            <div class="dco-print-factory-description">${escape_html(resolved.print_factory_description || "")}</div>
-            <div class="dco-print-factory-address">${escape_html(resolved.print_factory_address || "")}</div>
-            ${printContactsHtml(resolved.print_factory_contacts)}
-        </div>`;
+    function printHeaderHtml(identity, title, meta) {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerHtml !== "function") {
+            throw new Error("Unified factory print header is unavailable");
+        }
+        return theme.headerHtml(identity, { title, meta });
+    }
+
+    function printHeaderCss() {
+        const theme = printThemeApi();
+        if (!theme || typeof theme.headerCss !== "function") {
+            throw new Error("Unified factory print header styles are unavailable");
+        }
+        return theme.headerCss();
     }
 
     function printOrderMetaHtml(frm, plan, totalSheets) {
@@ -472,13 +473,7 @@
                 return `<div class="dco-print-sheets-row">${rowHtml}</div>`;
             }).join("");
             return `<section class="dco-print-page" data-page="${pageIndex + 1}">
-                <header class="dco-print-header">
-                    ${printFactoryIdentityHtml(identity)}
-                    <div class="dco-print-document-title">
-                        <h1>خطة القص</h1>
-                        <span>صفحة ${pageIndex + 1} من ${chunks.length}</span>
-                    </div>
-                </header>
+                ${printHeaderHtml(identity, "خطة القص", `صفحة ${pageIndex + 1} من ${chunks.length}`)}
                 ${printOrderMetaHtml(frm, plan, totalSheets)}
                 <div class="dco-print-sheets-grid">${gridRows}</div>
             </section>`;
@@ -505,6 +500,7 @@ html, body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
 }
+${printHeaderCss()}
 .dco-print-page {
     width: 100%;
     min-height: 198mm;
@@ -517,23 +513,6 @@ html, body {
     break-after: auto;
     page-break-after: auto;
 }
-.dco-print-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(45mm, .55fr);
-    gap: 5mm;
-    align-items: start;
-    padding-bottom: 1.3mm;
-    border-bottom: 1pt solid #111;
-}
-.dco-print-factory-identity { min-width: 0; text-align: right; line-height: 1.2; }
-.dco-print-factory-name { font-size: 12.5pt; line-height: 1.05; font-weight: 950; }
-.dco-print-factory-description { margin-top: .55mm; font-size: 6.6pt; font-weight: 800; }
-.dco-print-factory-address { margin-top: .4mm; font-size: 6.2pt; font-weight: 650; }
-.dco-print-factory-contacts { display: flex; flex-wrap: wrap; gap: .35mm 2.2mm; margin-top: .4mm; font-size: 6pt; font-weight: 700; }
-.dco-print-factory-contacts span { white-space: nowrap; }
-.dco-print-document-title { text-align: left; }
-.dco-print-document-title h1 { margin: 0; font-size: 14.5pt; font-weight: 950; line-height: 1.05; }
-.dco-print-document-title span { display: block; margin-top: .8mm; font-size: 6.2pt; color: #555; }
 .dco-print-order-meta {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
