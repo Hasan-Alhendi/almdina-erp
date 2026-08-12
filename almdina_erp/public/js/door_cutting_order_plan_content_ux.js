@@ -1,23 +1,14 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-plan-content-layout-css-v4";
+    const STYLE_ID = "dco-plan-content-layout-css-v5";
     const BOARD_GAP_PX = 12;
     const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
     const FOCUS_INITIAL_ZOOM = 1.25;
     const FOCUS_MIN_ZOOM = 1;
     const FOCUS_MAX_ZOOM = 2;
     const FOCUS_ZOOM_STEP = 0.25;
-
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
+    const ZERO_MARGIN_EPSILON_MM = 0.001;
 
     function sectionElement(frm, fieldname) {
         const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
@@ -143,19 +134,19 @@
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert {
                 display:flex !important;
                 align-items:flex-start !important;
-                gap:10px !important;
+                gap:8px !important;
                 direction:rtl !important;
-                margin:0 0 12px !important;
-                padding:11px 12px !important;
+                margin:0 0 10px !important;
+                padding:8px 10px !important;
                 border:1px solid #e0b34c !important;
-                border-radius:11px !important;
+                border-radius:10px !important;
                 background:linear-gradient(135deg,#fff9e8,#fffdf6) !important;
                 color:#5f4508 !important;
                 box-shadow:none !important;
             }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__icon {
                 flex:0 0 auto;
-                font-size:18px !important;
+                font-size:16px !important;
                 line-height:1.25 !important;
             }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__body {
@@ -163,34 +154,118 @@
                 flex:1 1 auto;
             }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__title {
-                display:block;
-                margin-bottom:4px;
-                font-size:12px !important;
+                display:inline;
+                margin-left:5px;
+                font-size:11.5px !important;
                 font-weight:900 !important;
             }
-            [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__note {
-                margin:2px 0 0;
+            [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__summary {
+                display:inline;
                 font-size:11px !important;
+                font-weight:750 !important;
+                line-height:1.55 !important;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__details {
+                margin-top:4px;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__note {
+                margin:1px 0 0;
+                font-size:10.5px !important;
                 font-weight:700 !important;
-                line-height:1.65 !important;
+                line-height:1.55 !important;
             }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edges {
                 display:flex;
                 flex-wrap:wrap;
                 gap:5px;
-                margin-top:7px;
+                margin-top:6px;
             }
             [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edge {
                 display:inline-flex;
                 align-items:center;
-                min-height:24px;
-                padding:3px 7px;
+                min-height:22px;
+                padding:2px 7px;
                 border:1px solid rgba(143,103,13,.22);
                 border-radius:999px;
                 background:rgba(255,255,255,.78);
-                font-size:10px !important;
+                font-size:9.5px !important;
                 font-weight:850 !important;
                 white-space:nowrap;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edge.is-zero {
+                border-color:#d18a00;
+                background:#fff2c9;
+                color:#704700;
+            }
+
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge {
+                position:absolute;
+                z-index:30;
+                pointer-events:none;
+                color:#7a4d00;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top {
+                top:1px;
+                left:0;
+                right:0;
+                border-top:3px dashed #d18a00;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom {
+                bottom:1px;
+                left:0;
+                right:0;
+                border-bottom:3px dashed #d18a00;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left {
+                top:0;
+                bottom:0;
+                left:1px;
+                border-left:3px dashed #d18a00;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right {
+                top:0;
+                bottom:0;
+                right:1px;
+                border-right:3px dashed #d18a00;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge__label {
+                position:absolute;
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                min-height:17px;
+                padding:1px 5px;
+                border:1px solid rgba(209,138,0,.38);
+                border-radius:999px;
+                background:rgba(255,248,225,.94);
+                box-shadow:0 1px 3px rgba(80,54,0,.08);
+                color:#704700;
+                direction:rtl;
+                font-family:Tahoma,Arial,sans-serif;
+                font-size:8px;
+                font-weight:900;
+                line-height:1.1;
+                white-space:nowrap;
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top .dco-board-original-edge__label {
+                top:3px;
+                left:50%;
+                transform:translateX(-50%);
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom .dco-board-original-edge__label {
+                bottom:3px;
+                left:50%;
+                transform:translateX(-50%);
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left .dco-board-original-edge__label {
+                top:50%;
+                left:3px;
+                transform:translate(-50%,-50%) rotate(-90deg);
+            }
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right .dco-board-original-edge__label {
+                top:50%;
+                right:3px;
+                transform:translate(50%,-50%) rotate(90deg);
             }
 
             /* Responsive board gallery: screen presentation only. Workshop print
@@ -476,8 +551,8 @@
                     min-width:0;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert {
-                    gap:8px !important;
-                    padding:10px !important;
+                    gap:7px !important;
+                    padding:8px 9px !important;
                 }
                 [data-fieldname="cutting_plan_html"] .dco-board-gallery > .dco-sheet-card {
                     padding:8px !important;
@@ -531,6 +606,10 @@
                     white-space:normal;
                     line-height:1.45 !important;
                 }
+                [data-fieldname="cutting_plan_html"] .dco-board-original-edge__label {
+                    font-size:7px;
+                    padding:1px 4px;
+                }
                 .dco-board-focus { padding:2px; }
                 .dco-board-focus__dialog { width:100%;height:99vh;border-radius:10px; }
                 .dco-board-focus__body { padding:8px; }
@@ -541,8 +620,7 @@
         document.head.appendChild(style);
     }
 
-    function localizePlanSections(frm) {
-        if (!isArabic()) return;
+    function applyArabicPlanLabels(frm) {
         const labels = {
             cut_geometry_section: "إعدادات تنفيذ القص",
             optimizer_section: "محرك خطة القص",
@@ -606,6 +684,28 @@
             .filter(Boolean);
     }
 
+    function numericMargin(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function isZeroMargin(value) {
+        const numeric = numericMargin(value);
+        return numeric !== null && Math.abs(numeric) <= ZERO_MARGIN_EPSILON_MM;
+    }
+
+    function zeroMarginEdges(policy) {
+        const source = policy || {};
+        return [
+            ["right", source.right_mm],
+            ["left", source.left_mm],
+            ["top", source.top_mm],
+            ["bottom", source.bottom_mm],
+        ]
+            .filter(([, value]) => isZeroMargin(value))
+            .map(([edge]) => edge);
+    }
+
     function marginPolicySignature(plan, notes) {
         const policy = (plan && plan.margin_policy) || {};
         return JSON.stringify({
@@ -626,14 +726,21 @@
         ];
         return edges
             .filter(([, value]) => value !== null && value !== undefined && value !== "")
-            .map(([label, value]) => (
-                `<span class="dco-margin-policy-alert__edge">${label}: ${escapeHtml(value)} مم</span>`
-            ))
+            .map(([label, value]) => {
+                const zeroClass = isZeroMargin(value) ? " is-zero" : "";
+                return `<span class="dco-margin-policy-alert__edge${zeroClass}">${label}: ${escapeHtml(value)} مم</span>`;
+            })
             .join("");
     }
 
     function buildMarginPolicyAlert(plan, notes, signature) {
         const policy = (plan && plan.margin_policy) || {};
+        const zeroEdges = zeroMarginEdges(policy);
+        const hasOriginalEdge = zeroEdges.length > 0;
+        const summary = hasOriginalEdge
+            ? "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ."
+            : "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع.";
+        const detailNotes = hasOriginalEdge ? notes : [];
         const alert = document.createElement("div");
         alert.className = "dco-margin-policy-alert";
         alert.dataset.marginSignature = signature;
@@ -643,16 +750,16 @@
             <span class="dco-margin-policy-alert__icon" aria-hidden="true">⚠</span>
             <div class="dco-margin-policy-alert__body">
                 <strong class="dco-margin-policy-alert__title">تنبيه هامش التشذيب</strong>
-                ${notes.map(note => `<div class="dco-margin-policy-alert__note">${escapeHtml(note)}</div>`).join("")}
+                <span class="dco-margin-policy-alert__summary">${escapeHtml(summary)}</span>
+                ${detailNotes.length ? `<div class="dco-margin-policy-alert__details">${detailNotes.map(note => `<div class="dco-margin-policy-alert__note">${escapeHtml(note)}</div>`).join("")}</div>` : ""}
                 <div class="dco-margin-policy-alert__edges">${marginEdgeBadges(policy)}</div>
             </div>
         `;
         return alert;
     }
 
-    function ensureMarginPolicyAlert(frm, planRoot) {
+    function ensureMarginPolicyAlert(planRoot, plan) {
         const existing = planRoot.querySelector(":scope > .dco-margin-policy-alert");
-        const plan = parsePlanSnapshot(frm);
         const notes = normalizedMarginNotes(plan);
         if (!notes.length) {
             if (existing) existing.remove();
@@ -676,6 +783,37 @@
         } else {
             planRoot.appendChild(alert);
         }
+    }
+
+    function originalEdgeLabel(edge) {
+        const labels = {
+            right: "حافة أصلية · يمين",
+            left: "حافة أصلية · يسار",
+            top: "حافة أصلية · أعلى",
+            bottom: "حافة أصلية · أسفل",
+        };
+        return labels[edge] || "حافة أصلية";
+    }
+
+    function buildOriginalEdgeMarker(edge) {
+        const marker = document.createElement("span");
+        marker.className = `dco-board-original-edge dco-board-original-edge--${edge}`;
+        marker.setAttribute("aria-hidden", "true");
+        marker.innerHTML = `<span class="dco-board-original-edge__label">${escapeHtml(originalEdgeLabel(edge))}</span>`;
+        return marker;
+    }
+
+    function ensureOriginalBoardEdges(planRoot, plan) {
+        const policy = (plan && plan.margin_policy) || {};
+        const edges = zeroMarginEdges(policy);
+        const signature = edges.join("|");
+
+        planRoot.querySelectorAll(".dco-sheet-board").forEach(board => {
+            if (board.dataset.originalEdgeSignature === signature) return;
+            board.querySelectorAll(":scope > .dco-board-original-edge").forEach(marker => marker.remove());
+            edges.forEach(edge => board.appendChild(buildOriginalEdgeMarker(edge)));
+            board.dataset.originalEdgeSignature = signature;
+        });
     }
 
     function desiredBoardColumns(width) {
@@ -879,6 +1017,7 @@
         const root = field.$wrapper.get(0);
         if (!root) return;
 
+        const plan = parsePlanSnapshot(frm);
         root.querySelectorAll(".dco-cutting-plan").forEach(planRoot => {
             const heading = planRoot.querySelector(":scope > h2");
             if (heading) heading.remove();
@@ -901,8 +1040,9 @@
                 if (isDuplicatedHeader || isMethodDuplicate) child.remove();
             });
 
-            ensureMarginPolicyAlert(frm, planRoot);
+            ensureMarginPolicyAlert(planRoot, plan);
             layoutBoardGallery(planRoot);
+            ensureOriginalBoardEdges(planRoot, plan);
         });
 
         // The normal order form already has one authoritative optimizer/control
@@ -961,7 +1101,7 @@
 
     function apply(frm) {
         installStyles();
-        localizePlanSections(frm);
+        applyArabicPlanLabels(frm);
         movePlanActionsToFullWidth(frm);
         cleanRenderedPlan(frm);
         installObserver(frm);
