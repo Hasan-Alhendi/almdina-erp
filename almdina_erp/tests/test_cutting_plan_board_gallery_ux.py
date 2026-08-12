@@ -37,6 +37,22 @@ class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
         self.assertIn('event.key === "Escape"', source)
         self.assertIn('button.setAttribute("aria-label", "تكبير اللوح")', source)
 
+    def test_focus_view_is_materially_larger_and_user_zoomable(self) -> None:
+        source = PLAN_CONTENT.read_text(encoding="utf-8")
+
+        self.assertIn("FOCUS_INITIAL_ZOOM = 1.25", source)
+        self.assertIn("FOCUS_MAX_ZOOM = 2", source)
+        self.assertIn("function focusFitWidth", source)
+        self.assertIn("function applyFocusZoom", source)
+        self.assertIn("availableBoardHeight", source)
+        self.assertIn("dco-board-focus__zoom", source)
+        self.assertIn("dco-board-focus__fit", source)
+        self.assertIn('data-focus-zoom="in"', source)
+        self.assertIn('data-focus-zoom="out"', source)
+        self.assertIn(".dco-board-focus .dco-sheet-title", source)
+        self.assertIn("display:none !important", source)
+        self.assertIn("max-width:none !important", source)
+
     def test_workshop_print_layout_remains_renderer_owned(self) -> None:
         content_source = PLAN_CONTENT.read_text(encoding="utf-8")
         renderer_source = PLAN_RENDERER.read_text(encoding="utf-8")
