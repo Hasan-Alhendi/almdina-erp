@@ -320,20 +320,20 @@
     }
 
     async function printMeasurements(frm) {
-        const identity = captureIdentity(frm);
-        if (!isCurrent(frm, identity)) return false;
+        const documentIdentity = captureIdentity(frm);
+        if (!isCurrent(frm, documentIdentity)) return false;
         const [, printIdentity] = await Promise.all([
             ensureProfiles(frm),
             resolvePrintIdentity(),
         ]);
-        if (!isCurrent(frm, identity)) return false;
+        if (!isCurrent(frm, documentIdentity)) return false;
         printHtml(documentHtml(frm, "measurements", printIdentity));
         return true;
     }
 
     async function printAuthorizedInvoice(frm, payload) {
-        const identity = captureIdentity(frm);
-        if (!isCurrent(frm, identity)) return false;
+        const documentIdentity = captureIdentity(frm);
+        if (!isCurrent(frm, documentIdentity)) return false;
         if (!payload || payload.kind !== "customer_invoice" || payload.order_name !== frm.doc.name) {
             throw new Error("Authorized customer invoice payload does not match the active order");
         }
@@ -341,7 +341,7 @@
             ensureProfiles(frm),
             resolvePrintIdentity(),
         ]);
-        if (!isCurrent(frm, identity)) return false;
+        if (!isCurrent(frm, documentIdentity)) return false;
         printHtml(documentHtml(frm, "invoice", printIdentity, payload));
         return true;
     }
@@ -353,6 +353,10 @@
         }
         frappe.msgprint("تعذر تجهيز فاتورة الزبون. أعد تحميل الصفحة ثم حاول مرة أخرى.");
         return Promise.resolve(false);
+    }
+
+    function printInvoice(frm) {
+        return requestAuthorizedInvoice(frm);
     }
 
     function bindPrintInterception() {
@@ -367,7 +371,7 @@
             if (!invoiceButton && !measurementButton) return;
             event.preventDefault();
             event.stopImmediatePropagation();
-            const action = invoiceButton ? requestAuthorizedInvoice(frm) : printMeasurements(frm);
+            const action = invoiceButton ? printInvoice(frm) : printMeasurements(frm);
             Promise.resolve(action).catch(error => {
                 console.error("Order document preparation failed", error);
                 frappe.msgprint("تعذر تجهيز المستند للطباعة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
@@ -387,7 +391,7 @@
     });
 
     window.AlmdinaOrderDocumentPrint = Object.freeze({
-        printInvoice: requestAuthorizedInvoice,
+        printInvoice,
         printAuthorizedInvoice,
         printMeasurements,
         html: documentHtml,
