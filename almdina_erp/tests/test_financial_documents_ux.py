@@ -12,6 +12,9 @@ APPLICATION_PATH = (
 )
 UX_PATH = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
 PRESENTER_PATH = ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
+DOCUMENT_PRINT_PATH = (
+    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+)
 COMPACTNESS_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_document_compactness_ux.js"
 )
@@ -125,14 +128,18 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "canDocument" in source
     assert "Customer invoice HTML is server-authorized" in source
     assert "AlmdinaOrderCostUX" in source
-    assert "void costApi;" in source
+    assert 'typeof costApi.pendingCustomEdgePriceLabels === "function"' in source
+    assert "costApi.pendingCustomEdgePriceLabels(frm)" in source
     assert "costApi.printInvoice =" not in source
     assert "AlmdinaOrderDocumentPrint" in source
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in source
     assert "dco-print-customer-invoice" in source
     assert "dco-secure-print-customer-invoice" in source
     assert "dco-secure-print-internal-cost-report" in source
     assert "buildPrintHtml" not in source
     assert "invoiceLines(frm)" not in source
+    assert "function measurementsHtml" not in source
+    assert "function invoiceLinesHtml" not in source
 
 
 def test_invoice_waits_for_edge_profiles_before_final_screen_render() -> None:
@@ -157,15 +164,25 @@ def test_financial_actions_are_idempotent_and_follow_the_active_order() -> None:
     assert "root.find(`.${CUSTOMER_CLASS},${INTERNAL_CLASS}`).remove()" not in source
 
 
-def test_customer_and_internal_reports_use_distinct_print_layouts() -> None:
+def test_customer_invoice_delegates_layout_and_internal_report_stays_distinct() -> None:
     source = UX_PATH.read_text(encoding="utf-8")
-    assert '@page{size:A4 ${internal ? "landscape" : "portrait"}' in source
-    assert "financial-summary.customer" in source
+    customer_print = DOCUMENT_PRINT_PATH.read_text(encoding="utf-8")
+
+    # The confidential internal report owns its landscape layout here.
+    assert "@page{size:A4 landscape;margin:11mm}" in source
     assert "financial-summary.internal" in source
-    measurements = source.split("function measurementsHtml", 1)[1].split(
-        "function invoiceLinesHtml", 1
-    )[0]
-    assert "متر القشاط" not in measurements
+
+    # Customer invoice layout is not duplicated in the financial adapter.
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in source
+    assert 'throw new Error("Customer invoice layout belongs to AlmdinaOrderDocumentPrint")' in source
+    assert "function measurementsHtml" not in source
+    assert "function invoiceLinesHtml" not in source
+    assert "financial-summary.customer" not in source
+
+    # Customer invoice inherits the exact measurement print theme/body.
+    assert 'theme.css("measurements", shapePrintCss())' in customer_print
+    assert "function measurementDocumentBody(frm)" in customer_print
+    assert "function quoteDetailsHtml(payload)" in customer_print
 
 
 def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:
