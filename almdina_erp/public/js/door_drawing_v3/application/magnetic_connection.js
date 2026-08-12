@@ -12,6 +12,10 @@
 
     function badgeLabel(state) {
         const guide = state && state.smartGuide;
+        if (state && state.kind === "intersection") return "تقاطع";
+        if (state && state.kind === "perpendicular") return "عمودي";
+        if (state && state.kind === "parallel") return "متوازٍ";
+        if (state && state.kind === "parallel-equal") return "متوازٍ · نفس الطول";
         if (state && state.kind === "midpoint") return "منتصف";
         if (state && state.kind === "surface") return "على الضلع";
         if (state && state.kind === "alignment") return "محاذاة";
@@ -38,7 +42,7 @@
         badge.textContent = badgeLabel(state);
         badge.dataset.snapKind = String(state.kind || "snap");
         const p = V.worldToScreen(c, state.point);
-        badge.style.left = `${Math.max(8, Math.min(c.viewport.widthPx - 86, p.x + 12))}px`;
+        badge.style.left = `${Math.max(8, Math.min(c.viewport.widthPx - 120, p.x + 12))}px`;
         badge.style.top = `${Math.max(8, Math.min(c.viewport.heightPx - 34, p.y - 26))}px`;
         badge.classList.add("is-visible");
         c.canvas.classList.add("has-magnetic-snap");
