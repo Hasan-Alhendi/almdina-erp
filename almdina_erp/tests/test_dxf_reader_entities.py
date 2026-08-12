@@ -20,6 +20,11 @@ def test_reader_supports_production_line_and_curve_entities(tmp_path: Path):
         dxfattribs={"layer": "SHEET_OUTLINE"},
     )
     msp.add_line((10, 10), (200, 10), dxfattribs={"layer": "CUT_PATH"})
+    msp.add_polyline2d(
+        [(210, 10), (230, 10), (230, 30), (210, 30)],
+        close=True,
+        dxfattribs={"layer": "CUT_PATH"},
+    )
     msp.add_arc((250, 100), 40, 0, 180, dxfattribs={"layer": "CUT_PATH"})
     msp.add_circle((400, 100), 25, dxfattribs={"layer": "CUT_PATH"})
     msp.add_ellipse((520, 100), major_axis=(45, 0), ratio=0.5, dxfattribs={"layer": "CUT_PATH"})
@@ -36,5 +41,5 @@ def test_reader_supports_production_line_and_curve_entities(tmp_path: Path):
     assert result["segments"]
     assert result["unsupported"] == []
     entity_types = {row["entity_type"] for row in result["segments"]}
-    assert {"LINE", "LWPOLYLINE", "ARC", "CIRCLE", "ELLIPSE", "SPLINE"} <= entity_types
+    assert {"LINE", "LWPOLYLINE", "POLYLINE", "ARC", "CIRCLE", "ELLIPSE", "SPLINE"} <= entity_types
     assert "POLYLINE" in SUPPORTED_DXF_ENTITY_TYPES
