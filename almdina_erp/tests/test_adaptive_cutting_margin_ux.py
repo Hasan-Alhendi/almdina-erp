@@ -166,3 +166,44 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert '["يسار", policy.left_mm]' in source
     assert '["أعلى", policy.top_mm]' in source
     assert '["أسفل", policy.bottom_mm]' in source
+
+
+def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
+    source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+
+    assert "function zeroMarginEdges" in source
+    assert "function ensureOriginalBoardEdges" in source
+    assert "function buildOriginalEdgeMarker" in source
+    assert "dco-board-original-edge--top" in source
+    assert "dco-board-original-edge--bottom" in source
+    assert "dco-board-original-edge--left" in source
+    assert "dco-board-original-edge--right" in source
+    assert "حافة أصلية · أعلى" in source
+    assert "حافة أصلية · أسفل" in source
+    assert "originalEdgeSignature" in source
+    assert "ZERO_MARGIN_EPSILON_MM" in source
+    assert "ensureOriginalBoardEdges(planRoot, plan)" in source
+
+
+def test_margin_warning_is_compact_except_when_original_edge_is_used():
+    source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+
+    assert "const hasOriginalEdge = zeroEdges.length > 0" in source
+    assert "const detailNotes = hasOriginalEdge ? notes : []" in source
+    assert "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع." in source
+    assert "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ." in source
+    assert "dco-margin-policy-alert__summary" in source
+    assert "dco-margin-policy-alert__details" in source
+    assert "dco-margin-policy-alert__edge${zeroClass}" in source
+    assert ".dco-margin-policy-alert__edge.is-zero" in source
+
+
+def test_cutting_plan_sections_are_always_arabic_for_factory_operator_ui():
+    source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+
+    assert "function applyArabicPlanLabels" in source
+    assert "function isArabic" not in source
+    assert 'cut_geometry_section: "إعدادات تنفيذ القص"' in source
+    assert 'optimizer_section: "محرك خطة القص"' in source
+    assert 'plan_section: "توزيع القطع على الألواح"' in source
+    assert "applyArabicPlanLabels(frm);" in source
