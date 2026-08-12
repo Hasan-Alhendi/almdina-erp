@@ -1,9 +1,13 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-plan-content-layout-css-v3";
+    const STYLE_ID = "dco-plan-content-layout-css-v4";
     const BOARD_GAP_PX = 12;
     const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
+    const FOCUS_INITIAL_ZOOM = 1.25;
+    const FOCUS_MIN_ZOOM = 1;
+    const FOCUS_MAX_ZOOM = 2;
+    const FOCUS_ZOOM_STEP = 0.25;
 
     function isArabic() {
         const lang = String(
@@ -306,13 +310,13 @@
                 z-index:10050;
                 display:grid;
                 place-items:center;
-                padding:18px;
-                background:rgba(20,27,34,.68);
+                padding:10px;
+                background:rgba(20,27,34,.72);
                 backdrop-filter:blur(3px);
             }
             .dco-board-focus__dialog {
-                width:min(1080px,96vw);
-                max-height:94vh;
+                width:min(1320px,98vw);
+                height:min(96vh,980px);
                 display:flex;
                 flex-direction:column;
                 overflow:hidden;
@@ -327,14 +331,79 @@
                 display:flex;
                 align-items:center;
                 justify-content:space-between;
-                gap:12px;
-                padding:11px 13px;
+                gap:14px;
+                min-height:58px;
+                padding:9px 12px;
                 border-bottom:1px solid var(--border-color,#dfe3e8);
+                background:var(--card-bg,#fff);
             }
-            .dco-board-focus__header strong { font-size:13px;font-weight:900; }
-            .dco-board-focus__close {
-                width:34px;
+            .dco-board-focus__identity {
+                min-width:0;
+                display:flex;
+                align-items:center;
+                gap:10px;
+                flex:1 1 auto;
+            }
+            .dco-board-focus__identity strong {
+                flex:0 0 auto;
+                font-size:14px;
+                font-weight:900;
+            }
+            .dco-board-focus__stats {
+                min-width:0;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+                color:var(--text-muted,#68737d);
+                font-size:11px;
+                font-weight:750;
+            }
+            .dco-board-focus__actions {
+                flex:0 0 auto;
+                display:flex;
+                align-items:center;
+                gap:7px;
+            }
+            .dco-board-focus__zoom {
+                display:inline-flex;
+                align-items:center;
+                overflow:hidden;
+                border:1px solid var(--border-color,#dfe3e8);
+                border-radius:9px;
+                background:var(--subtle-fg,#f6f8fa);
+            }
+            .dco-board-focus__zoom button,
+            .dco-board-focus__fit {
+                min-width:34px;
                 height:34px;
+                border:0;
+                background:transparent;
+                color:var(--text-color,#202a33);
+                font-size:14px;
+                font-weight:900;
+                cursor:pointer;
+            }
+            .dco-board-focus__fit {
+                padding:0 10px;
+                border:1px solid var(--border-color,#dfe3e8);
+                border-radius:9px;
+                background:var(--subtle-fg,#f6f8fa);
+                font-size:11px;
+            }
+            .dco-board-focus__zoom button:hover,
+            .dco-board-focus__fit:hover {
+                background:var(--card-bg,#fff);
+            }
+            .dco-board-focus__zoom-value {
+                min-width:52px;
+                text-align:center;
+                font-size:10px;
+                font-weight:850;
+                color:var(--text-muted,#68737d);
+            }
+            .dco-board-focus__close {
+                width:36px;
+                height:36px;
                 display:inline-grid;
                 place-items:center;
                 border:1px solid var(--border-color,#dfe3e8);
@@ -349,37 +418,37 @@
                 min-height:0;
                 flex:1 1 auto;
                 overflow:auto;
-                display:grid;
-                place-items:start center;
-                padding:14px;
+                display:flex;
+                align-items:flex-start;
+                justify-content:center;
+                padding:10px 18px 18px;
                 background:var(--subtle-fg,#f7f9fb);
+                overscroll-behavior:contain;
             }
             .dco-board-focus .dco-sheet-card {
-                width:100% !important;
-                max-width:100% !important;
+                flex:0 0 auto;
+                width:auto !important;
+                max-width:none !important;
                 margin:0 !important;
-                padding:10px !important;
+                padding:0 !important;
                 border:0 !important;
                 background:transparent !important;
                 box-shadow:none !important;
             }
             .dco-board-focus .dco-sheet-title {
-                display:flex !important;
-                align-items:center !important;
-                justify-content:space-between !important;
-                gap:12px !important;
-                margin:0 0 9px !important;
-                font-size:12px !important;
+                display:none !important;
             }
             .dco-board-focus .dco-board-focus-trigger { display:none !important; }
             .dco-board-focus .dco-sheet-board {
-                width:var(--dco-focus-board-width,420px) !important;
+                width:var(--dco-focus-board-width,480px) !important;
                 height:auto !important;
-                max-width:100% !important;
+                max-width:none !important;
                 aspect-ratio:var(--dco-board-aspect,1 / 2) !important;
                 margin:0 auto !important;
+                background-size:24px 24px !important;
+                box-shadow:0 8px 26px rgba(28,38,48,.12);
             }
-            .dco-board-focus .dco-piece { font-size:10px !important; }
+            .dco-board-focus .dco-piece { font-size:clamp(10px,.72vw,13px) !important; }
             .dco-board-focus .dco-piece-kind-badge { font-size:8px !important;padding:2px 5px !important; }
 
             @media (max-width:760px) {
@@ -416,6 +485,25 @@
                 [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title {
                     grid-template-columns:auto minmax(0,1fr) auto;
                 }
+                .dco-board-focus__dialog {
+                    width:99vw;
+                    height:98vh;
+                    border-radius:12px;
+                }
+                .dco-board-focus__header {
+                    align-items:flex-start;
+                    gap:8px;
+                    flex-wrap:wrap;
+                }
+                .dco-board-focus__identity {
+                    flex:1 1 100%;
+                    order:1;
+                }
+                .dco-board-focus__actions {
+                    order:2;
+                    width:100%;
+                    justify-content:flex-start;
+                }
             }
             @media (max-width:520px) {
                 [data-fieldname="plan_control_actions"] .dco-plan-document-actions .btn {
@@ -443,9 +531,11 @@
                     white-space:normal;
                     line-height:1.45 !important;
                 }
-                .dco-board-focus { padding:6px; }
-                .dco-board-focus__dialog { width:100%;max-height:97vh;border-radius:12px; }
+                .dco-board-focus { padding:2px; }
+                .dco-board-focus__dialog { width:100%;height:99vh;border-radius:10px; }
                 .dco-board-focus__body { padding:8px; }
+                .dco-board-focus__stats { font-size:10px; }
+                .dco-board-focus__fit { display:none; }
             }
         `;
         document.head.appendChild(style);
@@ -662,12 +752,37 @@
         });
     }
 
+    function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+    }
+
     function closeBoardFocus() {
         const overlay = document.querySelector(".dco-board-focus");
         if (overlay) overlay.remove();
         if (document.body && document.body.classList) {
             document.body.classList.remove("dco-board-focus-open");
         }
+    }
+
+    function focusFitWidth(aspect) {
+        const viewportHeight = Math.max(520, window.innerHeight || 720);
+        const viewportWidth = Math.max(720, window.innerWidth || 1280);
+        const availableBoardHeight = Math.max(360, viewportHeight - 112);
+        const byHeight = availableBoardHeight * 0.92 * aspect;
+        const byWidth = viewportWidth * 0.82;
+        return Math.max(240, Math.min(byHeight, byWidth));
+    }
+
+    function applyFocusZoom(overlay, fitWidth, zoom) {
+        if (!overlay) return;
+        const normalized = clamp(zoom, FOCUS_MIN_ZOOM, FOCUS_MAX_ZOOM);
+        const board = overlay.querySelector(".dco-sheet-board");
+        const label = overlay.querySelector(".dco-board-focus__zoom-value");
+        if (board) {
+            board.style.setProperty("--dco-focus-board-width", `${Math.round(fitWidth * normalized)}px`);
+        }
+        if (label) label.textContent = `${Math.round(normalized * 100)}%`;
+        overlay.dataset.focusZoom = String(normalized);
     }
 
     function openBoardFocus(card) {
@@ -679,15 +794,14 @@
         const board = clone.querySelector(".dco-sheet-board");
         const sourceBoard = card.querySelector(".dco-sheet-board");
         const aspect = boardAspect(sourceBoard);
-        const maxByViewport = Math.max(220, (window.innerHeight || 720) * 0.72 * aspect);
-        const maxByWidth = Math.max(220, (window.innerWidth || 1280) * 0.72);
-        const focusWidth = Math.min(maxByViewport, maxByWidth);
+        const fitWidth = focusFitWidth(aspect);
         if (board) {
             board.style.setProperty("--dco-board-aspect", `${aspect} / 1`);
-            board.style.setProperty("--dco-focus-board-width", `${Math.round(focusWidth)}px`);
         }
 
-        const titleText = (card.querySelector(".dco-sheet-title > :first-child")?.textContent || "تفاصيل اللوح").trim();
+        const title = card.querySelector(".dco-sheet-title");
+        const titleText = (title?.querySelector(":scope > :first-child")?.textContent || "تفاصيل اللوح").trim();
+        const statsText = (title?.querySelector(":scope > :nth-child(2)")?.textContent || "").replace(/\s+/g, " ").trim();
         const overlay = document.createElement("div");
         overlay.className = "dco-board-focus";
         overlay.setAttribute("role", "dialog");
@@ -696,8 +810,19 @@
         overlay.innerHTML = `
             <div class="dco-board-focus__dialog">
                 <div class="dco-board-focus__header">
-                    <strong>${escapeHtml(titleText)}</strong>
-                    <button type="button" class="dco-board-focus__close" aria-label="إغلاق">×</button>
+                    <div class="dco-board-focus__identity">
+                        <strong>${escapeHtml(titleText)}</strong>
+                        <span class="dco-board-focus__stats">${escapeHtml(statsText)}</span>
+                    </div>
+                    <div class="dco-board-focus__actions">
+                        <button type="button" class="dco-board-focus__fit">ملاءمة</button>
+                        <div class="dco-board-focus__zoom" role="group" aria-label="تكبير وتصغير اللوح">
+                            <button type="button" data-focus-zoom="out" aria-label="تصغير">−</button>
+                            <span class="dco-board-focus__zoom-value">100%</span>
+                            <button type="button" data-focus-zoom="in" aria-label="تكبير">+</button>
+                        </div>
+                        <button type="button" class="dco-board-focus__close" aria-label="إغلاق">×</button>
+                    </div>
                 </div>
                 <div class="dco-board-focus__body"></div>
             </div>
@@ -706,10 +831,22 @@
         overlay.addEventListener("click", event => {
             if (event.target === overlay || event.target.closest(".dco-board-focus__close")) {
                 closeBoardFocus();
+                return;
             }
+            if (event.target.closest(".dco-board-focus__fit")) {
+                applyFocusZoom(overlay, fitWidth, 1);
+                return;
+            }
+            const zoomButton = event.target.closest("[data-focus-zoom]");
+            if (!zoomButton) return;
+            const current = Number(overlay.dataset.focusZoom || 1);
+            const delta = zoomButton.dataset.focusZoom === "in" ? FOCUS_ZOOM_STEP : -FOCUS_ZOOM_STEP;
+            applyFocusZoom(overlay, fitWidth, current + delta);
         });
         document.body.appendChild(overlay);
         document.body.classList.add("dco-board-focus-open");
+        const initialZoom = (window.innerWidth || 0) <= 760 ? 1 : FOCUS_INITIAL_ZOOM;
+        applyFocusZoom(overlay, fitWidth, initialZoom);
         overlay.querySelector(".dco-board-focus__close")?.focus();
     }
 
