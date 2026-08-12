@@ -7,8 +7,9 @@
     const S = root.Snapping;
     const V = root.ShapeView;
     const F = root.SmartFreehandPolicy;
+    const I = root.SmartStrokeIntelligence;
     const Editor = root.Editor;
-    if (!G || !D || !S || !V || !F || !Editor || !G.path) throw new Error("Door Drawing V3 intelligent freehand stack must load before smart pen");
+    if (!G || !D || !S || !V || !F || !I || !Editor || !G.path) throw new Error("Door Drawing V3 intelligent freehand stack must load before smart pen");
 
     const CLOSE_CAPTURE_PX = 18;
     const INPUT_PROFILES = Object.freeze({
@@ -23,6 +24,8 @@
             arcResidualRatio: 0.05,
             collinearAngleToleranceDeg: 9,
             orthogonalAngleToleranceDeg: 10,
+            stabilizerMotionPx: 16,
+            minimumMixedSegmentPx: 18,
         }),
         pen: Object.freeze({
             sampleSpacingPx: 1.45,
@@ -35,6 +38,8 @@
             arcResidualRatio: 0.038,
             collinearAngleToleranceDeg: 7,
             orthogonalAngleToleranceDeg: 8,
+            stabilizerMotionPx: 11,
+            minimumMixedSegmentPx: 14,
         }),
         touch: Object.freeze({
             sampleSpacingPx: 3.2,
@@ -47,6 +52,8 @@
             arcResidualRatio: 0.055,
             collinearAngleToleranceDeg: 10,
             orthogonalAngleToleranceDeg: 11,
+            stabilizerMotionPx: 18,
+            minimumMixedSegmentPx: 22,
         }),
     });
     let sequence = 0;
@@ -124,13 +131,15 @@
     function updateDraft(c, pointer, closeReady = false) {
         const stroke = c.penStroke;
         if (!stroke) return;
-        const previewPoints = stroke.rawPoints.slice();
+        const source = stroke.stablePoints && stroke.stablePoints.length ? stroke.stablePoints : stroke.rawPoints;
+        const previewPoints = source.slice();
         if (pointer && (!previewPoints.length || G.distance(previewPoints[previewPoints.length - 1], pointer) >= G.EPSILON_MM)) previewPoints.push(pointer);
         c.penDraft = {
             points: previewPoints,
             pointer: pointer || previewPoints[previewPoints.length - 1] || stroke.startPoint,
             closeReady: Boolean(closeReady),
             freehand: true,
+            stabilized: true,
             inputKind: stroke.pointerType,
         };
     }
@@ -145,10 +154,13 @@
             pointerId: event.pointerId,
             pointerType,
             profile: inputProfile(pointerType),
+            stabilizer: I.createStabilizer(pointerType, start),
             rawPoints: [start],
+            stablePoints: [start],
             startPoint: start,
             startTarget: snap.target || null,
             lastPoint: start,
+            lastStablePoint: start,
         };
         c.snapState = snap;
         updateDraft(c, start, false);
@@ -163,9 +175,16 @@
         const events = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [event];
         const profile = stroke.profile || inputProfile(stroke.pointerType);
         const minSampleMm = Math.max(G.EPSILON_MM, pxToMm(c, profile.sampleSpacingPx));
+        const motionScaleMm = Math.max(G.EPSILON_MM, pxToMm(c, profile.stabilizerMotionPx));
         for (const sampleEvent of events.length ? events : [event]) {
             const point = V.eventWorld(c, sampleEvent);
+            const before = stroke.rawPoints.length;
             stroke.rawPoints = F.appendSample(stroke.rawPoints, point, minSampleMm);
+            if (stroke.rawPoints.length > before) {
+                const stabilized = I.pushStabilized(stroke.stabilizer, point, { motionScaleMm });
+                stroke.stablePoints = F.appendSample(stroke.stablePoints, stabilized, Math.max(G.EPSILON_MM, minSampleMm * 0.45));
+                stroke.lastStablePoint = stabilized;
+            }
             stroke.lastPoint = point;
         }
         return stroke.lastPoint || V.eventWorld(c, event);
@@ -175,9 +194,10 @@
         const stroke = c.penStroke;
         if (!stroke || stroke.pointerId !== event.pointerId) return false;
         const raw = appendEventSamples(c, event);
+        const stable = stroke.lastStablePoint || raw;
         const snap = resolveEndpoint(c, raw, c.snapState && c.snapState.target);
         const shouldClose = closeCandidate(c, raw);
-        const previewPoint = shouldClose ? stroke.startPoint : (snap.snapped ? snap.point : raw);
+        const previewPoint = shouldClose ? stroke.startPoint : (snap.snapped ? snap.point : stable);
         c.snapState = shouldClose
             ? Object.freeze({ ...snap, point: stroke.startPoint, snapped: true, target: Object.freeze({ objectId: "__stroke__", role: "start", point: stroke.startPoint, priority: 1000, kind: "joint" }), kind: "joint" })
             : snap;
@@ -186,14 +206,23 @@
         return true;
     }
 
-    function objectFromRecognition(result) {
+    function objectFromDescriptor(result) {
         if (!result || result.type === "none") return null;
         if (result.type === "line") return G.line(nextId("line"), result.start, result.end);
         if (result.type === "rectangle") return G.rectangle(nextId("rectangle"), result.origin, result.widthMm, result.heightMm);
         if (result.type === "circle") return G.circle(nextId("circle"), result.center, result.radiusMm);
         if (result.type === "arc") return G.arc(nextId("arc"), result.center, result.radiusMm, result.startAngleDeg, result.sweepAngleDeg);
-        if (result.type === "path") return G.path(nextId("path"), result.points, result.closed);
+        if (result.type === "path") return G.path(nextId("path"), result.points, Boolean(result.closed));
         return null;
+    }
+
+    function objectsFromRecognition(result) {
+        if (!result) return [];
+        if (result.type === "compound") {
+            return (result.segments || []).map(objectFromDescriptor).filter(Boolean);
+        }
+        const object = objectFromDescriptor(result);
+        return object ? [object] : [];
     }
 
     function finishFreehand(c, event) {
@@ -218,7 +247,7 @@
         }
 
         const profile = stroke.profile || inputProfile(stroke.pointerType);
-        const result = F.recognize(points, {
+        const recognitionOptions = {
             closed,
             simplifyToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, profile.simplifyTolerancePx)),
             straightToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, profile.straightTolerancePx)),
@@ -229,24 +258,27 @@
             arcResidualRatio: profile.arcResidualRatio,
             collinearAngleToleranceDeg: profile.collinearAngleToleranceDeg,
             orthogonalAngleToleranceDeg: profile.orthogonalAngleToleranceDeg,
+            minimumSegmentMm: Math.max(G.EPSILON_MM, pxToMm(c, profile.minimumMixedSegmentPx)),
             preserveEndpoints: true,
             orthogonalize: true,
             inputKind: stroke.pointerType,
-        });
-        let object = null;
-        try { object = objectFromRecognition(result); } catch (error) { object = null; }
+        };
+        const result = I.interpret(points, recognitionOptions);
+        let objects = [];
+        try { objects = objectsFromRecognition(result); } catch (error) { objects = []; }
         clearFreehand(c);
         try { c.canvas.releasePointerCapture(event.pointerId); } catch (error) { /* optional */ }
-        if (!object) {
+        if (!objects.length) {
             render(c);
             return true;
         }
-        const document = D.addObject(c.history.current(), object);
-        c.selectedId = object.id;
+        let document = c.history.current();
+        for (const object of objects) document = D.addObject(document, object);
+        c.selectedId = objects[0].id;
         c.nodeEditId = "";
         c.selectedNodeIndex = null;
         c.tool = "pen";
-        execute(c, document, `Smart freehand ${object.type}`);
+        execute(c, document, objects.length > 1 ? `Smart mixed stroke (${objects.length})` : `Smart freehand ${objects[0].type}`);
         return true;
     }
 
@@ -511,5 +543,5 @@
         open(frm, row, options = {}) { return install(originalOpen(frm, row, options)); },
         view(frm, row) { return install(originalView(frm, row)); },
     });
-    root.SmartPen = Object.freeze({ INPUT_PROFILES, inputProfile, activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, install });
+    root.SmartPen = Object.freeze({ INPUT_PROFILES, inputProfile, activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, objectsFromRecognition, install });
 })();

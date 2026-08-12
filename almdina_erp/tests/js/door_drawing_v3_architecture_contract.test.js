@@ -14,6 +14,7 @@ const moveSnapPolicy = fs.readFileSync(path.resolve(__dirname, "../../public/js/
 const handles = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/shape_handles.js"), "utf8");
 const precision = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/precision_input.js"), "utf8");
 const freehand = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_freehand_policy.js"), "utf8");
+const intelligence = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_stroke_intelligence.js"), "utf8");
 const view = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/canvas_view.js"), "utf8");
 const smartPathView = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/smart_path_view.js"), "utf8");
 const editor = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/editor_stage2.js"), "utf8");
@@ -37,6 +38,7 @@ for (const modulePath of [
     "door_drawing_v3/application/shape_handles.js",
     "door_drawing_v3/application/precision_input.js",
     "door_drawing_v3/application/smart_freehand_policy.js",
+    "door_drawing_v3/application/smart_stroke_intelligence.js",
     "door_drawing_v3/presentation/canvas_view.js",
     "door_drawing_v3/presentation/canvas_policy.js",
     "door_drawing_v3/presentation/smart_path_view.js",
@@ -56,6 +58,8 @@ assert.match(entry, /__doorDrawingV3MagneticConnection:\s*true/);
 assert.match(entry, /__doorDrawingV3EasyMoveSnap:\s*true/);
 assert.match(entry, /__doorDrawingV3SmartPen:\s*true/);
 assert.match(entry, /__doorDrawingV3SmartFreehand:\s*true/);
+assert.match(entry, /__doorDrawingV3LiveStabilizer:\s*true/);
+assert.match(entry, /__doorDrawingV3MixedStrokeRecognition:\s*true/);
 assert.match(entry, /__doorDrawingV3SmartPath:\s*true/);
 assert.match(entry, /__doorDrawingV3NodeEditing:\s*true/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
@@ -136,6 +140,12 @@ assert.match(freehand, /function fittedCircle/);
 assert.match(freehand, /function unwrapSweep/);
 assert.match(freehand, /function recognize/);
 assert.doesNotMatch(freehand, /document\.|querySelector|getBoundingClientRect|clientX|clientY|pointerId/, "Freehand correction must remain geometry/application policy, independent from DOM/pointer events");
+assert.match(intelligence, /function createStabilizer/);
+assert.match(intelligence, /function pushStabilized/);
+assert.match(intelligence, /function arcThroughEndpoints/);
+assert.match(intelligence, /function recognizeMixed/);
+assert.match(intelligence, /function interpret/);
+assert.doesNotMatch(intelligence, /document\.|querySelector|getBoundingClientRect|clientX|clientY|pointerId/, "Stroke intelligence must remain independent from DOM and pointer-event coordinates");
 
 assert.match(magnetic, /function magneticMove/);
 assert.match(magnetic, /S\.resolveObjectMove/);
@@ -152,7 +162,10 @@ assert.match(smartPen, /function moveFreehand/);
 assert.match(smartPen, /function finishFreehand/);
 assert.match(smartPen, /getCoalescedEvents/);
 assert.match(smartPen, /F\.appendSample/);
-assert.match(smartPen, /F\.recognize/);
+assert.match(smartPen, /I\.pushStabilized/);
+assert.match(smartPen, /I\.interpret/);
+assert.match(smartPen, /function objectsFromRecognition/);
+assert.match(smartPen, /Smart mixed stroke/);
 assert.match(smartPen, /function enterNodeEdit/);
 assert.match(smartPen, /function insertNodeAtEvent/);
 assert.match(smartPen, /G\.setPathPoint/);
