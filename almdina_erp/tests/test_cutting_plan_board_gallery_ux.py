@@ -35,7 +35,7 @@ class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
         self.assertIn("function openBoardFocus", source)
         self.assertIn("dco-board-focus__dialog", source)
         self.assertIn('event.key === "Escape"', source)
-        self.assertIn('aria-label="تكبير اللوح"', source)
+        self.assertIn('button.setAttribute("aria-label", "تكبير اللوح")', source)
 
     def test_workshop_print_layout_remains_renderer_owned(self) -> None:
         content_source = PLAN_CONTENT.read_text(encoding="utf-8")
