@@ -51,6 +51,12 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
     def current_user(self) -> str:
         return shop_floor_authorization.current_user()
 
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        return shop_floor_authorization.roles_of(user or self.current_user())
+
+    def is_admin(self, user: str | None = None) -> bool:
+        return str(user or self.current_user() or "") == "Administrator"
+
     def capabilities_for_order(self, order_name: str) -> frozenset[str]:
         order = order_tracking_repository.get_order(order_name)
         return frozenset(

@@ -18,6 +18,7 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
 
     injectStyles();
     page.set_primary_action(__("تحديث"), load, "refresh");
+    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
     load();
 
     function esc(value) {
@@ -64,18 +65,20 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
     function render(rows) {
         const cards = rows.map(row => {
             const actions = [];
-            if (permissions.can_approve) {
-                actions.push(`<button type="button" class="btn btn-primary aaq-approve">${__("اعتماد")}</button>`);
-            }
+            // Order approval was retired with the review step. Reject remains so
+            // leftover Pending Review rows can return for editing / dispatch.
             if (permissions.can_reject) {
                 actions.push(`<button type="button" class="btn btn-default aaq-reject">${__("رفض وإعادة للتعديل")}</button>`);
             }
+            actions.push(
+                `<a class="btn btn-primary" href="/app/door-cutting-order/${encodeURIComponent(row.name)}">${__("فتح وإرسال للإنتاج")}</a>`
+            );
             return `
                 <article class="aaq-card" data-order="${esc(row.name)}">
                     <div>
                         <div class="aaq-title">
                             <a href="/app/door-cutting-order/${encodeURIComponent(row.name)}">${esc(row.name)}</a>
-                            <span class="aaq-badge">${__("بانتظار المراجعة")}</span>
+                            <span class="aaq-badge">${__("عالق من المراجعة القديمة")}</span>
                         </div>
                         <div class="text-muted" style="margin-top:4px">${esc(row.customer || "—")} · ${esc(row.order_date || "")}</div>
                         <div class="aaq-meta">
@@ -92,32 +95,16 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
         $body.html(`
             <div class="aaq-shell">
                 <section class="aaq-hero">
-                    <h3>${__("مراجعة الطلبات قبل اعتمادها")}</h3>
-                    <p>${__("تُعرض هنا الطلبات المرسلة للمراجعة فقط. كل إجراء يظهر وفق الصلاحية الممنوحة لك، ويعاد التحقق منه على الخادم عند التنفيذ.")}</p>
+                    <h3>${__("المراجعة والاعتماد أُلغيا")}</h3>
+                    <p>${__("الطلبات تُرسل مباشرة من المسودة إلى الإنتاج. هذه الصفحة تعرض فقط الطلبات العالقة من المسار القديم إن وُجدت — افتح الطلب وأرسله للإنتاج، أو ارفضه لإعادته للتعديل.")}</p>
                 </section>
-                ${cards ? `<section class="aaq-list">${cards}</section>` : `<div class="aaq-empty">${__("لا توجد طلبات تنتظر المراجعة حاليًا.")}</div>`}
+                ${cards ? `<section class="aaq-list">${cards}</section>` : `<div class="aaq-empty">${__("لا توجد طلبات عالقة من المراجعة القديمة.")}</div>`}
             </div>
         `);
         bindActions();
     }
 
     function bindActions() {
-        $body.find(".aaq-approve").on("click", function () {
-            const orderName = String($(this).closest(".aaq-card").data("order") || "");
-            frappe.confirm(
-                __("سيتم اعتماد الطلب وإنشاء الخطة الرسمية غير القابلة للتعديل. هل تريد المتابعة؟"),
-                () => frappe.call({
-                    method: METHODS.approve,
-                    args: { order_name: orderName },
-                    freeze: true,
-                    freeze_message: __("جاري اعتماد الطلب بأمان..."),
-                }).then(() => {
-                    frappe.show_alert({ message: __("تم اعتماد الطلب."), indicator: "green" });
-                    return load();
-                })
-            );
-        });
-
         $body.find(".aaq-reject").on("click", function () {
             const orderName = String($(this).closest(".aaq-card").data("order") || "");
             frappe.prompt(

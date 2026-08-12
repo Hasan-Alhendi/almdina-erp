@@ -52,11 +52,26 @@ def _presentation(label: str, description: str, risk: str = "normal") -> dict[st
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
     Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
-    Capability.EDIT_ORDER: _presentation("تعديل الطلب", "تفعيل وضع التعديل على نفس الطلب قبل الوصول لمرحلة القص (شريون أو CNC).", "sensitive"),
+    Capability.EDIT_ORDER: _presentation(
+        "تعديل الطلب",
+        "تفعيل وضع التعديل على الطلب وهو في حالة المسودة فقط. بعد الإرسال للإنتاج استخدم إعادة للمسودة أو نسخة تعديل.",
+        "sensitive",
+    ),
     Capability.CREATE_ORDER_REVISION: _presentation("إنشاء نسخة تعديل", "إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.", "sensitive"),
-    Capability.SUBMIT_ORDER: _presentation("إرسال للمراجعة", "نقل الطلب من المسودة إلى قائمة المراجعة."),
-    Capability.APPROVE_ORDER: _presentation("اعتماد الطلب", "اعتماد الطلب ليصبح جاهزًا للإنتاج.", "critical"),
-    Capability.REJECT_ORDER: _presentation("رفض الطلب", "رفض الطلب الموجود في قائمة المراجعة وإعادته للتعديل.", "critical"),
+    Capability.SUBMIT_ORDER: _presentation(
+        "إرسال للمراجعة (ملغاة)",
+        "أُلغيت. الطلب يُرسل مباشرة إلى الإنتاج دون مرور بالمراجعة.",
+    ),
+    Capability.APPROVE_ORDER: _presentation(
+        "اعتماد الطلب (ملغاة)",
+        "أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.",
+        "critical",
+    ),
+    Capability.REJECT_ORDER: _presentation(
+        "رفض الطلب",
+        "رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.",
+        "critical",
+    ),
     Capability.CANCEL_ORDER: _presentation("إلغاء الطلب", "إلغاء الطلب وفق ضوابط دورة الحياة.", "critical"),
     Capability.VIEW_COSTS: _presentation("عرض التكلفة", "عرض بيانات التكلفة والأسعار والربحية المحمية.", "sensitive"),
     Capability.EDIT_COST_SETTINGS: _presentation("تعديل إعدادات التكلفة", "تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.", "critical"),
@@ -83,7 +98,13 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "مشاهدة تبويب الخطة المعتمدة للإنتاج.",
     ),
     Capability.RECALCULATE_PLAN: _presentation("إعادة حساب الخطة", "إعادة تشغيل محرك توزيع القطع على الألواح.", "sensitive"),
-    Capability.EDIT_OPTIMIZER_SETTINGS: _presentation("تعديل إعدادات المحسّن", "تغيير الخوارزمية والهوامش وKerf وإعدادات البحث ثم إعادة حساب الخطة. تتضمن صلاحية إعادة الحساب تلقائيًا.", "sensitive"),
+    Capability.EDIT_OPTIMIZER_SETTINGS: _presentation(
+        "تعديل خوارزمية القص",
+        "تغيير خوارزمية القص التي يقدمها النظام والهوامش وKerf وإعدادات البحث،"
+        " ثم إعادة الحساب ومشاهدة النتيجة في «خطة النظام». صلاحية مستقلة تمامًا"
+        " عن «تعديل الطلب»: من يملك تعديل الطلب لا يستطيع تغيير الخوارزمية بدونها.",
+        "sensitive",
+    ),
     Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
     Capability.APPROVE_DXF: _presentation("اعتماد خطة القص", "اعتماد خطة النظام الحالية أو خطة DXF المرفوعة كمصدر نهائي للإنتاج بعد مراجعتها.", "critical"),
     Capability.VIEW_DRAWING_WORKSPACE: _presentation("فتح مساحة الرسم", "عرض أدوات الرسم الخاصة وخطة DXF."),
@@ -95,7 +116,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.START_ASSIGNED_STAGE: _presentation("بدء المرحلة المسندة", "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه."),
     Capability.HANDOFF_ASSIGNED_STAGE: _presentation("تسليم المرحلة المسندة", "إنهاء المرحلة وإرسال الطلب إلى العامل التالي."),
     Capability.REVERT_DEPARTMENT: _presentation("إرجاع الطلب لقسم سابق", "إعادة الطلب إلى مرحلة أو قسم سابق مع سجل تدقيق.", "critical"),
-    Capability.RETURN_ORDER_TO_DRAFT: _presentation("إعادة الطلب للمسودة", "إعادة الطلب إلى حالة قابلة للتعديل وفق السياسة.", "critical"),
+    Capability.RETURN_ORDER_TO_DRAFT: _presentation(
+        "إعادة الطلب للمسودة",
+        "إعادة نفس الطلب إلى المسودة بعد إلغاء مراحل الإنتاج النشطة، دون إنشاء نسخة جديدة.",
+        "critical",
+    ),
     Capability.MARK_DELIVERED: _presentation("تأكيد التسليم", "تغيير حالة الطلب إلى تم التسليم.", "critical"),
     Capability.REASSIGN_WORKER: _presentation("تغيير العامل", "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.", "sensitive"),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),
@@ -202,11 +227,13 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         capability: supplied.get(capability) is True
         for capability in sorted(ALL_CAPABILITIES)
     }
-    # Optimizer editing is not useful without running the engine. This dependency
-    # stays strictly inside the cutting-plan boundary and never grants order edit
-    # or financial authority.
+    # Optimizer editing is not useful without running the engine and reading the
+    # plan it produces. This dependency stays strictly inside the cutting-plan
+    # boundary and never grants order edit or financial authority.
     if state[Capability.EDIT_OPTIMIZER_SETTINGS]:
         state[Capability.RECALCULATE_PLAN] = True
+    if state[Capability.RECALCULATE_PLAN]:
+        state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
 
     order_actions = {
         capability

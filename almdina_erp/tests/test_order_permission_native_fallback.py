@@ -81,18 +81,18 @@ def test_locked_order_explains_the_controlled_revision_path() -> None:
 
 def test_drawing_recalculation_is_capability_driven_not_client_assignment_driven() -> None:
     drawing = source("door_cutting_order_drawing_plan_ux.js")
-    block = drawing.split("function canUseDrawingOptimizer(frm)", 1)[1].split(
+    block = drawing.split("function canTuneCuttingAlgorithm(frm)", 1)[1].split(
         "function canUseDrawingOptimizerInbox", 1
     )[0]
 
     assert 'can("recalculate_plan", frm)' in block
-    assert "isDrawingStage(frm)" in block
+    assert "holdsStageOperationalRole(frm)" in block
     assert "isAssignedToCurrentUser" not in block
 
-    service = (SERVICES / "shop_floor_dxf_service.py").read_text(encoding="utf-8")
-    server_block = service.split("def _get_recalculation_order", 1)[1].split(
-        "def _validate_and_attach_dxf_file", 1
-    )[0]
-    assert "Capability.RECALCULATE_PLAN" in server_block
-    assert "user_can_recalculate_drawing_system_plan" in server_block
-    assert "validate_assigned_drawing_action" not in server_block
+    plan_service = (SERVICES / "order_plan_permission_service.py").read_text(
+        encoding="utf-8"
+    )
+    assert "Capability.RECALCULATE_PLAN" in plan_service
+    assert "require_stage_operational_access" in plan_service
+    assert "user_can_recalculate_drawing_system_plan" in plan_service
+    assert "validate_assigned_drawing_action" not in plan_service

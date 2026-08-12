@@ -50,6 +50,26 @@ class FakeShopFloorCommandRepository:
         self.calls.append(("capabilities_for_order", order_name))
         return frozenset(self.capabilities)
 
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        return tuple(
+            getattr(
+                self,
+                "roles",
+                (
+                    "عامل شريون",
+                    "عامل رسم",
+                    "عامل CNC",
+                    "عامل تقشيط",
+                    "عامل قص مخصص",
+                    "عامل PVC",
+                    "مشغل PVC",
+                ),
+            )
+        )
+
+    def is_admin(self, user: str | None = None) -> bool:
+        return bool(getattr(self, "admin", False))
+
     def lock_order(self, order_name: str) -> None:
         self.calls.append(("lock_order", order_name))
 
@@ -60,7 +80,19 @@ class FakeShopFloorCommandRepository:
         return self.orders[order_name]
 
     def get_stage_state(self, stage_name: str) -> commands.StageState:
-        return self.stages[stage_name]
+        stage = self.stages[stage_name]
+        if stage.operational_role:
+            return stage
+        order = self.orders.get(stage.order_name)
+        route_name = order.production_path if order else None
+        route = self.routes.get(str(route_name or ""))
+        if not route:
+            return stage
+        try:
+            role = route.stage(stage.stage_type).operational_role
+        except ValueError:
+            return stage
+        return replace(stage, operational_role=role)
 
     def validate_special_shapes(self, order_name: str) -> None:
         self.calls.append(("validate_special_shapes", order_name))

@@ -14,23 +14,31 @@ from almdina_erp.almdina_erp.domain.orders.editability import (
 
 
 class TestOrderEditabilityPolicy(unittest.TestCase):
-    def test_draft_like_orders_are_editable_without_privileged_roles(self) -> None:
+    def test_only_draft_orders_are_editable(self) -> None:
+        self.assertTrue(can_edit_order(None))
+        self.assertTrue(can_edit_order("Draft"))
+        self.assertTrue(can_edit_order("Draft", privileged=True))
+        for status in (
+            "Pending Review",
+            "Rejected",
+            "Approved",
+            "At Drawing",
+            "At Sharyoun",
+            "At CNC",
+            "Delivered",
+            "Cancelled",
+        ):
+            with self.subTest(status=status):
+                self.assertFalse(can_edit_order(status, roles=()))
+                self.assertFalse(can_edit_order(status, privileged=True))
+                self.assertFalse(can_edit_order(status, roles={"Order Entry"}))
+
+    def test_draft_like_helper_still_covers_legacy_review_states(self) -> None:
         for status in (None, "Draft", "Pending Review", "Rejected"):
             with self.subTest(status=status):
                 self.assertTrue(is_draft_like(status))
-                self.assertTrue(is_before_cutting(status))
-                self.assertTrue(can_edit_order(status, roles=()))
-                self.assertTrue(can_edit_order(status, privileged=False))
 
-    def test_pre_cutting_orders_need_privilege_for_in_place_edit(self) -> None:
-        for status in ("Approved", "At Drawing", "On Hold", "Production In Progress"):
-            with self.subTest(status=status):
-                self.assertTrue(is_before_cutting(status))
-                self.assertFalse(can_edit_order(status, roles=()))
-                self.assertTrue(can_edit_order(status, privileged=True))
-                self.assertTrue(can_edit_order(status, roles={"Order Entry"}))
-
-    def test_cutting_and_later_orders_are_not_editable(self) -> None:
+    def test_cutting_and_later_orders_are_not_before_cutting(self) -> None:
         for status in (
             "At Sharyoun",
             "At CNC",
@@ -43,7 +51,6 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
             with self.subTest(status=status):
                 self.assertFalse(is_before_cutting(status))
                 self.assertFalse(can_edit_order(status, privileged=True))
-                self.assertFalse(can_edit_order(status, roles={"System Manager"}))
 
     def test_locked_orders_are_never_editable(self) -> None:
         for status in ("Delivered", "Cancelled"):

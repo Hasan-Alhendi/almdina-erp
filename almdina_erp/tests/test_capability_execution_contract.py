@@ -72,6 +72,23 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             with self.subTest(financial_field=financial_field):
                 self.assertNotIn(financial_field, service)
 
+    def test_algorithm_preview_is_capability_only_and_never_persists(self) -> None:
+        service = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
+        preview = service.split("def simulate_optimizer_plan", 1)[1].split(
+            "\n__all__", 1
+        )[0]
+
+        self.assertIn('check_permission("read")', preview)
+        self.assertIn("Capability.EDIT_OPTIMIZER_SETTINGS", preview)
+        self.assertIn("frappe.copy_doc(stored)", preview)
+        self.assertIn("_calculate_cutting_plan", preview)
+        # Inspection only: no persistence, no stage gate, no lifecycle unlock.
+        self.assertNotIn("save(", preview)
+        self.assertNotIn("db_set", preview)
+        self.assertNotIn("require_stage_operational_access", preview)
+        self.assertNotIn("assert_order_editable", preview)
+        self.assertNotIn("approved_plan =", preview)
+
     def test_optimizer_and_special_drawings_are_guarded_on_every_save(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
         service = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")

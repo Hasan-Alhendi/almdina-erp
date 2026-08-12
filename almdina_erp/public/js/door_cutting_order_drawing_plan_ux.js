@@ -3,6 +3,9 @@
 
 	if (window.AlmdinaDrawingPlanUX) return;
 
+	const SIMULATE_METHOD =
+		"almdina_erp.almdina_erp.services.order_plan_permission_service.simulate_optimizer_plan";
+
 	const PACKING_MODES = [
 		"Auto Pro",
 		"Auto",
@@ -35,18 +38,49 @@
 		return frm.__almdina_stage_type === "Drawing" || frm.doc.current_department === "رسم";
 	}
 
+	function holdsStageOperationalRole(frm) {
+		const context = documentContext();
+		if (context && typeof context.canMutateCurrentStage === "function") {
+			return context.canMutateCurrentStage(frm);
+		}
+		if (context && typeof context.holdsStageOperationalRole === "function") {
+			return context.holdsStageOperationalRole(frm);
+		}
+		return Boolean(frm && frm.__almdina_actor_holds_stage_role);
+	}
+
+	function canTuneCuttingAlgorithm(frm) {
+		const context = documentContext();
+		if (context && typeof context.canTuneCuttingAlgorithm === "function") {
+			return context.canTuneCuttingAlgorithm(frm);
+		}
+		if (!frm || !frm.doc || frm.is_new() || frm.doc.approved_plan) return false;
+		if (frm.doc.current_production_stage) return holdsStageOperationalRole(frm);
+		return true;
+	}
+
+	// Writing the new plan into the order: stage-scoped and never on an approved
+	// plan. Previewing it: capability only, because nothing is persisted.
+	function canCommitDrawingPlan(frm) {
+		return canTuneCuttingAlgorithm(frm) && can("recalculate_plan", frm);
+	}
+
+	function canPreviewDrawingOptimizer(frm = null) {
+		const context = documentContext();
+		const saved = context && typeof context.canPreviewCuttingAlgorithm === "function"
+			? context.canPreviewCuttingAlgorithm(frm)
+			: Boolean(frm && frm.doc && !frm.is_new());
+		return saved && can("edit_optimizer_settings", frm);
+	}
+
 	function canUseDrawingOptimizer(frm) {
-		return Boolean(
-			frm &&
-			!frm.is_new() &&
-			can("recalculate_plan", frm) &&
-			isDrawingStage(frm) &&
-			!frm.doc.approved_plan
-		);
+		return canCommitDrawingPlan(frm) || canPreviewDrawingOptimizer(frm);
 	}
 
 	function canEditDrawingOptimizer(frm = null) {
-		return can("edit_optimizer_settings", frm);
+		// Packing algorithm only (never the rest of the document).
+		return canPreviewDrawingOptimizer(frm)
+			|| (canTuneCuttingAlgorithm(frm) && can("edit_optimizer_settings", frm));
 	}
 
 	function canUseDrawingOptimizerInbox(detail, meta) {
@@ -54,10 +88,9 @@
 			detail &&
 			meta &&
 			can("recalculate_plan") &&
-			meta.stageType === "Drawing" &&
+			detail.actor_holds_operational_role &&
 			isAssignedToCurrentUser(detail.current_assignee) &&
-			!detail.approved_plan &&
-			(detail.current_department === "رسم" || detail.status === "At Drawing")
+			!detail.approved_plan
 		);
 	}
 
@@ -67,27 +100,27 @@
 
 	function ensureStageType(frm) {
 		const context = documentContext();
-		const identity = context.capture(frm);
-		const requestedStage = frm.doc.current_production_stage;
-		if (!requestedStage) {
-			frm.__almdina_stage_type = null;
-			return Promise.resolve(context.isCurrent(frm, identity));
+		if (!context || typeof context.ensureStageContext !== "function") {
+			return Promise.resolve(Boolean(frm && frm.doc));
 		}
-		return frappe
-			.call({
-				method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
-				args: { order_name: frm.doc.name },
-			})
-			.then((response) => {
-				if (!context.isCurrent(frm, identity)) return false;
-				if (frm.doc.current_production_stage !== requestedStage) return false;
-				frm.__almdina_stage_type = (response.message && response.message.active_stage_type) || null;
-				return true;
-			})
-			.catch((error) => {
-				console.error("Failed to load production stage type", error);
-				return false;
-			});
+		const token = context.capture(frm);
+		return context.ensureStageContext(frm).then((ready) => (
+			ready && context.isCurrent(frm, token)
+		));
+	}
+
+	function scheduleDrawingPanel(frm) {
+		const context = documentContext();
+		const identity = context.capture(frm);
+		ensureStageType(frm).then((stageTypeIsCurrent) => {
+			if (!stageTypeIsCurrent || !context.isCurrent(frm, identity)) return;
+			if (!canUseDrawingOptimizer(frm)) return;
+			if (window.AlmdinaPlanTabsUX && window.AlmdinaPlanTabsUX.shouldShowPlanTabs(frm)) {
+				window.AlmdinaPlanTabsUX.renderDualTabs(frm);
+				return;
+			}
+			renderPanel(frm);
+		});
 	}
 
 	function escape(value) {
@@ -117,25 +150,32 @@
 			</div>`;
 	}
 
-	function buildDrawingPanelHtml(plan, packingMode, mayEditSettings) {
+	function buildDrawingPanelHtml(plan, packingMode, mayEditSettings, previewOnly = false) {
 		const disabled = mayEditSettings ? "" : "disabled";
 		const options = PACKING_MODES.map(
 			(mode) => `<option value="${escape(mode)}" ${packingMode === mode ? "selected" : ""}>${escape(__(mode))}</option>`
 		).join("");
+		const title = previewOnly ? __("تجربة خوارزميات القص") : __("محرك خطة الرسم");
+		const intro = previewOnly
+			? __("جرّب أي خوارزمية وقارن النتيجة. هذه معاينة فقط ولا تغيّر خطة الطلب المحفوظة.")
+			: __("إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.");
+		const badge = previewOnly
+			? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,159,10,.12);color:#a15c00;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">${__("معاينة فقط")}</span>`
+			: `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(36,144,239,.1);color:#1769aa;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("إعادة الحساب متاحة")}</span>`;
 		return `
 			<div class="dco-drawing-plan-panel" style="direction:rtl;border:1px solid var(--border-color,#dfe3e8);border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f8fafc));margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.035)">
 				<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
-					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${__("محرك خطة الرسم")}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${__("إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.")}</p></div>
-					<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(36,144,239,.1);color:#1769aa;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("إعادة الحساب متاحة")}</span>
+					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${title}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${intro}</p></div>
+					${badge}
 				</div>
 				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
 					<select class="form-control input-sm" style="max-width:240px;min-height:36px" data-drawing-mode ${disabled}>${options}</select>
-					<button type="button" class="btn btn-primary btn-sm" data-drawing-recalc>${__("إعادة الحساب")}</button>
+					<button type="button" class="btn btn-primary btn-sm" data-drawing-recalc>${previewOnly ? __("عرض النتيجة") : __("إعادة الحساب")}</button>
 					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Auto Pro" ${disabled}>${__("أفضل توزيع متقدم")}</button>
 					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Deep Search" ${disabled}>${__("بحث معمق")}</button>
 					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Optimal Search" ${disabled}>${__("بحث أمثل")}</button>
 				</div>
-				${mayEditSettings ? "" : `<div class="text-muted" style="font-size:11px;margin-top:8px">${__("تغيير الخوارزمية يحتاج صلاحية «تعديل إعدادات المحسّن». يمكنك إعادة الحساب بالخوارزمية الحالية.")}</div>`}
+				${mayEditSettings ? "" : `<div class="text-muted" style="font-size:11px;margin-top:8px">${__("تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص». يمكنك إعادة الحساب بالخوارزمية الحالية.")}</div>`}
 				${summaryCards(plan)}
 			</div>`;
 	}
@@ -168,7 +208,33 @@
 			});
 	}
 
+	function previewCurrentOrder(frm, packingMode) {
+		const context = documentContext();
+		const identity = context.capture(frm);
+		const mode = packingMode || frm.doc.packing_mode || "Auto Pro";
+		return frappe
+			.call({
+				method: SIMULATE_METHOD,
+				args: recalculationArgs(frm.doc.name, frm.doc, mode, true),
+				freeze: true,
+				freeze_message: __("جاري تجربة الخوارزمية..."),
+			})
+			.then((r) => {
+				if (!context.isCurrent(frm, identity)) return r.message;
+				frm.__almdina_algorithm_preview = Object.assign({}, r.message || {}, {
+					packing_mode: mode,
+				});
+				frappe.show_alert({
+					message: __("هذه نتيجة معاينة. لم يطرأ أي تغيير على الطلب."),
+					indicator: "orange",
+				});
+				renderPanel(frm);
+				return r.message;
+			});
+	}
+
 	function recalcCurrentOrder(frm, packingMode) {
+		if (!canCommitDrawingPlan(frm)) return previewCurrentOrder(frm, packingMode);
 		const context = documentContext();
 		const identity = context.capture(frm);
 		const orderName = frm.doc.name;
@@ -226,8 +292,19 @@
 			return;
 		}
 		const mayEditSettings = canEditDrawingOptimizer(frm);
-		const plan = parsePlan(frm.doc.system_plan_json || frm.doc.cutting_plan_json);
-		const html = buildDrawingPanelHtml(plan, frm.doc.packing_mode, mayEditSettings);
+		const previewOnly = !canCommitDrawingPlan(frm);
+		const preview = previewOnly ? frm.__almdina_algorithm_preview : null;
+		const plan = parsePlan(
+			(preview && (preview.system_plan_json || preview.cutting_plan_json))
+			|| frm.doc.system_plan_json
+			|| frm.doc.cutting_plan_json
+		);
+		const html = buildDrawingPanelHtml(
+			plan,
+			(preview && preview.packing_mode) || frm.doc.packing_mode,
+			mayEditSettings,
+			previewOnly
+		);
 		const root = target || (frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper);
 		if (!root) return;
 		if (target) {
@@ -269,18 +346,12 @@
 	};
 
 	frappe.ui.form.on("Door Cutting Order", {
-		refresh(frm) {
-			const context = documentContext();
-			const identity = context.capture(frm);
-			ensureStageType(frm).then((stageTypeIsCurrent) => {
-				if (!stageTypeIsCurrent || !context.isCurrent(frm, identity)) return;
-				if (!canUseDrawingOptimizer(frm)) return;
-				if (window.AlmdinaPlanTabsUX && window.AlmdinaPlanTabsUX.shouldShowPlanTabs(frm)) {
-					window.AlmdinaPlanTabsUX.renderDualTabs(frm);
-					return;
-				}
-				renderPanel(frm);
-			});
-		},
+		onload_post_render(frm) { scheduleDrawingPanel(frm); },
+		refresh(frm) { scheduleDrawingPanel(frm); },
+	});
+
+	window.addEventListener("almdina:stage-context-ready", (event) => {
+		const frm = event.detail && event.detail.frm;
+		if (frm && frm === window.cur_frm) scheduleDrawingPanel(frm);
 	});
 })();

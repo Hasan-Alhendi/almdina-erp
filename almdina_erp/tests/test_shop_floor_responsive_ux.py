@@ -74,6 +74,26 @@ def test_shop_floor_defaults_to_a_route_aware_kanban_board() -> None:
     assert ".almdina-sf-kanban-column.is-drag-over" in css
 
 
+def test_worker_list_closes_with_other_role_stages_in_green() -> None:
+    source = PAGE_PATH.read_text(encoding="utf-8")
+    css = CSS_PATH.read_text(encoding="utf-8")
+
+    # Actionable work stays first and unchanged; orders whose current stage
+    # operational role is not the worker's follow in green with no stage action.
+    assert "function showsPersonalHistory()" in source
+    assert "sessionContext.personal_inbox" in source
+    assert "function isMyOperationalStage(row)" in source
+    assert "actor_holds_current_stage_role" in source
+    assert "function mergePersonalList(activeRows, historyRows)" in source
+    assert "function workerBoardRows(activeRows)" in source
+    assert 'listSection(__("طلبات في مراحل أخرى"), other, { otherRole: true })' in source
+    assert "terminal || otherRole ? \"\" : quickActionHtml(row)" in source
+
+    assert ".almdina-sf-order-card.is-other-role" in css
+    assert ".almdina-sf-list-title.is-other-role" in css
+    assert "background: #dcfce7 !important;" in css
+
+
 def test_kanban_keeps_touch_users_on_explicit_server_authorized_actions() -> None:
     source = PAGE_PATH.read_text(encoding="utf-8")
     css = CSS_PATH.read_text(encoding="utf-8")

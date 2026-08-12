@@ -140,6 +140,28 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertFalse(business[Capability.VIEW_COSTS])
         self.assertFalse(business[Capability.EDIT_ORDER])
 
+    def test_editing_the_cutting_algorithm_always_shows_its_result(self) -> None:
+        # Tuning the algorithm is pointless without reading the plan it produces,
+        # so the system-plan tab stays granted even when tabs are configured off.
+        state = normalize_capability_state(
+            {
+                Capability.EDIT_OPTIMIZER_SETTINGS: True,
+                Capability.VIEW_SYSTEM_CUTTING_PLAN: False,
+                Capability.VIEW_UPLOADED_CUTTING_PLAN: False,
+                Capability.VIEW_APPROVED_CUTTING_PLAN: False,
+            }
+        )
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
+
+    def test_order_editing_never_grants_cutting_algorithm_authority(self) -> None:
+        state = normalize_capability_state({Capability.EDIT_ORDER: True})
+        self.assertTrue(state[Capability.EDIT_ORDER])
+        self.assertFalse(state[Capability.EDIT_OPTIMIZER_SETTINGS])
+        self.assertFalse(state[Capability.RECALCULATE_PLAN])
+        self.assertFalse(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+
     def test_plan_approval_does_not_require_drawing_workspace(self) -> None:
         state = normalize_capability_state({Capability.APPROVE_DXF: True})
         self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])

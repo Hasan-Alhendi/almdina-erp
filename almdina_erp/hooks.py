@@ -24,6 +24,7 @@ after_migrate = "almdina_erp.lifecycle.after_migrate"
 
 app_include_js = [
     "/assets/almdina_erp/js/permission_context.js",
+    "/assets/almdina_erp/js/page_revisit_refresh.js",
     "/assets/almdina_erp/js/permission_action_visibility_guard.js",
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
@@ -39,8 +40,10 @@ app_include_js = [
 
 doctype_js = {
     "Door Cutting Order": [
-        "public/js/permission_context.js",
+        # The document context owns the surface-readiness registry, so it must be
+        # evaluated before any module that registers a probe with it.
         "public/js/door_cutting_order_document_context.js",
+        "public/js/permission_context.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_output_contract.js",
         "public/js/door_cutting_order_print_identity.js",

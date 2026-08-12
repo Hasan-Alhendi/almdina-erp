@@ -46,7 +46,10 @@ def test_client_editable_checks_use_shared_order_can_edit_helper():
     assert 'frm.add_custom_button(__("إعادة للمسودة")' in workflow
     assert "return_order_to_draft" in workflow
     assert "frappe.almdina.orderCanEdit" in _source(OPERATOR)
-    assert "frappe.almdina.orderCanEdit" in _source(PLAN_UX)
+    # The plan surface deliberately opts out: the cutting algorithm has its own
+    # capability and must not depend on the order edit session.
+    assert "frappe.almdina.orderCanEdit" not in _source(PLAN_UX)
+    assert "canTuneCuttingAlgorithm" in _source(PLAN_UX)
 
 
 def test_revert_targets_expose_stage_labels_not_ids_in_ui():

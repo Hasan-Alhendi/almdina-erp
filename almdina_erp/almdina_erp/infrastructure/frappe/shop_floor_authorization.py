@@ -14,6 +14,13 @@ def current_user() -> str:
     return str(frappe.session.user)
 
 
+def roles_of(user: str | None = None) -> tuple[str, ...]:
+    actor = str(user or current_user() or "").strip()
+    if not actor:
+        return ()
+    return tuple(str(role) for role in frappe.get_roles(actor) if role)
+
+
 def assert_enabled_user_has_role(user: str, role: str) -> None:
     """Ensure an assignee is an active Almdina worker in the configured role."""
 

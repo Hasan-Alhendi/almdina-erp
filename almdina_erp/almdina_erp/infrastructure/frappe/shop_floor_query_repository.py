@@ -5,6 +5,7 @@ from typing import Any
 
 import frappe
 
+from almdina_erp import permissions
 from almdina_erp.almdina_erp.application.shop_floor.queries import (
     SHOP_FLOOR_DETAIL_CAPABILITIES,
 )
@@ -52,6 +53,12 @@ class FrappeShopFloorQueryRepository:
 
     def global_capabilities(self) -> frozenset[str]:
         return granted_capabilities(user=self.current_user())
+
+    def actor_roles(self, user: str | None = None) -> tuple[str, ...]:
+        actor = str(user or self.current_user() or "").strip()
+        if not actor:
+            return ()
+        return tuple(str(role) for role in frappe.get_roles(actor) if role)
 
     def is_admin(self) -> bool:
         return any(
@@ -168,17 +175,14 @@ class FrappeShopFloorQueryRepository:
         return frappe.get_doc("Door Cutting Order", order_name)
 
     def can_view_order(self, order: Any) -> bool:
-        if self.is_admin() or frappe.has_permission(order, "read"):
+        if self.is_admin():
             return True
-        return bool(
-            frappe.db.exists(
-                "Production Stage",
-                {
-                    "door_cutting_order": order.name,
-                    "assigned_to": self.current_user(),
-                },
-            )
-        )
+        user = self.current_user()
+        if user == "Administrator":
+            return True
+        if not permissions._requires_assigned_scope(user):
+            return frappe.has_permission(order, "read")
+        return permissions.worker_can_view_order(user, order.name)
 
     def list_order_stages(self, order_name: str) -> list[Any]:
         return frappe.get_all(

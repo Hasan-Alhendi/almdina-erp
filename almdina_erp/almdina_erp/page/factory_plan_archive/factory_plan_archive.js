@@ -16,6 +16,7 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
 
     injectStyles();
     page.set_primary_action(__("تحديث"), load, "refresh");
+    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
     load();
 
     function esc(value) {

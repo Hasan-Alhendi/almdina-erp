@@ -159,10 +159,24 @@
     function perform(context, options = {}) {
         const action = actionFor(context);
         if (!action || !context.stage) return;
-        if (action.kind === "start") {
-            return start(context, options);
-        }
-        return handoff(context, options);
+
+        const guard = frappe.call({
+            method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
+            args: { order_name: context.order },
+        }).then(response => {
+            const stage = response.message || {};
+            if (stage.actor_holds_operational_role === false) {
+                frappe.msgprint(__(
+                    "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية."
+                ));
+                return null;
+            }
+            if (action.kind === "start") {
+                return start(context, options);
+            }
+            return handoff(context, options);
+        });
+        return guard;
     }
 
     ensureStylesheet();

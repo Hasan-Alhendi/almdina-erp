@@ -34,6 +34,13 @@ class TestDocumentContextUxContract(unittest.TestCase):
         ):
             self.assertLess(hooks.index(context), hooks.index(feature))
 
+        # The context owns the surface-readiness registry that the permission
+        # bundle registers into.
+        self.assertLess(
+            hooks.index(context),
+            hooks.index('"public/js/permission_context.js"'),
+        )
+
         for retired in (
             '"public/js/door_cutting_order_workflow.js"',
             '"public/js/door_cutting_order_cost_invoice_ux.js"',
@@ -60,7 +67,76 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("clearDocumentHtml(frm)", source)
         self.assertIn("resetDocumentState(frm)", source)
         self.assertIn("before_load(frm) { synchronize(frm); }", source)
-        self.assertIn("refresh(frm) { synchronize(frm); }", source)
+        self.assertIn("ensureStageContext(frm)", source)
+
+    def test_stage_context_is_loaded_before_stage_gated_surfaces_render(self) -> None:
+        plan = (ROOT / "public" / "js" / "door_cutting_order_plan_ux.js").read_text(
+            encoding="utf-8"
+        )
+        controls = (
+            ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("ensureStageContext(frm).then", plan)
+        self.assertIn("almdina:stage-context-ready", plan)
+        self.assertIn("function canOperatePlanEngine(frm)", plan)
+        self.assertIn("function canEditOptimizerSettings(frm)", plan)
+        self.assertIn("function canUseDocumentPlanActions(frm)", plan)
+        # Upload / export / print stay available on an active stage; the gate is
+        # the capability plus the stage's operational role, never the stage alone.
+        self.assertIn(
+            "return Boolean(frm && frm.doc) && canMutateCurrentStage(frm);",
+            plan,
+        )
+        self.assertIn(
+            "canUseDocumentPlanActions(frm) && hasUploadCapability(frm)",
+            plan,
+        )
+        self.assertIn("frm.doc.current_production_stage) return true;", plan)
+        self.assertIn("ensureStageContext(frm).then", controls)
+        self.assertIn("isStageContextPending", controls)
+        self.assertIn("canMutateCurrentStage(frm)", controls)
+        self.assertIn(
+            "Only the packing-algorithm fields open here",
+            controls,
+        )
+
+    def test_cutting_algorithm_surface_never_waits_for_an_order_edit_session(self) -> None:
+        context = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
+        plan = (ROOT / "public" / "js" / "door_cutting_order_plan_ux.js").read_text(
+            encoding="utf-8"
+        )
+        controls = (
+            ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+        ).read_text(encoding="utf-8")
+        drawing = DRAWING_PLAN.read_text(encoding="utf-8")
+
+        self.assertIn("function canTuneCuttingAlgorithm(frm)", context)
+        self.assertIn("function canPreviewCuttingAlgorithm(frm)", context)
+        for module in (plan, controls, drawing):
+            self.assertIn("canTuneCuttingAlgorithm", module)
+            # The order edit session belongs to the document, not to the plan
+            # engine, so a role holding only the algorithm grant still works.
+            self.assertNotIn("frappe.almdina.orderCanEdit", module)
+
+    def test_algorithm_preview_stays_open_at_every_stage_without_persisting(self) -> None:
+        drawing = DRAWING_PLAN.read_text(encoding="utf-8")
+
+        self.assertIn("simulate_optimizer_plan", drawing)
+        self.assertIn("function canPreviewDrawingOptimizer(frm", drawing)
+        self.assertIn("function canCommitDrawingPlan(frm)", drawing)
+        # Preview never writes, so it must not reload or dirty the document.
+        preview = drawing.split("function previewCurrentOrder(frm, packingMode)", 1)[
+            1
+        ].split("function recalcCurrentOrder", 1)[0]
+        self.assertNotIn("reload_doc", preview)
+        self.assertNotIn("frm.doc.packing_mode =", preview)
+        self.assertIn("معاينة", preview)
+
+    def test_finished_route_is_not_treated_as_pre_production(self) -> None:
+        source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
+        self.assertIn('return !String(frm.doc.production_path || "").trim();', source)
+        self.assertIn("غادر مراحل الإنتاج النشطة", source)
 
     def test_identity_transition_invalidates_document_scoped_state(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
@@ -75,11 +151,11 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("frm.__almdina_approved_plan_loading = null", source)
         self.assertIn("frm.__almdina_approved_plan_context = null", source)
         self.assertIn("frm.__almdina_stage_type = null", source)
-        self.assertIn("frm.__almdinaCostSnapshotPromise = null", source)
-        self.assertIn("frm.__almdinaPermissionRefreshPromise = null", source)
-        self.assertIn("frm.__almdinaProductionActionsPromise = null", source)
-        self.assertIn("frm.__almdinaProductionRecoveryPromise = null", source)
-        self.assertIn("delete frm._almdina_factory_defaults_loaded", source)
+        self.assertIn("frm.__almdina_actor_holds_stage_role = false", source)
+        self.assertIn("frm.__almdina_stage_context_ready = false", source)
+        self.assertIn("ensureStageContext", source)
+        self.assertIn("almdina:stage-context-ready", source)
+        self.assertIn("holdsStageOperationalRole", source)
 
     def test_defaults_ignore_responses_captured_for_another_order(self) -> None:
         source = DEFAULTS.read_text(encoding="utf-8")
@@ -105,16 +181,51 @@ class TestDocumentContextUxContract(unittest.TestCase):
         source = DRAWING_PLAN.read_text(encoding="utf-8")
 
         self.assertIn("if (window.AlmdinaDrawingPlanUX) return", source)
-        self.assertIn("const requestedStage = frm.doc.current_production_stage", source)
-        self.assertIn("!context.isCurrent(frm, identity)", source)
-        self.assertIn("frm.doc.current_production_stage !== requestedStage", source)
+        self.assertIn("context.ensureStageContext(frm)", source)
+        self.assertIn("scheduleDrawingPanel(frm)", source)
+        self.assertIn("almdina:stage-context-ready", source)
         self.assertIn("const orderName = frm.doc.name", source)
         self.assertIn("if (!context.isCurrent(frm, identity)) return r.message", source)
-        self.assertGreaterEqual(
-            source.count("if (!context.isCurrent(frm, identity)) return"),
-            2,
-        )
+        self.assertIn("if (!context.isCurrent(frm, identity)) return", source)
         self.assertIn("if (!stageTypeIsCurrent || !context.isCurrent(frm, identity)) return", source)
+
+    def test_asynchronous_stage_context_is_kept_for_its_own_document(self) -> None:
+        source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
+
+        # Rendering still requires the active form, but storing a reply must not:
+        # dropping it forced the user to refresh the page again.
+        self.assertIn("function isSameDocument(frm, token)", source)
+        self.assertIn("if (!isSameDocument(frm, token)) return false;", source)
+        self.assertNotIn("if (!isCurrent(frm, token)) return false;", source)
+
+    def test_unrendered_surfaces_are_retried_without_a_page_reload(self) -> None:
+        source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
+
+        self.assertIn("function registerSurface(name, probe)", source)
+        self.assertIn("function settleSurfaces(frm, attempt)", source)
+        self.assertIn("function scheduleSettle(frm, attempt = 0)", source)
+        self.assertIn("SETTLE_DELAYS", source)
+        self.assertIn('"__almdinaSurfaceSettleTimer"', source)
+
+        for owner, probe in (
+            ("door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
+            ("door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
+            ("shop_floor_order_ux.js", '"production-actions"'),
+            ("permission_context.js", '"order-protected-modules"'),
+        ):
+            owner_source = (ROOT / "public" / "js" / owner).read_text(encoding="utf-8")
+            self.assertIn("registerSurface(", owner_source, owner)
+            self.assertIn(probe, owner_source, owner)
+
+    def test_protected_order_modules_load_on_every_visit(self) -> None:
+        source = (ROOT / "public" / "js" / "permission_context.js").read_text(
+            encoding="utf-8"
+        )
+
+        # A one-shot poll left later navigations without the protected modules.
+        self.assertIn('frappe.router.on("change"', source)
+        self.assertIn("function ensureOrderModules()", source)
+        self.assertIn("function orderModulesLoaded()", source)
 
     def test_customer_documents_wait_for_the_current_order_only(self) -> None:
         source = DOCUMENT_PRINT.read_text(encoding="utf-8")

@@ -6,11 +6,17 @@ import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
+    DRAWING_CAPABILITIES,
+    PLANNING_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
     REPORTING_CAPABILITIES,
     Capability,
+)
+from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    PRE_PRODUCTION_ORDER_STATUSES,
+    normalize_order_status,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
@@ -36,20 +42,36 @@ _COST_BROAD_CAPABILITIES = frozenset(
         Capability.PRINT_INTERNAL_COST_REPORT,
     }
 )
-_BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
+_ORDER_AUTHORING_CAPABILITIES = frozenset(
     {
         Capability.CREATE_ORDER,
         Capability.EDIT_ORDER,
         Capability.CREATE_ORDER_REVISION,
         Capability.SUBMIT_ORDER,
+    }
+)
+_BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
+    {
         Capability.APPROVE_ORDER,
         Capability.REJECT_ORDER,
         Capability.CANCEL_ORDER,
     }
+    | _ORDER_AUTHORING_CAPABILITIES
     | _CONTROL_CENTER_BROAD_CAPABILITIES
     | _COST_BROAD_CAPABILITIES
     | PRODUCTION_SUPERVISOR_CAPABILITIES
     | REPORTING_CAPABILITIES
+)
+# Authoring an order does not make somebody a floor supervisor. A worker who
+# also carries those grants stays inside their own stages.
+_SCOPE_OVERRIDING_CAPABILITIES = (
+    _BROAD_ORDER_SCOPE_CAPABILITIES - _ORDER_AUTHORING_CAPABILITIES
+)
+_FLOOR_WORKER_CAPABILITIES = frozenset(
+    {
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+    }
 )
 _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
     {
@@ -61,6 +83,9 @@ _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
 )
 _READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
 _MUTATING_PERMISSION_TYPES = frozenset({"create", "write", "delete"})
+_WORKER_SCOPED_CAPABILITIES = (
+    PRODUCTION_OPERATOR_CAPABILITIES | PLANNING_CAPABILITIES | DRAWING_CAPABILITIES
+)
 
 _DCO_PERMISSION_CAPABILITIES = {
     definition.permission_type: capability
@@ -96,30 +121,175 @@ def _requires_assigned_scope(user: str) -> bool:
 
     if user in {"Guest", "Administrator"}:
         return False
-    if _has_any(user, _BROAD_ORDER_SCOPE_CAPABILITIES):
+    if _has_any(user, _SCOPE_OVERRIDING_CAPABILITIES):
         return False
-    return _has_any(user, PRODUCTION_OPERATOR_CAPABILITIES)
+    if _has_any(user, _FLOOR_WORKER_CAPABILITIES):
+        return True
+    if _has_any(user, _ORDER_AUTHORING_CAPABILITIES):
+        return False
+    return _has_any(user, _WORKER_SCOPED_CAPABILITIES)
+
+
+def _pre_production_status_sql() -> str:
+    return ", ".join(
+        frappe.db.escape(status)
+        for status in sorted(PRE_PRODUCTION_ORDER_STATUSES)
+    )
+
+
+def _row_value(row: Any, fieldname: str) -> Any:
+    if isinstance(row, dict):
+        return row.get(fieldname)
+    return getattr(row, fieldname, None)
+
+
+def _dispatched_order_row(order_name: str) -> Any | None:
+    """Return the order only when it already reached the production floor."""
+
+    row = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        ["status", "current_production_stage"],
+        as_dict=True,
+    )
+    if not row:
+        return None
+    status = normalize_order_status(_row_value(row, "status"))
+    stage = str(_row_value(row, "current_production_stage") or "").strip()
+    if status in PRE_PRODUCTION_ORDER_STATUSES and not stage:
+        return None
+    return row
 
 
 def _assigned_order_subquery(user: str) -> str:
-    return (
-        " select distinct door_cutting_order from `tabProduction Stage`"
-        f" where assigned_to = {frappe.db.escape(user)}"
+    return _worker_visible_orders_subquery(user)
+
+
+def _worker_operational_roles(user: str) -> tuple[str, ...]:
+    """Resolve operational roles through the shop-floor authorization gateway."""
+
+    from almdina_erp.almdina_erp.infrastructure.frappe import (
+        shop_floor_authorization,
     )
+
+    return shop_floor_authorization.roles_of(user)
+
+
+def _resolve_stage_operational_role(
+    order_name: str,
+    stage: Any,
+) -> str | None:
+    role = str(_row_value(stage, "operational_role") or "").strip()
+    if role:
+        return role
+    stage_type = str(_row_value(stage, "stage_type") or "").strip()
+    if not stage_type:
+        return None
+    production_path = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        "production_path",
+    )
+    if not production_path:
+        return None
+    from almdina_erp.almdina_erp.infrastructure.frappe import (
+        production_routing_repository,
+    )
+
+    try:
+        route = production_routing_repository.get_route(str(production_path))
+        return str(route.stage(stage_type).operational_role or "").strip() or None
+    except (ValueError, AttributeError):
+        return None
+
+
+def _worker_actionable_orders_subquery(user: str) -> str:
+    roles = _worker_operational_roles(user)
+    user_sql = frappe.db.escape(user)
+    if not roles:
+        return " select null as door_cutting_order where 1=0"
+    role_sql = ", ".join(frappe.db.escape(role) for role in roles)
+    pre_production_sql = _pre_production_status_sql()
+    return (
+        " select distinct ps.door_cutting_order"
+        " from `tabProduction Stage` ps"
+        " inner join `tabDoor Cutting Order` dco on dco.name = ps.door_cutting_order"
+        f" where ps.name = dco.current_production_stage"
+        f" and ifnull(dco.current_production_stage, '') != ''"
+        f" and dco.status not in ({pre_production_sql})"
+        f" and ps.assigned_to = {user_sql}"
+        f" and ps.operational_role in ({role_sql})"
+    )
+
+
+def _worker_completed_orders_subquery(user: str) -> str:
+    user_sql = frappe.db.escape(user)
+    pre_production_sql = _pre_production_status_sql()
+    return (
+        " select distinct ps.door_cutting_order"
+        " from `tabProduction Stage` ps"
+        " inner join `tabDoor Cutting Order` dco on dco.name = ps.door_cutting_order"
+        f" where ps.assigned_to = {user_sql}"
+        " and ps.status = 'Completed'"
+        " and ifnull(ps.piece_label, '') = ''"
+        f" and dco.status not in ({pre_production_sql})"
+    )
+
+
+def _worker_visible_orders_subquery(user: str) -> str:
+    return (
+        _worker_actionable_orders_subquery(user)
+        + " union "
+        + _worker_completed_orders_subquery(user)
+    )
+
+
+def worker_can_view_order(user: str, order_name: str | None) -> bool:
+    """Workers may read only orders that need their stage work or they finished."""
+
+    if not order_name:
+        return False
+    if not _requires_assigned_scope(user):
+        return True
+
+    order = _dispatched_order_row(order_name)
+    if not order:
+        return False
+
+    if frappe.db.exists(
+        "Production Stage",
+        {
+            "door_cutting_order": order_name,
+            "assigned_to": user,
+            "status": "Completed",
+            "piece_label": ["is", "not set"],
+        },
+    ):
+        return True
+
+    current_stage_name = str(
+        _row_value(order, "current_production_stage") or ""
+    ).strip()
+    if not current_stage_name:
+        return False
+
+    stage = frappe.db.get_value(
+        "Production Stage",
+        current_stage_name,
+        ["assigned_to", "operational_role", "stage_type"],
+        as_dict=True,
+    )
+    if not stage or _row_value(stage, "assigned_to") != user:
+        return False
+
+    role = _resolve_stage_operational_role(order_name, stage)
+    if not role:
+        return False
+    return role in set(_worker_operational_roles(user))
 
 
 def _assigned_order_exists(user: str, order_name: str | None) -> bool:
-    if not order_name:
-        return False
-    return bool(
-        frappe.db.exists(
-            "Production Stage",
-            {
-                "door_cutting_order": order_name,
-                "assigned_to": user,
-            },
-        )
-    )
+    return worker_can_view_order(user, order_name)
 
 
 def _scoped_read_decision(
@@ -327,4 +497,5 @@ __all__ = [
     "production_stage_query",
     "replacement_piece_has_permission",
     "replacement_piece_query",
+    "worker_can_view_order",
 ]

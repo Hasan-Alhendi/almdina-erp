@@ -3,20 +3,6 @@
 
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
     const TERMINAL = new Set(["Delivered", "Cancelled"]);
-    const CUTTING_OR_LATER = new Set([
-        "At Sharyoun",
-        "At CNC",
-        "At Sanding",
-        "Ready for Delivery",
-        "Delivered",
-        "Cancelled",
-        "Completed",
-        "Cutting In Progress",
-        "Cut Completed",
-        "Edge Banding In Progress",
-        "Quality Check",
-        "Partially Completed",
-    ]);
     const EDIT_LABEL = __("تعديل");
     const SAVE_LABEL = __("حفظ");
     const CONFIRM_EDIT_LABEL = __("اعتماد التعديل"); // legacy label removed from UI; kept for cleanup
@@ -53,12 +39,6 @@
 
     function revisionState(frm) {
         return (frm && frm.doc && frm.doc.revision_state) || "Current";
-    }
-
-    function isBeforeCutting(status) {
-        const normalized = status || "Draft";
-        if (TERMINAL.has(normalized)) return false;
-        return !CUTTING_OR_LATER.has(normalized);
     }
 
     function sessionStore() {
@@ -149,7 +129,8 @@
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if (revisionState(frm) === "Superseded") return false;
         if (!can(frm, "edit_order")) return false;
-        return isBeforeCutting(frm.doc.status || "Draft");
+        // In-place editing is Draft-only; other states need return-to-draft or a revision.
+        return (frm.doc.status || "Draft") === "Draft";
     }
 
     function orderCanEdit(frm) {
@@ -262,7 +243,7 @@
 
     function enterEditSession(frm) {
         if (!canOfferEditSession(frm)) {
-            frappe.msgprint(__("لا يمكن تعديل هذا الطلب بعد بدء مرحلة القص (شريون أو CNC)."));
+            frappe.msgprint(__("يمكن تعديل الطلب فقط وهو في حالة المسودة."));
             return;
         }
         setEditSession(frm, true, { resetRecalc: true });

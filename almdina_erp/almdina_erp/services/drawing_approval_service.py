@@ -14,17 +14,18 @@ from almdina_erp.almdina_erp.application.security.drawing_approval_policy import
     DrawingApprovalDenied,
     DrawingApprovalState,
     approval_warning,
-    validate_drawing_approval,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
+    require_stage_operational_access,
+)
 
 
 _POLICY_MESSAGES = {
-    "not_at_drawing": "اعتماد خطة القص متاح فقط عندما يكون الطلب في مرحلة الرسم.",
     "unsupported_plan_source": "مصدر خطة القص المحدد غير مدعوم.",
     "system_plan_missing": "لا توجد خطة قص من النظام صالحة للاعتماد.",
     "custom_plan_missing": "ارفع خطة DXF صالحة وتحقق منها قبل اعتمادها.",
@@ -66,10 +67,9 @@ def _authorized_order(order_name: str) -> Any:
         Capability.APPROVE_DXF,
         message=_("لا تملك صلاحية اعتماد خطة القص لهذا الطلب."),
     )
-    try:
-        validate_drawing_approval(_state(order))
-    except DrawingApprovalDenied as error:
-        _throw_policy_error(error)
+    # Approval is matrix-capability gated and additionally limited to actors who
+    # hold the current production stage's operational role.
+    require_stage_operational_access(order)
     return order
 
 

@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     can_transition_stage,
     is_order_dispatched,
 )
+from almdina_erp.almdina_erp.domain.orders.stage_operational_access import (
+    decide_stage_scoped_mutation,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
@@ -46,6 +49,9 @@ class ProductionActionFacts:
     assigned_to: str | None = None
     actor: str | None = None
     drawing_dxf_status: str | None = None
+    operational_role: str | None = None
+    actor_roles: tuple[str, ...] = ()
+    is_admin: bool = False
 
 
 def _decision(
@@ -153,6 +159,25 @@ def decide_production_action(
             "inactive_stage",
             "المرحلة المحددة ليست مرحلة الإنتاج الحالية للطلب.",
         )
+
+    if action in {
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+        Capability.REASSIGN_WORKER,
+    }:
+        allowed, code, reason = decide_stage_scoped_mutation(
+            actor_roles=facts.actor_roles,
+            operational_role=facts.operational_role,
+            has_current_stage=True,
+            is_admin=facts.is_admin,
+        )
+        # Reassignment is a supervisory override: only require that the stage
+        # has an operational role configured, not that the supervisor holds it.
+        if action == Capability.REASSIGN_WORKER:
+            if code == "missing_stage_role":
+                return _decision(action, False, code, reason)
+        elif not allowed:
+            return _decision(action, False, code, reason)
 
     if action == Capability.REASSIGN_WORKER:
         if facts.stage_status not in ACTIVE_STAGE_STATUSES:

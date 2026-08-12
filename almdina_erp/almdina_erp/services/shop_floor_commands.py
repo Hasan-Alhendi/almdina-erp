@@ -100,14 +100,14 @@ def revert_department(
 
 
 @frappe.whitelist()
-def return_order_to_draft(order_name: str) -> dict[str, Any]:
-    """Compatibility endpoint backed by the dedicated lifecycle capability."""
+def return_order_to_draft(order_name: str, reason: str | None = None) -> dict[str, Any]:
+    """Compatibility endpoint for the in-place lifecycle return-to-draft action."""
 
     from almdina_erp.almdina_erp.services.order_revision_service import (
-        return_order_to_draft as create_controlled_return,
+        return_order_to_draft as reset_same_order,
     )
 
-    return create_controlled_return(order_name)
+    return reset_same_order(order_name, reason=reason)
 
 
 # Private compatibility aliases retained for older Python callers and tests.

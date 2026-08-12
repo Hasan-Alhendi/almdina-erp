@@ -64,44 +64,23 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertIn("permission", decision.reason.lower())
 
-    def test_submit_and_approve_state_matrix(self) -> None:
-        for status in ("Draft", "Rejected"):
-            with self.subTest(action="submit", status=status):
-                self.assertTrue(
-                    decide_lifecycle_action(
-                        action=OrderLifecycleAction.SUBMIT_FOR_REVIEW,
-                        status=status,
-                        revision_state="Current",
-                        has_capability=True,
-                    ).allowed
+    def test_submit_and_approve_are_retired(self) -> None:
+        for action, status in (
+            (OrderLifecycleAction.SUBMIT_FOR_REVIEW, "Draft"),
+            (OrderLifecycleAction.SUBMIT_FOR_REVIEW, "Rejected"),
+            (OrderLifecycleAction.APPROVE, "Draft"),
+            (OrderLifecycleAction.APPROVE, "Pending Review"),
+            (OrderLifecycleAction.APPROVE, "Rejected"),
+        ):
+            with self.subTest(action=action, status=status):
+                decision = decide_lifecycle_action(
+                    action=action,
+                    status=status,
+                    revision_state="Current",
+                    has_capability=True,
                 )
-        self.assertFalse(
-            decide_lifecycle_action(
-                action=OrderLifecycleAction.SUBMIT_FOR_REVIEW,
-                status="Pending Review",
-                revision_state="Current",
-                has_capability=True,
-            ).allowed
-        )
-
-        for status in ("Draft", "Rejected", "Pending Review"):
-            with self.subTest(action="approve", status=status):
-                self.assertTrue(
-                    decide_lifecycle_action(
-                        action=OrderLifecycleAction.APPROVE,
-                        status=status,
-                        revision_state="Current",
-                        has_capability=True,
-                    ).allowed
-                )
-        self.assertFalse(
-            decide_lifecycle_action(
-                action=OrderLifecycleAction.APPROVE,
-                status="At Drawing",
-                revision_state="Current",
-                has_capability=True,
-            ).allowed
-        )
+                self.assertFalse(decision.allowed)
+                self.assertIn("أُلغي", decision.reason)
 
     def test_revision_actions_remain_separate(self) -> None:
         self.assertTrue(
@@ -131,43 +110,21 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
         self.assertTrue(
             decide_lifecycle_action(
                 action=OrderLifecycleAction.EDIT,
-                status="Approved",
+                status="Draft",
                 revision_state="Current",
                 has_capability=True,
             ).allowed
         )
-        self.assertTrue(
-            decide_lifecycle_action(
-                action=OrderLifecycleAction.EDIT,
-                status="At Drawing",
-                revision_state="Current",
-                has_capability=True,
-            ).allowed
-        )
-        self.assertFalse(
-            decide_lifecycle_action(
-                action=OrderLifecycleAction.EDIT,
-                status="At Sharyoun",
-                revision_state="Current",
-                has_capability=True,
-            ).allowed
-        )
-        self.assertFalse(
-            decide_lifecycle_action(
-                action=OrderLifecycleAction.EDIT,
-                status="At CNC",
-                revision_state="Current",
-                has_capability=True,
-            ).allowed
-        )
-        self.assertFalse(
-            decide_lifecycle_action(
-                action=OrderLifecycleAction.EDIT,
-                status="Delivered",
-                revision_state="Current",
-                has_capability=True,
-            ).allowed
-        )
+        for status in ("Rejected", "Approved", "At Drawing", "At Sharyoun", "At CNC", "Delivered"):
+            with self.subTest(status=status):
+                self.assertFalse(
+                    decide_lifecycle_action(
+                        action=OrderLifecycleAction.EDIT,
+                        status=status,
+                        revision_state="Current",
+                        has_capability=True,
+                    ).allowed
+                )
 
     def test_terminal_and_historical_orders_are_locked(self) -> None:
         for action in ACTION_CAPABILITIES:
@@ -201,11 +158,18 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
             },
         )
         self.assertEqual(set(context["actions"]), set(ACTION_CAPABILITIES))
-        self.assertTrue(context["editable"])
-        self.assertTrue(context["actions"][OrderLifecycleAction.APPROVE]["allowed"])
+        self.assertFalse(context["editable"])
+        self.assertFalse(context["actions"][OrderLifecycleAction.APPROVE]["allowed"])
         self.assertFalse(
             context["actions"][OrderLifecycleAction.CANCEL]["allowed"]
         )
+
+        draft = build_lifecycle_context(
+            status="Draft",
+            revision_state="Current",
+            capability_flags={Capability.EDIT_ORDER: True},
+        )
+        self.assertTrue(draft["editable"])
 
 
 if __name__ == "__main__":
