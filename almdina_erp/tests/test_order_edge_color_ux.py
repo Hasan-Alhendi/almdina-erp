@@ -44,7 +44,7 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
     assert "patchInvoiceMeta" not in source
 
 
-def test_financial_documents_use_the_server_document_and_edge_color_does_not_fork_it():
+def test_financial_documents_use_server_payload_and_shared_customer_presenter():
     financial = _source(ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js")
     presenter = _source(ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js")
     edge = _source(EDGE_COLOR_UX)
@@ -54,8 +54,10 @@ def test_financial_documents_use_the_server_document_and_edge_color_does_not_for
     assert "resolvePrintIdentity()" in financial
     assert "AlmdinaFactoryPrintIdentity" in financial
     assert "printHtml(documentHtml(payload, printIdentity))" in financial
-    assert 'printDocument(frm, "invoice")' in presenter
-    assert 'printDocument(frm, "measurements")' in presenter
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
+    assert "function printAuthorizedInvoice(frm, payload)" in presenter
+    assert 'documentHtml(frm, "invoice", printIdentity, payload)' in presenter
+    assert 'documentHtml(frm, "measurements", printIdentity)' in presenter
     assert "function printHtml(frm)" not in edge
     assert "event.stopImmediatePropagation()" not in edge
 
