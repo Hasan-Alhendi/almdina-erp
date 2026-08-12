@@ -19,6 +19,14 @@ from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
 )
 
 
+_EDGE_FIELD_BY_SIDE = {
+    "long_right": "edge_long_right",
+    "long_left": "edge_long_left",
+    "width_top": "edge_width_top",
+    "width_bottom": "edge_width_bottom",
+}
+
+
 def _format_decimal(value: Decimal) -> str:
     text = format(value, "f")
     return text.rstrip("0").rstrip(".") if "." in text else text
@@ -94,11 +102,47 @@ def _find_exact_candidate(
     return None
 
 
+def _edge_print_contract(spec: OrderPieceCutSpec) -> dict[str, Any]:
+    """Return canonical plan-piece edge metadata used by screen and print renderers.
+
+    Edge flags stay in the finished-door physical orientation. The renderer owns
+    visual rotation, so a rotated DXF piece receives the same four semantic edge
+    flags as the source order row instead of pre-rotating them here.
+    """
+    flags: dict[str, Any] = {
+        fieldname: 0 for fieldname in _EDGE_FIELD_BY_SIDE.values()
+    }
+    profiles: dict[str, dict[str, Any]] = {}
+
+    for profile in spec.side_profiles:
+        side = str(profile.get("side") or "")
+        fieldname = _EDGE_FIELD_BY_SIDE.get(side)
+        if not fieldname:
+            continue
+
+        flags[fieldname] = 1
+        profiles[side] = {
+            "side": side,
+            "side_label": str(profile.get("side_label") or ""),
+            "edge_type": str(profile.get("edge_type") or ""),
+            "thickness_mm": float(profile.get("thickness_mm") or 0),
+        }
+
+    edge_types = {
+        str(profile.get("edge_type") or "").strip()
+        for profile in profiles.values()
+        if str(profile.get("edge_type") or "").strip()
+    }
+    flags["edge_type"] = next(iter(edge_types)) if len(edge_types) == 1 else ""
+    flags["edge_profiles"] = profiles
+    return flags
+
+
 def _apply_strict_dimension_contract(
     snapshot: dict[str, Any],
     specs: list[OrderPieceCutSpec],
 ) -> list[str]:
-    """Relabel and accept pieces only by exact edge-adjusted raw-cut dimensions."""
+    """Relabel pieces and enrich them with exact order + edge-print metadata."""
     errors: list[str] = []
     unmatched = _expanded_expected(specs)
 
@@ -142,7 +186,10 @@ def _apply_strict_dimension_contract(
                 row_hint = None
                 try:
                     row_no = int(legacy_label.split(".", 1)[0])
-                    row_hint = next((spec for spec in specs if spec.row_index == row_no), None)
+                    row_hint = next(
+                        (spec for spec in specs if spec.row_index == row_no),
+                        None,
+                    )
                 except (TypeError, ValueError):
                     row_hint = None
                 if row_hint:
@@ -174,6 +221,7 @@ def _apply_strict_dimension_contract(
             piece["cut_length_cm"] = float(spec.cut_length_cm)
             piece["edge_width_deduction_mm"] = float(spec.width_deduction_mm)
             piece["edge_length_deduction_mm"] = float(spec.length_deduction_mm)
+            piece.update(_edge_print_contract(spec))
 
     if unmatched:
         preview = "، ".join(
@@ -189,11 +237,11 @@ def _apply_strict_dimension_contract(
 
 
 def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
-    """Validate DXF against exact raw-cut sizes derived from finished size + edge banding.
+    """Validate DXF and normalize accepted pieces to the canonical plan contract.
 
-    The legacy geometry importer is reused for DXF topology, layers, board bounds,
-    kerf and contour checks. Its historical piece association tolerance is only
-    used to identify a candidate; acceptance is then exact at 0.001 cm.
+    Topology/layers/board bounds/kerf remain owned by the geometry importer.
+    Final acceptance is exact at 0.001 cm, then each matched DXF piece inherits
+    the source order's semantic edge-banding metadata for the shared renderer.
     """
     try:
         specs = build_order_piece_cut_specs(order)
@@ -223,6 +271,11 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         "mode": "exact-edge-adjusted",
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
+    }
+    snapshot["print_contract"] = {
+        "renderer": "canonical-cutting-plan",
+        "edge_markers_from_order": True,
+        "rotation_owned_by_renderer": True,
     }
     return snapshot
 
