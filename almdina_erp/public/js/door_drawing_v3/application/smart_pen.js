@@ -11,11 +11,51 @@
     if (!G || !D || !S || !V || !F || !Editor || !G.path) throw new Error("Door Drawing V3 intelligent freehand stack must load before smart pen");
 
     const CLOSE_CAPTURE_PX = 18;
-    const SAMPLE_SPACING_PX = 1.8;
-    const SIMPLIFY_TOLERANCE_PX = 1.8;
-    const STRAIGHT_TOLERANCE_PX = 2.8;
+    const INPUT_PROFILES = Object.freeze({
+        mouse: Object.freeze({
+            sampleSpacingPx: 2.6,
+            simplifyTolerancePx: 2.5,
+            straightTolerancePx: 4.2,
+            smoothingPasses: 3,
+            pathSmoothingPasses: 1,
+            straightRatio: 1.06,
+            circleResidualRatio: 0.055,
+            arcResidualRatio: 0.05,
+            collinearAngleToleranceDeg: 9,
+            orthogonalAngleToleranceDeg: 10,
+        }),
+        pen: Object.freeze({
+            sampleSpacingPx: 1.45,
+            simplifyTolerancePx: 1.55,
+            straightTolerancePx: 2.8,
+            smoothingPasses: 2,
+            pathSmoothingPasses: 1,
+            straightRatio: 1.045,
+            circleResidualRatio: 0.042,
+            arcResidualRatio: 0.038,
+            collinearAngleToleranceDeg: 7,
+            orthogonalAngleToleranceDeg: 8,
+        }),
+        touch: Object.freeze({
+            sampleSpacingPx: 3.2,
+            simplifyTolerancePx: 3,
+            straightTolerancePx: 5,
+            smoothingPasses: 3,
+            pathSmoothingPasses: 2,
+            straightRatio: 1.075,
+            circleResidualRatio: 0.065,
+            arcResidualRatio: 0.055,
+            collinearAngleToleranceDeg: 10,
+            orthogonalAngleToleranceDeg: 11,
+        }),
+    });
     let sequence = 0;
     function nextId(type = "path") { sequence += 1; return `${type}-${Date.now()}-${sequence}`; }
+
+    function inputProfile(pointerType) {
+        const key = String(pointerType || "mouse").toLowerCase();
+        return INPUT_PROFILES[key] || INPUT_PROFILES.mouse;
+    }
 
     function selectedPath(c) {
         const object = D.objectById(c.history.current(), c.selectedId);
@@ -91,6 +131,7 @@
             pointer: pointer || previewPoints[previewPoints.length - 1] || stroke.startPoint,
             closeReady: Boolean(closeReady),
             freehand: true,
+            inputKind: stroke.pointerType,
         };
     }
 
@@ -99,8 +140,11 @@
         const raw = V.eventWorld(c, event);
         const snap = resolveEndpoint(c, raw, c.snapState && c.snapState.target);
         const start = snap.point;
+        const pointerType = String(event.pointerType || "mouse").toLowerCase();
         c.penStroke = {
             pointerId: event.pointerId,
+            pointerType,
+            profile: inputProfile(pointerType),
             rawPoints: [start],
             startPoint: start,
             startTarget: snap.target || null,
@@ -117,7 +161,8 @@
         const stroke = c.penStroke;
         if (!stroke || stroke.pointerId !== event.pointerId) return null;
         const events = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [event];
-        const minSampleMm = Math.max(G.EPSILON_MM, pxToMm(c, SAMPLE_SPACING_PX));
+        const profile = stroke.profile || inputProfile(stroke.pointerType);
+        const minSampleMm = Math.max(G.EPSILON_MM, pxToMm(c, profile.sampleSpacingPx));
         for (const sampleEvent of events.length ? events : [event]) {
             const point = V.eventWorld(c, sampleEvent);
             stroke.rawPoints = F.appendSample(stroke.rawPoints, point, minSampleMm);
@@ -144,6 +189,7 @@
     function objectFromRecognition(result) {
         if (!result || result.type === "none") return null;
         if (result.type === "line") return G.line(nextId("line"), result.start, result.end);
+        if (result.type === "rectangle") return G.rectangle(nextId("rectangle"), result.origin, result.widthMm, result.heightMm);
         if (result.type === "circle") return G.circle(nextId("circle"), result.center, result.radiusMm);
         if (result.type === "arc") return G.arc(nextId("arc"), result.center, result.radiusMm, result.startAngleDeg, result.sweepAngleDeg);
         if (result.type === "path") return G.path(nextId("path"), result.points, result.closed);
@@ -171,11 +217,21 @@
             return true;
         }
 
+        const profile = stroke.profile || inputProfile(stroke.pointerType);
         const result = F.recognize(points, {
             closed,
-            simplifyToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, SIMPLIFY_TOLERANCE_PX)),
-            straightToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, STRAIGHT_TOLERANCE_PX)),
-            smoothingPasses: 2,
+            simplifyToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, profile.simplifyTolerancePx)),
+            straightToleranceMm: Math.max(G.EPSILON_MM, pxToMm(c, profile.straightTolerancePx)),
+            smoothingPasses: profile.smoothingPasses,
+            pathSmoothingPasses: profile.pathSmoothingPasses,
+            straightRatio: profile.straightRatio,
+            circleResidualRatio: profile.circleResidualRatio,
+            arcResidualRatio: profile.arcResidualRatio,
+            collinearAngleToleranceDeg: profile.collinearAngleToleranceDeg,
+            orthogonalAngleToleranceDeg: profile.orthogonalAngleToleranceDeg,
+            preserveEndpoints: true,
+            orthogonalize: true,
+            inputKind: stroke.pointerType,
         });
         let object = null;
         try { object = objectFromRecognition(result); } catch (error) { object = null; }
@@ -455,5 +511,5 @@
         open(frm, row, options = {}) { return install(originalOpen(frm, row, options)); },
         view(frm, row) { return install(originalView(frm, row)); },
     });
-    root.SmartPen = Object.freeze({ activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, install });
+    root.SmartPen = Object.freeze({ INPUT_PROFILES, inputProfile, activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, install });
 })();
