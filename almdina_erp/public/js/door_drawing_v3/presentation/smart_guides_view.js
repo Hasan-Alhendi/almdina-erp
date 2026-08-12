@@ -16,6 +16,17 @@
         return `<g class="ddv3-smart-guide-label" transform="translate(${p.x + 10} ${p.y - 10})"><rect x="0" y="-14" width="${Math.max(28, String(text).length * 7 + 12)}" height="20" rx="4"/><text x="6" y="0">${String(text)}</text></g>`;
     }
 
+    function pointMarker(c, point, type) {
+        const p = Base.worldToScreen(c, point);
+        if (type === "midpoint") {
+            return `<g class="ddv3-smart-guide-point is-midpoint" transform="translate(${p.x} ${p.y})"><rect x="-4" y="-4" width="8" height="8" transform="rotate(45)"/></g>`;
+        }
+        if (type === "endpoint") {
+            return `<g class="ddv3-smart-guide-point is-endpoint" transform="translate(${p.x} ${p.y})"><circle r="5"/><circle r="2"/></g>`;
+        }
+        return "";
+    }
+
     function alignmentMarkup(c, guide) {
         const point = guide.point;
         const target = guide.targetPoint;
@@ -49,6 +60,9 @@
             const p = Base.worldToScreen(c, guide.point);
             return `<g class="ddv3-smart-guide-surface" transform="translate(${p.x} ${p.y})"><circle r="5"/><circle r="2"/></g>`;
         }
+        if (guide.type === "endpoint" || guide.type === "midpoint") {
+            return pointMarker(c, guide.point, guide.type);
+        }
         if (guide.type === "equal-length") {
             return `${guide.targetPoint ? lineMarkup(c, guide.point, guide.targetPoint, "is-equal-length") : ""}${labelMarkup(c, guide.point, "=")}`;
         }
@@ -63,5 +77,5 @@
     }
 
     root.ShapeView = Object.freeze({ ...Base, render, smartGuideMarkup: guideMarkup });
-    root.SmartGuidesView = Object.freeze({ guideMarkup, alignmentMarkup });
+    root.SmartGuidesView = Object.freeze({ guideMarkup, alignmentMarkup, pointMarker });
 })();
