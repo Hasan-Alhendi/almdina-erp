@@ -199,6 +199,20 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn('frm.set_df_property(fieldname, "read_only"', presenter)
         self.assertNotIn('frm.set_df_property(fieldname, "read_only"', guard)
 
+    def test_empty_plan_action_surface_recovers_before_approval_controls(self) -> None:
+        controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        simplify = controls.split("function simplifyActions(frm)", 1)[1].split(
+            "function apply(frm)", 1
+        )[0]
+
+        self.assertIn('.find(".dco-plan-actions-shell").first()', simplify)
+        self.assertIn("window.AlmdinaDoorCuttingPlanUX", simplify)
+        self.assertIn("presenter.refresh(frm)", simplify)
+        self.assertLess(
+            simplify.index("presenter.refresh(frm)"),
+            simplify.index("installApprovalAction(frm, field)"),
+        )
+
     def test_input_policy_uses_public_form_surface_only(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")
 

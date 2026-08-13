@@ -446,6 +446,19 @@
         const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
 
+        // Identity and permission refreshes may clear the protected HTML field
+        // before the presenter gets its next turn. Never rebuild only the
+        // approval button into an otherwise empty surface; ask the canonical
+        // presenter to restore the complete command deck first.
+        const shell = field.$wrapper.find(".dco-plan-actions-shell").first();
+        if (!shell.length) {
+            const presenter = window.AlmdinaDoorCuttingPlanUX;
+            if (presenter && typeof presenter.refresh === "function") {
+                presenter.refresh(frm);
+            }
+            return;
+        }
+
         const duplicated = field.$wrapper.find(DUPLICATED_ACTIONS);
         if (duplicated.length) duplicated.remove();
 
