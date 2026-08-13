@@ -221,7 +221,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         bootstrap = PLAN_SURFACE_BOOTSTRAP.read_text(encoding="utf-8")
 
         self.assertIn(
-            "return Promise.resolve(context.ensureStageContext(frm)).then(run)",
+            "return context.ensureStageContext(frm).then(run)",
             presenter,
         )
         self.assertIn("async function renderSurface(frm)", bootstrap)

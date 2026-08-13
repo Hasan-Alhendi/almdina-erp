@@ -675,7 +675,7 @@
             return false;
         };
         if (context && typeof context.ensureStageContext === "function") {
-            return Promise.resolve(context.ensureStageContext(frm)).then(run);
+            return context.ensureStageContext(frm).then(run);
         }
         return Promise.resolve(run());
     }
