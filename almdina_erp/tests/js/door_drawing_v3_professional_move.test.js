@@ -39,6 +39,7 @@ assert.equal(result.dx, 200, "Single-axis X alignment should remain available wh
 assert.equal(result.dy, 0);
 assert.equal(result.geometryCandidate, null);
 assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "x"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "نفس المحاذاة"), "A clerk should get a plain Arabic alignment hint instead of a technical constraint name");
 
 const alignedY = G.rectangle("aligned-y", G.point(600, 260), 70, 60);
 result = P.resolve(doc([moving, alignedY]), [moving], 0, 158, { viewportScale: 1 });
@@ -46,6 +47,7 @@ assert.equal(result.dx, 0);
 assert.equal(result.dy, 160, "Single-axis Y alignment should remain available when no point candidate is near");
 assert.equal(result.geometryCandidate, null);
 assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "y"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "نفس المحاذاة"));
 
 const left = G.rectangle("left", G.point(0, 100), 50, 50);
 const right = G.rectangle("right", G.point(150, 100), 50, 50);
