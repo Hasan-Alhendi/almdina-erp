@@ -8,6 +8,15 @@
     if (!G || !D || !Editor) throw new Error("Door Drawing V3 geometry, document model, and editor must load before editor shortcuts");
 
     const PASTE_OFFSET_MM = 20;
+    const PHYSICAL_SHORTCUTS = Object.freeze({
+        KeyA: "a",
+        KeyC: "c",
+        KeyD: "d",
+        KeyV: "v",
+        KeyX: "x",
+        KeyY: "y",
+        KeyZ: "z",
+    });
     let clipboard = null;
     let sequence = 0;
 
@@ -23,9 +32,6 @@
     function editingTarget(c, event) {
         const target = event && event.target;
         if (!isEditableTarget(target)) return false;
-        // The drawing dialog owns keyboard shortcuts while it is open. A stale focus
-        // left on the ERPNext form behind the modal must never disable Ctrl+C/V/Z/Y.
-        // Native text editing is preserved only for an actual editor field inside DDV3.
         if (c && c.root && typeof c.root.contains === "function") return c.root.contains(target);
         return true;
     }
@@ -53,12 +59,17 @@
         }
     }
 
+    function shortcutKey(event) {
+        const code = String(event && event.code || "");
+        if (PHYSICAL_SHORTCUTS[code]) return PHYSICAL_SHORTCUTS[code];
+        return String(event && event.key || "").toLowerCase();
+    }
+
     function selectedObjectIds(c) {
-        const candidates = Array.isArray(c.selectedIds) && c.selectedIds.length
-            ? c.selectedIds
-            : (c.selectedId ? [c.selectedId] : []);
-        return [...new Set(candidates.filter(Boolean).map(String))]
-            .filter(id => D.objectById(c.history.current(), id));
+        const selectedId = String(c && c.selectedId || "");
+        const group = Array.isArray(c && c.selectedIds) ? c.selectedIds.filter(Boolean).map(String) : [];
+        const candidates = selectedId && !group.includes(selectedId) ? [selectedId] : (group.length ? group : (selectedId ? [selectedId] : []));
+        return [...new Set(candidates)].filter(id => D.objectById(c.history.current(), id));
     }
 
     function selectedObjects(c) {
@@ -92,10 +103,7 @@
     function copySelection(c) {
         const objects = selectedObjects(c);
         if (!objects.length) return false;
-        clipboard = {
-            objects: objects.map(object => G.cloneObject(object)),
-            pasteSerial: 0,
-        };
+        clipboard = { objects: objects.map(object => G.cloneObject(object)), pasteSerial: 0 };
         return true;
     }
 
@@ -108,7 +116,6 @@
         try {
             clipboard.objects.forEach(source => {
                 const clone = G.cloneObject(source, nextId(source.type));
-                // World Y grows upward, so negative Y produces the familiar visual down-right paste offset.
                 const moved = G.translateObject(clone, offset, -offset);
                 document = D.addObject(document, moved);
                 ids.push(String(moved.id));
@@ -121,6 +128,33 @@
         setSelection(c, ids);
         render(c);
         return true;
+    }
+
+    function cutSelection(c) {
+        if (c.readOnly) return false;
+        const ids = selectedObjectIds(c);
+        if (!ids.length || !copySelection(c)) return false;
+        let document = c.history.current();
+        try { ids.forEach(id => { document = D.removeObject(document, id); }); }
+        catch (error) { return false; }
+        c.history.execute(document, ids.length > 1 ? `Cut ${ids.length} objects` : "Cut object");
+        c.dirty = true;
+        setSelection(c, []);
+        render(c);
+        return true;
+    }
+
+    function selectAll(c) {
+        const ids = (c.history.current().objects || []).map(object => String(object.id));
+        if (!ids.length) return false;
+        setSelection(c, ids);
+        render(c);
+        return true;
+    }
+
+    function duplicateSelection(c) {
+        if (!copySelection(c)) return false;
+        return pasteSelection(c);
     }
 
     function syncSelectionAfterHistory(c) {
@@ -163,10 +197,15 @@
         if (!editorVisible(c) || c.readOnly || editingTarget(c, event)) return false;
         const mod = Boolean(event.ctrlKey || event.metaKey);
         if (!mod || event.altKey) return false;
-        const key = String(event.key || "").toLowerCase();
+        const key = shortcutKey(event);
 
         if (key === "c") {
             if (!copySelection(c)) return false;
+            stop(event);
+            return true;
+        }
+        if (key === "x") {
+            if (!cutSelection(c)) return false;
             stop(event);
             return true;
         }
@@ -175,9 +214,18 @@
             stop(event);
             return true;
         }
+        if (key === "a") {
+            if (!selectAll(c)) return false;
+            stop(event);
+            return true;
+        }
+        if (key === "d") {
+            if (!duplicateSelection(c)) return false;
+            stop(event);
+            return true;
+        }
         if (key === "z") {
             event.shiftKey ? redo(c) : undo(c);
-            // Keep the browser from interpreting Ctrl/Cmd+Z even when the history stack is empty.
             stop(event);
             return true;
         }
@@ -199,8 +247,6 @@
             if (c.canvas && typeof c.canvas.contains === "function" && c.canvas.contains(target)) focusCanvas(c);
         };
 
-        // Window capture runs before the legacy document-level shortcut handler, giving one
-        // authoritative implementation for copy/paste/undo/redo without duplicating commands.
         window.addEventListener("keydown", onKeyDown, true);
         c.root.addEventListener("pointerdown", onRootPointerDown, true);
         focusCanvas(c);
@@ -222,10 +268,14 @@
     root.EditorShortcuts = Object.freeze({
         install,
         keyDown,
+        shortcutKey,
         editingTarget,
         focusCanvas,
         copySelection,
+        cutSelection,
         pasteSelection,
+        selectAll,
+        duplicateSelection,
         undo,
         redo,
         selectedObjectIds,
