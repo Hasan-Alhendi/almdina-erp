@@ -86,6 +86,7 @@
             duplicateMode: Boolean(event.altKey),
             moved: false,
             lockedAxis: null,
+            stickyCandidate: null,
         };
         c.professionalMoveDuplicate = Boolean(event.altKey);
         c.professionalMoveGuideState = null;
@@ -113,7 +114,10 @@
         const resolved = Policy.resolve(c.history.current(), gesture.objects, dx, dy, {
             viewportScale: c.viewport.scale,
             lockedAxis,
+            includeSourceTargets: Boolean(gesture.duplicateMode),
+            stickyCandidate: gesture.stickyCandidate,
         });
+        gesture.stickyCandidate = resolved.stickyCandidate || null;
         c.professionalMoveGuideState = resolved;
         c.vectorActiveTranslation = { ids: gesture.ids, dx: resolved.dx, dy: resolved.dy };
         schedule(c);
