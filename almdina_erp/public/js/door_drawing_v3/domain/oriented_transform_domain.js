@@ -112,7 +112,10 @@
             const a = hull[index], b = hull[(index + 1) % hull.length];
             const angle = normalize180(deg(Math.atan2(b.y - a.y, b.x - a.x)));
             const candidate = frameAtAngleFromPoints(points, angle);
-            if (!best || candidate.area < best.area - G.EPSILON_MM) best = candidate;
+            const betterArea = !best || candidate.area < best.area - G.EPSILON_MM;
+            const equalArea = best && Math.abs(candidate.area - best.area) <= G.EPSILON_MM;
+            const moreStableAngle = equalArea && Math.abs(candidate.angleDeg) < Math.abs(best.angleDeg) - 1e-9;
+            if (betterArea || moreStableAngle) best = candidate;
         }
         return best;
     }
