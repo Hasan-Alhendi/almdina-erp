@@ -10,6 +10,10 @@ require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/smart_pa
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/bezier_path_domain.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/vector_selection.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snapping.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_path_snapping.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_guides.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/unified_snap_engine.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snap_candidate_engine.js"));
 require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/professional_move_policy.js"));
 
 const V3 = global.window.AlmdinaDoorDrawingV3;
