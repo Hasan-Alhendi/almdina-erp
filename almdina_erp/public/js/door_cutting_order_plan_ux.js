@@ -645,15 +645,6 @@
         }
     }
 
-    function applyReadOnlyState(frm) {
-        // Kerf/trim follow the order edit session (revision_ux), not optimizer tuning.
-        const readOnly = canEditOptimizerSettings(frm) ? 0 : 1;
-        ["packing_mode", "cutting_machine_type", "optimization_time_limit_sec"].forEach(fieldname => {
-            frm.set_df_property(fieldname, "read_only", readOnly);
-        });
-        frm.toggle_display("optimization_time_limit_sec", ["Deep Search", "Optimal Search"].includes(frm.doc.packing_mode));
-    }
-
     function refreshPlanUX(frm) {
         installStyles();
         applyOptimizerFieldPresentation(frm);

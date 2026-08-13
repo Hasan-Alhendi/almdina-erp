@@ -143,7 +143,7 @@
     }
 
     function applyOptimizerFieldAccess(frm) {
-        // Only packing-algorithm fields open here (mode/machine/time). Kerf and
+        // Only the packing-algorithm fields open here (mode/machine/time). Kerf and
         // trim are ordinary order inputs governed by the edit session.
         const mayEdit = Boolean(
             canTuneCuttingAlgorithm(frm) && can(frm, "edit_optimizer_settings")
