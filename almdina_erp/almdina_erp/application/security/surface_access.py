@@ -25,6 +25,8 @@ class Surface:
     PRODUCTION_STAGES = "production_stages"
     PRODUCTION_INCIDENTS = "production_incidents"
     REPLACEMENTS = "replacements"
+    APPROVAL_QUEUE = "approval_queue"
+    PLAN_ARCHIVE = "plan_archive"
     FACTORY_MASTER_DATA = "factory_master_data"
     PRODUCTION_ROUTINGS = "production_routings"
     EDGE_BANDING_TYPES = "edge_banding_types"
@@ -66,6 +68,8 @@ ALL_SURFACES = frozenset(
         Surface.PRODUCTION_STAGES,
         Surface.PRODUCTION_INCIDENTS,
         Surface.REPLACEMENTS,
+        Surface.APPROVAL_QUEUE,
+        Surface.PLAN_ARCHIVE,
         Surface.FACTORY_MASTER_DATA,
         Surface.PRODUCTION_ROUTINGS,
         Surface.EDGE_BANDING_TYPES,
@@ -117,7 +121,16 @@ def build_surface_access(
         Surface.PRODUCTION_STAGES: sections.get("production") is True,
         Surface.PRODUCTION_INCIDENTS: Capability.VIEW_PRODUCTION_INCIDENTS in granted,
         Surface.REPLACEMENTS: Capability.VIEW_REPLACEMENTS in granted,
-        Surface.FACTORY_MASTER_DATA: can_open_master_data,
+        Surface.APPROVAL_QUEUE: bool(
+            granted.intersection({Capability.APPROVE_ORDER, Capability.REJECT_ORDER})
+        ),
+        Surface.PLAN_ARCHIVE: Capability.ARCHIVE_APPROVED_PLAN in granted,
+        # The factory-master-data Page is the Production Routing console. Edge
+        # types and customers have their own DocType surfaces, so granting either
+        # must not advertise a routing page that will reject the user on load.
+        Surface.FACTORY_MASTER_DATA: (
+            can_open_master_data and Capability.VIEW_PRODUCTION_ROUTINGS in granted
+        ),
         Surface.PRODUCTION_ROUTINGS: (
             can_open_master_data and Capability.VIEW_PRODUCTION_ROUTINGS in granted
         ),
@@ -145,6 +158,8 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
         Surface.PRODUCTION_STAGES: ("production-stage",),
         Surface.PRODUCTION_INCIDENTS: ("production-incident",),
         Surface.REPLACEMENTS: ("replacement-piece",),
+        Surface.APPROVAL_QUEUE: ("factory-approval-queue",),
+        Surface.PLAN_ARCHIVE: ("factory-plan-archive",),
         Surface.FACTORY_MASTER_DATA: ("factory-master-data",),
         Surface.PRODUCTION_ROUTINGS: ("production-routing",),
         Surface.EDGE_BANDING_TYPES: ("edge-banding-type",),

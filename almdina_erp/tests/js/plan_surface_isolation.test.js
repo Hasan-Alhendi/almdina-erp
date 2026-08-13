@@ -13,6 +13,12 @@ const source = fs.readFileSync(
 function htmlWrapper(initial = "") {
     return {
         content: initial,
+        attributes: {},
+        attr(name, value) {
+            if (arguments.length === 1) return this.attributes[name];
+            this.attributes[name] = String(value || "");
+            return this;
+        },
         html(value) {
             if (arguments.length === 0) return this.content;
             this.content = String(value || "");
@@ -97,6 +103,13 @@ function buildHarness({ canViewPlan }) {
                         return true;
                     },
                 };
+            } else if (asset.endsWith("door_cutting_order_plan_content_ux.js")) {
+                fakeWindow.AlmdinaPlanContentUX = {
+                    apply() {},
+                    isReady() {
+                        return layout.attr("data-almdina-order") === frm.doc.name;
+                    },
+                };
             }
             return Promise.resolve();
         },
@@ -149,6 +162,7 @@ function buildHarness({ canViewPlan }) {
             "/assets/almdina_erp/js/door_cutting_order_plan_ux.js",
             "/assets/almdina_erp/js/door_cutting_order_plan_controls_ux.js",
             "/assets/almdina_erp/js/door_cutting_order_plan_tabs_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order_plan_content_ux.js",
         ]
     );
     assert.ok(authorized.requestedCapabilities.includes("view_cutting_plan"));

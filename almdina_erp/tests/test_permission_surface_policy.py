@@ -38,8 +38,13 @@ class TestPermissionSurfacePolicy(unittest.TestCase):
         )
         self.assertTrue(surfaces[Surface.ORDERS])
         self.assertTrue(surfaces[Surface.EDGE_BANDING_TYPES])
-        self.assertTrue(surfaces[Surface.FACTORY_MASTER_DATA])
+        self.assertFalse(surfaces[Surface.FACTORY_MASTER_DATA])
         self.assertFalse(surfaces[Surface.CUSTOMER_ADMIN])
+
+    def test_routing_console_requires_routing_view(self) -> None:
+        surfaces = build_surface_access({Capability.VIEW_PRODUCTION_ROUTINGS})
+        self.assertTrue(surfaces[Surface.FACTORY_MASTER_DATA])
+        self.assertTrue(surfaces[Surface.PRODUCTION_ROUTINGS])
 
     def test_explicit_customer_view_is_visible_even_for_order_entry_role(self) -> None:
         surfaces = build_surface_access(
@@ -65,6 +70,19 @@ class TestPermissionSurfacePolicy(unittest.TestCase):
         self.assertFalse(navigation["sections"]["quality"])
         self.assertFalse(navigation["sections"]["costing"])
         self.assertNotIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])
+
+    def test_control_center_pages_follow_their_exact_capabilities(self) -> None:
+        incidents = build_surface_access({Capability.VIEW_PRODUCTION_INCIDENTS})
+        self.assertFalse(incidents[Surface.APPROVAL_QUEUE])
+        self.assertFalse(incidents[Surface.PLAN_ARCHIVE])
+
+        review = build_surface_access({Capability.REJECT_ORDER})
+        self.assertTrue(review[Surface.APPROVAL_QUEUE])
+        self.assertFalse(review[Surface.PLAN_ARCHIVE])
+
+        archive = build_surface_access({Capability.ARCHIVE_APPROVED_PLAN})
+        self.assertFalse(archive[Surface.APPROVAL_QUEUE])
+        self.assertTrue(archive[Surface.PLAN_ARCHIVE])
 
     def test_workforce_and_permission_admin_surfaces_are_explicit(self) -> None:
         workforce = build_surface_access({Capability.VIEW_USERS})

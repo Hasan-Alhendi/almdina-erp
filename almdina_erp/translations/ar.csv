@@ -68,6 +68,8 @@ Home,الرئيسية
 Naming Series,تسلسل الترقيم
 Customer,العميل
 Order,الطلب
+Order Cost,تكلفة الطلب
+Order Cost and Customer Invoice,تكلفة الطلب وفاتورة الزبون
 Order Date,تاريخ الطلب
 Status,الحالة
 Revision,رقم المراجعة
@@ -85,6 +87,8 @@ Board Width (MM),عرض اللوح (مم)
 Board Rate USD,سعر اللوح بالدولار
 Cutting Cost / Board USD,تكلفة قص اللوح بالدولار
 Cutting Settings,إعدادات القص
+Cutting Plan Engine,محرك خطة القص
+Board Layout,توزيع القطع على الألواح
 Default Edge Type,نوع القشاط الافتراضي
 Kerf (MM),سماكة خط المنشار (مم)
 Trim Margin (MM),هامش تسوية حواف اللوح (مم)

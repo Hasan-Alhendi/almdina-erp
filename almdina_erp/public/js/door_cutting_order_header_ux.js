@@ -8,6 +8,30 @@
         cost_tab: "تكلفة الطلب",
     };
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function scheduleFrame(frm, key, callback) {
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            return context.scheduleFrame(frm, key, callback);
+        }
+        return requestAnimationFrame(() => {
+            if (window.cur_frm === frm) callback(frm);
+        });
+    }
+
+    function scheduleDelay(frm, key, callback, delay) {
+        const context = documentContext();
+        if (context && typeof context.schedule === "function") {
+            return context.schedule(frm, key, callback, delay);
+        }
+        return setTimeout(() => {
+            if (window.cur_frm === frm) callback(frm);
+        }, delay);
+    }
+
     function isArabic() {
         const lang = String(
             (frappe.boot && frappe.boot.lang) ||
@@ -143,16 +167,15 @@
     function markCurrentHeader(frm) {
         installStyles();
 
-        document.querySelectorAll(".page-head.dco-responsive-head").forEach(node => {
+        const wrapper = domNode(frm && frm.wrapper);
+        if (!wrapper) return;
+        const pageContainer = wrapper.closest(".page-container") || wrapper.closest(".desk-page") || wrapper.parentElement;
+        if (!pageContainer) return;
+        pageContainer.querySelectorAll(".page-head.dco-responsive-head").forEach(node => {
             node.classList.remove("dco-responsive-head");
         });
 
-        const wrapper = domNode(frm && frm.wrapper);
-        if (!wrapper) return;
-
-        const pageContainer = wrapper.closest(".page-container") || wrapper.closest(".desk-page") || wrapper.parentElement;
-        let head = pageContainer ? pageContainer.querySelector(".page-head") : null;
-        if (!head) head = document.querySelector(".page-head");
+        const head = pageContainer.querySelector(".page-head");
         if (head) head.classList.add("dco-responsive-head");
     }
 
@@ -182,7 +205,7 @@
     function currentFixedTop(frm) {
         const wrapper = domNode(frm && frm.wrapper);
         const pageContainer = wrapper && (wrapper.closest(".page-container") || wrapper.closest(".desk-page"));
-        const head = pageContainer ? pageContainer.querySelector(".page-head") : document.querySelector(".page-head");
+        const head = pageContainer ? pageContainer.querySelector(".page-head") : null;
         if (!head) return 0;
 
         const style = window.getComputedStyle(head);
@@ -226,14 +249,8 @@
         if (frm._dco_fixed_tabs_listener_installed) return;
         frm._dco_fixed_tabs_listener_installed = true;
 
-        let scheduled = false;
         const schedule = () => {
-            if (scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => {
-                scheduled = false;
-                updateFixedTabs(frm);
-            });
+            scheduleFrame(frm, "header-fixed-tabs-scroll", () => updateFixedTabs(frm));
         };
 
         // Frappe may scroll a nested Desk container instead of window. Capture scrolls
@@ -241,6 +258,15 @@
         document.addEventListener("scroll", schedule, true);
         window.addEventListener("resize", schedule, { passive: true });
         frm._dco_fixed_tabs_schedule = schedule;
+        const context = documentContext();
+        if (context && typeof context.registerCleanup === "function") {
+            context.registerCleanup(frm, "header-fixed-tabs-listeners", () => {
+                document.removeEventListener("scroll", schedule, true);
+                window.removeEventListener("resize", schedule);
+                frm._dco_fixed_tabs_listener_installed = false;
+                frm._dco_fixed_tabs_schedule = null;
+            });
+        }
     }
 
     function markStickyTabs(frm) {
@@ -274,7 +300,7 @@
     function refreshHeaderUX(frm) {
         markCurrentHeader(frm);
         markStickyTabs(frm);
-        requestAnimationFrame(() => {
+        scheduleFrame(frm, "header-refresh-frame", () => {
             markCurrentHeader(frm);
             markStickyTabs(frm);
         });
@@ -286,8 +312,8 @@
         },
         refresh(frm) {
             refreshHeaderUX(frm);
-            setTimeout(() => markStickyTabs(frm), 180);
-            setTimeout(() => markStickyTabs(frm), 700);
+            scheduleDelay(frm, "header-sticky-tabs-180", () => markStickyTabs(frm), 180);
+            scheduleDelay(frm, "header-sticky-tabs-700", () => markStickyTabs(frm), 700);
         },
     });
 })();

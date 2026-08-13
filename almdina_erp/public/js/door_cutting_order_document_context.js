@@ -24,12 +24,15 @@
     const ALGORITHM_TUNABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const OBSERVER_FIELDS = Object.freeze([
         "_dcoToolbarObserver",
+        "_dcoMeasurementToolbarObserver",
         "__almdina_financial_observer",
         "__almdina_cost_actions_observer",
+        "__almdina_invoice_button_observer",
         "__dcoSimplePlanControlsObserver",
         "__dcoMobileCardsObserver",
         "_almdina_secure_dxf_observer",
     ]);
+    const EFFECT_STATE_FIELD = "__almdinaDocumentEffects";
 
     function formIdentity(frm) {
         const doc = frm && frm.doc;
@@ -137,10 +140,130 @@
         frm[fieldname] = null;
     }
 
+    function effectState(frm) {
+        if (!frm) return null;
+        const current = frm[EFFECT_STATE_FIELD];
+        if (
+            current
+            && current.timers instanceof Map
+            && current.frames instanceof Map
+            && current.observers instanceof Map
+            && current.cleanups instanceof Map
+        ) {
+            return current;
+        }
+        const state = {
+            timers: new Map(),
+            frames: new Map(),
+            observers: new Map(),
+            cleanups: new Map(),
+        };
+        frm[EFFECT_STATE_FIELD] = state;
+        return state;
+    }
+
+    function cancelEffect(frm, key) {
+        const state = effectState(frm);
+        const resolved = String(key || "").trim();
+        if (!state || !resolved) return false;
+
+        if (state.timers.has(resolved)) {
+            window.clearTimeout(state.timers.get(resolved));
+            state.timers.delete(resolved);
+        }
+        if (state.frames.has(resolved)) {
+            const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
+            cancelFrame.call(window, state.frames.get(resolved));
+            state.frames.delete(resolved);
+        }
+        if (state.observers.has(resolved)) {
+            const observer = state.observers.get(resolved);
+            if (observer && typeof observer.disconnect === "function") observer.disconnect();
+            state.observers.delete(resolved);
+        }
+        if (state.cleanups.has(resolved)) {
+            const cleanup = state.cleanups.get(resolved);
+            state.cleanups.delete(resolved);
+            try {
+                cleanup();
+            } catch (error) {
+                console.debug(`Almdina document cleanup failed: ${resolved}`, error);
+            }
+        }
+        return true;
+    }
+
+    function schedule(frm, key, callback, delay = 0) {
+        if (!frm || typeof callback !== "function") return null;
+        const resolved = String(key || "").trim();
+        if (!resolved) return null;
+        cancelEffect(frm, resolved);
+        const state = effectState(frm);
+        const token = capture(frm);
+        const timer = window.setTimeout(() => {
+            if (state.timers.get(resolved) !== timer) return;
+            state.timers.delete(resolved);
+            if (!isCurrent(frm, token)) return;
+            callback(frm, token);
+        }, Math.max(0, Number(delay) || 0));
+        state.timers.set(resolved, timer);
+        return timer;
+    }
+
+    function scheduleFrame(frm, key, callback) {
+        if (!frm || typeof callback !== "function") return null;
+        const resolved = String(key || "").trim();
+        if (!resolved) return null;
+        cancelEffect(frm, resolved);
+        const state = effectState(frm);
+        const token = capture(frm);
+        const requestFrame = window.requestAnimationFrame || window.setTimeout;
+        const frame = requestFrame.call(window, () => {
+            if (state.frames.get(resolved) !== frame) return;
+            state.frames.delete(resolved);
+            if (!isCurrent(frm, token)) return;
+            callback(frm, token);
+        });
+        state.frames.set(resolved, frame);
+        return frame;
+    }
+
+    function registerObserver(frm, key, observer) {
+        if (!frm || !observer || typeof observer.disconnect !== "function") return false;
+        const resolved = String(key || "").trim();
+        if (!resolved) return false;
+        cancelEffect(frm, resolved);
+        effectState(frm).observers.set(resolved, observer);
+        return true;
+    }
+
+    function registerCleanup(frm, key, cleanup) {
+        if (!frm || typeof cleanup !== "function") return false;
+        const resolved = String(key || "").trim();
+        if (!resolved) return false;
+        cancelEffect(frm, resolved);
+        effectState(frm).cleanups.set(resolved, cleanup);
+        return true;
+    }
+
+    function clearRegisteredEffects(frm) {
+        const state = frm && frm[EFFECT_STATE_FIELD];
+        if (!state) return;
+        const keys = new Set([
+            ...state.timers.keys(),
+            ...state.frames.keys(),
+            ...state.observers.keys(),
+            ...state.cleanups.keys(),
+        ]);
+        keys.forEach(key => cancelEffect(frm, key));
+        frm[EFFECT_STATE_FIELD] = null;
+    }
+
     function cancelDocumentEffects(frm) {
         TIMER_FIELDS.forEach(fieldname => clearTimer(frm, fieldname));
         TIMER_MAP_FIELDS.forEach(fieldname => clearTimerMap(frm, fieldname));
         OBSERVER_FIELDS.forEach(fieldname => disconnectObserver(frm, fieldname));
+        clearRegisteredEffects(frm);
     }
 
     function resetDocumentState(frm) {
@@ -167,6 +290,29 @@
         frm.__almdina_stage_context_key = null;
         frm.__almdinaStageContextPromise = null;
         frm.__almdinaStageContextToken = null;
+        frm.__almdinaProductionRouteName = null;
+        frm.__almdinaProductionRouteSteps = null;
+        frm.__almdinaProductionActionsContext = null;
+        frm.__almdinaProductionActionsKey = null;
+        frm.__almdinaProductionActionsPromise = null;
+        frm.__almdinaProductionRecoveryContext = null;
+        frm.__almdinaProductionRecoveryPromise = null;
+        frm.__almdinaPermissionRefreshContext = null;
+        frm.__almdinaPermissionRefreshPromise = null;
+        frm.__almdinaCostSnapshotContext = null;
+        frm.__almdinaCostSnapshotPromise = null;
+        frm.__almdina_cost_snapshot_order = null;
+        frm.__almdina_invoice_cost_reconcile_identity = null;
+        frm.__almdina_invoice_cost_reconcile_promise = null;
+        frm.__almdina_pending_order_input_persistence = null;
+        frm.__almdinaShopFloorHiddenState = null;
+        frm._dcoToolbarObservedHead = null;
+        frm._dcoMeasurementToolbarObservedRoot = null;
+        frm._dco_fixed_tabs = null;
+        frm._dco_tabs_placeholder = null;
+        frm._dco_fixed_tabs_listener_installed = false;
+        frm._dco_fixed_tabs_schedule = null;
+        frm.__dcoSimplePlanControlsScheduled = false;
 
         delete frm._almdina_factory_defaults_loaded;
         delete frm._dco_added_buttons;
@@ -450,6 +596,11 @@
         isStageContextPending,
         stageMutationBlockReason,
         registerSurface,
+        cancelEffect,
+        schedule,
+        scheduleFrame,
+        registerObserver,
+        registerCleanup,
         pendingSurfaces,
         scheduleSettle,
         settleSurfaces,

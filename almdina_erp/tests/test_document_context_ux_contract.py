@@ -80,7 +80,6 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("ensureStageContext(frm).then", plan)
         self.assertIn("almdina:stage-context-ready", plan)
         self.assertIn("function canOperatePlanEngine(frm)", plan)
-        self.assertIn("function canEditOptimizerSettings(frm)", plan)
         self.assertIn("function canUseDocumentPlanActions(frm)", plan)
         # Upload / export / print stay available on an active stage; the gate is
         # the capability plus the stage's operational role, never the stage alone.
@@ -100,6 +99,8 @@ class TestDocumentContextUxContract(unittest.TestCase):
             "Only the packing-algorithm fields open here",
             controls,
         )
+        self.assertIn("function applyOptimizerFieldAccess(frm)", controls)
+        self.assertNotIn("function canEditOptimizerSettings(frm)", plan)
 
     def test_cutting_algorithm_surface_never_waits_for_an_order_edit_session(self) -> None:
         context = DOCUMENT_CONTEXT.read_text(encoding="utf-8")

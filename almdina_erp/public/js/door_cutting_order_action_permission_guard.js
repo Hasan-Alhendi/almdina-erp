@@ -15,13 +15,6 @@
         ".dco-deep-plan",
         ".dco-optimal-plan",
     ].join(",");
-    const OPTIMIZER_FIELDS = [
-        "packing_mode",
-        "cutting_machine_type",
-        "kerf_mm",
-        "trim_margin_mm",
-        "optimization_time_limit_sec",
-    ];
     const MEASUREMENT_PRINT_SELECTOR = [
         ".dco-print-measurements",
         ".dco-entry-window-print",
@@ -44,6 +37,15 @@
 
     function planIsLocked(frm) {
         return Boolean(frm && frm.doc && frm.doc.approved_plan);
+    }
+
+    function canMutatePlan(frm) {
+        const context = window.AlmdinaDocumentContext;
+        return Boolean(
+            context
+            && typeof context.canTuneCuttingAlgorithm === "function"
+            && context.canTuneCuttingAlgorithm(frm)
+        );
     }
 
     function deny(message) {
@@ -70,9 +72,10 @@
         const mayRecalculate = can(frm, "recalculate_plan");
         const mayEditOptimizer = can(frm, "edit_optimizer_settings");
         const locked = planIsLocked(frm);
+        const mayMutate = canMutatePlan(frm);
         root.querySelectorAll(PLAN_ACTION_SELECTOR).forEach(button => {
             const modeButton = button.matches(MODE_ACTION_SELECTOR);
-            const allowed = !locked && mayRecalculate && (!modeButton || mayEditOptimizer);
+            const allowed = !locked && mayMutate && mayRecalculate && (!modeButton || mayEditOptimizer);
             if (button.disabled === allowed) button.disabled = !allowed;
             const ariaValue = allowed ? "false" : "true";
             if (button.getAttribute("aria-disabled") !== ariaValue) {
@@ -89,21 +92,13 @@
             }
         });
 
-        // Optimizer authority is independent from full order editing and from
-        // cost permissions. The server remains the final lifecycle/state guard.
-        const desiredReadOnly = mayEditOptimizer && !locked ? 0 : 1;
-        OPTIMIZER_FIELDS.forEach(fieldname => {
-            const field = frm.fields_dict && frm.fields_dict[fieldname];
-            if (!field || !field.df) return;
-            if (Number(field.df.read_only || 0) !== desiredReadOnly) {
-                frm.set_df_property(fieldname, "read_only", desiredReadOnly);
-            }
-        });
     }
 
     function protectMeasurementPrint(frm) {
         const allowed = can(frm, "print_measurements");
-        document.querySelectorAll(MEASUREMENT_PRINT_SELECTOR).forEach(button => {
+        const root = frm && frm.wrapper && (frm.wrapper[0] || frm.wrapper);
+        if (!root) return;
+        root.querySelectorAll(MEASUREMENT_PRINT_SELECTOR).forEach(button => {
             if (allowed) {
                 if (button.hidden) button.hidden = false;
                 button.removeAttribute("aria-hidden");
@@ -122,7 +117,7 @@
 
         const originalOpen = editor.open.bind(editor);
         editor.open = (targetFrm, row, options = {}) => {
-            const activeFrm = targetFrm || frm;
+            const activeFrm = targetFrm || window.cur_frm || frm;
             const readOnly = Boolean(options && options.readOnly);
             if (readOnly || can(activeFrm, "edit_special_drawing")) {
                 return originalOpen(activeFrm, row, options);
@@ -141,7 +136,7 @@
         if (!actions || actions.__almdinaPermissionGuarded || typeof actions.print !== "function") return;
         const originalPrint = actions.print.bind(actions);
         actions.print = targetFrm => {
-            const active = targetFrm || frm || window.cur_frm;
+            const active = targetFrm || window.cur_frm || frm;
             if (!can(active, "print_measurements")) {
                 deny("ليس لديك صلاحية طباعة القياسات.");
                 return false;
@@ -159,12 +154,13 @@
             : null;
         const originalHtml = presenter.html;
         window.AlmdinaOrderDocumentPrint = Object.freeze({
+            ...presenter,
             __almdinaPermissionGuarded: true,
             printInvoice(targetFrm) {
-                return secureInvoicePrint(targetFrm || frm || window.cur_frm);
+                return secureInvoicePrint(targetFrm || window.cur_frm || frm);
             },
             printMeasurements(targetFrm) {
-                const active = targetFrm || frm || window.cur_frm;
+                const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_measurements")) {
                     deny("ليس لديك صلاحية طباعة القياسات.");
                     return Promise.resolve(false);
@@ -185,13 +181,13 @@
             && typeof renderer.print === "function"
         ) {
             const originalRendererPrint = renderer.print.bind(renderer);
-            renderer.print = targetFrm => {
-                const active = targetFrm || frm || window.cur_frm;
+            renderer.print = (targetFrm, planOverride = null) => {
+                const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_cutting_plan")) {
                     deny("ليس لديك صلاحية طباعة خطة القص.");
                     return false;
                 }
-                return originalRendererPrint(active);
+                return originalRendererPrint(active, planOverride);
             };
             renderer.__almdinaPrintPermissionGuarded = true;
         }
@@ -204,7 +200,7 @@
         ) {
             const originalTabsPrint = tabs.printActivePlan.bind(tabs);
             tabs.printActivePlan = targetFrm => {
-                const active = targetFrm || frm || window.cur_frm;
+                const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_cutting_plan")) {
                     deny("ليس لديك صلاحية طباعة خطة القص.");
                     return false;
@@ -232,14 +228,16 @@
         root.addEventListener("click", event => {
             const planButton = event.target.closest && event.target.closest(PLAN_ACTION_SELECTOR);
             if (planButton && root.contains(planButton)) {
-                if (planIsLocked(frm)) {
+                const activeFrm = window.cur_frm;
+                if (!activeFrm || activeFrm.doctype !== "Door Cutting Order") return;
+                if (planIsLocked(activeFrm)) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
                     deny("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
                     return;
                 }
-                if (!can(frm, "recalculate_plan")) {
+                if (!can(activeFrm, "recalculate_plan")) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
@@ -250,18 +248,18 @@
                 if (
                     documentContext
                     && typeof documentContext.canMutateCurrentStage === "function"
-                    && !documentContext.canMutateCurrentStage(frm)
+                    && !documentContext.canMutateCurrentStage(activeFrm)
                 ) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
                     const reason = typeof documentContext.stageMutationBlockReason === "function"
-                        ? documentContext.stageMutationBlockReason(frm)
+                        ? documentContext.stageMutationBlockReason(activeFrm)
                         : "";
                     deny(reason || "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية.");
                     return;
                 }
-                if (planButton.matches(MODE_ACTION_SELECTOR) && !can(frm, "edit_optimizer_settings")) {
+                if (planButton.matches(MODE_ACTION_SELECTOR) && !can(activeFrm, "edit_optimizer_settings")) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
@@ -301,8 +299,20 @@
         bindCaptureGuard(frm);
         bindGlobalDocumentGuard();
         apply(frm);
-        requestAnimationFrame(() => apply(frm));
-        [100, 350, 900].forEach(delay => setTimeout(() => apply(frm), delay));
+        const context = window.AlmdinaDocumentContext;
+        if (context && typeof context.scheduleFrame === "function") {
+            context.scheduleFrame(frm, "action-permission-frame", () => apply(frm));
+            [100, 350, 900].forEach(delay => {
+                context.schedule(frm, `action-permission-${delay}`, () => apply(frm), delay);
+            });
+            return;
+        }
+        requestAnimationFrame(() => {
+            if (window.cur_frm === frm) apply(frm);
+        });
+        [100, 350, 900].forEach(delay => setTimeout(() => {
+            if (window.cur_frm === frm) apply(frm);
+        }, delay));
     }
 
     function scheduleObserverApply() {

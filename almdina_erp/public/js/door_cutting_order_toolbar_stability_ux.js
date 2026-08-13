@@ -32,6 +32,30 @@
     ]);
     const ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"]);
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function scheduleFrame(frm, key, callback) {
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            return context.scheduleFrame(frm, key, callback);
+        }
+        return requestAnimationFrame(() => {
+            if (window.cur_frm === frm) callback(frm);
+        });
+    }
+
+    function scheduleDelay(frm, key, callback, delay) {
+        const context = documentContext();
+        if (context && typeof context.schedule === "function") {
+            return context.schedule(frm, key, callback, delay);
+        }
+        return setTimeout(() => {
+            if (window.cur_frm === frm) callback(frm);
+        }, delay);
+    }
+
     function text(node) {
         return String(node && node.textContent || "")
             .replace(/[\u200e\u200f]/g, "")
@@ -54,7 +78,7 @@
     function pageHead(frm) {
         const wrapper = domNode(frm && frm.wrapper);
         const page = wrapper && (wrapper.closest(".page-container") || wrapper.closest(".desk-page"));
-        return (page && page.querySelector(".page-head")) || document.querySelector(".page-head");
+        return page ? page.querySelector(".page-head") : null;
     }
 
     function measurementRoot(frm) {
@@ -295,14 +319,20 @@
 
     function observeMeasurementToolbar(frm) {
         const root = measurementRoot(frm);
-        if (!root || frm._dcoMeasurementToolbarObservedRoot === root) return;
+        if (
+            !root
+            || (
+                frm._dcoMeasurementToolbarObservedRoot === root
+                && frm._dcoMeasurementToolbarObserver
+            )
+        ) return;
         if (frm._dcoMeasurementToolbarObserver) frm._dcoMeasurementToolbarObserver.disconnect();
 
         let scheduled = false;
         const observer = new MutationObserver(() => {
             if (scheduled) return;
             scheduled = true;
-            requestAnimationFrame(() => {
+            scheduleFrame(frm, "measurement-toolbar-observer-frame", () => {
                 scheduled = false;
                 reconcileMeasurementToolbar(frm);
             });
@@ -392,13 +422,13 @@
     function observe(frm) {
         observeMeasurementToolbar(frm);
         const head = pageHead(frm);
-        if (!head || frm._dcoToolbarObservedHead === head) return;
+        if (!head || (frm._dcoToolbarObservedHead === head && frm._dcoToolbarObserver)) return;
         if (frm._dcoToolbarObserver) frm._dcoToolbarObserver.disconnect();
         let scheduled = false;
         const observer = new MutationObserver(() => {
             if (scheduled) return;
             scheduled = true;
-            requestAnimationFrame(() => {
+            scheduleFrame(frm, "toolbar-observer-frame", () => {
                 scheduled = false;
                 reconcile(frm);
             });
@@ -413,7 +443,7 @@
     function schedule(frm) {
         reconcile(frm);
         observe(frm);
-        [0, 80, 250, 650, 1200].forEach(delay => setTimeout(() => {
+        [0, 80, 250, 650, 1200].forEach(delay => scheduleDelay(frm, `toolbar-${delay}`, () => {
             reconcile(frm);
             observe(frm);
         }, delay));
