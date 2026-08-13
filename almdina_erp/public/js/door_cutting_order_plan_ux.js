@@ -656,7 +656,7 @@
 
     function refreshPlanUX(frm) {
         installStyles();
-        applyOptimizerFieldPresentation(frm);
+        applyReadOnlyState(frm);
         decorateSections(frm);
         renderSummary(frm);
         renderActions(frm);
@@ -685,7 +685,7 @@
         refresh(frm) { schedulePlanUX(frm); },
         almdina_edit_session_changed(frm) { schedulePlanUX(frm); },
         refresh_plan_controls(frm) { schedulePlanUX(frm); },
-        packing_mode(frm) { applyOptimizerFieldPresentation(frm); renderActions(frm); markPending(frm); },
+        packing_mode(frm) { applyReadOnlyState(frm); renderActions(frm); markPending(frm); },
         cutting_machine_type(frm) { markPending(frm); },
         kerf_mm(frm) { markPending(frm); },
         trim_margin_mm(frm) { markPending(frm); },
