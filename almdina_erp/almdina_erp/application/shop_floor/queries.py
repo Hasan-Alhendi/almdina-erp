@@ -520,12 +520,10 @@ def get_dispatch_options(
         raise ShopFloorQueryError(
             "أنشئ مسار إنتاج وفعّله قبل إرسال الطلبات إلى الإنتاج."
         )
-    approved_plan = bool(_value(order, "approved_plan"))
     available_names = {route.name for route in routes}
     configured_default = repository.default_production_route()
     path_rows = []
     for route in routes:
-        blocked = route.requires_approved_plan_before_dispatch and not approved_plan
         path_rows.append(
             {
                 "value": route.name,
@@ -535,12 +533,8 @@ def get_dispatch_options(
                 "operational_role": route.first_stage.operational_role,
                 "stage_count": len(route.stages),
                 "starts_with_planning": route.starts_with_planning,
-                "can_dispatch": not blocked,
-                "dispatch_block_reason": (
-                    "يجب اعتماد خطة القص قبل اختيار مسار يبدأ بالتنفيذ الفعلي."
-                    if blocked
-                    else ""
-                ),
+                "can_dispatch": True,
+                "dispatch_block_reason": "",
                 "stages": [
                     {
                         "sequence": stage.sequence,

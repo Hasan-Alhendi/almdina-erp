@@ -47,7 +47,6 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertIn("capabilities_for_order", source)
         self.assertIn("Capability.REASSIGN_WORKER", source)
         self.assertIn("route_stage.is_planning_stage", source)
-        self.assertIn("route.requires_approved_plan_before_dispatch", source)
 
     def test_mutating_use_cases_request_locks_through_the_application_port(self) -> None:
         source = APPLICATION_COMMANDS.read_text(encoding="utf-8")
