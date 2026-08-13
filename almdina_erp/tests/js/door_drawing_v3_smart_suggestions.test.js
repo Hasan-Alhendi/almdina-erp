@@ -7,6 +7,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "../../public/js/door_drawing_v3");
 global.window = {};
 require(path.join(ROOT, "domain/geometry.js"));
+require(path.join(ROOT, "domain/document.js"));
 require(path.join(ROOT, "domain/smart_path_domain.js"));
 require(path.join(ROOT, "application/smart_freehand_policy.js"));
 require(path.join(ROOT, "application/smart_suggestion_policy.js"));
