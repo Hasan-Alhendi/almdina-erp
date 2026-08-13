@@ -407,7 +407,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         with self.assertRaises(queries.ShopFloorPermissionDenied):
             queries.get_order_detail(repository, "DCO-1")
 
-    def test_dispatch_options_mark_physical_route_blocked_until_plan_approval(self) -> None:
+    def test_dispatch_options_allow_all_routes_without_plan_approval(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-1",
@@ -421,14 +421,11 @@ class TestShopFloorQueryApplication(unittest.TestCase):
 
         result = queries.get_dispatch_options(repository, "DCO-1")
         by_name = {row["value"]: row for row in result["paths"]}
-        self.assertFalse(by_name["Sharyoun"]["can_dispatch"])
-        self.assertIn("اعتماد خطة القص", by_name["Sharyoun"]["dispatch_block_reason"])
+        self.assertTrue(by_name["Sharyoun"]["can_dispatch"])
+        self.assertEqual(by_name["Sharyoun"]["dispatch_block_reason"], "")
         self.assertTrue(by_name["Drawing"]["can_dispatch"])
         self.assertTrue(by_name["Drawing"]["starts_with_planning"])
         self.assertTrue(by_name["Drawing"]["stages"][0]["is_planning_stage"])
-
-        repository.order.approved_plan = "PLAN-1"
-        result = queries.get_dispatch_options(repository, "DCO-1")
         self.assertTrue(all(row["can_dispatch"] for row in result["paths"]))
 
         repository.capabilities.remove(Capability.DISPATCH_ORDER)

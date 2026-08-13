@@ -57,8 +57,8 @@
             </div>`).join('<div style="font-size:20px;color:var(--text-muted,#98a2b3)">←</div>');
         const startsPlanning = stages[0] && stages[0].planning;
         const gate = startsPlanning
-            ? __("يمكن إرسال الطلب إلى مرحلة التخطيط بعد حساب الخطة، لكن لا يمكن مغادرتها قبل اعتماد خطة القص.")
-            : __("هذا المسار يبدأ بالتنفيذ الفعلي؛ يجب اعتماد خطة القص قبل إرسال الطلب إليه.");
+            ? __("يمكن إرسال الطلب إلى مرحلة التخطيط دون اعتماد مسبق، لكن لا يمكن مغادرتها قبل اعتماد خطة القص.")
+            : __("يمكن إرسال الطلب مباشرة إلى أول مرحلة تنفيذ دون اشتراط اعتماد خطة القص مسبقًا.");
         return `
             <div dir="rtl">
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${chips}</div>
