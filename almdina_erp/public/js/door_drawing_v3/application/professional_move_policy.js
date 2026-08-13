@@ -5,7 +5,8 @@
     const G = root.Geometry;
     const S = root.Snapping;
     const Selection = root.VectorSelectionGeometry;
-    if (!G || !S || !Selection) throw new Error("Door Drawing V3 snapping and selection geometry must load before professional move policy");
+    const Candidates = root.SnapCandidateEngine;
+    if (!G || !S || !Selection || !Candidates) throw new Error("Door Drawing V3 snapping, selection geometry, and snap candidates must load before professional move policy");
 
     const ALIGN_PX = 8;
     const SPACING_PX = 9;
@@ -174,8 +175,9 @@
 
     function resolve(document, sourceObjects, requestedDx, requestedDy, options = {}) {
         const sourceBounds = Selection.unionBounds(sourceObjects || []);
-        if (!sourceBounds) return Object.freeze({ dx: 0, dy: 0, guides: Object.freeze([]), snapped: false });
-        const excludedIds = (sourceObjects || []).map(object => String(object.id));
+        if (!sourceBounds) return Object.freeze({ dx: 0, dy: 0, guides: Object.freeze([]), snapped: false, stickyCandidate: null });
+        const sourceIds = (sourceObjects || []).map(object => String(object.id));
+        const excludedIds = options.includeSourceTargets ? [] : sourceIds;
         const others = otherBounds(document, excludedIds);
         const alignTolerance = S.worldTolerance(options.viewportScale, options.alignPx || ALIGN_PX);
         const spacingTolerance = S.worldTolerance(options.viewportScale, options.spacingPx || SPACING_PX);
@@ -184,19 +186,36 @@
         if (lockedAxis === "x") dy = 0;
         if (lockedAxis === "y") dx = 0;
 
-        let moved = translateBounds(sourceBounds, dx, dy);
-        const alignmentX = lockedAxis === "y" ? null : bestAlignment(moved, others, "x", alignTolerance);
-        const alignmentY = lockedAxis === "x" ? null : bestAlignment(moved, others, "y", alignTolerance);
-        const spacingX = lockedAxis === "y" || alignmentX ? null : bestSpacing(moved, others, "x", spacingTolerance);
-        const spacingY = lockedAxis === "x" || alignmentY ? null : bestSpacing(moved, others, "y", spacingTolerance);
+        const geometry = Candidates.resolve(document, sourceObjects, dx, dy, {
+            viewportScale: options.viewportScale,
+            lockedAxis,
+            includeSourceTargets: Boolean(options.includeSourceTargets),
+            stickyCandidate: options.stickyCandidate || null,
+            pointSnapPx: options.pointSnapPx,
+        });
 
-        if (alignmentX) dx += alignmentX.correction;
-        else if (spacingX) dx += spacingX.correction;
-        if (alignmentY) dy += alignmentY.correction;
-        else if (spacingY) dy += spacingY.correction;
-        moved = translateBounds(sourceBounds, dx, dy);
+        let moved;
+        let alignmentX = null, alignmentY = null, spacingX = null, spacingY = null;
+        if (geometry.snapped) {
+            dx = geometry.dx;
+            dy = geometry.dy;
+            moved = translateBounds(sourceBounds, dx, dy);
+        } else {
+            moved = translateBounds(sourceBounds, dx, dy);
+            alignmentX = lockedAxis === "y" ? null : bestAlignment(moved, others, "x", alignTolerance);
+            alignmentY = lockedAxis === "x" ? null : bestAlignment(moved, others, "y", alignTolerance);
+            spacingX = lockedAxis === "y" || alignmentX ? null : bestSpacing(moved, others, "x", spacingTolerance);
+            spacingY = lockedAxis === "x" || alignmentY ? null : bestSpacing(moved, others, "y", spacingTolerance);
+
+            if (alignmentX) dx += alignmentX.correction;
+            else if (spacingX) dx += spacingX.correction;
+            if (alignmentY) dy += alignmentY.correction;
+            else if (spacingY) dy += spacingY.correction;
+            moved = translateBounds(sourceBounds, dx, dy);
+        }
 
         const guides = [];
+        if (geometry.guide) guides.push(geometry.guide);
         const xGuide = lineGuide("x", moved, alignmentX);
         const yGuide = lineGuide("y", moved, alignmentY);
         if (xGuide) guides.push(xGuide);
@@ -212,12 +231,14 @@
             requestedDy: G.roundMm(requestedDy),
             movedBounds: moved,
             lockedAxis,
+            geometryCandidate: geometry.candidate,
+            stickyCandidate: geometry.stickyCandidate,
             alignmentX,
             alignmentY,
             spacingX,
             spacingY,
             guides: Object.freeze(guides),
-            snapped: Boolean(alignmentX || alignmentY || spacingX || spacingY),
+            snapped: Boolean(geometry.snapped || alignmentX || alignmentY || spacingX || spacingY),
         });
     }
 
