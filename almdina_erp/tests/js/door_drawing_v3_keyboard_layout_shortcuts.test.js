@@ -90,6 +90,8 @@ const redo = event("غ", "KeyY");
 assert.equal(root.EditorShortcuts.keyDown(controller, redo), true, "Ctrl+Y must use physical KeyY");
 assert.equal(controller.history.current().objects.length, 3);
 
+controller.selectedId = "a";
+controller.selectedIds = ["a"];
 const cut = event("ء", "KeyX");
 assert.equal(root.EditorShortcuts.keyDown(controller, cut), true, "Ctrl+X must cut the current selection on Arabic layout");
 assert.equal(controller.history.current().objects.length, 2);
