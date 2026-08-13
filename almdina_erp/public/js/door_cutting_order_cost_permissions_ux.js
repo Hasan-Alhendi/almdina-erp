@@ -321,6 +321,16 @@
         return true;
     }
 
+    function inlinePriceLabel(piece) {
+        if (piece && piece.piece_type === "Special") {
+            return __("إجمالي تكلفة قشاط الدرفة الخاصة");
+        }
+        if (piece && piece.piece_type === "Clipped Corner") {
+            return __("تكلفة معالجة قشاط الزاوية المقصوصة");
+        }
+        return __("السعر");
+    }
+
     function bindInlinePriceInputs(frm) {
         const wrapper = costWrapper(frm);
         if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
@@ -330,7 +340,11 @@
             const piece = sourcePiece(frm, input.getAttribute("data-piece-name"));
             const editable = canEditInlinePiecePrice(frm, piece);
             input.disabled = !editable;
-            input.setAttribute("aria-label", editable ? __("تعديل السعر") : __("السعر للعرض فقط"));
+            const priceLabel = inlinePriceLabel(piece);
+            input.setAttribute(
+                "aria-label",
+                editable ? `${__("تعديل السعر")}: ${priceLabel}` : priceLabel
+            );
             if (editable) {
                 input.removeAttribute("readonly");
             } else {
