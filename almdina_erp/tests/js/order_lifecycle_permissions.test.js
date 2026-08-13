@@ -26,6 +26,12 @@ function makeForm(name = "DCO-TEST-001", status = "Draft") {
         },
         remove_custom_button(label, group) {
             removed.push({ label, group });
+            for (let i = added.length - 1; i >= 0; i -= 1) {
+                const item = added[i];
+                if (item.label !== label) continue;
+                if (group !== undefined && item.group !== group) continue;
+                added.splice(i, 1);
+            }
         },
         reload_doc() {
             return Promise.resolve();
@@ -150,6 +156,10 @@ function load(capabilities, responseFactory) {
         ["إعادة للمسودة"].sort()
     );
     assert.equal(
+        frm.added.find(item => item.label === "إعادة للمسودة").group,
+        undefined
+    );
+    assert.equal(
         loaded.calls[0].method,
         "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context"
     );
@@ -177,7 +187,12 @@ function load(capabilities, responseFactory) {
     const staleForm = makeForm("DCO-NEW");
     await stale.api.loadContext(staleForm);
     assert.equal(staleForm.__almdina_lifecycle_context, null);
-    assert.equal(staleForm.added.length, 0);
+    // Stale server context is ignored, but the client capability still paints
+    // the standalone return-to-draft button for the current order.
+    assert.deepEqual(
+        staleForm.added.map(item => item.label),
+        ["إعادة للمسودة"]
+    );
 
     console.log("Order lifecycle permission simulation passed");
 })().catch(error => {

@@ -79,6 +79,7 @@
 
     function removeLifecycleButtons(frm) {
         LEGACY_LABELS.forEach(label => {
+            frm.remove_custom_button(label);
             frm.remove_custom_button(label, ACTION_GROUP);
             frm.remove_custom_button(label, __("Order Workflow"));
         });
@@ -91,6 +92,16 @@
             context.actions[action] &&
             context.actions[action].allowed === true
         );
+    }
+
+    function isSuperseded(frm) {
+        return String((frm && frm.doc && frm.doc.revision_state) || "Current") === "Superseded";
+    }
+
+    function canReturnToDraft(frm, context) {
+        if (!frm || !frm.doc || frm.is_new()) return false;
+        if (isSuperseded(frm)) return false;
+        return actionAllowed(context, "return_to_draft") || can(frm, "return_order_to_draft");
     }
 
     function callAction(frm, options) {
@@ -195,15 +206,14 @@
 
     function installButtons(frm, context) {
         removeLifecycleButtons(frm);
-        if (frm.is_new() || !context || context.order_name !== frm.doc.name) return;
+        if (!frm || frm.is_new()) return;
 
-        // Review and order-approval were retired: orders go straight to production.
-        // Keep return-to-draft / cancel for stuck or in-flight documents.
-        if (actionAllowed(context, "return_to_draft")) {
+        // Standalone toolbar button — never nested under «دورة الطلب», otherwise
+        // the action disappears inside a dropdown or a detached group after refresh.
+        if (canReturnToDraft(frm, context)) {
             frm.add_custom_button(
                 LABELS.return_to_draft,
-                () => returnToDraft(frm),
-                ACTION_GROUP
+                () => returnToDraft(frm)
             );
         }
         if (actionAllowed(context, "cancel")) {
@@ -216,31 +226,47 @@
     }
 
     function loadContext(frm) {
-        removeLifecycleButtons(frm);
         if (frm.is_new()) {
             frm.__almdina_lifecycle_context = null;
+            removeLifecycleButtons(frm);
             return Promise.resolve(null);
         }
 
-        const identity = documentContext().capture(frm);
+        // Paint from the client capability immediately so the button is visible
+        // even while the server context is in flight or if that call is dropped.
+        installButtons(frm, frm.__almdina_lifecycle_context);
+
+        const contextApi = documentContext();
+        if (!contextApi || typeof contextApi.capture !== "function") {
+            return Promise.resolve(frm.__almdina_lifecycle_context);
+        }
+        const identity = contextApi.capture(frm);
         return frappe.call({
             method: "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context",
             args: { order_name: frm.doc.name },
         }).then(response => {
-            if (!documentContext().isCurrent(frm, identity)) return null;
+            if (!contextApi.isCurrent(frm, identity)) return frm.__almdina_lifecycle_context;
             const context = response.message || null;
-            if (!context || context.order_name !== frm.doc.name) return null;
+            if (!context || context.order_name !== frm.doc.name) {
+                installButtons(frm, frm.__almdina_lifecycle_context);
+                return frm.__almdina_lifecycle_context;
+            }
             frm.__almdina_lifecycle_context = context;
             installButtons(frm, context);
             return context;
         }).catch(error => {
-            if (documentContext().isCurrent(frm, identity)) {
-                frm.__almdina_lifecycle_context = null;
-                removeLifecycleButtons(frm);
-            }
+            if (!contextApi.isCurrent(frm, identity)) return frm.__almdina_lifecycle_context;
             console.error("Failed to load order lifecycle permissions", error);
-            return null;
+            installButtons(frm, frm.__almdina_lifecycle_context);
+            return frm.__almdina_lifecycle_context;
         });
+    }
+
+    function lifecycleActionsReady(frm) {
+        if (!frm || !frm.doc || frm.is_new()) return true;
+        if (!canReturnToDraft(frm, frm.__almdina_lifecycle_context)) return true;
+        const buttons = frm.custom_buttons || {};
+        return Boolean(buttons[LABELS.return_to_draft] || buttons["إعادة للمسودة"]);
     }
 
     installGlobalPolicy();
@@ -253,6 +279,22 @@
             setTimeout(() => loadContext(frm), 0);
         },
     });
+
+    if (typeof window.addEventListener === "function") {
+        window.addEventListener("almdina:permissions-updated", () => {
+            const frm = window.cur_frm;
+            if (!frm || frm.doctype !== "Door Cutting Order") return;
+            loadContext(frm);
+        });
+    }
+
+    const surfaceOwner = documentContext();
+    if (surfaceOwner && typeof surfaceOwner.registerSurface === "function") {
+        surfaceOwner.registerSurface("order-lifecycle-actions", {
+            isReady(frm) { return lifecycleActionsReady(frm); },
+            recover(frm) { return loadContext(frm); },
+        });
+    }
 
     window.AlmdinaOrderLifecycleUX = Object.freeze({
         actionAllowed,

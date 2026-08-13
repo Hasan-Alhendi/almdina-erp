@@ -7,7 +7,6 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     ACTIVE_STAGE_STATUSES,
     can_dispatch_from_status,
     can_mark_delivered,
-    can_revert_department,
     can_transition_stage,
     is_order_dispatched,
 )
@@ -140,16 +139,8 @@ def decide_production_action(
         return _decision(action, True, "allowed", "")
 
     if action == Capability.REVERT_DEPARTMENT:
-        if not can_revert_department(
-            facts.order_status,
-            production_path=facts.production_path,
-        ):
-            return _decision(
-                action,
-                False,
-                "not_on_production_path",
-                "لا يمكن إعادة الطلب إلى مرحلة إنتاج سابقة في حالته الحالية.",
-            )
+        # Capability alone authorizes revert; structural target checks stay in
+        # the command (must pick an existing earlier stage on the order).
         return _decision(action, True, "allowed", "")
 
     if not _stage_is_current(facts):

@@ -99,6 +99,24 @@ class TestOrderLifecyclePermissions(unittest.TestCase):
                 has_capability=True,
             ).allowed
         )
+        for status in ("Draft", "Rejected", "Delivered", "Cancelled", "Completed"):
+            with self.subTest(return_status=status):
+                self.assertTrue(
+                    decide_lifecycle_action(
+                        action=OrderLifecycleAction.RETURN_TO_DRAFT,
+                        status=status,
+                        revision_state="Current",
+                        has_capability=True,
+                    ).allowed
+                )
+                self.assertFalse(
+                    decide_lifecycle_action(
+                        action=OrderLifecycleAction.RETURN_TO_DRAFT,
+                        status=status,
+                        revision_state="Current",
+                        has_capability=False,
+                    ).allowed
+                )
         self.assertFalse(
             decide_lifecycle_action(
                 action=OrderLifecycleAction.CREATE_REVISION,

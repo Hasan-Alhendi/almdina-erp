@@ -68,6 +68,7 @@ def test_lifecycle_ui_is_capability_driven_and_fail_closed():
     assert "get_order_lifecycle_context" in lifecycle_ux
     assert 'can(frm, "create_order")' in lifecycle_ux
     assert 'can(frm, "edit_order")' in lifecycle_ux
+    assert 'can(frm, "return_order_to_draft")' in lifecycle_ux
     assert "documentContext().capture(frm)" in lifecycle_ux
     assert "documentContext().isCurrent(frm, identity)" in lifecycle_ux
     assert "removeLifecycleButtons(frm)" in lifecycle_ux
@@ -83,6 +84,52 @@ def test_lifecycle_ui_is_capability_driven_and_fail_closed():
     assert "Production Manager" not in combined
     assert "Order Entry" not in combined
     assert "System Manager" not in combined
+
+
+def test_return_and_revert_are_capability_only_without_status_gates():
+    lifecycle_policy = source(POLICY)
+    lifecycle_service = source(CANCEL_SERVICE)
+    lifecycle_ux = source(LIFECYCLE_UX)
+    shop_floor = (ROOT / "public" / "js" / "shop_floor_order_ux.js").read_text(
+        encoding="utf-8"
+    )
+    production_auth = (
+        ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
+    ).read_text(encoding="utf-8")
+    domain_lifecycle = (
+        ROOT / "almdina_erp" / "domain" / "orders" / "lifecycle.py"
+    ).read_text(encoding="utf-8")
+
+    return_reason = lifecycle_policy.split(
+        "if action == OrderLifecycleAction.RETURN_TO_DRAFT:", 1
+    )[1].split("if action == OrderLifecycleAction.CANCEL:", 1)[0]
+    assert "can_return_to_draft" not in return_reason
+    assert "Capability alone authorizes return-to-draft" in return_reason
+
+    return_fn = lifecycle_service.split("def return_order_to_draft", 1)[1]
+    assert "Cutting is already completed" not in return_fn
+    assert '"noop": True' in return_fn
+
+    assert 'can(frm, "return_order_to_draft")' in lifecycle_ux
+    assert "function canReturnToDraft(frm, context)" in lifecycle_ux
+    # Standalone toolbar button — not nested under «دورة الطلب».
+    install = lifecycle_ux.split("function installButtons(frm, context)", 1)[1].split(
+        "function loadContext", 1
+    )[0]
+    assert "LABELS.return_to_draft" in install
+    assert "ACTION_GROUP" not in install.split("LABELS.return_to_draft", 1)[1].split(
+        "if (actionAllowed(context, \"cancel\"))", 1
+    )[0]
+    assert 'can(frm, "revert_department")' in shop_floor
+    revert_btn = shop_floor.split("function addRevertButton", 1)[1].split(
+        "function addDeliveryButtons", 1
+    )[0]
+    assert 'frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm));' in revert_btn
+    assert "PRODUCTION_ACTION_GROUP" not in revert_btn
+    assert 'frm.doc.production_path && status !== "Delivered" && can(frm, "revert_department")' not in shop_floor
+    assert "Capability alone authorizes revert" in production_auth
+    assert "capability-gated, not status-gated" in domain_lifecycle
+    assert "capability-gated; status/path do not authorize" in domain_lifecycle
 
 
 def test_legacy_return_routes_use_dedicated_capability_endpoint():
