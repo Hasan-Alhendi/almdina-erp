@@ -1,0 +1,165 @@
+/* Door Drawing V3 — professional Bezier editing language shared by modern vector tools. */
+.ddv3-bezier-segment-hit {
+    fill: none;
+    stroke: transparent;
+    pointer-events: stroke;
+}
+
+.ddv3-bezier-handle-layer {
+    pointer-events: none;
+}
+
+.ddv3-bezier-tangent-line {
+    fill: none;
+    stroke: var(--primary, #5b5bd6);
+    stroke-width: 1;
+    stroke-dasharray: 3 2;
+    opacity: .72;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+.ddv3-bezier-tangent-line.is-draft {
+    opacity: .58;
+}
+
+.ddv3-bezier-handle {
+    fill: var(--card-bg, #fff);
+    stroke: var(--primary, #5b5bd6);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    pointer-events: all;
+    cursor: crosshair;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .08));
+}
+
+.ddv3-bezier-handle:hover,
+.ddv3-bezier-handle:focus {
+    fill: var(--primary, #5b5bd6);
+    stroke: var(--card-bg, #fff);
+}
+
+.ddv3-bezier-pen-layer {
+    pointer-events: none;
+}
+
+.ddv3-bezier-pen-preview {
+    fill: none;
+    stroke: var(--primary, #5b5bd6);
+    stroke-width: 1.7;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ddv3-bezier-pen-anchor {
+    fill: var(--card-bg, #fff);
+    stroke: var(--primary, #5b5bd6);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-bezier-pen-anchor.is-first {
+    stroke-width: 2;
+}
+
+.ddv3-bezier-pen-anchor.is-close-ready {
+    fill: var(--primary, #5b5bd6);
+    stroke: var(--card-bg, #fff);
+}
+
+.ddv3-bezier-draft-handle {
+    fill: var(--card-bg, #fff);
+    stroke: var(--primary, #5b5bd6);
+    stroke-width: 1.4;
+    vector-effect: non-scaling-stroke;
+}
+
+.ddv3-bezier-close-label {
+    fill: var(--text-color, #172033);
+    font-size: 11px;
+    font-weight: 650;
+    paint-order: stroke;
+    stroke: var(--card-bg, #fff);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+}
+
+.ddv3-bezier-contextbar {
+    position: absolute;
+    z-index: 9;
+    inset-inline-start: 50%;
+    bottom: 18px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 32px);
+    padding: 5px;
+    border: 1px solid var(--border-color, #e4e7ec);
+    border-radius: 10px;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 8px 24px rgba(16, 24, 40, .14);
+    transform: translateX(-50%);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.ddv3-bezier-contextbar.is-visible {
+    display: inline-flex;
+}
+
+.ddv3-bezier-contextbar::-webkit-scrollbar {
+    display: none;
+}
+
+.ddv3-bezier-context-label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 7px;
+    color: var(--text-muted, #667085);
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.ddv3-bezier-contextbar button {
+    min-height: 28px;
+    border-radius: 7px;
+    padding-inline: 9px;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.ddv3-bezier-contextbar button.is-active {
+    background: var(--primary, #5b5bd6);
+    color: var(--card-bg, #fff);
+    border-color: var(--primary, #5b5bd6);
+}
+
+.ddv3-canvas[data-tool="path"] {
+    cursor: crosshair;
+}
+
+.ddv3-canvas[data-bezier-editing="true"] .ddv3-path-node-dot {
+    vector-effect: non-scaling-stroke;
+}
+
+@media (max-width: 900px) {
+    .ddv3-bezier-contextbar {
+        bottom: 12px;
+        gap: 3px;
+        max-width: calc(100% - 16px);
+        padding: 4px;
+    }
+
+    .ddv3-bezier-context-label {
+        display: none;
+    }
+
+    .ddv3-bezier-contextbar button {
+        min-height: 34px;
+        padding-inline: 10px;
+        font-size: 12px;
+    }
+}
