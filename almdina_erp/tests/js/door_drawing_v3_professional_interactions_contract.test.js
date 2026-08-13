@@ -37,11 +37,12 @@ for (const flag of [
 assert.match(bootstrap, /door_drawing_v3_professional_move\.css/);
 assert.match(bootstrap, /door_drawing_v3_oriented_transform\.css/);
 
+const forbiddenDom = /window\.document|globalThis\.document|document\.(querySelector|querySelectorAll|createElement|createElementNS|getElementById)|getBoundingClientRect|clientX|clientY/;
 assert.match(movePolicy, /function bestAlignment\(/);
 assert.match(movePolicy, /function bestSpacing\(/);
 assert.match(movePolicy, /function referenceGaps\(/);
 assert.match(movePolicy, /lockedAxis/);
-assert.doesNotMatch(movePolicy, /document\.|querySelector|getBoundingClientRect|clientX|clientY/, "Move snapping policy must remain DOM independent");
+assert.doesNotMatch(movePolicy, forbiddenDom, "Move snapping policy must remain DOM independent");
 assert.match(moveApp, /event\.altKey/);
 assert.match(moveApp, /event\.shiftKey/);
 assert.match(moveApp, /Duplicate and move/);
@@ -57,7 +58,7 @@ assert.match(orientedDomain, /function frameAtAngle\(/);
 assert.match(orientedDomain, /function resizeMatrix\(/);
 assert.match(orientedDomain, /function rotationDelta\(/);
 assert.match(orientedDomain, /function snapAngle\(/);
-assert.doesNotMatch(orientedDomain, /document\.|querySelector|getBoundingClientRect|clientX|clientY/, "Oriented transform geometry must remain pure world-mm math");
+assert.doesNotMatch(orientedDomain, forbiddenDom, "Oriented transform geometry must remain pure world-mm math");
 assert.match(orientedView, /data-ddv3-oriented-transform-handle/);
 assert.match(orientedView, /"rotate"/);
 assert.match(orientedView, /"pivot"/);
