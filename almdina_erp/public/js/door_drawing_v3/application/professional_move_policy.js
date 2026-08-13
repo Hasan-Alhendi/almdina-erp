@@ -232,6 +232,21 @@
         return Object.freeze({ type: "assist-label", text: "نفس المسافة", point: G.point(moved.cx, moved.cy), tone: "spacing" });
     }
 
+    function alignmentAssist(moved, alignmentX, alignmentY) {
+        const alignments = [alignmentX, alignmentY].filter(Boolean);
+        if (!alignments.length) return null;
+        const centerAligned = alignments.some(alignment => (
+            String(alignment.sourceRole || "").startsWith("center")
+            || String(alignment.targetRole || "").startsWith("center")
+        ));
+        return Object.freeze({
+            type: "assist-label",
+            text: centerAligned ? "نفس المركز" : "نفس المحاذاة",
+            point: G.point(moved.cx, moved.cy),
+            tone: "alignment",
+        });
+    }
+
     function resolve(document, sourceObjects, requestedDx, requestedDy, options = {}) {
         const sourceBounds = Selection.unionBounds(sourceObjects || []);
         if (!sourceBounds) return Object.freeze({ dx: 0, dy: 0, guides: Object.freeze([]), snapped: false, stickyCandidate: null });
@@ -253,6 +268,7 @@
             pointSnapPx: options.pointSnapPx,
             segmentSnapPx: options.segmentSnapPx,
             collinearSnapPx: options.collinearSnapPx,
+            collinearExtensionPx: options.collinearExtensionPx,
         };
         let geometry = Candidates.resolve(document, sourceObjects, dx, dy, candidateOptions);
         if (geometry.snapped) {
@@ -295,7 +311,9 @@
         if (yGuide) guides.push(yGuide);
         guides.push(...spacingGuides("x", moved, spacingX));
         guides.push(...spacingGuides("y", moved, spacingY));
-        const assist = geometryAssist(geometry) || spacingAssist(moved, spacingX, spacingY);
+        const assist = geometryAssist(geometry)
+            || spacingAssist(moved, spacingX, spacingY)
+            || alignmentAssist(moved, alignmentX, alignmentY);
         if (assist) guides.push(assist);
         if (lockedAxis) guides.push(Object.freeze({ type: "axis-lock", axis: lockedAxis, box: moved }));
 
@@ -328,6 +346,7 @@
         referenceGaps,
         clusterReferenceGaps,
         bestSpacing,
+        alignmentAssist,
         resolve,
     });
 })();
