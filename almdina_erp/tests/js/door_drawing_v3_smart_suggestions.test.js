@@ -123,7 +123,7 @@ assert.doesNotMatch(controller, /closeReady \? stroke\.startPoint/, "The non-des
 assert.match(view, /ddv3-smart-suggestion-ghost/);
 assert.match(view, /data-ddv3-suggestion-accept/);
 assert.match(view, /data-ddv3-suggestion-dismiss/);
-assert.match(view, /closeLabel\.textContent = "إغلاق\?"/);
+assert.match(view, /closeLabel\.textContent = "إغلاق؟"/);
 assert.match(view, /يحافظ على رسمك/);
 assert.match(css, /\.ddv3-smart-suggestion-ghost/);
 assert.match(css, /\.ddv3-smart-suggestion-accept/);
