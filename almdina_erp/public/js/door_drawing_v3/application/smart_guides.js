@@ -32,17 +32,17 @@
     function lineSegmentsForObject(object) {
         if (!object || !object.geometry) return [];
         const g = object.geometry;
-        if (object.type === "line") return [{ objectId: object.id, role: "segment", start: g.start, end: g.end, priority: 100 }];
+        if (object.type === "line") return [{ objectId: object.id, role: "segment", start: g.start, end: g.end, priority: 100, curved: false }];
         if (object.type === "rectangle") {
             const bl = g.origin;
             const br = G.point(g.origin.x + g.widthMm, g.origin.y);
             const tr = G.point(g.origin.x + g.widthMm, g.origin.y + g.heightMm);
             const tl = G.point(g.origin.x, g.origin.y + g.heightMm);
             return [
-                { objectId: object.id, role: "bottom", start: bl, end: br, priority: 90 },
-                { objectId: object.id, role: "right", start: br, end: tr, priority: 90 },
-                { objectId: object.id, role: "top", start: tr, end: tl, priority: 90 },
-                { objectId: object.id, role: "left", start: tl, end: bl, priority: 90 },
+                { objectId: object.id, role: "bottom", start: bl, end: br, priority: 90, curved: false },
+                { objectId: object.id, role: "right", start: br, end: tr, priority: 90, curved: false },
+                { objectId: object.id, role: "top", start: tr, end: tl, priority: 90, curved: false },
+                { objectId: object.id, role: "left", start: tl, end: bl, priority: 90, curved: false },
             ];
         }
         if (G.PATH_TYPE && object.type === G.PATH_TYPE && typeof G.pathSegments === "function") {
@@ -51,6 +51,9 @@
                 role: `segment-${segment.index}`,
                 start: segment.start,
                 end: segment.end,
+                c1: segment.c1 || null,
+                c2: segment.c2 || null,
+                curved: Boolean(segment.curved),
                 priority: 110,
             }));
         }
@@ -70,6 +73,7 @@
     function nearestSurface(document, candidate, toleranceMm, options = {}) {
         let best = null;
         for (const segment of collectSegments(document, options)) {
+            if (segment.curved) continue;
             const projection = projectSegment(candidate, segment.start, segment.end);
             if (!projection || projection.distanceMm > toleranceMm) continue;
             const endpointEpsilon = 0.02;
@@ -101,6 +105,7 @@
         const requestedAngle = G.angleDeg(a, p);
         let best = null;
         for (const segment of collectSegments(document, options)) {
+            if (segment.curved) continue;
             const length = G.distance(segment.start, segment.end);
             if (length <= G.EPSILON_MM) continue;
             const segmentAngle = G.angleDeg(segment.start, segment.end);
