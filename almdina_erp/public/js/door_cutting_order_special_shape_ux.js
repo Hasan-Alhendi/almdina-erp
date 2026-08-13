@@ -52,6 +52,8 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_pen.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/bezier_path_editing.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/vector_editing.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/node_selection_policy.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/editor_shortcuts.js",
     ]);
 
     function ensureStyles() {
@@ -120,6 +122,9 @@
         __doorDrawingV3BezierPen: true,
         __doorDrawingV3AdvancedNodeEditing: true,
         __doorDrawingV3BezierPersistence: true,
+        __doorDrawingV3SelectionNodeDrag: true,
+        __doorDrawingV3ProfessionalShortcuts: true,
+        __doorDrawingV3MultiClipboard: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,
