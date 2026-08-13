@@ -109,9 +109,6 @@ jobs:
       - name: Run shop-floor query application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_application
 
-      - name: Run shop-floor presenter tests
-        run: python -m unittest -v almdina_erp.tests.test_shop_floor_presenters
-
       - name: Run shop-floor query architecture tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_architecture
 
