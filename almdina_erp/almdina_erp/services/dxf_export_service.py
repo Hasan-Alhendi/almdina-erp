@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.primitives import rects_have_clearance
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
@@ -17,6 +18,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     require_document_capability,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
+
+
+DXF_KERF_NUMERIC_TOLERANCE_CM = 0.01  # 0.1 mm, matching DXF import tolerance.
 
 
 def _require_export_access(
@@ -50,6 +54,70 @@ def _require_export_access(
         message=_("You do not have permission to export an unsaved order as DXF."),
     )
     return None
+
+
+def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> list[str]:
+    """Validate exported rectangular cut paths against the same Kerf invariant.
+
+    Snapshot coordinates are centimetres. The small numeric tolerance mirrors
+    the strict DXF importer tolerance and is only for floating-point noise.
+    """
+
+    required_kerf_cm = max(
+        0.0,
+        flt(snapshot.get("kerf_cm")) or (max(0.0, flt(fallback_kerf_mm)) / 10.0),
+    )
+    if required_kerf_cm <= 0:
+        return []
+
+    errors: list[str] = []
+    for sheet in snapshot.get("sheets") or []:
+        pieces = sheet.get("pieces") or []
+        sheet_no = int(sheet.get("sheet_no") or 0)
+        for index, first in enumerate(pieces):
+            first_rect = {
+                "x": flt(first.get("x")),
+                "y": flt(first.get("y")),
+                "w": flt(first.get("w")),
+                "h": flt(first.get("h")),
+            }
+            for second in pieces[index + 1 :]:
+                second_rect = {
+                    "x": flt(second.get("x")),
+                    "y": flt(second.get("y")),
+                    "w": flt(second.get("w")),
+                    "h": flt(second.get("h")),
+                }
+                if rects_have_clearance(
+                    first_rect,
+                    second_rect,
+                    required_kerf_cm,
+                    DXF_KERF_NUMERIC_TOLERANCE_CM,
+                ):
+                    continue
+                errors.append(
+                    _(
+                        "القطعتان {0} و{1} على اللوح رقم {2} لا تحققان مسافة المنشار المطلوبة {3:g} مم."
+                    ).format(
+                        first.get("label") or first.get("id") or "?",
+                        second.get("label") or second.get("id") or "?",
+                        sheet_no,
+                        required_kerf_cm * 10,
+                    )
+                )
+    return errors
+
+
+def _assert_export_kerf(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> None:
+    errors = _kerf_errors(snapshot, fallback_kerf_mm=fallback_kerf_mm)
+    if not errors:
+        return
+    frappe.throw(
+        _(
+            "خطة القص الحالية لا تحقق مسافة المنشار (Kerf) المطلوبة بين جميع القطع. "
+            "أعد حساب خطة القص ثم صدّر DXF.\n{0}"
+        ).format("\n".join(errors))
+    )
 
 
 def _approved_plan_manifest(order: Any, plan: Any) -> dict[str, Any]:
@@ -141,12 +209,21 @@ def get_validated_dxf_plan(
                         "\n".join(errors)
                     )
                 )
+            snapshot = legacy_export._plan_to_export_snapshot(plan)
+            _assert_export_kerf(
+                snapshot,
+                fallback_kerf_mm=flt(getattr(order, "kerf_mm", 0)),
+            )
             return {
-                "plan": legacy_export._plan_to_export_snapshot(plan),
+                "plan": snapshot,
                 "manifest": _approved_plan_manifest(order, plan),
             }
 
         snapshot = legacy_export._stored_order_export_snapshot(order)
+        _assert_export_kerf(
+            snapshot,
+            fallback_kerf_mm=flt(getattr(order, "kerf_mm", 0)),
+        )
         return {
             "plan": snapshot,
             "manifest": legacy_export._manifest_from_order_snapshot(
@@ -165,6 +242,10 @@ def get_validated_dxf_plan(
         )
 
     editable, snapshot = legacy_export._strict_editable_snapshot(payload)
+    _assert_export_kerf(
+        snapshot,
+        fallback_kerf_mm=flt(getattr(editable, "kerf_mm", 0)),
+    )
     return {
         "plan": snapshot,
         "manifest": _draft_manifest(editable, snapshot),
