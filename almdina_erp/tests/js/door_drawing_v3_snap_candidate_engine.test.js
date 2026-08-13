@@ -74,8 +74,26 @@ result = P.resolve(doc([targetLine, continuation]), [continuation], 0, 0, { view
 assert.equal(result.geometryCandidate.kind, "collinear", "Parallel line near a reference should become a simple same-line continuation");
 assert.equal(result.dx, 0);
 assert.equal(result.dy, -5);
+assert.equal(result.geometryCandidate.longitudinalGapMm, 50);
 assert.ok(result.guides.some(guide => guide.type === "geometry-line"));
 assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "على نفس الخط"));
+
+const farVerticalTarget = G.line("far-target", G.point(300, 500), G.point(300, 560));
+const farVerticalMoving = G.line("far-moving", G.point(298, 100), G.point(298, 150));
+const distantSameLine = C.resolve(doc([farVerticalTarget, farVerticalMoving]), [farVerticalMoving], 0, 0, { viewportScale: 1 });
+assert.equal(distantSameLine.snapped, false, "Same-line assistance must ignore mathematically collinear but visually unrelated distant segments");
+assert.equal(
+    C.collinearCandidate(
+        C.segmentsForObjects([farVerticalMoving])[0],
+        C.segmentsForObjects([farVerticalTarget])[0],
+        7,
+        null,
+        false,
+        72
+    ),
+    null,
+    "A distant parallel edge must not steal an ordinary alignment gesture"
+);
 
 result = P.resolve(doc([sourceLine]), [sourceLine], 49, 1, {
     viewportScale: 1,
