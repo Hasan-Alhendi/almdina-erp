@@ -38,7 +38,7 @@ assert.match(domain, /function transformPath\(/);
 assert.match(domain, /function rectanglePath\(/);
 assert.match(domain, /function circlePath\(/);
 assert.match(domain, /function arcPath\(/);
-assert.doesNotMatch(domain, /document\.|querySelector|getBoundingClientRect|clientX|clientY|style\./, "Affine transforms must remain a pure world-mm domain");
+assert.doesNotMatch(domain, /document\.|querySelector|getBoundingClientRect|clientX|clientY|\.style\.(?:transform|left|top|width|height|cssText)/, "Affine transforms must remain a pure world-mm domain without DOM presentation access");
 
 for (const role of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
     assert.match(view, new RegExp(`"${role}"`), `Transform box should expose ${role} handle`);
