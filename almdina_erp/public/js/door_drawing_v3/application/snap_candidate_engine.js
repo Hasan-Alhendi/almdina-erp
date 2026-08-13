@@ -61,11 +61,11 @@
     }
 
     function segmentsForObjects(objects) {
-        return Object.freeze(S.collectSegments({ objects: objects || [] }, {}));
+        return Object.freeze(S.collectSegments({ objects: objects || [] }, {}).filter(segment => !segment.curved));
     }
 
     function targetSegments(document, excludedIds = []) {
-        return Object.freeze(S.collectSegments(document, { excludeIds: excludedIds || [] }));
+        return Object.freeze(S.collectSegments(document, { excludeIds: excludedIds || [] }).filter(segment => !segment.curved));
     }
 
     function pairKind(source, target) {
@@ -155,7 +155,7 @@
     }
 
     function surfaceCandidate(source, segment, toleranceMm, lockedAxis, sticky = false) {
-        if (!source || source.kind !== "joint") return null;
+        if (!source || source.kind !== "joint" || !segment || segment.curved) return null;
         const projection = S.projectSegment(source.point, segment.start, segment.end);
         if (!projection || projection.distanceMm > toleranceMm) return null;
         const target = segmentDescriptor(segment, projection.point, "surface");
@@ -199,6 +199,7 @@
     }
 
     function collinearCandidate(sourceSegment, targetSegment, toleranceMm, lockedAxis, sticky = false) {
+        if (!sourceSegment || !targetSegment || sourceSegment.curved || targetSegment.curved) return null;
         if (angleDistance180(segmentAngle(sourceSegment), segmentAngle(targetSegment)) > COLLINEAR_ANGLE_TOLERANCE_DEG) return null;
         const sourceMid = G.point(
             (sourceSegment.start.x + sourceSegment.end.x) / 2,
