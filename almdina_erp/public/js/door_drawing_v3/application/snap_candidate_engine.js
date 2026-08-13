@@ -119,11 +119,11 @@
         return candidate(source, target, releaseToleranceMm, lockedAxis, true);
     }
 
-    function bestCandidate(sources, targets, toleranceMm, lockedAxis) {
+    function bestCandidate(sources, targets, toleranceMm, lockedAxis, allowSameObject = false) {
         let best = null;
         for (const source of sources || []) {
             for (const target of targets || []) {
-                if (String(source.objectId) === String(target.objectId)) continue;
+                if (!allowSameObject && String(source.objectId) === String(target.objectId)) continue;
                 const next = candidate(source, target, toleranceMm, lockedAxis, false);
                 if (!next) continue;
                 if (!best || score(next) > score(best)) best = next;
@@ -155,7 +155,8 @@
         if (lockedAxis === "x") dy = 0;
         if (lockedAxis === "y") dx = 0;
 
-        const excludedIds = options.includeSourceTargets
+        const includeSourceTargets = Boolean(options.includeSourceTargets);
+        const excludedIds = includeSourceTargets
             ? []
             : (sourceObjects || []).map(object => String(object.id));
         const sources = movedFeatures(sourceObjects || [], dx, dy);
@@ -164,7 +165,7 @@
         const releaseToleranceMm = toleranceMm * RELEASE_FACTOR;
 
         let best = stickyCandidate(sources, targets, options.stickyCandidate, releaseToleranceMm, lockedAxis);
-        if (!best) best = bestCandidate(sources, targets, toleranceMm, lockedAxis);
+        if (!best) best = bestCandidate(sources, targets, toleranceMm, lockedAxis, includeSourceTargets);
         if (!best) {
             return Object.freeze({
                 dx: G.roundMm(dx),
