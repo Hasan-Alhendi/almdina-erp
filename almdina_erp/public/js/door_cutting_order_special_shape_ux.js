@@ -11,6 +11,7 @@
         Object.freeze({ id: "almdina-door-drawing-v3-text-css", href: "/assets/almdina_erp/css/door_drawing_v3_text.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-vector-editing-css", href: "/assets/almdina_erp/css/door_drawing_v3_vector_editing.css" }),
         Object.freeze({ id: "almdina-door-drawing-v3-bezier-css", href: "/assets/almdina_erp/css/door_drawing_v3_bezier.css" }),
+        Object.freeze({ id: "almdina-door-drawing-v3-transform-css", href: "/assets/almdina_erp/css/door_drawing_v3_transform.css" }),
     ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
@@ -20,6 +21,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/domain/vector_selection.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/bezier_selection_domain.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/text_annotation_domain.js",
+        "/assets/almdina_erp/js/door_drawing_v3/domain/transform_domain.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/history.js",
         "/assets/almdina_erp/js/door_drawing_v3/infrastructure/persistence_adapter.js",
         "/assets/almdina_erp/js/door_drawing_v3/infrastructure/smart_path_persistence.js",
@@ -45,6 +47,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/presentation/advanced_snap_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/text_annotation_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/presentation/vector_editing_view.js",
+        "/assets/almdina_erp/js/door_drawing_v3/presentation/transform_box_view.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_stage2.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/text_annotation_editor.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/magnetic_connection.js",
@@ -54,6 +57,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/vector_editing.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/node_selection_policy.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/editor_shortcuts.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/transform_box.js",
     ]);
 
     function ensureStyles() {
@@ -125,6 +129,10 @@
         __doorDrawingV3SelectionNodeDrag: true,
         __doorDrawingV3ProfessionalShortcuts: true,
         __doorDrawingV3MultiClipboard: true,
+        __doorDrawingV3TransformBox: true,
+        __doorDrawingV3TransformResize: true,
+        __doorDrawingV3TransformFlip: true,
+        __doorDrawingV3TransformInspector: true,
         __referenceImageIntegrated: true,
         __smartTemplatePaletteIntegrated: true,
         __templateSilhouettePreviewIntegrated: true,
