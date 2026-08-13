@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
 const bootstrap = read("almdina_erp/public/js/door_cutting_order_special_shape_ux.js");
+const smartGuides = read("almdina_erp/public/js/door_drawing_v3/application/smart_guides.js");
 const candidates = read("almdina_erp/public/js/door_drawing_v3/application/snap_candidate_engine.js");
 const movePolicy = read("almdina_erp/public/js/door_drawing_v3/application/professional_move_policy.js");
 const moveView = read("almdina_erp/public/js/door_drawing_v3/presentation/professional_move_view.js");
@@ -34,6 +35,11 @@ for (const flag of [
     "__doorDrawingV3SnapCandidateEngine",
     "__doorDrawingV3DuplicateSnapTargets",
     "__doorDrawingV3GeometryPointSnap",
+    "__doorDrawingV3EndpointSurfaceSnap",
+    "__doorDrawingV3CollinearContinuation",
+    "__doorDrawingV3RepeatedSpacingGuides",
+    "__doorDrawingV3OperatorAssistLabels",
+    "__doorDrawingV3ExactLinearSnapSafety",
     "__doorDrawingV3StickyMoveSnap",
     "__doorDrawingV3OrientedTransform",
     "__doorDrawingV3RotationHandle",
@@ -50,16 +56,31 @@ assert.ok(unifiedIndex >= 0 && candidateIndex > unifiedIndex, "Move candidate en
 assert.ok(movePolicyIndex > candidateIndex, "Professional move policy must consume the candidate engine");
 
 const forbiddenDom = /window\.document|globalThis\.document|document\.(querySelector|querySelectorAll|createElement|createElementNS|getElementById)|getBoundingClientRect|clientX|clientY/;
-assert.match(candidates, /function bestCandidate\(/);
+assert.match(candidates, /function bestPointCandidate\(/);
+assert.match(candidates, /function bestSurfaceCandidate\(/);
+assert.match(candidates, /function bestCollinearCandidate\(/);
+assert.match(candidates, /function surfaceCandidate\(/);
+assert.match(candidates, /function collinearCandidate\(/);
 assert.match(candidates, /includeSourceTargets/);
 assert.match(candidates, /stickyCandidate/);
+assert.match(candidates, /claimedAxes/);
 assert.match(candidates, /POINT_CAPTURE_PX/);
+assert.match(candidates, /SEGMENT_CAPTURE_PX/);
+assert.match(candidates, /COLLINEAR_CAPTURE_PX/);
 assert.doesNotMatch(candidates, forbiddenDom, "Snap candidate engine must remain DOM independent world-mm policy");
+assert.match(smartGuides, /curved:\s*Boolean\(segment\.curved\)/);
+assert.match(smartGuides, /filter\(segment => !segment\.curved\)/);
 assert.match(movePolicy, /function bestAlignment\(/);
 assert.match(movePolicy, /function bestSpacing\(/);
 assert.match(movePolicy, /function referenceGaps\(/);
+assert.match(movePolicy, /function clusterReferenceGaps\(/);
+assert.match(movePolicy, /repeat-series/);
+assert.match(movePolicy, /نفس المسافة/);
+assert.match(movePolicy, /على الضلع/);
+assert.match(movePolicy, /على نفس الخط/);
 assert.match(movePolicy, /Candidates\.resolve/);
 assert.match(movePolicy, /includeSourceTargets/);
+assert.match(movePolicy, /claimedAxes/);
 assert.match(movePolicy, /lockedAxis/);
 assert.doesNotMatch(movePolicy, forbiddenDom, "Move snapping policy must remain DOM independent");
 assert.match(moveApp, /event\.altKey/);
@@ -73,7 +94,12 @@ assert.match(moveView, /ddv3-move-spacing-label/);
 assert.match(moveView, /spacing-reference/);
 assert.match(moveView, /ddv3-move-duplicate-origin/);
 assert.match(moveView, /geometry-point/);
+assert.match(moveView, /geometry-segment/);
+assert.match(moveView, /geometry-line/);
+assert.match(moveView, /assist-label/);
 assert.match(moveView, /ddv3-move-point-snap/);
+assert.match(moveView, /ddv3-move-guide-surface/);
+assert.match(moveView, /ddv3-move-guide-collinear/);
 
 assert.match(orientedDomain, /function convexHull\(/);
 assert.match(orientedDomain, /function minimumFrame\(/);
@@ -99,6 +125,9 @@ assert.match(orientedApp, /c\.history\.execute/);
 assert.match(moveCss, /\.ddv3-move-guide-alignment/);
 assert.match(moveCss, /\.ddv3-move-spacing-line/);
 assert.match(moveCss, /\.ddv3-move-point-snap/);
+assert.match(moveCss, /\.ddv3-move-guide-surface/);
+assert.match(moveCss, /\.ddv3-move-guide-collinear/);
+assert.match(moveCss, /\.ddv3-move-assist-label/);
 assert.match(orientedCss, /\.ddv3-oriented-transform-outline/);
 assert.match(orientedCss, /\.ddv3-oriented-rotation-handle/);
 assert.match(orientedCss, /\.ddv3-oriented-pivot/);
