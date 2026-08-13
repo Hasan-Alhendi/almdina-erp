@@ -90,13 +90,39 @@
         return result;
     }
 
+    function firstDefined(...values) {
+        return values.find(value => value !== undefined && value !== null && value !== "");
+    }
+
+    function appliedTrimMm(plan, sheet) {
+        // Piece coordinates are relative to the optimizer's usable board. Translate
+        // them back to the physical sheet with the *resolved* per-axis trim. This is
+        // intentionally not derived from the requested trim because adaptive-margin
+        // plans may remove/reduce only one axis to fit exact customer dimensions.
+        const widthTrimCm = firstDefined(
+            sheet && sheet.applied_trim_width_cm,
+            plan.applied_trim_width_cm,
+            plan.trim_cm,
+            0
+        );
+        const lengthTrimCm = firstDefined(
+            sheet && sheet.applied_trim_length_cm,
+            plan.applied_trim_length_cm,
+            plan.trim_cm,
+            0
+        );
+        return {
+            width: Math.max(0, num(widthTrimCm)) * 10,
+            length: Math.max(0, num(lengthTrimCm)) * 10,
+        };
+    }
+
     function buildDxf(plan) {
         const sheets = plan.sheets || [];
         const perRow = 2;
         const gapMm = 200;
         const maxWidth = Math.max(0, ...sheets.map(sheet => num(sheet.full_width_cm || plan.full_board_width_cm) * 10));
         const maxHeight = Math.max(0, ...sheets.map(sheet => num(sheet.full_length_cm || plan.full_board_length_cm) * 10));
-        const trimMm = num(plan.trim_cm) * 10;
         let entities = "";
         let extmaxX = 0;
         let extmaxY = 0;
@@ -106,6 +132,7 @@
             const fullHeight = num(sheet.full_length_cm || plan.full_board_length_cm) * 10;
             const offsetX = (index % perRow) * (maxWidth + gapMm);
             const offsetY = Math.floor(index / perRow) * (maxHeight + gapMm);
+            const appliedTrim = appliedTrimMm(plan, sheet);
             extmaxX = Math.max(extmaxX, offsetX + fullWidth);
             extmaxY = Math.max(extmaxY, offsetY + fullHeight);
 
@@ -114,8 +141,11 @@
             (sheet.pieces || []).forEach(piece => {
                 const pieceWidth = num(piece.w) * 10;
                 const pieceHeight = num(piece.h) * 10;
-                const x = offsetX + trimMm + num(piece.x) * 10;
-                const y = offsetY + fullHeight - trimMm - num(piece.y) * 10 - pieceHeight;
+                // x/y/w/h are the authoritative optimizer cut-path geometry. The
+                // optimizer already reserves kerf between pieces, so keep those
+                // coordinates unchanged and add only the physical-sheet translation.
+                const x = offsetX + appliedTrim.width + num(piece.x) * 10;
+                const y = offsetY + fullHeight - appliedTrim.length - num(piece.y) * 10 - pieceHeight;
                 const clippedGeometry = window.AlmdinaClippedCornerGeometry;
                 const shapeOutput = window.AlmdinaShapeOutputContract;
                 const clipped = clippedGeometry && clippedGeometry.isClipped(piece);
