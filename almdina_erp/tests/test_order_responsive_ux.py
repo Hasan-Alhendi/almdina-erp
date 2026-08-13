@@ -186,6 +186,8 @@ def test_desk_list_paints_foreign_operational_role_rows_green():
     assert "function applyOperationalRoleRows(listview)" in list_source
     assert "get_order_operational_role_flags" in list_source
     assert 'classList.toggle("dco-list-row-other-role"' in list_source
-    assert "[...mine, ...other].forEach(container => result.appendChild(container))" in list_source
+    assert "const ordered = [...mine, ...other];" in list_source
+    assert "const needsReorder = ordered.some" in list_source
+    assert "ordered.forEach(container => result.appendChild(container));" in list_source
     assert ".list-row-container.dco-list-row-other-role > .list-row" in css
     assert "background: #dcfce7 !important;" in css
