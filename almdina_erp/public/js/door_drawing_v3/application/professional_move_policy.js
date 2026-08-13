@@ -11,7 +11,7 @@
     const SPACING_PX = 9;
 
     function translateBounds(box, dx, dy) {
-        return Selection.bounds(box.left + dx, box.bottom + dy, box.right + dx, box.top + dy);
+        return Selection.bounds(box.left + dx, box.top + dy, box.right + dx, box.bottom + dy);
     }
 
     function axisValues(box, axis) {
@@ -70,12 +70,12 @@
         for (const item of others) {
             const box = item.box;
             const crossOverlap = axis === "x"
-                ? overlap(moved.bottom, moved.top, box.bottom, box.top)
+                ? overlap(moved.top, moved.bottom, box.top, box.bottom)
                 : overlap(moved.left, moved.right, box.left, box.right);
             const crossSize = axis === "x" ? Math.min(moved.height, box.height) : Math.min(moved.width, box.width);
             if (crossSize > G.EPSILON_MM && crossOverlap < -crossSize * 0.15) continue;
-            const beforeGap = axis === "x" ? moved.left - box.right : moved.bottom - box.top;
-            const afterGap = axis === "x" ? box.left - moved.right : box.bottom - moved.top;
+            const beforeGap = axis === "x" ? moved.left - box.right : moved.top - box.bottom;
+            const afterGap = axis === "x" ? box.left - moved.right : box.top - moved.bottom;
             if (beforeGap >= -G.EPSILON_MM && (!before || beforeGap < before.gap)) before = { ...item, gap: Math.max(0, beforeGap) };
             if (afterGap >= -G.EPSILON_MM && (!after || afterGap < after.gap)) after = { ...item, gap: Math.max(0, afterGap) };
         }
@@ -83,11 +83,11 @@
     }
 
     function referenceGaps(others, axis) {
-        const ordered = others.slice().sort((a, b) => axis === "x" ? a.box.left - b.box.left : a.box.bottom - b.box.bottom);
+        const ordered = others.slice().sort((a, b) => axis === "x" ? a.box.left - b.box.left : a.box.top - b.box.top);
         const gaps = [];
         for (let i = 0; i < ordered.length - 1; i += 1) {
             const first = ordered[i], second = ordered[i + 1];
-            const gap = axis === "x" ? second.box.left - first.box.right : second.box.bottom - first.box.top;
+            const gap = axis === "x" ? second.box.left - first.box.right : second.box.top - first.box.bottom;
             if (gap < -G.EPSILON_MM) continue;
             gaps.push({ axis, value: Math.max(0, gap), first, second });
         }
@@ -101,7 +101,7 @@
         if (neighbors.before && neighbors.after) {
             const delta = neighbors.before.gap - neighbors.after.gap;
             if (Math.abs(delta) <= toleranceMm * 2) {
-                const correction = axis === "x" ? -delta / 2 : -delta / 2;
+                const correction = -delta / 2;
                 best = {
                     axis,
                     correction,
@@ -143,7 +143,7 @@
         const target = alignment.targetBox;
         if (axis === "x") {
             const x = alignment.targetRole === "left" ? target.left : alignment.targetRole === "right" ? target.right : target.cx;
-            return Object.freeze({ type: "alignment", axis: "x", x, from: Math.min(moved.bottom, target.bottom), to: Math.max(moved.top, target.top), targetId: alignment.targetId, role: alignment.targetRole });
+            return Object.freeze({ type: "alignment", axis: "x", x, from: Math.min(moved.top, target.top), to: Math.max(moved.bottom, target.bottom), targetId: alignment.targetId, role: alignment.targetRole });
         }
         const y = alignment.targetRole === "bottom" ? target.bottom : alignment.targetRole === "top" ? target.top : target.cy;
         return Object.freeze({ type: "alignment", axis: "y", y, from: Math.min(moved.left, target.left), to: Math.max(moved.right, target.right), targetId: alignment.targetId, role: alignment.targetRole });
@@ -153,19 +153,19 @@
         if (!spacing) return [];
         const guides = [];
         if (spacing.before) {
-            const from = axis === "x" ? spacing.before.box.right : spacing.before.box.top;
-            const to = axis === "x" ? moved.left : moved.bottom;
+            const from = axis === "x" ? spacing.before.box.right : spacing.before.box.bottom;
+            const to = axis === "x" ? moved.left : moved.top;
             guides.push(Object.freeze({ type: "spacing", axis, from, to, at: axis === "x" ? moved.cy : moved.cx, distanceMm: Math.abs(to - from) }));
         }
         if (spacing.after) {
-            const from = axis === "x" ? moved.right : moved.top;
-            const to = axis === "x" ? spacing.after.box.left : spacing.after.box.bottom;
+            const from = axis === "x" ? moved.right : moved.bottom;
+            const to = axis === "x" ? spacing.after.box.left : spacing.after.box.top;
             guides.push(Object.freeze({ type: "spacing", axis, from, to, at: axis === "x" ? moved.cy : moved.cx, distanceMm: Math.abs(to - from) }));
         }
         if (spacing.reference) {
             const first = spacing.reference.first.box, second = spacing.reference.second.box;
-            const from = axis === "x" ? first.right : first.top;
-            const to = axis === "x" ? second.left : second.bottom;
+            const from = axis === "x" ? first.right : first.bottom;
+            const to = axis === "x" ? second.left : second.top;
             const at = axis === "x" ? (first.cy + second.cy) / 2 : (first.cx + second.cx) / 2;
             guides.push(Object.freeze({ type: "spacing-reference", axis, from, to, at, distanceMm: spacing.reference.value }));
         }
