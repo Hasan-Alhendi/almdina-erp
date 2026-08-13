@@ -85,6 +85,61 @@ assert.deepEqual(controller.selectedIds, [], "Undo must not retain stale pasted 
 assert.equal(root.EditorShortcuts.redo(controller), true, "Ctrl+Y / Ctrl+Shift+Z must redo the paste command");
 assert.equal(controller.history.current().objects.length, 5);
 
+function keyboardEvent(key, options = {}) {
+    const state = { prevented: false, stopped: false, immediate: false };
+    return {
+        key,
+        ctrlKey: options.ctrlKey !== false,
+        metaKey: Boolean(options.metaKey),
+        altKey: Boolean(options.altKey),
+        shiftKey: Boolean(options.shiftKey),
+        target: options.target || null,
+        preventDefault() { state.prevented = true; },
+        stopPropagation() { state.stopped = true; },
+        stopImmediatePropagation() { state.immediate = true; },
+        state,
+    };
+}
+
+const backgroundInput = { matches: selector => selector.includes("input"), isContentEditable: false };
+controller.root.contains = target => target !== backgroundInput;
+assert.equal(root.EditorShortcuts.editingTarget(controller, { target: backgroundInput }), false, "A stale ERPNext input behind the modal must not disable editor shortcuts");
+
+const editorInput = { matches: selector => selector.includes("input"), isContentEditable: false };
+assert.equal(root.EditorShortcuts.editingTarget(controller, { target: editorInput }), true, "An actual DDV3 inspector input must keep native text editing shortcuts");
+
+const undoEvent = keyboardEvent("z", { target: backgroundInput });
+assert.equal(root.EditorShortcuts.keyDown(controller, undoEvent), true, "Ctrl+Z must be claimed by the visible drawing modal even if ERPNext left focus behind it");
+assert.equal(controller.history.current().objects.length, 3);
+assert.equal(undoEvent.state.prevented, true);
+
+const redoEvent = keyboardEvent("y", { target: backgroundInput });
+assert.equal(root.EditorShortcuts.keyDown(controller, redoEvent), true, "Ctrl+Y must redo through the drawing history manager");
+assert.equal(controller.history.current().objects.length, 5);
+assert.equal(redoEvent.state.prevented, true);
+
+controller.selectedId = "a";
+controller.selectedIds = ["a"];
+const copyEvent = keyboardEvent("c", { target: backgroundInput });
+assert.equal(root.EditorShortcuts.keyDown(controller, copyEvent), true, "Ctrl+C must work while the modal owns keyboard focus");
+const beforePasteCount = controller.history.current().objects.length;
+const pasteEvent = keyboardEvent("v", { target: backgroundInput });
+assert.equal(root.EditorShortcuts.keyDown(controller, pasteEvent), true, "Ctrl+V must work while the modal owns keyboard focus");
+assert.equal(controller.history.current().objects.length, beforePasteCount + 1);
+
+let focusCalls = 0;
+const attributes = Object.create(null);
+const focusController = {
+    canvas: {
+        setAttribute(name, value) { attributes[name] = value; },
+        getAttribute(name) { return attributes[name] || null; },
+        focus() { focusCalls += 1; },
+    },
+};
+assert.equal(root.EditorShortcuts.focusCanvas(focusController), true);
+assert.equal(attributes.tabindex, "0", "The SVG canvas must become an explicit keyboard focus owner");
+assert.equal(focusCalls, 1);
+
 controller.selectedId = "p";
 controller.selectedIds = ["p"];
 controller.nodeEditId = "";
@@ -119,4 +174,4 @@ root.NodeSelectionPolicy.restoreNodeEdit(controller, selectEvent);
 assert.equal(controller.nodeEditId, "p", "Clicking the V/select tool must preserve an active path node-edit session");
 assert.deepEqual(controller.selectedNodeIndices, [1]);
 
-console.log("Door Drawing V3 editor shortcut and node selection behavior tests passed");
+console.log("Door Drawing V3 editor shortcut, modal focus, and node selection behavior tests passed");
