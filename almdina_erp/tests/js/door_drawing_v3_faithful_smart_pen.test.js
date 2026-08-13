@@ -12,6 +12,7 @@ require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/sma
 const V3 = global.window.AlmdinaDoorDrawingV3;
 const G = V3.Geometry;
 const I = V3.SmartStrokeIntelligence;
+const F = V3.SmartFreehandPolicy;
 
 const irregular = [
     G.point(0, 0), G.point(12, 3), G.point(25, 1), G.point(38, 16),
@@ -50,9 +51,22 @@ assert.equal(subtleCurve.type, "path");
 assert.deepEqual(subtleCurve.points, almostLineButIntentionalCurve);
 
 const state = I.createStabilizer("mouse", G.point(0, 0));
-const rawLivePoint = G.point(10, 0);
-const stabilizedLivePoint = I.pushStabilized(state, rawLivePoint, { motionScaleMm: 20 });
-assert.ok(stabilizedLivePoint.x > 0 && stabilizedLivePoint.x < rawLivePoint.x, "Preview stabilization must stay separate from committed geometry");
+const rawLivePoint = G.point(10, 2.5);
+const previewPoint = I.pushStabilized(state, rawLivePoint, { motionScaleMm: 20 });
+assert.deepEqual(previewPoint, rawLivePoint, "Live preview must follow the same raw point that will be committed");
+assert.deepEqual(state.point, rawLivePoint, "The stabilizer state must not lag behind and reshape the preview");
+
+const stableSeries = I.stabilizeSeries([
+    G.point(0, 0), G.point(4, 1), G.point(8, -1), G.point(12, 3),
+], "mouse", { motionScaleMm: 20 });
+assert.deepEqual(stableSeries, [
+    G.point(0, 0), G.point(4, 1), G.point(8, -1), G.point(12, 3),
+], "Series stabilization must be identity for the order-entry freehand pen");
+
+const sparse = [G.point(0, 0)];
+const denser = F.appendSample(sparse, G.point(4, 0), 10);
+assert.equal(denser.length, 2, "The fidelity guard must keep sub-threshold detail by sampling more densely than the old pen profile");
+assert.equal(V3.SmartStrokeCornerGuard.SAMPLE_FIDELITY_FACTOR, 0.35);
 
 const closed = [G.point(0, 0), G.point(30, 5), G.point(38, 28), G.point(8, 36), G.point(0, 0)];
 const closedResult = I.interpret(closed, { closed: true });
