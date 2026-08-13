@@ -139,3 +139,112 @@
     font-size: 9px;
     line-height: 1.7;
 }
+
+.ddv3-smart-suggestion-ghost {
+    fill: none;
+    stroke: var(--dd-blue);
+    stroke-width: 1.8;
+    stroke-dasharray: 7 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+    opacity: .78;
+}
+
+.ddv3-smart-suggestion {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    max-width: calc(100% - 28px);
+    padding: 5px 6px 5px 9px;
+    transform: translateX(-50%);
+    border: 1px solid #4a4a4a;
+    border-radius: 7px;
+    background: rgba(44, 44, 44, .97);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+    color: #f4f4f4;
+    font-size: 10px;
+    pointer-events: auto;
+}
+
+.ddv3-smart-suggestion[hidden] {
+    display: none;
+}
+
+.ddv3-smart-suggestion-spark {
+    color: var(--dd-blue);
+    font-size: 13px;
+    line-height: 1;
+}
+
+.ddv3-smart-suggestion-copy {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.ddv3-smart-suggestion-copy b {
+    color: #f4f4f4;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.ddv3-smart-suggestion-copy span {
+    color: #b8b8b8;
+    font-size: 9px;
+}
+
+.ddv3-smart-suggestion-accept,
+.ddv3-smart-suggestion-dismiss {
+    height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
+.ddv3-smart-suggestion-accept {
+    min-width: 48px;
+    padding: 0 9px;
+    border: 1px solid var(--dd-blue);
+    background: var(--dd-blue);
+    color: #fff;
+}
+
+.ddv3-smart-suggestion-accept:hover {
+    filter: brightness(1.08);
+}
+
+.ddv3-smart-suggestion-dismiss {
+    width: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #aaa;
+    font-size: 15px;
+}
+
+.ddv3-smart-suggestion-dismiss:hover {
+    border-color: #555;
+    background: #383838;
+    color: #fff;
+}
+
+@media (max-width: 720px) {
+    .ddv3-smart-suggestion {
+        bottom: 12px;
+        max-width: calc(100% - 16px);
+    }
+
+    .ddv3-smart-suggestion-copy b {
+        display: none;
+    }
+}
