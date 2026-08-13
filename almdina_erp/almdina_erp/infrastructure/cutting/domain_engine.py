@@ -30,7 +30,7 @@ class DomainCuttingEngineAdapter:
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
     ) -> dict[str, Any]:
-        return optimize_plan(
+        plan = optimize_plan(
             pieces,
             board_width_cm,
             board_length_cm,
@@ -43,6 +43,8 @@ class DomainCuttingEngineAdapter:
             min_remnant_length_cm=min_remnant_length_cm,
             min_remnant_area_m2=min_remnant_area_m2,
         )
+        plan["kerf_cm"] = max(0.0, float(kerf_cm or 0))
+        return plan
 
     def validate(
         self,
@@ -56,6 +58,7 @@ class DomainCuttingEngineAdapter:
             pieces,
             board_width_cm,
             board_length_cm,
+            kerf_cm=max(0.0, float(plan.get("kerf_cm") or 0)),
         )
 
 
