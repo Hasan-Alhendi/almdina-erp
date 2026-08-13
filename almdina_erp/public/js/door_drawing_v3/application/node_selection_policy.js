@@ -22,6 +22,12 @@
             .filter(index => Number.isInteger(index) && index >= 0 && index <= max))].sort((a, b) => a - b);
     }
 
+    function render(c) {
+        root.ShapeView.render(c);
+        if (root.VectorEditingView) root.VectorEditingView.schedule(c);
+        if (root.BezierPathView) root.BezierPathView.schedule(c);
+    }
+
     function rememberNodeEdit(c, event) {
         if (!selectionButton(c, event) || !c.nodeEditId) return;
         const object = pathById(c, c.nodeEditId);
@@ -55,10 +61,30 @@
             ? nodeIndices[0]
             : (Number.isInteger(snapshot.selectedNodeIndex) && snapshot.selectedNodeIndex <= maxNode ? snapshot.selectedNodeIndex : null);
         c.selectedSegmentIndices = segmentIndices;
+        render(c);
+    }
 
-        root.ShapeView.render(c);
-        if (root.VectorEditingView) root.VectorEditingView.schedule(c);
-        if (root.BezierPathView) root.BezierPathView.schedule(c);
+    function editingTarget(event) {
+        const target = event && event.target;
+        return Boolean(target && ((target.matches && target.matches("input, textarea, select")) || target.isContentEditable));
+    }
+
+    function enterSelectedPath(c, event) {
+        if (!event || event.key !== "Enter" || event.ctrlKey || event.metaKey || event.altKey || editingTarget(event)) return false;
+        if (c.readOnly || c.tool !== "select" || c.nodeEditId) return false;
+        const object = pathById(c, c.selectedId);
+        if (!object) return false;
+        c.selectedId = String(object.id);
+        c.selectedIds = [String(object.id)];
+        c.nodeEditId = String(object.id);
+        c.selectedNodeIndex = null;
+        c.selectedNodeIndices = [];
+        c.selectedSegmentIndices = [];
+        render(c);
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+        return true;
     }
 
     function install(c) {
@@ -68,14 +94,17 @@
 
         const onPointerDown = event => rememberNodeEdit(c, event);
         const onClick = event => restoreNodeEdit(c, event);
+        const onKeyDown = event => enterSelectedPath(c, event);
         c.root.addEventListener("pointerdown", onPointerDown, true);
         // Bubble phase intentionally runs after the base tool switch. SmartPen may leave
         // node-edit mode in capture phase; this policy restores the user's vector-edit intent.
         c.root.addEventListener("click", onClick, false);
+        window.addEventListener("keydown", onKeyDown, true);
 
         if (c.dialog && c.dialog.$wrapper) c.dialog.$wrapper.one("hidden.bs.modal.ddv3-node-selection-policy-cleanup", () => {
             c.root.removeEventListener("pointerdown", onPointerDown, true);
             c.root.removeEventListener("click", onClick, false);
+            window.removeEventListener("keydown", onKeyDown, true);
             c.__selectionToolNodeEditSnapshot = null;
         });
         return c;
@@ -88,5 +117,5 @@
         open(frm, row, options = {}) { return install(originalOpen(frm, row, options)); },
         view(frm, row) { return install(originalView(frm, row)); },
     });
-    root.NodeSelectionPolicy = Object.freeze({ install, rememberNodeEdit, restoreNodeEdit });
+    root.NodeSelectionPolicy = Object.freeze({ install, rememberNodeEdit, restoreNodeEdit, enterSelectedPath });
 })();
