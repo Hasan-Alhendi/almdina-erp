@@ -43,7 +43,7 @@ def test_shop_floor_profile_never_replaces_or_whitelists_the_form_layout() -> No
     assert 'frm.add_custom_button(__("رجوع لصالة الإنتاج")' in presentation
 
     dispatch = order_ux.split("function addDispatchButton", 1)[1].split(
-        "function addDeliveryButtons", 1
+        "function addRevertButton", 1
     )[0]
     delivery = order_ux.split("function addDeliveryButtons", 1)[1].split(
         "function openRevertDialog", 1

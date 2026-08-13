@@ -595,8 +595,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
 
         repository.capabilities.add(Capability.REVERT_DEPARTMENT)
         repository.order.status = "Delivered"
-        with self.assertRaises(queries.ShopFloorQueryError):
-            queries.get_revert_targets(repository, "DCO-1")
+        # Revert is capability-only; Delivered no longer blocks authorization.
+        targets = queries.get_revert_targets(repository, "DCO-1")
+        self.assertEqual([target["stage_type"] for target in targets], ["Drawing", "CNC"])
 
 
 if __name__ == "__main__":

@@ -289,6 +289,15 @@ class FrappeOrderPlanAdapter:
         for fieldname, value in state.items():
             setattr(self.document, fieldname, value)
         self.access.clear_system_plan_if_available()
+        # Keep last board count for invoice continuity; refresh money from current
+        # rates and freshly calculated edge totals.
+        boards = cint(self.document.required_boards)
+        if boards > 0:
+            self.costing.apply_order_costs(boards)
+        else:
+            self.document.mdf_cost_usd = 0
+            self.document.cutting_cost_usd = 0
+            self.document.total_cost_usd = flt(self.document.edge_cost_usd)
         self.costing.calculate_special_shape_pricing()
 
     def calculate_cutting_plan(self, input_fingerprint: str) -> None:

@@ -594,10 +594,13 @@
             frappe.msgprint(reason || "فعّل وضع «تعديل» أولًا لإعادة حساب الخطة. إعادة الحساب لا تعتمد الطلب.");
             return;
         }
-        if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
-            frappe.msgprint("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
-            return;
-        }
+
+        const revisionUx = window.AlmdinaOrderRevisionUX;
+        const wasEditing = Boolean(
+            revisionUx && typeof revisionUx.captureEditSessionPresence === "function"
+                ? revisionUx.captureEditSessionPresence(frm)
+                : frm.__almdina_edit_session
+        );
 
         const buttons = $(frm.wrapper).find(".dco-recalculate-plan,.dco-auto-pro-plan,.dco-deep-plan,.dco-optimal-plan");
         buttons.prop("disabled", true);
@@ -609,16 +612,28 @@
                 : "جاري إعادة حساب أفضل توزيع للقطع...";
         frappe.dom.freeze(message);
         try {
-            await frm.save();
+            const controls = window.AlmdinaPlanControlsUX;
+            if (controls && typeof controls.runRecalculation === "function") {
+                await controls.runRecalculation(frm);
+            } else if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
+                frappe.msgprint("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
+            } else {
+                if (frm.is_dirty && frm.is_dirty()) {
+                    await frm.save();
+                }
+                frappe.show_alert({ message: "تم تحديث خطة القص والنتائج", indicator: "green" }, 3);
+            }
             renderSummary(frm);
             renderActions(frm);
-            frappe.show_alert({ message: "تم تحديث خطة القص والنتائج", indicator: "green" }, 3);
+            if (revisionUx && typeof revisionUx.restorePrimaryAfterPlanEngine === "function") {
+                revisionUx.restorePrimaryAfterPlanEngine(frm, wasEditing);
+            }
         } catch (error) {
             console.error("Failed to recalculate cutting plan", error);
             throw error;
         } finally {
             frappe.dom.unfreeze();
-            $(frm.wrapper).find(".dco-recalculate-plan,.dco-auto-pro-plan,.dco-deep-plan,.dco-optimal-plan").prop("disabled", !canRecalculatePlan(frm));
+            buttons.prop("disabled", !canRecalculatePlan(frm));
         }
     }
 
@@ -630,7 +645,12 @@
         }
     }
 
-    function applyOptimizerFieldPresentation(frm) {
+    function applyReadOnlyState(frm) {
+        // Kerf/trim follow the order edit session (revision_ux), not optimizer tuning.
+        const readOnly = canEditOptimizerSettings(frm) ? 0 : 1;
+        ["packing_mode", "cutting_machine_type", "optimization_time_limit_sec"].forEach(fieldname => {
+            frm.set_df_property(fieldname, "read_only", readOnly);
+        });
         frm.toggle_display("optimization_time_limit_sec", ["Deep Search", "Optimal Search"].includes(frm.doc.packing_mode));
     }
 

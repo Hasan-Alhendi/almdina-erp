@@ -325,6 +325,12 @@
 		frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));
 	}
 
+	function addRevertButton(frm) {
+		if (frm.is_new() || !can(frm, "revert_department")) return;
+		// Standalone toolbar button — not nested under «صالة الإنتاج».
+		frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm));
+	}
+
 	function addDeliveryButtons(frm) {
 		if (frm.is_new()) return;
 		if (frm.doc.status === "Ready for Delivery" && can(frm, "mark_delivered")) {
@@ -338,9 +344,6 @@
 					)
 				);
 			}, PRODUCTION_ACTION_GROUP);
-		}
-		if (frm.doc.production_path && frm.doc.status !== "Delivered" && can(frm, "revert_department")) {
-			frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm), PRODUCTION_ACTION_GROUP);
 		}
 	}
 
@@ -604,7 +607,7 @@
 		if (status === "Ready for Delivery" && can(frm, "mark_delivered")) {
 			labels.push(__("تم التسليم"));
 		}
-		if (frm.doc.production_path && status !== "Delivered" && can(frm, "revert_department")) {
+		if (can(frm, "revert_department")) {
 			labels.push(__("إرجاع لمرحلة سابقة"));
 		}
 
@@ -759,8 +762,10 @@
 			"إنهاء وإرسال",
 			"تغيير العامل",
 		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
-		// Dispatch is a standalone toolbar button (no group).
+		// Standalone toolbar buttons (no group).
 		frm.remove_custom_button(__("إرسال للإنتاج"));
+		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"));
+		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"), PRODUCTION_ACTION_GROUP);
 	}
 
 	function reconcileProductionActions(frm) {
@@ -771,6 +776,7 @@
 		frm.__almdinaProductionActionsKey = null;
 		removeProductionButtons(frm);
 		addDispatchButton(frm);
+		addRevertButton(frm);
 		addDeliveryButtons(frm);
 		addWorkerStageButtons(frm);
 		return true;

@@ -24,18 +24,19 @@ from almdina_erp.almdina_erp.services.order_edit_policy import (
 _OPTIMIZER_FIELDS = (
     "packing_mode",
     "cutting_machine_type",
+    "optimization_time_limit_sec",
+)
+# Cut geometry belongs to ordinary order editing, not algorithm tuning.
+_CUT_GEOMETRY_FIELDS = (
     "kerf_mm",
     "trim_margin_mm",
-    "optimization_time_limit_sec",
 )
 _OPTIMIZER_DEFAULTS = {
     "packing_mode": "default_packing_mode",
     "cutting_machine_type": "default_cutting_machine_type",
-    "kerf_mm": "default_kerf_mm",
-    "trim_margin_mm": "default_trim_margin_mm",
     "optimization_time_limit_sec": "default_optimization_time_limit_sec",
 }
-_NUMERIC_OPTIMIZER_FIELDS = frozenset(
+_NUMERIC_PLAN_INPUT_FIELDS = frozenset(
     {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
 )
 
@@ -47,7 +48,7 @@ def _capability_allowed(doc: Any, capability: str) -> bool:
 
 
 def _same_value(fieldname: str, left: Any, right: Any) -> bool:
-    if fieldname in _NUMERIC_OPTIMIZER_FIELDS:
+    if fieldname in _NUMERIC_PLAN_INPUT_FIELDS:
         return abs(flt(left) - flt(right)) < 0.000001
     return str(left or "").strip() == str(right or "").strip()
 
@@ -185,18 +186,25 @@ def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
     if not changed:
         return []
 
-    require_document_capability(
-        doc,
-        Capability.EDIT_OPTIMIZER_SETTINGS,
-        message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
-    )
-    if getattr(doc, "current_production_stage", None) or getattr(
-        doc, "production_path", None
-    ):
-        require_stage_operational_access(doc)
+    optimizer_changed = [
+        fieldname for fieldname in changed if fieldname in _OPTIMIZER_FIELDS
+    ]
+    # kerf/trim may ride along in the recalculate payload via _CUT_GEOMETRY_FIELDS
+    # without requiring EDIT_OPTIMIZER_SETTINGS.
+    if optimizer_changed:
+        require_document_capability(
+            doc,
+            Capability.EDIT_OPTIMIZER_SETTINGS,
+            message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
+        )
+        if getattr(doc, "current_production_stage", None) or getattr(
+            doc, "production_path", None
+        ):
+            require_stage_operational_access(doc)
+
     for fieldname in changed:
         doc.set(fieldname, updates[fieldname])
-    return changed
+    return optimizer_changed
 
 
 def _assert_recalculation_state(doc: Any) -> None:
@@ -262,9 +270,10 @@ def recalculate_order(
 ) -> dict[str, Any]:
     """Recalculate one plan through granular plan capabilities only.
 
-    ``RECALCULATE_PLAN`` authorizes running the engine. Changing any optimizer
-    input additionally requires ``EDIT_OPTIMIZER_SETTINGS``. Neither operation
-    requires cost visibility or cost editing authority.
+    ``RECALCULATE_PLAN`` authorizes running the engine. Changing packing mode,
+    machine type, or time limit additionally requires ``EDIT_OPTIMIZER_SETTINGS``.
+    Kerf and trim are ordinary order inputs and do not require optimizer authority.
+    Neither operation requires cost visibility or cost editing authority.
     """
 
     name = str(order_name or "").strip()

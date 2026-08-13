@@ -239,6 +239,12 @@
 		const identity = context.capture(frm);
 		const orderName = frm.doc.name;
 		const mayEditSettings = canEditDrawingOptimizer(frm);
+		const revisionUx = window.AlmdinaOrderRevisionUX;
+		const wasEditing = Boolean(
+			revisionUx && typeof revisionUx.captureEditSessionPresence === "function"
+				? revisionUx.captureEditSessionPresence(frm)
+				: frm.__almdina_edit_session
+		);
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
@@ -249,7 +255,12 @@
 			.then((r) => {
 				if (!context.isCurrent(frm, identity)) return r.message;
 				frappe.show_alert({ message: __("تم تحديث خطة النظام."), indicator: "green" });
-				return frm.reload_doc().then(() => r.message);
+				return frm.reload_doc().then(() => {
+					if (revisionUx && typeof revisionUx.restorePrimaryAfterPlanEngine === "function") {
+						revisionUx.restorePrimaryAfterPlanEngine(frm, wasEditing);
+					}
+					return r.message;
+				});
 			});
 	}
 

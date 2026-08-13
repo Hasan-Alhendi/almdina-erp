@@ -2,7 +2,7 @@
     "use strict";
 
     const STYLE_ID = "dco-side-edge-profile-css";
-    const SIDE_ORDER = ["long_right", "long_left", "width_top", "width_bottom"];
+    const SIDE_ORDER = ["width_top", "width_bottom", "long_right", "long_left"];
     const SIDES = {
         long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", labelAr: "الطول الأيمن", labelEn: "Right long edge", axis: "long" },
         long_left: { selectedField: "edge_long_left", overrideField: "edge_long_left_type_override", labelAr: "الطول الأيسر", labelEn: "Left long edge", axis: "long" },

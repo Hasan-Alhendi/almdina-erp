@@ -15,6 +15,11 @@
         ".dco-deep-plan",
         ".dco-optimal-plan",
     ].join(",");
+    const OPTIMIZER_FIELDS = [
+        "packing_mode",
+        "cutting_machine_type",
+        "optimization_time_limit_sec",
+    ];
     const MEASUREMENT_PRINT_SELECTOR = [
         ".dco-print-measurements",
         ".dco-entry-window-print",

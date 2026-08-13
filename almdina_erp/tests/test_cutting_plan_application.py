@@ -241,15 +241,25 @@ class TestPlanReusePolicy(unittest.TestCase):
         self.assertFalse(decision.reuse)
         self.assertEqual(decision.reason, "missing_snapshot_sheets")
 
-    def test_invalidation_state_resets_all_plan_outputs(self) -> None:
+    def test_invalidation_state_resets_plan_geometry_only(self) -> None:
         state = plan_invalidation_state(engine_version="v-test")
         self.assertEqual(state["plan_needs_recalculation"], 1)
         self.assertEqual(state["cutting_plan_json"], "")
         self.assertEqual(state["calculated_plan_input_hash"], "")
         self.assertEqual(state["calculated_plan_metadata_hash"], "")
-        self.assertEqual(state["required_boards"], 0)
         self.assertEqual(state["packing_score"], "خطة القص تحتاج إعادة حساب")
         self.assertEqual(state["engine_version"], "v-test")
+        # Invoice continuity: last board/cost totals must survive ordinary saves
+        # that only invalidate placement geometry.
+        for fieldname in (
+            "required_boards",
+            "waste_area_m2",
+            "waste_percent",
+            "mdf_cost_usd",
+            "cutting_cost_usd",
+            "total_cost_usd",
+        ):
+            self.assertNotIn(fieldname, state)
 
 
 class TestPlanMetadataRefresh(unittest.TestCase):

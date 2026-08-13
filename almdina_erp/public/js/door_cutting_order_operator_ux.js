@@ -390,10 +390,10 @@
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
                 <td class="dco-col-edges" data-label="${labels.edges}"><div class="dco-edge-buttons" title="${isSpecial ? (isArabic() ? "قشاط مبدئي لتقدير السعر؛ يمكن اعتماده أو تعديله بعد تصميم CNC" : "Preliminary banding for the estimate; finalize after CNC design") : ""}">
-                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
-                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
                     ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
                     ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
+                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
+                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
                 </div></td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
                 <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
