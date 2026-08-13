@@ -16,15 +16,41 @@
         return `${String(type || "object")}-${Date.now()}-${sequence}`;
     }
 
-    function editingTarget(event) {
-        const target = event && event.target;
+    function isEditableTarget(target) {
         return Boolean(target && ((target.matches && target.matches("input, textarea, select")) || target.isContentEditable));
+    }
+
+    function editingTarget(c, event) {
+        const target = event && event.target;
+        if (!isEditableTarget(target)) return false;
+        // The drawing dialog owns keyboard shortcuts while it is open. A stale focus
+        // left on the ERPNext form behind the modal must never disable Ctrl+C/V/Z/Y.
+        // Native text editing is preserved only for an actual editor field inside DDV3.
+        if (c && c.root && typeof c.root.contains === "function") return c.root.contains(target);
+        return true;
     }
 
     function editorVisible(c) {
         if (!c || !c.root || !c.root.isConnected) return false;
         if (c.dialog && c.dialog.$wrapper && typeof c.dialog.$wrapper.is === "function") return c.dialog.$wrapper.is(":visible");
         return true;
+    }
+
+    function focusCanvas(c) {
+        if (!c || !c.canvas) return false;
+        try {
+            if (typeof c.canvas.setAttribute === "function") {
+                c.canvas.setAttribute("tabindex", "0");
+                if (!c.canvas.getAttribute || !c.canvas.getAttribute("aria-label")) c.canvas.setAttribute("aria-label", "مساحة رسم الدرفة");
+            }
+            if (typeof c.canvas.focus === "function") {
+                try { c.canvas.focus({ preventScroll: true }); }
+                catch (error) { c.canvas.focus(); }
+            }
+            return true;
+        } catch (error) {
+            return false;
+        }
     }
 
     function selectedObjectIds(c) {
@@ -134,7 +160,7 @@
     }
 
     function keyDown(c, event) {
-        if (!editorVisible(c) || c.readOnly || editingTarget(event)) return false;
+        if (!editorVisible(c) || c.readOnly || editingTarget(c, event)) return false;
         const mod = Boolean(event.ctrlKey || event.metaKey);
         if (!mod || event.altKey) return false;
         const key = String(event.key || "").toLowerCase();
@@ -150,15 +176,15 @@
             return true;
         }
         if (key === "z") {
-            const handled = event.shiftKey ? redo(c) : undo(c);
+            event.shiftKey ? redo(c) : undo(c);
             // Keep the browser from interpreting Ctrl/Cmd+Z even when the history stack is empty.
             stop(event);
-            return handled || true;
+            return true;
         }
         if (key === "y") {
-            const handled = redo(c);
+            redo(c);
             stop(event);
-            return handled || true;
+            return true;
         }
         return false;
     }
@@ -167,11 +193,21 @@
         if (!c || !c.root || c.__editorShortcutsInstalled) return c;
         c.__editorShortcutsInstalled = true;
         const onKeyDown = event => keyDown(c, event);
+        const onRootPointerDown = event => {
+            const target = event && event.target;
+            if (!target || isEditableTarget(target)) return;
+            if (c.canvas && typeof c.canvas.contains === "function" && c.canvas.contains(target)) focusCanvas(c);
+        };
+
         // Window capture runs before the legacy document-level shortcut handler, giving one
         // authoritative implementation for copy/paste/undo/redo without duplicating commands.
         window.addEventListener("keydown", onKeyDown, true);
+        c.root.addEventListener("pointerdown", onRootPointerDown, true);
+        focusCanvas(c);
+
         if (c.dialog && c.dialog.$wrapper) c.dialog.$wrapper.one("hidden.bs.modal.ddv3-editor-shortcuts-cleanup", () => {
             window.removeEventListener("keydown", onKeyDown, true);
+            c.root.removeEventListener("pointerdown", onRootPointerDown, true);
         });
         return c;
     }
@@ -183,5 +219,15 @@
         open(frm, row, options = {}) { return install(originalOpen(frm, row, options)); },
         view(frm, row) { return install(originalView(frm, row)); },
     });
-    root.EditorShortcuts = Object.freeze({ install, copySelection, pasteSelection, undo, redo, selectedObjectIds });
+    root.EditorShortcuts = Object.freeze({
+        install,
+        keyDown,
+        editingTarget,
+        focusCanvas,
+        copySelection,
+        pasteSelection,
+        undo,
+        redo,
+        selectedObjectIds,
+    });
 })();
