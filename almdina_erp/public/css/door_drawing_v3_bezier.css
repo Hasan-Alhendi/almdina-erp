@@ -137,6 +137,27 @@
     border-color: var(--primary, #5b5bd6);
 }
 
+.ddv3-topology-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.ddv3-topology-control svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+}
+
+.ddv3-topology-separator {
+    width: 1px;
+    height: 20px;
+    margin-inline: 2px;
+    background: var(--border-color, #e4e7ec);
+}
+
 .ddv3-canvas[data-tool="path"] {
     cursor: crosshair;
 }
@@ -161,5 +182,9 @@
         min-height: 34px;
         padding-inline: 10px;
         font-size: 12px;
+    }
+
+    .ddv3-topology-control span {
+        display: none;
     }
 }
