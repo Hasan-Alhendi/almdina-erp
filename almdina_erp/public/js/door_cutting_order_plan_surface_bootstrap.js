@@ -22,6 +22,10 @@
             global: "AlmdinaPlanTabsUX",
             asset: "/assets/almdina_erp/js/door_cutting_order_plan_tabs_ux.js",
         }),
+        Object.freeze({
+            global: "AlmdinaPlanContentUX",
+            asset: "/assets/almdina_erp/js/door_cutting_order_plan_content_ux.js",
+        }),
     ]);
 
     let modulePromise = null;
@@ -71,14 +75,41 @@
         if (layout) layout.empty();
     }
 
+    function setWrapperOrder(target, orderName) {
+        if (!target) return;
+        if (typeof target.attr === "function") {
+            target.attr("data-almdina-order", orderName);
+            return;
+        }
+        const node = target.nodeType ? target : (target[0] || null);
+        if (node && node.dataset) node.dataset.almdinaOrder = orderName;
+    }
+
+    function wrapperOrder(target) {
+        if (!target) return "";
+        if (typeof target.attr === "function") {
+            return String(target.attr("data-almdina-order") || "");
+        }
+        const node = target.nodeType ? target : (target[0] || null);
+        return String(node && node.dataset && node.dataset.almdinaOrder || "");
+    }
+
     function surfaceReady(frm) {
         const actions = wrapper(frm, "plan_control_actions");
         const layout = wrapper(frm, "cutting_plan_html");
+        const orderName = String(frm && frm.doc && frm.doc.name || "");
+        const content = window.AlmdinaPlanContentUX;
         return Boolean(
             actions
             && layout
+            && wrapperOrder(actions) === orderName
+            && wrapperOrder(layout) === orderName
             && actions.find(".dco-plan-actions-shell").length
+            && layout.find(".dco-plan-tab-content").length
             && layout.children().length
+            && content
+            && typeof content.isReady === "function"
+            && content.isReady(frm)
         );
     }
 
@@ -106,6 +137,7 @@
         const presenter = window.AlmdinaDoorCuttingPlanUX;
         const controls = window.AlmdinaPlanControlsUX;
         const tabs = window.AlmdinaPlanTabsUX;
+        const content = window.AlmdinaPlanContentUX;
 
         if (!presenter || typeof presenter.refresh !== "function") {
             throw new Error("AlmdinaDoorCuttingPlanUX.refresh is unavailable");
@@ -113,8 +145,12 @@
         if (!tabs || typeof tabs.afterRender !== "function") {
             throw new Error("AlmdinaPlanTabsUX.afterRender is unavailable");
         }
+        if (!content || typeof content.apply !== "function") {
+            throw new Error("AlmdinaPlanContentUX.apply is unavailable");
+        }
 
         presenter.refresh(frm);
+        setWrapperOrder(wrapper(frm, "plan_control_actions"), String(frm.doc.name || ""));
         if (controls && typeof controls.apply === "function") {
             controls.apply(frm);
         }
@@ -130,6 +166,8 @@
                 );
             }
         }
+        setWrapperOrder(wrapper(frm, "cutting_plan_html"), String(frm.doc.name || ""));
+        content.apply(frm);
         return surfaceReady(frm);
     }
 

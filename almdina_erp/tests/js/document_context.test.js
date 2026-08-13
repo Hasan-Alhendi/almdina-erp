@@ -12,6 +12,8 @@ const source = fs.readFileSync(
 
 const handlers = {};
 const clearedTimers = [];
+const scheduledTimers = new Map();
+let nextTimer = 1000;
 let disconnectedObservers = 0;
 
 function htmlWrapper(content) {
@@ -67,8 +69,14 @@ function form(name) {
 
 const fakeWindow = {
     cur_frm: null,
+    setTimeout(callback) {
+        nextTimer += 1;
+        scheduledTimers.set(nextTimer, callback);
+        return nextTimer;
+    },
     clearTimeout(timer) {
         clearedTimers.push(timer);
+        scheduledTimers.delete(timer);
     },
 };
 const fakeFrappe = {
@@ -134,6 +142,20 @@ Object.values(frm.fields_dict).forEach(field => {
     assert.equal(field.$wrapper.emptyCalls, 1);
 });
 
+// Deferred work and observers belong to the active document generation. A
+// navigation must cancel them before the reused Form can render the next order.
+let staleEffectRuns = 0;
+const staleTimer = fakeWindow.AlmdinaDocumentContext.schedule(
+    frm,
+    "stale-plan-render",
+    () => { staleEffectRuns += 1; },
+    25
+);
+const staleCallback = scheduledTimers.get(staleTimer);
+fakeWindow.AlmdinaDocumentContext.registerObserver(frm, "stale-plan-observer", {
+    disconnect() { disconnectedObservers += 1; },
+});
+
 // Reusing the Form object for another route clears every stale document region.
 frm.doc.name = "DCO-2026-00002";
 frm._dco_selected_piece_rows.add("ROW-FROM-FIRST-ORDER");
@@ -145,6 +167,10 @@ assert.equal(frm._almdinaDocumentContextIdentity, "Door Cutting Order::DCO-2026-
 assert.equal(frm._almdinaDocumentContextGeneration, 2);
 assert.equal(frm._dco_selected_piece_rows.size, 0);
 assert.equal(frm._dco_piece_type_restore_token, null);
+assert.equal(scheduledTimers.has(staleTimer), false);
+assert.equal(disconnectedObservers, 2);
+staleCallback();
+assert.equal(staleEffectRuns, 0);
 Object.values(frm.fields_dict).forEach(field => {
     assert.equal(field.$wrapper.content, "");
     assert.equal(field.$wrapper.emptyCalls, 2);

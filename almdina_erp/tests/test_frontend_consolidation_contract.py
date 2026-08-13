@@ -20,6 +20,10 @@ INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
 PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
+ACTION_GUARD = (
+    ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
+)
 MEASUREMENT_ACTIONS = (
     ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 )
@@ -184,6 +188,16 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("__almdinaSecureDxfExportLoaded", secure_dxf)
         self.assertNotIn("DXF_EXPORT_ROLES", secure_dxf)
         self.assertNotIn("frappe.user_roles", secure_dxf)
+
+    def test_plan_controls_are_the_only_optimizer_field_permission_owner(self) -> None:
+        controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        presenter = PLAN_UX.read_text(encoding="utf-8")
+        guard = ACTION_GUARD.read_text(encoding="utf-8")
+
+        self.assertIn("function applyOptimizerFieldAccess(frm)", controls)
+        self.assertIn('frm.set_df_property(fieldname, "read_only"', controls)
+        self.assertNotIn('frm.set_df_property(fieldname, "read_only"', presenter)
+        self.assertNotIn('frm.set_df_property(fieldname, "read_only"', guard)
 
     def test_input_policy_uses_public_form_surface_only(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")

@@ -200,6 +200,19 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertFalse(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
         self.assertFalse(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
 
+    def test_visible_plan_section_always_has_at_least_one_source(self) -> None:
+        state = normalize_capability_state(
+            {
+                Capability.VIEW_CUTTING_PLAN: True,
+                Capability.VIEW_SYSTEM_CUTTING_PLAN: False,
+                Capability.VIEW_UPLOADED_CUTTING_PLAN: False,
+                Capability.VIEW_APPROVED_CUTTING_PLAN: False,
+            }
+        )
+        self.assertTrue(state[Capability.VIEW_SYSTEM_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_UPLOADED_CUTTING_PLAN])
+        self.assertFalse(state[Capability.VIEW_APPROVED_CUTTING_PLAN])
+
     def test_drawing_actions_automatically_require_drawing_workspace(self) -> None:
         for action in (
             Capability.EDIT_SPECIAL_DRAWING,

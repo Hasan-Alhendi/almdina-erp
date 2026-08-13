@@ -20,6 +20,11 @@ const fakeWindow = {
             return grants.has(capability);
         },
     },
+    AlmdinaCuttingPlanRender: {
+        print(_frm, plan) {
+            fakeWindow.printedPlan = plan;
+        },
+    },
 };
 const fakeFrappe = {
     ui: { form: { on() {} } },
@@ -63,5 +68,11 @@ assert.deepEqual(
     [...fakeWindow.AlmdinaPlanTabsUX.visibleTabs(frm)].map(tab => tab.id),
     ["System", "Approved"]
 );
+
+grants.add("view_uploaded_cutting_plan");
+frm.doc.custom_plan_json = JSON.stringify({ sheets: [{ source: "Custom" }] });
+frm.__almdina_active_plan_tab = "Custom";
+fakeWindow.AlmdinaPlanTabsUX.printActivePlan(frm);
+assert.equal(fakeWindow.printedPlan.sheets[0].source, "Custom");
 
 console.log("Granular cutting-plan tab capability contract passed");

@@ -104,10 +104,6 @@
         return canOperatePlanEngine(frm);
     }
 
-    function canEditOptimizerSettings(frm) {
-        return canTuneCuttingAlgorithm(frm) && can(frm, "edit_optimizer_settings");
-    }
-
     function num(value, digits = 2) {
         const n = Number(value || 0);
         return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
@@ -420,12 +416,12 @@
             frappe.msgprint("ليست لديك صلاحية طباعة خطة القص.");
             return;
         }
-        if (window.AlmdinaCuttingPlanRender && typeof window.AlmdinaCuttingPlanRender.print === "function") {
-            window.AlmdinaCuttingPlanRender.print(frm);
-            return;
-        }
         if (window.AlmdinaPlanTabsUX && typeof window.AlmdinaPlanTabsUX.printActivePlan === "function") {
             window.AlmdinaPlanTabsUX.printActivePlan(frm);
+            return;
+        }
+        if (window.AlmdinaCuttingPlanRender && typeof window.AlmdinaCuttingPlanRender.print === "function") {
+            window.AlmdinaCuttingPlanRender.print(frm);
             return;
         }
         if (window.AlmdinaDrawingPlanUX && typeof window.AlmdinaDrawingPlanUX.printActivePlan === "function") {
@@ -660,7 +656,7 @@
 
     function refreshPlanUX(frm) {
         installStyles();
-        applyReadOnlyState(frm);
+        applyOptimizerFieldPresentation(frm);
         decorateSections(frm);
         renderSummary(frm);
         renderActions(frm);
@@ -668,8 +664,11 @@
 
     function schedulePlanUX(frm) {
         const context = documentContext();
+        const token = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
         const run = () => {
-            if (!context || context.isCurrent(frm, context.capture(frm))) {
+            if (!context || context.isCurrent(frm, token)) {
                 refreshPlanUX(frm);
             }
         };
@@ -685,7 +684,7 @@
         refresh(frm) { schedulePlanUX(frm); },
         almdina_edit_session_changed(frm) { schedulePlanUX(frm); },
         refresh_plan_controls(frm) { schedulePlanUX(frm); },
-        packing_mode(frm) { applyReadOnlyState(frm); renderActions(frm); markPending(frm); },
+        packing_mode(frm) { applyOptimizerFieldPresentation(frm); renderActions(frm); markPending(frm); },
         cutting_machine_type(frm) { markPending(frm); },
         kerf_mm(frm) { markPending(frm); },
         trim_margin_mm(frm) { markPending(frm); },

@@ -476,9 +476,17 @@
     function scheduleSimplify(frm) {
         if (frm.__dcoSimplePlanControlsScheduled) return;
         frm.__dcoSimplePlanControlsScheduled = true;
-        requestAnimationFrame(() => {
+        const run = () => {
             frm.__dcoSimplePlanControlsScheduled = false;
             simplifyActions(frm);
+        };
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            context.scheduleFrame(frm, "simple-plan-controls", run);
+            return;
+        }
+        requestAnimationFrame(() => {
+            if (window.cur_frm === frm) run();
         });
     }
 
@@ -491,12 +499,23 @@
             scheduleSimplify(frm);
         });
         frm.__dcoSimplePlanControlsObserver.observe(node, { childList: true, subtree: true });
+        const context = documentContext();
+        if (context && typeof context.registerObserver === "function") {
+            context.registerObserver(
+                frm,
+                "simple-plan-controls-observer",
+                frm.__dcoSimplePlanControlsObserver
+            );
+        }
     }
 
     function refresh(frm) {
         const context = documentContext();
+        const token = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
         const run = () => {
-            if (context && !context.isCurrent(frm, context.capture(frm))) return;
+            if (context && !context.isCurrent(frm, token)) return;
             apply(frm);
             observeActions(frm);
         };
@@ -532,6 +551,7 @@
 
     window.AlmdinaPlanControlsUX = Object.freeze({
         apply,
+        applyOptimizerFieldAccess,
         canCalculate,
         preparePlanInputs,
         persistPendingOrderInputs,

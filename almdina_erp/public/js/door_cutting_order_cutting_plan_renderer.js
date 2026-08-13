@@ -216,7 +216,7 @@
         const board_height_px = Math.max(260, Math.round(board_width_px * (board_h_cm / board_w_cm)));
 
         let html = `
-            <div class="dco-cutting-plan" style="font-family:Arial,Tahoma,sans-serif;direction:rtl;color:#111;background:#fff;">
+            <div class="dco-cutting-plan" data-almdina-order="${escape_html(frm.doc.name || "")}" style="font-family:Arial,Tahoma,sans-serif;direction:rtl;color:#111;background:#fff;">
                 <h2 style="margin:0 0 8px 0;font-size:18px;">خطة القص</h2>
                 ${render_plan_header_cards(frm)}
 

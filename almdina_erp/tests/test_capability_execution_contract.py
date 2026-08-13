@@ -120,7 +120,10 @@ class TestCapabilityExecutionContract(unittest.TestCase):
                 self.assertIn(f'"{capability}"', source)
         self.assertNotIn("orderEditable", source)
         self.assertIn("planIsLocked", source)
-        self.assertIn("mayEditOptimizer && !locked", source)
+        self.assertIn(
+            "!locked && mayMutate && mayRecalculate && (!modeButton || mayEditOptimizer)",
+            source,
+        )
         self.assertIn("RECALCULATE_METHOD", controls)
         self.assertIn(
             '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"',
@@ -166,7 +169,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("required_upload_capability", service)
         self.assertIn("Capability.UPLOAD_DXF", policy)
         self.assertIn("Capability.REPLACE_DXF", policy)
-        self.assertIn("_validate_and_attach_dxf_file", service)
+        self.assertIn("_attach_validated_dxf_file", service)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,9 @@
 (() => {
     "use strict";
 
-    const STYLE_ID = "dco-plan-content-layout-css-v6";
+    if (window.AlmdinaPlanContentUX) return;
+
+    const STYLE_ID = "dco-plan-content-layout-css-v7";
     const BOARD_GAP_PX = 8;
     const BOARD_CARD_CHROME_PX = 12;
     const BOARD_VIEWPORT_HEIGHT_RATIO = 0.68;
@@ -15,6 +17,52 @@
     const FOCUS_MAX_ZOOM = 2;
     const FOCUS_ZOOM_STEP = 0.25;
     const ZERO_MARGIN_EPSILON_MM = 0.001;
+
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function capture(frm) {
+        const context = documentContext();
+        return context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : `${frm.doctype || ""}::${frm.doc && frm.doc.name || "__new__"}`;
+    }
+
+    function isCurrent(frm, token) {
+        const context = documentContext();
+        if (context && typeof context.isCurrent === "function") {
+            return context.isCurrent(frm, token);
+        }
+        return Boolean(window.cur_frm === frm);
+    }
+
+    function tokenKey(token) {
+        if (!token || typeof token !== "object") return String(token || "");
+        return `${String(token.identity || "")}::${Number(token.generation || 0)}`;
+    }
+
+    function scheduleFrame(frm, key, callback) {
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            return context.scheduleFrame(frm, key, callback);
+        }
+        const token = capture(frm);
+        return window.requestAnimationFrame(() => {
+            if (isCurrent(frm, token)) callback(frm, token);
+        });
+    }
+
+    function schedule(frm, key, callback, delay) {
+        const context = documentContext();
+        if (context && typeof context.schedule === "function") {
+            return context.schedule(frm, key, callback, delay);
+        }
+        const token = capture(frm);
+        return window.setTimeout(() => {
+            if (isCurrent(frm, token)) callback(frm, token);
+        }, delay);
+    }
 
     function sectionElement(frm, fieldname) {
         const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
@@ -668,7 +716,14 @@
     }
 
     function parsePlanSnapshot(frm) {
-        const raw = frm && frm.doc && frm.doc.cutting_plan_json;
+        if (!frm || !frm.doc) return null;
+        const tabs = window.AlmdinaPlanTabsUX;
+        const activeTab = frm.__almdina_active_plan_tab;
+        if (tabs && activeTab && typeof tabs.getPlanForTab === "function") {
+            const active = tabs.getPlanForTab(frm, activeTab);
+            if (active && typeof active === "object") return active;
+        }
+        const raw = frm.doc.system_plan_json || frm.doc.cutting_plan_json;
         if (!raw) return null;
         if (typeof raw === "object") return raw;
         try {
@@ -1019,10 +1074,13 @@
     }
 
     function cleanRenderedPlan(frm) {
+        const token = capture(frm);
+        if (!isCurrent(frm, token)) return false;
         const field = frm.fields_dict.cutting_plan_html;
-        if (!field || !field.$wrapper) return;
+        if (!field || !field.$wrapper) return false;
         const root = field.$wrapper.get(0);
-        if (!root) return;
+        if (!root) return false;
+        root.dataset.almdinaOrder = String(frm.doc && frm.doc.name || "");
 
         const plan = parsePlanSnapshot(frm);
         root.querySelectorAll(".dco-cutting-plan").forEach(planRoot => {
@@ -1059,38 +1117,80 @@
             ".dco-drawing-plan-panel-host, .dco-drawing-plan-panel"
         ).forEach(el => el.remove());
         installBoardInteractions(root);
+        return true;
+    }
+
+    function isReady(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const root = field && field.$wrapper && field.$wrapper.get(0);
+        const orderName = String(frm && frm.doc && frm.doc.name || "");
+        if (!root || root.dataset.almdinaOrder !== orderName) return false;
+        const planRoots = [...root.querySelectorAll(".dco-cutting-plan")];
+        return planRoots.every(planRoot => {
+            if (String(planRoot.getAttribute("data-almdina-order") || "") !== orderName) {
+                return false;
+            }
+            const directCards = planRoot.querySelectorAll(":scope > .dco-sheet-card");
+            if (directCards.length) return false;
+            const cards = planRoot.querySelectorAll(".dco-sheet-card");
+            if (cards.length && !planRoot.querySelector(":scope > .dco-board-gallery")) return false;
+            return ![...planRoot.children].some(child =>
+                String(child.textContent || "").replace(/\s+/g, " ").includes("طريقة الترتيب:")
+            );
+        });
     }
 
     function installObserver(frm) {
         const field = frm.fields_dict.cutting_plan_html;
         if (!field || !field.$wrapper) return;
         const root = field.$wrapper.get(0);
-        if (!root || root._dcoPlanContentObserver) return;
+        if (!root) return;
+        const identity = capture(frm);
+        const identityKey = tokenKey(identity);
+        if (
+            root._dcoPlanContentObserver
+            && root._dcoPlanContentObserverIdentity === identityKey
+        ) return;
+        if (root._dcoPlanContentObserver) root._dcoPlanContentObserver.disconnect();
 
         let scheduled = false;
         const observer = new MutationObserver(() => {
+            if (!isCurrent(frm, identity)) return;
             if (scheduled) return;
             scheduled = true;
-            requestAnimationFrame(() => {
+            scheduleFrame(frm, "plan-content-observer-frame", () => {
                 scheduled = false;
                 cleanRenderedPlan(frm);
             });
         });
         observer.observe(root, { childList: true, subtree: true });
         root._dcoPlanContentObserver = observer;
+        root._dcoPlanContentObserverIdentity = identityKey;
+        const context = documentContext();
+        if (context && typeof context.registerObserver === "function") {
+            context.registerObserver(frm, "plan-content-observer", observer);
+        }
     }
 
     function installResizeObserver(frm) {
         const field = frm.fields_dict.cutting_plan_html;
         if (!field || !field.$wrapper) return;
         const root = field.$wrapper.get(0);
-        if (!root || root._dcoPlanContentResizeObserver) return;
+        if (!root) return;
+        const identity = capture(frm);
+        const identityKey = tokenKey(identity);
+        if (
+            root._dcoPlanContentResizeObserver
+            && root._dcoPlanContentResizeObserverIdentity === identityKey
+        ) return;
+        if (root._dcoPlanContentResizeObserver) root._dcoPlanContentResizeObserver.disconnect();
 
         let scheduled = false;
         const relayout = () => {
+            if (!isCurrent(frm, identity)) return;
             if (scheduled) return;
             scheduled = true;
-            requestAnimationFrame(() => {
+            scheduleFrame(frm, "plan-content-resize-frame", () => {
                 scheduled = false;
                 root.querySelectorAll(".dco-cutting-plan").forEach(layoutBoardGallery);
             });
@@ -1100,36 +1200,56 @@
             const observer = new ResizeObserver(relayout);
             observer.observe(root);
             root._dcoPlanContentResizeObserver = observer;
+            const context = documentContext();
+            if (context && typeof context.registerObserver === "function") {
+                context.registerObserver(frm, "plan-content-resize-observer", observer);
+            }
         } else {
             window.addEventListener("resize", relayout);
-            root._dcoPlanContentResizeObserver = { disconnect() {} };
+            const fallback = { disconnect() { window.removeEventListener("resize", relayout); } };
+            root._dcoPlanContentResizeObserver = fallback;
+            const context = documentContext();
+            if (context && typeof context.registerObserver === "function") {
+                context.registerObserver(frm, "plan-content-resize-observer", fallback);
+            }
         }
+        root._dcoPlanContentResizeObserverIdentity = identityKey;
     }
 
     function apply(frm) {
+        const identity = capture(frm);
+        if (!isCurrent(frm, identity)) return false;
         installStyles();
         applyArabicPlanLabels(frm);
         movePlanActionsToFullWidth(frm);
         cleanRenderedPlan(frm);
         installObserver(frm);
         installResizeObserver(frm);
-        requestAnimationFrame(() => {
+        scheduleFrame(frm, "plan-content-apply-frame", () => {
             movePlanActionsToFullWidth(frm);
             cleanRenderedPlan(frm);
         });
-        window.setTimeout(() => {
+        schedule(frm, "plan-content-apply-delay", () => {
             movePlanActionsToFullWidth(frm);
             cleanRenderedPlan(frm);
         }, 350);
+        return isReady(frm);
     }
+
+    window.AlmdinaPlanContentUX = Object.freeze({
+        apply,
+        cleanRenderedPlan,
+        isReady,
+        parsePlanSnapshot,
+    });
 
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { apply(frm); },
         refresh(frm) { apply(frm); },
         cutting_plan_json(frm) { apply(frm); },
-        packing_mode(frm) { requestAnimationFrame(() => movePlanActionsToFullWidth(frm)); },
-        optimization_time_limit_sec(frm) { requestAnimationFrame(() => movePlanActionsToFullWidth(frm)); },
-        refresh_plan_controls(frm) { requestAnimationFrame(() => apply(frm)); },
+        packing_mode(frm) { scheduleFrame(frm, "plan-content-packing-mode", () => movePlanActionsToFullWidth(frm)); },
+        optimization_time_limit_sec(frm) { scheduleFrame(frm, "plan-content-optimizer-time", () => movePlanActionsToFullWidth(frm)); },
+        refresh_plan_controls(frm) { scheduleFrame(frm, "plan-content-refresh-controls", () => apply(frm)); },
     });
 
     if (window && typeof window.addEventListener === "function") {

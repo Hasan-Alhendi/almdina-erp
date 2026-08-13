@@ -8,6 +8,26 @@
         cost_tab: "view_costs",
     });
 
+    function scheduleFrame(frm, key, callback) {
+        const context = window.AlmdinaDocumentContext;
+        if (context && typeof context.scheduleFrame === "function") {
+            return context.scheduleFrame(frm, key, callback);
+        }
+        return window.requestAnimationFrame(() => {
+            if (window.cur_frm === frm) callback(frm);
+        });
+    }
+
+    function scheduleDelay(frm, key, callback, delay) {
+        const context = window.AlmdinaDocumentContext;
+        if (context && typeof context.schedule === "function") {
+            return context.schedule(frm, key, callback, delay);
+        }
+        return window.setTimeout(() => {
+            if (window.cur_frm === frm) callback(frm);
+        }, delay);
+    }
+
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
@@ -97,7 +117,7 @@
             activateOrderTab(frm);
         }
 
-        window.requestAnimationFrame(() => {
+        scheduleFrame(frm, "tab-permissions-frame", () => {
             applyRenderedVisibility(frm, visibility);
         });
     }
@@ -110,8 +130,8 @@
             apply(frm);
             // Frappe may repaint the tab navigation after refresh. Reapply only
             // DOM visibility; never rebuild the form layout.
-            window.setTimeout(() => apply(frm), 180);
-            window.setTimeout(() => apply(frm), 700);
+            scheduleDelay(frm, "tab-permissions-180", () => apply(frm), 180);
+            scheduleDelay(frm, "tab-permissions-700", () => apply(frm), 700);
         },
     });
 
