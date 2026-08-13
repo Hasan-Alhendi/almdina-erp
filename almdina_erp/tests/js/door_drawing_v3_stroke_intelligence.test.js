@@ -14,6 +14,7 @@ require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/too
 const V3 = global.window.AlmdinaDoorDrawingV3;
 const G = V3.Geometry;
 const I = V3.SmartStrokeIntelligence;
+const C = V3.SmartStrokeCornerGuard;
 const M = V3.ToolModifierPolicy;
 
 const mouseState = I.createStabilizer("mouse", G.point(0, 0));
@@ -32,7 +33,7 @@ assert.deepEqual(mouseSeries.at(-1), G.point(40, 0), "Live stabilization must pr
 const roughRightAngle = [];
 for (let x = 0; x <= 100; x += 5) roughRightAngle.push(G.point(x, x % 10 === 0 ? 0.45 : -0.4));
 for (let y = 5; y <= 100; y += 5) roughRightAngle.push(G.point(y % 10 === 0 ? 100.45 : 99.55, y));
-const mixed = I.interpret(roughRightAngle, {
+const automatic = I.interpret(roughRightAngle, {
     closed: false,
     straightToleranceMm: 2.4,
     simplifyToleranceMm: 1.2,
@@ -45,11 +46,21 @@ const mixed = I.interpret(roughRightAngle, {
     preserveEndpoints: true,
     orthogonalize: true,
 });
-assert.equal(mixed.type, "compound", "One mouse drag containing a clear corner should split into intelligent geometry runs");
-assert.equal(mixed.segments.length, 2);
-assert.deepEqual(mixed.segments.map(segment => segment.type), ["line", "line"]);
-assert.deepEqual(mixed.segments[0].end, mixed.segments[1].start, "Split runs must share the exact same world-mm junction");
-assert.ok(mixed.cornerTurnDeg > 70, "The corner guard should only activate for a clearly deliberate change in direction");
+assert.equal(automatic.type, "path", "A clear corner drawn with one freehand gesture must remain the user's path unless correction is explicitly requested");
+assert.equal(automatic.fidelity, true);
+assert.deepEqual(automatic.points, roughRightAngle, "Automatic smart-pen interpretation must not rebuild an L stroke into straight segments");
+
+const explicitCorner = C.sharpLineCorner(roughRightAngle, {
+    straightToleranceMm: 2.4,
+    straightRatio: 1.07,
+    minimumSegmentMm: 20,
+});
+assert.ok(explicitCorner, "The line-corner recognizer remains available as an explicit assisted operation");
+assert.equal(explicitCorner.type, "compound");
+assert.equal(explicitCorner.segments.length, 2);
+assert.deepEqual(explicitCorner.segments.map(segment => segment.type), ["line", "line"]);
+assert.deepEqual(explicitCorner.segments[0].end, explicitCorner.segments[1].start, "Explicit split runs must share the exact same world-mm junction");
+assert.ok(explicitCorner.cornerTurnDeg > 70, "Explicit corner recognition should still require a clearly deliberate change in direction");
 
 const arcPoints = [];
 for (let angle = -90; angle <= 10; angle += 5) {
@@ -62,7 +73,7 @@ const exactArc = I.arcThroughEndpoints(arcPoints, {
     minimumArcSweepDeg: 20,
     maximumArcSweepDeg: 335,
 });
-assert.ok(exactArc, "A curved run should be recognized independently inside a future mixed stroke");
+assert.ok(exactArc, "A curved run should remain recognizable for explicit assisted correction");
 assert.equal(exactArc.type, "arc");
 const reconstructedStart = G.pointAt(exactArc.center, exactArc.radiusMm, exactArc.startAngleDeg);
 const reconstructedEnd = G.pointAt(exactArc.center, exactArc.radiusMm, exactArc.startAngleDeg + exactArc.sweepAngleDeg);
@@ -79,7 +90,8 @@ const irregularResult = I.interpret(irregular, {
     simplifyToleranceMm: 2,
     minimumSegmentMm: 28,
 });
-assert.notEqual(irregularResult.type, "line", "Intelligence must not force genuinely irregular mouse gestures into a straight primitive");
+assert.equal(irregularResult.type, "path", "Intelligence must preserve genuinely irregular mouse gestures as freehand paths");
+assert.deepEqual(irregularResult.points, irregular);
 
 assert.equal(M.penConstraint({ altKey: true }), M.PEN_CONSTRAINTS.STRAIGHT, "Alt should request a perfectly straight pen gesture");
 assert.equal(M.penConstraint({ shiftKey: true }), M.PEN_CONSTRAINTS.AXIS, "Shift should request an axis-constrained pen gesture");
