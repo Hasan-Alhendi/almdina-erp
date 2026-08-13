@@ -78,8 +78,8 @@ assert.equal(closedCandidate.type, G.PATH_TYPE);
 assert.equal(closedCandidate.geometry.closed, true);
 assert.deepEqual(
     closedCandidate.geometry.points,
-    nearClosedIrregular.slice(0, -1),
-    "Close suggestion must preserve the drawn contour instead of rebuilding it"
+    nearClosedIrregular,
+    "Close suggestion must preserve every drawn node instead of rebuilding the contour"
 );
 
 const irregularOpen = [
