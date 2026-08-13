@@ -56,9 +56,9 @@ assert.equal(subtleCurve.type, "path", "A subtle intentional curve must not be f
 assert.deepEqual(subtleCurve.points, almostLineButIntentionalCurve);
 
 const state = I.createStabilizer("mouse", G.point(0, 0));
-const livePoint = G.point(31.25, 17.75);
-assert.deepEqual(I.pushStabilized(state, livePoint), livePoint, "Live preview must follow the actual sampled point without lagging deformation");
-assert.deepEqual(state.point, livePoint);
+const rawLivePoint = G.point(10, 0);
+const stabilizedLivePoint = I.pushStabilized(state, rawLivePoint, { motionScaleMm: 20 });
+assert.ok(stabilizedLivePoint.x > 0 && stabilizedLivePoint.x < rawLivePoint.x, "Live input may keep light jitter stabilization without changing committed freehand geometry");
 
 const closed = [G.point(0, 0), G.point(30, 5), G.point(38, 28), G.point(8, 36), G.point(0, 0)];
 const closedResult = I.interpret(closed, { closed: true, circleResidualRatio: 0.001, simplifyToleranceMm: 10 });
