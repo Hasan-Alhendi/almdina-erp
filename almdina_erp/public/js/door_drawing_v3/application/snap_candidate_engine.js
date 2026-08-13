@@ -12,6 +12,7 @@
     const POINT_CAPTURE_PX = 10;
     const SEGMENT_CAPTURE_PX = 9;
     const COLLINEAR_CAPTURE_PX = 7;
+    const COLLINEAR_EXTENSION_PX = 72;
     const COLLINEAR_ANGLE_TOLERANCE_DEG = 1.5;
     const RELEASE_FACTOR = 1.6;
     const RANK = Object.freeze({
@@ -198,9 +199,37 @@
         return Object.freeze({ point: projected, distanceMm: G.distance(p, projected), t });
     }
 
-    function collinearCandidate(sourceSegment, targetSegment, toleranceMm, lockedAxis, sticky = false) {
+    function scalarAlong(point, origin, ux, uy) {
+        return (point.x - origin.x) * ux + (point.y - origin.y) * uy;
+    }
+
+    function longitudinalGap(sourceSegment, targetSegment) {
+        const dx = targetSegment.end.x - targetSegment.start.x;
+        const dy = targetSegment.end.y - targetSegment.start.y;
+        const length = Math.hypot(dx, dy);
+        if (length <= G.EPSILON_MM) return Infinity;
+        const ux = dx / length;
+        const uy = dy / length;
+        const origin = targetSegment.start;
+        const sourceValues = [
+            scalarAlong(sourceSegment.start, origin, ux, uy),
+            scalarAlong(sourceSegment.end, origin, ux, uy),
+        ];
+        const targetValues = [0, length];
+        const sourceMin = Math.min(...sourceValues);
+        const sourceMax = Math.max(...sourceValues);
+        const targetMin = Math.min(...targetValues);
+        const targetMax = Math.max(...targetValues);
+        if (sourceMax < targetMin) return targetMin - sourceMax;
+        if (targetMax < sourceMin) return sourceMin - targetMax;
+        return 0;
+    }
+
+    function collinearCandidate(sourceSegment, targetSegment, toleranceMm, lockedAxis, sticky = false, extensionToleranceMm = Infinity) {
         if (!sourceSegment || !targetSegment || sourceSegment.curved || targetSegment.curved) return null;
         if (angleDistance180(segmentAngle(sourceSegment), segmentAngle(targetSegment)) > COLLINEAR_ANGLE_TOLERANCE_DEG) return null;
+        const alongGapMm = longitudinalGap(sourceSegment, targetSegment);
+        if (alongGapMm > Math.max(0, Number(extensionToleranceMm) || 0)) return null;
         const sourceMid = G.point(
             (sourceSegment.start.x + sourceSegment.end.x) / 2,
             (sourceSegment.start.y + sourceSegment.end.y) / 2
@@ -219,6 +248,7 @@
             correctionX,
             correctionY,
             distanceMm: projection.distanceMm,
+            longitudinalGapMm: G.roundMm(alongGapMm),
             sticky: Boolean(sticky),
             claimedAxes: segmentClaimedAxes(targetSegment),
             identity: identity("collinear", source, target),
@@ -253,12 +283,12 @@
         return best;
     }
 
-    function bestCollinearCandidate(sources, targets, toleranceMm, lockedAxis, allowSameObject = false) {
+    function bestCollinearCandidate(sources, targets, toleranceMm, lockedAxis, allowSameObject = false, extensionToleranceMm = Infinity) {
         let best = null;
         for (const source of sources || []) {
             for (const target of targets || []) {
                 if (!allowSameObject && String(source.objectId) === String(target.objectId)) continue;
-                const next = collinearCandidate(source, target, toleranceMm, lockedAxis, false);
+                const next = collinearCandidate(source, target, toleranceMm, lockedAxis, false, extensionToleranceMm);
                 if (!next) continue;
                 if (!best || score(next) > score(best)) best = next;
             }
@@ -283,7 +313,14 @@
         if (previous.kind === "collinear") {
             const source = segmentByIdentity(sourceSegments, previous.sourceObjectId, previous.sourceRole);
             const target = segmentByIdentity(segments, previous.targetObjectId, previous.targetRole);
-            return source && target ? collinearCandidate(source, target, tolerances.collinearMm * RELEASE_FACTOR, lockedAxis, true) : null;
+            return source && target ? collinearCandidate(
+                source,
+                target,
+                tolerances.collinearMm * RELEASE_FACTOR,
+                lockedAxis,
+                true,
+                tolerances.collinearExtensionMm * RELEASE_FACTOR
+            ) : null;
         }
         const source = (sources || []).find(feature => sameIdentity(feature, previous.sourceObjectId, previous.sourceRole));
         const target = (targets || []).find(feature => sameIdentity(feature, previous.targetObjectId, previous.targetRole));
@@ -346,6 +383,7 @@
             pointMm: S.worldTolerance(options.viewportScale, options.pointSnapPx || POINT_CAPTURE_PX),
             segmentMm: S.worldTolerance(options.viewportScale, options.segmentSnapPx || SEGMENT_CAPTURE_PX),
             collinearMm: S.worldTolerance(options.viewportScale, options.collinearSnapPx || COLLINEAR_CAPTURE_PX),
+            collinearExtensionMm: S.worldTolerance(options.viewportScale, options.collinearExtensionPx || COLLINEAR_EXTENSION_PX),
         });
 
         let best = stickyCandidate(sources, sourceSegments, targets, segments, options.stickyCandidate, tolerances, lockedAxis);
@@ -353,7 +391,14 @@
             const candidates = [
                 bestPointCandidate(sources, targets, tolerances.pointMm, lockedAxis, includeSourceTargets),
                 bestSurfaceCandidate(sources, segments, tolerances.segmentMm, lockedAxis, includeSourceTargets),
-                bestCollinearCandidate(sourceSegments, segments, tolerances.collinearMm, lockedAxis, includeSourceTargets),
+                bestCollinearCandidate(
+                    sourceSegments,
+                    segments,
+                    tolerances.collinearMm,
+                    lockedAxis,
+                    includeSourceTargets,
+                    tolerances.collinearExtensionMm
+                ),
             ].filter(Boolean);
             best = candidates.sort((a, b) => score(b) - score(a))[0] || null;
         }
@@ -391,6 +436,7 @@
         POINT_CAPTURE_PX,
         SEGMENT_CAPTURE_PX,
         COLLINEAR_CAPTURE_PX,
+        COLLINEAR_EXTENSION_PX,
         COLLINEAR_ANGLE_TOLERANCE_DEG,
         RELEASE_FACTOR,
         RANK,
@@ -404,6 +450,7 @@
         pairKind,
         score,
         projectInfinite,
+        longitudinalGap,
         surfaceCandidate,
         collinearCandidate,
         resolve,
