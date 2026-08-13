@@ -64,6 +64,24 @@ def test_export_keeps_required_cut_and_preview_layers():
     assert 'application/dxf;charset=us-ascii' in src
 
 
+def test_export_uses_resolved_per_axis_trim_without_rewriting_optimizer_spacing():
+    src = _source(SECURE_DXF)
+    assert "function appliedTrimMm(plan, sheet)" in src
+    assert "sheet && sheet.applied_trim_width_cm" in src
+    assert "sheet && sheet.applied_trim_length_cm" in src
+    assert "plan.applied_trim_width_cm" in src
+    assert "plan.applied_trim_length_cm" in src
+    assert "const appliedTrim = appliedTrimMm(plan, sheet);" in src
+    assert "const x = offsetX + appliedTrim.width + num(piece.x) * 10;" in src
+    assert (
+        "const y = offsetY + fullHeight - appliedTrim.length - num(piece.y) * 10 - pieceHeight;"
+        in src
+    )
+    assert "const trimMm = num(plan.trim_cm) * 10;" not in src
+    assert "piece.x) * 10" in src
+    assert "piece.y) * 10" in src
+
+
 def test_secure_exporter_removes_legacy_buttons_without_loading_legacy_workflow():
     workflow = _source(WORKFLOW_JS)
     secure = _source(SECURE_DXF)
@@ -96,6 +114,7 @@ def test_plan_section_hosts_permissioned_print_and_dxf_actions():
     assert "uploadCuttingPlanDxf" in plan
     assert "export_order_dxf" in plan
     assert "upload_production_dxf" in plan
+
 
 def test_dxf_import_service_is_wired_for_round_trip():
     importer = ROOT / "almdina_erp" / "services" / "dxf_import_service.py"
