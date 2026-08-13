@@ -25,45 +25,39 @@ const preserved = I.interpret(irregular, {
     pathSmoothingPasses: 2,
     orthogonalize: true,
 });
-assert.equal(preserved.type, "path", "An irregular freehand gesture must remain a path");
-assert.equal(preserved.fidelity, true, "Fallback freehand geometry must be explicitly fidelity-preserving");
-assert.deepEqual(preserved.points, irregular, "Freehand fallback must preserve every sampled point instead of smoothing or simplifying the silhouette");
+assert.equal(preserved.type, "path");
+assert.equal(preserved.fidelity, true);
+assert.deepEqual(preserved.points, irregular, "Freehand must preserve every sampled point");
 
 const roughL = [
     G.point(0, 0), G.point(18, 1.3), G.point(36, -0.8), G.point(55, 1.1), G.point(75, 0.5),
     G.point(77, 14), G.point(74.8, 30), G.point(76.2, 48), G.point(75, 66),
 ];
-const lResult = I.interpret(roughL, {
-    straightToleranceMm: 3,
-    straightRatio: 1.08,
-    simplifyToleranceMm: 5,
-    minimumSegmentMm: 12,
-});
-assert.equal(lResult.type, "path", "A multi-direction freehand stroke must not be auto-split into compound straight segments");
-assert.deepEqual(lResult.points, roughL, "Corner recognition must never rebuild a freehand stroke automatically");
+const lResult = I.interpret(roughL, { straightToleranceMm: 3, straightRatio: 1.08, simplifyToleranceMm: 5 });
+assert.equal(lResult.type, "path");
+assert.deepEqual(lResult.points, roughL, "A corner must not be rebuilt automatically");
 
 const exactLine = [G.point(0, 0), G.point(20, 0), G.point(40, 0), G.point(70, 0), G.point(100, 0)];
 const lineResult = I.interpret(exactLine, { straightToleranceMm: 3, straightRatio: 1.05 });
-assert.equal(lineResult.type, "line", "An unmistakably straight gesture should still receive useful smart recognition");
-assert.deepEqual(lineResult.start, exactLine[0]);
-assert.deepEqual(lineResult.end, exactLine.at(-1));
+assert.equal(lineResult.type, "path", "Even a perfect hand-drawn line must remain a freehand path");
+assert.deepEqual(lineResult.points, exactLine, "The pen must never replace the stroke with a native line automatically");
 
 const almostLineButIntentionalCurve = [
     G.point(0, 0), G.point(20, 0.9), G.point(40, 2.4), G.point(60, 4.5), G.point(80, 7.1), G.point(100, 10.5),
 ];
 const subtleCurve = I.interpret(almostLineButIntentionalCurve, { straightToleranceMm: 5, straightRatio: 1.08 });
-assert.equal(subtleCurve.type, "path", "A subtle intentional curve must not be flattened merely because it is near a line");
+assert.equal(subtleCurve.type, "path");
 assert.deepEqual(subtleCurve.points, almostLineButIntentionalCurve);
 
 const state = I.createStabilizer("mouse", G.point(0, 0));
 const rawLivePoint = G.point(10, 0);
 const stabilizedLivePoint = I.pushStabilized(state, rawLivePoint, { motionScaleMm: 20 });
-assert.ok(stabilizedLivePoint.x > 0 && stabilizedLivePoint.x < rawLivePoint.x, "Live input may keep light jitter stabilization without changing committed freehand geometry");
+assert.ok(stabilizedLivePoint.x > 0 && stabilizedLivePoint.x < rawLivePoint.x, "Preview stabilization must stay separate from committed geometry");
 
 const closed = [G.point(0, 0), G.point(30, 5), G.point(38, 28), G.point(8, 36), G.point(0, 0)];
-const closedResult = I.interpret(closed, { closed: true, circleResidualRatio: 0.001, simplifyToleranceMm: 10 });
+const closedResult = I.interpret(closed, { closed: true });
 assert.equal(closedResult.type, "path");
 assert.equal(closedResult.closed, true);
-assert.deepEqual(closedResult.points, closed.slice(0, -1), "Closed freehand geometry should preserve the stroke and only remove the redundant closing duplicate");
+assert.deepEqual(closedResult.points, closed.slice(0, -1));
 
 console.log("Door Drawing V3 faithful smart-pen tests passed");
