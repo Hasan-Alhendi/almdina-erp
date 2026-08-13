@@ -59,13 +59,10 @@
 	}
 
 	function visibleTabs(frm) {
-		const allowed = PLAN_TABS.filter((tab) => canCapability(frm, tab.capability));
-		if (allowed.length) return allowed;
-		// Legacy roles may still carry only the umbrella view_cutting_plan grant.
-		if (canCapability(frm, "view_cutting_plan")) {
-			return PLAN_TABS.slice();
-		}
-		return [];
+		// The server normalizes legacy umbrella grants into granular tab grants.
+		// The browser must never widen an explicit denial by guessing that the
+		// umbrella permission means all tabs.
+		return PLAN_TABS.filter((tab) => canCapability(frm, tab.capability));
 	}
 
 	function parseJsonField(raw) {
@@ -205,17 +202,8 @@
 			);
 		}
 
-		const parts = [];
-		if (
-			window.AlmdinaDrawingPlanUX &&
-			window.AlmdinaDrawingPlanUX.canUseDrawingOptimizer &&
-			window.AlmdinaDrawingPlanUX.canUseDrawingOptimizer(frm)
-		) {
-			parts.push('<div class="dco-drawing-plan-panel-host"></div>');
-		}
 		const planHtml = renderPlanHtml(frm, getPlanForTab(frm, "System"));
-		parts.push(planHtml || emptyState("لا توجد خطة نظام لعرضها."));
-		return parts.join("");
+		return planHtml || emptyState("لا توجد خطة نظام لعرضها.");
 	}
 
 	function ensureApprovedPlanLoaded(frm) {
@@ -286,19 +274,6 @@
 			frm.__almdina_active_plan_tab = $(this).attr("data-plan-tab");
 			renderDualTabs(frm);
 		});
-
-		if (
-			activeTab === "System" &&
-			window.AlmdinaDrawingPlanUX &&
-			window.AlmdinaDrawingPlanUX.renderPanel
-		) {
-			const host = wrapper.find(".dco-drawing-plan-panel-host");
-			if (host.length) {
-				window.AlmdinaDrawingPlanUX.renderPanel(frm, host);
-			} else {
-				window.AlmdinaDrawingPlanUX.renderPanel(frm);
-			}
-		}
 
 		if (activeTab === "Approved" && hasApprovedPlan(frm) && !getCachedApprovedPlan(frm)) {
 			const identity = capture(frm);

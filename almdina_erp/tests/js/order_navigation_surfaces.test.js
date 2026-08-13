@@ -269,11 +269,21 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         },
         fields_dict: {},
         meta: { fields: [] },
+        page: {
+            wrapper: {
+                nodeType: 1,
+                querySelectorAll() {
+                    return added.map(button => ({ textContent: button.label }));
+                },
+            },
+        },
         is_new() {
             return false;
         },
         add_custom_button(label, _handler, group) {
             added.push({ label, group });
+            this.custom_buttons = this.custom_buttons || {};
+            this.custom_buttons[label] = { group };
         },
         remove_custom_button(label, group) {
             for (let index = added.length - 1; index >= 0; index -= 1) {
@@ -281,6 +291,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
                     added.splice(index, 1);
                 }
             }
+            if (this.custom_buttons) delete this.custom_buttons[label];
         },
         set_df_property() {},
         enable_save() {},
@@ -300,6 +311,16 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         true,
         "production actions must be rebuilt when the jqXHR-like permission refresh completes"
     );
+    assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), true);
+
+    // Frappe can rebuild the toolbar while revisiting the same order.  The
+    // document/status key remains unchanged, so readiness must also verify that
+    // the expected DOM/custom-button surface still exists.
+    added.length = 0;
+    assert.ok(frm.custom_buttons["إرسال للإنتاج"], "the stale Frappe button cache remains");
+    assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), false);
+    fakeWindow.AlmdinaShopFloorOrderUX.reconcileProductionActions(frm);
+    assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), true);
     assert.equal(typeof listeners["almdina:permissions-updated"], "function");
 
     capabilities.clear();

@@ -5,12 +5,8 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         context: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_shop_floor_context",
         inbox: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_inbox",
         archive: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_archive",
-        detail: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_shop_floor_detail",
-        start: "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
         handoffContext: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
         handoff: "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
-        reassignmentWorkers: "almdina_erp.almdina_erp.services.production_worker_service.get_reassignment_workers",
-        reassign: "almdina_erp.almdina_erp.services.shop_floor_commands.reassign_worker",
     });
 
     const page = frappe.ui.make_app_page({
@@ -33,14 +29,12 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
     const $tabs = $section.find(".almdina-sf-tabs");
     const $content = $section.find(".almdina-sf-content");
     let mode = "board";
-    let selected = null;
     let sessionContext = null;
     let boardRows = [];
     let boardArchiveRows = [];
     let boardRouteFilter = "";
     let boardSearch = "";
     let listRequest = 0;
-    let detailRequest = 0;
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -54,10 +48,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
             Completed: __("مكتمل"),
         };
         return labels[status] || __(status || "");
-    }
-
-    function documentCan(detail, capability) {
-        return Boolean(detail && detail.document_capabilities && detail.document_capabilities[capability] === true);
     }
 
     function loading(message) {
@@ -81,8 +71,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
 
     function setMode(nextMode) {
         mode = String(nextMode || "board");
-        selected = null;
-        detailRequest += 1;
         syncTabs();
         if (mode === "account") {
             renderAccount();
@@ -132,7 +120,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
     function loadList() {
         const requestId = ++listRequest;
         const requestedMode = mode;
-        selected = null;
         loading(__("جاري التحميل..."));
         const primaryMethod = requestedMode === "archive" ? METHODS.archive : METHODS.inbox;
         return loadSessionContext()
@@ -235,7 +222,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 </div>
                 <div class="almdina-sf-card-actions" style="display:flex;gap:8px;margin-top:12px">
                     ${terminal || otherRole ? "" : quickActionHtml(row)}
-                    <button type="button" class="btn btn-default sf-open-btn open-detail" style="flex:1">${__("التفاصيل")}</button>
+                    <button type="button" class="btn btn-default sf-open-btn" style="flex:1">${__("فتح الطلب")}</button>
                 </div>
                 ${canDrag ? `<div class="almdina-sf-drag-hint">${__("اسحب للمرحلة التالية")}</div>` : ""}
             </div>`;
@@ -244,7 +231,8 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
     function bindCardActions($scope) {
         $scope.find(".shop-floor-order-card").on("click", function (event) {
             if ($(event.target).closest(".sf-quick-action").length) return;
-            openDetail(cardContext($(this)));
+            const context = cardContext($(this));
+            if (context.order) frappe.set_route("Form", "Door Cutting Order", context.order);
         });
         $scope.find(".sf-quick-action").on("click", function (event) {
             event.preventDefault();
@@ -408,7 +396,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                     <div class="almdina-sf-board-help">${__("استخدم الزر داخل البطاقة، أو اسحب بطاقة قيد العمل إلى المرحلة التالية. سيطلب النظام تحديد العامل التالي ويعيد التحقق من الصلاحيات على الخادم.")}</div>
                     <div class="almdina-sf-boards">${boards}</div>
                 </div>
-                <div class="shop-floor-detail" style="display:none"></div>
             </div>`);
 
         const $overview = $content.find(".almdina-sf-overview");
@@ -503,7 +490,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 <div class="almdina-sf-overview">
                     ${sections || `<div class="almdina-sf-empty">${__("لا توجد طلبات في هذا القسم حاليًا.")}</div>`}
                 </div>
-                <div class="shop-floor-detail" style="display:none"></div>
             </div>`);
         bindCardActions($content.find(".almdina-sf-overview"));
     }
@@ -554,294 +540,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                     window.location.href = "/login";
                 },
             });
-        });
-    }
-
-    function hasCustomPlan(detail) {
-        if (!detail || !detail.custom_plan_json) return false;
-        try {
-            const plan = typeof detail.custom_plan_json === "object"
-                ? detail.custom_plan_json
-                : JSON.parse(detail.custom_plan_json);
-            return Boolean(plan && Array.isArray(plan.sheets) && plan.sheets.length);
-        } catch (error) {
-            return false;
-        }
-    }
-
-    function emptyPlanHtml(message) {
-        return `<div class="almdina-sf-empty">${esc(message)}</div>`;
-    }
-
-    function buildPlanTabsHtml(detail) {
-        const tabs = Array.isArray(detail.visible_plan_tabs) && detail.visible_plan_tabs.length
-            ? detail.visible_plan_tabs
-            : (
-                documentCan(detail, "view_cutting_plan")
-                    ? ["System", "Custom", "Approved"].filter(tab => {
-                        if (tab === "System") return documentCan(detail, "view_system_cutting_plan");
-                        if (tab === "Custom") return documentCan(detail, "view_uploaded_cutting_plan");
-                        return documentCan(detail, "view_approved_cutting_plan");
-                    })
-                    : []
-            );
-        if (!tabs.length) return "";
-
-        if (tabs.length === 1 && !detail.show_dual_tabs) {
-            const only = tabs[0];
-            const html = planHtmlForTab(detail, only);
-            return html || emptyPlanHtml(__("لا توجد خطة قص للعرض."));
-        }
-
-        const preferred = detail.active_plan_source;
-        const active = tabs.includes(preferred) ? preferred : tabs[0];
-        const approvedSource = detail.approved_plan_source || "System";
-        const badge = source => {
-            if (source === "Approved" && detail.approved_plan) {
-                return `<span class="indicator-pill green" style="margin-inline-start:6px">${__("معتمدة")}</span>`;
-            }
-            if (detail.approved_plan && approvedSource === source) {
-                return `<span class="indicator-pill green" style="margin-inline-start:6px">${__("مصدر الاعتماد")}</span>`;
-            }
-            return "";
-        };
-        const labels = {
-            System: __("خطة النظام"),
-            Custom: __("الخطة المرفوعة"),
-            Approved: __("الخطة المعتمدة"),
-        };
-        const buttons = tabs.map(tab => (
-            `<button type="button" class="btn btn-sm sf-plan-tab ${active === tab ? "btn-primary" : "btn-default"}" data-plan-tab="${esc(tab)}">${labels[tab] || tab}${badge(tab)}</button>`
-        )).join("");
-        const panels = tabs.map(tab => (
-            `<div class="sf-plan-tab-panel" data-plan-panel="${esc(tab)}" style="${active === tab ? "" : "display:none"}">${planHtmlForTab(detail, tab) || emptyPlanHtml(emptyMessageForTab(tab))}</div>`
-        )).join("");
-
-        return `
-            <div class="dco-drawing-plan-inbox-host"></div>
-            <div class="almdina-sf-plan-tabs" data-active-tab="${esc(active)}">
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${buttons}</div>
-                ${panels}
-            </div>
-        `;
-    }
-
-    function planHtmlForTab(detail, tab) {
-        if (tab === "Custom") {
-            return hasCustomPlan(detail) ? detail.custom_plan_html : "";
-        }
-        if (tab === "Approved") {
-            return detail.approved_plan_html || "";
-        }
-        return detail.system_plan_html || "";
-    }
-
-    function emptyMessageForTab(tab) {
-        if (tab === "Custom") return __("لا توجد خطة مرفوعة.");
-        if (tab === "Approved") return __("لا توجد خطة معتمدة.");
-        return __("لا توجد خطة نظام.");
-    }
-
-    function bindPlanTabs($detail) {
-        $detail.find(".sf-plan-tab").on("click", function () {
-            const tab = $(this).attr("data-plan-tab");
-            $detail.find(".sf-plan-tab").removeClass("btn-primary").addClass("btn-default");
-            $(this).removeClass("btn-default").addClass("btn-primary");
-            $detail.find(".sf-plan-tab-panel").hide();
-            $detail.find(`[data-plan-panel="${tab}"]`).show();
-            $detail.find(".almdina-sf-plan-tabs").attr("data-active-tab", tab);
-        });
-    }
-
-    function resolveStageContext(detail, meta) {
-        return {
-            order: detail.name || meta.order,
-            stage: detail.active_stage_name || detail.current_production_stage || meta.stage,
-            status: detail.active_stage_status || meta.status,
-            stageType: detail.current_stage_type || meta.stageType,
-            next: detail.can_handoff_to || meta.next,
-        };
-    }
-
-    function holdsStageOperationalRole(detail) {
-        return Boolean(detail && detail.actor_holds_operational_role);
-    }
-
-    function canUploadDxf(detail, meta) {
-        if (!detail || !holdsStageOperationalRole(detail)) return false;
-        const capability = detail.production_dxf ? "replace_dxf" : "upload_dxf";
-        return documentCan(detail, capability);
-    }
-
-    function buildActionsHtml(detail, meta) {
-        const context = resolveStageContext(detail, meta);
-        const actions = [`<button type="button" class="btn btn-default back-to-list">${__("رجوع")}</button>`];
-        const activeMode = mode === "board" || mode === "inbox";
-        if (activeMode && detail.can_start_stage) {
-            actions.push(`<button type="button" class="btn btn-primary start-stage">${__("بدء العمل")}</button>`);
-        }
-        if (activeMode && detail.can_handoff_stage) {
-            actions.push(`<button type="button" class="btn btn-success handoff-stage">${!context.next ? __("جاهزة للتسليم") : __("إرسال للقسم التالي")}</button>`);
-        }
-        if (activeMode && detail.can_reassign_worker) {
-            actions.push(`<button type="button" class="btn btn-default reassign-worker">${__("تغيير العامل")}</button>`);
-        }
-        if (canUploadDxf(detail, meta)) {
-            actions.push(
-                `<button type="button" class="btn btn-default upload-dxf-plan">${detail.production_dxf ? __("استبدال خطة DXF") : __("رفع خطة DXF")}</button>`
-            );
-        }
-        if (documentCan(detail, "print_cutting_plan")) {
-            actions.push(`<button type="button" class="btn btn-default print-plan">${__("طباعة خطة القص")}</button>`);
-        }
-        return actions.join(" ");
-    }
-
-    function stageStatusLabel(detail, meta) {
-        const context = resolveStageContext(detail, meta);
-        return detail.department_status || statusLabel(context.status);
-    }
-
-    function openDetail(meta) {
-        selected = { ...meta };
-        const requestId = ++detailRequest;
-        const requestedOrder = meta.order;
-        const $detail = $content.find(".shop-floor-detail");
-        $content.find(".almdina-sf-overview").hide();
-        $detail.html(`<div class="text-muted">${__("جاري تحميل تفاصيل الطلب...")}</div>`).show();
-
-        return frappe
-            .call({ method: METHODS.detail, args: { order_name: requestedOrder } })
-            .then(response => {
-                if (requestId !== detailRequest || !selected || selected.order !== requestedOrder) return;
-                renderDetail($detail, response.message || {}, meta, requestId);
-            })
-            .catch(error => {
-                if (requestId !== detailRequest) return;
-                $detail.html(`<div class="almdina-sf-empty">${esc(error && error.message ? error.message : __("تعذر تحميل تفاصيل الطلب."))}</div>`);
-            });
-    }
-
-    function renderDetail($detail, detail, meta, requestId) {
-        const context = resolveStageContext(detail, meta);
-        selected = { ...meta, ...context };
-        const showDxf = Boolean(detail.production_dxf) && documentCan(detail, "view_cutting_plan");
-        const showPlan = Boolean(
-            (Array.isArray(detail.visible_plan_tabs) && detail.visible_plan_tabs.length) ||
-            documentCan(detail, "view_cutting_plan") ||
-            documentCan(detail, "view_system_cutting_plan") ||
-            documentCan(detail, "view_uploaded_cutting_plan") ||
-            documentCan(detail, "view_approved_cutting_plan")
-        );
-        $detail.html(`
-            <div class="frappe-card" style="padding:14px;border-radius:14px">
-                <div style="margin-bottom:12px">
-                    <h3 class="almdina-sf-detail-title">${esc(detail.name || context.order)}</h3>
-                    <div class="text-muted">${esc(detail.customer || "")}</div>
-                    <div style="font-size:13px;margin-top:4px">${__("القسم")}: <b>${esc(detail.current_department || context.stageType || "")}</b> · ${__("الحالة")}: <b>${esc(stageStatusLabel(detail, context))}</b></div>
-                    ${detail.active_stage_assigned_to ? `<div class="text-muted" style="font-size:12px;margin-top:3px">${__("العامل الحالي")}: ${esc(detail.active_stage_assigned_to)}</div>` : ""}
-                </div>
-                <div class="almdina-sf-actions">${buildActionsHtml(detail, context)}</div>
-                ${!holdsStageOperationalRole(detail) && detail.current_stage_type
-                    ? `<div class="text-muted" style="font-size:12px;margin:8px 0 12px">${__(
-                        "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية."
-                    )}</div>`
-                    : ""}
-                ${showDxf ? `<div style="margin-bottom:10px"><a class="btn btn-default" href="${esc(detail.production_dxf)}" target="_blank" rel="noopener">${__("تنزيل DXF الإنتاج")}</a><span class="text-muted"> · ${esc(__(detail.drawing_dxf_status || ""))}</span></div>` : ""}
-                ${detail.pieces_html ? `<div class="almdina-sf-pieces-wrap" style="margin:8px 0 14px">${detail.pieces_html}</div>` : `<div class="almdina-sf-empty" style="margin:8px 0 14px">${__("لا توجد قطع مسجّلة.")}</div>`}
-                ${showPlan ? `<div style="margin:8px 0 10px"><b>${__("خطة القص والرسومات")}</b></div><div class="almdina-sf-plan-wrap cutting-plan-wrap">${buildPlanTabsHtml(detail)}</div>` : ""}
-            </div>
-        `);
-
-        $detail.find(".back-to-list").on("click", backToList);
-        $detail.find(".start-stage").on("click", () => startStage(context));
-        $detail.find(".handoff-stage").on("click", () => handoffStage(context));
-        $detail.find(".reassign-worker").on("click", () => reassignWorker(context));
-        $detail.find(".upload-dxf-plan").on("click", () => uploadDxfPlan(detail, context));
-        $detail.find(".print-plan").on("click", () => printPlan($detail, detail));
-        bindPlanTabs($detail);
-        renderDrawingPanel($detail, detail, context, requestId);
-    }
-
-    function uploadDxfPlan(detail, meta) {
-        if (!canUploadDxf(detail, meta)) {
-            frappe.msgprint(__("ليست لديك صلاحية رفع خطة القص كملف DXF في المرحلة الحالية."));
-            return;
-        }
-        const orderName = detail.name || meta.order;
-        const replacing = Boolean(detail.production_dxf);
-        new frappe.ui.FileUploader({
-            doctype: "Door Cutting Order",
-            docname: orderName,
-            folder: "Home/Attachments",
-            is_private: 1,
-            restrictions: { allowed_file_types: [".dxf"], max_file_size: 10 * 1024 * 1024 },
-            on_success(file) {
-                frappe.call({
-                    method: "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf",
-                    args: { order_name: orderName, file_url: file.file_url },
-                    freeze: true,
-                    freeze_message: __("جاري التحقق من ملف DXF وتطبيق الخطة..."),
-                }).then(() => {
-                    frappe.show_alert({
-                        message: replacing
-                            ? __("تم استبدال ملف DXF والتحقق منه.")
-                            : __("تم رفع ملف DXF والتحقق منه."),
-                        indicator: "green",
-                    }, 5);
-                    return openDetail({ ...meta, order: orderName });
-                });
-            },
-        });
-    }
-
-    function drawingPlanModule() {
-        if (window.AlmdinaDrawingPlanUX) return Promise.resolve(window.AlmdinaDrawingPlanUX);
-        if (!frappe.require) return Promise.resolve(null);
-        return Promise.resolve(
-            frappe.require("/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js")
-        )
-            .then(() => window.AlmdinaDrawingPlanUX || null)
-            .catch(error => {
-                console.error("Failed to load the drawing plan panel", error);
-                return null;
-            });
-    }
-
-    function renderDrawingPanel($detail, detail, context, requestId) {
-        const $host = $detail.find(".dco-drawing-plan-inbox-host");
-        if (!$host.length) return;
-        const refresh = preview => {
-            if (requestId !== detailRequest || !selected || selected.order !== context.order) return Promise.resolve();
-            if (preview && preview.system_plan_json) detail.system_plan_json = preview.system_plan_json;
-            return openDetail({ ...context });
-        };
-        // The panel module is shipped app-wide but can still be pending when the
-        // detail renders. Wait for it instead of leaving an empty placeholder
-        // that only a page reload would fill.
-        drawingPlanModule().then(module => {
-            if (!module || typeof module.renderInboxPanel !== "function") return;
-            if (requestId !== detailRequest || !$host.closest("body").length) return;
-            module.renderInboxPanel($host, context, detail, refresh);
-        });
-    }
-
-    function backToList() {
-        detailRequest += 1;
-        selected = null;
-        $content.find(".shop-floor-detail").hide().empty();
-        $content.find(".almdina-sf-overview").show();
-    }
-
-    function startStage(context) {
-        return frappe.call({
-            method: METHODS.start,
-            args: { stage_name: context.stage },
-            freeze: true,
-            freeze_message: __("بدء العمل..."),
-        }).then(() => {
-            frappe.show_alert({ message: __("تم بدء العمل."), indicator: "green" });
-            loadList();
         });
     }
 
@@ -896,59 +594,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 __("إرسال")
             );
         });
-    }
-
-    function reassignWorker(context) {
-        frappe.call({ method: METHODS.reassignmentWorkers, args: { stage_name: context.stage } }).then(response => {
-            const workers = response.message || [];
-            if (!workers.length) {
-                frappe.msgprint(__("لا يوجد عمال مؤهلون لهذا القسم."));
-                return;
-            }
-            frappe.prompt(
-                [{
-                    fieldname: "assignee",
-                    fieldtype: "Select",
-                    label: __("العامل الجديد"),
-                    options: workerOptions(workers),
-                    reqd: 1,
-                }],
-                values => frappe.call({
-                    method: METHODS.reassign,
-                    args: { stage_name: context.stage, assignee: values.assignee },
-                    freeze: true,
-                }).then(() => {
-                    frappe.show_alert({ message: __("تم تغيير العامل."), indicator: "green" });
-                    loadList();
-                }),
-                __("تغيير العامل"),
-                __("حفظ")
-            );
-        });
-    }
-
-    function printPlan($detail, detail) {
-        if (!documentCan(detail, "print_cutting_plan")) return;
-        const tab = $detail.find(".almdina-sf-plan-tabs").attr("data-active-tab")
-            || detail.active_plan_source
-            || "System";
-        const html = tab === "Custom"
-            ? detail.custom_plan_html
-            : tab === "Approved"
-                ? detail.approved_plan_html
-                : (detail.system_plan_html || detail.cutting_plan_html);
-        if (!html) {
-            frappe.msgprint(__("لا يوجد مخطط قص للطباعة."));
-            return;
-        }
-        const printWindow = window.open("", "_blank");
-        if (!printWindow) {
-            frappe.msgprint(__("المتصفح منع فتح نافذة الطباعة."));
-            return;
-        }
-        printWindow.document.open();
-        printWindow.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(__("خطة قص"))}</title><style>@page{size:A4 portrait;margin:6mm}body{font-family:Arial,Tahoma,sans-serif;direction:rtl;padding:5mm}</style></head><body>${html}<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},500);};<\/script></body></html>`);
-        printWindow.document.close();
     }
 
     $tabs.on("click", ".almdina-sf-tab", function () {

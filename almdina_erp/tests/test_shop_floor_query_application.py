@@ -358,11 +358,15 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             "PST-DRAW": {
                 "name": "PST-DRAW",
                 "stage_type": "Drawing",
+                "status": "Pending",
+                "assigned_to": repository.user,
                 "operational_role": "عامل رسم",
             },
             "PST-CNC": {
                 "name": "PST-CNC",
                 "stage_type": "CNC",
+                "status": "Pending",
+                "assigned_to": "cnc@example.com",
                 "operational_role": "عامل CNC",
             },
         }
@@ -373,7 +377,10 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         )
         self.assertTrue(payload["personal_view"])
         self.assertTrue(payload["orders"]["DCO-MINE"]["actor_holds_current_stage_role"])
+        self.assertTrue(payload["orders"]["DCO-MINE"]["can_start_stage"])
+        self.assertFalse(payload["orders"]["DCO-MINE"]["can_handoff_stage"])
         self.assertFalse(payload["orders"]["DCO-OTHER"]["actor_holds_current_stage_role"])
+        self.assertFalse(payload["orders"]["DCO-OTHER"]["can_start_stage"])
         self.assertFalse(payload["orders"]["DCO-DONE"]["actor_holds_current_stage_role"])
 
         repository.admin = True

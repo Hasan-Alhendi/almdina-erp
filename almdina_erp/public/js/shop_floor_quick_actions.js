@@ -171,6 +171,13 @@
                 ));
                 return null;
             }
+            const stillAllowed = action.kind === "start"
+                ? stage.can_start_stage === true
+                : stage.can_handoff_stage === true;
+            if (!stillAllowed) {
+                frappe.msgprint(__("لم يعد هذا الإجراء متاحًا في حالة الطلب الحالية."));
+                return null;
+            }
             if (action.kind === "start") {
                 return start(context, options);
             }

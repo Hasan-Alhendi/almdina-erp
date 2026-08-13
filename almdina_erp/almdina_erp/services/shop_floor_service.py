@@ -51,7 +51,6 @@ get_dispatch_options = _public_delegate(_QUERIES, "get_dispatch_options")
 get_revert_targets = _public_delegate(_QUERIES, "get_revert_targets")
 get_my_inbox = _public_delegate(_QUERIES, "get_my_inbox")
 get_my_archive = _public_delegate(_QUERIES, "get_my_archive")
-get_order_shop_floor_detail = _public_delegate(_QUERIES, "get_order_shop_floor_detail")
 mark_dxf_exported = _public_delegate(_DXF, "mark_dxf_exported")
 upload_production_dxf = _public_delegate(_DXF, "upload_production_dxf")
 recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")
@@ -108,7 +107,6 @@ __all__ = [
     "get_handoff_workers",
     "get_my_archive",
     "get_my_inbox",
-    "get_order_shop_floor_detail",
     "get_revert_targets",
     "get_shop_floor_context",
     "handoff_to_next",

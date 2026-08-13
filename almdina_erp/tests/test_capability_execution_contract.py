@@ -17,7 +17,6 @@ PLAN_PERMISSION_SERVICE = (
 PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 APPROVAL_SERVICE = ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 ACTION_GUARD = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
-DXF_VISIBILITY = ROOT / "public" / "js" / "shop_floor_dxf_visibility_ux.js"
 DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
 DRAWING_POLICY = (
     ROOT / "almdina_erp" / "application" / "security" / "drawing_action_policy.py"
@@ -168,19 +167,6 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.UPLOAD_DXF", policy)
         self.assertIn("Capability.REPLACE_DXF", policy)
         self.assertIn("_validate_and_attach_dxf_file", service)
-
-    def test_shop_floor_dxf_link_uses_drawing_capabilities_not_plan_approval(self) -> None:
-        source = DXF_VISIBILITY.read_text(encoding="utf-8")
-        self.assertIn("DXF_CAPABILITIES", source)
-        self.assertIn('"view_drawing_workspace"', source)
-        self.assertIn('"export_dxf"', source)
-        self.assertIn('"upload_dxf"', source)
-        self.assertIn('"replace_dxf"', source)
-        self.assertNotIn('"approve_dxf"', source)
-        self.assertIn("detail.document_capabilities", source)
-        self.assertNotIn('"view_cutting_plan"', source)
-        self.assertNotIn('can("view_cutting_plan")', source)
-
 
 if __name__ == "__main__":
     unittest.main()

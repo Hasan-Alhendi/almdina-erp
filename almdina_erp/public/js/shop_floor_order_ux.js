@@ -188,54 +188,30 @@
 	}
 
 	function applyShopFloorPresentation(frm) {
-		if (!isShopFloorProfile(frm)) {
-			const original = frm.__almdinaShopFloorHiddenState;
-			if (!original) return false;
+		// Every role uses the canonical Door Cutting Order form.  Permissions may
+		// hide individual tabs/actions, but a profile must never replace the form
+		// with a different layout.  Restore metadata visibility left by older page
+		// visits before the focused permission modules apply their own rules.
+		const original = frm.__almdinaShopFloorHiddenState;
+		if (original) {
 			Object.entries(original).forEach(([fieldname, hidden]) => {
 				frm.set_df_property(fieldname, "hidden", hidden ? 1 : 0);
 			});
 			frm.__almdinaShopFloorHiddenState = null;
-			const editable = frm.is_new()
-				? can(frm, "create_order")
-				: can(frm, "edit_order") && ["Draft", "Pending Review", "Rejected"].includes(frm.doc.status || "Draft");
-			if (editable && typeof frm.enable_save === "function") frm.enable_save();
-			return false;
 		}
-		const keep = new Set([
-			"operator_status_strip",
-			"results_tab",
-			"plan_section",
-			"cutting_plan_html",
-			"shop_floor_section",
-			"production_path",
-			"current_department",
-			"shop_floor_column",
-			"current_assignee",
-			"department_status",
-			"current_production_stage",
-			"production_dxf",
-			"drawing_dxf_status",
-		]);
-		if (!frm.__almdinaShopFloorHiddenState) {
-			frm.__almdinaShopFloorHiddenState = Object.fromEntries(
-				(frm.meta.fields || [])
-					.filter(field => field && field.fieldname)
-					.map(field => [field.fieldname, Boolean(field.hidden)])
-			);
+
+		const mayCreate = frm.is_new() && can(frm, "create_order");
+		const mayEdit = !frm.is_new()
+			&& can(frm, "edit_order")
+			&& ["Draft", "Pending Review", "Rejected"].includes(frm.doc.status || "Draft");
+		if (mayCreate || mayEdit) {
+			if (typeof frm.enable_save === "function") frm.enable_save();
+		} else if (typeof frm.disable_save === "function") {
+			frm.disable_save();
 		}
-		(frm.meta.fields || []).forEach((field) => {
-			if (!field || !field.fieldname) return;
-			frm.set_df_property(field.fieldname, "hidden", keep.has(field.fieldname) ? 0 : 1);
-		});
-		if (frm.fields_dict.results_tab) {
-			try {
-				frm.set_tab("results_tab");
-			} catch (error) {
-				console.debug("Could not focus cutting-plan tab", error);
-			}
-		}
-		frm.disable_save();
-		frm.page.clear_inner_toolbar();
+
+		if (!isShopFloorProfile(frm)) return false;
+		frm.remove_custom_button(__("رجوع لصالة الإنتاج"));
 		frm.add_custom_button(__("رجوع لصالة الإنتاج"), () => frappe.set_route("shop-floor-inbox"));
 		return true;
 	}
@@ -336,7 +312,7 @@
 	]);
 
 	function addDispatchButton(frm) {
-		if (isShopFloorProfile(frm) || frm.is_new() || !can(frm, "dispatch_order")) return;
+		if (frm.is_new() || !can(frm, "dispatch_order")) return;
 		// Review/approve were retired: dispatch opens from draft (and leftovers).
 		if (
 			!DISPATCHABLE_STATUSES.has(frm.doc.status || "Draft")
@@ -350,7 +326,7 @@
 	}
 
 	function addDeliveryButtons(frm) {
-		if (isShopFloorProfile(frm) || frm.is_new()) return;
+		if (frm.is_new()) return;
 		if (frm.doc.status === "Ready for Delivery" && can(frm, "mark_delivered")) {
 			frm.add_custom_button(__("تم التسليم"), () => {
 				frappe.confirm(__("تأكيد تسليم الطلب للعميل؟"), () =>
@@ -595,6 +571,75 @@
 		frm.__almdinaProductionActionsKey = productionActionsKey(frm);
 	}
 
+	function renderedButtonLabels(frm) {
+		const labels = new Set();
+		const root = frm && frm.page && frm.page.wrapper;
+		const node = root && (root.nodeType ? root : root[0]);
+		const hasRenderedToolbar = Boolean(node && typeof node.querySelectorAll === "function");
+		if (hasRenderedToolbar) {
+			node.querySelectorAll(".custom-actions button, .page-actions button").forEach((button) => {
+				const label = String(button.textContent || "").replace(/\s+/g, " ").trim();
+				if (label) labels.add(label);
+			});
+		}
+		// Test/minimal form adapters may not expose a DOM. In the real desk, trust
+		// the rendered toolbar only: Frappe can leave custom_buttons cached while
+		// rebuilding and temporarily removing the actual buttons.
+		if (!hasRenderedToolbar) {
+			Object.keys((frm && frm.custom_buttons) || {}).forEach(label => labels.add(String(label).trim()));
+		}
+		return labels;
+	}
+
+	function expectedProductionActionLabels(frm) {
+		if (!frm || !frm.doc || frm.is_new()) return [];
+		const labels = [];
+		const status = frm.doc.status || "Draft";
+		if (
+			can(frm, "dispatch_order")
+			&& DISPATCHABLE_STATUSES.has(status)
+			&& !frm.doc.production_path
+			&& !frm.doc.current_production_stage
+		) labels.push(__("إرسال للإنتاج"));
+		if (status === "Ready for Delivery" && can(frm, "mark_delivered")) {
+			labels.push(__("تم التسليم"));
+		}
+		if (frm.doc.production_path && status !== "Delivered" && can(frm, "revert_department")) {
+			labels.push(__("إرجاع لمرحلة سابقة"));
+		}
+
+		const stage = frm.__almdina_stage_context || {};
+		const stageStatus = stage.active_stage_status || "";
+		const assignedToMe = Boolean(
+			stage.active_stage_assigned_to
+			&& stage.active_stage_assigned_to === frappe.session.user
+		);
+		if (
+			stage.can_reassign_worker
+			&& ACTIVE_STAGE_STATUSES.has(stageStatus)
+			&& can(frm, "reassign_worker")
+		) labels.push(__("تغيير العامل"));
+		if (assignedToMe && stage.can_start_stage && stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
+			labels.push(__("بدء العمل"));
+		}
+		if (
+			assignedToMe
+			&& stage.can_handoff_stage
+			&& ["In Progress", "Paused"].includes(stageStatus)
+			&& can(frm, "handoff_assigned_stage")
+		) labels.push(__("إنهاء وإرسال"));
+		return labels;
+	}
+
+	function productionActionsReady(frm) {
+		if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return true;
+		if (frm.__almdinaProductionActionsKey !== productionActionsKey(frm)) return false;
+		const expected = expectedProductionActionLabels(frm);
+		if (!expected.length) return true;
+		const rendered = renderedButtonLabels(frm);
+		return expected.every(label => [...rendered].some(value => value.includes(label)));
+	}
+
 	function capabilitiesResolved() {
 		const permissions = permissionContext();
 		return Boolean(
@@ -720,6 +765,10 @@
 
 	function reconcileProductionActions(frm) {
 		if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return false;
+		// A form revisit can keep the same document identity while Frappe rebuilds
+		// its toolbar DOM.  Invalidate readiness before removing buttons so the
+		// surface owner retries until the expected controls really exist.
+		frm.__almdinaProductionActionsKey = null;
 		removeProductionButtons(frm);
 		addDispatchButton(frm);
 		addDeliveryButtons(frm);
@@ -791,6 +840,8 @@
 	frappe.almdina.upload_production_dxf = uploadDrawingDxf;
 	window.AlmdinaShopFloorOrderUX = Object.freeze({
 		applyShopFloorPresentation,
+		expectedProductionActionLabels,
+		productionActionsReady,
 		reconcileProductionActions,
 		recoverProductionActions,
 		renderTrackingStrip,
@@ -800,8 +851,7 @@
 	if (surfaceOwner && typeof surfaceOwner.registerSurface === "function") {
 		surfaceOwner.registerSurface("production-actions", {
 			isReady(frm) {
-				if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return true;
-				return frm.__almdinaProductionActionsKey === productionActionsKey(frm);
+				return productionActionsReady(frm);
 			},
 			recover(frm) { return reconcileProductionActions(frm); },
 		});

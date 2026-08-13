@@ -14,11 +14,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_query_repository i
     FrappeShopFloorQueryRepository,
 )
 from almdina_erp.almdina_erp.presentation.shop_floor.data_policy import (
-    sanitize_shop_floor_detail,
     sanitize_shop_floor_summary,
-)
-from almdina_erp.almdina_erp.presentation.shop_floor.presenters import (
-    present_order_detail,
 )
 
 
@@ -82,30 +78,6 @@ def get_my_archive() -> list[dict[str, Any]]:
 
 
 @frappe.whitelist()
-def get_order_shop_floor_detail(order_name: str) -> dict[str, Any]:
-    result = _execute(queries.get_order_detail, order_name)
-    document_capabilities = result.get("document_capabilities") or {}
-    payload = present_order_detail(
-        result,
-        translate=_,
-        escape=lambda value: frappe.utils.escape_html(str(value)),
-        dumps=frappe.as_json,
-    )
-    stage_snapshot = result["stage_snapshot"]
-    payload.update(
-        {
-            "active_stage_assigned_to": stage_snapshot.get(
-                "active_stage_assigned_to"
-            ),
-            "can_reassign_worker": stage_snapshot.get("can_reassign_worker"),
-            "production_actions": stage_snapshot.get("production_actions") or {},
-            "document_capabilities": document_capabilities,
-        }
-    )
-    return sanitize_shop_floor_detail(payload, document_capabilities)
-
-
-@frappe.whitelist()
 def get_order_operational_role_flags(order_names: Any = None) -> dict[str, Any]:
     return _execute(queries.get_order_operational_role_flags, order_names)
 
@@ -116,7 +88,6 @@ __all__ = [
     "get_my_archive",
     "get_my_inbox",
     "get_order_operational_role_flags",
-    "get_order_shop_floor_detail",
     "get_revert_targets",
     "get_shop_floor_context",
 ]

@@ -65,6 +65,11 @@ const doc = {
     current_assignee: "cutting@example.com",
     current_production_stage: "PST-10",
     department_status: "بحاجة للعمل",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: true,
+        canHandoff: false,
+    },
 };
 
 const html = api.buildCard(doc, true);
@@ -116,7 +121,11 @@ const laptopRoot = { getBoundingClientRect: () => ({ width: 1024 }) };
 assert.strictEqual(responsive.isTabletDevice(laptopRoot), false, "a laptop must not be treated as a tablet");
 assert.strictEqual(api.isPhoneLayout(laptopRoot), false, "a laptop must retain the original list table");
 
-const otherWorker = { ...doc, current_assignee: "other@example.com" };
+const otherWorker = {
+    ...doc,
+    current_assignee: "other@example.com",
+    __almdinaProductionActionContext: null,
+};
 assert.strictEqual(api.quickActionContext(otherWorker).canStart, false);
 assert(!api.buildCard(otherWorker, false).includes("dco-card-production-action"));
 

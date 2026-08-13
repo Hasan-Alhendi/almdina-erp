@@ -387,10 +387,11 @@ def get_order_operational_role_flags(
     repository: ShopFloorQueryPort,
     order_names: Any = None,
 ) -> dict[str, Any]:
-    """Return whether each listed order is on a stage matching the actor's roles.
+    """Return role classification and server-authorized quick actions per order.
 
     Used by the Door Cutting Order list so workers can see their own-stage rows
-    normally and push every other visible order to a green trailer section.
+    normally, push every other visible order to a green trailer section, and
+    render only production actions currently allowed by the domain policy.
     Supervisors keep an unmarked list.
     """
 
@@ -398,9 +399,9 @@ def get_order_operational_role_flags(
     if not actor or actor == "Guest":
         return {"personal_view": False, "orders": {}}
 
-    personal_view = actor != "Administrator" and not repository.is_admin()
     names = _normalize_order_names(order_names)
-    if not personal_view or not names:
+    personal_view = actor != "Administrator" and not repository.is_admin()
+    if not names:
         return {"personal_view": personal_view, "orders": {}}
 
     orders = repository.order_summaries(names)
@@ -410,6 +411,8 @@ def get_order_operational_role_flags(
     for name in names:
         order = orders.get(name)
         if not order:
+            continue
+        if not repository.can_view_order(order):
             continue
         stage_name = str(_value(order, "current_production_stage") or "").strip()
         current_stage = None
@@ -422,6 +425,11 @@ def get_order_operational_role_flags(
             if current_stage
             else None
         )
+        stage_snapshot = _active_stage_snapshot(
+            repository,
+            order,
+            repository.capabilities_for_order(order),
+        )
         flags[name] = {
             "actor_holds_current_stage_role": actor_holds_operational_role(
                 actor_roles,
@@ -429,8 +437,13 @@ def get_order_operational_role_flags(
                 is_admin=False,
             ),
             "current_stage_operational_role": role,
+            # List actions are presentation hints from the same server policy
+            # used by the command endpoints. The commands still authorize again.
+            "active_stage_name": stage_snapshot.get("active_stage_name"),
+            "can_start_stage": stage_snapshot.get("can_start_stage") is True,
+            "can_handoff_stage": stage_snapshot.get("can_handoff_stage") is True,
         }
-    return {"personal_view": True, "orders": flags}
+    return {"personal_view": personal_view, "orders": flags}
 
 
 def _resolve_operational_role(

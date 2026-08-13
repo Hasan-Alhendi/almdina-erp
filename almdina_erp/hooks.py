@@ -29,7 +29,6 @@ app_include_js = [
     "/assets/almdina_erp/js/responsive_device.js",
     "/assets/almdina_erp/js/shop_floor_quick_actions.js",
     "/assets/almdina_erp/js/shared_shell.js",
-    "/assets/almdina_erp/js/shop_floor_dxf_visibility_ux.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
@@ -216,8 +215,6 @@ override_whitelisted_methods = {
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_inbox",
     "almdina_erp.almdina_erp.services.shop_floor_service.get_my_archive":
         "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_archive",
-    "almdina_erp.almdina_erp.services.shop_floor_service.get_order_shop_floor_detail":
-        "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_shop_floor_detail",
     "almdina_erp.almdina_erp.services.shop_floor_service.mark_dxf_exported":
         "almdina_erp.almdina_erp.services.shop_floor_dxf_service.mark_dxf_exported",
     "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf":

@@ -38,7 +38,13 @@ const context = {
                 return Promise.resolve({ message: handoffContext });
             }
             if (options.method.endsWith("get_current_stage_context")) {
-                return Promise.resolve({ message: { actor_holds_operational_role: true } });
+                return Promise.resolve({
+                    message: {
+                        actor_holds_operational_role: true,
+                        can_start_stage: true,
+                        can_handoff_stage: true,
+                    },
+                });
             }
             return Promise.resolve({ message: { ok: true } });
         },

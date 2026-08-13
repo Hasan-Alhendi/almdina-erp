@@ -164,6 +164,8 @@ class FrappeShopFloorQueryRepository:
                     "department_status",
                     "current_production_stage",
                     "approved_plan",
+                    "cutting_plan_json",
+                    "plan_needs_recalculation",
                     "production_dxf",
                     "drawing_dxf_status",
                     "revision",

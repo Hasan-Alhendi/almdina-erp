@@ -21,13 +21,6 @@ APPROVAL_POLICY_PATH = (
     / "security"
     / "drawing_approval_policy.py"
 )
-PRESENTER_PATH = (
-    ROOT
-    / "almdina_erp"
-    / "presentation"
-    / "shop_floor"
-    / "presenters.py"
-)
 REPOSITORY_PATH = (
     ROOT
     / "almdina_erp"
@@ -43,12 +36,11 @@ HOOKS_PATH = ROOT / "hooks.py"
 
 
 class TestShopFloorQueryArchitecture(unittest.TestCase):
-    def test_application_and_presenters_do_not_import_frappe(self) -> None:
+    def test_application_and_policies_do_not_import_frappe(self) -> None:
         for path in (
             APPLICATION_PATH,
             DRAWING_POLICY_PATH,
             APPROVAL_POLICY_PATH,
-            PRESENTER_PATH,
         ):
             source = path.read_text(encoding="utf-8")
             with self.subTest(path=path):
@@ -65,11 +57,12 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("def session_identity", application_source)
         self.assertIn("def global_capabilities", application_source)
 
-    def test_query_service_composes_application_repository_and_presenter(self) -> None:
+    def test_query_service_composes_application_and_repository(self) -> None:
         source = QUERY_SERVICE_PATH.read_text(encoding="utf-8")
         self.assertIn("application.shop_floor import queries", source)
         self.assertIn("FrappeShopFloorQueryRepository", source)
-        self.assertIn("present_order_detail", source)
+        self.assertNotIn("present_order_detail", source)
+        self.assertNotIn("get_order_shop_floor_detail", source)
         self.assertIn("def get_shop_floor_context", source)
         self.assertNotIn("frappe.get_roles", source)
 
@@ -98,7 +91,6 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
             "get_revert_targets",
             "get_my_inbox",
             "get_my_archive",
-            "get_order_shop_floor_detail",
         )
         for method in query_methods:
             old = f"almdina_erp.almdina_erp.services.shop_floor_service.{method}"

@@ -42,20 +42,18 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
             source = (PAGES / page / f"{page}.js").read_text(encoding="utf-8")
             self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", source, page)
 
-    def test_inbox_waits_for_the_drawing_panel_module(self) -> None:
+    def test_inbox_opens_the_canonical_order_form_instead_of_loading_a_panel(self) -> None:
         source = (PAGES / "shop_floor_inbox" / "shop_floor_inbox.js").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("function drawingPlanModule()", source)
         self.assertIn(
-            'frappe.require("/assets/almdina_erp/js/door_cutting_order_drawing_plan_ux.js")',
+            'frappe.set_route("Form", "Door Cutting Order", context.order)',
             source,
         )
-        self.assertNotIn(
-            "if (!window.AlmdinaDrawingPlanUX || !window.AlmdinaDrawingPlanUX.renderInboxPanel) return;",
-            source,
-        )
+        self.assertNotIn("function drawingPlanModule()", source)
+        self.assertNotIn("renderInboxPanel", source)
+        self.assertNotIn("get_order_shop_floor_detail", source)
 
 
 if __name__ == "__main__":

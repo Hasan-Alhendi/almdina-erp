@@ -12,8 +12,7 @@
 .almdina-sf-boards,
 .almdina-sf-route-board,
 .almdina-sf-kanban,
-.almdina-sf-kanban-column,
-.shop-floor-detail {
+.almdina-sf-kanban-column {
     min-width: 0;
     max-width: 100%;
 }
@@ -572,25 +571,6 @@
     border-bottom: 0;
 }
 
-.shop-floor-detail > .frappe-card {
-    max-width: 100%;
-    border: 1px solid var(--border-color, #dfe3e8) !important;
-    border-radius: 15px !important;
-    box-shadow: 0 2px 12px rgba(15, 23, 42, .06);
-}
-
-.almdina-sf-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 12px;
-}
-
-.almdina-sf-actions .btn {
-    min-height: 42px;
-    border-radius: 10px;
-}
-
 @media (hover: hover) and (pointer: fine) {
     .almdina-sf-order-card:hover {
         border-color: color-mix(in srgb, var(--sf-accent) 36%, var(--border-color, #dfe3e8)) !important;
@@ -704,17 +684,6 @@
         font-size: 13px;
     }
 
-    .almdina-sf-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .almdina-sf-actions .btn {
-        width: 100%;
-        min-width: 0;
-        min-height: 46px;
-    }
-
     .almdina-sf-account-card {
         padding: 14px;
     }
@@ -732,10 +701,6 @@
 
     .almdina-sf-order-card > div:nth-child(2) {
         gap: 7px !important;
-    }
-
-    .almdina-sf-actions {
-        grid-template-columns: 1fr;
     }
 
     .almdina-sf-kanban {

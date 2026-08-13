@@ -94,6 +94,7 @@
             args.filters = (args.filters || []).filter(filter => !isNameFilter(filter, this.doctype));
             const pattern = `%${term}%`;
             args.or_filters = [
+                ...(args.or_filters || []),
                 [this.doctype, "name", "like", pattern],
                 [this.doctype, "customer", "like", pattern],
             ];
@@ -206,17 +207,13 @@
     }
 
     function quickActionContext(doc) {
-        const assignedToCurrentUser = Boolean(
-            doc.current_assignee
-            && frappe.session
-            && doc.current_assignee === frappe.session.user
-        );
+        const authorized = doc.__almdinaProductionActionContext || {};
         return {
             order: doc.name,
-            stage: doc.current_production_stage,
+            stage: authorized.stage || doc.current_production_stage,
             stageType: STAGE_BY_DEPARTMENT[doc.current_department] || doc.current_department,
-            canStart: assignedToCurrentUser && doc.department_status === "بحاجة للعمل",
-            canHandoff: assignedToCurrentUser && doc.department_status === "قيد العمل",
+            canStart: authorized.canStart === true,
+            canHandoff: authorized.canHandoff === true,
         };
     }
 
@@ -320,21 +317,24 @@
     function renderMobileCards(listview) {
         const root = rootNode(listview);
         if (!root) return;
-        const containers = [...root.querySelectorAll(".list-row-container")];
-        containers.forEach((container, index) => {
+        const docs = orderDocuments(listview);
+        const allContainers = [...root.querySelectorAll(".list-row-container")];
+        allContainers.forEach(container => {
             container.classList.remove("dco-order-card-container");
             const previous = [...container.children]
                 .find(child => child.classList.contains("dco-mobile-order-card"));
             if (previous) previous.remove();
         });
+        // The list header uses the same .list-row-container class in Frappe.
+        // Only containers that resolve to an actual document may receive cards.
+        const containers = allContainers
+            .map(container => ({ container, name: rowDocumentName(container) }))
+            .filter(item => item.name && docs.has(item.name));
         if (!applyCardLayoutClass(listview)) return;
 
-        const docs = orderDocuments(listview);
-        containers.forEach((container, index) => {
-            const fallback = (listview.data || [])[index];
-            const name = rowDocumentName(container, fallback);
-            const doc = docs.get(name) || fallback;
-            if (!doc || !doc.name) return;
+        containers.forEach(({ container, name }) => {
+            const doc = docs.get(name);
+            if (!doc) return;
             const originalCheckbox = container.querySelector("input.list-row-checkbox, input[type='checkbox']");
             const holder = document.createElement("div");
             holder.innerHTML = buildCard(doc, Boolean(originalCheckbox)).trim();
@@ -389,6 +389,7 @@
 
         let scheduled = false;
         const observer = new MutationObserver(mutations => {
+            if (listview._dcoApplyingRolePresentation) return;
             const frappeRowsAdded = mutations.some(mutation =>
                 [...mutation.addedNodes].some(node =>
                     node.nodeType === 1
@@ -425,6 +426,18 @@
         const flags = payload && payload.orders && typeof payload.orders === "object"
             ? payload.orders
             : {};
+        const docs = orderDocuments(listview);
+        docs.forEach((doc, name) => {
+            const flag = flags[name] || {};
+            doc.__almdinaProductionActionContext = {
+                stage: flag.active_stage_name || doc.current_production_stage || "",
+                canStart: flag.can_start_stage === true,
+                canHandoff: flag.can_handoff_stage === true,
+            };
+        });
+        // The first paint intentionally has no guessed action. Rebuild phone
+        // cards only after the server-authorized action context arrives.
+        renderMobileCards(listview);
         if (!personalView) {
             clearOperationalRoleRows(listview);
             return;
@@ -434,6 +447,7 @@
         const other = [];
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
+            if (!name) return;
             const flag = flags[name];
             // Missing flag (no current stage / unknown) counts as other-role so
             // finished or foreign-stage orders still land in the green trailer.
@@ -445,7 +459,19 @@
         });
 
         // Own-role stages stay at the top; everything else closes the list in green.
-        [...mine, ...other].forEach(container => result.appendChild(container));
+        // Do not move nodes when they are already ordered: moving a node triggers
+        // Frappe's mutation observer and used to start another request/reorder loop.
+        const ordered = [...mine, ...other];
+        const current = [...result.querySelectorAll(".list-row-container")]
+            .filter(container => Boolean(rowDocumentName(container)));
+        const needsReorder = ordered.some((container, index) => current[index] !== container);
+        if (needsReorder) {
+            listview._dcoApplyingRolePresentation = true;
+            ordered.forEach(container => result.appendChild(container));
+            requestAnimationFrame(() => {
+                listview._dcoApplyingRolePresentation = false;
+            });
+        }
     }
 
     function applyOperationalRoleRows(listview) {
@@ -476,6 +502,9 @@
     function schedule(listview) {
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
+        (listview.data || []).forEach(doc => {
+            if (doc) doc.__almdinaProductionActionContext = null;
+        });
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
@@ -485,16 +514,13 @@
         requestAnimationFrame(() => {
             applySearchHint(listview);
             renderMobileCards(listview);
-            applyOperationalRoleRows(listview);
         });
         setTimeout(() => {
             renderMobileCards(listview);
-            applyOperationalRoleRows(listview);
         }, 100);
         setTimeout(() => {
             applySearchHint(listview);
             renderMobileCards(listview);
-            applyOperationalRoleRows(listview);
         }, 350);
     }
 
