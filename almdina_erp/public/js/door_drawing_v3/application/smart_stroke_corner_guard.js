@@ -55,9 +55,8 @@
         });
     }
 
-    // Kept as an explicit helper for future assisted commands, but deliberately not
-    // applied automatically by the freehand pen. A hand-drawn L/S/flower must not be
-    // silently rebuilt from straight/arc primitives.
+    // Available for explicit future assisted commands, but never applied automatically
+    // by the freehand pen. A hand-drawn L/S/flower must remain the user's stroke.
     function sharpLineCorner(points, options = {}) {
         if (options.closed) return null;
         const input = F.dedupe(points);
@@ -112,26 +111,14 @@
         return true;
     }
 
-    // Preview fidelity matters as much as saved geometry. SmartPen uses this method
-    // for its live stroke, so return the real sampled point rather than a lagging
-    // low-pass approximation. Sampling already removes sub-pixel jitter.
-    function pushStabilized(state, rawPoint) {
-        const raw = G.point(rawPoint && rawPoint.x, rawPoint && rawPoint.y);
-        if (state) state.point = raw;
-        return raw;
-    }
-
-    function stabilizeSeries(points) {
-        return faithfulPoints(points, false);
-    }
-
     function interpret(points, options = {}) {
         const raw = F.dedupe(points);
         if (raw.length < 2) return Object.freeze({ type: "none", points: raw, confidence: 0 });
 
-        // Whole-stroke recognition only. This keeps useful intelligence for an
-        // unmistakable line/circle/arc/rectangle without segmenting an arbitrary
-        // freehand sketch into primitives or changing its silhouette.
+        // Preserve the existing light live stabilizer for mouse/pen/touch input.
+        // At commit time, however, recognize only an unmistakable WHOLE primitive.
+        // Never run mixed-segment reconstruction, path smoothing, RDP simplification,
+        // collinear pruning, or orthogonalization on a genuine freehand silhouette.
         const recognized = F.recognize(raw, options);
         if (primitiveIsUnambiguous(recognized, raw, options)) return recognized;
         return faithfulPath(raw, options);
@@ -139,8 +126,6 @@
 
     root.SmartStrokeIntelligence = Object.freeze({
         ...Base,
-        pushStabilized,
-        stabilizeSeries,
         windowTurn,
         strongestCorner,
         sharpLineCorner,
