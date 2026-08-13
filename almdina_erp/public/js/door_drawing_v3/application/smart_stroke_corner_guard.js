@@ -7,6 +7,8 @@
     const F = root.SmartFreehandPolicy;
     if (!Base || !G || !F) throw new Error("Door Drawing V3 stroke intelligence must load before fidelity guard");
 
+    // These helpers stay available only for explicit future commands such as
+    // "convert to precise line". The freehand pen itself never invokes them.
     const PRIMITIVE_CONFIDENCE = Object.freeze({
         line: 0.9,
         rectangle: 0.9,
@@ -55,8 +57,6 @@
         });
     }
 
-    // Available for explicit future assisted commands, but never applied automatically
-    // by the freehand pen. A hand-drawn L/S/flower must remain the user's stroke.
     function sharpLineCorner(points, options = {}) {
         if (options.closed) return null;
         const input = F.dedupe(points);
@@ -100,27 +100,23 @@
         if (!result || !Object.prototype.hasOwnProperty.call(PRIMITIVE_CONFIDENCE, result.type)) return false;
         const confidence = Number(result.confidence) || 0;
         if (confidence + 1e-9 < PRIMITIVE_CONFIDENCE[result.type]) return false;
-
-        if (result.type === "line") {
-            const quality = F.lineQuality(F.dedupe(points));
-            if (!quality.eligible) return false;
-            const tolerance = Math.max(G.EPSILON_MM, Number(options.straightToleranceMm) || F.DEFAULTS.straightToleranceMm);
-            const ratioLimit = Math.max(1.005, Math.min(1.025, Number(options.straightRatio) || F.DEFAULTS.straightRatio));
-            return quality.maxDeviationMm <= tolerance * 0.5 && quality.ratio <= ratioLimit;
-        }
-        return true;
+        if (result.type !== "line") return true;
+        const quality = F.lineQuality(F.dedupe(points));
+        if (!quality.eligible) return false;
+        const tolerance = Math.max(G.EPSILON_MM, Number(options.straightToleranceMm) || F.DEFAULTS.straightToleranceMm);
+        const ratioLimit = Math.max(1.005, Math.min(1.025, Number(options.straightRatio) || F.DEFAULTS.straightRatio));
+        return quality.maxDeviationMm <= tolerance * 0.5 && quality.ratio <= ratioLimit;
     }
 
     function interpret(points, options = {}) {
         const raw = F.dedupe(points);
         if (raw.length < 2) return Object.freeze({ type: "none", points: raw, confidence: 0 });
 
-        // Preserve the existing light live stabilizer for mouse/pen/touch input.
-        // At commit time, however, recognize only an unmistakable WHOLE primitive.
-        // Never run mixed-segment reconstruction, path smoothing, RDP simplification,
-        // collinear pruning, or orthogonalization on a genuine freehand silhouette.
-        const recognized = F.recognize(raw, options);
-        if (primitiveIsUnambiguous(recognized, raw, options)) return recognized;
+        // Fundamental UX contract for order-entry staff:
+        // the freehand pen NEVER redraws, straightens, smooths, simplifies,
+        // orthogonalizes, segments, or converts the user's stroke. Intelligence
+        // may assist pointer capture at endpoints, but committed geometry remains
+        // the sampled stroke exactly as drawn.
         return faithfulPath(raw, options);
     }
 
