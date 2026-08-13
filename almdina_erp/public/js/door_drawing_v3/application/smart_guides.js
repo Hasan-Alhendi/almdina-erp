@@ -65,7 +65,7 @@
         const segments = [];
         for (const object of (document && document.objects) || []) {
             if (excluded.has(String(object.id))) continue;
-            segments.push(...lineSegmentsForObject(object));
+            segments.push(...lineSegmentsForObject(object).filter(segment => !segment.curved));
         }
         return segments;
     }
@@ -73,7 +73,6 @@
     function nearestSurface(document, candidate, toleranceMm, options = {}) {
         let best = null;
         for (const segment of collectSegments(document, options)) {
-            if (segment.curved) continue;
             const projection = projectSegment(candidate, segment.start, segment.end);
             if (!projection || projection.distanceMm > toleranceMm) continue;
             const endpointEpsilon = 0.02;
@@ -105,7 +104,6 @@
         const requestedAngle = G.angleDeg(a, p);
         let best = null;
         for (const segment of collectSegments(document, options)) {
-            if (segment.curved) continue;
             const length = G.distance(segment.start, segment.end);
             if (length <= G.EPSILON_MM) continue;
             const segmentAngle = G.angleDeg(segment.start, segment.end);
