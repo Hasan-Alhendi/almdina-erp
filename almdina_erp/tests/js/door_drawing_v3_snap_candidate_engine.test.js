@@ -20,6 +20,7 @@ const V3 = global.window.AlmdinaDoorDrawingV3;
 const G = V3.Geometry;
 const C = V3.SnapCandidateEngine;
 const P = V3.ProfessionalMovePolicy;
+const S = V3.Snapping;
 
 function doc(objects) {
     return { blank: { widthMm: 1000, heightMm: 1000 }, objects };
@@ -57,6 +58,24 @@ assert.equal(result.dx, -100, "Moving endpoint must snap exactly onto the target
 assert.equal(result.dy, -10);
 assert.equal(result.geometryCandidate.kind, "endpoint");
 assert.ok(result.guides.some(guide => guide.type === "geometry-point"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "نقطة إلى نقطة"));
+
+const endpointToEdge = G.line("edge-source", G.point(30, 8), G.point(30, 28));
+result = P.resolve(doc([targetLine, endpointToEdge]), [endpointToEdge], 0, 0, { viewportScale: 1 });
+assert.equal(result.geometryCandidate.kind, "segment", "A nearby endpoint should land on an exact straight edge without a separate CAD tool");
+assert.equal(result.dx, 0);
+assert.equal(result.dy, -8);
+assert.deepEqual(result.geometryCandidate.claimedAxes, ["y"], "Horizontal target edge should constrain only the perpendicular move axis");
+assert.ok(result.guides.some(guide => guide.type === "geometry-segment"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "على الضلع"));
+
+const continuation = G.line("continuation", G.point(150, 5), G.point(200, 5));
+result = P.resolve(doc([targetLine, continuation]), [continuation], 0, 0, { viewportScale: 1 });
+assert.equal(result.geometryCandidate.kind, "collinear", "Parallel line near a reference should become a simple same-line continuation");
+assert.equal(result.dx, 0);
+assert.equal(result.dy, -5);
+assert.ok(result.guides.some(guide => guide.type === "geometry-line"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "على نفس الخط"));
 
 result = P.resolve(doc([sourceLine]), [sourceLine], 49, 1, {
     viewportScale: 1,
@@ -74,17 +93,40 @@ result = P.resolve(doc([a, b]), [b], 101, 2, {
     includeSourceTargets: true,
 });
 assert.equal(result.dx, 100, "Alt-drag third copy should match the existing A-B spacing");
-assert.equal(result.dy, 0, "The duplicate should also align to the original row");
+assert.equal(result.dy, 0, "The duplicate should also stay on the original row automatically");
 assert.ok(result.guides.some(guide => guide.type === "spacing" && Math.abs(guide.distanceMm - 50) < 0.01));
 assert.ok(result.guides.some(guide => guide.type === "spacing-reference" && Math.abs(guide.distanceMm - 50) < 0.01));
-assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "y"));
+assert.ok(result.guides.some(guide => guide.type === "geometry-line"), "Same-row intelligence may be expressed as exact collinear geometry rather than a bounding-box alignment");
 
 const sameRow = P.resolve(doc([b]), [b], 100, 3, {
     viewportScale: 1,
     includeSourceTargets: true,
 });
 assert.equal(sameRow.dx, 100);
-assert.equal(sameRow.dy, 0, "The original must participate as an alignment reference during Alt-drag");
-assert.ok(sameRow.guides.some(guide => guide.type === "alignment" && guide.axis === "y"));
+assert.equal(sameRow.dy, 0, "The original must participate as a same-line reference during Alt-drag");
+assert.ok(sameRow.guides.some(guide => guide.type === "geometry-line"));
 
-console.log("Door Drawing V3 snap candidate and Alt-drag reference tests passed");
+const c = G.rectangle("c", G.point(200, 0), 50, 50);
+const d = G.rectangle("d", G.point(400, 0), 50, 50);
+const repeated = P.resolve(doc([a, b, c, d]), [d], -98, 3, { viewportScale: 1 });
+assert.equal(repeated.dx, -100, "A fourth item should settle onto the repeated 50 mm series");
+assert.equal(repeated.dy, 0);
+assert.equal(repeated.spacingX.mode, "repeat-series");
+assert.ok(repeated.spacingX.seriesReferences.length >= 2, "Repeated spacing should use the whole visible pattern, not one accidental pair");
+assert.ok(repeated.guides.filter(guide => guide.type === "spacing-reference" && guide.series).length >= 2);
+assert.ok(repeated.guides.some(guide => guide.type === "assist-label" && (guide.text === "على نفس الخط" || guide.text === "نفس المسافة")));
+
+const curved = G.path(
+    "curve",
+    [G.point(0, 100), G.point(100, 100)],
+    false,
+    {},
+    [
+        { type: "smooth", out: { x: 20, y: 60 } },
+        { type: "smooth", in: { x: -20, y: 60 } },
+    ]
+);
+assert.equal(S.collectSegments(doc([curved])).length, 0, "Bezier chords must never be exposed as fake straight edges to smart move snapping");
+assert.equal(C.targetSegments(doc([curved])).length, 0, "Candidate engine must keep curved geometry out of linear projection/collinearity rules");
+
+console.log("Door Drawing V3 snap candidate and operator-friendly smart move tests passed");
