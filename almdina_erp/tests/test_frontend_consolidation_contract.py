@@ -148,8 +148,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
         # The form has one authoritative optimizer/action deck above the layout.
         # The drawing optimizer panel stays available only for inbox/shop-floor use.
-        self.assertIn("movePlanActionsToFullWidth", source)
-        self.assertIn("dco-plan-action-row", source)
+        self.assertIn("stabilizePlanActionsLayout", source)
+        self.assertIn("dco-plan-actions-native", source)
         self.assertIn("dco-drawing-plan-panel-host", source)
         self.assertIn("dco-drawing-plan-panel", source)
         self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
@@ -201,6 +201,14 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn('frm.set_df_property(fieldname, "read_only"', controls)
         self.assertNotIn('frm.set_df_property(fieldname, "read_only"', presenter)
         self.assertNotIn('frm.set_df_property(fieldname, "read_only"', guard)
+
+    def test_plan_action_control_stays_in_frappe_native_layout(self) -> None:
+        content = PLAN_CONTENT.read_text(encoding="utf-8")
+
+        self.assertIn('sectionElement(frm, "plan_actions_section")', content)
+        self.assertIn('addClass("dco-plan-actions-native")', content)
+        self.assertNotIn("host.append(field.$wrapper)", content)
+        self.assertNotIn("dco-plan-action-row", content)
 
     def test_empty_plan_action_surface_recovers_before_approval_controls(self) -> None:
         controls = PLAN_CONTROLS.read_text(encoding="utf-8")

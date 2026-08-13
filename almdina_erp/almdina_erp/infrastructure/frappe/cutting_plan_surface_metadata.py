@@ -19,6 +19,7 @@ CUTTING_PLAN_SURFACE_FIELDS = (
     "cutting_machine_type",
     "optimizer_column",
     "optimization_time_limit_sec",
+    "plan_actions_section",
     "plan_control_actions",
     "plan_result_section",
     "plan_controls_intro",
@@ -40,22 +41,43 @@ CUTTING_PLAN_SURFACE_FIELDS = (
     "approved_plan_source",
 )
 
+# These structural controls are always present for a user who can open the
+# Cutting Plan tab. Business capabilities decide the content rendered inside
+# them; site-local metadata must not hide the containers themselves.
+VISIBLE_PLAN_SURFACE_FIELDS = (
+    "results_tab",
+    "cut_geometry_section",
+    "optimizer_section",
+    "plan_actions_section",
+    "plan_control_actions",
+    "plan_section",
+    "cutting_plan_html",
+)
 
-def _remove_stale_permlevel_property_setters() -> None:
-    """Remove site-local overrides that can couple plan UI to cost permlevel 1."""
+
+def _remove_stale_property_setters() -> None:
+    """Remove site-local overrides that can hide protected plan containers."""
 
     if not frappe.db.exists("DocType", "Property Setter"):
         return
 
-    names = frappe.get_all(
-        "Property Setter",
-        filters={
-            "doc_type": DOCTYPE,
-            "field_name": ["in", CUTTING_PLAN_SURFACE_FIELDS],
-            "property": "permlevel",
-        },
-        pluck="name",
-    )
+    names: list[str] = []
+    for property_name, fieldnames in (
+        ("permlevel", CUTTING_PLAN_SURFACE_FIELDS),
+        ("hidden", VISIBLE_PLAN_SURFACE_FIELDS),
+        ("depends_on", VISIBLE_PLAN_SURFACE_FIELDS),
+    ):
+        names.extend(
+            frappe.get_all(
+                "Property Setter",
+                filters={
+                    "doc_type": DOCTYPE,
+                    "field_name": ["in", fieldnames],
+                    "property": property_name,
+                },
+                pluck="name",
+            )
+        )
     for name in names:
         frappe.delete_doc(
             "Property Setter",
@@ -83,18 +105,47 @@ def _repair_standard_docfields() -> None:
         (DOCTYPE, *CUTTING_PLAN_SURFACE_FIELDS),
     )
 
+    visible_placeholders = ", ".join(["%s"] * len(VISIBLE_PLAN_SURFACE_FIELDS))
+    frappe.db.sql(
+        f"""
+        update `tabDocField`
+           set hidden = 0,
+               depends_on = null
+         where parent = %s
+           and fieldname in ({visible_placeholders})
+           and (
+                coalesce(hidden, 0) != 0
+                or coalesce(depends_on, '') != ''
+           )
+        """,
+        (DOCTYPE, *VISIBLE_PLAN_SURFACE_FIELDS),
+    )
+
 
 def cutting_plan_surface_metadata_state() -> dict[str, object]:
     """Return the effective field levels and any surviving local overrides."""
 
     if not frappe.db.exists("DocType", DOCTYPE):
-        return {"doctype": DOCTYPE, "fields": {}, "property_setters": []}
+        return {
+            "doctype": DOCTYPE,
+            "fields": {},
+            "visibility": {},
+            "property_setters": [],
+        }
 
     meta = frappe.get_meta(DOCTYPE)
     fields: dict[str, int | None] = {}
     for fieldname in CUTTING_PLAN_SURFACE_FIELDS:
         field = meta.get_field(fieldname)
         fields[fieldname] = None if field is None else int(field.permlevel or 0)
+
+    visibility: dict[str, dict[str, object] | None] = {}
+    for fieldname in VISIBLE_PLAN_SURFACE_FIELDS:
+        field = meta.get_field(fieldname)
+        visibility[fieldname] = None if field is None else {
+            "hidden": int(field.hidden or 0),
+            "depends_on": str(field.depends_on or ""),
+        }
 
     property_setters = frappe.get_all(
         "Property Setter",
@@ -103,12 +154,30 @@ def cutting_plan_surface_metadata_state() -> dict[str, object]:
             "field_name": ["in", CUTTING_PLAN_SURFACE_FIELDS],
             "property": "permlevel",
         },
-        fields=["name", "field_name", "value"],
-        order_by="field_name asc",
+        fields=["name", "field_name", "property", "value"],
+    )
+    property_setters.extend(
+        frappe.get_all(
+            "Property Setter",
+            filters={
+                "doc_type": DOCTYPE,
+                "field_name": ["in", VISIBLE_PLAN_SURFACE_FIELDS],
+                "property": ["in", ("hidden", "depends_on")],
+            },
+            fields=["name", "field_name", "property", "value"],
+        )
+    )
+    property_setters.sort(
+        key=lambda row: (
+            str(row.get("field_name", "")),
+            str(row.get("property", "")),
+            str(row.get("name", "")),
+        )
     )
     return {
         "doctype": DOCTYPE,
         "fields": fields,
+        "visibility": visibility,
         "property_setters": [dict(row) for row in property_setters],
     }
 
@@ -120,13 +189,21 @@ def _assert_cutting_plan_surface_metadata() -> None:
         for fieldname, permlevel in state["fields"].items()
         if permlevel != 0
     }
+    invalid_visibility = {
+        fieldname: values
+        for fieldname, values in state["visibility"].items()
+        if not values
+        or values["hidden"] != 0
+        or values["depends_on"]
+    }
     setters = state["property_setters"]
-    if not invalid and not setters:
+    if not invalid and not invalid_visibility and not setters:
         return
 
     raise RuntimeError(
         "Cutting Plan metadata repair failed: "
-        f"invalid permlevels={invalid}, property_setters={setters}"
+        f"invalid permlevels={invalid}, invalid visibility={invalid_visibility}, "
+        f"property_setters={setters}"
     )
 
 
@@ -146,7 +223,7 @@ def sync_cutting_plan_surface_metadata() -> None:
     if not frappe.db.exists("DocType", DOCTYPE):
         return
 
-    _remove_stale_permlevel_property_setters()
+    _remove_stale_property_setters()
     _repair_standard_docfields()
     frappe.clear_cache(doctype=DOCTYPE)
     _assert_cutting_plan_surface_metadata()
@@ -154,6 +231,7 @@ def sync_cutting_plan_surface_metadata() -> None:
 
 __all__ = [
     "CUTTING_PLAN_SURFACE_FIELDS",
+    "VISIBLE_PLAN_SURFACE_FIELDS",
     "cutting_plan_surface_metadata_state",
     "sync_cutting_plan_surface_metadata",
 ]

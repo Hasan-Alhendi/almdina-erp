@@ -50,8 +50,14 @@ function buildHarness({ canViewPlan, asyncPresenter = false }) {
         doctype: "Door Cutting Order",
         doc: { name: "DCO-TEST-0001" },
         fields_dict: {
-            plan_control_actions: { $wrapper: actions },
-            cutting_plan_html: { $wrapper: layout },
+            plan_control_actions: {
+                df: { hidden: 1, permlevel: 1, hidden_due_to_dependency: 1 },
+                $wrapper: actions,
+            },
+            cutting_plan_html: {
+                df: { hidden: 1, permlevel: 1, hidden_due_to_dependency: 1 },
+                $wrapper: layout,
+            },
         },
     };
 
@@ -159,6 +165,11 @@ function buildHarness({ canViewPlan, asyncPresenter = false }) {
     assert.match(authorized.actions.content, /dco-plan-actions-shell/);
     assert.match(authorized.actions.content, /dco-recalculate-plan/);
     assert.match(authorized.layout.content, /dco-plan-tabs/);
+    assert.deepEqual(
+        authorized.frm.fields_dict.plan_control_actions.df,
+        { hidden: 0, permlevel: 0, hidden_due_to_dependency: 0 },
+        "authorized plan commands must recover from stale hidden/permlevel metadata"
+    );
     assert.deepEqual(
         authorized.requiredAssets,
         [

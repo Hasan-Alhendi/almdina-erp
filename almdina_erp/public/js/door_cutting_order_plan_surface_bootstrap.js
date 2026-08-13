@@ -75,6 +75,50 @@
         if (layout) layout.empty();
     }
 
+    function wrapperNode(target) {
+        if (!target) return null;
+        return target.nodeType ? target : (target[0] || null);
+    }
+
+    function wrapperAttached(frm, target) {
+        const node = wrapperNode(target);
+        const root = frm && wrapperNode(frm.wrapper);
+        if (!node || !root || typeof root.contains !== "function") return true;
+        return root.contains(node);
+    }
+
+    function reattachActionField(frm, field) {
+        if (!field || !field.$wrapper || wrapperAttached(frm, field.$wrapper)) return;
+        const section = wrapper(frm, "plan_actions_section");
+        if (!section || typeof section.find !== "function") return;
+        const body = section.find(".section-body").first();
+        if (body.length && typeof body.append === "function") {
+            body.append(field.$wrapper);
+        }
+    }
+
+    function restoreProtectedFieldAccess(frm) {
+        ["plan_control_actions", "cutting_plan_html"].forEach(fieldname => {
+            const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+            if (!field || !field.$wrapper) return;
+
+            // These HTML containers carry no business data. Authorization is
+            // enforced by canViewPlan plus the per-command capabilities; stale
+            // site metadata must not leave an authorized container hidden.
+            if (field.df) {
+                field.df.permlevel = 0;
+                field.df.hidden = 0;
+                field.df.hidden_due_to_dependency = 0;
+            }
+            if (typeof field.refresh === "function") field.refresh();
+            if (typeof field.$wrapper.removeClass === "function") {
+                field.$wrapper.removeClass("hide-control");
+            }
+            if (typeof field.$wrapper.show === "function") field.$wrapper.show();
+            if (fieldname === "plan_control_actions") reattachActionField(frm, field);
+        });
+    }
+
     function setWrapperOrder(target, orderName) {
         if (!target) return;
         if (typeof target.attr === "function") {
@@ -102,6 +146,8 @@
         return Boolean(
             actions
             && layout
+            && wrapperAttached(frm, actions)
+            && wrapperAttached(frm, layout)
             && wrapperOrder(actions) === orderName
             && wrapperOrder(layout) === orderName
             && actions.find(".dco-plan-actions-shell").length
@@ -150,6 +196,7 @@
             throw new Error("AlmdinaPlanContentUX.apply is unavailable");
         }
 
+        restoreProtectedFieldAccess(frm);
         await Promise.resolve(presenter.refresh(frm));
         if (!isCurrent(frm, identity)) return false;
         setWrapperOrder(wrapper(frm, "plan_control_actions"), String(frm.doc.name || ""));
@@ -185,6 +232,7 @@
         await ensureModules();
         if (!isCurrent(frm, identity)) return false;
 
+        restoreProtectedFieldAccess(frm);
         const ready = await renderSurface(frm);
         if (!isCurrent(frm, identity)) return false;
         if (!ready) {
@@ -221,6 +269,7 @@
         ensureModules,
         recover,
         renderSurface,
+        restoreProtectedFieldAccess,
         schedule,
         surfaceReady,
     });

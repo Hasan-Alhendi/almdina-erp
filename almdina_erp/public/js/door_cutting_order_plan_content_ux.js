@@ -76,23 +76,18 @@
         const style = document.createElement("style");
         style.id = STYLE_ID;
         style.textContent = `
-            .dco-optimizer-card > .section-body,
-            .dco-optimizer-card .section-body:first-of-type {
-                display:flex !important;
-                flex-wrap:wrap !important;
-                align-items:flex-start !important;
+            .dco-plan-actions-section {
+                border:0 !important;
+                box-shadow:none !important;
+                margin-top:-4px !important;
+                background:transparent !important;
             }
-            .dco-plan-action-row {
-                flex:0 0 100% !important;
+            .dco-plan-actions-section > .section-body {
+                padding-top:0 !important;
+            }
+            .dco-plan-actions-native {
                 width:100% !important;
                 max-width:100% !important;
-                padding:2px 15px 0 !important;
-                margin-top:2px !important;
-            }
-            .dco-plan-action-row > [data-fieldname="plan_control_actions"],
-            .dco-plan-action-row > .frappe-control {
-                width:100% !important;
-                max-width:none !important;
                 margin-bottom:0 !important;
             }
             [data-fieldname="plan_control_actions"] .dco-plan-actions-shell {
@@ -581,7 +576,7 @@
             .dco-board-focus .dco-piece-kind-badge { font-size:8px !important;padding:2px 5px !important; }
 
             @media (max-width:760px) {
-                .dco-plan-action-row { padding-inline:8px !important; }
+                .dco-plan-actions-section > .section-body { padding-inline:8px !important; }
                 [data-fieldname="plan_control_actions"] .dco-plan-actions {
                     grid-template-columns:1fr !important;
                 }
@@ -683,27 +678,23 @@
             totals_section: "تفاصيل الحساب والتكلفة",
         };
         Object.entries(labels).forEach(([fieldname, label]) => {
-            if (frm.fields_dict[fieldname]) frm.set_df_property(fieldname, "label", label);
+            const field = frm.fields_dict[fieldname];
+            if (field && field.df && field.df.label !== label) {
+                frm.set_df_property(fieldname, "label", label);
+            }
         });
     }
 
-    function movePlanActionsToFullWidth(frm) {
+    function stabilizePlanActionsLayout(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.plan_control_actions;
-        const section = sectionElement(frm, "optimizer_section");
-        if (!field || !field.$wrapper || !field.$wrapper.length || !section.length) return;
+        const section = sectionElement(frm, "plan_actions_section");
+        if (!field || !field.$wrapper || !field.$wrapper.length) return;
 
-        const body = section.find(".section-body").first();
-        if (!body.length) return;
-
-        let host = body.children(".dco-plan-action-row").first();
-        if (!host.length) {
-            host = $('<div class="dco-plan-action-row"></div>');
-            body.append(host);
-        }
-        const wrapper = field.$wrapper.get(0);
-        if (wrapper && !host.get(0).contains(wrapper)) {
-            host.append(field.$wrapper);
-        }
+        // Keep the control inside Frappe's native layout. Moving a ControlHTML
+        // wrapper into an ad-hoc row leaves it detached when Frappe repaints a
+        // section, while fields_dict still points at the detached node.
+        field.$wrapper.addClass("dco-plan-actions-native");
+        if (section.length) section.addClass("dco-plan-actions-section");
     }
 
     function escapeHtml(value) {
@@ -1221,16 +1212,16 @@
         if (!isCurrent(frm, identity)) return false;
         installStyles();
         applyArabicPlanLabels(frm);
-        movePlanActionsToFullWidth(frm);
+        stabilizePlanActionsLayout(frm);
         cleanRenderedPlan(frm);
         installObserver(frm);
         installResizeObserver(frm);
         scheduleFrame(frm, "plan-content-apply-frame", () => {
-            movePlanActionsToFullWidth(frm);
+            stabilizePlanActionsLayout(frm);
             cleanRenderedPlan(frm);
         });
         schedule(frm, "plan-content-apply-delay", () => {
-            movePlanActionsToFullWidth(frm);
+            stabilizePlanActionsLayout(frm);
             cleanRenderedPlan(frm);
         }, 350);
         return isReady(frm);
@@ -1247,8 +1238,8 @@
         onload_post_render(frm) { apply(frm); },
         refresh(frm) { apply(frm); },
         cutting_plan_json(frm) { apply(frm); },
-        packing_mode(frm) { scheduleFrame(frm, "plan-content-packing-mode", () => movePlanActionsToFullWidth(frm)); },
-        optimization_time_limit_sec(frm) { scheduleFrame(frm, "plan-content-optimizer-time", () => movePlanActionsToFullWidth(frm)); },
+        packing_mode(frm) { scheduleFrame(frm, "plan-content-packing-mode", () => stabilizePlanActionsLayout(frm)); },
+        optimization_time_limit_sec(frm) { scheduleFrame(frm, "plan-content-optimizer-time", () => stabilizePlanActionsLayout(frm)); },
         refresh_plan_controls(frm) { scheduleFrame(frm, "plan-content-refresh-controls", () => apply(frm)); },
     });
 
