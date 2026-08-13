@@ -75,7 +75,7 @@ assert.match(view, /data-ddv3-bezier-action=\"segment-type\"/);
 assert.match(view, /C \$\{c1\.x\}/);
 
 assert.match(topologyView, /ddv3-bezier-contextbar/);
-assert.match(topologyView, /data-ddv3-path-topology-action/);
+assert.match(topologyView, /dataset\.ddv3PathTopologyAction\s*=\s*action/);
 assert.match(topologyView, /paths\.length === 2 && paths\.every\(path => !path\.geometry\.closed\)/);
 assert.match(topologyView, /"join", "join", "ربط"/);
 assert.match(topologyView, /"split-node"/);
