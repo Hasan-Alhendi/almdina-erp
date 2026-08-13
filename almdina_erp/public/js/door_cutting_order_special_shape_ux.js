@@ -93,8 +93,26 @@
         window.__almdinaDoorDrawingV3BootPromise = SCRIPTS.reduce((promise, src) => promise.then(() => loadScript(src)), Promise.resolve()).catch(error => { window.__almdinaDoorDrawingV3BootPromise = null; console.error("Door Drawing V3 bootstrap failed", error); throw error; });
         return window.__almdinaDoorDrawingV3BootPromise;
     }
+    function can(frm, capability) {
+        const permissions = window.AlmdinaPermissions;
+        if (!permissions) return false;
+        return typeof permissions.canDocument === "function"
+            ? Boolean(permissions.canDocument(frm, capability))
+            : typeof permissions.can === "function" && Boolean(permissions.can(capability));
+    }
     function editor() { const instance = window.AlmdinaDoorDrawingV3 && window.AlmdinaDoorDrawingV3.Editor; if (!instance) throw new Error("Door Drawing V3 editor is not ready"); return instance; }
-    function open(frm, row, options = {}) { return boot().then(() => editor().open(frm, row, options)).catch(error => { console.error(error); if (window.frappe) frappe.msgprint("تعذر تحميل محرر رسم الدرفة الجديد. أعد تحميل الصفحة ثم حاول مرة أخرى."); return null; }); }
+    function open(frm, row, options = {}) {
+        const readOnly = Boolean(options && options.readOnly);
+        if (!readOnly && !can(frm, "edit_special_drawing")) {
+            if (can(frm, "view_drawing_workspace")) {
+                options = { ...options, readOnly: true };
+            } else {
+                if (window.frappe) frappe.msgprint("ليس لديك صلاحية فتح مساحة رسم الدرفة الخاصة.");
+                return Promise.resolve(null);
+            }
+        }
+        return boot().then(() => editor().open(frm, row, options)).catch(error => { console.error(error); if (window.frappe) frappe.msgprint("تعذر تحميل محرر رسم الدرفة الجديد. أعد تحميل الصفحة ثم حاول مرة أخرى."); return null; });
+    }
     function view(frm, row) { return open(frm, row, { readOnly: true }); }
     function parseDrawing(raw) { try { const parsed = typeof raw === "string" ? JSON.parse(raw) : raw; const document = parsed && parsed.meta && parsed.meta.door_drawing_v3; return document && Array.isArray(document.objects) ? document.objects : []; } catch (error) { return []; } }
 
