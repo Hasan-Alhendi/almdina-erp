@@ -216,14 +216,13 @@ jobs:
           node almdina_erp/tests/test_shape_print.js
 
       - name: Run Door Drawing V3 geometry and architecture regressions
+        shell: bash
         run: |
-          node almdina_erp/tests/js/door_drawing_v3_geometry.test.js
-          node almdina_erp/tests/js/door_drawing_v3_snapping.test.js
-          node almdina_erp/tests/js/door_drawing_v3_handles.test.js
-          node almdina_erp/tests/js/door_drawing_v3_precision_input.test.js
-          node almdina_erp/tests/js/door_drawing_v3_freehand.test.js
-          node almdina_erp/tests/js/door_drawing_v3_stroke_intelligence.test.js
-          node almdina_erp/tests/js/door_drawing_v3_smart_guides.test.js
-          node almdina_erp/tests/js/door_drawing_v3_unified_snap_engine.test.js
-          node almdina_erp/tests/js/door_drawing_v3_text_annotation.test.js
-          node almdina_erp/tests/js/door_drawing_v3_architecture_contract.test.js
+          set -euo pipefail
+          count=0
+          for test_file in almdina_erp/tests/js/door_drawing_v3_*.test.js; do
+            echo "Running ${test_file}"
+            node "${test_file}"
+            count=$((count + 1))
+          done
+          echo "Executed ${count} Door Drawing V3 regression tests"
