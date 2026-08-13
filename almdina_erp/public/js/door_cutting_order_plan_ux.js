@@ -645,6 +645,15 @@
         }
     }
 
+    function applyReadOnlyState(frm) {
+        // The controls module remains the only owner of optimizer field access.
+        if (!frm.fields_dict || !frm.fields_dict["packing_mode"]) return;
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.applyOptimizerFieldAccess === "function") {
+            controls.applyOptimizerFieldAccess(frm);
+        }
+    }
+
     function refreshPlanUX(frm) {
         installStyles();
         applyOptimizerFieldPresentation(frm);

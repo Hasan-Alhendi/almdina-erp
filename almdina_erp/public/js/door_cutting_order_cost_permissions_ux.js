@@ -330,6 +330,7 @@
             const piece = sourcePiece(frm, input.getAttribute("data-piece-name"));
             const editable = canEditInlinePiecePrice(frm, piece);
             input.disabled = !editable;
+            input.setAttribute("aria-label", editable ? __("تعديل السعر") : __("السعر للعرض فقط"));
             if (editable) {
                 input.removeAttribute("readonly");
             } else {
