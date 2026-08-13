@@ -19,16 +19,18 @@ const M = V3.ToolModifierPolicy;
 
 const mouseState = I.createStabilizer("mouse", G.point(0, 0));
 const penState = I.createStabilizer("pen", G.point(0, 0));
-const mousePoint = I.pushStabilized(mouseState, G.point(10, 0), { motionScaleMm: 20 });
-const penPoint = I.pushStabilized(penState, G.point(10, 0), { motionScaleMm: 20 });
-assert.ok(mousePoint.x < penPoint.x, "Mouse preview should suppress hand jitter more aggressively than pen input");
-assert.ok(penPoint.x < 10, "Pen input still receives light stabilization instead of bypassing the shared pipeline");
+const mouseRaw = G.point(10, 0);
+const penRaw = G.point(10, 0);
+const mousePoint = I.pushStabilized(mouseState, mouseRaw, { motionScaleMm: 20 });
+const penPoint = I.pushStabilized(penState, penRaw, { motionScaleMm: 20 });
+assert.deepEqual(mousePoint, mouseRaw, "Mouse preview must not lag behind the hand and reshape the stroke");
+assert.deepEqual(penPoint, penRaw, "Pen preview must remain exactly on the sampled stylus point");
 
-const mouseSeries = I.stabilizeSeries([
+const rawSeries = [
     G.point(0, 0), G.point(10, 2), G.point(20, -2), G.point(30, 1.5), G.point(40, 0),
-], "mouse", { motionScaleMm: 18 });
-assert.deepEqual(mouseSeries[0], G.point(0, 0));
-assert.deepEqual(mouseSeries.at(-1), G.point(40, 0), "Live stabilization must preserve exact gesture endpoints for snapping/connection");
+];
+const mouseSeries = I.stabilizeSeries(rawSeries, "mouse", { motionScaleMm: 18 });
+assert.deepEqual(mouseSeries, rawSeries, "Live preview and committed freehand must use the same geometry");
 
 const roughRightAngle = [];
 for (let x = 0; x <= 100; x += 5) roughRightAngle.push(G.point(x, x % 10 === 0 ? 0.45 : -0.4));
