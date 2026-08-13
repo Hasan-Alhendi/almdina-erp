@@ -45,7 +45,7 @@ close(preferred.height, 50, 0.1);
 
 const east = O.handleWorld(preferred, "e");
 const resize = O.resizeMatrix(preferred, "e", G.point(east.x + Math.cos(Math.PI / 6) * 50, east.y + Math.sin(Math.PI / 6) * 50));
-close(resize.sx, 2, 0.02, "Local east resize must scale along the rotated local X axis");
+close(resize.sx, 1.5, 0.02, "Moving the east handle 50 mm outward should grow a 100 mm frame to 150 mm");
 close(resize.sy, 1, 0.02);
 
 const corner = O.handleWorld(preferred, "ne");
