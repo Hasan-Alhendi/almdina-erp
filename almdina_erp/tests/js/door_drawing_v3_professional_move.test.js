@@ -32,8 +32,8 @@ assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis =
 const left = G.rectangle("left", G.point(0, 100), 50, 50);
 const right = G.rectangle("right", G.point(150, 100), 50, 50);
 const middle = G.rectangle("middle", G.point(300, 100), 50, 50);
-result = P.resolve(doc([left, right, middle]), [middle], -198, 0, { viewportScale: 1 });
-assert.equal(result.dx, -200, "Move should settle exactly between two neighbors when the gaps become equal");
+result = P.resolve(doc([left, right, middle]), [middle], -223, 0, { viewportScale: 1 });
+assert.equal(result.dx, -225, "Move should settle exactly between two neighbors when the gaps become equal");
 assert.ok(result.guides.filter(guide => guide.type === "spacing").length >= 2, "Equal spacing should show both distances");
 
 const a = G.rectangle("a", G.point(0, 0), 50, 50);
