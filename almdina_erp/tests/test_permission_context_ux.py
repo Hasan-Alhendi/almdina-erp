@@ -84,13 +84,17 @@ def test_shared_shell_keeps_desk_and_uses_navigation_context() -> None:
         assert hidden_chrome not in source
 
 
-def test_shop_floor_page_uses_server_context_and_document_capabilities() -> None:
+def test_shop_floor_page_uses_server_context_and_shared_order_form() -> None:
     source = SHOP_FLOOR_PAGE_PATH.read_text(encoding="utf-8")
     assert "get_shop_floor_context" in source
-    assert "document_capabilities" in source
-    assert 'documentCan(detail, "view_cutting_plan")' in source
-    assert 'documentCan(detail, "print_cutting_plan")' in source
-    assert "requestId !== detailRequest" in source
+    assert "get_my_inbox" in source
+    assert "can_start_stage" in source
+    assert "can_handoff_stage" in source
+    assert 'frappe.set_route("Form", "Door Cutting Order", context.order)' in source
+    assert "requestId !== listRequest" in source
+    assert "document_capabilities" not in source
+    assert "buildPlanTabsHtml" not in source
+    assert "renderDetail" not in source
     assert "frappe.user_roles" not in source
     for role in ("Production Manager", "System Manager", "عامل رسم", "عامل CNC"):
         assert role not in source
