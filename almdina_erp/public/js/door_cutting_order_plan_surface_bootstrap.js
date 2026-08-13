@@ -133,7 +133,8 @@
         return modulePromise;
     }
 
-    function renderSurface(frm) {
+    async function renderSurface(frm) {
+        const identity = documentIdentity(frm);
         const presenter = window.AlmdinaDoorCuttingPlanUX;
         const controls = window.AlmdinaPlanControlsUX;
         const tabs = window.AlmdinaPlanTabsUX;
@@ -149,7 +150,8 @@
             throw new Error("AlmdinaPlanContentUX.apply is unavailable");
         }
 
-        presenter.refresh(frm);
+        await Promise.resolve(presenter.refresh(frm));
+        if (!isCurrent(frm, identity)) return false;
         setWrapperOrder(wrapper(frm, "plan_control_actions"), String(frm.doc.name || ""));
         if (controls && typeof controls.apply === "function") {
             controls.apply(frm);
@@ -183,7 +185,8 @@
         await ensureModules();
         if (!isCurrent(frm, identity)) return false;
 
-        const ready = renderSurface(frm);
+        const ready = await renderSurface(frm);
+        if (!isCurrent(frm, identity)) return false;
         if (!ready) {
             throw new Error("Cutting-plan surface remained empty after recovery");
         }

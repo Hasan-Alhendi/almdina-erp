@@ -21,6 +21,9 @@ FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
 PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
+PLAN_SURFACE_BOOTSTRAP = (
+    ROOT / "public" / "js" / "door_cutting_order_plan_surface_bootstrap.js"
+)
 ACTION_GUARD = (
     ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
 )
@@ -212,6 +215,18 @@ class TestFrontendConsolidationContract(unittest.TestCase):
             simplify.index("presenter.refresh(frm)"),
             simplify.index("installApprovalAction(frm, field)"),
         )
+
+    def test_plan_surface_waits_for_stage_context_before_readiness_check(self) -> None:
+        presenter = PLAN_UX.read_text(encoding="utf-8")
+        bootstrap = PLAN_SURFACE_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "return Promise.resolve(context.ensureStageContext(frm)).then(run)",
+            presenter,
+        )
+        self.assertIn("async function renderSurface(frm)", bootstrap)
+        self.assertIn("await Promise.resolve(presenter.refresh(frm))", bootstrap)
+        self.assertIn("const ready = await renderSurface(frm)", bootstrap)
 
     def test_input_policy_uses_public_form_surface_only(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")

@@ -38,7 +38,7 @@ function htmlWrapper(initial = "") {
     };
 }
 
-function buildHarness({ canViewPlan }) {
+function buildHarness({ canViewPlan, asyncPresenter = false }) {
     const actions = htmlWrapper();
     const layout = htmlWrapper();
     const requiredAssets = [];
@@ -91,7 +91,11 @@ function buildHarness({ canViewPlan }) {
             } else if (asset.endsWith("door_cutting_order_plan_ux.js")) {
                 fakeWindow.AlmdinaDoorCuttingPlanUX = {
                     refresh() {
-                        actions.html('<div class="dco-plan-actions-shell"><button class="dco-recalculate-plan">recalc</button></div>');
+                        const render = () => {
+                            actions.html('<div class="dco-plan-actions-shell"><button class="dco-recalculate-plan">recalc</button></div>');
+                            return true;
+                        };
+                        return asyncPresenter ? Promise.resolve().then(render) : render();
                     },
                 };
             } else if (asset.endsWith("door_cutting_order_plan_controls_ux.js")) {
@@ -173,6 +177,24 @@ function buildHarness({ canViewPlan }) {
     assert.ok(
         authorized.timers.length > 0,
         "lazy-loaded bootstrap should also schedule recovery for the active form"
+    );
+
+    const asyncAuthorized = buildHarness({ canViewPlan: true, asyncPresenter: true });
+    const pendingRecovery = asyncAuthorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(
+        asyncAuthorized.frm
+    );
+    assert.equal(
+        asyncAuthorized.actions.content,
+        "",
+        "the asynchronous presenter must start with an empty action surface"
+    );
+    assert.equal(await pendingRecovery, true);
+    assert.match(asyncAuthorized.actions.content, /dco-plan-actions-shell/);
+    assert.ok(
+        asyncAuthorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.surfaceReady(
+            asyncAuthorized.frm
+        ),
+        "surface recovery must wait for stage context before checking action readiness"
     );
 
     const denied = buildHarness({ canViewPlan: false });

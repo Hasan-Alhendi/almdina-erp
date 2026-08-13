@@ -660,6 +660,7 @@
         decorateSections(frm);
         renderSummary(frm);
         renderActions(frm);
+        return true;
     }
 
     function schedulePlanUX(frm) {
@@ -669,14 +670,14 @@
             : null;
         const run = () => {
             if (!context || context.isCurrent(frm, token)) {
-                refreshPlanUX(frm);
+                return refreshPlanUX(frm);
             }
+            return false;
         };
         if (context && typeof context.ensureStageContext === "function") {
-            context.ensureStageContext(frm).then(run);
-            return;
+            return Promise.resolve(context.ensureStageContext(frm)).then(run);
         }
-        run();
+        return Promise.resolve(run());
     }
 
     frappe.ui.form.on("Door Cutting Order", {
