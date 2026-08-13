@@ -19,8 +19,6 @@
     const OPTIMIZER_FIELDS = [
         "packing_mode",
         "cutting_machine_type",
-        "kerf_mm",
-        "trim_margin_mm",
         "optimization_time_limit_sec",
     ];
 
@@ -145,9 +143,8 @@
     }
 
     function applyOptimizerFieldAccess(frm) {
-        // Only the packing-algorithm fields open here, and they answer to the
-        // algorithm capability alone. Everything else on the form stays governed
-        // by the normal edit session.
+        // Only packing-algorithm fields open here (mode/machine/time). Kerf and
+        // trim are ordinary order inputs governed by the edit session.
         const mayEdit = Boolean(
             canTuneCuttingAlgorithm(frm) && can(frm, "edit_optimizer_settings")
         );
@@ -267,6 +264,14 @@
             return false;
         }
         if (!(await preparePlanInputs(frm))) return false;
+
+        const revisionUx = window.AlmdinaOrderRevisionUX;
+        const wasEditing = Boolean(
+            revisionUx && typeof revisionUx.captureEditSessionPresence === "function"
+                ? revisionUx.captureEditSessionPresence(frm)
+                : frm.__almdina_edit_session
+        );
+
         if (!(await persistPendingOrderInputs(frm))) return false;
 
         try {
@@ -278,6 +283,9 @@
             });
             frappe.show_alert({ message: __("تم تحديث خطة القص والنتائج."), indicator: "green" }, 4);
             await frm.reload_doc();
+            if (revisionUx && typeof revisionUx.restorePrimaryAfterPlanEngine === "function") {
+                revisionUx.restorePrimaryAfterPlanEngine(frm, wasEditing);
+            }
             return true;
         } catch (error) {
             console.error("Cutting plan recalculation failed", error);

@@ -621,7 +621,11 @@ class DoorCuttingOrder(Document):
         self._refresh_costs_from_plan(settings, snapshot)
 
     def _mark_plan_for_recalculation(self, settings: Any) -> None:
-        """Invalidate stale layout output while keeping the ordinary save fast."""
+        """Invalidate stale layout output while keeping the ordinary save fast.
+
+        Preserve last known board count and board/cutting money so the customer
+        invoice does not lose material/cutting lines until plan recalculation.
+        """
         self.plan_needs_recalculation = 1
         self.calculated_plan_input_hash = ""
         self.cutting_plan_json = ""
@@ -629,15 +633,23 @@ class DoorCuttingOrder(Document):
 
         if has_dual_plan_field("system_plan_json"):
             self.system_plan_json = ""
-        self.required_boards = 0
-        self.waste_area_m2 = 0
-        self.waste_percent = 0
-        self.mdf_cost_usd = 0
-        self.cutting_cost_usd = 0
-        self.total_cost_usd = 0
         self.packing_method = ""
         self.packing_score = "خطة القص تحتاج إعادة حساب"
         self.engine_version = ENGINE_VERSION
+        boards = cint(self.required_boards)
+        if boards > 0:
+            mdf_cost = boards * flt(self.board_rate_usd)
+            cutting_cost = boards * flt(self.cutting_cost_per_board_usd)
+            self.mdf_cost_usd = round_value(mdf_cost, 3)
+            self.cutting_cost_usd = round_value(cutting_cost, 3)
+            self.total_cost_usd = round_value(
+                mdf_cost + cutting_cost + flt(self.edge_cost_usd),
+                3,
+            )
+        else:
+            self.mdf_cost_usd = 0
+            self.cutting_cost_usd = 0
+            self.total_cost_usd = round_value(flt(self.edge_cost_usd), 3)
         self._calculate_special_shape_pricing(settings)
 
     def _calculate_cutting_plan(

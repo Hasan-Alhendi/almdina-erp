@@ -4,10 +4,10 @@
     const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const CHECK_COLUMNS = [
         { field: "allow_rotation", labelAr: "تدوير", labelEn: "Rotate" },
-        { field: "edge_long_right", labelAr: "طول يمين", labelEn: "Long R" },
-        { field: "edge_long_left", labelAr: "طول يسار", labelEn: "Long L" },
         { field: "edge_width_top", labelAr: "عرض أعلى", labelEn: "Top" },
         { field: "edge_width_bottom", labelAr: "عرض أسفل", labelEn: "Bottom" },
+        { field: "edge_long_right", labelAr: "طول يمين", labelEn: "Long R" },
+        { field: "edge_long_left", labelAr: "طول يسار", labelEn: "Long L" },
     ];
     const EDGE_COLUMNS = CHECK_COLUMNS.slice(1);
     const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);

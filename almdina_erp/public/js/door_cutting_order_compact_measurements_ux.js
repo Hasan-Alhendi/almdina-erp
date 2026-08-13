@@ -3,10 +3,10 @@
 
     const STYLE_ID = "dco-compact-measurements-css";
     const EDGE_LABELS = {
-        edge_long_right: { ar: "قشاط الطول الأيمن", en: "Right long edge" },
-        edge_long_left: { ar: "قشاط الطول الأيسر", en: "Left long edge" },
         edge_width_top: { ar: "قشاط العرض العلوي", en: "Top width edge" },
         edge_width_bottom: { ar: "قشاط العرض السفلي", en: "Bottom width edge" },
+        edge_long_right: { ar: "قشاط الطول الأيمن", en: "Right long edge" },
+        edge_long_left: { ar: "قشاط الطول الأيسر", en: "Left long edge" },
     };
 
     function isArabic() {

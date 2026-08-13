@@ -15,6 +15,9 @@ FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 PLAN_TABS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
 ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
 REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
+PLAN_PERMISSION_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
+)
 
 
 def source(path: Path) -> str:
@@ -105,6 +108,43 @@ def test_cutting_plan_browser_authority_never_depends_on_cost_visibility():
     assert '"view_approved_cutting_plan"' in tabs
     assert '"recalculate_plan"' in controls
     assert '"edit_optimizer_settings"' in controls
+
+
+def test_kerf_and_trim_are_not_optimizer_fields_in_plan_ui():
+    controls = source(CONTROLS_UX)
+    guard = source(ACTION_GUARD_UX)
+    plan = source(PLAN_UX)
+
+    for module in (controls, guard):
+        optimizer_block = module.split("const OPTIMIZER_FIELDS = [", 1)[1].split("];", 1)[0]
+        assert '"kerf_mm"' not in optimizer_block
+        assert '"trim_margin_mm"' not in optimizer_block
+        assert '"packing_mode"' in optimizer_block
+        assert '"cutting_machine_type"' in optimizer_block
+        assert '"optimization_time_limit_sec"' in optimizer_block
+
+    # Recalculation still reads current order geometry values.
+    assert "kerf_mm: frm.doc.kerf_mm" in controls
+    assert "trim_margin_mm: frm.doc.trim_margin_mm" in controls
+
+    # plan_ux must not unlock kerf/trim via optimizer read_only control.
+    read_only_body = plan.split("function applyReadOnlyState(frm)", 1)[1].split(
+        "function refreshPlanUX(frm)", 1
+    )[0]
+    assert '"kerf_mm"' not in read_only_body
+    assert '"trim_margin_mm"' not in read_only_body
+    assert '"packing_mode"' in read_only_body
+
+
+def test_server_treats_kerf_and_trim_as_cut_geometry_not_optimizer_settings():
+    service = source(PLAN_PERMISSION_SERVICE)
+    optimizer_block = service.split("_OPTIMIZER_FIELDS = (", 1)[1].split(")", 1)[0]
+    geometry_block = service.split("_CUT_GEOMETRY_FIELDS = (", 1)[1].split(")", 1)[0]
+    assert '"kerf_mm"' not in optimizer_block
+    assert '"trim_margin_mm"' not in optimizer_block
+    assert '"kerf_mm"' in geometry_block
+    assert '"trim_margin_mm"' in geometry_block
+    assert "Kerf and trim are ordinary order inputs" in service
 
 
 def test_piece_financial_fields_are_protected_at_cost_permission_level():

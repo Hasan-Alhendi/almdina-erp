@@ -39,6 +39,8 @@ def apply_factory_defaults(payload: dict[str, Any]) -> dict[str, Any]:
         values["cutting_cost_per_board_usd"] = flt(
             settings.default_cutting_cost_per_board_usd
         )
+    if _missing(values, "costing_currency"):
+        values["costing_currency"] = "USD"
     if _missing(values, "packing_mode"):
         values["packing_mode"] = settings.default_packing_mode or "Auto"
     return values

@@ -18,8 +18,6 @@
     const OPTIMIZER_FIELDS = [
         "packing_mode",
         "cutting_machine_type",
-        "kerf_mm",
-        "trim_margin_mm",
         "optimization_time_limit_sec",
     ];
     const MEASUREMENT_PRINT_SELECTOR = [

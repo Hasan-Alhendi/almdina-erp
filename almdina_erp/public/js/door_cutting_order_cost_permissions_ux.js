@@ -93,6 +93,29 @@
         frm.__almdina_cost_snapshot_order = null;
     }
 
+    function pendingPriceFields(piece) {
+        if (!piece || !piece.__almdina_pending_price_edit) return null;
+        if (piece.__almdina_pending_price_edit === "clipped") {
+            return {
+                __almdina_pending_price_edit: "clipped",
+                clipped_corner_edge_price_usd: piece.clipped_corner_edge_price_usd,
+                clipped_corner_edge_price_status: piece.clipped_corner_edge_price_status,
+                clipped_corner_edge_price_note: piece.clipped_corner_edge_price_note,
+                clipped_corner_edge_price_set_by: piece.clipped_corner_edge_price_set_by,
+                clipped_corner_edge_price_set_on: piece.clipped_corner_edge_price_set_on,
+            };
+        }
+        return {
+            __almdina_pending_price_edit: "special",
+            special_shape_custom_unit_price_usd: piece.special_shape_custom_unit_price_usd,
+            special_shape_final_unit_price_usd: piece.special_shape_final_unit_price_usd,
+            special_shape_price_status: piece.special_shape_price_status,
+            special_shape_price_note: piece.special_shape_price_note,
+            special_shape_price_approved_by: piece.special_shape_price_approved_by,
+            special_shape_price_approved_on: piece.special_shape_price_approved_on,
+        };
+    }
+
     function mergeSnapshot(frm, snapshot) {
         Object.assign(frm.doc, (snapshot && snapshot.order) || {});
         const byName = new Map(
@@ -100,7 +123,10 @@
         );
         (frm.doc.pieces || []).forEach((piece) => {
             const costPiece = byName.get(piece.name);
-            if (costPiece) Object.assign(piece, costPiece);
+            if (!costPiece) return;
+            const pending = pendingPriceFields(piece);
+            Object.assign(piece, costPiece);
+            if (pending) Object.assign(piece, pending);
         });
         frm.__almdina_cost_snapshot_order = frm.doc.name;
     }
@@ -120,6 +146,41 @@
         );
     }
 
+    function editSessionActive(frm) {
+        const revisionUx = window.AlmdinaOrderRevisionUX;
+        if (
+            revisionUx
+            && typeof revisionUx.captureEditSessionPresence === "function"
+        ) {
+            return Boolean(revisionUx.captureEditSessionPresence(frm));
+        }
+        return Boolean(
+            frm
+            && frm.__almdina_edit_session
+            && !frm.__almdina_edit_session_abandoned
+            && frm.__almdina_edit_session_order === (frm.doc && frm.doc.name)
+        );
+    }
+
+    function canEditInlinePiecePrice(frm, piece) {
+        if (!frm || !piece || !orderIsEditable(frm) || !editSessionActive(frm)) {
+            return false;
+        }
+        if (piece.piece_type === "Special") {
+            const capability = piece.special_shape_price_status === "Approved"
+                ? "edit_special_price"
+                : "approve_special_price";
+            return can(frm, capability);
+        }
+        if (piece.piece_type === "Clipped Corner") {
+            const capability = piece.clipped_corner_edge_price_status === "Priced"
+                ? "edit_special_price"
+                : "approve_special_price";
+            return can(frm, capability);
+        }
+        return false;
+    }
+
     function orderCostFieldsEditable(frm) {
         return Boolean(
             can(frm, "edit_cost_settings")
@@ -128,116 +189,176 @@
     }
 
     function configureCostInputFields(frm) {
+        // Force USD display for Currency inputs regardless of company default (e.g. LBP).
+        if (!frm.doc.costing_currency) {
+            frm.doc.costing_currency = "USD";
+        }
         const visible = can(frm, "view_costs");
         const editable = orderCostFieldsEditable(frm);
         COST_INPUT_FIELDS.forEach(fieldname => {
+            frm.set_df_property(fieldname, "options", "costing_currency");
             frm.set_df_property(fieldname, "hidden", visible ? 0 : 1);
             frm.set_df_property(fieldname, "read_only", editable ? 0 : 1);
+            if (typeof frm.refresh_field === "function") {
+                frm.refresh_field(fieldname);
+            }
         });
     }
 
-    function editSpecialPrice(frm, piece) {
-        if (!orderIsEditable(frm)) {
-            frappe.msgprint(__("افتح الطلب للتعديل أولاً قبل تغيير أسعار القشاط."));
+    function markFormDirty(frm) {
+        if (!frm) return;
+        if (typeof frm.dirty === "function") {
+            frm.dirty();
             return;
         }
-        const approved = piece.special_shape_price_status === "Approved";
-        frappe.prompt(
-            [
-                {
-                    fieldname: "unit_price_usd",
-                    fieldtype: "Currency",
-                    label: __("إجمالي تكلفة قشاط الدرفة الخاصة ($)"),
-                    reqd: 1,
-                    non_negative: 1,
-                    default: Number(
-                        approved
-                            ? piece.special_shape_custom_unit_price_usd
-                            : piece.special_shape_estimated_unit_price_usd
-                    ) || 0,
-                },
-                {
-                    fieldname: "note",
-                    fieldtype: "Small Text",
-                    label: __("ملاحظة التسعير (اختياري)"),
-                    default: piece.special_shape_price_note || "",
-                },
-            ],
-            (values) => {
-                frappe.call({
-                    method: "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price",
-                    args: {
-                        order_name: frm.doc.name,
-                        piece_name: piece.name,
-                        unit_price_usd: values.unit_price_usd,
-                        note: values.note || "",
-                    },
-                    freeze: true,
-                    freeze_message: approved
-                        ? __("جاري تحديث سعر القشاط...")
-                        : __("جاري حفظ سعر قشاط الدرفة الخاصة..."),
-                }).then(() => {
-                    frappe.show_alert({
-                        message: approved
-                            ? __("تم تحديث سعر القشاط.")
-                            : __("تم حفظ سعر قشاط الدرفة الخاصة."),
-                        indicator: "green",
-                    }, 5);
-                    return frm.reload_doc();
-                });
-            },
-            __("تعديل السعر"),
-            __("حفظ السعر")
-        );
+        if (frm.doc) frm.doc.__unsaved = 1;
     }
 
-    function editCutCornerEdgePrice(frm, piece) {
-        if (!orderIsEditable(frm)) {
-            frappe.msgprint(__("افتح الطلب للتعديل أولاً قبل تغيير أسعار القشاط."));
+    function syncLocalInvoiceTotals(frm) {
+        const costUx = window.AlmdinaOrderCostUX;
+        if (costUx && typeof costUx.quoteTotal === "function") {
+            frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm);
+        }
+        if ((frm.doc.pieces || []).some((row) =>
+            row.piece_type === "Special" && row.special_shape_price_status === "Approved"
+        )) {
+            const allApproved = (frm.doc.pieces || [])
+                .filter((row) => row.piece_type === "Special")
+                .every((row) => row.special_shape_price_status === "Approved");
+            frm.doc.customer_quote_status = allApproved ? "Approved" : "Partially Approved";
+        }
+    }
+
+    function applyInlinePriceToPiece(piece, kind, rawValue) {
+        const price = Math.max(0, Number(rawValue) || 0);
+        if (kind === "clipped") {
+            piece.clipped_corner_edge_price_usd = price;
+            piece.clipped_corner_edge_price_status = price > 0 ? "Priced" : "Unpriced";
+            piece.clipped_corner_edge_price_set_by =
+                piece.clipped_corner_edge_price_set_by
+                || (frappe.session && frappe.session.user)
+                || "";
+            piece.clipped_corner_edge_price_set_on =
+                piece.clipped_corner_edge_price_set_on
+                || (frappe.datetime && frappe.datetime.now_datetime
+                    ? frappe.datetime.now_datetime()
+                    : null);
+            piece.__almdina_pending_price_edit = "clipped";
             return;
         }
-        const priced = piece.clipped_corner_edge_price_status === "Priced";
-        frappe.prompt(
-            [
-                {
-                    fieldname: "edge_price_usd",
-                    fieldtype: "Currency",
-                    label: __("تكلفة معالجة قشاط الزاوية المقصوصة ($)"),
-                    reqd: 1,
-                    non_negative: 1,
-                    default: Number(piece.clipped_corner_edge_price_usd) || 0,
-                },
-                {
-                    fieldname: "note",
-                    fieldtype: "Small Text",
-                    label: __("ملاحظة التسعير (اختياري)"),
-                    default: piece.special_shape_price_note || "",
-                },
-            ],
-            (values) => {
-                frappe.call({
+        piece.special_shape_custom_unit_price_usd = price;
+        piece.special_shape_final_unit_price_usd = price;
+        piece.special_shape_price_status = price > 0 ? "Approved" : "Estimated";
+        piece.special_shape_price_approved_by =
+            piece.special_shape_price_approved_by
+            || (frappe.session && frappe.session.user)
+            || "";
+        piece.special_shape_price_approved_on =
+            piece.special_shape_price_approved_on
+            || (frappe.datetime && frappe.datetime.now_datetime
+                ? frappe.datetime.now_datetime()
+                : null);
+        piece.__almdina_pending_price_edit = "special";
+    }
+
+    function refreshInvoiceAfterInlinePrice(frm) {
+        syncLocalInvoiceTotals(frm);
+        const costUx = window.AlmdinaOrderCostUX;
+        if (costUx && typeof costUx.refreshInvoiceSection === "function") {
+            costUx.refreshInvoiceSection(frm);
+            return;
+        }
+        renderAuthorizedCost(frm);
+    }
+
+    function pendingPricePieces(frm) {
+        return (frm.doc.pieces || []).filter((piece) => piece.__almdina_pending_price_edit);
+    }
+
+    function clearPriceOnlyDirty(frm) {
+        if (!frm || !frm.doc) return;
+        if (pendingPricePieces(frm).length) return;
+        frm.doc.__unsaved = 0;
+    }
+
+    async function flushPendingPriceEdits(frm) {
+        const pending = pendingPricePieces(frm);
+        if (!pending.length) return false;
+
+        for (const piece of pending) {
+            if (piece.__almdina_pending_price_edit === "clipped") {
+                await frappe.call({
                     method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
                     args: {
                         order_name: frm.doc.name,
                         piece_name: piece.name,
-                        edge_price_usd: values.edge_price_usd,
-                        note: values.note || "",
+                        edge_price_usd: piece.clipped_corner_edge_price_usd,
+                        note: piece.clipped_corner_edge_price_note || "",
                     },
                     freeze: true,
-                    freeze_message: __("جاري حفظ سعر قشاط الزاوية المقصوصة..."),
-                }).then(() => {
-                    frappe.show_alert({
-                        message: priced
-                            ? __("تم تحديث سعر قشاط الزاوية المقصوصة.")
-                            : __("تم حفظ سعر قشاط الزاوية المقصوصة."),
-                        indicator: "green",
-                    }, 5);
-                    return frm.reload_doc();
+                    freeze_message: __("جاري اعتماد أسعار القشاط..."),
                 });
-            },
-            __("تعديل السعر"),
-            __("حفظ السعر")
-        );
+            } else {
+                await frappe.call({
+                    method: "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price",
+                    args: {
+                        order_name: frm.doc.name,
+                        piece_name: piece.name,
+                        unit_price_usd: piece.special_shape_custom_unit_price_usd,
+                        note: piece.special_shape_price_note || "",
+                    },
+                    freeze: true,
+                    freeze_message: __("جاري اعتماد أسعار القشاط..."),
+                });
+            }
+            delete piece.__almdina_pending_price_edit;
+        }
+
+        frm.__almdinaCostSnapshotPromise = null;
+        frm.__almdinaCostSnapshotContext = null;
+        await loadCostSnapshot(frm);
+        clearPriceOnlyDirty(frm);
+        return true;
+    }
+
+    function bindInlinePriceInputs(frm) {
+        const wrapper = costWrapper(frm);
+        if (!wrapper || !wrapper.find(".dco-cost-shell").length) return;
+
+        wrapper.find(".dco-inline-price-input").each(function syncInlinePriceInput() {
+            const input = this;
+            const piece = sourcePiece(frm, input.getAttribute("data-piece-name"));
+            const editable = canEditInlinePiecePrice(frm, piece);
+            input.disabled = !editable;
+            if (editable) {
+                input.removeAttribute("readonly");
+            } else {
+                input.setAttribute("readonly", "readonly");
+            }
+        });
+
+        wrapper.off(".almdinaInlinePrice");
+        wrapper.on("change.almdinaInlinePrice", ".dco-inline-price-input", function onInlinePriceChange() {
+            const input = this;
+            const piece = sourcePiece(frm, input.getAttribute("data-piece-name"));
+            if (!canEditInlinePiecePrice(frm, piece)) return;
+            applyInlinePriceToPiece(
+                piece,
+                input.getAttribute("data-price-kind"),
+                input.value
+            );
+            markFormDirty(frm);
+            const cell = input.closest(".dco-special-price-cell");
+            if (cell) {
+                const priced = Number(input.value) > 0;
+                cell.classList.toggle("is-unpriced", !priced);
+            }
+            refreshInvoiceAfterInlinePrice(frm);
+            const revisionUx = window.AlmdinaOrderRevisionUX;
+            if (revisionUx && typeof revisionUx.schedulePrimaryActionSync === "function") {
+                revisionUx.schedulePrimaryActionSync(frm);
+            }
+        });
     }
 
     function canUseCostTab(frm) {
@@ -266,40 +387,8 @@
 
         ensurePrintInvoiceButton(frm);
         wrapper.find(".dco-edit-cost-settings").remove();
-
-        wrapper.find(".dco-approve-special-price,.dco-capability-special-price").remove();
-        wrapper.find("[data-special-row]").each(function installPriceAction() {
-            const card = $(this);
-            const piece = sourcePiece(frm, card.attr("data-special-row"));
-            if (!piece) return;
-            const approved = piece.special_shape_price_status === "Approved";
-            const capability = approved ? "edit_special_price" : "approve_special_price";
-            if (!can(frm, capability) || !orderIsEditable(frm)) {
-                return;
-            }
-            const button = $(
-                `<button type="button" class="btn btn-primary btn-xs dco-capability-special-price">${__("تعديل السعر")}</button>`
-            );
-            card.find(".dco-special-price-actions").prepend(button);
-            button.on("click", () => editSpecialPrice(frm, piece));
-        });
-
-        wrapper.find(".dco-capability-cut-corner-price").remove();
-        wrapper.find("[data-cut-corner-row]").each(function installCutCornerPriceAction() {
-            const card = $(this);
-            const piece = sourcePiece(frm, card.attr("data-cut-corner-row"));
-            if (!piece) return;
-            const priced = piece.clipped_corner_edge_price_status === "Priced";
-            const capability = priced ? "edit_special_price" : "approve_special_price";
-            if (!can(frm, capability) || !orderIsEditable(frm)) {
-                return;
-            }
-            const button = $(
-                `<button type="button" class="btn btn-primary btn-xs dco-capability-cut-corner-price">${__("تعديل السعر")}</button>`
-            );
-            card.find(".dco-special-price-actions").prepend(button);
-            button.on("click", () => editCutCornerEdgePrice(frm, piece));
-        });
+        wrapper.find(".dco-approve-special-price,.dco-capability-special-price,.dco-capability-cut-corner-price").remove();
+        bindInlinePriceInputs(frm);
     }
 
     function installActionsAfterRender(frm) {
@@ -427,5 +516,7 @@
         can,
         mergeSnapshot,
         scrubCostData,
+        flushPendingPriceEdits,
+        pendingPricePieces,
     });
 })();

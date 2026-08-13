@@ -93,6 +93,20 @@ def test_cost_ui_hides_and_scrubs_unauthorized_data():
     assert 'can(frm, "view_costs") && can(frm, "print_customer_invoice")' not in source
     assert '"edit_special_price"' in source
     assert '"approve_special_price"' in source
+    assert "bindInlinePriceInputs" in source
+    assert "canEditInlinePiecePrice" in source
+    assert "editSessionActive" in source
+    assert "flushPendingPriceEdits" in source
+    assert "clearPriceOnlyDirty" in source
+    assert 'dco-capability-special-price">${__("تعديل السعر")}' not in source
+    assert "frappe.prompt" not in source
+    assert '__("حفظ السعر")' not in source
+    assert "__almdina_pending_price_edit" in source
+    assert "preserveEditSessionForPriceSave" not in source
+    assert "finalizeAfterPriceSave" not in source
+    assert 'frm.doc.costing_currency = "USD"' in source
+    assert 'set_df_property(fieldname, "options", "costing_currency")' in source
+    assert "return frm.reload_doc();" not in source
     assert "MutationObserver" in source
     assert 'class="btn btn-default btn-sm dco-edit-cost-settings"' not in source
     assert "تعديل إعدادات التكلفة" not in source
@@ -105,11 +119,16 @@ def test_cost_input_fields_live_on_cost_tab():
     schema = json.loads(_source(ORDER_SCHEMA))
     order = schema["field_order"]
     cost_index = order.index("cost_tab")
+    currency_index = order.index("costing_currency")
     board_index = order.index("board_rate_usd")
     cutting_index = order.index("cutting_cost_per_board_usd")
     html_index = order.index("order_cost_invoice_html")
-    assert cost_index < board_index < cutting_index < html_index
+    assert cost_index < currency_index < board_index < cutting_index < html_index
     assert "board_rate_usd" not in order[:order.index("pieces_section")]
+    fields = {field["fieldname"]: field for field in schema["fields"]}
+    assert fields["costing_currency"]["default"] == "USD"
+    assert fields["board_rate_usd"]["options"] == "costing_currency"
+    assert fields["cutting_cost_per_board_usd"]["options"] == "costing_currency"
 
 
 def test_hooks_route_legacy_price_api_to_capability_service():

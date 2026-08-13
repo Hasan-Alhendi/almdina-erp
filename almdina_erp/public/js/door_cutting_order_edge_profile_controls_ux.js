@@ -6,20 +6,6 @@
     const BULK_DEFAULT_VALUE = "__almdina_default__";
     const SIDE_CONFIG = [
         {
-            side: "long_right",
-            selectedField: "edge_long_right",
-            overrideField: "edge_long_right_type_override",
-            labelAr: "الطول الأيمن",
-            labelEn: "Right long edge",
-        },
-        {
-            side: "long_left",
-            selectedField: "edge_long_left",
-            overrideField: "edge_long_left_type_override",
-            labelAr: "الطول الأيسر",
-            labelEn: "Left long edge",
-        },
-        {
             side: "width_top",
             selectedField: "edge_width_top",
             overrideField: "edge_width_top_type_override",
@@ -32,6 +18,20 @@
             overrideField: "edge_width_bottom_type_override",
             labelAr: "العرض السفلي",
             labelEn: "Bottom width edge",
+        },
+        {
+            side: "long_right",
+            selectedField: "edge_long_right",
+            overrideField: "edge_long_right_type_override",
+            labelAr: "الطول الأيمن",
+            labelEn: "Right long edge",
+        },
+        {
+            side: "long_left",
+            selectedField: "edge_long_left",
+            overrideField: "edge_long_left_type_override",
+            labelAr: "الطول الأيسر",
+            labelEn: "Left long edge",
         },
     ];
     let activePopover = null;

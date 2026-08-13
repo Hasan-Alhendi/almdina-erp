@@ -603,7 +603,11 @@ ${frm.doc.order_notes ? `<div class="notes"><b>ملاحظات:</b> ${esc(frm.doc
                     callback(response) {
                         if (!response.exc) {
                             frappe.show_alert({ message: "تم اعتماد السعر الشامل وتحديث عرض الزبون.", indicator: "green" }, 5);
-                            frm.reload_doc();
+                            if (window.AlmdinaCostPermissionsUX && typeof window.AlmdinaCostPermissionsUX.apply === "function") {
+                                window.AlmdinaCostPermissionsUX.apply(frm);
+                            } else {
+                                frm.reload_doc();
+                            }
                         }
                     },
                 });

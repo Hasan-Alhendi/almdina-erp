@@ -39,6 +39,10 @@ def test_cost_presenter_is_loaded_without_reintroducing_role_gates() -> None:
     assert "order_cost_invoice_html" in presenter
     assert "dco-cost-shell" in presenter
     assert "invoiceLines" in presenter
+    assert "dco-inline-price-input" in presenter
+    assert "refreshInvoiceSection" in presenter
+    assert "stalePlanNoticeHtml" in presenter
+    assert "plan_needs_recalculation" in presenter
     assert "frappe.user_roles" not in presenter
     assert "Accounts Management" not in presenter
     assert "System Manager" not in presenter

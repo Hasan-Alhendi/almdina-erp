@@ -126,6 +126,13 @@ class PlanDoorCuttingOrder(CostingDoorCuttingOrder):
 
         if has_dual_plan_field("system_plan_json"):
             self.system_plan_json = ""
+        boards = cint(self.required_boards)
+        if boards > 0:
+            self._refresh_costs_from_stored_summary(settings)
+            return
+        self.mdf_cost_usd = 0
+        self.cutting_cost_usd = 0
+        self.total_cost_usd = flt(self.edge_cost_usd)
         self._calculate_special_shape_pricing(settings)
 
     def _calculate_cutting_plan(self, settings: Any, input_fingerprint: str) -> None:

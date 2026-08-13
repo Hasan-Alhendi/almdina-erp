@@ -101,10 +101,10 @@ def test_rotation_and_each_edge_side_have_independent_select_all_controls():
     source = KEYBOARD_COLUMNS_JS.read_text(encoding="utf-8")
     for fieldname in (
         "allow_rotation",
-        "edge_long_right",
-        "edge_long_left",
         "edge_width_top",
         "edge_width_bottom",
+        "edge_long_right",
+        "edge_long_left",
     ):
         assert f'field: "{fieldname}"' in source
         assert f'headerCheckbox("{fieldname}")' in source or fieldname in source
@@ -119,6 +119,28 @@ def test_rotation_and_each_edge_side_have_independent_select_all_controls():
     ]
     missing = [fragment for fragment in required if fragment not in source]
     assert not missing, f"Missing select-all fragments: {missing}"
+
+
+def test_piece_row_shows_width_edge_toggles_before_length_edges():
+    operator = UX_JS.read_text(encoding="utf-8")
+    keyboard = KEYBOARD_COLUMNS_JS.read_text(encoding="utf-8")
+    edge_block = operator.split('class="dco-edge-buttons"', 1)[1].split("</div>", 1)[0]
+    width_top = edge_block.index('toggle("edge_width_top"')
+    width_bottom = edge_block.index('toggle("edge_width_bottom"')
+    long_right = edge_block.index('toggle("edge_long_right"')
+    long_left = edge_block.index('toggle("edge_long_left"')
+    assert width_top < width_bottom < long_right < long_left
+
+    columns_block = keyboard.split("const CHECK_COLUMNS = [", 1)[1].split("];", 1)[0]
+    assert columns_block.index('field: "edge_width_top"') < columns_block.index(
+        'field: "edge_width_bottom"'
+    )
+    assert columns_block.index('field: "edge_width_bottom"') < columns_block.index(
+        'field: "edge_long_right"'
+    )
+    assert columns_block.index('field: "edge_long_right"') < columns_block.index(
+        'field: "edge_long_left"'
+    )
 
 
 def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logic():
