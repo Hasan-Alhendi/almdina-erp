@@ -116,26 +116,6 @@
         });
     }
 
-    function protectSpecialDrawingEditor(frm) {
-        const editor = window.AlmdinaSpecialShapeEditor;
-        if (!editor || editor.__almdinaPermissionGuarded || typeof editor.open !== "function") return;
-
-        const originalOpen = editor.open.bind(editor);
-        editor.open = (targetFrm, row, options = {}) => {
-            const activeFrm = targetFrm || window.cur_frm || frm;
-            const readOnly = Boolean(options && options.readOnly);
-            if (readOnly || can(activeFrm, "edit_special_drawing")) {
-                return originalOpen(activeFrm, row, options);
-            }
-            if (can(activeFrm, "view_drawing_workspace")) {
-                return originalOpen(activeFrm, row, { ...options, readOnly: true });
-            }
-            deny("ليس لديك صلاحية فتح مساحة رسم الدرفة الخاصة.");
-            return undefined;
-        };
-        editor.__almdinaPermissionGuarded = true;
-    }
-
     function protectMeasurementApi(frm) {
         const actions = window.AlmdinaMeasurementActions;
         if (!actions || actions.__almdinaPermissionGuarded || typeof actions.print !== "function") return;
@@ -220,7 +200,6 @@
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         protectPlanActions(frm);
         protectMeasurementPrint(frm);
-        protectSpecialDrawingEditor(frm);
         protectMeasurementApi(frm);
         protectUnifiedPrintApi(frm);
         protectPlanPrintApis(frm);
