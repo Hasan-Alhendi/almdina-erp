@@ -66,6 +66,27 @@
         layer.appendChild(group);
     }
 
+    function geometrySegmentGuide(c, layer, guide) {
+        if (!guide.targetSegment || !guide.targetSegment.start || !guide.targetSegment.end) return;
+        let a = screen(c, guide.targetSegment.start);
+        let b = screen(c, guide.targetSegment.end);
+        if (guide.type === "geometry-line") {
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const length = Math.max(0.001, Math.hypot(dx, dy));
+            const ux = dx / length;
+            const uy = dy / length;
+            a = { x: a.x - ux * 34, y: a.y - uy * 34 };
+            b = { x: b.x + ux * 34, y: b.y + uy * 34 };
+        }
+        const cls = guide.type === "geometry-line" ? "ddv3-move-guide-collinear" : "ddv3-move-guide-surface";
+        layer.appendChild(svg("line", { class: `ddv3-move-guide ${cls}`, x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
+        if (guide.point) {
+            const point = screen(c, guide.point);
+            layer.appendChild(svg("circle", { class: "ddv3-move-surface-point", cx: point.x, cy: point.y, r: 4 }));
+        }
+    }
+
     function spacingGuide(c, layer, guide) {
         let a, b;
         if (guide.axis === "x") {
@@ -75,8 +96,10 @@
             a = screen(c, G.point(guide.at, guide.from));
             b = screen(c, G.point(guide.at, guide.to));
         }
-        const cls = guide.type === "spacing-reference" ? " is-reference" : "";
-        const group = svg("g", { class: `ddv3-move-spacing${cls}` });
+        const classes = ["ddv3-move-spacing"];
+        if (guide.type === "spacing-reference") classes.push("is-reference");
+        if (guide.series || guide.repeated) classes.push("is-series");
+        const group = svg("g", { class: classes.join(" ") });
         group.appendChild(svg("line", { class: "ddv3-move-spacing-line", x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
         if (guide.axis === "x") {
             group.appendChild(svg("line", { class: "ddv3-move-spacing-tick", x1: a.x, y1: a.y - 5, x2: a.x, y2: a.y + 5 }));
@@ -89,6 +112,19 @@
         label.textContent = fmt(guide.distanceMm);
         group.appendChild(label);
         layer.appendChild(group);
+    }
+
+    function assistLabel(c, layer, guide) {
+        if (!guide.point || !guide.text) return;
+        const point = screen(c, guide.point);
+        const label = svg("text", {
+            class: `ddv3-move-assist-label is-${String(guide.tone || "default")}`,
+            x: point.x + 11,
+            y: point.y - 12,
+            direction: "rtl",
+        });
+        label.textContent = String(guide.text);
+        layer.appendChild(label);
     }
 
     function axisGuide(c, layer, guide) {
@@ -111,7 +147,9 @@
         state.guides.forEach(guide => {
             if (guide.type === "alignment") alignmentGuide(c, layer, guide);
             else if (guide.type === "geometry-point") geometryPointGuide(c, layer, guide);
+            else if (guide.type === "geometry-segment" || guide.type === "geometry-line") geometrySegmentGuide(c, layer, guide);
             else if (guide.type === "spacing" || guide.type === "spacing-reference") spacingGuide(c, layer, guide);
+            else if (guide.type === "assist-label") assistLabel(c, layer, guide);
             else if (guide.type === "axis-lock") axisGuide(c, layer, guide);
         });
     }
