@@ -56,6 +56,16 @@
         }
     }
 
+    function geometryPointGuide(c, layer, guide) {
+        if (!guide.point) return;
+        const point = screen(c, guide.point);
+        const group = svg("g", { class: `ddv3-move-point-snap is-${String(guide.kind || "point")}` });
+        group.appendChild(svg("circle", { cx: point.x, cy: point.y, r: 5 }));
+        group.appendChild(svg("line", { x1: point.x - 8, y1: point.y, x2: point.x + 8, y2: point.y }));
+        group.appendChild(svg("line", { x1: point.x, y1: point.y - 8, x2: point.x, y2: point.y + 8 }));
+        layer.appendChild(group);
+    }
+
     function spacingGuide(c, layer, guide) {
         let a, b;
         if (guide.axis === "x") {
@@ -100,6 +110,7 @@
         if (!state || !Array.isArray(state.guides)) return;
         state.guides.forEach(guide => {
             if (guide.type === "alignment") alignmentGuide(c, layer, guide);
+            else if (guide.type === "geometry-point") geometryPointGuide(c, layer, guide);
             else if (guide.type === "spacing" || guide.type === "spacing-reference") spacingGuide(c, layer, guide);
             else if (guide.type === "axis-lock") axisGuide(c, layer, guide);
         });
