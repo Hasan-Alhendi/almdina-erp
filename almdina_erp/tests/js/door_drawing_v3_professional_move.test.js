@@ -28,9 +28,23 @@ function doc(objects) {
 const moving = G.rectangle("moving", G.point(100, 100), 50, 50);
 const aligned = G.rectangle("aligned", G.point(300, 260), 70, 60);
 let result = P.resolve(doc([moving, aligned]), [moving], 198, 158, { viewportScale: 1 });
-assert.equal(result.dx, 200, "Move should snap the moving left edge to the target left edge");
-assert.equal(result.dy, 160, "Move should snap the moving bottom edge to the target bottom edge");
+assert.equal(result.dx, 200, "Corner capture should settle the moving left edge onto the target left edge");
+assert.equal(result.dy, 160, "Corner capture should settle the moving bottom edge onto the target bottom edge");
+assert.equal(result.geometryCandidate && result.geometryCandidate.kind, "endpoint", "A near-exact corner relation should outrank generic box alignment");
+assert.ok(result.guides.some(guide => guide.type === "geometry-point"), "Corner capture should render one precise geometry-point marker");
+
+const alignedX = G.rectangle("aligned-x", G.point(300, 500), 70, 60);
+result = P.resolve(doc([moving, alignedX]), [moving], 198, 0, { viewportScale: 1 });
+assert.equal(result.dx, 200, "Single-axis X alignment should remain available when no point candidate is near");
+assert.equal(result.dy, 0);
+assert.equal(result.geometryCandidate, null);
 assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "x"));
+
+const alignedY = G.rectangle("aligned-y", G.point(600, 260), 70, 60);
+result = P.resolve(doc([moving, alignedY]), [moving], 0, 158, { viewportScale: 1 });
+assert.equal(result.dx, 0);
+assert.equal(result.dy, 160, "Single-axis Y alignment should remain available when no point candidate is near");
+assert.equal(result.geometryCandidate, null);
 assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "y"));
 
 const left = G.rectangle("left", G.point(0, 100), 50, 50);
