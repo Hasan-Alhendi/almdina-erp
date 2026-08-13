@@ -34,6 +34,7 @@ DOCUMENT_PRINT = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 )
 SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
+SPECIAL_SHAPE_UX = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 
 
 class TestFrontendConsolidationContract(unittest.TestCase):
@@ -201,6 +202,22 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn('frm.set_df_property(fieldname, "read_only"', controls)
         self.assertNotIn('frm.set_df_property(fieldname, "read_only"', presenter)
         self.assertNotIn('frm.set_df_property(fieldname, "read_only"', guard)
+
+    def test_plan_presenter_calls_the_optimizer_access_owner_by_its_current_name(self) -> None:
+        presenter = PLAN_UX.read_text(encoding="utf-8")
+
+        self.assertIn("function applyReadOnlyState(frm)", presenter)
+        self.assertEqual(presenter.count("applyReadOnlyState(frm)"), 3)
+        self.assertNotIn("applyOptimizerFieldPresentation", presenter)
+
+    def test_frozen_special_shape_facade_enforces_its_own_permission(self) -> None:
+        editor = SPECIAL_SHAPE_UX.read_text(encoding="utf-8")
+        guard = ACTION_GUARD.read_text(encoding="utf-8")
+
+        self.assertIn('can(frm, "edit_special_drawing")', editor)
+        self.assertIn('can(frm, "view_drawing_workspace")', editor)
+        self.assertIn("window.AlmdinaSpecialShapeEditor = Object.freeze(facade)", editor)
+        self.assertNotIn("editor.open =", guard)
 
     def test_plan_action_control_stays_in_frappe_native_layout(self) -> None:
         content = PLAN_CONTENT.read_text(encoding="utf-8")
