@@ -15,6 +15,7 @@
         circle: 0.92,
         arc: 0.94,
     });
+    const SAMPLE_FIDELITY_FACTOR = 0.35;
 
     function windowTurn(points, index, radius = 2) {
         const left = Math.max(0, index - radius);
@@ -114,12 +115,31 @@
 
         // Fundamental UX contract for order-entry staff:
         // the freehand pen NEVER redraws, straightens, smooths, simplifies,
-        // orthogonalizes, segments, or converts the user's stroke. Intelligence
-        // may assist pointer capture at endpoints, but committed geometry remains
-        // the sampled stroke exactly as drawn.
+        // orthogonalizes, segments, or converts the user's stroke.
         return faithfulPath(raw, options);
     }
 
+    function pushFaithful(state, rawPoint) {
+        const point = G.point(rawPoint && rawPoint.x, rawPoint && rawPoint.y);
+        if (state && typeof state === "object") state.point = point;
+        return point;
+    }
+
+    function stabilizeFaithfully(points) {
+        return F.dedupe(points).map(point => G.point(point.x, point.y));
+    }
+
+    function appendFaithfulSample(points, point, minSampleMm = F.DEFAULTS.minSampleMm) {
+        const requested = Math.max(G.EPSILON_MM, Number(minSampleMm) || F.DEFAULTS.minSampleMm);
+        return F.appendSample(points, point, Math.max(G.EPSILON_MM, requested * SAMPLE_FIDELITY_FACTOR));
+    }
+
+    // SmartPen is loaded after this module. It therefore receives denser raw samples
+    // and an identity live stabilizer, so the preview and the committed path match.
+    root.SmartFreehandPolicy = Object.freeze({
+        ...F,
+        appendSample: appendFaithfulSample,
+    });
     root.SmartStrokeIntelligence = Object.freeze({
         ...Base,
         windowTurn,
@@ -128,15 +148,21 @@
         faithfulPoints,
         faithfulPath,
         primitiveIsUnambiguous,
+        pushStabilized: pushFaithful,
+        stabilizeSeries: stabilizeFaithfully,
         interpret,
     });
     root.SmartStrokeCornerGuard = Object.freeze({
         PRIMITIVE_CONFIDENCE,
+        SAMPLE_FIDELITY_FACTOR,
         windowTurn,
         strongestCorner,
         sharpLineCorner,
         faithfulPoints,
         faithfulPath,
         primitiveIsUnambiguous,
+        pushFaithful,
+        stabilizeFaithfully,
+        appendFaithfulSample,
     });
 })();
