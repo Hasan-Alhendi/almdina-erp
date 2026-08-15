@@ -29,7 +29,8 @@
         ["إعادة حساب خطة القص", 10],
         ["إعادة للمسودة", 35],
         ["إرجاع لمرحلة سابقة", 36],
-        ["دورة الطلب", 40],
+        ["نسخ الطلب", 70],
+        ["إلغاء الطلب", 90],
         ["عرض", 50],
     ]);
     const ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"]);
@@ -220,6 +221,16 @@
                 outline-offset:2px!important;
             }
 
+            .page-head.dco-stable-actions-head .custom-actions {
+                min-height:34px!important;
+                transition:opacity .08s linear!important;
+            }
+            .page-head.dco-stable-actions-head.dco-actions-settling .custom-actions {
+                visibility:hidden!important;
+                opacity:0!important;
+                pointer-events:none!important;
+            }
+
             @media(max-width:1200px){
                 .page-head.dco-stable-actions-head .page-actions {
                     max-height:none!important;
@@ -408,6 +419,29 @@
         });
     }
 
+    function toolbarIdentity(frm) {
+        if (!frm || !frm.doc) return "";
+        return [
+            frm.doctype || frm.doc.doctype || "",
+            frm.doc.name || "__new__",
+            Number(frm._almdinaDocumentContextGeneration || 0),
+        ].join("::");
+    }
+
+    function beginActionSettle(frm, head) {
+        if (!head) return;
+        const identity = toolbarIdentity(frm);
+        if (head.dataset.almdinaActionsIdentity === identity) return;
+        head.dataset.almdinaActionsIdentity = identity;
+        head.classList.add("dco-stable-actions-head", "dco-actions-settling");
+    }
+
+    function revealActions(frm) {
+        const head = pageHead(frm);
+        if (!head || head.dataset.almdinaActionsIdentity !== toolbarIdentity(frm)) return;
+        head.classList.remove("dco-actions-settling");
+    }
+
     function reconcile(frm) {
         installStyles();
         reconcileMeasurementToolbar(frm);
@@ -443,16 +477,35 @@
     }
 
     function schedule(frm) {
+        installStyles();
+        beginActionSettle(frm, pageHead(frm));
         reconcile(frm);
         observe(frm);
-        [0, 80, 250, 650, 1200].forEach(delay => scheduleDelay(frm, `toolbar-${delay}`, () => {
+        [0, 180].forEach(delay => scheduleDelay(frm, `toolbar-${delay}`, () => {
             reconcile(frm);
             observe(frm);
         }, delay));
+        // Never leave actions hidden if a remote surface fails. The normal reveal
+        // happens much earlier through the surface-settled event.
+        scheduleDelay(frm, "toolbar-reveal-failsafe", () => {
+            reconcile(frm);
+            revealActions(frm);
+        }, 3500);
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
     });
+
+    if (typeof window.addEventListener === "function") {
+        window.addEventListener("almdina:surfaces-settled", (event) => {
+            const frm = event.detail && event.detail.frm;
+            if (!frm || frm !== window.cur_frm) return;
+            scheduleFrame(frm, "toolbar-final-reveal", () => {
+                reconcile(frm);
+                revealActions(frm);
+            });
+        });
+    }
 })();
