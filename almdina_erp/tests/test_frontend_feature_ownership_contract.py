@@ -27,8 +27,19 @@ ORDER_ENTRY_SCRIPTS = (
     "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
 )
 
+EDGE_BANDING_SCRIPTS = (
+    "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
+    "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js",
+    "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_double_click_guard.js",
+    "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js",
+    "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
+)
+
 OLD_ORDER_ENTRY_PATHS = tuple(
     f"public/js/{Path(script).name}" for script in ORDER_ENTRY_SCRIPTS
+)
+OLD_EDGE_BANDING_PATHS = tuple(
+    f"public/js/{Path(script).name}" for script in EDGE_BANDING_SCRIPTS
 )
 
 
@@ -87,6 +98,33 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
                 f'"{old_path}"',
                 hooks,
                 f"Retired root asset path still loaded: {old_path}",
+            )
+
+    def test_edge_banding_batch_has_canonical_feature_paths(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        positions = []
+
+        for script in EDGE_BANDING_SCRIPTS:
+            source = ROOT / script
+            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
+            self.assertEqual(
+                hooks.count(f'"{script}"'),
+                1,
+                f"{script} must have one canonical Door Cutting Order asset owner",
+            )
+            positions.append(hooks.index(f'"{script}"'))
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "Edge Banding load order changed during migration",
+        )
+
+        for old_path in OLD_EDGE_BANDING_PATHS:
+            self.assertNotIn(
+                f'"{old_path}"',
+                hooks,
+                f"Retired root edge-banding asset path still loaded: {old_path}",
             )
 
 
