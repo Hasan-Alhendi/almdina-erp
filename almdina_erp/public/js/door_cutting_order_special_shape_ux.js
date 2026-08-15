@@ -18,6 +18,7 @@
     ]);
     const SCRIPTS = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v3/domain/geometry.js",
+        "/assets/almdina_erp/js/door_drawing_v3/domain/shape_preserving_stroke_domain.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/document.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/smart_path_domain.js",
         "/assets/almdina_erp/js/door_drawing_v3/domain/bezier_path_domain.js",
@@ -44,6 +45,7 @@
         "/assets/almdina_erp/js/door_drawing_v3/application/shape_handles.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/precision_input.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_freehand_policy.js",
+        "/assets/almdina_erp/js/door_drawing_v3/application/adaptive_stroke_cleaner.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_stroke_intelligence.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_stroke_corner_guard.js",
         "/assets/almdina_erp/js/door_drawing_v3/application/smart_suggestion_policy.js",
@@ -115,7 +117,7 @@
                 return Promise.resolve(null);
             }
         }
-        return boot().then(() => editor().open(frm, row, options)).catch(error => { console.error(error); if (window.frappe) frappe.msgprint("تعذر تحميل محرر رسم الدرفة الجديد. أعد تحميل الصفحة ثم حاول مرة أخرى."); return null; });
+        return boot().then(() => editor().open(frm, row, options)).catch(error => { console.error(error); if (window.frappe) frappe.msgprint("تعذر تحميل محرر الرسم الجديد. أعد تحميل الصفحة ثم حاول مرة أخرى."); return null; });
     }
     function view(frm, row) { return open(frm, row, { readOnly: true }); }
     function parseDrawing(raw) { try { const parsed = typeof raw === "string" ? JSON.parse(raw) : raw; const document = parsed && parsed.meta && parsed.meta.door_drawing_v3; return document && Array.isArray(document.objects) ? document.objects : []; } catch (error) { return []; } }
@@ -159,6 +161,9 @@
         __doorDrawingV3MixedStrokeRecognition: true,
         __doorDrawingV3SharpCornerRecognition: true,
         __doorDrawingV3NonDestructiveSuggestions: true,
+        __doorDrawingV3ShapePreservingCleaner: true,
+        __doorDrawingV3LocalStraightening: true,
+        __doorDrawingV3SmartCleanUndo: true,
         __doorDrawingV3PersistentTools: true,
         __doorDrawingV3ModifierConstraints: true,
         __doorDrawingV3TemporarySelect: true,
