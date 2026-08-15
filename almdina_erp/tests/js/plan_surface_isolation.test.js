@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-    path.resolve(__dirname, "../../public/js/door_cutting_order_plan_surface_bootstrap.js"),
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"),
     "utf8"
 );
 
@@ -176,11 +176,11 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
     assert.deepEqual(
         authorized.requiredAssets,
         [
-            "/assets/almdina_erp/js/door_cutting_order_cutting_plan_renderer.js",
-            "/assets/almdina_erp/js/door_cutting_order_plan_ux.js",
-            "/assets/almdina_erp/js/door_cutting_order_plan_controls_ux.js",
-            "/assets/almdina_erp/js/door_cutting_order_plan_tabs_ux.js",
-            "/assets/almdina_erp/js/door_cutting_order_plan_content_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
+            "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
+            "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
         ]
     );
     assert.ok(authorized.requestedCapabilities.includes("view_cutting_plan"));
