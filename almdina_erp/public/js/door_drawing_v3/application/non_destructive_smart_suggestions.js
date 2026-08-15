@@ -25,6 +25,27 @@
         return true;
     }
 
+    function resetCompetingPenState(c) {
+        if (!c) return false;
+        const transientKeys = [
+            "bezierPathDraft",
+            "bezierPenGesture",
+            "bezierGesture",
+            "vectorPathDraft",
+            "vectorGesture",
+            "vectorMarquee",
+            "vectorSnapState",
+            "vectorActiveTranslation",
+            "previewObject",
+        ];
+        let changed = false;
+        transientKeys.forEach(key => {
+            if (c[key] !== null && c[key] !== undefined) changed = true;
+            c[key] = null;
+        });
+        return changed;
+    }
+
     function execute(c, document, label) {
         c.history.execute(document, label);
         c.dirty = true;
@@ -187,8 +208,6 @@
         const rawObject = freehandPathObject(points);
         if (!rawObject) return null;
 
-        // Keep the exact hand stroke as a real undo state. The smart reconstruction
-        // is a second history step and never destroys the source gesture.
         const rawDocument = D.addObject(c.history.current(), rawObject);
         c.history.execute(rawDocument, "Draw freehand stroke");
 
@@ -259,7 +278,6 @@
         c.tool = "pen";
         render(c);
 
-        // Primitive recognition is suggestion-only. It never owns the committed stroke.
         propose(c, committed.finalObject, points, options, closeReady);
         return true;
     }
@@ -297,6 +315,7 @@
 
         const onPointerDown = event => {
             if (c.readOnly || c.tool !== "pen" || c.spaceHeld || event.button !== 0) return;
+            resetCompetingPenState(c);
             clearSuggestion(c);
         };
         const onPointerMove = event => {
@@ -327,7 +346,8 @@
                 return;
             }
             const tool = event.target.closest && event.target.closest("[data-ddv3-tool]");
-            if (tool && tool.dataset.ddv3Tool !== "pen") clearSuggestion(c);
+            if (tool && tool.dataset.ddv3Tool === "pen") resetCompetingPenState(c);
+            else if (tool) clearSuggestion(c);
         };
 
         window.addEventListener("pointerdown", onPointerDown, true);
@@ -355,6 +375,7 @@
     });
     root.NonDestructiveSmartSuggestions = Object.freeze({
         clearSuggestion,
+        resetCompetingPenState,
         closeCandidate,
         moveFreehand,
         finishFreehand,
