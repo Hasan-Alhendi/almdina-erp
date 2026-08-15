@@ -13,11 +13,20 @@ def source(path: str) -> str:
 
 def test_operational_workers_keep_assigned_scope_despite_adjacent_grants():
     permissions = source("permissions.py")
+    authorization = source(
+        "almdina_erp/domain/security/authorization.py"
+    )
+    matrix = source(
+        "almdina_erp/application/security/permission_matrix.py"
+    )
     predicate = permissions.split("def _requires_assigned_scope", 1)[1].split(
         "def _pre_production_status_sql", 1
     )[0]
 
-    assert "PRODUCTION_SUPERVISOR_CAPABILITIES" in permissions
+    assert "VIEW_ALL_ORDERS = \"view_all_orders\"" in authorization
+    assert "Capability.VIEW_ALL_ORDERS" in matrix
+    assert "frozenset({Capability.VIEW_ALL_ORDERS})" in permissions
+    assert "PRODUCTION_SUPERVISOR_CAPABILITIES" not in permissions
     assert "REPORTING_CAPABILITIES" not in permissions
     assert "_FLOOR_WORKER_CAPABILITIES | _WORKER_SCOPED_CAPABILITIES" in predicate
     assert predicate.index("_SCOPE_OVERRIDING_CAPABILITIES") < predicate.index(

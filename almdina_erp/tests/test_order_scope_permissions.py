@@ -28,7 +28,7 @@ class TestOrderScopePermissions(unittest.TestCase):
                 permissions._requires_assigned_scope("worker@example.com")
             )
 
-    def test_cost_and_supervisor_grants_open_broad_order_scope(self) -> None:
+    def test_adjacent_and_supervisor_grants_do_not_open_broad_scope(self) -> None:
         for capability in (
             Capability.VIEW_COSTS,
             Capability.EDIT_COST_SETTINGS,
@@ -45,11 +45,27 @@ class TestOrderScopePermissions(unittest.TestCase):
                     "doctype_has_capability",
                     side_effect=self.capability_checker(granted),
                 ):
-                    self.assertFalse(
+                    self.assertTrue(
                         permissions._requires_assigned_scope(
                             "supervisor@example.com"
                         )
                     )
+
+    def test_explicit_global_order_grant_opens_broad_scope(self) -> None:
+        granted = {
+            Capability.VIEW_ORDERS,
+            Capability.START_ASSIGNED_STAGE,
+            Capability.REASSIGN_WORKER,
+            Capability.VIEW_ALL_ORDERS,
+        }
+        with patch.object(
+            permissions,
+            "doctype_has_capability",
+            side_effect=self.capability_checker(granted),
+        ):
+            self.assertFalse(
+                permissions._requires_assigned_scope("manager@example.com")
+            )
 
     def test_master_data_and_permission_admin_do_not_expand_operator_scope(self) -> None:
         granted = {

@@ -10,7 +10,6 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     PLANNING_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
-    PRODUCTION_SUPERVISOR_CAPABILITIES,
     Capability,
 )
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
@@ -30,10 +29,10 @@ _ORDER_AUTHORING_CAPABILITIES = frozenset(
         Capability.SUBMIT_ORDER,
     }
 )
-# Only explicit shop-floor supervision grants widen operational order scope.
-# Cost, reporting, approval, or authoring grants must never make an operator see
-# every worker's assignments.
-_SCOPE_OVERRIDING_CAPABILITIES = frozenset(PRODUCTION_SUPERVISOR_CAPABILITIES)
+# Global order visibility is independent from every operational action grant.
+# Supervising, dispatching, reassigning, reporting, or editing must never widen
+# an operator's data scope unless this dedicated capability is explicitly set.
+_SCOPE_OVERRIDING_CAPABILITIES = frozenset({Capability.VIEW_ALL_ORDERS})
 _FLOOR_WORKER_CAPABILITIES = frozenset(
     {
         Capability.START_ASSIGNED_STAGE,

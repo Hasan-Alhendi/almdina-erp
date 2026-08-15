@@ -51,6 +51,11 @@ def _presentation(label: str, description: str, risk: str = "normal") -> dict[st
 
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
+    Capability.VIEW_ALL_ORDERS: _presentation(
+        "عرض جميع الطلبات",
+        "تجاوز نطاق الإسناد وعرض طلبات جميع العاملين. تُمنح للإدارة المخولة فقط.",
+        "critical",
+    ),
     Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
     Capability.EDIT_ORDER: _presentation(
         "تعديل الطلب",
