@@ -47,6 +47,22 @@ CUTTING_PLAN_SCRIPTS = (
     "public/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
 )
 
+COSTING_SCRIPTS = (
+    "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
+    "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js",
+    "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
+    "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
+    "public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js",
+)
+
+PRINTING_SCRIPTS = (
+    "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
+    "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
+    "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js",
+    "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
+    "public/js/door_cutting_order/printing/door_cutting_order_document_compactness_ux.js",
+)
+
 OLD_ORDER_ENTRY_PATHS = tuple(
     f"public/js/{Path(script).name}" for script in ORDER_ENTRY_SCRIPTS
 )
@@ -55,6 +71,12 @@ OLD_EDGE_BANDING_PATHS = tuple(
 )
 OLD_CUTTING_PLAN_PATHS = tuple(
     f"public/js/{Path(script).name}" for script in CUTTING_PLAN_SCRIPTS
+)
+OLD_COSTING_PATHS = tuple(
+    f"public/js/{Path(script).name}" for script in COSTING_SCRIPTS
+)
+OLD_PRINTING_PATHS = tuple(
+    f"public/js/{Path(script).name}" for script in PRINTING_SCRIPTS
 )
 
 
@@ -177,6 +199,60 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
             '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
             hooks,
         )
+
+    def test_costing_batch_has_canonical_feature_paths(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        positions = []
+
+        for script in COSTING_SCRIPTS:
+            source = ROOT / script
+            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
+            self.assertEqual(
+                hooks.count(f'"{script}"'),
+                1,
+                f"{script} must have one canonical Door Cutting Order asset owner",
+            )
+            positions.append(hooks.index(f'"{script}"'))
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "Costing load order changed during migration",
+        )
+
+        for old_path in OLD_COSTING_PATHS:
+            self.assertNotIn(
+                f'"{old_path}"',
+                hooks,
+                f"Retired root costing asset path still loaded: {old_path}",
+            )
+
+    def test_printing_batch_has_canonical_feature_paths(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        positions = []
+
+        for script in PRINTING_SCRIPTS:
+            source = ROOT / script
+            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
+            self.assertEqual(
+                hooks.count(f'"{script}"'),
+                1,
+                f"{script} must have one canonical Door Cutting Order asset owner",
+            )
+            positions.append(hooks.index(f'"{script}"'))
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "Printing load order changed during migration",
+        )
+
+        for old_path in OLD_PRINTING_PATHS:
+            self.assertNotIn(
+                f'"{old_path}"',
+                hooks,
+                f"Retired root printing asset path still loaded: {old_path}",
+            )
 
 
 if __name__ == "__main__":
