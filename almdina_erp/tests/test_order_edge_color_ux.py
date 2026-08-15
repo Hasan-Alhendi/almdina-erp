@@ -84,8 +84,8 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
 
 
 def test_financial_documents_use_server_payload_and_shared_customer_presenter():
-    financial = _source(ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js")
-    presenter = _source(ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js")
+    financial = _source(ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js")
+    presenter = _source(ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js")
     edge = _source(EDGE_COLOR_UX)
     assert "get_customer_invoice_document" in financial
     assert "get_internal_cost_report_document" in financial
@@ -162,8 +162,8 @@ def test_edge_profile_lists_are_custom_and_scrollable():
 def test_edge_color_layer_loads_after_secure_financial_presenters():
     hooks = HOOKS.read_text(encoding="utf-8")
     legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
-    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
+    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
     edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
     assert legacy not in hooks
     for script in (presenter, financial, edge_color):
