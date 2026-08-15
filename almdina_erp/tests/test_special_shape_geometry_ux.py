@@ -17,7 +17,6 @@ PLAN = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 EXPORT = ROOT / "almdina_erp" / "services" / "export_validation_service.py"
 GEOMETRY = ROOT / "public" / "js" / "door_cutting_order_special_shape_geometry.js"
-WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
 HOOKS = ROOT / "hooks.py"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
@@ -94,16 +93,14 @@ def test_exact_geometry_survives_every_packing_and_approved_export_path():
         assert "special_shape_geometry_json" in path.read_text(encoding="utf-8"), path
 
 
-def test_plan_print_and_current_dxf_paths_use_exact_special_polygon_when_available():
-    order_js = PLAN_RENDERER.read_text(encoding="utf-8")
-    workflow = WORKFLOW.read_text(encoding="utf-8")
+def test_plan_and_current_dxf_paths_use_exact_special_polygon_when_available():
+    plan_renderer = PLAN_RENDERER.read_text(encoding="utf-8")
     secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
-    for source in (order_js, workflow, secure_dxf):
+    for source in (plan_renderer, secure_dxf):
         assert "AlmdinaShapeOutputContract" in source
         assert "hasExactCutPath(piece)" in source
         assert "AlmdinaSpecialShapeGeometry" not in source
-    for source in (workflow, secure_dxf):
-        assert "shapeOutput.dxfPoints(piece" in source
-    assert "dco-special-exact-piece" in order_js
-    assert "◆ درفة خاصة · مسار هندسي" in order_js
-    assert "dco-special-exact-piece" in workflow
+    assert "shapeOutput.dxfPoints(piece" in secure_dxf
+    assert "dco-special-exact-piece" in plan_renderer
+    assert "◆ درفة خاصة · مسار هندسي" in plan_renderer
+    assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

@@ -10,6 +10,9 @@ DOCUMENT_CONTEXT = ROOT / "public" / "js" / "door_cutting_order_document_context
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
 PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+PERMISSION_REFRESH = (
+    ROOT / "public" / "js" / "door_cutting_order_permission_refresh_ux.js"
+)
 TOOLBAR_STABILITY = (
     ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
 )
@@ -168,12 +171,18 @@ class TestDocumentContextUxContract(unittest.TestCase):
         )
         self.assertIn("frm.doc.default_edge_type !== requestedType", source)
 
-    def test_production_actions_wait_for_permissions_without_detaching_groups(self) -> None:
+    def test_production_actions_wait_for_central_permission_refresh_without_detaching_groups(self) -> None:
         production = PRODUCTION_ACTIONS.read_text(encoding="utf-8")
+        permission_refresh = PERMISSION_REFRESH.read_text(encoding="utf-8")
         toolbar = TOOLBAR_STABILITY.read_text(encoding="utf-8")
 
         self.assertIn("recoverProductionActions", production)
-        self.assertIn('typeof permissions.refresh === "function"', production)
+        self.assertIn("capabilitiesResolved", production)
+        self.assertIn("PermissionRefreshUX is the sole owner of the permission request", production)
+        self.assertNotIn('typeof permissions.refresh === "function"', production)
+        self.assertIn("function refreshPermissions(frm)", permission_refresh)
+        self.assertIn('typeof permissions.refresh === "function"', permission_refresh)
+        self.assertIn("production.reconcileProductionActions(frm)", permission_refresh)
         self.assertIn("Promise.resolve(frappe.call({", production)
         self.assertNotIn("removeEmptyGroups", toolbar)
         self.assertIn('ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"])', toolbar)

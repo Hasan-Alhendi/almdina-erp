@@ -82,11 +82,11 @@ def test_export_uses_resolved_per_axis_trim_without_rewriting_optimizer_spacing(
     assert "piece.y) * 10" in src
 
 
-def test_secure_exporter_removes_legacy_buttons_without_loading_legacy_workflow():
-    workflow = _source(WORKFLOW_JS)
+def test_secure_exporter_strips_legacy_buttons_and_legacy_workflow_stays_deleted():
     secure = _source(SECURE_DXF)
     hooks = _source(HOOKS)
-    assert 'frm.add_custom_button("تصدير DXF"' in workflow
+
+    assert not WORKFLOW_JS.exists()
     assert '"public/js/door_cutting_order_workflow.js"' not in hooks
     assert 'const STRIP_EXPORT_LABELS = [' in secure
     assert 'function isExportButtonLabel(text)' in secure

@@ -3,9 +3,10 @@ from __future__ import annotations
 import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
+    ORDER_LIST_ROUTE,
     WORKSPACE_CONTROL_CENTER,
+    WORKSPACE_MAIN,
     WORKSPACE_REPORTS,
-    WORKSPACE_SHOP_FLOOR,
     build_navigation_context,
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
@@ -120,7 +121,7 @@ class TestControlCenterAuthorization(unittest.TestCase):
         )
         self.assertTrue(allowed.allowed)
 
-    def test_operator_replacement_work_stays_in_shop_floor(self) -> None:
+    def test_operator_replacement_work_uses_shared_order_interface(self) -> None:
         navigation = build_navigation_context(
             {
                 Capability.VIEW_REPLACEMENTS,
@@ -128,8 +129,9 @@ class TestControlCenterAuthorization(unittest.TestCase):
                 Capability.COMPLETE_REPLACEMENT,
             }
         )
-        self.assertEqual(navigation["home_page"], "shop-floor-inbox")
-        self.assertEqual(navigation["workspaces"], [WORKSPACE_SHOP_FLOOR])
+        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
+        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
 
     def test_management_and_reports_expand_the_correct_workspaces(self) -> None:
         control = build_navigation_context(

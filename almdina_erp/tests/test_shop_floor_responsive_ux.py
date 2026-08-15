@@ -74,24 +74,32 @@ def test_shop_floor_defaults_to_a_route_aware_kanban_board() -> None:
     assert ".almdina-sf-kanban-column.is-drag-over" in css
 
 
-def test_worker_list_closes_with_other_role_stages_in_green() -> None:
+def test_worker_list_keeps_assigned_work_first_and_completed_history_last() -> None:
     source = PAGE_PATH.read_text(encoding="utf-8")
     css = CSS_PATH.read_text(encoding="utf-8")
 
-    # Actionable work stays first and unchanged; orders whose current stage
-    # operational role is not the worker's follow in green with no stage action.
+    # The worker sees only their actionable current-stage assignments. Completed
+    # history follows at the bottom and never exposes a production quick action.
     assert "function showsPersonalHistory()" in source
     assert "sessionContext.personal_inbox" in source
     assert "function isMyOperationalStage(row)" in source
     assert "actor_holds_current_stage_role" in source
-    assert "function mergePersonalList(activeRows, historyRows)" in source
+    assert "function mergeVisibleList(activeRows, historyRows)" in source
+    assert "? (activeRows || []).filter(isMyOperationalStage)" in source
+    assert "return { assigned, completed };" in source
     assert "function workerBoardRows(activeRows)" in source
-    assert 'listSection(__("طلبات في مراحل أخرى"), other, { otherRole: true })' in source
-    assert "terminal || otherRole ? \"\" : quickActionHtml(row)" in source
+    assert 'listSection(__("الطلبات المنتهية"), completed, { completed: true })' in source
+    assert 'terminal || completed ? "" : quickActionHtml(row)' in source
+    assert 'completed ? " is-completed" : ""' in source
 
-    assert ".almdina-sf-order-card.is-other-role" in css
-    assert ".almdina-sf-list-title.is-other-role" in css
+    # Completed history—not foreign-role work—owns the green full-row treatment.
+    assert ".almdina-sf-list-title.is-completed" in css
+    assert ".almdina-sf-order-card.is-completed" in css
+    assert ".almdina-sf-order-card.is-completed[data-status]" in css
     assert "background: #dcfce7 !important;" in css
+    assert "--sf-accent: #16a34a;" in css
+    assert "is-other-role" not in css
+    assert "is-other-role" not in source
 
 
 def test_kanban_keeps_touch_users_on_explicit_server_authorized_actions() -> None:

@@ -4,6 +4,8 @@ import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     DESKTOP_PAGE_ROUTE,
+    ORDER_LIST_ROUTE,
+    WORKSPACE_MAIN,
     WORKSPACE_MAIN_ROUTE,
     build_navigation_context,
 )
@@ -49,7 +51,7 @@ class TestV16DeskNavigation(unittest.TestCase):
         self.assertTrue(navigation["app_only"])
         self.assertIn("Almdina ERP", navigation["workspaces"])
 
-    def test_operator_only_profile_still_opens_shop_floor(self) -> None:
+    def test_operator_only_profile_uses_shared_order_list(self) -> None:
         navigation = build_navigation_context(
             {
                 Capability.VIEW_ORDERS,
@@ -63,8 +65,9 @@ class TestV16DeskNavigation(unittest.TestCase):
         )
 
         self.assertEqual(navigation["profile"], "shop_floor")
-        self.assertEqual(navigation["home_page"], "shop-floor-inbox")
-        self.assertEqual(navigation["default_route"], "/app/shop-floor-inbox")
+        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
+        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(navigation["app_only"])
 
     def test_inactive_context_does_not_force_a_route(self) -> None:

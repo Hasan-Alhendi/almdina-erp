@@ -64,11 +64,20 @@ def test_server_actions_use_one_lifecycle_policy_without_role_names():
 def test_lifecycle_ui_is_capability_driven_and_fail_closed():
     lifecycle_ux = source(LIFECYCLE_UX)
     revision_ux = source(REVISION_UX)
+    lifecycle_policy = source(POLICY)
+    context_service = source(CONTEXT_SERVICE)
 
     assert "get_order_lifecycle_context" in lifecycle_ux
     assert 'can(frm, "create_order")' in lifecycle_ux
     assert 'can(frm, "edit_order")' in lifecycle_ux
-    assert 'can(frm, "return_order_to_draft")' in lifecycle_ux
+    assert "function canReturnToDraft(frm, context)" in lifecycle_ux
+    assert 'return actionAllowed(context, "return_to_draft");' in lifecycle_ux
+    assert "context.actions[action].allowed === true" in lifecycle_ux
+    assert (
+        "OrderLifecycleAction.RETURN_TO_DRAFT: Capability.RETURN_ORDER_TO_DRAFT"
+        in lifecycle_policy
+    )
+    assert "document_has_capability(order, capability)" in context_service
     assert "documentContext().capture(frm)" in lifecycle_ux
     assert "documentContext().isCurrent(frm, identity)" in lifecycle_ux
     assert "removeLifecycleButtons(frm)" in lifecycle_ux
@@ -90,6 +99,7 @@ def test_return_and_revert_are_capability_only_without_status_gates():
     lifecycle_policy = source(POLICY)
     lifecycle_service = source(CANCEL_SERVICE)
     lifecycle_ux = source(LIFECYCLE_UX)
+    context_service = source(CONTEXT_SERVICE)
     shop_floor = (ROOT / "public" / "js" / "shop_floor_order_ux.js").read_text(
         encoding="utf-8"
     )
@@ -110,8 +120,13 @@ def test_return_and_revert_are_capability_only_without_status_gates():
     assert "Cutting is already completed" not in return_fn
     assert '"noop": True' in return_fn
 
-    assert 'can(frm, "return_order_to_draft")' in lifecycle_ux
+    assert (
+        "OrderLifecycleAction.RETURN_TO_DRAFT: Capability.RETURN_ORDER_TO_DRAFT"
+        in lifecycle_policy
+    )
+    assert "document_has_capability(order, capability)" in context_service
     assert "function canReturnToDraft(frm, context)" in lifecycle_ux
+    assert 'return actionAllowed(context, "return_to_draft");' in lifecycle_ux
     # Standalone toolbar button — not nested under «دورة الطلب».
     install = lifecycle_ux.split("function installButtons(frm, context)", 1)[1].split(
         "function loadContext", 1

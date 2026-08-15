@@ -7,10 +7,11 @@ from almdina_erp.almdina_erp.application.security.business_capability_state impo
     normalize_business_capability_state,
 )
 from almdina_erp.almdina_erp.application.security.navigation_context import (
+    ORDER_LIST_ROUTE,
     WORKSPACE_GO_LIVE,
+    WORKSPACE_MAIN,
     WORKSPACE_REPORTS,
     WORKSPACE_SETTINGS,
-    WORKSPACE_SHOP_FLOOR,
     build_navigation_context,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -77,7 +78,8 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertTrue(navigation["sections"]["planning"])
         self.assertTrue(navigation["sections"]["drawing"])
         self.assertTrue(navigation["sections"]["production"])
-        self.assertIn(WORKSPACE_SHOP_FLOOR, navigation["workspaces"])
+        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
+        self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(state[Capability.UPLOAD_DXF])
         self.assertTrue(state[Capability.REPLACE_DXF])
         self.assertFalse(state[Capability.DISPATCH_ORDER])
@@ -85,7 +87,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertFalse(state[Capability.VIEW_COSTS])
         self.assertFalse(navigation["sections"]["reports"])
 
-    def test_operator_grants_route_to_shop_floor_without_supervision(self) -> None:
+    def test_operator_grants_use_shared_order_list_without_supervision(self) -> None:
         state, navigation = self._context(
             Capability.VIEW_ORDERS,
             Capability.START_ASSIGNED_STAGE,
@@ -98,8 +100,9 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.COMPLETE_REPLACEMENT,
         )
         self.assertEqual(navigation["profile"], "shop_floor")
-        self.assertEqual(navigation["home_page"], "shop-floor-inbox")
-        self.assertEqual(navigation["workspaces"], [WORKSPACE_SHOP_FLOOR])
+        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
+        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(state[Capability.START_ASSIGNED_STAGE])
         self.assertTrue(state[Capability.HANDOFF_ASSIGNED_STAGE])
         self.assertFalse(state[Capability.UPLOAD_DXF])
