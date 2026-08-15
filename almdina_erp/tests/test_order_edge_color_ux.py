@@ -12,9 +12,33 @@ DEFAULTS = (
     / "order_entry"
     / "door_cutting_order_defaults.js"
 )
-EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
-EDGE_CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
-EDGE_DOUBLE_CLICK_GUARD = ROOT / "public" / "js" / "door_cutting_order_edge_profile_double_click_guard.js"
+EDGE_COLOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_color_ux.js"
+)
+EDGE_CONTROLS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_controls_ux.js"
+)
+EDGE_DOUBLE_CLICK_GUARD = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_double_click_guard.js"
+)
 MEASUREMENT_UX = (
     ROOT
     / "public"
@@ -111,9 +135,9 @@ def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
     assert "toggle.click()" in guard
     assert "controls.openSidePopover" in guard
 
-    controls_script = '"public/js/door_cutting_order_edge_profile_controls_ux.js"'
-    guard_script = '"public/js/door_cutting_order_edge_profile_double_click_guard.js"'
-    cut_script = '"public/js/door_cutting_order_cut_dimensions_ux.js"'
+    controls_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js"'
+    guard_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_double_click_guard.js"'
+    cut_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js"'
     assert controls_script in hooks
     assert guard_script in hooks
     assert cut_script in hooks
@@ -140,7 +164,7 @@ def test_edge_color_layer_loads_after_secure_financial_presenters():
     legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
     presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
     financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
-    edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
+    edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
     assert legacy not in hooks
     for script in (presenter, financial, edge_color):
         assert script in hooks
