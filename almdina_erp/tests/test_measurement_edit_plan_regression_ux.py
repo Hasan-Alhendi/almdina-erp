@@ -95,7 +95,7 @@ def test_kerf_and_trim_follow_order_input_plan_staleness() -> None:
 
 
 def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observers() -> None:
-    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+    operator_patch = source("door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js")
 
     assert "disconnectCompetingEdgeObservers" in operator_patch
     assert '"_dcoSideEdgeObserver"' in operator_patch
@@ -114,7 +114,7 @@ def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observe
 
 
 def test_special_edge_visual_highlight_is_scoped_to_special_rows() -> None:
-    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+    operator_patch = source("door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js")
 
     assert 'SPECIAL_EDGE_STYLE_ID = "dco-special-edge-visual-guard-css"' in operator_patch
     assert "tr:not(.dco-special-row)" in operator_patch
