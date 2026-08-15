@@ -112,5 +112,5 @@ def test_door_cutting_order_asset_order_is_frozen_during_manifest_extraction():
         "public/js/replacement_piece.js",
     ]
     assert manifest["doctype_list_js"] == {
-        "Door Cutting Order": "public/js/door_cutting_order_list.js",
+        "Door Cutting Order": "public/js/door_cutting_order/list_view/door_cutting_order_list.js",
     }
