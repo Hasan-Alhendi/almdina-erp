@@ -98,20 +98,25 @@ const domainSource = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/
 
 assert.ok(
     bootstrap.indexOf("/domain/shape_preserving_stroke_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_cleaner.js"),
-    "Pure stroke geometry must load before the adaptive profile"
+    "Legacy shape-preserving cleaner remains loadable for its regression coverage"
 );
 assert.ok(
-    bootstrap.indexOf("/application/adaptive_stroke_cleaner.js") < bootstrap.indexOf("/application/non_destructive_smart_suggestions.js"),
-    "The cleaner must load before the active freehand owner"
+    bootstrap.indexOf("/domain/smart_stroke_reconstruction_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js"),
+    "Pure smart reconstruction must load before its adaptive input profiles"
+);
+assert.ok(
+    bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js") < bootstrap.indexOf("/application/non_destructive_smart_suggestions.js"),
+    "The active reconstructor must load before the freehand owner"
 );
 assert.match(bootstrap, /__doorDrawingV3ShapePreservingCleaner:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3LocalStraightening:\s*true/);
+assert.match(bootstrap, /__doorDrawingV3SmartStrokeReconstruction:\s*true/);
+assert.match(bootstrap, /__doorDrawingV3BezierFreehandReconstruction:\s*true/);
 assert.match(bootstrap, /__doorDrawingV3SmartCleanUndo:\s*true/);
 
-assert.match(application, /Cleaner\.clean\(points, pointerType\)/);
+assert.match(application, /Reconstructor\.reconstruct\(points, pointerType\)/);
 assert.match(application, /c\.history\.execute\(rawDocument, "Draw freehand stroke"\)/);
-assert.match(application, /"Smart clean freehand stroke"/);
-assert.match(application, /G\.path\(rawObject\.id, cleaning\.points, false/);
+assert.match(application, /"Smart reconstruct freehand stroke"/);
+assert.match(application, /reconstruction\.nodes/);
 assert.doesNotMatch(application, /const result = I\.interpret\(points, options\)/, "Committed freehand must never use primitive or compound recognition");
 
 assert.match(domainSource, /trendSeries/);
