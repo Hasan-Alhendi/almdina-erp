@@ -10,7 +10,7 @@ PUBLIC = ROOT / "public" / "js"
 
 class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
     def test_draft_never_offers_return_to_draft(self) -> None:
-        source = (PUBLIC / "order_lifecycle.js").read_text(encoding="utf-8")
+        source = (PUBLIC / "door_cutting_order/core/order_lifecycle.js").read_text(encoding="utf-8")
         predicate = source.split("function canReturnToDraft", 1)[1].split(
             "function canCancelOrder", 1
         )[0]
@@ -21,7 +21,7 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertNotIn('|| can(frm, "return_order_to_draft")', predicate)
 
     def test_cancel_is_a_red_standalone_action(self) -> None:
-        source = (PUBLIC / "order_lifecycle.js").read_text(encoding="utf-8")
+        source = (PUBLIC / "door_cutting_order/core/order_lifecycle.js").read_text(encoding="utf-8")
         installer = source.split("function installButtons", 1)[1].split(
             "function loadContext", 1
         )[0]
@@ -47,11 +47,11 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertLess(button.index("current && rows.length"), button.index("frm.add_custom_button"))
 
     def test_toolbar_never_hides_actions_and_stays_at_top_left(self) -> None:
-        toolbar = (PUBLIC / "door_cutting_order_toolbar_stability_ux.js").read_text(
+        toolbar = (PUBLIC / "door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js").read_text(
             encoding="utf-8"
         )
         production = (PUBLIC / "shop_floor_order_ux.js").read_text(encoding="utf-8")
-        lifecycle = (PUBLIC / "order_lifecycle.js").read_text(encoding="utf-8")
+        lifecycle = (PUBLIC / "door_cutting_order/core/order_lifecycle.js").read_text(encoding="utf-8")
 
         self.assertNotIn("dco-actions-settling", toolbar)
         self.assertNotIn("toolbar-final-reveal", toolbar)
@@ -80,7 +80,7 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertIn("ensureLifecycleButton", installer)
 
     def test_revision_actions_use_a_clear_group_name(self) -> None:
-        source = (PUBLIC / "door_cutting_order_revision_ux.js").read_text(
+        source = (PUBLIC / "door_cutting_order/core/door_cutting_order_revision_ux.js").read_text(
             encoding="utf-8"
         )
 
