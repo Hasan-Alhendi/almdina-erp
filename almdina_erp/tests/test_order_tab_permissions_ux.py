@@ -23,7 +23,7 @@ PLAN_BOOTSTRAP = (
     / "cutting_plan"
     / "door_cutting_order_plan_surface_bootstrap.js"
 )
-HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 
 
 class TestOrderTabPermissionsUX(unittest.TestCase):
@@ -61,12 +61,12 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
 
     def test_compatibility_modules_still_wait_for_source_registered_globals(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
 
         self.assertIn('global: "AlmdinaOrderTabPermissionsUX"', source)
         self.assertIn("function waitForGlobal", source)
         self.assertIn("return waitForGlobal(module.global)", source)
-        self.assertIn('"public/js/door_cutting_order_tab_permissions_ux.js"', hooks)
+        self.assertIn('"public/js/door_cutting_order_tab_permissions_ux.js"', manifest)
 
     def test_cutting_plan_surface_loads_independently_from_cost_chain(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
