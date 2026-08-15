@@ -41,7 +41,7 @@ doctype_js = {
     "Door Cutting Order": [
         # The document context owns the surface-readiness registry, so it must be
         # evaluated before any module that registers a probe with it.
-        "public/js/door_cutting_order_document_context.js",
+        "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
         "public/js/permission_context.js",
         "public/js/door_cutting_order_special_shape_geometry.js",
         "public/js/door_cutting_order_shape_output_contract.js",
@@ -58,7 +58,7 @@ doctype_js = {
         "public/js/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_measurement_toolbar_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_action_permission_guard.js",
+        "public/js/door_cutting_order/core/door_cutting_order_action_permission_guard.js",
         "public/js/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order_multi_edge_ux.js",
@@ -90,9 +90,9 @@ doctype_js = {
         "public/js/shop_floor_order_ux.js",
         "public/js/door_cutting_order_drawing_approval_ux.js",
         "public/js/secure_dxf_export.js",
-        "public/js/door_cutting_order_toolbar_stability_ux.js",
-        "public/js/door_cutting_order_revision_ux.js",
-        "public/js/order_lifecycle.js",
+        "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
+        "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
+        "public/js/door_cutting_order/core/order_lifecycle.js",
         "public/js/input_stability.js",
         "public/js/door_cutting_order_mobile_cards_ux.js",
     ],
