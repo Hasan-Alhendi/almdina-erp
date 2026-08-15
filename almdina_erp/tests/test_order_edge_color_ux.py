@@ -4,11 +4,26 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
+DEFAULTS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_defaults.js"
+)
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
 EDGE_CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
 EDGE_DOUBLE_CLICK_GUARD = ROOT / "public" / "js" / "door_cutting_order_edge_profile_double_click_guard.js"
-MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+MEASUREMENT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
 HOOKS = ROOT / "hooks.py"
 
 
