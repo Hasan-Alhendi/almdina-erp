@@ -9,13 +9,12 @@ SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
 PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
-WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
 OPERATOR = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
 TABLE = ROOT / "public" / "js" / "door_cutting_order_table_performance_ux.js"
 MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
+FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
 
 
 def _source(path: Path) -> str:
@@ -100,23 +99,24 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     shape_print = _source(SHAPE_PRINT)
     measurement_actions = _source(MEASUREMENT_ACTIONS)
     presenter = _source(PRINT_PRESENTER)
-    invoice = _source(INVOICE)
+    financial = _source(FINANCIAL_DOCUMENTS)
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in shape_print
     assert "const selected = shapeOutput.visual(piece);" in shape_print
     assert 'selected.kind === "drawing"' in shape_print
     assert "renderer.notesCell(row, row.notes" in presenter
     assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
-    assert "renderer.notesCell(row, row.notes" in invoice
+    assert '${measurementDocumentBody(frm)}' in presenter
+    assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
 
 
-def test_plan_dxf_and_status_surfaces_do_not_reimplement_exact_shape_policy():
-    consumers = (PLAN_RENDERER, WORKFLOW, SECURE_DXF, OPERATOR, TABLE)
+def test_plan_dxf_and_browser_surfaces_do_not_reimplement_exact_shape_policy():
+    consumers = (PLAN_RENDERER, SECURE_DXF, OPERATOR, TABLE)
     for path in consumers:
         source = _source(path)
         assert "AlmdinaShapeOutputContract" in source, path
         assert "AlmdinaSpecialShapeGeometry" not in source, path
         assert ".isExact(" not in source, path
     assert "shapeOutput.pointsAttribute(piece, 100, 100)" in _source(PLAN_RENDERER)
-    assert "shapeOutput.pointsAttribute(piece, 100, 100)" in _source(WORKFLOW)
-    assert "shapeOutput.dxfPoints(piece" in _source(WORKFLOW)
     assert "shapeOutput.dxfPoints(piece" in _source(SECURE_DXF)
+    assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()
