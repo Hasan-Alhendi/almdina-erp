@@ -3,7 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
-RENDERER = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
+RENDERER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
 MEASUREMENT_ACTIONS = (
     ROOT
@@ -14,8 +14,8 @@ MEASUREMENT_ACTIONS = (
     / "measurements"
     / "door_cutting_order_measurement_actions_ux.js"
 )
-PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-FINANCIAL = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+FINANCIAL = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 EDGE_COLOR = (
     ROOT
     / "public"
@@ -33,10 +33,10 @@ def text(path: Path) -> str:
 
 def test_shared_shape_print_renderer_loads_before_every_active_print_surface():
     hooks = text(HOOKS)
-    renderer = '"public/js/door_cutting_order_shape_print.js"'
+    renderer = '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"'
     measurements = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"'
-    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
-    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
+    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
     edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
     for script in (renderer, measurements, presenter, financial, edge_color):
         assert script in hooks
