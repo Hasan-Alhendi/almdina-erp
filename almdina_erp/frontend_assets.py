@@ -92,5 +92,5 @@ doctype_js = {
 }
 
 doctype_list_js = {
-    "Door Cutting Order": "public/js/door_cutting_order_list.js",
+    "Door Cutting Order": "public/js/door_cutting_order/list_view/door_cutting_order_list.js",
 }
