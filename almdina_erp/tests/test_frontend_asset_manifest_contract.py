@@ -17,8 +17,8 @@ EXPECTED_APP_INCLUDE_JS = [
     "/assets/almdina_erp/js/shared_shell.js",
     "/assets/almdina_erp/js/arabic_operator_ui.js",
     "/assets/almdina_erp/js/input_stability.js",
-    "/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js",
-    "/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js",
+    "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
+    "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js",
     "/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
     "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js",
 ]
@@ -26,8 +26,8 @@ EXPECTED_APP_INCLUDE_JS = [
 EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
     "public/js/permission_context.js",
-    "public/js/door_cutting_order_special_shape_geometry.js",
-    "public/js/door_cutting_order_shape_output_contract.js",
+    "public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
+    "public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js",
     "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
     "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
