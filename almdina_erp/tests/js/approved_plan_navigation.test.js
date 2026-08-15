@@ -82,7 +82,7 @@ async function flushPromises() {
         },
     });
     vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
-    vm.runInContext(source("door_cutting_order_plan_tabs_ux.js"), context);
+    vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"), context);
 
     const frm = {
         doctype: "Door Cutting Order",
