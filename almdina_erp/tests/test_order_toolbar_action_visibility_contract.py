@@ -46,7 +46,7 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertIn("current && rows.length", button)
         self.assertLess(button.index("current && rows.length"), button.index("frm.add_custom_button"))
 
-    def test_toolbar_never_hides_actions_and_stays_at_top_left(self) -> None:
+    def test_toolbar_uses_natural_header_flow_and_keeps_edit_visible(self) -> None:
         toolbar = (PUBLIC / "door_cutting_order_toolbar_stability_ux.js").read_text(
             encoding="utf-8"
         )
@@ -59,10 +59,15 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
             ".dco-actions-settling .custom-actions",
             toolbar,
         )
-        self.assertIn("left:16px!important", toolbar)
-        self.assertIn("right:auto!important", toolbar)
-        self.assertIn("position:absolute!important", toolbar)
+        self.assertIn("margin-inline-start:auto!important", toolbar)
+        self.assertIn("position:static!important", toolbar)
+        self.assertNotIn("left:16px!important", toolbar)
+        self.assertNotIn("width:max-content!important", toolbar)
         self.assertIn("flex-wrap:nowrap!important", toolbar)
+        self.assertIn("dco-edit-action-placeholder", toolbar)
+        self.assertIn('permissions.canDocument(frm, "edit_order")', toolbar)
+        self.assertIn("placeholder.disabled = true", toolbar)
+        self.assertIn("ensureEditActionPresence(frm, head, permissionsReady)", toolbar)
         self.assertIn("[0, 180]", toolbar)
         self.assertNotIn("[0, 80, 250, 650, 1200]", toolbar)
         self.assertNotIn("permissionVersion", production)
