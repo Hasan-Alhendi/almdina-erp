@@ -11,7 +11,14 @@ SETTINGS_JSON = APP_ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / 
 ORDER_PY = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
 PLAN_RENDERER = APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
-OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
+OPERATOR_UX = (
+    APP_ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
 EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 V3_VIEW = APP_ROOT / "public" / "js" / "door_drawing_v3" / "presentation" / "canvas_view.js"
 V3_EDITOR = APP_ROOT / "public" / "js" / "door_drawing_v3" / "application" / "editor_stage2.js"
