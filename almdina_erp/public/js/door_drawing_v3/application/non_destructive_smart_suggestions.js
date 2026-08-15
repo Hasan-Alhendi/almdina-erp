@@ -8,11 +8,11 @@
     const V = root.ShapeView;
     const F = root.SmartFreehandPolicy;
     const I = root.SmartStrokeIntelligence;
-    const Cleaner = root.AdaptiveStrokeCleaner;
+    const Reconstructor = root.AdaptiveStrokeReconstructor;
     const Suggest = root.SmartSuggestionPolicy;
     const SmartPen = root.SmartPen;
     const Editor = root.Editor;
-    if (!G || !D || !S || !V || !F || !I || !Cleaner || !Suggest || !SmartPen || !Editor) {
+    if (!G || !D || !S || !V || !F || !I || !Reconstructor || !Suggest || !SmartPen || !Editor) {
         throw new Error("Door Drawing V3 smart pen stack must load before non-destructive suggestions");
     }
 
@@ -111,8 +111,6 @@
         const snap = resolveEndpoint(c, raw, c.snapState && c.snapState.target);
         const closeReady = closeCandidate(c, raw);
 
-        // Near the starting point we only show intent. We never move the user's
-        // endpoint to the start until the user explicitly accepts a close suggestion.
         const previewPoint = closeReady ? raw : (snap.snapped ? snap.point : stable);
         c.snapState = closeReady
             ? Object.freeze({
@@ -189,30 +187,37 @@
         const rawObject = freehandPathObject(points);
         if (!rawObject) return null;
 
-        // The raw stroke is deliberately a real history state. One Undo after an
-        // automatic cleanup restores exactly what came from the user's hand.
+        // Keep the exact hand stroke as a real undo state. The smart reconstruction
+        // is a second history step and never destroys the source gesture.
         const rawDocument = D.addObject(c.history.current(), rawObject);
         c.history.execute(rawDocument, "Draw freehand stroke");
 
-        const cleaning = Cleaner.clean(points, pointerType);
+        const reconstruction = Reconstructor.reconstruct(points, pointerType);
         let finalObject = rawObject;
-        if (cleaning.changed && cleaning.points.length >= 2) {
-            finalObject = G.path(rawObject.id, cleaning.points, false, rawObject.style || {});
+        if (reconstruction.changed && reconstruction.points.length >= 2) {
+            finalObject = G.path(
+                rawObject.id,
+                reconstruction.points,
+                false,
+                rawObject.style || {},
+                reconstruction.nodes
+            );
             c.history.execute(
                 D.replaceObject(c.history.current(), finalObject),
-                "Smart clean freehand stroke"
+                "Smart reconstruct freehand stroke"
             );
         }
 
         c.lastSmartClean = Object.freeze({
             sourceId: rawObject.id,
-            changed: Boolean(cleaning.changed),
-            straightenedRuns: cleaning.straightenedRuns,
-            cornerIndices: cleaning.cornerIndices,
-            maximumDeviationMm: cleaning.maximumDeviationMm,
+            changed: Boolean(reconstruction.changed),
+            cornerCount: reconstruction.cornerCount,
+            straightSegmentCount: reconstruction.straightSegmentCount,
+            curveSegmentCount: reconstruction.curveSegmentCount,
+            spans: reconstruction.spans,
         });
         c.dirty = true;
-        return Object.freeze({ rawObject, finalObject, cleaning });
+        return Object.freeze({ rawObject, finalObject, reconstruction });
     }
 
     function finishFreehand(c, event) {
@@ -242,8 +247,6 @@
         c.snapState = null;
         try { c.canvas.releasePointerCapture(event.pointerId); } catch (error) { /* optional */ }
 
-        // Do not use primitive or mixed-stroke recognition to create the committed
-        // object. The automatic pen is allowed to improve the same path only.
         const committed = commitRawThenClean(c, points, pointerType);
         if (!committed) {
             render(c);
@@ -256,8 +259,7 @@
         c.tool = "pen";
         render(c);
 
-        // Primitive recognition remains an optional suggestion layer. It never
-        // changes the committed geometry without an explicit Apply action.
+        // Primitive recognition is suggestion-only. It never owns the committed stroke.
         propose(c, committed.finalObject, points, options, closeReady);
         return true;
     }
