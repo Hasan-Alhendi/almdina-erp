@@ -1,7 +1,9 @@
 (() => {
     "use strict";
 
-    const ACTION_GROUP = __("دورة الطلب");
+    const ACTION_GROUP = __("دورة الطلب"); // legacy cleanup only
+    const NON_RETURNABLE_STATUSES = new Set(["Draft", "Rejected", "Delivered", "Cancelled"]);
+    const NON_CANCELLABLE_STATUSES = new Set(["Cancelled", "Delivered", "Completed"]);
     const LABELS = Object.freeze({
         submit_for_review: __("إرسال للمراجعة"),
         approve: __("اعتماد الطلب"),
@@ -99,9 +101,17 @@
     }
 
     function canReturnToDraft(frm, context) {
-        if (!frm || !frm.doc || frm.is_new()) return false;
-        if (isSuperseded(frm)) return false;
-        return actionAllowed(context, "return_to_draft") || can(frm, "return_order_to_draft");
+        if (!frm || !frm.doc || frm.is_new() || isSuperseded(frm)) return false;
+        const status = String(frm.doc.status || "Draft");
+        if (NON_RETURNABLE_STATUSES.has(status)) return false;
+        return actionAllowed(context, "return_to_draft");
+    }
+
+    function canCancelOrder(frm, context) {
+        if (!frm || !frm.doc || frm.is_new() || isSuperseded(frm)) return false;
+        const status = String(frm.doc.status || "Draft");
+        if (NON_CANCELLABLE_STATUSES.has(status)) return false;
+        return actionAllowed(context, "cancel");
     }
 
     function callAction(frm, options) {
@@ -208,47 +218,62 @@
         removeLifecycleButtons(frm);
         if (!frm || frm.is_new()) return;
 
-        // Standalone toolbar button — never nested under «دورة الطلب», otherwise
-        // the action disappears inside a dropdown or a detached group after refresh.
         if (canReturnToDraft(frm, context)) {
             frm.add_custom_button(
                 LABELS.return_to_draft,
                 () => returnToDraft(frm)
             );
         }
-        if (actionAllowed(context, "cancel")) {
-            frm.add_custom_button(
+        if (canCancelOrder(frm, context)) {
+            const cancelButton = frm.add_custom_button(
                 LABELS.cancel,
-                () => cancelOrder(frm),
-                ACTION_GROUP
+                () => cancelOrder(frm)
             );
+            if (cancelButton && typeof cancelButton.removeClass === "function") {
+                cancelButton.removeClass("btn-default").addClass("btn-danger");
+            }
         }
     }
 
     function loadContext(frm) {
-        if (frm.is_new()) {
+        if (!frm || frm.is_new()) {
             frm.__almdina_lifecycle_context = null;
+            frm.__almdinaLifecycleContextPending = false;
             removeLifecycleButtons(frm);
             return Promise.resolve(null);
         }
 
-        // Paint from the client capability immediately so the button is visible
-        // even while the server context is in flight or if that call is dropped.
-        installButtons(frm, frm.__almdina_lifecycle_context);
-
         const contextApi = documentContext();
-        if (!contextApi || typeof contextApi.capture !== "function") {
-            return Promise.resolve(frm.__almdina_lifecycle_context);
+        if (
+            !contextApi
+            || typeof contextApi.capture !== "function"
+            || typeof contextApi.isCurrent !== "function"
+        ) {
+            removeLifecycleButtons(frm);
+            return Promise.resolve(null);
         }
+
+        if (
+            frm.__almdinaLifecycleContextPromise
+            && contextApi.isCurrent(frm, frm.__almdinaLifecycleContextToken)
+        ) {
+            return frm.__almdinaLifecycleContextPromise;
+        }
+
+        const cached = frm.__almdina_lifecycle_context;
+        if (cached && cached.order_name === frm.doc.name) installButtons(frm, cached);
+        else removeLifecycleButtons(frm);
+
         const identity = contextApi.capture(frm);
-        return frappe.call({
+        frm.__almdinaLifecycleContextPending = true;
+        const request = frappe.call({
             method: "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context",
             args: { order_name: frm.doc.name },
         }).then(response => {
             if (!contextApi.isCurrent(frm, identity)) return frm.__almdina_lifecycle_context;
             const context = response.message || null;
             if (!context || context.order_name !== frm.doc.name) {
-                installButtons(frm, frm.__almdina_lifecycle_context);
+                removeLifecycleButtons(frm);
                 return frm.__almdina_lifecycle_context;
             }
             frm.__almdina_lifecycle_context = context;
@@ -257,16 +282,51 @@
         }).catch(error => {
             if (!contextApi.isCurrent(frm, identity)) return frm.__almdina_lifecycle_context;
             console.error("Failed to load order lifecycle permissions", error);
-            installButtons(frm, frm.__almdina_lifecycle_context);
+            if (cached && cached.order_name === frm.doc.name) installButtons(frm, cached);
+            else removeLifecycleButtons(frm);
             return frm.__almdina_lifecycle_context;
+        }).finally(() => {
+            if (frm.__almdinaLifecycleContextPromise === request) {
+                frm.__almdinaLifecycleContextPending = false;
+                frm.__almdinaLifecycleContextPromise = null;
+                frm.__almdinaLifecycleContextToken = null;
+                const owner = documentContext();
+                if (owner && typeof owner.settleSurfaces === "function") {
+                    owner.settleSurfaces(frm, 0);
+                }
+            }
         });
+
+        frm.__almdinaLifecycleContextToken = identity;
+        frm.__almdinaLifecycleContextPromise = request;
+        return request;
+    }
+
+    function lifecycleButtonRendered(frm, label) {
+        const root = frm && frm.page && frm.page.wrapper;
+        const node = root && (root.nodeType ? root : root[0]);
+        if (node && typeof node.querySelectorAll === "function") {
+            return [...node.querySelectorAll(".custom-actions button, .page-actions button")]
+                .some((button) => String(button.textContent || "").replace(/\s+/g, " ").trim() === label);
+        }
+        const buttons = frm.custom_buttons || {};
+        return Boolean(buttons[label]);
     }
 
     function lifecycleActionsReady(frm) {
         if (!frm || !frm.doc || frm.is_new()) return true;
-        if (!canReturnToDraft(frm, frm.__almdina_lifecycle_context)) return true;
-        const buttons = frm.custom_buttons || {};
-        return Boolean(buttons[LABELS.return_to_draft] || buttons["إعادة للمسودة"]);
+        if (frm.__almdinaLifecycleContextPending) return false;
+        const context = frm.__almdina_lifecycle_context;
+        if (!context || context.order_name !== frm.doc.name) return true;
+        if (
+            canReturnToDraft(frm, context)
+            && !lifecycleButtonRendered(frm, LABELS.return_to_draft)
+        ) return false;
+        if (
+            canCancelOrder(frm, context)
+            && !lifecycleButtonRendered(frm, LABELS.cancel)
+        ) return false;
+        return true;
     }
 
     installGlobalPolicy();
