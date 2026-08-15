@@ -8,7 +8,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS_PATH = ROOT / "hooks.py"
 POLICY_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_document_compactness_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_compactness_ux.js"
 )
 
 
@@ -17,15 +22,17 @@ class TestDocumentCompactnessUX(unittest.TestCase):
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
 
-        theme = scripts.index("public/js/door_cutting_order_document_print_theme.js")
+        theme = scripts.index(
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js"
+        )
         presenter = scripts.index(
-            "public/js/door_cutting_order_document_print_presenter.js"
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
         )
         documents = scripts.index(
-            "public/js/door_cutting_order_multi_edge_documents_ux.js"
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js"
         )
         compactness = scripts.index(
-            "public/js/door_cutting_order_document_compactness_ux.js"
+            "public/js/door_cutting_order/printing/door_cutting_order_document_compactness_ux.js"
         )
 
         self.assertLess(theme, presenter)
