@@ -16,6 +16,7 @@ before any implementation cleanup or consolidation happens.
 - `production/`: shop-floor behavior owned by the order form.
 - `responsive/`: order header/mobile-card adaptations.
 - `drawing/`: facade/integration for special-shape drawing.
+- `list_view/`: Door Cutting Order list presentation, search, status/stage presentation and list quick actions.
 
 The complex drawing editor remains separately layered under `door_drawing_v3/`
 (`domain`, `application`, `infrastructure`, `presentation`).
