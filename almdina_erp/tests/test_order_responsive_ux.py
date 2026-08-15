@@ -8,8 +8,23 @@ HOOKS = ROOT / "hooks.py"
 RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
 RESPONSIVE_DEVICE = ROOT / "public" / "js" / "responsive_device.js"
 MOBILE_CARDS_UX = ROOT / "public" / "js" / "door_cutting_order_mobile_cards_ux.js"
-OPERATOR_UX = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-BULK_ROWS_UX = ROOT / "public" / "js" / "door_cutting_order_bulk_rows_ux.js"
+OPERATOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+BULK_ROWS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_bulk_rows_ux.js"
+)
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 QUICK_ACTIONS_UX = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
 SHOP_FLOOR_INBOX = (

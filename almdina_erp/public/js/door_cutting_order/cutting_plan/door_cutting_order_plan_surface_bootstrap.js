@@ -8,23 +8,23 @@
     const MODULES = Object.freeze([
         Object.freeze({
             global: "AlmdinaCuttingPlanRender",
-            asset: "/assets/almdina_erp/js/door_cutting_order_cutting_plan_renderer.js",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         }),
         Object.freeze({
             global: "AlmdinaDoorCuttingPlanUX",
-            asset: "/assets/almdina_erp/js/door_cutting_order_plan_ux.js",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
         }),
         Object.freeze({
             global: "AlmdinaPlanControlsUX",
-            asset: "/assets/almdina_erp/js/door_cutting_order_plan_controls_ux.js",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
         }),
         Object.freeze({
             global: "AlmdinaPlanTabsUX",
-            asset: "/assets/almdina_erp/js/door_cutting_order_plan_tabs_ux.js",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
         }),
         Object.freeze({
             global: "AlmdinaPlanContentUX",
-            asset: "/assets/almdina_erp/js/door_cutting_order_plan_content_ux.js",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
         }),
     ]);
 

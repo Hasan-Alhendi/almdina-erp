@@ -36,11 +36,11 @@ class TestProductScopeContract(unittest.TestCase):
         hooks = runpy.run_path(str(ROOT / "hooks.py"))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         for script in (
-            "public/js/door_cutting_order_document_print_theme.js",
-            "public/js/door_cutting_order_document_print_presenter.js",
-            "public/js/door_cutting_order_multi_edge_documents_ux.js",
-            "public/js/door_cutting_order_cost_permissions_ux.js",
-            "public/js/door_cutting_order_financial_documents_ux.js",
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js",
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
+            "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
+            "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
         ):
             self.assertIn(script, scripts)
         self.assertNotIn(

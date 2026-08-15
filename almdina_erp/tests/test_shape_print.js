@@ -15,7 +15,7 @@ require(path.resolve(
 ));
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_shape_print.js"
+    "../public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"
 ));
 
 const renderer = window.AlmdinaShapePrint;

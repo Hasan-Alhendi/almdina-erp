@@ -20,7 +20,7 @@ def source(name: str) -> str:
 
 
 def test_special_door_pricing_does_not_block_ordinary_save() -> None:
-    cost_permissions = source("door_cutting_order_cost_permissions_ux.js")
+    cost_permissions = source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js")
     adapter = PIECE_POLICY_ADAPTER.read_text(encoding="utf-8")
     validate_rows = adapter.split("def validate_rows(self)", 1)[1].split(
         "def ensure_documented(self)", 1
@@ -35,7 +35,7 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
 
 
 def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
-    plan_controls = source("door_cutting_order_plan_controls_ux.js")
+    plan_controls = source("door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js")
     fast_save = source("door_cutting_order_fast_save_ux.js")
     revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
@@ -95,7 +95,7 @@ def test_kerf_and_trim_follow_order_input_plan_staleness() -> None:
 
 
 def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observers() -> None:
-    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+    operator_patch = source("door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js")
 
     assert "disconnectCompetingEdgeObservers" in operator_patch
     assert '"_dcoSideEdgeObserver"' in operator_patch
@@ -114,7 +114,7 @@ def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observe
 
 
 def test_special_edge_visual_highlight_is_scoped_to_special_rows() -> None:
-    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+    operator_patch = source("door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js")
 
     assert 'SPECIAL_EDGE_STYLE_ID = "dco-special-edge-visual-guard-css"' in operator_patch
     assert "tr:not(.dco-special-row)" in operator_patch

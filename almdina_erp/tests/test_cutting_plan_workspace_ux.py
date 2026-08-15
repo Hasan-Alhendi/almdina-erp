@@ -6,8 +6,9 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-PLAN_UX = APP_ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
-CONTENT_UX = APP_ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
+CUTTING_PLAN = APP_ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
+CONTENT_UX = CUTTING_PLAN / "door_cutting_order_plan_content_ux.js"
 
 
 def _field_order() -> list[str]:

@@ -13,16 +13,56 @@ CANONICAL_FORM = (
     / "door_cutting_order"
     / "door_cutting_order.js"
 )
-PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
-PLAN_CONTENT = ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
-DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
+PLAN_RENDERER = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_cutting_plan_renderer.js"
+)
+PLAN_CONTENT = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_ux.js"
+)
+DRAWING_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_plan_ux.js"
+)
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
-PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
-PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
+PLAN_CONTROLS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_controls_ux.js"
+)
+PLAN_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_ux.js"
+)
 PLAN_SURFACE_BOOTSTRAP = (
-    ROOT / "public" / "js" / "door_cutting_order_plan_surface_bootstrap.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_surface_bootstrap.js"
 )
 ACTION_GUARD = (
     ROOT
@@ -33,12 +73,30 @@ ACTION_GUARD = (
     / "door_cutting_order_action_permission_guard.js"
 )
 MEASUREMENT_ACTIONS = (
-    ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
 )
 DOCUMENT_PRINT = (
-    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
 )
-SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
+SECURE_DXF = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "secure_dxf_export.js"
+)
 SPECIAL_SHAPE_UX = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 
 
@@ -56,21 +114,21 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
     def test_focused_renderer_loads_before_every_active_plan_consumer(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
-        renderer = '"public/js/door_cutting_order_cutting_plan_renderer.js"'
+        renderer = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"'
 
         self.assertIn(renderer, hooks)
         for consumer in (
-            '"public/js/door_cutting_order_plan_tabs_ux.js"',
-            '"public/js/door_cutting_order_drawing_plan_ux.js"',
+            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"',
+            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/shop_floor_order_ux.js"',
         ):
             self.assertLess(hooks.index(renderer), hooks.index(consumer))
 
     def test_protected_surfaces_have_deterministic_form_load_order(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
-        cost_presenter = '"public/js/door_cutting_order_cost_presenter.js"'
-        cost_permissions = '"public/js/door_cutting_order_cost_permissions_ux.js"'
-        plan_tabs = '"public/js/door_cutting_order_plan_tabs_ux.js"'
+        cost_presenter = '"public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"'
+        cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
+        plan_tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
         permission_refresh = '"public/js/door_cutting_order_permission_refresh_ux.js"'
 
         self.assertIn('"route": "/desk"', hooks)

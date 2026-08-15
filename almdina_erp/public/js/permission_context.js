@@ -78,7 +78,7 @@
     // must never leave an authorized cutting-plan surface empty.
     const PLAN_SURFACE_MODULE = Object.freeze({
         global: "AlmdinaCuttingPlanSurfaceBootstrap",
-        asset: "/assets/almdina_erp/js/door_cutting_order_plan_surface_bootstrap.js",
+        asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
     });
 
     function normalizeNavigation(raw) {

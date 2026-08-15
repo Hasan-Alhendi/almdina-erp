@@ -14,7 +14,7 @@ def source(name: str) -> str:
 
 class TestOrderPageStabilityContract(unittest.TestCase):
     def test_status_strip_has_one_renderer(self) -> None:
-        operator = source("door_cutting_order_operator_ux.js")
+        operator = source("door_cutting_order/order_entry/door_cutting_order_operator_ux.js")
         production = source("shop_floor_order_ux.js")
 
         self.assertNotIn("fields_dict.operator_status_strip", operator)
@@ -22,7 +22,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertIn("_almdinaTrackingStripHtml", production)
 
     def test_measurement_editor_preserves_identical_dom(self) -> None:
-        operator = source("door_cutting_order_operator_ux.js")
+        operator = source("door_cutting_order/order_entry/door_cutting_order_operator_ux.js")
 
         self.assertIn("root._dcoFastEntryHtml !== html", operator)
         self.assertIn("root._dcoFastEntryHtml = html", operator)
@@ -79,14 +79,16 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertNotIn("dco-primary-action-pending", toolbar)
 
     def test_plan_recovery_does_not_destroy_ready_html(self) -> None:
-        bootstrap = source("door_cutting_order_plan_surface_bootstrap.js")
+        bootstrap = source(
+            "door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"
+        )
 
         self.assertIn("if (metadataChanged && typeof field.refresh", bootstrap)
         self.assertIn("__almdinaPlanSurfaceSignature", bootstrap)
         self.assertIn("permissionVersion() <= 0", bootstrap)
 
     def test_permission_field_metadata_is_updated_only_when_changed(self) -> None:
-        costs = source("door_cutting_order_cost_permissions_ux.js")
+        costs = source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js")
 
         self.assertIn('field.df.options !== "costing_currency"', costs)
         self.assertIn("Number(field.df.hidden || 0) !== hidden", costs)

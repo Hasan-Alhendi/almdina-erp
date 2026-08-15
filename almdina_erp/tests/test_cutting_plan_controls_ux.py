@@ -8,11 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 DETAIL_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
 HOOKS = ROOT / "hooks.py"
-PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
-CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
+CONTROLS_UX = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
 TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
 FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-PLAN_TABS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
+PLAN_TABS_UX = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
 ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_action_permission_guard.js"
 REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
 PLAN_PERMISSION_SERVICE = (
@@ -33,10 +34,10 @@ def test_advanced_algorithms_remain_in_the_primary_packing_mode_select():
 
 def test_duplicate_algorithm_palette_is_removed_and_simple_controls_load_last():
     hooks = source(HOOKS)
-    plan = '"public/js/door_cutting_order_plan_ux.js"'
+    plan = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
     text_board = '"public/js/door_cutting_order_text_board_plan_ux.js"'
     fast_save = '"public/js/door_cutting_order_fast_save_ux.js"'
-    controls = '"public/js/door_cutting_order_plan_controls_ux.js"'
+    controls = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"'
 
     assert not REMOVED_PALETTE.exists()
     assert "door_cutting_order_algorithm_palette_ux.js" not in hooks

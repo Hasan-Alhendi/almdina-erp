@@ -21,7 +21,7 @@ SHOP_FLOOR_WORKSPACE_PATH = (
 )
 PLAN_TABS_PATH = (
     REPOSITORY_ROOT
-    / "almdina_erp/public/js/door_cutting_order_plan_tabs_ux.js"
+    / "almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"
 )
 
 

@@ -5,16 +5,40 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
-SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
+SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
-PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
-SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
-OPERATOR = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-TABLE = ROOT / "public" / "js" / "door_cutting_order_table_performance_ux.js"
-MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
+SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
+OPERATOR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+TABLE = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_table_performance_ux.js"
+)
+MEASUREMENT_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 
 
 def _source(path: Path) -> str:
@@ -37,17 +61,17 @@ def test_contract_loads_before_active_shape_output_consumers():
     hooks = _source(HOOKS)
     geometry = '"/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js"'
     contract = '"/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js"'
-    secure_dxf = '"/assets/almdina_erp/js/secure_dxf_export.js"'
+    secure_dxf = '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js"'
     assert hooks.index(geometry) < hooks.index(contract) < hooks.index(secure_dxf)
 
     consumers = (
-        '"public/js/door_cutting_order_cutting_plan_renderer.js"',
-        '"public/js/door_cutting_order_shape_print.js"',
-        '"public/js/door_cutting_order_operator_ux.js"',
+        '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"',
+        '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"',
+        '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"',
         '"public/js/door_cutting_order_special_shape_ux.js"',
-        '"public/js/door_cutting_order_table_performance_ux.js"',
-        '"public/js/door_cutting_order_measurement_actions_ux.js"',
-        '"public/js/door_cutting_order_document_print_presenter.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"',
+        '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
     )
     for consumer in consumers:
         assert consumer in hooks
@@ -62,13 +86,13 @@ def test_order_form_boots_shape_dependencies_before_active_consumers():
     geometry = "public/js/door_cutting_order_special_shape_geometry.js"
     contract = "public/js/door_cutting_order_shape_output_contract.js"
     consumers = (
-        "public/js/door_cutting_order_cutting_plan_renderer.js",
-        "public/js/door_cutting_order_shape_print.js",
-        "public/js/door_cutting_order_operator_ux.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
+        "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
+        "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_table_performance_ux.js",
-        "public/js/door_cutting_order_measurement_actions_ux.js",
-        "public/js/door_cutting_order_document_print_presenter.js",
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
+        "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
     )
     assert geometry in scripts
     assert contract in scripts

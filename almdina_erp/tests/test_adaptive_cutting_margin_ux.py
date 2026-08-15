@@ -14,7 +14,14 @@ from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLAN_CONTENT_UX = ROOT / "public/js/door_cutting_order_plan_content_ux.js"
+PLAN_CONTENT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_ux.js"
+)
 
 
 def _command(

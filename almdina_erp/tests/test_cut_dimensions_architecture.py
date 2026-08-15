@@ -61,16 +61,48 @@ DETAIL_DOCTYPE_PATH = (
     / "door_cutting_order_detail"
     / "door_cutting_order_detail.json"
 )
-CUT_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_cut_dimensions_ux.js"
-SIDE_EDGE_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_multi_edge_ux.js"
+CUT_UX_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_cut_dimensions_ux.js"
+)
+SIDE_EDGE_UX_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_multi_edge_ux.js"
+)
 EDGE_CONTROLS_UX_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_controls_ux.js"
 )
 DOCUMENT_PRINT_PRESENTER_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
 )
 DOCUMENT_UX_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_multi_edge_documents_ux.js"
 )
 EDGE_UX_PATH = ROOT / "public" / "js" / "edge_banding_type_ux.js"
 HOOKS_PATH = ROOT / "hooks.py"
@@ -175,25 +207,25 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         performance_index = scripts.index(
-            "public/js/door_cutting_order_table_performance_ux.js"
+            "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"
         )
         side_edge_index = scripts.index(
-            "public/js/door_cutting_order_multi_edge_ux.js"
+            "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_multi_edge_ux.js"
         )
         controls_index = scripts.index(
-            "public/js/door_cutting_order_edge_profile_controls_ux.js"
+            "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js"
         )
         cut_index = scripts.index(
-            "public/js/door_cutting_order_cut_dimensions_ux.js"
+            "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js"
         )
         theme_index = scripts.index(
-            "public/js/door_cutting_order_document_print_theme.js"
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js"
         )
         print_index = scripts.index(
-            "public/js/door_cutting_order_document_print_presenter.js"
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
         )
         documents_index = scripts.index(
-            "public/js/door_cutting_order_multi_edge_documents_ux.js"
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js"
         )
 
         self.assertGreater(side_edge_index, performance_index)
