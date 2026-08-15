@@ -105,7 +105,7 @@ assert.equal(M.effectiveTool("pen", true), "select", "Ctrl selection is temporar
 assert.equal(M.effectiveTool("pen", false), "pen", "Releasing Ctrl must restore the chosen tool");
 assert.equal(M.normalizeTool("rectangle"), "rectangle");
 
-const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const modifiers = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/tool_modifiers.js"), "utf8");
 assert.match(entry, /application\/tool_modifier_policy\.js/);
 assert.match(entry, /application\/tool_modifiers\.js/);
