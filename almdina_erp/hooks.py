@@ -57,7 +57,7 @@ doctype_js = {
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js",
-        "public/js/door_cutting_order_special_shape_ux.js",
+        "public/js/door_cutting_order/drawing/special_shape_facade.js",
         "public/js/door_cutting_order/core/door_cutting_order_action_permission_guard.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
