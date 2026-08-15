@@ -22,7 +22,14 @@ LIFECYCLE_UX = (
     ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
 )
 REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
-BOARD_TEXT_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
+BOARD_TEXT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_board_text_ux.js"
+)
 FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
 API_PATH = ROOT / "almdina_erp" / "api.py"
