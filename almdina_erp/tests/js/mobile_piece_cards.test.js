@@ -9,7 +9,7 @@ const responsiveSource = fs.readFileSync(
     "utf8"
 );
 const source = fs.readFileSync(
-    "almdina_erp/public/js/door_cutting_order_mobile_cards_ux.js",
+    "almdina_erp/public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
     "utf8"
 );
 const cardCss = fs.readFileSync(
