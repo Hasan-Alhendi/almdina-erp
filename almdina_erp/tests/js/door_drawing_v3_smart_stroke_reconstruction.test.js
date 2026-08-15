@@ -85,7 +85,7 @@ assert.ok(hasHandles(flowerResult));
 
 const source = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/domain/smart_stroke_reconstruction_domain.js"), "utf8");
 const app = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/application/non_destructive_smart_suggestions.js"), "utf8");
-const bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 
 assert.match(source, /resampleUniform/);
 assert.match(source, /straightEvidence/);
