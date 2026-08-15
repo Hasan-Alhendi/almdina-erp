@@ -61,10 +61,32 @@ DETAIL_DOCTYPE_PATH = (
     / "door_cutting_order_detail"
     / "door_cutting_order_detail.json"
 )
-CUT_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_cut_dimensions_ux.js"
-SIDE_EDGE_UX_PATH = ROOT / "public" / "js" / "door_cutting_order_multi_edge_ux.js"
+CUT_UX_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_cut_dimensions_ux.js"
+)
+SIDE_EDGE_UX_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_multi_edge_ux.js"
+)
 EDGE_CONTROLS_UX_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_controls_ux.js"
 )
 DOCUMENT_PRINT_PRESENTER_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
@@ -178,13 +200,13 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
             "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"
         )
         side_edge_index = scripts.index(
-            "public/js/door_cutting_order_multi_edge_ux.js"
+            "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_multi_edge_ux.js"
         )
         controls_index = scripts.index(
-            "public/js/door_cutting_order_edge_profile_controls_ux.js"
+            "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js"
         )
         cut_index = scripts.index(
-            "public/js/door_cutting_order_cut_dimensions_ux.js"
+            "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js"
         )
         theme_index = scripts.index(
             "public/js/door_cutting_order_document_print_theme.js"
