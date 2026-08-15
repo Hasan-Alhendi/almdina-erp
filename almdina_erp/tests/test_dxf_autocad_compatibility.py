@@ -2,7 +2,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
 WORKFLOW_JS = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -102,7 +103,7 @@ def test_secure_exporter_strips_legacy_buttons_and_legacy_workflow_stays_deleted
 
 
 def test_plan_section_hosts_permissioned_print_and_dxf_actions():
-    plan = _source(ROOT / "public" / "js" / "door_cutting_order_plan_ux.js")
+    plan = _source(CUTTING_PLAN / "door_cutting_order_plan_ux.js")
     assert "dco-print-cutting-plan" in plan
     assert "dco-export-dxf" in plan
     assert "dco-upload-dxf-plan" in plan
