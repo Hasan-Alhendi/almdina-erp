@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "stage": "Stage 10 — Backend Legacy Audit",
+  "baseline_develop_sha": "453c000240b574b9739fc46ba392c17c42b766c9",
+  "scope": "Known backend runtime, compatibility, mixed-legacy and retired-product boundaries. Classification is by responsibility/surface; a LEGACY module is a Stage 11 migration target, not permission to delete it.",
+  "rules": [
+    "Do not delete a compatibility path until its HTTP/Python callers are proven migrated.",
+    "Do not delete the canonical Door Cutting Order DocType base class; Frappe requires the active override to subclass it.",
+    "Retired product HTTP routes must remain fail-closed until the route itself is formally removed.",
+    "Stage 11 must split mixed modules before deleting historical endpoints.",
+    "DEAD requires positive evidence of zero hook, HTTP, Python-import and test consumers; none met that bar in this audit."
+  ],
+  "classifications": {
+    "active": [
+      {
+        "path": "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_controller.py",
+        "owner": "Door Cutting Order Frappe entry point",
+        "evidence": "hooks.py activates this thin subclass; save orchestration delegates to Application/Infrastructure.",
+        "stage11_action": "Keep as the only override_doctype_class owner."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/application/orders/process_order_save.py",
+        "owner": "Order save application use case",
+        "evidence": "Framework-independent save orchestration used by the active controller.",
+        "stage11_action": "Keep canonical."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py",
+        "owner": "Order save Frappe gateway",
+        "evidence": "Composes focused document, piece, cutting, costing and plan adapters.",
+        "stage11_action": "Keep canonical."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/frappe/orders/plan_adapter.py",
+        "owner": "Cutting-plan Frappe adapter",
+        "evidence": "Uses application cutting use cases and domain_cutting_engine, not legacy service engines.",
+        "stage11_action": "Keep canonical."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/cutting/domain_engine.py",
+        "owner": "Cutting domain engine adapter",
+        "evidence": "Canonical adapter to the pure domain.cutting package.",
+        "stage11_action": "Keep canonical."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/shop_floor_commands.py",
+        "owner": "Shop-floor command API adapter",
+        "evidence": "Thin adapter over application.shop_floor.commands and focused Frappe repository.",
+        "stage11_action": "Keep canonical public command service."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/shop_floor_query_service.py",
+        "owner": "Shop-floor query API adapter",
+        "evidence": "Canonical query service used by hook overrides for historical shop_floor_service routes.",
+        "stage11_action": "Keep canonical public query service."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/shop_floor_dxf_service.py",
+        "owner": "Shop-floor drawing/DXF API adapter",
+        "evidence": "Canonical focused drawing/DXF service used by historical route overrides.",
+        "stage11_action": "Keep canonical public drawing service."
+      }
+    ],
+    "compatibility": [
+      {
+        "path": "almdina_erp/almdina_erp/services/cutting_engine.py",
+        "canonical_owner": "almdina_erp.almdina_erp.domain.cutting",
+        "evidence": "Backward-compatible star-import facade; no cutting algorithm remains here.",
+        "stage11_action": "Preserve until Python import consumers are migrated; then remove in Stage 11 only if zero consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/advanced_cutting_optimizer.py",
+        "canonical_owner": "almdina_erp.almdina_erp.domain.cutting.optimizer",
+        "evidence": "Backward-compatible optimizer import facade.",
+        "stage11_action": "Preserve until import consumers migrate; then remove if zero consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/cutting/legacy_engine.py",
+        "canonical_owner": "almdina_erp.almdina_erp.infrastructure.cutting.domain_engine",
+        "evidence": "Legacy names are aliases of DomainCuttingEngineAdapter/domain_cutting_engine.",
+        "stage11_action": "Migrate old imports to domain_engine and remove alias module only after zero consumers."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/shop_floor_service.py",
+        "canonical_owner": "focused shop_floor_commands, shop_floor_query_service, shop_floor_dxf_service and order_dispatch_service",
+        "evidence": "Historical whitelisted API facade with lazy delegates; owns no database/business logic.",
+        "stage11_action": "Keep old HTTP/Python compatibility while callers migrate; shrink only after route usage is proven zero."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/infrastructure/frappe/shop_floor_gateway.py",
+        "canonical_owner": "focused production/order/event repositories and shop_floor_authorization",
+        "evidence": "Historical import facade; removed role gates fail closed and old create_stage semantics are explicit.",
+        "stage11_action": "Migrate imports symbol-by-symbol; never delete before callers of compatibility semantics are gone."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/replacement_service.py",
+        "canonical_owner": "focused replacement creation/approval/execution/completion services",
+        "evidence": "Backward-compatible whitelisted facade that lazy-delegates and owns no business logic.",
+        "stage11_action": "Retain public route compatibility until clients migrate."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/legacy_endpoint_service.py",
+        "canonical_owner": "capability-protected canonical services or explicit fail-closed retirement",
+        "evidence": "Compatibility boundary for retired product endpoints and historical stage/replacement routes.",
+        "stage11_action": "Keep through Stage 11 as the fail-closed/public compatibility boundary; remove only after old routes are formally retired."
+      }
+    ],
+    "legacy": [
+      {
+        "path": "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
+        "evidence": "Frappe-required canonical base class still inherited by DoorCuttingOrderController, but it contains superseded save/plan/cost implementations.",
+        "stage11_action": "Slim carefully after proving which inherited methods remain required; do not delete the canonical DocType class."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
+        "evidence": "Historical performance controller branch; not the active override.",
+        "stage11_action": "Migrate any remaining imports, then remove when compatibility consumers are zero."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
+        "evidence": "Historical text-board controller branch built on FastDoorCuttingOrder; not the active override.",
+        "stage11_action": "Migrate any remaining imports, then remove when compatibility consumers are zero."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_domain.py",
+        "evidence": "Historical domain-backed controller branch retained for compatibility tests/imports; not active override.",
+        "stage11_action": "Migrate any remaining imports and remove the alternate controller chain after parity checks."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/cutting_plan_service.py",
+        "evidence": "Mixed boundary: active plan snapshot persistence plus historical whitelisted order lifecycle endpoints delegated to canonical services.",
+        "stage11_action": "Split active plan persistence from compatibility endpoints before removing any legacy route."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/production_service.py",
+        "evidence": "Mixed production module with historical start/finish/pause/resume HTTP surfaces; hooks redirect them.",
+        "stage11_action": "Separate any still-active internal helpers, migrate callers, then retire old endpoint implementations."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/order_creation_service.py",
+        "evidence": "Native order UI is current product path; both historical HTTP creation endpoints are overridden to the retired boundary.",
+        "stage11_action": "Prove whether apply_factory_defaults has internal consumers; remove retired HTTP surface first, then module if unused."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/replacement_cancellation_service.py",
+        "evidence": "Historical cancellation endpoint is overridden to cancel_legacy_replacement, which rejects obsolete stock reversal.",
+        "stage11_action": "Migrate callers to the supported replacement service and retire the old endpoint module when safe."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/actual_consumption_reversal.py",
+        "evidence": "Inventory feature is outside active product scope; public endpoint is fail-closed by hooks.",
+        "stage11_action": "Remove only after old route compatibility policy is preserved elsewhere and internal imports are zero."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/actual_consumption_service.py",
+        "evidence": "Inventory feature is outside active product scope; public endpoint is fail-closed by hooks.",
+        "stage11_action": "Remove only after old route compatibility policy is preserved elsewhere and internal imports are zero."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/performance_service.py",
+        "evidence": "Historical benchmark endpoint is explicitly retired through hooks.",
+        "stage11_action": "Remove after confirming no internal benchmark tooling imports it."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/preflight_service.py",
+        "evidence": "Historical preflight endpoint is explicitly retired through hooks.",
+        "stage11_action": "Remove after confirming no deployment tooling imports it."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/remnant_service.py",
+        "evidence": "Remnant inventory is outside active product scope; endpoint is fail-closed.",
+        "stage11_action": "Remove after internal import audit and compatibility-route preservation."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/settings_access_service.py",
+        "evidence": "Stock settings endpoints are outside active product scope and fail-closed.",
+        "stage11_action": "Remove obsolete stock settings API implementation after internal import audit."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/stock_availability_service.py",
+        "evidence": "Stock availability is outside active product scope and endpoint is fail-closed.",
+        "stage11_action": "Remove after internal import audit."
+      },
+      {
+        "path": "almdina_erp/almdina_erp/services/stock_service.py",
+        "evidence": "Stock execution is outside active product scope and public methods are fail-closed.",
+        "stage11_action": "Remove after internal import audit and verification that active production/replacement paths remain stock-free."
+      }
+    ],
+    "dead": []
+  },
+  "public_api_contract": {
+    "compatibility_overrides": {
+      "almdina_erp.almdina_erp.services.cutting_plan_service.submit_order_for_review": "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.submit_order_for_review",
+      "almdina_erp.almdina_erp.services.cutting_plan_service.approve_order": "almdina_erp.almdina_erp.services.order_approval_service.approve_order",
+      "almdina_erp.almdina_erp.services.cutting_plan_service.reject_order": "almdina_erp.almdina_erp.services.order_review_service.reject_order",
+      "almdina_erp.almdina_erp.services.cutting_plan_service.send_order_to_production": "almdina_erp.almdina_erp.services.order_dispatch_service.validate_order_for_dispatch",
+      "almdina_erp.almdina_erp.services.cutting_plan_service.lock_cutting_plan": "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
+      "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price": "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
+      "almdina_erp.almdina_erp.services.export_validation_service.get_validated_dxf_plan": "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan",
+      "almdina_erp.almdina_erp.services.production_service.start_stage": "almdina_erp.almdina_erp.services.legacy_endpoint_service.start_legacy_stage",
+      "almdina_erp.almdina_erp.services.production_service.finish_stage": "almdina_erp.almdina_erp.services.legacy_endpoint_service.finish_legacy_stage",
+      "almdina_erp.almdina_erp.services.replacement_cancellation_service.cancel_replacement": "almdina_erp.almdina_erp.services.legacy_endpoint_service.cancel_legacy_replacement",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_shop_floor_context": "almdina_erp.almdina_erp.services.shop_floor_query_service.get_shop_floor_context",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options": "almdina_erp.almdina_erp.services.shop_floor_query_service.get_dispatch_options",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets": "almdina_erp.almdina_erp.services.shop_floor_query_service.get_revert_targets",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_my_inbox": "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_inbox",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_my_archive": "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_archive",
+      "almdina_erp.almdina_erp.services.shop_floor_service.mark_dxf_exported": "almdina_erp.almdina_erp.services.shop_floor_dxf_service.mark_dxf_exported",
+      "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf": "almdina_erp.almdina_erp.services.shop_floor_dxf_service.upload_production_dxf",
+      "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan": "almdina_erp.almdina_erp.services.shop_floor_dxf_service.recalculate_drawing_plan",
+      "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf": "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_workers": "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_workers",
+      "almdina_erp.almdina_erp.services.shop_floor_service.get_handoff_context": "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
+      "almdina_erp.almdina_erp.services.shop_floor_service.dispatch_order": "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order",
+      "almdina_erp.almdina_erp.services.shop_floor_commands.dispatch_order": "almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order",
+      "almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage": "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
+      "almdina_erp.almdina_erp.services.shop_floor_service.handoff_to_next": "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
+      "almdina_erp.almdina_erp.services.shop_floor_service.mark_delivered": "almdina_erp.almdina_erp.services.shop_floor_commands.mark_delivered",
+      "almdina_erp.almdina_erp.services.shop_floor_service.revert_department": "almdina_erp.almdina_erp.services.shop_floor_commands.revert_department",
+      "almdina_erp.almdina_erp.services.shop_floor_service.return_order_to_draft": "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft",
+      "almdina_erp.almdina_erp.services.shop_floor_commands.return_order_to_draft": "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft"
+    },
+    "retired_target": "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+    "retired_sources": [
+      "almdina_erp.almdina_erp.services.actual_consumption_reversal.reverse_actual_consumption",
+      "almdina_erp.almdina_erp.services.actual_consumption_service.record_actual_consumption",
+      "almdina_erp.almdina_erp.services.order_creation_service.create_door_cutting_order",
+      "almdina_erp.almdina_erp.services.order_creation_service.get_new_order_defaults",
+      "almdina_erp.almdina_erp.services.performance_service.benchmark_order_cutting_engine",
+      "almdina_erp.almdina_erp.services.preflight_service.run_factory_preflight",
+      "almdina_erp.almdina_erp.services.remnant_service.generate_order_remnants",
+      "almdina_erp.almdina_erp.services.settings_access_service.get_stock_settings",
+      "almdina_erp.almdina_erp.services.settings_access_service.update_stock_settings",
+      "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
+      "almdina_erp.almdina_erp.services.stock_service.check_order_stock",
+      "almdina_erp.almdina_erp.services.stock_service.consume_order_materials",
+      "almdina_erp.almdina_erp.services.production_service.pause_stage",
+      "almdina_erp.almdina_erp.services.production_service.resume_stage"
+    ]
+  },
+  "stage11_order": [
+    "Controller chain: slim the canonical DoorCuttingOrder base and remove alternate fast/text/domain controller chain only after parity and import checks.",
+    "Cutting imports: migrate callers from cutting_engine/advanced_cutting_optimizer/legacy_engine to pure domain/canonical adapters.",
+    "Cutting plan: split plan snapshot persistence from historical lifecycle endpoint compatibility.",
+    "Shop floor: migrate Python callers off shop_floor_service/shop_floor_gateway while preserving public HTTP routes via hooks.",
+    "Replacement: migrate clients to focused replacement services, then retire the facade only when public route usage is zero.",
+    "Retired product modules: prove zero internal imports, preserve fail-closed old HTTP routing, then remove obsolete inventory/remnant/preflight implementations."
+  ]
+}
