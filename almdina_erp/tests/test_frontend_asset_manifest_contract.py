@@ -60,7 +60,7 @@ EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
     "public/js/door_cutting_order_save_render_performance_ux.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
-    "public/js/door_cutting_order_text_board_plan_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js",
     "public/js/door_cutting_order_fast_save_ux.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
