@@ -80,16 +80,18 @@ class TestProductScopeContract(unittest.TestCase):
         self.assertNotIn("services.remnant_planning", approval_source)
         self.assertIn("frappe.parse_json(order.cutting_plan_json", approval_source)
 
-        workflow_source = (
-            ROOT / "public" / "js" / "door_cutting_order_workflow.js"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("stock_service", workflow_source)
-        self.assertNotIn("Stock Manager", workflow_source)
-        self.assertNotIn("فحص توفر المواد", workflow_source)
+        order_scripts = hooks["doctype_js"]["Door Cutting Order"]
+        retired_workflow = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
+        self.assertFalse(retired_workflow.exists())
         self.assertNotIn(
             "public/js/door_cutting_order_workflow.js",
-            hooks["doctype_js"]["Door Cutting Order"],
+            order_scripts,
         )
+        for script in order_scripts:
+            source = (ROOT / script).read_text(encoding="utf-8")
+            for token in ("stock_service", "Stock Manager", "فحص توفر المواد"):
+                with self.subTest(script=script, token=token):
+                    self.assertNotIn(token, source)
 
         commands_source = (
             ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
