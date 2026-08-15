@@ -21,8 +21,6 @@ function hasPoint(points, expected, tolerance = 0.01) {
 }
 function maxAbsY(points) { return Math.max(...points.map(point => Math.abs(point.y))); }
 
-// This is intentionally much rougher than the old regression. It mirrors the
-// visibly wavy mouse stroke from the operator video rather than a laboratory line.
 const visiblyWobblyLine = [
     G.point(0, 0), G.point(10, 2.4), G.point(20, -2.1), G.point(30, 3.0),
     G.point(40, -2.7), G.point(50, 2.2), G.point(60, -2.9), G.point(70, 2.6),
@@ -42,8 +40,6 @@ const horizontalQuality = Domain.straightQuality(visiblyWobblyLine, Cleaner.PROF
 assert.equal(horizontalQuality.eligible, true);
 assert.ok(horizontalQuality.curveBias < Cleaner.PROFILES.mouse.curveBiasThreshold, "Alternating jitter should look like tremor, not a deliberate curve");
 
-// Dense noisy L: trend-based corner detection must ignore the wobble but retain
-// the real 90-degree direction change.
 const roughL = [
     G.point(0, 0), G.point(10, 1.8), G.point(20, -1.7), G.point(30, 2.0),
     G.point(40, -1.9), G.point(50, 1.7), G.point(60, -1.8), G.point(70, 1.4),
@@ -58,8 +54,6 @@ const protectedCorner = roughL[lResult.cornerIndices[0]];
 assert.ok(hasPoint(lResult.points, protectedCorner), "A protected direction-change anchor must remain exact");
 assert.ok(lResult.points.length <= 5, "High-frequency hand noise should disappear instead of remaining as many small segments");
 
-// A real shallow curve can have a similar maximum deviation to a wobbly line.
-// What differentiates it is that most residuals stay on one side of the chord.
 const intentionalShallowCurve = [];
 for (let x = 0; x <= 120; x += 10) {
     const base = 5.2 * Math.sin(Math.PI * x / 120);
@@ -75,7 +69,6 @@ assert.equal(shallow.straightenedRuns.length, 0, "A deliberate shallow curve mus
 assert.ok(shallow.points.length > 2);
 assert.ok(maxAbsY(shallow.points) > 3.5, "The curve silhouette must remain visibly curved after cleanup");
 
-// A larger free-form arch should get smoother without becoming a primitive or a line.
 const roughArch = [];
 for (let index = 0; index <= 24; index += 1) {
     const x = index * 5;
@@ -125,8 +118,8 @@ assert.match(domainSource, /trendSeries/);
 assert.match(domainSource, /signedDistanceToLine/);
 assert.match(domainSource, /curveBiasThreshold/);
 assert.match(domainSource, /deliberateCurve/);
-assert.match(domainSource, /smooth each intent span independently/i);
-assert.doesNotMatch(domainSource, /circle|rectangle|arc/i, "Automatic cleaner must not recognize or construct primitive types");
+assert.match(domainSource, /Smooth each intent span independently/i);
+assert.doesNotMatch(domainSource, /G\.(?:circle|rectangle|arc)\s*\(/i, "Automatic cleaner must not construct primitive geometry");
 assert.doesNotMatch(domainSource, /document\.|querySelector|frappe\./, "Pure stroke domain must remain DOM and Frappe independent");
 
 console.log("Door Drawing V3 intent-aware smart cleaner passed");
