@@ -96,8 +96,16 @@ assert.doesNotMatch(source, /document\.|querySelector|frappe\./, "The reconstruc
 assert.match(app, /Reconstructor\.reconstruct\(points, pointerType\)/);
 assert.match(app, /reconstruction\.nodes/);
 assert.match(app, /Smart reconstruct freehand stroke/);
+assert.match(app, /function resetCompetingPenState\(c\)/, "Freehand pen must own an explicit transient-state reset");
+assert.match(app, /"bezierPathDraft"/);
+assert.match(app, /"bezierPenGesture"/);
+assert.match(app, /"vectorPathDraft"/);
+assert.match(app, /"vectorGesture"/);
+assert.match(app, /resetCompetingPenState\(c\);\s*clearSuggestion\(c\);/, "Pointer-down must isolate freehand state before the stroke owner starts");
+assert.match(app, /tool\.dataset\.ddv3Tool === "pen"\) resetCompetingPenState\(c\)/, "Selecting the freehand pen must clear stale competing drafts without a page refresh");
 assert.ok(bootstrap.indexOf("/domain/bezier_path_domain.js") < bootstrap.indexOf("/domain/smart_stroke_reconstruction_domain.js"));
 assert.ok(bootstrap.indexOf("/domain/smart_stroke_reconstruction_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js"));
 assert.ok(bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js") < bootstrap.indexOf("/application/non_destructive_smart_suggestions.js"));
+assert.match(bootstrap, /__doorDrawingV3PenStateIsolation:\s*true/);
 
-console.log("Door Drawing V3 local smart stroke reconstruction passed");
+console.log("Door Drawing V3 local smart stroke reconstruction and pen-state isolation passed");
