@@ -293,7 +293,9 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             }
         )
         navigation = impact["navigation"]
-        self.assertEqual(navigation["home_page"], "shop-floor-inbox")
+        self.assertEqual(navigation["home_page"], "door-cutting-order")
+        self.assertEqual(navigation["default_route"], "/desk/door-cutting-order")
+        self.assertEqual(navigation["workspaces"], ["Almdina ERP"])
         self.assertEqual(navigation["profile"], "shop_floor")
         self.assertTrue(navigation["shared_shell"])
         self.assertTrue(navigation["sections"]["production"])
