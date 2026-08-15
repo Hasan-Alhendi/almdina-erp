@@ -17,7 +17,8 @@ V3_VIEW = APP_ROOT / "public" / "js" / "door_drawing_v3" / "presentation" / "can
 V3_EDITOR = APP_ROOT / "public" / "js" / "door_drawing_v3" / "application" / "editor_stage2.js"
 V3_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v3" / "domain" / "geometry.js"
 V3_CSS = APP_ROOT / "public" / "css" / "door_drawing_v3.css"
-COST_UX = APP_ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
+COST_PRESENTER = APP_ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
+COST_PERMISSIONS = APP_ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
 CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 CUTTING_PLAN_PIECE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "cutting_plan_piece" / "cutting_plan_piece.json"
@@ -124,29 +125,41 @@ def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_autho
 def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
     order = ORDER_PY.read_text(encoding="utf-8")
-    cost = COST_UX.read_text(encoding="utf-8")
+    permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
+
     assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
     assert "doctype_has_any_capability" in service
     assert "SPECIAL_PRICE_APPROVER_ROLES" not in service
     assert "special_shape_price_approved_by = frappe.session.user" in service
     assert "special_shape_price_approved_on = now_datetime()" in service
     assert "order.save(ignore_permissions=True)" in service
-    assert 'label: "ملاحظة التسعير (اختياري)"' in cost
-    assert 'note: values.note || ""' in cost
+
+    # Current UX edits the price inline only inside an authorized edit session,
+    # then flushes the pending value through the server capability boundary.
+    assert "function canEditInlinePiecePrice(frm, piece)" in permissions
+    assert '"approve_special_price"' in permissions
+    assert "function applyInlinePriceToPiece(piece, kind, rawValue)" in permissions
+    assert "function flushPendingPriceEdits(frm)" in permissions
+    assert "special_shape_service.approve_special_piece_price" in permissions
+    assert 'note: piece.special_shape_price_note || ""' in permissions
+
     assert "old_drawing != drawing" in order
     assert "if pricing_basis_changed and not approval_action" in order
 
 
 def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     order = ORDER_PY.read_text(encoding="utf-8")
-    cost = COST_UX.read_text(encoding="utf-8")
+    presenter = COST_PRESENTER.read_text(encoding="utf-8")
+    permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
+
     assert "invoice_base_total = board_and_cutting_cost + regular_edge_total" in order
     assert "self.customer_quote_total_usd = round_value(invoice_base_total + final_total, 3)" in order
     assert "self.total_cost_usd = round_value(total_cost, 3)" in order
-    assert "boardCount * boardRate" in cost
-    assert "boardCount * cuttingRate" in cost
-    assert "approve_special_piece_price" in cost
-    assert "التكلفة الداخلية تبقى مستقلة" in cost
+    assert "boardCount * boardRate" in presenter
+    assert "boardCount * cuttingRate" in presenter
+    assert "function quoteTotal(frm)" in presenter
+    assert "special_shape_service.approve_special_piece_price" in permissions
+    assert "frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm)" in permissions
 
 
 def test_review_and_production_approval_gate_special_documentation_and_price():
