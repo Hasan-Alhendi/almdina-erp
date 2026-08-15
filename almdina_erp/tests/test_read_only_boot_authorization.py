@@ -143,7 +143,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertNotIn("almdina_shop_floor_only", bootinfo)
         self.assertNotIn("almdina_order_entry_only", bootinfo)
 
-    def test_operator_capabilities_use_shop_floor_home_without_hiding_desk(self) -> None:
+    def test_operator_capabilities_use_shared_order_list_without_hiding_desk(self) -> None:
         boot = BootHarness(
             {
                 Capability.VIEW_ORDERS,
@@ -175,11 +175,11 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         boot.boot_session(bootinfo)
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "shop_floor")
-        self.assertEqual(bootinfo["home_page"], "shop-floor-inbox")
-        self.assertEqual(bootinfo["default_route"], "/app/shop-floor-inbox")
+        self.assertEqual(bootinfo["home_page"], "door-cutting-order")
+        self.assertEqual(bootinfo["default_route"], "/desk/door-cutting-order")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
-            ["Shop Floor"],
+            ["Almdina ERP"],
         )
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
         self.assertTrue(context["navigation"]["shared_shell"])
