@@ -70,7 +70,8 @@ assert.match(persistence, /authoritative:\s*"door_drawing_v3"/);
 
 assert.match(view, /data-ddv3-path-handle/);
 assert.match(view, /ddv3-bezier-contextbar/);
-assert.match(view, /data-ddv3-bezier-action=\"\$\{action\}\"/);
+assert.match(view, /data-ddv3-bezier-action=\"node-type\"/);
+assert.match(view, /data-ddv3-bezier-action=\"segment-type\"/);
 assert.match(view, /C \$\{c1\.x\}/);
 
 assert.match(topologyView, /ddv3-bezier-contextbar/);
