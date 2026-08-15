@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
-CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
+CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
 MEASUREMENT_ACTIONS = (
     ROOT
     / "public"

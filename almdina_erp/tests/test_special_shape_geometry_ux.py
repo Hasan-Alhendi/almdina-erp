@@ -17,7 +17,7 @@ SERVICE = ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 PLAN = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 EXPORT = ROOT / "almdina_erp" / "services" / "export_validation_service.py"
-GEOMETRY = ROOT / "public" / "js" / "door_cutting_order_special_shape_geometry.js"
+GEOMETRY = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_special_shape_geometry.js"
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
 HOOKS = ROOT / "frontend_assets.py"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
@@ -41,8 +41,8 @@ def test_exact_geometry_is_separate_from_documentation_and_persisted_in_plan():
 
 def test_v3_editor_is_primary_while_production_geometry_contract_remains_available():
     hooks = HOOKS.read_text(encoding="utf-8")
-    geometry_hook = '"/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js"'
-    contract_hook = '"/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js"'
+    geometry_hook = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"'
+    contract_hook = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"'
     editor_hook = '"public/js/door_cutting_order/drawing/special_shape_facade.js"'
     assert geometry_hook in hooks
     assert contract_hook in hooks
