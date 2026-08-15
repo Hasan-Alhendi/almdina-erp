@@ -14,7 +14,12 @@ THEME_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_theme.js"
 )
 PLAN_RENDERER_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_cutting_plan_renderer.js"
 )
 FINANCIAL_DOCUMENTS_PATH = (
     ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
