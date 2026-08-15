@@ -100,9 +100,14 @@ def test_return_and_revert_are_capability_only_without_status_gates():
     lifecycle_service = source(CANCEL_SERVICE)
     lifecycle_ux = source(LIFECYCLE_UX)
     context_service = source(CONTEXT_SERVICE)
-    shop_floor = (ROOT / "public" / "js" / "shop_floor_order_ux.js").read_text(
-        encoding="utf-8"
-    )
+    shop_floor = (
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "production"
+        / "shop_floor_order_ux.js"
+    ).read_text(encoding="utf-8")
     production_auth = (
         ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
     ).read_text(encoding="utf-8")

@@ -30,7 +30,14 @@ DRAWING_PLAN = (
     / "cutting_plan"
     / "door_cutting_order_drawing_plan_ux.js"
 )
-PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+PRODUCTION_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
 PERMISSION_REFRESH = (
     ROOT / "public" / "js" / "door_cutting_order_permission_refresh_ux.js"
 )
@@ -63,7 +70,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
             '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
             '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
             '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
-            '"public/js/shop_floor_order_ux.js"',
+            '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
             '"public/js/door_cutting_order/core/order_lifecycle.js"',
             '"public/js/input_stability.js"',
         ):
@@ -252,7 +259,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
         for owner, probe in (
             ("door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
             ("door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
-            ("shop_floor_order_ux.js", '"production-actions"'),
+            ("door_cutting_order/production/shop_floor_order_ux.js", '"production-actions"'),
             ("permission_context.js", '"order-protected-modules"'),
         ):
             owner_source = (ROOT / "public" / "js" / owner).read_text(encoding="utf-8")

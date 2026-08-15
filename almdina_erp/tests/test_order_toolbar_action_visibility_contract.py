@@ -32,7 +32,12 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertNotIn(",\n                ACTION_GROUP", installer)
 
     def test_previous_stage_button_requires_real_server_targets(self) -> None:
-        source = (PUBLIC / "shop_floor_order_ux.js").read_text(encoding="utf-8")
+        source = (
+            PUBLIC
+            / "door_cutting_order"
+            / "production"
+            / "shop_floor_order_ux.js"
+        ).read_text(encoding="utf-8")
         predicate = source.split("function canCheckRevertTargets", 1)[1].split(
             "function ensureRevertTargets", 1
         )[0]
@@ -50,7 +55,12 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         toolbar = (PUBLIC / "door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js").read_text(
             encoding="utf-8"
         )
-        production = (PUBLIC / "shop_floor_order_ux.js").read_text(encoding="utf-8")
+        production = (
+            PUBLIC
+            / "door_cutting_order"
+            / "production"
+            / "shop_floor_order_ux.js"
+        ).read_text(encoding="utf-8")
         lifecycle = (PUBLIC / "door_cutting_order/core/order_lifecycle.js").read_text(encoding="utf-8")
 
         self.assertNotIn("dco-actions-settling", toolbar)

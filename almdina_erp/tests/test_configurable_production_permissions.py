@@ -18,7 +18,14 @@ DISPATCH_SERVICE = ROOT / "almdina_erp" / "services" / "order_dispatch_service.p
 COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
 QUERY_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
 WORKER_SERVICE = ROOT / "almdina_erp" / "services" / "production_worker_service.py"
-ORDER_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+ORDER_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
 
 
 class TestConfigurableProductionPermissions(unittest.TestCase):
