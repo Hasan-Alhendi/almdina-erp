@@ -5,8 +5,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PLAN_CONTENT = ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
-PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+PLAN_CONTENT = CUTTING_PLAN / "door_cutting_order_plan_content_ux.js"
+PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
 
 
 class TestCuttingPlanBoardGalleryUX(unittest.TestCase):
