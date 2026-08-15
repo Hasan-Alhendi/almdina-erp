@@ -19,7 +19,7 @@ REMNANTS = ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 EXPORT = ROOT / "almdina_erp" / "services" / "export_validation_service.py"
 GEOMETRY = ROOT / "public" / "js" / "door_cutting_order_special_shape_geometry.js"
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 V3_GEOMETRY = ROOT / "public" / "js" / "door_drawing_v3" / "domain" / "geometry.js"
 
