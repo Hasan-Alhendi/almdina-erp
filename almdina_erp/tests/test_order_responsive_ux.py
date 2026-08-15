@@ -32,7 +32,14 @@ BULK_ROWS_UX = (
     / "measurements"
     / "door_cutting_order_bulk_rows_ux.js"
 )
-LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
+LIST_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "list_view"
+    / "door_cutting_order_list.js"
+)
 QUICK_ACTIONS_UX = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
 SHOP_FLOOR_INBOX = (
     ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
