@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
-SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
+SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
@@ -37,8 +37,8 @@ MEASUREMENT_ACTIONS = (
     / "measurements"
     / "door_cutting_order_measurement_actions_ux.js"
 )
-PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 
 
 def _source(path: Path) -> str:
@@ -66,12 +66,12 @@ def test_contract_loads_before_active_shape_output_consumers():
 
     consumers = (
         '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"',
-        '"public/js/door_cutting_order_shape_print.js"',
+        '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"',
         '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"',
         '"public/js/door_cutting_order_special_shape_ux.js"',
         '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"',
         '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"',
-        '"public/js/door_cutting_order_document_print_presenter.js"',
+        '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
     )
     for consumer in consumers:
         assert consumer in hooks
@@ -87,12 +87,12 @@ def test_order_form_boots_shape_dependencies_before_active_consumers():
     contract = "public/js/door_cutting_order_shape_output_contract.js"
     consumers = (
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
-        "public/js/door_cutting_order_shape_print.js",
+        "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
-        "public/js/door_cutting_order_document_print_presenter.js",
+        "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
     )
     assert geometry in scripts
     assert contract in scripts
