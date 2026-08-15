@@ -86,7 +86,7 @@ const context = vm.createContext({
 });
 vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
 vm.runInContext(source("door_cutting_order/order_entry/door_cutting_order_defaults.js"), context);
-vm.runInContext(source("door_cutting_order_drawing_plan_ux.js"), context);
+vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"), context);
 
 function trigger(event, frm) {
     const eventHandlers = handlers["Door Cutting Order"][event] || [];
