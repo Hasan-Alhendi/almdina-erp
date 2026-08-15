@@ -18,7 +18,12 @@ PRODUCTION_POLICY = (
     ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
 )
 DRAWING_APPROVAL_UX = (
-    ROOT / "public" / "js" / "door_cutting_order_drawing_approval_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_approval_ux.js"
 )
 
 
