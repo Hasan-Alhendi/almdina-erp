@@ -13,7 +13,7 @@ CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
 FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
 PLAN_TABS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
-ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
+ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_action_permission_guard.js"
 REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
 PLAN_PERMISSION_SERVICE = (
     ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
