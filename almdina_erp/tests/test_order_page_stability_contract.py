@@ -71,6 +71,8 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertIn("position:fixed!important", toolbar)
         self.assertIn("--dco-viewport-left-compensation", toolbar)
         self.assertIn("function anchorActionsToViewportLeft", toolbar)
+        self.assertIn("Math.min(...visibleLefts)", toolbar)
+        self.assertIn('!node.closest(".dropdown-menu")', toolbar)
         self.assertIn("16 - actualLeft", toolbar)
         self.assertIn("right:auto!important", toolbar)
         self.assertIn("top:10px!important", toolbar)

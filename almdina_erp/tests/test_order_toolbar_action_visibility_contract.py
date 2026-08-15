@@ -61,6 +61,7 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         )
         self.assertIn("--dco-viewport-left-compensation", toolbar)
         self.assertIn("anchorActionsToViewportLeft(head)", toolbar)
+        self.assertIn("Math.min(...visibleLefts)", toolbar)
         self.assertIn("right:auto!important", toolbar)
         self.assertIn("position:fixed!important", toolbar)
         self.assertIn("flex-wrap:nowrap!important", toolbar)

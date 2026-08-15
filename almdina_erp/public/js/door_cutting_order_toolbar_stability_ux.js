@@ -448,12 +448,27 @@
             return;
         }
 
-        // A transformed Frappe ancestor turns position:fixed into a container-
-        // relative position. Compensate for that ancestor so the final screen
-        // coordinate is always 16px, matching the native top-left action row.
+        // The actions container may already span the viewport while its visible
+        // buttons remain aligned to the right. Measure the leftmost visible
+        // control, not the container, then move the whole row to screen x=16.
         const property = "--dco-viewport-left-compensation";
         const current = Number.parseFloat(actions.style.getPropertyValue(property)) || 0;
-        const actualLeft = actions.getBoundingClientRect().left;
+        const visibleLefts = [...actions.querySelectorAll("button,a,.btn-group,.dropdown")]
+            .filter(node => !node.closest(".dropdown-menu"))
+            .map(node => {
+                const rect = node.getBoundingClientRect();
+                const style = window.getComputedStyle(node);
+                return rect.width > 0
+                    && rect.height > 0
+                    && style.display !== "none"
+                    && style.visibility !== "hidden"
+                    ? rect.left
+                    : null;
+            })
+            .filter(value => Number.isFinite(value));
+        const actualLeft = visibleLefts.length
+            ? Math.min(...visibleLefts)
+            : actions.getBoundingClientRect().left;
         if (!Number.isFinite(actualLeft)) return;
         const corrected = current + (16 - actualLeft);
         if (Math.abs(corrected - current) > 0.5) {
