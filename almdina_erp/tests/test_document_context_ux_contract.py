@@ -6,7 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
-DOCUMENT_CONTEXT = ROOT / "public" / "js" / "door_cutting_order_document_context.js"
+DOCUMENT_CONTEXT = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_document_context.js"
+)
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
 DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
 PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
@@ -14,7 +21,12 @@ PERMISSION_REFRESH = (
     ROOT / "public" / "js" / "door_cutting_order_permission_refresh_ux.js"
 )
 TOOLBAR_STABILITY = (
-    ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_toolbar_stability_ux.js"
 )
 DOCUMENT_PRINT = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
@@ -24,7 +36,7 @@ DOCUMENT_PRINT = (
 class TestDocumentContextUxContract(unittest.TestCase):
     def test_document_context_loads_before_every_active_order_feature(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
-        context = '"public/js/door_cutting_order_document_context.js"'
+        context = '"public/js/door_cutting_order/core/door_cutting_order_document_context.js"'
 
         self.assertIn(context, hooks)
         for feature in (
@@ -32,7 +44,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
             '"public/js/door_cutting_order_document_print_presenter.js"',
             '"public/js/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/shop_floor_order_ux.js"',
-            '"public/js/order_lifecycle.js"',
+            '"public/js/door_cutting_order/core/order_lifecycle.js"',
             '"public/js/input_stability.js"',
         ):
             self.assertLess(hooks.index(context), hooks.index(feature))
