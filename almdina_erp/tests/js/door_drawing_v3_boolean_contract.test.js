@@ -7,7 +7,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "../..");
 const read = relative => fs.readFileSync(path.join(ROOT, relative), "utf8");
 
-const bootstrap = read("public/js/door_cutting_order_special_shape_ux.js");
+const bootstrap = read("public/js/door_cutting_order/drawing/special_shape_facade.js");
 const domain = read("public/js/door_drawing_v3/domain/boolean_geometry_domain.js");
 const view = read("public/js/door_drawing_v3/presentation/boolean_operations_view.js");
 const application = read("public/js/door_drawing_v3/application/boolean_operations.js");
