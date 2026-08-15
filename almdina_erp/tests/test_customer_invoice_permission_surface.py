@@ -23,7 +23,7 @@ FINANCIAL = (
     / "door_cutting_order_financial_documents_ux.js"
 )
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
-HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 
 
 class TestCustomerInvoicePermissionSurface(unittest.TestCase):
@@ -75,11 +75,11 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
 
     def test_order_form_loads_customer_invoice_toolbar_from_source(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
 
         self.assertIn(
             '"public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js"',
-            hooks,
+            manifest,
         )
         self.assertIn("AlmdinaCustomerInvoiceToolbarUX", source)
 
