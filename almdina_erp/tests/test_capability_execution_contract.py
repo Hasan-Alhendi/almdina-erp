@@ -14,7 +14,14 @@ HOOKS = ROOT / "hooks.py"
 PLAN_PERMISSION_SERVICE = (
     ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 )
-PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+PLAN_CONTROLS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_controls_ux.js"
+)
 APPROVAL_SERVICE = ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 ACTION_GUARD = (
     ROOT
