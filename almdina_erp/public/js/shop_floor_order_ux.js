@@ -4,6 +4,7 @@
 	const DRAWING_ACTION_GROUP = __("الرسم / DXF");
 	const PRODUCTION_ACTION_GROUP = __("صالة الإنتاج");
 	const ACTIVE_STAGE_STATUSES = new Set(["Pending", "In Progress", "Paused"]);
+	const NON_REVERTABLE_ORDER_STATUSES = new Set(["Draft", "Rejected", "Delivered", "Cancelled"]);
 
 	function permissionContext() {
 		return window.AlmdinaPermissions || null;
@@ -325,10 +326,91 @@
 		frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));
 	}
 
-	function addRevertButton(frm) {
-		if (frm.is_new() || !can(frm, "revert_department")) return;
-		// Standalone toolbar button — not nested under «صالة الإنتاج».
-		frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm));
+	function revertTargetsKey(frm) {
+		if (!frm || !frm.doc) return "";
+		return [
+			frm.doc.name || "",
+			frm.doc.status || "",
+			frm.doc.production_path || "",
+			frm.doc.current_production_stage || "",
+		].join("::");
+	}
+
+	function canCheckRevertTargets(frm) {
+		if (!frm || !frm.doc || frm.is_new() || !can(frm, "revert_department")) return false;
+		const status = String(frm.doc.status || "Draft");
+		return Boolean(
+			!NON_REVERTABLE_ORDER_STATUSES.has(status)
+			&& frm.doc.production_path
+			&& frm.doc.current_production_stage
+		);
+	}
+
+	function ensureRevertTargets(frm) {
+		const key = revertTargetsKey(frm);
+		if (!canCheckRevertTargets(frm)) {
+			frm.__almdinaRevertTargetsKey = key;
+			frm.__almdinaRevertTargets = [];
+			return Promise.resolve([]);
+		}
+		if (
+			frm.__almdinaRevertTargetsKey === key
+			&& Array.isArray(frm.__almdinaRevertTargets)
+		) {
+			return Promise.resolve(frm.__almdinaRevertTargets);
+		}
+		if (
+			frm.__almdinaRevertTargetsPromise
+			&& frm.__almdinaRevertTargetsPromiseKey === key
+		) {
+			return frm.__almdinaRevertTargetsPromise;
+		}
+
+		const identity = capture(frm);
+		const request = frappe.call({
+			method: "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets",
+			args: { order_name: frm.doc.name },
+		}).then((response) => {
+			if (!isCurrent(frm, identity) || revertTargetsKey(frm) !== key) return [];
+			const rows = Array.isArray(response.message) ? response.message : [];
+			frm.__almdinaRevertTargetsKey = key;
+			frm.__almdinaRevertTargets = rows;
+			return rows;
+		}).catch((error) => {
+			if (isCurrent(frm, identity) && revertTargetsKey(frm) === key) {
+				console.error("Failed to load previous production stages", error);
+				frm.__almdinaRevertTargetsKey = key;
+				frm.__almdinaRevertTargets = [];
+			}
+			return [];
+		}).finally(() => {
+			if (frm.__almdinaRevertTargetsPromise === request) {
+				frm.__almdinaRevertTargetsPromise = null;
+				frm.__almdinaRevertTargetsPromiseKey = null;
+			}
+		});
+		frm.__almdinaRevertTargetsPromiseKey = key;
+		frm.__almdinaRevertTargetsPromise = request;
+		return request;
+	}
+
+	function addRevertButton(frm, generation) {
+		return ensureRevertTargets(frm).then((rows) => {
+			const current = isCurrent(frm, capture(frm))
+				&& frm.__almdinaRevertButtonGeneration === generation;
+			if (current && rows.length) {
+				// Standalone toolbar button — rendered only after the server confirms
+				// that at least one earlier stage really exists.
+				frm.add_custom_button(__("إرجاع لمرحلة سابقة"), () => openRevertDialog(frm));
+			}
+			if (current) {
+				const owner = documentContext();
+				if (owner && typeof owner.settleSurfaces === "function") {
+					owner.settleSurfaces(frm, 0);
+				}
+			}
+			return rows;
+		});
 	}
 
 	function addDeliveryButtons(frm) {
@@ -347,31 +429,29 @@
 		}
 	}
 
+	function showRevertDialog(frm, rows) {
+		const labels = new Map(rows.map((row) => [row.label || __(row.stage_type), row.stage_type]));
+		frappe.prompt(
+			[{ fieldname: "target", fieldtype: "Select", label: __("المرحلة"), options: [...labels.keys()].join("\n"), reqd: 1 }],
+			(values) => callAction(
+				"almdina_erp.almdina_erp.services.shop_floor_service.revert_department",
+				{ order_name: frm.doc.name, target_stage_type: labels.get(values.target) },
+				__("تم إرجاع الطلب للمرحلة المحددة."),
+				frm
+			),
+			__("إرجاع لمرحلة سابقة"),
+			__("إرجاع")
+		);
+	}
+
 	function openRevertDialog(frm) {
-		return frappe
-			.call({
-				method: "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets",
-				args: { order_name: frm.doc.name },
-			})
-			.then((response) => {
-				const rows = response.message || [];
-				if (!rows.length) {
-					frappe.msgprint(__("لا توجد مراحل يمكن الرجوع إليها."));
-					return;
-				}
-				const labels = new Map(rows.map((row) => [row.label || __(row.stage_type), row.stage_type]));
-				frappe.prompt(
-					[{ fieldname: "target", fieldtype: "Select", label: __("المرحلة"), options: [...labels.keys()].join("\n"), reqd: 1 }],
-					(values) => callAction(
-						"almdina_erp.almdina_erp.services.shop_floor_service.revert_department",
-						{ order_name: frm.doc.name, target_stage_type: labels.get(values.target) },
-						__("تم إرجاع الطلب للمرحلة المحددة."),
-						frm
-					),
-					__("إرجاع لمرحلة سابقة"),
-					__("إرجاع")
-				);
-			});
+		return ensureRevertTargets(frm).then((rows) => {
+			if (!rows.length) {
+				frappe.msgprint(__("لا توجد مراحل يمكن الرجوع إليها."));
+				return;
+			}
+			showRevertDialog(frm, rows);
+		});
 	}
 
 	function availableApprovalSources(frm) {
@@ -563,10 +643,16 @@
 
 	function productionActionsKey(frm) {
 		if (!frm || !frm.doc) return "";
+		const permissions = permissionContext();
+		const permissionVersion = permissions && typeof permissions.version === "function"
+			? permissions.version()
+			: 0;
 		return [
 			frm.doc.name || "",
 			frm.doc.current_production_stage || "",
 			frm.doc.status || "",
+			frm.doc.production_path || "",
+			permissionVersion,
 		].join("::");
 	}
 
@@ -607,7 +693,12 @@
 		if (status === "Ready for Delivery" && can(frm, "mark_delivered")) {
 			labels.push(__("تم التسليم"));
 		}
-		if (can(frm, "revert_department")) {
+		if (
+			canCheckRevertTargets(frm)
+			&& frm.__almdinaRevertTargetsKey === revertTargetsKey(frm)
+			&& Array.isArray(frm.__almdinaRevertTargets)
+			&& frm.__almdinaRevertTargets.length
+		) {
 			labels.push(__("إرجاع لمرحلة سابقة"));
 		}
 
@@ -636,6 +727,10 @@
 
 	function productionActionsReady(frm) {
 		if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return true;
+		if (
+			frm.__almdinaRevertTargetsPromise
+			&& frm.__almdinaRevertTargetsPromiseKey === revertTargetsKey(frm)
+		) return false;
 		if (frm.__almdinaProductionActionsKey !== productionActionsKey(frm)) return false;
 		const expected = expectedProductionActionLabels(frm);
 		if (!expected.length) return true;
@@ -770,13 +865,17 @@
 
 	function reconcileProductionActions(frm) {
 		if (!frm || frm.doctype !== "Door Cutting Order" || !frm.doc) return false;
-		// A form revisit can keep the same document identity while Frappe rebuilds
-		// its toolbar DOM.  Invalidate readiness before removing buttons so the
-		// surface owner retries until the expected controls really exist.
+		if (
+			frm.__almdinaProductionActionsKey === productionActionsKey(frm)
+			&& productionActionsReady(frm)
+		) return true;
+
 		frm.__almdinaProductionActionsKey = null;
+		frm.__almdinaRevertButtonGeneration = Number(frm.__almdinaRevertButtonGeneration || 0) + 1;
+		const revertGeneration = frm.__almdinaRevertButtonGeneration;
 		removeProductionButtons(frm);
 		addDispatchButton(frm);
-		addRevertButton(frm);
+		addRevertButton(frm, revertGeneration);
 		addDeliveryButtons(frm);
 		addWorkerStageButtons(frm);
 		return true;
