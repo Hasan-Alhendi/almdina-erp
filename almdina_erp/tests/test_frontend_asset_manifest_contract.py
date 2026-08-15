@@ -31,7 +31,7 @@ EXPECTED_DOOR_CUTTING_ORDER_JS = [
     "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
     "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
-    "public/js/door_cutting_order_clipped_corner_ux.js",
+    "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
     "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
     "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
     "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js",
