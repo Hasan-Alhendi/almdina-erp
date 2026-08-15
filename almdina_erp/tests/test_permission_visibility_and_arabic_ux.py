@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.application.security.workspace_visibility import (
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 PUBLIC = ROOT / "public" / "js"
+MANIFEST = ROOT / "frontend_assets.py"
 WORKSPACE = APP / "workspace" / "almdina_erp" / "almdina_erp.json"
 
 
@@ -175,8 +176,8 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertIn('currentRoute() !== "factory-workforce"', source)
         self.assertIn('can("create_users")', source)
         self.assertIn("MutationObserver", source)
-        hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
-        self.assertIn("permission_action_visibility_guard.js", hooks)
+        manifest = MANIFEST.read_text(encoding="utf-8")
+        self.assertIn("permission_action_visibility_guard.js", manifest)
 
     def test_active_permission_services_do_not_use_english_denial_fallbacks(self) -> None:
         paths = (

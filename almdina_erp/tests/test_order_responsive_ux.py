@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
 RESPONSIVE_DEVICE = ROOT / "public" / "js" / "responsive_device.js"
 MOBILE_CARDS_UX = (

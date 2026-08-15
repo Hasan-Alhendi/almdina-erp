@@ -48,7 +48,7 @@ MEASUREMENT_UX = (
     / "measurements"
     / "door_cutting_order_measurement_actions_ux.js"
 )
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source(path: Path) -> str:

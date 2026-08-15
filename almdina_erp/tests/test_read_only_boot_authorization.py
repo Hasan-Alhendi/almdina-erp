@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 BOOT_PATH = PACKAGE_ROOT / "boot.py"
 HOOKS_PATH = PACKAGE_ROOT / "hooks.py"
+MANIFEST_PATH = PACKAGE_ROOT / "frontend_assets.py"
 INSTALL_PATH = PACKAGE_ROOT / "install.py"
 PROVISION_PATH = (
     PACKAGE_ROOT
@@ -94,12 +95,13 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertIn("build_permission_context", source)
 
     def test_hooks_use_read_only_boot_adapter_and_shared_shell(self) -> None:
-        source = HOOKS_PATH.read_text(encoding="utf-8")
-        self.assertIn('boot_session = "almdina_erp.boot.boot_session"', source)
-        self.assertIn('"/assets/almdina_erp/js/shared_shell.js"', source)
-        self.assertNotIn("ensure_operator_account", source)
-        self.assertNotIn('"/assets/almdina_erp/js/shop_floor_desk.js"', source)
-        self.assertNotIn('"/assets/almdina_erp/js/order_entry_desk.js"', source)
+        hooks = HOOKS_PATH.read_text(encoding="utf-8")
+        manifest = MANIFEST_PATH.read_text(encoding="utf-8")
+        self.assertIn('boot_session = "almdina_erp.boot.boot_session"', hooks)
+        self.assertIn('"/assets/almdina_erp/js/shared_shell.js"', manifest)
+        self.assertNotIn("ensure_operator_account", hooks)
+        self.assertNotIn('"/assets/almdina_erp/js/shop_floor_desk.js"', manifest)
+        self.assertNotIn('"/assets/almdina_erp/js/order_entry_desk.js"', manifest)
 
     def test_order_entry_capabilities_keep_main_shared_shell(self) -> None:
         boot = BootHarness(

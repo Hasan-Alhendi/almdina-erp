@@ -11,7 +11,7 @@ UX = (
     / "measurements"
     / "door_cutting_order_measurement_resilience_ux.js"
 )
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source() -> str:

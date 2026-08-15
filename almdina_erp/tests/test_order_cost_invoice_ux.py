@@ -12,7 +12,7 @@ PRINT_THEME = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door
 INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_customer_invoice_toolbar_ux.js"
 FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 HEADER_UX = ROOT / "public" / "js" / "door_cutting_order" / "responsive" / "door_cutting_order_header_ux.js"
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source(path: Path) -> str:

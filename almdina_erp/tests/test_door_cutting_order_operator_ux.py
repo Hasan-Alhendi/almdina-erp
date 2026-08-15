@@ -32,7 +32,7 @@ COMPACT_MEASUREMENTS_JS = (
     / "measurements"
     / "door_cutting_order_compact_measurements_ux.js"
 )
-HOOKS = APP_ROOT / "hooks.py"
+HOOKS = APP_ROOT / "frontend_assets.py"
 
 
 def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_surface():

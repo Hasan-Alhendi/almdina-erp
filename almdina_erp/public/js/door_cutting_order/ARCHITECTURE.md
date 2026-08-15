@@ -20,6 +20,16 @@ before any implementation cleanup or consolidation happens.
 The complex drawing editor remains separately layered under `door_drawing_v3/`
 (`domain`, `application`, `infrastructure`, `presentation`).
 
+## Frontend asset manifest
+
+`almdina_erp/frontend_assets.py` is the single owner of global frontend assets,
+DocType JavaScript assets, and DocType list JavaScript assets. `hooks.py` only
+re-exports those Frappe hook variables; it must not duplicate their path lists.
+
+Asset ordering is runtime-significant. Reorganizing ownership must preserve the
+existing sequence exactly unless a separate behavior change explicitly changes a
+dependency and updates the relevant regression contracts.
+
 ## Migration rules
 
 1. Move one feature group at a time and preserve script contents and load order first.
