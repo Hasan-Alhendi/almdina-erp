@@ -175,7 +175,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         performance_index = scripts.index(
-            "public/js/door_cutting_order_table_performance_ux.js"
+            "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"
         )
         side_edge_index = scripts.index(
             "public/js/door_cutting_order_multi_edge_ux.js"
