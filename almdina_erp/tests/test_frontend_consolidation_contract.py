@@ -33,7 +33,13 @@ ACTION_GUARD = (
     / "door_cutting_order_action_permission_guard.js"
 )
 MEASUREMENT_ACTIONS = (
-    ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
 )
 DOCUMENT_PRINT = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
