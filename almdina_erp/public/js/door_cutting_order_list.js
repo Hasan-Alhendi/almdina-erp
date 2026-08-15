@@ -412,9 +412,20 @@
     function clearOperationalRoleRows(listview) {
         const root = rootNode(listview);
         if (!root) return;
-        root.querySelectorAll(".dco-list-row-other-role").forEach(node => {
+        root.querySelectorAll(".dco-list-row-other-role,.dco-list-row-completed").forEach(node => {
             node.classList.remove("dco-list-row-other-role");
+            node.classList.remove("dco-list-row-completed");
         });
+    }
+
+    function compareServerTimes(left, right, fieldname, direction) {
+        const leftValue = String(left.flag && left.flag[fieldname] || "");
+        const rightValue = String(right.flag && right.flag[fieldname] || "");
+        if (!leftValue && !rightValue) return left.name.localeCompare(right.name);
+        if (!leftValue) return 1;
+        if (!rightValue) return -1;
+        const compared = leftValue.localeCompare(rightValue);
+        return compared ? compared * direction : left.name.localeCompare(right.name);
     }
 
     function applyOperationalRolePresentation(listview, payload) {
@@ -443,25 +454,40 @@
             return;
         }
 
-        const mine = [];
-        const other = [];
+        const assigned = [];
+        const completed = [];
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
             if (!name) return;
-            const flag = flags[name];
-            // Missing flag (no current stage / unknown) counts as other-role so
-            // finished or foreign-stage orders still land in the green trailer.
-            const isOther = !(flag && flag.actor_holds_current_stage_role === true);
-            container.classList.toggle("dco-list-row-other-role", isOther);
+            const flag = flags[name] || {};
+            const isCompleted = flag.assignment_state === "completed";
+            container.classList.remove("dco-list-row-other-role");
+            container.classList.toggle("dco-list-row-completed", isCompleted);
             const card = container.querySelector(".dco-mobile-order-card");
-            if (card) card.classList.toggle("dco-list-row-other-role", isOther);
-            (isOther ? other : mine).push(container);
+            if (card) {
+                card.classList.remove("dco-list-row-other-role");
+                card.classList.toggle("dco-list-row-completed", isCompleted);
+            }
+            (isCompleted ? completed : assigned).push({ container, flag, name });
         });
 
-        // Own-role stages stay at the top; everything else closes the list in green.
+        // Current assignments: oldest assignment first. Completed work follows:
+        // newest finish first. Order creation time is deliberately irrelevant.
+        assigned.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "assignment_time",
+            1
+        ));
+        completed.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "completion_time",
+            -1
+        ));
+        const ordered = [...assigned, ...completed].map(item => item.container);
         // Do not move nodes when they are already ordered: moving a node triggers
         // Frappe's mutation observer and used to start another request/reorder loop.
-        const ordered = [...mine, ...other];
         const current = [...result.querySelectorAll(".list-row-container")]
             .filter(container => Boolean(rowDocumentName(container)));
         const needsReorder = ordered.some((container, index) => current[index] !== container);

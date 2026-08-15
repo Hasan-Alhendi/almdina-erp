@@ -159,6 +159,9 @@
 
     function resolveHomeRoute(nav) {
         const requested = routeSlug(nav && nav.home_page);
+        if (requested === "door-cutting-order" && surfaceAllowed("orders")) {
+            return requested;
+        }
         if (registeredWorkspace(requested) || registeredPage(requested)) {
             return requested;
         }

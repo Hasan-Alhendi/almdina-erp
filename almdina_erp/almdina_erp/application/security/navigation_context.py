@@ -33,6 +33,7 @@ WORKSPACE_CONTROL_CENTER = "Almdina Control Center"
 WORKSPACE_REPORTS = "Almdina Reports"
 WORKSPACE_SETTINGS = "Almdina Settings"
 WORKSPACE_GO_LIVE = "Almdina Go-Live"
+ORDER_LIST_ROUTE = "door-cutting-order"
 
 _CUSTOMER_DOCUMENT_CAPABILITIES = frozenset(
     {Capability.PRINT_MEASUREMENTS, Capability.PRINT_CUSTOMER_INVOICE}
@@ -179,7 +180,9 @@ def build_navigation_context(
 
     workspaces: list[str] = []
     if operator_only:
-        workspaces.append(WORKSPACE_SHOP_FLOOR)
+        # Operators use the same primary workspace and order list as admins;
+        # server-side scope changes the rows, never the interface.
+        workspaces.append(WORKSPACE_MAIN)
     elif active:
         workspaces.append(WORKSPACE_MAIN)
         if has_shop_floor:
@@ -203,8 +206,8 @@ def build_navigation_context(
         home_page = DESKTOP_PAGE_ROUTE
         default_route = f"/desk/{DESKTOP_PAGE_ROUTE}"
     elif operator_only:
-        home_page = "shop-floor-inbox"
-        default_route = "/app/shop-floor-inbox"
+        home_page = ORDER_LIST_ROUTE
+        default_route = f"/desk/{ORDER_LIST_ROUTE}"
     else:
         home_page = WORKSPACE_MAIN_ROUTE
         default_route = f"/desk/{WORKSPACE_MAIN_ROUTE}"
@@ -234,6 +237,7 @@ def build_navigation_context(
 
 __all__ = [
     "DESKTOP_PAGE_ROUTE",
+    "ORDER_LIST_ROUTE",
     "WORKSPACE_CONTROL_CENTER",
     "WORKSPACE_GO_LIVE",
     "WORKSPACE_MAIN",

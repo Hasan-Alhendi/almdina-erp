@@ -224,7 +224,7 @@
 
 		if (!isShopFloorProfile(frm)) return false;
 		frm.remove_custom_button(__("رجوع لصالة الإنتاج"));
-		frm.add_custom_button(__("رجوع لصالة الإنتاج"), () => frappe.set_route("shop-floor-inbox"));
+		frm.remove_custom_button(__("العودة إلى الطلبات"));
 		return true;
 	}
 

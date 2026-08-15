@@ -97,10 +97,12 @@ class FrappeShopFloorQueryRepository:
                 "operational_role",
                 "status",
                 "assigned_to",
+                "assignment_time",
                 "sequence",
+                "creation",
                 "modified",
             ],
-            order_by="modified desc",
+            order_by="assignment_time asc, creation asc",
         )
 
     def list_archive_stages(self, *, user: str, is_admin: bool) -> list[Any]:
@@ -125,9 +127,48 @@ class FrappeShopFloorQueryRepository:
                 "finish_time",
                 "modified",
             ],
-            order_by="modified desc",
+            order_by="finish_time desc, modified desc",
             limit_page_length=100,
         )
+
+    def personal_order_stage_timings(
+        self,
+        order_names: Sequence[str],
+        *,
+        user: str,
+    ) -> dict[str, Any]:
+        names = [str(name) for name in order_names if str(name or "").strip()]
+        if not names:
+            return {}
+        placeholders = ", ".join(["%s"] * len(names))
+        rows = frappe.db.sql(
+            f"""
+            select ps.door_cutting_order,
+                   max(
+                       case
+                           when ps.name = dco.current_production_stage
+                            and ps.status in ('Pending', 'In Progress', 'Paused')
+                           then coalesce(ps.assignment_time, ps.creation)
+                       end
+                   ) as assignment_time,
+                   max(
+                       case
+                           when ps.status = 'Completed'
+                           then coalesce(ps.finish_time, ps.modified)
+                       end
+                   ) as completion_time
+              from `tabProduction Stage` ps
+              inner join `tabDoor Cutting Order` dco
+                      on dco.name = ps.door_cutting_order
+             where ps.assigned_to = %s
+               and ifnull(ps.piece_label, '') = ''
+               and ps.door_cutting_order in ({placeholders})
+             group by ps.door_cutting_order
+            """,
+            [user, *names],
+            as_dict=True,
+        )
+        return {str(row.door_cutting_order): row for row in rows}
 
     def current_stage_names(
         self,

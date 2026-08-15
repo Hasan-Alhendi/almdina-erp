@@ -49,19 +49,34 @@
     font-weight: 650;
 }
 
-/* Worker list: rows whose current stage operational role is not the actor's. */
-.dco-order-list .list-row-container.dco-list-row-other-role > .list-row {
+/* Shared admin list: a worker's completed rows form a full-width green trailer. */
+.dco-order-list .list-row-container.dco-list-row-completed,
+.dco-order-list .list-row-container.dco-list-row-completed > .list-row,
+.dco-order-list .list-row-container.dco-list-row-completed > .list-row .list-row-col {
     background: #dcfce7 !important;
     border-color: #86efac !important;
 }
 
-.dco-order-list .list-row-container.dco-list-row-other-role > .list-row:hover {
+.dco-order-list .list-row-container.dco-list-row-completed:hover,
+.dco-order-list .list-row-container.dco-list-row-completed > .list-row:hover,
+.dco-order-list .list-row-container.dco-list-row-completed > .list-row:hover .list-row-col {
     background: #bbf7d0 !important;
 }
 
-.dco-order-list .dco-mobile-order-card.dco-list-row-other-role {
+.dco-order-list .dco-mobile-order-card.dco-list-row-completed {
     background: #dcfce7 !important;
     border-color: #86efac !important;
+}
+
+.almdina-sf-list.is-completed .shop-floor-order-card,
+.almdina-sf-order-card.is-completed {
+    background: #dcfce7 !important;
+    border-color: #86efac !important;
+}
+
+.almdina-sf-list.is-completed .shop-floor-order-card:hover,
+.almdina-sf-order-card.is-completed:hover {
+    background: #bbf7d0 !important;
 }
 
 /* Mobile order cards are opt-in through the shared phone detector. */

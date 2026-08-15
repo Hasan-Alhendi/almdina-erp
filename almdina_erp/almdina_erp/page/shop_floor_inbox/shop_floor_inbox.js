@@ -19,7 +19,6 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         <div class="almdina-sf-tabs">
             <button type="button" class="almdina-sf-tab is-active" data-sf-mode="board">${__("لوحة الإنتاج")}</button>
             <button type="button" class="almdina-sf-tab" data-sf-mode="inbox">${__("قائمة الطلبات")}</button>
-            <button type="button" class="almdina-sf-tab" data-sf-mode="archive">${__("الطلبات المؤرشفة")}</button>
             <button type="button" class="almdina-sf-tab" data-sf-mode="account">${__("الحساب")}</button>
             <button type="button" class="btn btn-default almdina-sf-refresh">${__("تحديث")}</button>
         </div>
@@ -87,10 +86,9 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         });
     }
 
-    // A worker's inbox is already scoped to their own stages, so it can also
-    // show orders they previously touched that have moved to other roles. Those
-    // sit after the actionable queue and are painted green. Supervisors keep the
-    // active-only list.
+    // A worker's data is scoped on the server. The shared list keeps current
+    // assignments first and appends completed work in green; there is no
+    // separate archive interface.
     function showsPersonalHistory() {
         return Boolean(sessionContext && sessionContext.personal_inbox);
     }
@@ -99,17 +97,18 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         return Boolean(row && row.actor_holds_current_stage_role === true);
     }
 
-    function mergePersonalList(activeRows, historyRows) {
-        const mine = (activeRows || []).filter(isMyOperationalStage);
-        const seen = new Set(mine.map(row => row && row.door_cutting_order).filter(Boolean));
-        const other = [];
+    function mergeVisibleList(activeRows, historyRows) {
+        const assigned = showsPersonalHistory()
+            ? (activeRows || []).filter(isMyOperationalStage)
+            : (activeRows || []).slice();
+        const seen = new Set(assigned.map(row => row && row.door_cutting_order).filter(Boolean));
+        const completed = [];
         (historyRows || []).forEach(row => {
             if (!row || !row.door_cutting_order || seen.has(row.door_cutting_order)) return;
-            if (isMyOperationalStage(row)) return;
             seen.add(row.door_cutting_order);
-            other.push(row);
+            completed.push(row);
         });
-        return { mine, other };
+        return { assigned, completed };
     }
 
     function workerBoardRows(activeRows) {
@@ -121,12 +120,11 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         const requestId = ++listRequest;
         const requestedMode = mode;
         loading(__("جاري التحميل..."));
-        const primaryMethod = requestedMode === "archive" ? METHODS.archive : METHODS.inbox;
+        const primaryMethod = METHODS.inbox;
         return loadSessionContext()
             .then(() => {
                 if (requestId !== listRequest || requestedMode !== mode) return null;
-                const withArchive = requestedMode === "board"
-                    || (requestedMode === "inbox" && showsPersonalHistory());
+                const withArchive = requestedMode === "board" || requestedMode === "inbox";
                 const requests = [frappe.call({ method: primaryMethod, freeze: false })];
                 if (withArchive) {
                     requests.push(frappe.call({ method: METHODS.archive, freeze: false }));
@@ -177,15 +175,15 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         };
     }
 
-    function orderCardHtml(row, { compact = false, terminal = false, otherRole = false } = {}) {
+    function orderCardHtml(row, { compact = false, terminal = false, completed = false } = {}) {
         const canDrag = compact && !terminal && row.can_handoff_stage === true;
-        const cardClasses = `${compact ? " almdina-sf-kanban-card" : ""}${otherRole ? " is-other-role" : ""}`;
-        const stageLabel = otherRole && row.current_department
+        const cardClasses = `${compact ? " almdina-sf-kanban-card" : ""}${completed ? " is-completed" : ""}`;
+        const stageLabel = completed && row.current_department
             ? row.current_department
             : (row.department_label || row.stage_type);
         const statusText = terminal
             ? __("جاهز للتسليم")
-            : (otherRole && row.current_stage_type
+            : (completed && row.current_stage_type
                 ? statusLabel(row.status === "Completed" ? "Completed" : row.status)
                 : statusLabel(row.status));
         return `
@@ -198,7 +196,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                 data-can-start="${row.can_start_stage === true ? "1" : "0"}"
                 data-can-handoff="${row.can_handoff_stage === true ? "1" : "0"}"
                 data-terminal="${terminal ? "1" : "0"}"
-                data-other-role="${otherRole ? "1" : "0"}"
+                data-completed="${completed ? "1" : "0"}"
                 draggable="${canDrag ? "true" : "false"}">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
                     <div style="min-width:0;flex:1">
@@ -208,7 +206,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                         <div style="font-size:12px">${__("الحالة")}: <b>${esc(statusText)}</b></div>
                         ${row.assigned_to ? `<div class="text-muted" style="font-size:11px;margin-top:3px">${__("العامل")}: ${esc(row.assigned_to)}</div>` : ""}
                     </div>
-                    <span class="indicator-pill ${terminal || otherRole ? "green" : "blue"}">${esc(terminal ? __("جاهز") : statusLabel(row.status))}</span>
+                    <span class="indicator-pill ${terminal || completed ? "green" : "blue"}">${esc(terminal ? __("جاهز") : statusLabel(row.status))}</span>
                 </div>
                 <div class="almdina-sf-card-meta" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">
                     <div style="background:var(--subtle-fg,#f7f8fa);padding:9px 10px;border-radius:10px;min-width:0">
@@ -221,7 +219,7 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
                     </div>
                 </div>
                 <div class="almdina-sf-card-actions" style="display:flex;gap:8px;margin-top:12px">
-                    ${terminal || otherRole ? "" : quickActionHtml(row)}
+                    ${terminal || completed ? "" : quickActionHtml(row)}
                     <button type="button" class="btn btn-default sf-open-btn" style="flex:1">${__("فتح الطلب")}</button>
                 </div>
                 ${canDrag ? `<div class="almdina-sf-drag-hint">${__("اسحب للمرحلة التالية")}</div>` : ""}
@@ -454,14 +452,14 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
         });
     }
 
-    function listSection(title, rows, { otherRole = false } = {}) {
+    function listSection(title, rows, { completed = false } = {}) {
         if (!rows.length) return "";
-        const cards = rows.map(row => orderCardHtml(row, { otherRole })).join("");
+        const cards = rows.map(row => orderCardHtml(row, { completed })).join("");
         return `
-            <div class="almdina-sf-list-title${otherRole ? " is-other-role" : ""}">${esc(title)}
+            <div class="almdina-sf-list-title${completed ? " is-completed" : ""}">${esc(title)}
                 <span class="almdina-sf-list-count">${rows.length}</span>
             </div>
-            <div class="almdina-sf-list${otherRole ? " is-other-role" : ""}">${cards}</div>`;
+            <div class="almdina-sf-list${completed ? " is-completed" : ""}">${cards}</div>`;
     }
 
     function renderList(rows) {
@@ -470,20 +468,14 @@ frappe.pages["shop-floor-inbox"].on_page_load = function (wrapper) {
             return;
         }
         let sections = "";
-        if (mode === "archive") {
-            sections = listSection(__("الطلبات المؤرشفة"), rows, { otherRole: true });
-        } else if (showsPersonalHistory()) {
-            const { mine, other } = mergePersonalList(rows, boardArchiveRows);
-            const title = __("قائمة الطلبات الحالية");
-            if (mine.length || other.length) {
-                sections = mine.length
-                    ? listSection(title, mine)
-                    : `<div class="almdina-sf-list-title">${esc(title)}</div>
-                       <div class="almdina-sf-empty">${__("لا توجد طلبات في مرحلة ضمن أدوارك التشغيلية حاليًا.")}</div>`;
-                sections += listSection(__("طلبات في مراحل أخرى"), other, { otherRole: true });
-            }
-        } else {
-            sections = listSection(__("قائمة الطلبات الحالية"), rows);
+        const { assigned, completed } = mergeVisibleList(rows, boardArchiveRows);
+        const title = __("الطلبات المسندة");
+        if (assigned.length || completed.length) {
+            sections = assigned.length
+                ? listSection(title, assigned)
+                : `<div class="almdina-sf-list-title">${esc(title)}</div>
+                   <div class="almdina-sf-empty">${__("لا توجد طلبات مسندة حاليًا.")}</div>`;
+            sections += listSection(__("الطلبات المنتهية"), completed, { completed: true });
         }
         $content.html(`
             <div class="almdina-sf-shell">

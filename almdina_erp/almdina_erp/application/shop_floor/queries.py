@@ -73,6 +73,13 @@ class ShopFloorQueryPort(Protocol):
 
     def order_summaries(self, order_names: Sequence[str]) -> Mapping[str, Any]: ...
 
+    def personal_order_stage_timings(
+        self,
+        order_names: Sequence[str],
+        *,
+        user: str,
+    ) -> Mapping[str, Any]: ...
+
     def get_order(self, order_name: str) -> Any: ...
 
     def can_view_order(self, order: Any) -> bool: ...
@@ -389,9 +396,9 @@ def get_order_operational_role_flags(
 ) -> dict[str, Any]:
     """Return role classification and server-authorized quick actions per order.
 
-    Used by the Door Cutting Order list so workers can see their own-stage rows
-    normally, push every other visible order to a green trailer section, and
-    render only production actions currently allowed by the domain policy.
+    Used by the shared Door Cutting Order list to put a worker's current
+    assignments first, then their completed work in a green trailer section,
+    while rendering only actions currently allowed by the domain policy.
     Supervisors keep an unmarked list.
     """
 
@@ -405,6 +412,12 @@ def get_order_operational_role_flags(
         return {"personal_view": personal_view, "orders": {}}
 
     orders = repository.order_summaries(names)
+    timing_loader = getattr(repository, "personal_order_stage_timings", None)
+    personal_timings = (
+        timing_loader(names, user=actor)
+        if personal_view and callable(timing_loader)
+        else {}
+    )
     actor_roles = repository.actor_roles(actor)
     flags: dict[str, dict[str, Any]] = {}
     current_stages: dict[str, Any] = {}
@@ -430,12 +443,22 @@ def get_order_operational_role_flags(
             order,
             repository.capabilities_for_order(order),
         )
+        actor_holds_current_role = actor_holds_operational_role(
+            actor_roles,
+            role,
+            is_admin=False,
+        )
+        is_current_assignee = bool(
+            actor_holds_current_role
+            and stage_snapshot.get("active_stage_assigned_to") == actor
+        )
+        timing = personal_timings.get(name) or {}
         flags[name] = {
-            "actor_holds_current_stage_role": actor_holds_operational_role(
-                actor_roles,
-                role,
-                is_admin=False,
-            ),
+            "actor_holds_current_stage_role": actor_holds_current_role,
+            "is_current_assignee": is_current_assignee,
+            "assignment_state": "assigned" if is_current_assignee else "completed",
+            "assignment_time": _value(timing, "assignment_time"),
+            "completion_time": _value(timing, "completion_time"),
             "current_stage_operational_role": role,
             # List actions are presentation hints from the same server policy
             # used by the command endpoints. The commands still authorize again.

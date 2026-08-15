@@ -179,15 +179,19 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     assert 'row.board_description || "—"' in inbox
 
 
-def test_desk_list_paints_foreign_operational_role_rows_green():
+def test_desk_list_orders_assignments_then_completed_rows_green():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
 
     assert "function applyOperationalRoleRows(listview)" in list_source
     assert "get_order_operational_role_flags" in list_source
-    assert 'classList.toggle("dco-list-row-other-role"' in list_source
-    assert "const ordered = [...mine, ...other];" in list_source
+    assert 'flag.assignment_state === "completed"' in list_source
+    assert 'classList.toggle("dco-list-row-completed"' in list_source
+    assert '"assignment_time"' in list_source
+    assert '"completion_time"' in list_source
+    assert "const ordered = [...assigned, ...completed]" in list_source
     assert "const needsReorder = ordered.some" in list_source
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
-    assert ".list-row-container.dco-list-row-other-role > .list-row" in css
+    assert ".list-row-container.dco-list-row-completed > .list-row" in css
+    assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
     assert "background: #dcfce7 !important;" in css

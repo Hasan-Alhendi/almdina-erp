@@ -13,3 +13,4 @@ almdina_erp.patches.v1_0.reset_canonical_permission_states
 almdina_erp.patches.v1_0.activate_configurable_production_routings
 almdina_erp.patches.v1_0.clean_order_lookup_business_grants
 almdina_erp.patches.v1_0.mark_route_planning_stages
+almdina_erp.patches.v1_0.backfill_production_stage_assignment_time

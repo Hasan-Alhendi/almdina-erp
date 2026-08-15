@@ -11,7 +11,6 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     PRODUCTION_CAPABILITIES,
     PRODUCTION_OPERATOR_CAPABILITIES,
     PRODUCTION_SUPERVISOR_CAPABILITIES,
-    REPORTING_CAPABILITIES,
     Capability,
 )
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
@@ -23,25 +22,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 )
 
 
-_CONTROL_CENTER_BROAD_CAPABILITIES = frozenset(
-    {
-        Capability.APPROVE_ORDER,
-        Capability.REJECT_ORDER,
-        Capability.ARCHIVE_APPROVED_PLAN,
-        Capability.CREATE_REPLACEMENT,
-        Capability.APPROVE_REPLACEMENT,
-        Capability.CANCEL_REPLACEMENT,
-    }
-)
-_COST_BROAD_CAPABILITIES = frozenset(
-    {
-        Capability.VIEW_COSTS,
-        Capability.EDIT_COST_SETTINGS,
-        Capability.EDIT_SPECIAL_PRICE,
-        Capability.APPROVE_SPECIAL_PRICE,
-        Capability.PRINT_INTERNAL_COST_REPORT,
-    }
-)
 _ORDER_AUTHORING_CAPABILITIES = frozenset(
     {
         Capability.CREATE_ORDER,
@@ -50,23 +30,10 @@ _ORDER_AUTHORING_CAPABILITIES = frozenset(
         Capability.SUBMIT_ORDER,
     }
 )
-_BROAD_ORDER_SCOPE_CAPABILITIES = frozenset(
-    {
-        Capability.APPROVE_ORDER,
-        Capability.REJECT_ORDER,
-        Capability.CANCEL_ORDER,
-    }
-    | _ORDER_AUTHORING_CAPABILITIES
-    | _CONTROL_CENTER_BROAD_CAPABILITIES
-    | _COST_BROAD_CAPABILITIES
-    | PRODUCTION_SUPERVISOR_CAPABILITIES
-    | REPORTING_CAPABILITIES
-)
-# Authoring an order does not make somebody a floor supervisor. A worker who
-# also carries those grants stays inside their own stages.
-_SCOPE_OVERRIDING_CAPABILITIES = (
-    _BROAD_ORDER_SCOPE_CAPABILITIES - _ORDER_AUTHORING_CAPABILITIES
-)
+# Only explicit shop-floor supervision grants widen operational order scope.
+# Cost, reporting, approval, or authoring grants must never make an operator see
+# every worker's assignments.
+_SCOPE_OVERRIDING_CAPABILITIES = frozenset(PRODUCTION_SUPERVISOR_CAPABILITIES)
 _FLOOR_WORKER_CAPABILITIES = frozenset(
     {
         Capability.START_ASSIGNED_STAGE,
@@ -123,11 +90,11 @@ def _requires_assigned_scope(user: str) -> bool:
         return False
     if _has_any(user, _SCOPE_OVERRIDING_CAPABILITIES):
         return False
-    if _has_any(user, _FLOOR_WORKER_CAPABILITIES):
+    if _has_any(user, _FLOOR_WORKER_CAPABILITIES | _WORKER_SCOPED_CAPABILITIES):
         return True
     if _has_any(user, _ORDER_AUTHORING_CAPABILITIES):
         return False
-    return _has_any(user, _WORKER_SCOPED_CAPABILITIES)
+    return False
 
 
 def _pre_production_status_sql() -> str:
