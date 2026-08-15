@@ -2,7 +2,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-UX = ROOT / "public" / "js" / "door_cutting_order_measurement_resilience_ux.js"
+UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_resilience_ux.js"
+)
 HOOKS = ROOT / "hooks.py"
 
 
@@ -54,9 +62,9 @@ def test_piece_type_change_preserves_table_and_page_scroll_position():
 
 def test_resilience_layer_loads_after_compact_and_special_shape_ux():
     hooks = HOOKS.read_text(encoding="utf-8")
-    compact = '"public/js/door_cutting_order_compact_measurements_ux.js"'
+    compact = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js"'
     special = '"public/js/door_cutting_order_special_shape_ux.js"'
-    resilience = '"public/js/door_cutting_order_measurement_resilience_ux.js"'
+    resilience = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js"'
     assert compact in hooks
     assert special in hooks
     assert resilience in hooks
