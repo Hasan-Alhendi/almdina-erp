@@ -8,7 +8,14 @@ ROOT = Path(__file__).resolve().parents[1]
 TAB_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_tab_permissions_ux.js"
 COST_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
-PLAN_BOOTSTRAP = ROOT / "public" / "js" / "door_cutting_order_plan_surface_bootstrap.js"
+PLAN_BOOTSTRAP = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_surface_bootstrap.js"
+)
 HOOKS = ROOT / "hooks.py"
 
 
@@ -60,7 +67,7 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
 
         self.assertIn('global: "AlmdinaCuttingPlanSurfaceBootstrap"', source)
         self.assertIn(
-            'asset: "/assets/almdina_erp/js/door_cutting_order_plan_surface_bootstrap.js"',
+            'asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"',
             source,
         )
         self.assertIn("loadPlanSurfaceModule();", source)
