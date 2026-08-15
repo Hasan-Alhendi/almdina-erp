@@ -7,7 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
 RESPONSIVE_DEVICE = ROOT / "public" / "js" / "responsive_device.js"
-MOBILE_CARDS_UX = ROOT / "public" / "js" / "door_cutting_order_mobile_cards_ux.js"
+MOBILE_CARDS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "responsive"
+    / "door_cutting_order_mobile_cards_ux.js"
+)
 OPERATOR_UX = (
     ROOT
     / "public"
@@ -48,10 +55,10 @@ def test_responsive_presentation_uses_scoped_css_and_a_focused_card_adapter():
     assert ".page-head.dco-responsive-head" in css
     assert "frappe.ui.form.on" not in css
     assert "MutationObserver" not in css
-    assert '"public/js/door_cutting_order_mobile_cards_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"' in hooks
     assert '"/assets/almdina_erp/js/responsive_device.js"' in hooks
     assert hooks.index('"public/js/input_stability.js"') < hooks.index(
-        '"public/js/door_cutting_order_mobile_cards_ux.js"'
+        '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"'
     )
     assert "ResizeObserver" in cards
     assert "MutationObserver" not in cards
