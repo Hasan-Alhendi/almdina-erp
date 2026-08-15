@@ -39,12 +39,13 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertNotIn("frm.enable_save(", presentation)
         self.assertNotIn("frm.disable_save(", presentation)
         self.assertIn("setPrimaryActionMode", revision)
-        self.assertIn('"pending"', revision)
-        pending = revision.split('if (mode === "pending")', 1)[1].split(
-            "if (", 1
+        self.assertIn('"edit-pending"', revision)
+        self.assertIn("canShowEditAction", revision)
+        self.assertIn("requestEditSession", revision)
+        show_edit = revision.split("function canShowEditAction", 1)[1].split(
+            "function primaryActionLabel", 1
         )[0]
-        self.assertIn("frm.save_disabled = true", pending)
-        self.assertNotIn("disable_save", pending)
+        self.assertIn('(frm.doc.status || "Draft") !== "Draft"', show_edit)
         scheduler = revision.split("function schedulePrimaryActionSync", 1)[1].split(
             "function removeEditSessionButtons", 1
         )[0]
@@ -67,10 +68,11 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         toolbar = source("door_cutting_order_toolbar_stability_ux.js")
 
         self.assertIn("@media(min-width:992px)", toolbar)
+        self.assertIn("position:fixed!important", toolbar)
         self.assertIn("left:16px!important", toolbar)
         self.assertIn("right:auto!important", toolbar)
-        self.assertIn("top:50%!important", toolbar)
-        self.assertIn("dco-primary-action-pending", toolbar)
+        self.assertIn("top:10px!important", toolbar)
+        self.assertNotIn("dco-primary-action-pending", toolbar)
 
     def test_plan_recovery_does_not_destroy_ready_html(self) -> None:
         bootstrap = source("door_cutting_order_plan_surface_bootstrap.js")

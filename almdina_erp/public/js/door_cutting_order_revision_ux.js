@@ -50,6 +50,24 @@
         );
     }
 
+    function nativeMayEdit(frm) {
+        if (!frm || typeof frm.has_perm !== "function") return false;
+        try {
+            return Boolean(frm.has_perm("write"));
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function canShowEditAction(frm) {
+        if (!frm || !frm.doc || frm.is_new()) return false;
+        if (Number(frm.doc.docstatus || 0) !== 0) return false;
+        if (revisionState(frm) === "Superseded") return false;
+        if ((frm.doc.status || "Draft") !== "Draft") return false;
+        if (permissionsResolved()) return canOfferEditSession(frm);
+        return can(frm, "edit_order") || nativeMayEdit(frm);
+    }
+
     function primaryActionLabel(frm) {
         const wrapper = frm && frm.page && frm.page.wrapper;
         const root = wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
@@ -60,12 +78,15 @@
 
     function setPrimaryActionMode(frm, mode, label = "", handler = null, disabled = true) {
         const currentLabel = primaryActionLabel(frm);
-        if (mode === "pending") {
-            // Keep Frappe's provisional button in the layout as an invisible
-            // width placeholder. ToolbarStabilityUX hides and disables it until
-            // permissions resolve, so neighbouring actions never slide.
+        const changingBetweenEditModes = Boolean(
+            label === EDIT_LABEL
+            && currentLabel === EDIT_LABEL
+            && ["edit", "edit-pending"].includes(mode)
+            && ["edit", "edit-pending"].includes(frm.__almdinaPrimaryActionMode)
+        );
+        if (changingBetweenEditModes) {
             frm.__almdinaPrimaryActionMode = mode;
-            frm.save_disabled = true;
+            frm.save_disabled = Boolean(disabled);
             return;
         }
         if (
@@ -480,11 +501,21 @@
             return;
         }
 
-        // A saved order never exposes Frappe's provisional native «حفظ».
-        // Wait for the authoritative capability matrix, then paint exactly one
-        // final action (تعديل / حفظ / none) without an intermediate label.
+        // On a Draft, never hide the provisional edit affordance while the
+        // capability matrix is loading. The label and DOM node stay stable when
+        // access becomes authoritative, preventing toolbar shifts at startup.
         if (!permissionsResolved()) {
-            setPrimaryActionMode(frm, "pending", "", null, true);
+            if (canShowEditAction(frm)) {
+                setPrimaryActionMode(
+                    frm,
+                    "edit-pending",
+                    EDIT_LABEL,
+                    () => requestEditSession(frm),
+                    true
+                );
+            } else {
+                setPrimaryActionMode(frm, "none", "", null, true);
+            }
             return;
         }
 
@@ -493,8 +524,8 @@
             return;
         }
 
-        if (canOfferEditSession(frm)) {
-            setPrimaryActionMode(frm, "edit", EDIT_LABEL, () => enterEditSession(frm), true);
+        if (canShowEditAction(frm)) {
+            setPrimaryActionMode(frm, "edit", EDIT_LABEL, () => requestEditSession(frm), true);
             return;
         }
 
@@ -504,6 +535,23 @@
     function schedulePrimaryActionSync(frm) {
         syncPrimaryAction(frm);
         window.requestAnimationFrame(() => syncPrimaryAction(frm));
+    }
+
+    function requestEditSession(frm) {
+        if (!permissionsResolved()) {
+            frappe.show_alert({
+                message: __("جاري تحميل صلاحيات التعديل..."),
+                indicator: "blue",
+            }, 3);
+            return;
+        }
+        if (canOfferEditSession(frm)) {
+            enterEditSession(frm);
+            return;
+        }
+        frappe.msgprint(__(
+            "زر التعديل متاح لك، لكن فتح الحقول يتطلب أن يكون الطلب في حالة «مسودة». استخدم «إعادة للمسودة» أولًا."
+        ));
     }
 
     function removeEditSessionButtons(frm) {
@@ -828,6 +876,7 @@
     window.AlmdinaOrderRevisionUX = Object.freeze({
         canCreateRevision,
         canOfferEditSession,
+        canShowEditAction,
         createRevision,
         applyImmutableFields: applyEditableFields,
         isEditableDraft: orderCanEdit,

@@ -126,22 +126,8 @@
             }
             .page-head.dco-stable-actions-head .page-actions {
                 margin:0!important;
-                margin-inline-start:auto!important;
                 justify-content:flex-start!important;
                 flex:0 0 auto!important;
-            }
-            .page-head.dco-stable-actions-head.dco-primary-action-pending .primary-action {
-                visibility:hidden!important;
-                pointer-events:none!important;
-            }
-            .page-head.dco-stable-actions-head .dco-edit-action-placeholder {
-                display:inline-flex!important;
-                visibility:visible!important;
-                opacity:.62!important;
-                align-items:center!important;
-                white-space:nowrap!important;
-                flex:0 0 auto!important;
-                cursor:not-allowed!important;
             }
             .page-head.dco-stable-actions-head .custom-actions > .btn,
             .page-head.dco-stable-actions-head .custom-actions > .btn-group,
@@ -256,15 +242,14 @@
             }
             @media(min-width:992px){
                 .page-head.dco-stable-actions-head .page-actions {
-                    position:static!important;
-                    left:auto!important;
+                    position:fixed!important;
+                    left:16px!important;
                     right:auto!important;
-                    top:auto!important;
+                    top:10px!important;
                     transform:none!important;
-                    z-index:auto!important;
-                    width:auto!important;
-                    max-width:none!important;
-                    margin-inline-start:auto!important;
+                    z-index:1025!important;
+                    width:max-content!important;
+                    max-width:calc(100vw - 32px)!important;
                 }
             }
             @media(max-width:991px){
@@ -455,77 +440,6 @@
         });
     }
 
-    function permissionMatrixReady() {
-        const permissions = window.AlmdinaPermissions;
-        return Boolean(
-            permissions
-            && typeof permissions.version === "function"
-            && permissions.version() > 0
-        );
-    }
-
-    function canEditOrderDocument(frm) {
-        const permissions = window.AlmdinaPermissions;
-        if (!permissions) return false;
-        if (typeof permissions.canDocument === "function") {
-            return Boolean(permissions.canDocument(frm, "edit_order"));
-        }
-        if (typeof permissions.can === "function") {
-            return Boolean(permissions.can("edit_order"));
-        }
-        return false;
-    }
-
-    function editSessionActive(frm) {
-        const revision = window.AlmdinaOrderRevisionUX;
-        if (revision && typeof revision.isEditSessionActive === "function") {
-            return Boolean(revision.isEditSessionActive(frm));
-        }
-        const policy = frappe.almdina && frappe.almdina.isOrderEditSessionActive;
-        return typeof policy === "function" && Boolean(policy(frm));
-    }
-
-    function ensureEditActionPresence(frm, head, permissionsReady) {
-        const actions = head.querySelector(".page-actions");
-        if (!actions) return;
-
-        let placeholder = actions.querySelector(".dco-edit-action-placeholder");
-        const primary = actions.querySelector(".primary-action");
-        const primaryLabel = text(primary);
-        const hasFinalPrimaryAction = Boolean(
-            primary
-            && !head.classList.contains("dco-primary-action-pending")
-            && ["تعديل", "Edit", "حفظ", "Save"].includes(primaryLabel)
-        );
-
-        if (frm.is_new() || editSessionActive(frm) || hasFinalPrimaryAction) {
-            if (placeholder) placeholder.remove();
-            return;
-        }
-
-        if (permissionsReady && !canEditOrderDocument(frm)) {
-            if (placeholder) placeholder.remove();
-            return;
-        }
-
-        if (!placeholder) {
-            placeholder = document.createElement("button");
-            placeholder.type = "button";
-            placeholder.className = "btn btn-primary btn-sm dco-edit-action-placeholder";
-            placeholder.disabled = true;
-            placeholder.setAttribute("aria-disabled", "true");
-            actions.appendChild(placeholder);
-        }
-
-        placeholder.textContent = isArabic() ? "تعديل" : "Edit";
-        const status = String(frm.doc && frm.doc.status || "Draft");
-        placeholder.title = !permissionsReady
-            ? (isArabic() ? "جاري تحميل صلاحية التعديل..." : "Loading edit permission...")
-            : status === "Draft"
-                ? (isArabic() ? "جاري تجهيز وضع التعديل..." : "Preparing edit mode...")
-                : (isArabic() ? "للتعديل أعد الطلب إلى المسودة أولاً." : "Return the order to Draft before editing.");
-    }
-
     function reconcile(frm) {
         installStyles();
         reconcileMeasurementToolbar(frm);
@@ -534,15 +448,9 @@
         if (!head.classList.contains("dco-stable-actions-head")) {
             head.classList.add("dco-stable-actions-head");
         }
-        const permissionsReady = permissionMatrixReady();
-        head.classList.toggle(
-            "dco-primary-action-pending",
-            !frm.is_new() && !permissionsReady
-        );
         removeLegacyButtons(frm, head);
         removeDrawingDxfGroup(head);
         dedupeButtons(head);
-        ensureEditActionPresence(frm, head, permissionsReady);
     }
 
     function observe(frm) {
