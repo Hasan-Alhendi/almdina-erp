@@ -5,7 +5,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TAB_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_tab_permissions_ux.js"
+TAB_PERMISSIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_tab_permissions_ux.js"
+)
 COST_PERMISSIONS = (
     ROOT
     / "public"
@@ -66,7 +73,10 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
         self.assertIn('global: "AlmdinaOrderTabPermissionsUX"', source)
         self.assertIn("function waitForGlobal", source)
         self.assertIn("return waitForGlobal(module.global)", source)
-        self.assertIn('"public/js/door_cutting_order_tab_permissions_ux.js"', manifest)
+        self.assertIn(
+            '"public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js"',
+            manifest,
+        )
 
     def test_cutting_plan_surface_loads_independently_from_cost_chain(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
