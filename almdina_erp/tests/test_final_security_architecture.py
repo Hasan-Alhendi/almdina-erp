@@ -19,6 +19,7 @@ SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
 TRANSFER_POLICY = APP / "application" / "security" / "permission_transfer.py"
 HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
 _FIXED_BUSINESS_ROLES = (
@@ -55,8 +56,8 @@ _RETIRED_TARGET = (
 )
 
 
-def _literal_assignment(name: str) -> Any:
-    tree = ast.parse(HOOKS.read_text(encoding="utf-8"))
+def _literal_assignment(name: str, source_path: Path = HOOKS) -> Any:
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
             isinstance(target, ast.Name) and target.id == name
@@ -69,14 +70,14 @@ def _literal_assignment(name: str) -> Any:
             and node.target.id == name
         ):
             return ast.literal_eval(node.value)
-    raise AssertionError(f"Missing hooks assignment: {name}")
+    raise AssertionError(f"Missing assignment in {source_path.name}: {name}")
 
 
 def _loaded_javascript_paths() -> list[Path]:
     paths: set[Path] = set()
-    for asset in _literal_assignment("app_include_js"):
+    for asset in _literal_assignment("app_include_js", MANIFEST):
         paths.add(ROOT / "public" / "js" / str(asset).rsplit("/", 1)[-1])
-    for configured in _literal_assignment("doctype_js").values():
+    for configured in _literal_assignment("doctype_js", MANIFEST).values():
         values = configured if isinstance(configured, list) else [configured]
         for value in values:
             paths.add(ROOT / "public" / str(value).removeprefix("public/"))
