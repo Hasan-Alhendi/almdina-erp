@@ -86,11 +86,14 @@
     function wholeStrokeStraight(points, options) {
         const sampled = Domain.resampleUniform(points, options);
         if (sampled.length < 2) return null;
-        // A whole-stroke straight decision intentionally tolerates alternating hand
-        // tremor more than local span fitting. The deliberate-curve guard inside
-        // straightEvidence remains mandatory, so a one-sided bow cannot be flattened.
+        // A whole-stroke straight decision gets a broader trend filter than local
+        // segmentation. This removes alternating hand tremor from heading/turn
+        // measurements without weakening the deliberate-curve guard that protects
+        // bows, arches and other intended curves from being flattened.
         const evidence = Domain.straightEvidence(sampled, {
             ...options,
+            trendPasses: Math.max(4, Number(options.trendPasses) || 0),
+            trendRadius: Math.max(4, Number(options.trendRadius) || 0),
             straightMaxHeadingDeviationDeg: Math.max(26, Number(options.straightMaxHeadingDeviationDeg) || 0),
             straightTotalTurnDeg: Math.max(90, Number(options.straightTotalTurnDeg) || 0),
             straightLengthRatio: Math.max(1.28, Number(options.straightLengthRatio) || 1),
