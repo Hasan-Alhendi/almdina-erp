@@ -143,14 +143,17 @@ function load(capabilities, responseFactory) {
         return { name: "DCO-TEST-001" };
     });
 
-    const frm = makeForm();
-    assert.equal(loaded.api.orderCanEdit(frm), false);
-    frm.__almdina_edit_session = { active: true };
-    assert.equal(loaded.api.orderCanEdit(frm), true);
+    const editForm = makeForm();
+    assert.equal(loaded.api.orderCanEdit(editForm), false);
+    editForm.__almdina_edit_session = { active: true };
+    assert.equal(loaded.api.orderCanEdit(editForm), true);
+
+    const frm = makeForm("DCO-TEST-001", "At Drawing");
     await loaded.api.loadContext(frm);
     assert.equal(frm.__almdina_lifecycle_context.order_name, "DCO-TEST-001");
-    assert.equal(loaded.api.orderCanEdit(frm), true);
-    // Review/approve were retired: even a permissive context must not install them.
+    assert.equal(loaded.api.orderCanEdit(frm), false);
+    // Review/approve were retired. A non-draft order gets only the valid
+    // standalone return action; draft never gets a meaningless return action.
     assert.deepEqual(
         frm.added.map(item => item.label).sort(),
         ["إعادة للمسودة"].sort()
@@ -172,8 +175,28 @@ function load(capabilities, responseFactory) {
             call.method.endsWith("order_revision_service.return_order_to_draft")
         )
     );
-    // In-place reset: stay on the same order (reload), never route to a copy.
     assert.equal(loaded.routes.length, 0);
+
+    const draftLoaded = load(capabilities, () => lifecycle);
+    const draftForm = makeForm();
+    await draftLoaded.api.loadContext(draftForm);
+    assert.deepEqual(draftForm.added, []);
+
+    const cancellableLifecycle = {
+        ...lifecycle,
+        actions: {
+            ...lifecycle.actions,
+            return_to_draft: { allowed: false },
+            cancel: { allowed: true },
+        },
+    };
+    const cancellable = load(capabilities, () => cancellableLifecycle);
+    const cancellableForm = makeForm();
+    await cancellable.api.loadContext(cancellableForm);
+    assert.deepEqual(
+        cancellableForm.added.map(item => ({ label: item.label, group: item.group })),
+        [{ label: "إلغاء الطلب", group: undefined }]
+    );
 
     const denied = load(new Set(), () => lifecycle);
     const deniedForm = makeForm();
@@ -187,12 +210,7 @@ function load(capabilities, responseFactory) {
     const staleForm = makeForm("DCO-NEW");
     await stale.api.loadContext(staleForm);
     assert.equal(staleForm.__almdina_lifecycle_context, null);
-    // Stale server context is ignored, but the client capability still paints
-    // the standalone return-to-draft button for the current order.
-    assert.deepEqual(
-        staleForm.added.map(item => item.label),
-        ["إعادة للمسودة"]
-    );
+    assert.deepEqual(staleForm.added, []);
 
     console.log("Order lifecycle permission simulation passed");
 })().catch(error => {
