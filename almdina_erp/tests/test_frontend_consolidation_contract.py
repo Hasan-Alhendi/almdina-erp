@@ -40,7 +40,14 @@ DRAWING_PLAN = (
 )
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+TEXT_BOARD_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_text_board_plan_ux.js"
+)
 PLAN_CONTROLS = (
     ROOT
     / "public"
