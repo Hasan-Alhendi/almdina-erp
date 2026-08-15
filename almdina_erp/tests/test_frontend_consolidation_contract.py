@@ -160,6 +160,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("export_cutting_plan_dxf", source)
         self.assertNotIn("setup_pieces_excel_ux", source)
 
+        # Workshop print stays inside the renderer but is now a separate compact
+        # landscape document: up to ten boards per page, preserving board ratio.
         self.assertIn("size: A4 landscape", source)
         self.assertIn("MAX_SHEETS_PER_PAGE = 10", source)
         self.assertIn("planRootFromVisibleDom", source)
@@ -179,6 +181,9 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("piece.label)}</b>", source)
         self.assertNotIn("ERPNext Cutting Plan", source)
 
+        # Printed boards are workshop-first: only the primary piece number is
+        # printed, banding marks stay thin/red, and dense pages use explicit
+        # balanced rows (7 => 4+3) rather than leaving a lone board below.
         self.assertIn("dco-piece-number", source)
         self.assertIn("dco-piece-size { display: none !important; }", source)
         self.assertIn('label.split(".")[0]', source)
@@ -198,11 +203,15 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         source = PLAN_CONTENT.read_text(encoding="utf-8")
         drawing = DRAWING_PLAN.read_text(encoding="utf-8")
 
+        # Order metadata, aggregate cards and the measurement list already live on
+        # other order surfaces. Keep only the actual board layout on this screen.
         self.assertIn("dco-plan-header-cards", source)
         self.assertIn("dco-summary-grid", source)
         self.assertIn("dco-piece-groups", source)
         self.assertIn("cleanRenderedPlan", source)
 
+        # The form has one authoritative optimizer/action deck above the layout.
+        # The drawing optimizer panel stays available only for inbox/shop-floor use.
         self.assertIn("stabilizePlanActionsLayout", source)
         self.assertIn("dco-plan-actions-native", source)
         self.assertIn("dco-drawing-plan-panel-host", source)
@@ -227,6 +236,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn('can(frm, "edit_optimizer_settings")', plan_controls)
         self.assertNotIn("frm.save", plan_controls)
 
+        # These modules may validate inputs or mark a plan stale, but they must
+        # never intercept or execute cutting-plan commands themselves.
         for helper in (fast_save, text_board):
             self.assertNotIn("door_cutting_order.recalculate_order", helper)
             self.assertNotIn("order_plan_permission_service.recalculate_order", helper)
