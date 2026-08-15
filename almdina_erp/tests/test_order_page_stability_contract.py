@@ -15,7 +15,7 @@ def source(name: str) -> str:
 class TestOrderPageStabilityContract(unittest.TestCase):
     def test_status_strip_has_one_renderer(self) -> None:
         operator = source("door_cutting_order/order_entry/door_cutting_order_operator_ux.js")
-        production = source("shop_floor_order_ux.js")
+        production = source("door_cutting_order/production/shop_floor_order_ux.js")
 
         self.assertNotIn("fields_dict.operator_status_strip", operator)
         self.assertIn("fields_dict.operator_status_strip", production)
@@ -30,7 +30,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertIn("renderStableHtml(", operator)
 
     def test_revision_is_the_only_save_edit_owner(self) -> None:
-        production = source("shop_floor_order_ux.js")
+        production = source("door_cutting_order/production/shop_floor_order_ux.js")
         revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
         presentation = production.split("function applyShopFloorPresentation", 1)[1].split(
@@ -53,7 +53,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
 
     def test_permission_request_has_one_form_owner(self) -> None:
         permission_context = source("permission_context.js")
-        production = source("shop_floor_order_ux.js")
+        production = source("door_cutting_order/production/shop_floor_order_ux.js")
         duplicate_guard = permission_context.split(
             "if (window.AlmdinaPermissions)", 1
         )[1].split("return;", 1)[0]
