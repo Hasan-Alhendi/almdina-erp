@@ -17,6 +17,7 @@ PLAN_PERMISSION_SERVICE = (
 PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 APPROVAL_SERVICE = ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 ACTION_GUARD = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
+SPECIAL_SHAPE_UX = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
 DRAWING_POLICY = (
     ROOT / "almdina_erp" / "application" / "security" / "drawing_action_policy.py"
@@ -105,19 +106,24 @@ class TestCapabilityExecutionContract(unittest.TestCase):
 
     def test_browser_plan_actions_do_not_depend_on_full_order_editability(self) -> None:
         source = ACTION_GUARD.read_text(encoding="utf-8")
+        drawing_source = SPECIAL_SHAPE_UX.read_text(encoding="utf-8")
         controls = PLAN_CONTROLS.read_text(encoding="utf-8")
 
         for capability in (
             "recalculate_plan",
             "edit_optimizer_settings",
-            "edit_special_drawing",
-            "view_drawing_workspace",
             "print_measurements",
             "print_customer_invoice",
             "print_cutting_plan",
         ):
             with self.subTest(capability=capability):
                 self.assertIn(f'"{capability}"', source)
+        for capability in (
+            "edit_special_drawing",
+            "view_drawing_workspace",
+        ):
+            with self.subTest(capability=capability):
+                self.assertIn(f'"{capability}"', drawing_source)
         self.assertNotIn("orderEditable", source)
         self.assertIn("planIsLocked", source)
         self.assertIn(
