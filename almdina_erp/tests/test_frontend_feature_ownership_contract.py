@@ -13,6 +13,24 @@ CORE_SCRIPTS = (
     "public/js/door_cutting_order/core/order_lifecycle.js",
 )
 
+ORDER_ENTRY_SCRIPTS = (
+    "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
+    "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
+)
+
+OLD_ORDER_ENTRY_PATHS = tuple(
+    f"public/js/{Path(script).name}" for script in ORDER_ENTRY_SCRIPTS
+)
+
 
 class TestFrontendFeatureOwnershipContract(unittest.TestCase):
     def test_first_core_batch_is_loaded_once_in_stable_order(self):
@@ -42,6 +60,33 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
                 document_context,
                 hooks.index(f'"{script}"'),
                 f"Document context must initialize before {script}",
+            )
+
+    def test_order_entry_measurement_batch_has_canonical_feature_paths(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        positions = []
+
+        for script in ORDER_ENTRY_SCRIPTS:
+            source = ROOT / script.removeprefix("public/js/")
+            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
+            self.assertEqual(
+                hooks.count(f'"{script}"'),
+                1,
+                f"{script} must have one canonical Door Cutting Order asset owner",
+            )
+            positions.append(hooks.index(f'"{script}"'))
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "Order Entry / Measurements load order changed during migration",
+        )
+
+        for old_path in OLD_ORDER_ENTRY_PATHS:
+            self.assertNotIn(
+                f'"{old_path}"',
+                hooks,
+                f"Retired root asset path still loaded: {old_path}",
             )
 
 
