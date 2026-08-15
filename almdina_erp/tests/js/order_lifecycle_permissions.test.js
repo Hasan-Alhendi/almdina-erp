@@ -166,6 +166,12 @@ function load(capabilities, responseFactory) {
         loaded.calls[0].method,
         "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context"
     );
+    loaded.api.installButtons(frm, lifecycle);
+    assert.equal(
+        frm.added.filter(item => item.label === "إعادة للمسودة").length,
+        1,
+        "reinstalling the same lifecycle state must not remove and recreate the action"
+    );
 
     const returned = frm.added.find(item => item.label === "إعادة للمسودة");
     returned.handler();
@@ -196,6 +202,12 @@ function load(capabilities, responseFactory) {
     assert.deepEqual(
         cancellableForm.added.map(item => ({ label: item.label, group: item.group })),
         [{ label: "إلغاء الطلب", group: undefined }]
+    );
+    cancellable.api.installButtons(cancellableForm, cancellableLifecycle);
+    assert.equal(
+        cancellableForm.added.filter(item => item.label === "إلغاء الطلب").length,
+        1,
+        "the cancel action must remain stable across repeated permission refreshes"
     );
 
     const denied = load(new Set(), () => lifecycle);

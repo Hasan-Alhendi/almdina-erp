@@ -5,6 +5,16 @@
 	const PRODUCTION_ACTION_GROUP = __("صالة الإنتاج");
 	const ACTIVE_STAGE_STATUSES = new Set(["Pending", "In Progress", "Paused"]);
 	const NON_REVERTABLE_ORDER_STATUSES = new Set(["Draft", "Rejected", "Delivered", "Cancelled"]);
+	const OWNED_PRODUCTION_ACTION_LABELS = new Set([
+		__("إرسال للإنتاج"),
+		__("تم التسليم"),
+		__("إرجاع لمرحلة سابقة"),
+		__("بدء العمل"),
+		__("إرسال للقسم التالي"),
+		__("جاهزة للتسليم"),
+		__("إنهاء وإرسال"),
+		__("تغيير العامل"),
+	]);
 
 	function permissionContext() {
 		return window.AlmdinaPermissions || null;
@@ -643,16 +653,11 @@
 
 	function productionActionsKey(frm) {
 		if (!frm || !frm.doc) return "";
-		const permissions = permissionContext();
-		const permissionVersion = permissions && typeof permissions.version === "function"
-			? permissions.version()
-			: 0;
 		return [
 			frm.doc.name || "",
 			frm.doc.current_production_stage || "",
 			frm.doc.status || "",
 			frm.doc.production_path || "",
-			permissionVersion,
 		].join("::");
 	}
 
@@ -666,7 +671,9 @@
 		const node = root && (root.nodeType ? root : root[0]);
 		const hasRenderedToolbar = Boolean(node && typeof node.querySelectorAll === "function");
 		if (hasRenderedToolbar) {
-			node.querySelectorAll(".custom-actions button, .page-actions button").forEach((button) => {
+			node.querySelectorAll(
+				".custom-actions button, .custom-actions a, .page-actions button, .page-actions a, .page-actions .dropdown-item"
+			).forEach((button) => {
 				const label = String(button.textContent || "").replace(/\s+/g, " ").trim();
 				if (label) labels.add(label);
 			});
@@ -732,10 +739,13 @@
 			&& frm.__almdinaRevertTargetsPromiseKey === revertTargetsKey(frm)
 		) return false;
 		if (frm.__almdinaProductionActionsKey !== productionActionsKey(frm)) return false;
-		const expected = expectedProductionActionLabels(frm);
-		if (!expected.length) return true;
+		const expected = new Set(expectedProductionActionLabels(frm));
 		const rendered = renderedButtonLabels(frm);
-		return expected.every(label => [...rendered].some(value => value.includes(label)));
+		const renderedOwned = [...rendered].filter(label => OWNED_PRODUCTION_ACTION_LABELS.has(label));
+		return (
+			[...expected].every(label => rendered.has(label))
+			&& renderedOwned.every(label => expected.has(label))
+		);
 	}
 
 	function capabilitiesResolved() {

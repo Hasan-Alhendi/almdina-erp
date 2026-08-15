@@ -11,13 +11,9 @@
         return_to_draft: __("إعادة للمسودة"),
         cancel: __("إلغاء الطلب"),
     });
-    const LEGACY_LABELS = Object.freeze([
+    const RETIRED_LABELS = Object.freeze([
         __("إرسال للمراجعة"),
         __("اعتماد الطلب"),
-        __("تعديل الطلب"),
-        __("إنشاء نسخة تعديل"),
-        __("إعادة للمسودة"),
-        __("إلغاء الطلب"),
         __("Cancel Order"),
         "Cancel Order",
     ]);
@@ -79,12 +75,41 @@
         frappe.almdina.isOrderEditor = frm => can(frm || window.cur_frm, "edit_order");
     }
 
-    function removeLifecycleButtons(frm) {
-        LEGACY_LABELS.forEach(label => {
+    function removeRetiredLifecycleButtons(frm) {
+        RETIRED_LABELS.forEach(label => {
             frm.remove_custom_button(label);
             frm.remove_custom_button(label, ACTION_GROUP);
             frm.remove_custom_button(label, __("Order Workflow"));
         });
+    }
+
+    function removeManagedLifecycleButton(frm, label) {
+        frm.remove_custom_button(label);
+        frm.remove_custom_button(label, ACTION_GROUP);
+        frm.remove_custom_button(label, __("Order Workflow"));
+        if (frm.__almdinaLifecycleRenderedLabels instanceof Set) {
+            frm.__almdinaLifecycleRenderedLabels.delete(label);
+        }
+    }
+
+    function removeLifecycleButtons(frm) {
+        removeRetiredLifecycleButtons(frm);
+        removeManagedLifecycleButton(frm, LABELS.return_to_draft);
+        removeManagedLifecycleButton(frm, LABELS.cancel);
+    }
+
+    function rememberLifecycleButton(frm, label) {
+        if (!(frm.__almdinaLifecycleRenderedLabels instanceof Set)) {
+            frm.__almdinaLifecycleRenderedLabels = new Set();
+        }
+        frm.__almdinaLifecycleRenderedLabels.add(label);
+    }
+
+    function ensureLifecycleButton(frm, label, handler) {
+        if (lifecycleButtonRendered(frm, label)) return null;
+        const button = frm.add_custom_button(label, handler);
+        rememberLifecycleButton(frm, label);
+        return button;
     }
 
     function actionAllowed(context, action) {
@@ -215,23 +240,33 @@
     }
 
     function installButtons(frm, context) {
-        removeLifecycleButtons(frm);
-        if (!frm || frm.is_new()) return;
+        removeRetiredLifecycleButtons(frm);
+        if (!frm || frm.is_new()) {
+            removeManagedLifecycleButton(frm, LABELS.return_to_draft);
+            removeManagedLifecycleButton(frm, LABELS.cancel);
+            return;
+        }
 
         if (canReturnToDraft(frm, context)) {
-            frm.add_custom_button(
+            ensureLifecycleButton(
+                frm,
                 LABELS.return_to_draft,
                 () => returnToDraft(frm)
             );
+        } else {
+            removeManagedLifecycleButton(frm, LABELS.return_to_draft);
         }
         if (canCancelOrder(frm, context)) {
-            const cancelButton = frm.add_custom_button(
+            const cancelButton = ensureLifecycleButton(
+                frm,
                 LABELS.cancel,
                 () => cancelOrder(frm)
             );
             if (cancelButton && typeof cancelButton.removeClass === "function") {
                 cancelButton.removeClass("btn-default").addClass("btn-danger");
             }
+        } else {
+            removeManagedLifecycleButton(frm, LABELS.cancel);
         }
     }
 
@@ -310,7 +345,13 @@
                 .some((button) => String(button.textContent || "").replace(/\s+/g, " ").trim() === label);
         }
         const buttons = frm.custom_buttons || {};
-        return Boolean(buttons[label]);
+        return Boolean(
+            buttons[label]
+            || (
+                frm.__almdinaLifecycleRenderedLabels instanceof Set
+                && frm.__almdinaLifecycleRenderedLabels.has(label)
+            )
+        );
     }
 
     function lifecycleActionsReady(frm) {
@@ -318,15 +359,12 @@
         if (frm.__almdinaLifecycleContextPending) return false;
         const context = frm.__almdina_lifecycle_context;
         if (!context || context.order_name !== frm.doc.name) return true;
-        if (
-            canReturnToDraft(frm, context)
-            && !lifecycleButtonRendered(frm, LABELS.return_to_draft)
-        ) return false;
-        if (
-            canCancelOrder(frm, context)
-            && !lifecycleButtonRendered(frm, LABELS.cancel)
-        ) return false;
-        return true;
+        const wantsReturn = canReturnToDraft(frm, context);
+        const wantsCancel = canCancelOrder(frm, context);
+        return (
+            lifecycleButtonRendered(frm, LABELS.return_to_draft) === wantsReturn
+            && lifecycleButtonRendered(frm, LABELS.cancel) === wantsCancel
+        );
     }
 
     installGlobalPolicy();

@@ -46,24 +46,32 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
         self.assertIn("current && rows.length", button)
         self.assertLess(button.index("current && rows.length"), button.index("frm.add_custom_button"))
 
-    def test_toolbar_is_revealed_only_after_surfaces_settle(self) -> None:
-        context = (PUBLIC / "door_cutting_order_document_context.js").read_text(
-            encoding="utf-8"
-        )
+    def test_toolbar_never_hides_actions_and_stays_at_top_left(self) -> None:
         toolbar = (PUBLIC / "door_cutting_order_toolbar_stability_ux.js").read_text(
             encoding="utf-8"
         )
         production = (PUBLIC / "shop_floor_order_ux.js").read_text(encoding="utf-8")
+        lifecycle = (PUBLIC / "order_lifecycle.js").read_text(encoding="utf-8")
 
-        self.assertIn("almdina:surfaces-settled", context)
-        self.assertIn("dco-actions-settling", toolbar)
-        self.assertIn("toolbar-final-reveal", toolbar)
+        self.assertNotIn("dco-actions-settling", toolbar)
+        self.assertNotIn("toolbar-final-reveal", toolbar)
+        self.assertNotIn("visibility:hidden!important", toolbar)
+        self.assertIn("margin-right:auto!important", toolbar)
+        self.assertIn("margin-left:0!important", toolbar)
+        self.assertIn("flex-wrap:nowrap!important", toolbar)
         self.assertIn("[0, 180]", toolbar)
         self.assertNotIn("[0, 80, 250, 650, 1200]", toolbar)
+        self.assertNotIn("permissionVersion", production)
         self.assertIn(
             "frm.__almdinaProductionActionsKey === productionActionsKey(frm)",
             production,
         )
+        self.assertIn("renderedOwned.every(label => expected.has(label))", production)
+        installer = lifecycle.split("function installButtons", 1)[1].split(
+            "function loadContext", 1
+        )[0]
+        self.assertNotIn("removeLifecycleButtons(frm);", installer)
+        self.assertIn("ensureLifecycleButton", installer)
 
     def test_revision_actions_use_a_clear_group_name(self) -> None:
         source = (PUBLIC / "door_cutting_order_revision_ux.js").read_text(
