@@ -35,11 +35,26 @@ EDGE_BANDING_SCRIPTS = (
     "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
 )
 
+CUTTING_PLAN_SCRIPTS = (
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_approval_ux.js",
+    "public/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
+)
+
 OLD_ORDER_ENTRY_PATHS = tuple(
     f"public/js/{Path(script).name}" for script in ORDER_ENTRY_SCRIPTS
 )
 OLD_EDGE_BANDING_PATHS = tuple(
     f"public/js/{Path(script).name}" for script in EDGE_BANDING_SCRIPTS
+)
+OLD_CUTTING_PLAN_PATHS = tuple(
+    f"public/js/{Path(script).name}" for script in CUTTING_PLAN_SCRIPTS
 )
 
 
@@ -126,6 +141,42 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
                 hooks,
                 f"Retired root edge-banding asset path still loaded: {old_path}",
             )
+
+    def test_cutting_plan_batch_has_canonical_feature_paths(self):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        positions = []
+
+        for script in CUTTING_PLAN_SCRIPTS:
+            source = ROOT / script
+            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
+            self.assertEqual(
+                hooks.count(f'"{script}"'),
+                1,
+                f"{script} must have one canonical Door Cutting Order asset owner",
+            )
+            positions.append(hooks.index(f'"{script}"'))
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            "Cutting Plan load order changed during migration",
+        )
+
+        for old_path in OLD_CUTTING_PLAN_PATHS:
+            self.assertNotIn(
+                f'"{old_path}"',
+                hooks,
+                f"Retired root cutting-plan asset path still loaded: {old_path}",
+            )
+
+        self.assertIn(
+            '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js"',
+            hooks,
+        )
+        self.assertIn(
+            '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
+            hooks,
+        )
 
 
 if __name__ == "__main__":
