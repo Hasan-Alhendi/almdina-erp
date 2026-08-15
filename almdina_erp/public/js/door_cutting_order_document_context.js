@@ -452,7 +452,14 @@
         if (!isCurrent(frm, capture(frm))) return false;
 
         const pending = pendingSurfaces(frm);
-        if (!pending.length) return true;
+        if (!pending.length) {
+            if (typeof window.dispatchEvent === "function") {
+                window.dispatchEvent(new CustomEvent("almdina:surfaces-settled", {
+                    detail: { frm },
+                }));
+            }
+            return true;
+        }
 
         pending.forEach(({ name, probe }) => {
             try {
