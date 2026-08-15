@@ -67,7 +67,7 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
         positions = []
 
         for script in ORDER_ENTRY_SCRIPTS:
-            source = ROOT / script.removeprefix("public/js/")
+            source = ROOT / script
             self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
             self.assertEqual(
                 hooks.count(f'"{script}"'),
