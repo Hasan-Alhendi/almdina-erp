@@ -36,7 +36,7 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
 
 def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
     plan_controls = source("door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js")
-    fast_save = source("door_cutting_order_fast_save_ux.js")
+    fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
     revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
     assert "async function persistPendingOrderInputs(frm)" in fast_save
@@ -58,7 +58,7 @@ def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -
 
 
 def test_optimizer_only_recalculation_does_not_require_order_save() -> None:
-    fast_save = source("door_cutting_order_fast_save_ux.js")
+    fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
 
     mark_order_body = fast_save.split("function markOrderInputPlanStale(frm)", 1)[1].split(
         "function markOptimizerPlanStale(frm)", 1
@@ -71,7 +71,7 @@ def test_optimizer_only_recalculation_does_not_require_order_save() -> None:
 
 
 def test_kerf_and_trim_follow_order_input_plan_staleness() -> None:
-    fast_save = source("door_cutting_order_fast_save_ux.js")
+    fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
     revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
     assert "kerf_mm(frm) { markOrderInputPlanStale(frm); }" in fast_save
