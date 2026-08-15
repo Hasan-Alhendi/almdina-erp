@@ -88,7 +88,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertIn("permissionVersion() <= 0", bootstrap)
 
     def test_permission_field_metadata_is_updated_only_when_changed(self) -> None:
-        costs = source("door_cutting_order_cost_permissions_ux.js")
+        costs = source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js")
 
         self.assertIn('field.df.options !== "costing_currency"', costs)
         self.assertIn("Number(field.df.hidden || 0) !== hidden", costs)
