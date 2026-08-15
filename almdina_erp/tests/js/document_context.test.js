@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-    path.resolve(__dirname, "../../public/js/door_cutting_order_document_context.js"),
+    path.resolve(__dirname, "../../public/js/door_cutting_order/core/door_cutting_order_document_context.js"),
     "utf8"
 );
 
