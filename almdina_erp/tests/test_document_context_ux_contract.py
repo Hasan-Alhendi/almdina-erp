@@ -43,7 +43,12 @@ TOOLBAR_STABILITY = (
     / "door_cutting_order_toolbar_stability_ux.js"
 )
 DOCUMENT_PRINT = (
-    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
 )
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 
@@ -56,7 +61,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn(context, hooks)
         for feature in (
             '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
-            '"public/js/door_cutting_order_document_print_presenter.js"',
+            '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
             '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/shop_floor_order_ux.js"',
             '"public/js/door_cutting_order/core/order_lifecycle.js"',
