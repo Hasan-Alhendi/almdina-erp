@@ -16,7 +16,14 @@ PLAN_PERMISSION_SERVICE = (
 )
 PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
 APPROVAL_SERVICE = ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
-ACTION_GUARD = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
+ACTION_GUARD = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_action_permission_guard.js"
+)
 SPECIAL_SHAPE_UX = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
 DRAWING_POLICY = (
