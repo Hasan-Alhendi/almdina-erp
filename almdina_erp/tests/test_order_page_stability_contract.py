@@ -79,7 +79,9 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertNotIn("dco-primary-action-pending", toolbar)
 
     def test_plan_recovery_does_not_destroy_ready_html(self) -> None:
-        bootstrap = source("door_cutting_order_plan_surface_bootstrap.js")
+        bootstrap = source(
+            "door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"
+        )
 
         self.assertIn("if (metadataChanged && typeof field.refresh", bootstrap)
         self.assertIn("__almdinaPlanSurfaceSignature", bootstrap)
