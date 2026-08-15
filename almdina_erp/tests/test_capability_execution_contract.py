@@ -31,7 +31,14 @@ ACTION_GUARD = (
     / "core"
     / "door_cutting_order_action_permission_guard.js"
 )
-SPECIAL_SHAPE_UX = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+SPECIAL_SHAPE_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "drawing"
+    / "special_shape_facade.js"
+)
 DXF_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
 DRAWING_POLICY = (
     ROOT / "almdina_erp" / "application" / "security" / "drawing_action_policy.py"

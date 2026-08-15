@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "../..");
-const loader = fs.readFileSync(path.join(root, "public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const loader = fs.readFileSync(path.join(root, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const app = fs.readFileSync(path.join(root, "public/js/door_drawing_v3/application/vector_editing.js"), "utf8");
 const view = fs.readFileSync(path.join(root, "public/js/door_drawing_v3/presentation/vector_editing_view.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "public/css/door_drawing_v3_vector_editing.css"), "utf8");

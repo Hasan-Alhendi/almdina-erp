@@ -7,7 +7,7 @@ const path = require("node:path");
 const repoRoot = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(repoRoot, relative), "utf8");
 
-const bootstrap = read("almdina_erp/public/js/door_cutting_order_special_shape_ux.js");
+const bootstrap = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
 const shortcuts = read("almdina_erp/public/js/door_drawing_v3/application/editor_shortcuts.js");
 const nodePolicy = read("almdina_erp/public/js/door_drawing_v3/application/node_selection_policy.js");
 

@@ -7,7 +7,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
-const bootstrap = read("almdina_erp/public/js/door_cutting_order_special_shape_ux.js");
+const bootstrap = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
 const smartGuides = read("almdina_erp/public/js/door_drawing_v3/application/smart_guides.js");
 const candidates = read("almdina_erp/public/js/door_drawing_v3/application/snap_candidate_engine.js");
 const movePolicy = read("almdina_erp/public/js/door_drawing_v3/application/professional_move_policy.js");

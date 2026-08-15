@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
 SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
-EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
@@ -68,7 +68,7 @@ def test_contract_loads_before_active_shape_output_consumers():
         '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"',
         '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"',
         '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"',
-        '"public/js/door_cutting_order_special_shape_ux.js"',
+        '"public/js/door_cutting_order/drawing/special_shape_facade.js"',
         '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"',
         '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"',
         '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
@@ -89,7 +89,7 @@ def test_order_form_boots_shape_dependencies_before_active_consumers():
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
-        "public/js/door_cutting_order_special_shape_ux.js",
+        "public/js/door_cutting_order/drawing/special_shape_facade.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",

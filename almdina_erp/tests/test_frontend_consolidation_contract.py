@@ -97,7 +97,14 @@ SECURE_DXF = (
     / "cutting_plan"
     / "secure_dxf_export.js"
 )
-SPECIAL_SHAPE_UX = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+SPECIAL_SHAPE_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "drawing"
+    / "special_shape_facade.js"
+)
 
 
 class TestFrontendConsolidationContract(unittest.TestCase):

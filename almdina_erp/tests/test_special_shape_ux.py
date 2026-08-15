@@ -19,7 +19,7 @@ OPERATOR_UX = (
     / "order_entry"
     / "door_cutting_order_operator_ux.js"
 )
-EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 V3_VIEW = APP_ROOT / "public" / "js" / "door_drawing_v3" / "presentation" / "canvas_view.js"
 V3_EDITOR = APP_ROOT / "public" / "js" / "door_drawing_v3" / "application" / "editor_stage2.js"
 V3_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v3" / "domain" / "geometry.js"
@@ -87,7 +87,7 @@ def test_operator_opens_only_clean_v3_editor_runtime():
     assert 'data-field="piece_type"' in operator
     assert "dco-special-sketch-button" in operator
     assert "AlmdinaSpecialShapeEditor.open" in operator
-    assert '"public/js/door_cutting_order_special_shape_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
     assert "__doorDrawingV3: true" in entry
     assert "__doorDrawingV3Shapes: true" in entry
     assert "door_drawing_v3/domain/geometry.js" in entry

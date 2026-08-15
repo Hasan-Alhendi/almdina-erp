@@ -95,7 +95,7 @@ assert.equal(P.analyze(irregularOpen, {
     smoothingPasses: 0,
 }), null, "An ambiguous freehand shape should receive no automatic correction suggestion");
 
-const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const controller = fs.readFileSync(path.join(ROOT, "application/non_destructive_smart_suggestions.js"), "utf8");
 const view = fs.readFileSync(path.join(ROOT, "presentation/smart_suggestion_view.js"), "utf8");
 const smartPen = fs.readFileSync(path.join(ROOT, "application/smart_pen.js"), "utf8");

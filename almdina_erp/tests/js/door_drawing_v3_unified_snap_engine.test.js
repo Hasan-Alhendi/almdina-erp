@@ -191,7 +191,7 @@ assert.deepEqual(restoredNote.geometry.position, G.point(22.5, 30.25));
 // 13) Browser integration contract: Text is a direct on-canvas tool, not a
 // secondary Frappe modal, and advanced snapping is booted before the editor.
 const publicRoot = path.resolve(__dirname, "../../public");
-const bootstrapSource = fs.readFileSync(path.join(publicRoot, "js/door_cutting_order_special_shape_ux.js"), "utf8");
+const bootstrapSource = fs.readFileSync(path.join(publicRoot, "js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const textEditorSource = fs.readFileSync(path.join(publicRoot, "js/door_drawing_v3/application/text_annotation_editor.js"), "utf8");
 const textViewSource = fs.readFileSync(path.join(publicRoot, "js/door_drawing_v3/presentation/text_annotation_view.js"), "utf8");
 const textCssSource = fs.readFileSync(path.join(publicRoot, "css/door_drawing_v3_text.css"), "utf8");

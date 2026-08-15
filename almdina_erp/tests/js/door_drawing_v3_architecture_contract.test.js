@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const geometry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"), "utf8");
 const smartPathDomain = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/smart_path_domain.js"), "utf8");
 const smartPathPersistence = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/infrastructure/smart_path_persistence.js"), "utf8");
