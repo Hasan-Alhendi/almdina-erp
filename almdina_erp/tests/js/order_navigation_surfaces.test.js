@@ -254,7 +254,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         Array,
         __: value => value,
     });
-    vm.runInContext(source("shop_floor_order_ux.js"), context);
+    vm.runInContext(source("door_cutting_order/production/shop_floor_order_ux.js"), context);
 
     const added = [];
     const frm = {
