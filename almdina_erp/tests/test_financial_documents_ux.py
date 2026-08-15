@@ -148,7 +148,12 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert detail_fields["clipped_corner_edge_price_usd"]["fieldtype"] == "Currency"
     assert detail_fields["clipped_corner_edge_price_status"]["options"] == "Unpriced\nPriced"
     clipped_ux = (
-        ROOT / "public" / "js" / "door_cutting_order_clipped_corner_ux.js"
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "drawing"
+        / "door_cutting_order_clipped_corner_ux.js"
     ).read_text(encoding="utf-8")
     assert "function view(frm, row)" in clipped_ux
     assert "view," in clipped_ux

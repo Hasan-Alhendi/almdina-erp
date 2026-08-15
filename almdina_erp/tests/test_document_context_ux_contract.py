@@ -39,7 +39,12 @@ PRODUCTION_ACTIONS = (
     / "shop_floor_order_ux.js"
 )
 PERMISSION_REFRESH = (
-    ROOT / "public" / "js" / "door_cutting_order_permission_refresh_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_permission_refresh_ux.js"
 )
 TOOLBAR_STABILITY = (
     ROOT
@@ -258,7 +263,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
 
         for owner, probe in (
             ("door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
-            ("door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
+            ("door_cutting_order/core/door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
             ("door_cutting_order/production/shop_floor_order_ux.js", '"production-actions"'),
             ("permission_context.js", '"order-protected-modules"'),
         ):

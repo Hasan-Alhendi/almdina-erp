@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 SAVE_RENDER_GUARD = (
-    ROOT / "public" / "js" / "door_cutting_order_save_render_performance_ux.js"
+    ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_save_render_performance_ux.js"
 )
 MANIFEST = ROOT / "frontend_assets.py"
 CANONICAL_ORDER_FORM = (

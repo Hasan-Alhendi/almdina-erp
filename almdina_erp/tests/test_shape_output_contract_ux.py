@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
-CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
+CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
 SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
@@ -59,8 +59,8 @@ def test_shape_output_contract_is_pure_immutable_and_version_aware():
 
 def test_contract_loads_before_active_shape_output_consumers():
     hooks = _source(HOOKS)
-    geometry = '"/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js"'
-    contract = '"/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js"'
+    geometry = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"'
+    contract = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"'
     secure_dxf = '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js"'
     assert hooks.index(geometry) < hooks.index(contract) < hooks.index(secure_dxf)
 
@@ -80,11 +80,14 @@ def test_contract_loads_before_active_shape_output_consumers():
     assert '"public/js/door_cutting_order_cost_invoice_ux.js"' not in hooks
 
 
-def test_order_form_boots_shape_dependencies_before_active_consumers():
+def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
     hooks = runpy.run_path(str(HOOKS))
-    scripts = hooks["doctype_js"]["Door Cutting Order"]
-    geometry = "public/js/door_cutting_order_special_shape_geometry.js"
-    contract = "public/js/door_cutting_order_shape_output_contract.js"
+    global_scripts = hooks["app_include_js"]
+    form_scripts = hooks["doctype_js"]["Door Cutting Order"]
+    geometry_global = "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
+    contract_global = "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
+    geometry_form = "public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
+    contract_form = "public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
     consumers = (
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
@@ -94,10 +97,13 @@ def test_order_form_boots_shape_dependencies_before_active_consumers():
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
     )
-    assert geometry in scripts
-    assert contract in scripts
-    assert scripts.index(geometry) < scripts.index(contract)
-    assert scripts.index(contract) < min(scripts.index(item) for item in consumers)
+    assert geometry_global in global_scripts
+    assert contract_global in global_scripts
+    assert global_scripts.index(geometry_global) < global_scripts.index(contract_global)
+    assert geometry_form not in form_scripts
+    assert contract_form not in form_scripts
+    for consumer in consumers:
+        assert consumer in form_scripts
 
 
 def test_special_shape_button_resolves_v3_editor_at_click_time():

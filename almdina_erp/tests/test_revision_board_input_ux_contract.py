@@ -30,8 +30,15 @@ BOARD_TEXT_UX = (
     / "order_entry"
     / "door_cutting_order_board_text_ux.js"
 )
-FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_text_board_plan_ux.js"
+)
 API_PATH = ROOT / "almdina_erp" / "api.py"
 DOCTYPE_JSON = (
     ROOT

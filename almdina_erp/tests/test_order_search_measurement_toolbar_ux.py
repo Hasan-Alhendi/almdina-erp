@@ -5,7 +5,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 HOOKS = ROOT / "frontend_assets.py"
-LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
+LIST_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "list_view"
+    / "door_cutting_order_list.js"
+)
 MEASUREMENT_UX = (
     ROOT
     / "public"
@@ -134,7 +141,7 @@ def test_all_new_ux_layers_are_loaded_in_the_required_order():
     secure_dxf = '"public/js/door_cutting_order/cutting_plan/secure_dxf_export.js"'
     toolbar = '"public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js"'
     assert "doctype_list_js = {" in hooks
-    assert '"Door Cutting Order": "public/js/door_cutting_order_list.js"' in hooks
+    assert '"Door Cutting Order": "public/js/door_cutting_order/list_view/door_cutting_order_list.js"' in hooks
     assert measurement in hooks
     assert secure_dxf in hooks
     assert toolbar in hooks

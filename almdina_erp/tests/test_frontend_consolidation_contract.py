@@ -39,8 +39,15 @@ DRAWING_PLAN = (
     / "door_cutting_order_drawing_plan_ux.js"
 )
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
-FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_text_board_plan_ux.js"
+)
 PLAN_CONTROLS = (
     ROOT
     / "public"
@@ -138,7 +145,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         cost_presenter = '"public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"'
         cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
         plan_tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
-        permission_refresh = '"public/js/door_cutting_order_permission_refresh_ux.js"'
+        permission_refresh = '"public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"'
 
         self.assertIn('"route": "/desk"', hooks)
         self.assertNotIn('"route": "/desk/almdina-erp"', hooks)
