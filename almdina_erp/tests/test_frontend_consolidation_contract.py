@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 CANONICAL_FORM = (
     ROOT
     / "almdina_erp"
@@ -120,19 +121,20 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("board_item", source)
 
     def test_focused_renderer_loads_before_every_active_plan_consumer(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
         renderer = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"'
 
-        self.assertIn(renderer, hooks)
+        self.assertIn(renderer, manifest)
         for consumer in (
             '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"',
             '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
         ):
-            self.assertLess(hooks.index(renderer), hooks.index(consumer))
+            self.assertLess(manifest.index(renderer), manifest.index(consumer))
 
     def test_protected_surfaces_have_deterministic_form_load_order(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
         cost_presenter = '"public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"'
         cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
         plan_tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
@@ -140,17 +142,17 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
         self.assertIn('"route": "/desk"', hooks)
         self.assertNotIn('"route": "/desk/almdina-erp"', hooks)
-        self.assertLess(hooks.index(cost_presenter), hooks.index(cost_permissions))
-        self.assertLess(hooks.index(plan_tabs), hooks.index(permission_refresh))
+        self.assertLess(manifest.index(cost_presenter), manifest.index(cost_permissions))
+        self.assertLess(manifest.index(plan_tabs), manifest.index(permission_refresh))
 
     def test_duplicate_legacy_form_controllers_are_not_loaded(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
         for legacy in (
             '"public/js/door_cutting_order_workflow.js"',
             '"public/js/door_cutting_order_cost_invoice_ux.js"',
             '"public/js/production_stage.js"',
         ):
-            self.assertNotIn(legacy, hooks)
+            self.assertNotIn(legacy, manifest)
 
     def test_renderer_owns_drawing_only(self) -> None:
         source = PLAN_RENDERER.read_text(encoding="utf-8")
