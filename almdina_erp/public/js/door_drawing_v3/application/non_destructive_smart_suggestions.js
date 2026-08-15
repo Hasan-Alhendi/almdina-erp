@@ -8,11 +8,12 @@
     const V = root.ShapeView;
     const F = root.SmartFreehandPolicy;
     const I = root.SmartStrokeIntelligence;
+    const Cleaner = root.AdaptiveStrokeCleaner;
     const Suggest = root.SmartSuggestionPolicy;
     const SmartPen = root.SmartPen;
     const Editor = root.Editor;
-    if (!G || !D || !S || !V || !F || !I || !Suggest || !SmartPen || !Editor) {
-        throw new Error("Door Drawing V3 smart pen must load before non-destructive suggestions");
+    if (!G || !D || !S || !V || !F || !I || !Cleaner || !Suggest || !SmartPen || !Editor) {
+        throw new Error("Door Drawing V3 smart pen stack must load before non-destructive suggestions");
     }
 
     function render(c) { V.render(c); }
@@ -174,6 +175,46 @@
         return true;
     }
 
+    function freehandPathObject(points) {
+        let objects = [];
+        try {
+            objects = SmartPen.objectsFromRecognition({ type: "path", points, closed: false });
+        } catch (error) {
+            objects = [];
+        }
+        return objects.length === 1 && objects[0].type === G.PATH_TYPE ? objects[0] : null;
+    }
+
+    function commitRawThenClean(c, points, pointerType) {
+        const rawObject = freehandPathObject(points);
+        if (!rawObject) return null;
+
+        // The raw stroke is deliberately a real history state. One Undo after an
+        // automatic cleanup restores exactly what came from the user's hand.
+        const rawDocument = D.addObject(c.history.current(), rawObject);
+        c.history.execute(rawDocument, "Draw freehand stroke");
+
+        const cleaning = Cleaner.clean(points, pointerType);
+        let finalObject = rawObject;
+        if (cleaning.changed && cleaning.points.length >= 2) {
+            finalObject = G.path(rawObject.id, cleaning.points, false, rawObject.style || {});
+            c.history.execute(
+                D.replaceObject(c.history.current(), finalObject),
+                "Smart clean freehand stroke"
+            );
+        }
+
+        c.lastSmartClean = Object.freeze({
+            sourceId: rawObject.id,
+            changed: Boolean(cleaning.changed),
+            straightenedRuns: cleaning.straightenedRuns,
+            cornerIndices: cleaning.cornerIndices,
+            maximumDeviationMm: cleaning.maximumDeviationMm,
+        });
+        c.dirty = true;
+        return Object.freeze({ rawObject, finalObject, cleaning });
+    }
+
     function finishFreehand(c, event) {
         const stroke = c.penStroke;
         if (!stroke || stroke.pointerId !== event.pointerId) return false;
@@ -195,29 +236,29 @@
         }
 
         const options = recognitionOptions(c, stroke);
-        const result = I.interpret(points, options);
-        let objects = [];
-        try { objects = SmartPen.objectsFromRecognition(result); } catch (error) { objects = []; }
-
+        const pointerType = stroke.pointerType || "mouse";
         c.penStroke = null;
         c.penDraft = null;
         c.snapState = null;
         try { c.canvas.releasePointerCapture(event.pointerId); } catch (error) { /* optional */ }
-        if (!objects.length) {
+
+        // Do not use primitive or mixed-stroke recognition to create the committed
+        // object. The automatic pen is allowed to improve the same path only.
+        const committed = commitRawThenClean(c, points, pointerType);
+        if (!committed) {
             render(c);
             return true;
         }
 
-        let document = c.history.current();
-        for (const object of objects) document = D.addObject(document, object);
-        c.selectedId = objects[0].id;
+        c.selectedId = committed.finalObject.id;
         c.nodeEditId = "";
         c.selectedNodeIndex = null;
         c.tool = "pen";
-        execute(c, document, `Freehand path (${objects.length})`);
-        if (objects.length === 1 && objects[0].type === G.PATH_TYPE) {
-            propose(c, objects[0], points, options, closeReady);
-        }
+        render(c);
+
+        // Primitive recognition remains an optional suggestion layer. It never
+        // changes the committed geometry without an explicit Apply action.
+        propose(c, committed.finalObject, points, options, closeReady);
         return true;
     }
 
@@ -250,6 +291,7 @@
         if (!c || !c.canvas || c.__nonDestructiveSuggestionInstalled) return c;
         c.__nonDestructiveSuggestionInstalled = true;
         c.smartSuggestion = null;
+        c.lastSmartClean = null;
 
         const onPointerDown = event => {
             if (c.readOnly || c.tool !== "pen" || c.spaceHeld || event.button !== 0) return;
@@ -314,6 +356,8 @@
         closeCandidate,
         moveFreehand,
         finishFreehand,
+        freehandPathObject,
+        commitRawThenClean,
         propose,
         acceptSuggestion,
         dismissSuggestion,
