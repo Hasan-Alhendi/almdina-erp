@@ -120,7 +120,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         for consumer in (
             '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"',
             '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
-            '"public/js/shop_floor_order_ux.js"',
+            '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
         ):
             self.assertLess(hooks.index(renderer), hooks.index(consumer))
 
