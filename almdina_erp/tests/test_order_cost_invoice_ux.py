@@ -5,12 +5,12 @@ import json
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 EDGE_TYPE = ROOT / "almdina_erp" / "doctype" / "edge_banding_type" / "edge_banding_type.json"
-COST_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
-MULTI_EDGE_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order_multi_edge_documents_ux.js"
-PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-PRINT_THEME = ROOT / "public" / "js" / "door_cutting_order_document_print_theme.js"
-INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order_customer_invoice_toolbar_ux.js"
-FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+COST_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
+MULTI_EDGE_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_multi_edge_documents_ux.js"
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+PRINT_THEME = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_theme.js"
+INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_customer_invoice_toolbar_ux.js"
+FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 HEADER_UX = ROOT / "public" / "js" / "door_cutting_order_header_ux.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -137,10 +137,10 @@ def test_legacy_cost_invoice_is_deleted_and_secure_financial_layers_are_loaded()
     assert not legacy_path.exists()
 
     legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
-    cost_permissions = '"public/js/door_cutting_order_cost_permissions_ux.js"'
-    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
-    toolbar = '"public/js/door_cutting_order_customer_invoice_toolbar_ux.js"'
+    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
+    cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
+    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
+    toolbar = '"public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js"'
     assert legacy not in hooks
     for script in (presenter, cost_permissions, financial, toolbar):
         assert script in hooks
