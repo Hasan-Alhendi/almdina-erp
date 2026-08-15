@@ -92,7 +92,7 @@ assert.ok(penProfile.maxCurveDisplacementMm < mouseProfile.maxCurveDisplacementM
 assert.ok(penProfile.straightMaximumDeviationMm < mouseProfile.straightMaximumDeviationMm);
 assert.equal(Cleaner.profile("unknown"), Cleaner.PROFILES.mouse);
 
-const bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const application = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/application/non_destructive_smart_suggestions.js"), "utf8");
 const domainSource = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/domain/shape_preserving_stroke_domain.js"), "utf8");
 
