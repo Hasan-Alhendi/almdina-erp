@@ -10,8 +10,17 @@ from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION_UX = ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
-LIFECYCLE_UX = ROOT / "public" / "js" / "order_lifecycle.js"
+REVISION_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_revision_ux.js"
+)
+LIFECYCLE_UX = (
+    ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
+)
 REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
 BOARD_TEXT_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
 FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
