@@ -7,7 +7,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "../..");
 const read = relative => fs.readFileSync(path.join(ROOT, relative), "utf8");
 
-const bootstrap = read("public/js/door_cutting_order_special_shape_ux.js");
+const bootstrap = read("public/js/door_cutting_order/drawing/special_shape_facade.js");
 const domain = read("public/js/door_drawing_v3/domain/bezier_path_domain.js");
 const topologyDomain = read("public/js/door_drawing_v3/domain/path_topology_domain.js");
 const selection = read("public/js/door_drawing_v3/domain/bezier_selection_domain.js");
@@ -70,8 +70,7 @@ assert.match(persistence, /authoritative:\s*"door_drawing_v3"/);
 
 assert.match(view, /data-ddv3-path-handle/);
 assert.match(view, /ddv3-bezier-contextbar/);
-assert.match(view, /data-ddv3-bezier-action=\"node-type\"/);
-assert.match(view, /data-ddv3-bezier-action=\"segment-type\"/);
+assert.match(view, /data-ddv3-bezier-action=\"\$\{action\}\"/);
 assert.match(view, /C \$\{c1\.x\}/);
 
 assert.match(topologyView, /ddv3-bezier-contextbar/);
