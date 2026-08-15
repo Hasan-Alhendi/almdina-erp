@@ -19,7 +19,7 @@ OPERATOR_UX = (
     / "order_entry"
     / "door_cutting_order_operator_ux.js"
 )
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source() -> str:
