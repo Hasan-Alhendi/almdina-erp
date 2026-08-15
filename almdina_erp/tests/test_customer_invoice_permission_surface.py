@@ -6,8 +6,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVICE = ROOT / "almdina_erp" / "services" / "cost_document_service.py"
-TOOLBAR = ROOT / "public" / "js" / "door_cutting_order_customer_invoice_toolbar_ux.js"
-FINANCIAL = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
+TOOLBAR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_customer_invoice_toolbar_ux.js"
+)
+FINANCIAL = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_financial_documents_ux.js"
+)
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
 HOOKS = ROOT / "hooks.py"
 
@@ -64,7 +78,7 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
         hooks = HOOKS.read_text(encoding="utf-8")
 
         self.assertIn(
-            '"public/js/door_cutting_order_customer_invoice_toolbar_ux.js"',
+            '"public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js"',
             hooks,
         )
         self.assertIn("AlmdinaCustomerInvoiceToolbarUX", source)
