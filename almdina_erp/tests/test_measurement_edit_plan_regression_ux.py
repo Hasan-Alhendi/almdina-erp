@@ -20,7 +20,7 @@ def source(name: str) -> str:
 
 
 def test_special_door_pricing_does_not_block_ordinary_save() -> None:
-    cost_permissions = source("door_cutting_order_cost_permissions_ux.js")
+    cost_permissions = source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js")
     adapter = PIECE_POLICY_ADAPTER.read_text(encoding="utf-8")
     validate_rows = adapter.split("def validate_rows(self)", 1)[1].split(
         "def ensure_documented(self)", 1
