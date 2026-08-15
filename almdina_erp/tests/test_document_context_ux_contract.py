@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 DOCUMENT_CONTEXT = (
     ROOT
     / "public"
@@ -62,10 +62,10 @@ CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 
 class TestDocumentContextUxContract(unittest.TestCase):
     def test_document_context_loads_before_every_active_order_feature(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
         context = '"public/js/door_cutting_order/core/door_cutting_order_document_context.js"'
 
-        self.assertIn(context, hooks)
+        self.assertIn(context, manifest)
         for feature in (
             '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
             '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
@@ -74,13 +74,13 @@ class TestDocumentContextUxContract(unittest.TestCase):
             '"public/js/door_cutting_order/core/order_lifecycle.js"',
             '"public/js/input_stability.js"',
         ):
-            self.assertLess(hooks.index(context), hooks.index(feature))
+            self.assertLess(manifest.index(context), manifest.index(feature))
 
         # The context owns the surface-readiness registry that the permission
         # bundle registers into.
         self.assertLess(
-            hooks.index(context),
-            hooks.index('"public/js/permission_context.js"'),
+            manifest.index(context),
+            manifest.index('"public/js/permission_context.js"'),
         )
 
         for retired in (
@@ -88,7 +88,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
             '"public/js/door_cutting_order_cost_invoice_ux.js"',
             '"public/js/production_stage.js"',
         ):
-            self.assertNotIn(retired, hooks)
+            self.assertNotIn(retired, manifest)
 
     def test_identity_transition_clears_every_document_owned_html_region(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
