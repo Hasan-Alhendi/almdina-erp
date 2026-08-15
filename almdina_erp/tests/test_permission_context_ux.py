@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-HOOKS_PATH = REPOSITORY_ROOT / "almdina_erp/hooks.py"
+HOOKS_PATH = REPOSITORY_ROOT / "almdina_erp/frontend_assets.py"
 BOOT_PATH = REPOSITORY_ROOT / "almdina_erp/boot.py"
 PERMISSIONS_PATH = REPOSITORY_ROOT / "almdina_erp/permissions.py"
 PERMISSION_JS_PATH = REPOSITORY_ROOT / "almdina_erp/public/js/permission_context.js"
