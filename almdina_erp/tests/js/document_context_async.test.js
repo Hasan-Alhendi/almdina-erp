@@ -84,7 +84,7 @@ const context = vm.createContext({
     },
     __: value => value,
 });
-vm.runInContext(source("door_cutting_order_document_context.js"), context);
+vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
 vm.runInContext(source("door_cutting_order_defaults.js"), context);
 vm.runInContext(source("door_cutting_order_drawing_plan_ux.js"), context);
 
