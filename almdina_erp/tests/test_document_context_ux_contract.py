@@ -22,7 +22,14 @@ DEFAULTS = (
     / "order_entry"
     / "door_cutting_order_defaults.js"
 )
-DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
+DRAWING_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_plan_ux.js"
+)
 PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
 PERMISSION_REFRESH = (
     ROOT / "public" / "js" / "door_cutting_order_permission_refresh_ux.js"
@@ -38,6 +45,7 @@ TOOLBAR_STABILITY = (
 DOCUMENT_PRINT = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 )
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 
 
 class TestDocumentContextUxContract(unittest.TestCase):
@@ -49,7 +57,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
         for feature in (
             '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
             '"public/js/door_cutting_order_document_print_presenter.js"',
-            '"public/js/door_cutting_order_drawing_plan_ux.js"',
+            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/shop_floor_order_ux.js"',
             '"public/js/door_cutting_order/core/order_lifecycle.js"',
             '"public/js/input_stability.js"',
@@ -92,11 +100,11 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("ensureStageContext(frm)", source)
 
     def test_stage_context_is_loaded_before_stage_gated_surfaces_render(self) -> None:
-        plan = (ROOT / "public" / "js" / "door_cutting_order_plan_ux.js").read_text(
+        plan = (CUTTING_PLAN / "door_cutting_order_plan_ux.js").read_text(
             encoding="utf-8"
         )
         controls = (
-            ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+            CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
         ).read_text(encoding="utf-8")
 
         self.assertIn("ensureStageContext(frm).then", plan)
@@ -126,11 +134,11 @@ class TestDocumentContextUxContract(unittest.TestCase):
 
     def test_cutting_algorithm_surface_never_waits_for_an_order_edit_session(self) -> None:
         context = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
-        plan = (ROOT / "public" / "js" / "door_cutting_order_plan_ux.js").read_text(
+        plan = (CUTTING_PLAN / "door_cutting_order_plan_ux.js").read_text(
             encoding="utf-8"
         )
         controls = (
-            ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+            CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
         ).read_text(encoding="utf-8")
         drawing = DRAWING_PLAN.read_text(encoding="utf-8")
 
@@ -237,7 +245,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn('"__almdinaSurfaceSettleTimer"', source)
 
         for owner, probe in (
-            ("door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
+            ("door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
             ("door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
             ("shop_floor_order_ux.js", '"production-actions"'),
             ("permission_context.js", '"order-protected-modules"'),
