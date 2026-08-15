@@ -6,6 +6,8 @@
     const EDIT_LABEL = __("تعديل");
     const SAVE_LABEL = __("حفظ");
     const CONFIRM_EDIT_LABEL = __("اعتماد التعديل"); // legacy label removed from UI; kept for cleanup
+    const REVISION_GROUP = __("نسخ الطلب");
+    const LEGACY_LIFECYCLE_GROUP = __("دورة الطلب");
     const ORDER_INPUT_FIELDS = [
         "customer",
         "order_date",
@@ -459,14 +461,17 @@
     }
 
     function removeEditSessionButtons(frm) {
+        [EDIT_LABEL, CONFIRM_EDIT_LABEL, __("تعديل الطلب"), SAVE_LABEL].forEach((label) => {
+            frm.remove_custom_button(label, LEGACY_LIFECYCLE_GROUP);
+        });
         frm.remove_custom_button(EDIT_LABEL);
         frm.remove_custom_button(CONFIRM_EDIT_LABEL);
-        frm.remove_custom_button(EDIT_LABEL, __("دورة الطلب"));
-        frm.remove_custom_button(CONFIRM_EDIT_LABEL, __("دورة الطلب"));
+        frm.remove_custom_button(EDIT_LABEL, REVISION_GROUP);
+        frm.remove_custom_button(CONFIRM_EDIT_LABEL, REVISION_GROUP);
         frm.remove_custom_button(__("تعديل الطلب"));
-        frm.remove_custom_button(__("تعديل الطلب"), __("دورة الطلب"));
+        frm.remove_custom_button(__("تعديل الطلب"), REVISION_GROUP);
         frm.remove_custom_button(SAVE_LABEL);
-        frm.remove_custom_button(SAVE_LABEL, __("دورة الطلب"));
+        frm.remove_custom_button(SAVE_LABEL, REVISION_GROUP);
     }
 
     function refreshDependentUx(frm) {
@@ -725,18 +730,19 @@
             renderRevisionState(frm);
             removeEditSessionButtons(frm);
 
-            frm.remove_custom_button(__("إنشاء نسخة تعديل"), __("دورة الطلب"));
+            frm.remove_custom_button(__("إنشاء نسخة تعديل"), REVISION_GROUP);
+            frm.remove_custom_button(__("إنشاء نسخة تعديل"), LEGACY_LIFECYCLE_GROUP);
 
             if (frm.doc.revision_of) {
                 frm.add_custom_button(__("فتح الطلب الأصلي"), () => {
                     frappe.set_route("Form", "Door Cutting Order", frm.doc.revision_of);
-                }, __("دورة الطلب"));
+                }, REVISION_GROUP);
             }
 
             if (frm.doc.superseded_by) {
                 frm.add_custom_button(__("فتح نسخة التعديل"), () => {
                     frappe.set_route("Form", "Door Cutting Order", frm.doc.superseded_by);
-                }, __("دورة الطلب"));
+                }, REVISION_GROUP);
                 schedulePrimaryActionSync(frm);
                 if (editable || wasEditable || leftEdit) {
                     requestAnimationFrame(() => refreshDependentUx(frm));
@@ -751,7 +757,7 @@
                 frm.add_custom_button(
                     __("إنشاء نسخة تعديل"),
                     () => openRevision(frm),
-                    __("دورة الطلب")
+                    REVISION_GROUP
                 );
             }
 
