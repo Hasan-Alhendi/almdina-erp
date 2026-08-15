@@ -67,13 +67,15 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         # Missing reason is filled with a default audit message — never rejected.
         self.assertNotIn("if not reason:", return_fn)
 
-    def test_legacy_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
+    def test_retired_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
         source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("const RETIRED_LABELS = Object.freeze([", source)
+        self.assertIn("function removeRetiredLifecycleButtons(frm)", source)
+        self.assertIn("RETIRED_LABELS.forEach", source)
         self.assertIn("function removeLifecycleButtons(frm)", source)
-        self.assertIn("LEGACY_LABELS.forEach", source)
         self.assertIn('__("إعادة للمسودة")', source)
         self.assertIn('__("Cancel Order")', source)
-        self.assertIn("removeLifecycleButtons(frm)", source)
+        self.assertIn("removeRetiredLifecycleButtons(frm)", source)
         self.assertNotIn('document.addEventListener("click"', source)
         self.assertNotIn("stopImmediatePropagation", source)
 
