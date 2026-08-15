@@ -55,10 +55,10 @@ jobs:
           node --check almdina_erp/public/js/permission_context.js
           node --check almdina_erp/public/js/shared_shell.js
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_action_permission_guard.js
-          node --check almdina_erp/public/js/door_cutting_order_cost_presenter.js
+          node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js
           node --check almdina_erp/public/js/door_cutting_order_permission_refresh_ux.js
           node --check almdina_erp/public/js/door_cutting_order_tab_permissions_ux.js
-          node --check almdina_erp/public/js/door_cutting_order_customer_invoice_toolbar_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/secure_dxf_export.js
           node almdina_erp/tests/js/plan_surface_isolation.test.js
