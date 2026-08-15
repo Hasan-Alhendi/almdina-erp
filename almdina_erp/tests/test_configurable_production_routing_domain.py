@@ -116,9 +116,14 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         queries = (
             root / "almdina_erp" / "application" / "shop_floor" / "queries.py"
         ).read_text(encoding="utf-8")
-        order_ux = (root / "public" / "js" / "shop_floor_order_ux.js").read_text(
-            encoding="utf-8"
-        )
+        order_ux = (
+            root
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "production"
+            / "shop_floor_order_ux.js"
+        ).read_text(encoding="utf-8")
         routing_ux = (root / "public" / "js" / "production_routing_ux.js").read_text(
             encoding="utf-8"
         )
