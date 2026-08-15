@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
+    ORDER_LIST_ROUTE,
     WORKSPACE_CONTROL_CENTER,
     WORKSPACE_MAIN,
     WORKSPACE_SETTINGS,
@@ -99,8 +100,9 @@ class TestAuthorizationDomain(unittest.TestCase):
             }
         )
         self.assertEqual(navigation["profile"], "shop_floor")
-        self.assertEqual(navigation["home_page"], "shop-floor-inbox")
-        self.assertEqual(navigation["workspaces"], [WORKSPACE_SHOP_FLOOR])
+        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
+        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(navigation["shared_shell"])
         self.assertTrue(navigation["sections"]["production"])
 
