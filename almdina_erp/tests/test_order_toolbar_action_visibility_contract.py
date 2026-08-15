@@ -55,9 +55,13 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
 
         self.assertNotIn("dco-actions-settling", toolbar)
         self.assertNotIn("toolbar-final-reveal", toolbar)
-        self.assertNotIn("visibility:hidden!important", toolbar)
-        self.assertIn("margin-right:auto!important", toolbar)
-        self.assertIn("margin-left:0!important", toolbar)
+        self.assertNotIn(
+            ".dco-actions-settling .custom-actions",
+            toolbar,
+        )
+        self.assertIn("left:16px!important", toolbar)
+        self.assertIn("right:auto!important", toolbar)
+        self.assertIn("position:absolute!important", toolbar)
         self.assertIn("flex-wrap:nowrap!important", toolbar)
         self.assertIn("[0, 180]", toolbar)
         self.assertNotIn("[0, 80, 250, 650, 1200]", toolbar)

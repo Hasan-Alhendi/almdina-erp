@@ -22,21 +22,22 @@
             edge_color: "لون القشاط",
         };
         Object.entries(labels).forEach(([fieldname, label]) => {
-            if (frm.fields_dict[fieldname]) frm.set_df_property(fieldname, "label", label);
+            const field = frm.fields_dict[fieldname];
+            if (field && field.df && field.df.label !== label) {
+                frm.set_df_property(fieldname, "label", label);
+            }
         });
         if (frm.fields_dict.board_description) {
-            frm.set_df_property(
-                "board_description",
-                "description",
-                "اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم."
-            );
+            const description = "اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم.";
+            if (frm.fields_dict.board_description.df.description !== description) {
+                frm.set_df_property("board_description", "description", description);
+            }
         }
         if (frm.fields_dict.edge_color) {
-            frm.set_df_property(
-                "edge_color",
-                "description",
-                "يُجلب تلقائيًا من نوع القشاط، ويمكن تعديله لهذا الطلب."
-            );
+            const description = "يُجلب تلقائيًا من نوع القشاط، ويمكن تعديله لهذا الطلب.";
+            if (frm.fields_dict.edge_color.df.description !== description) {
+                frm.set_df_property("edge_color", "description", description);
+            }
         }
     }
 

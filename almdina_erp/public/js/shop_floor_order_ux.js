@@ -173,7 +173,7 @@
 		const field = frm.fields_dict.operator_status_strip;
 		if (!field || !field.$wrapper) return;
 		if (frm.is_new()) {
-			field.$wrapper.empty();
+			if (field.$wrapper.children().length) field.$wrapper.empty();
 			return;
 		}
 		const escape = (value) => frappe.utils.escape_html(String(value ?? ""));
@@ -188,14 +188,20 @@
 				([label, value]) => `<div style="min-width:120px"><div style="font-size:11px;color:var(--text-muted,#6b7280);font-weight:700">${escape(label)}</div><div style="font-size:14px;font-weight:700">${escape(value)}</div></div>`
 			)
 			.join("");
-		field.$wrapper.html(`
+		const html = `
 			<div class="frappe-card" style="padding:14px 16px;margin-bottom:10px;border-inline-start:6px solid ${color}">
 				<div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px">
 					<div><div style="font-size:11px;color:var(--text-muted,#6b7280);font-weight:700">${__("حالة الطلب")}</div><div style="display:inline-block;background:${color};color:#fff;border-radius:999px;padding:5px 16px;font-size:15px;font-weight:800;margin-top:2px">${escape(statusLabel(status))}</div></div>
 					${facts}
 				</div>
 				${renderProgressSteps(frm)}
-			</div>`);
+			</div>`;
+		const root = field.$wrapper.get(0);
+		if (root && root._almdinaTrackingStripHtml === html && field.$wrapper.children().length) {
+			return;
+		}
+		field.$wrapper.html(html);
+		if (root) root._almdinaTrackingStripHtml = html;
 	}
 
 	function applyShopFloorPresentation(frm) {
@@ -211,15 +217,10 @@
 			frm.__almdinaShopFloorHiddenState = null;
 		}
 
-		const mayCreate = frm.is_new() && can(frm, "create_order");
-		const mayEdit = !frm.is_new()
-			&& can(frm, "edit_order")
-			&& ["Draft", "Pending Review", "Rejected"].includes(frm.doc.status || "Draft");
-		if (mayCreate || mayEdit) {
-			if (typeof frm.enable_save === "function") frm.enable_save();
-		} else if (typeof frm.disable_save === "function") {
-			frm.disable_save();
-		}
+		// RevisionUX is the single owner of the primary Save/Edit action and of
+		// the document edit session. A production-profile renderer must never
+		// call enable_save()/disable_save(), otherwise Frappe alternates the
+		// primary label while permission requests settle.
 
 		if (!isShopFloorProfile(frm)) return false;
 		frm.remove_custom_button(__("رجوع لصالة الإنتاج"));
@@ -903,20 +904,10 @@
 		}
 
 		const identity = capture(frm);
-		const permissions = permissionContext();
-		const operation = permissions && typeof permissions.refresh === "function"
-			? Promise.resolve().then(() => permissions.refresh())
-			: Promise.resolve();
-		const recoveryPromise = Promise.resolve(operation)
-			.catch((error) => {
-				if (isCurrent(frm, identity)) {
-					console.error("Failed to refresh permissions for production actions", error);
-				}
-			})
-			.then(() => {
-				if (!isCurrent(frm, identity)) return false;
-				return reconcileProductionActions(frm);
-			})
+		// PermissionRefreshUX is the sole owner of the permission request. This
+		// recovery pass only reconciles the actions against the current snapshot.
+		const recoveryPromise = Promise.resolve()
+			.then(() => isCurrent(frm, identity) && reconcileProductionActions(frm))
 			.finally(() => {
 				if (frm.__almdinaProductionRecoveryPromise === recoveryPromise) {
 					frm.__almdinaProductionRecoveryPromise = null;
@@ -931,13 +922,12 @@
 
 	frappe.ui.form.on("Door Cutting Order", {
 		onload_post_render(frm) {
-			recoverProductionActions(frm);
+			reconcileProductionActions(frm);
 		},
 		refresh(frm) {
 			applyShopFloorPresentation(frm);
 			renderTrackingStrip(frm);
 			reconcileProductionActions(frm);
-			recoverProductionActions(frm);
 			removeDrawingDxfToolbarButtons(frm);
 		},
 	});

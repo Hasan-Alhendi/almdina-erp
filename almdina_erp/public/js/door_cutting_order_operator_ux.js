@@ -216,23 +216,15 @@
         `);
     }
 
-    function renderStatusStrip(frm) {
-        const field = frm.fields_dict.operator_status_strip;
-        if (!field || !field.$wrapper) return;
-        const status = __(frm.doc.status || "Draft");
-        const revision = frm.doc.revision || 1;
-        const plan = frm.doc.approved_plan;
-        const noPlan = isArabic() ? "لم تعتمد خطة قص بعد" : "No cutting plan approved yet";
-        const planValue = plan
-            ? `<a href="/desk/cutting-plan/${encodeURIComponent(plan)}"><b>${escapeHtml(plan)}</b></a>`
-            : escapeHtml(noPlan);
-        field.$wrapper.html(`
-            <div class="dco-status-strip">
-                <div class="dco-summary-tile"><span class="dco-label">${__("Status")}</span><span class="dco-value"><span class="dco-status-badge"><span class="dco-status-dot"></span>${escapeHtml(status)}</span></span></div>
-                <div class="dco-summary-tile"><span class="dco-label">${__("Revision")}</span><span class="dco-value">${escapeHtml(revision)}</span></div>
-                <div class="dco-summary-tile"><span class="dco-label">${__("Approved Cutting Plan")}</span><span class="dco-value">${planValue}</span></div>
-            </div>
-        `);
+    function renderStableHtml(field, cacheKey, html) {
+        if (!field || !field.$wrapper) return false;
+        const root = field.$wrapper.get(0);
+        if (root && root[cacheKey] === html && field.$wrapper.children().length) {
+            return false;
+        }
+        field.$wrapper.html(html);
+        if (root) root[cacheKey] = html;
+        return true;
     }
 
     function renderBoardSummary(frm) {
@@ -240,7 +232,11 @@
         if (!field || !field.$wrapper) return;
         const boardDescription = String(frm.doc.board_description || "").trim();
         if (!boardDescription) {
-            field.$wrapper.html(`<div class="dco-fast-entry-toolbar" style="margin-top:10px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px">${isArabic() ? "أدخل صنف اللوح ومقاساته أولًا." : "Enter the board description and dimensions first."}</div>`);
+            renderStableHtml(
+                field,
+                "_dcoBoardSummaryHtml",
+                `<div class="dco-fast-entry-toolbar" style="margin-top:10px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px">${isArabic() ? "أدخل صنف اللوح ومقاساته أولًا." : "Enter the board description and dimensions first."}</div>`
+            );
             return;
         }
         const lengthCm = Number(frm.doc.board_length_cm || 0);
@@ -254,7 +250,11 @@
             [isArabic() ? "صنف اللوح" : "Board Item", boardDescription],
             [isArabic() ? "المقاس الكامل للوح" : "Full Board Size", dimensions],
         ];
-        field.$wrapper.html(`<div class="dco-board-summary">${tiles.map(([label,value]) => `<div class="dco-summary-tile"><span class="dco-label">${escapeHtml(label)}</span><span class="dco-value">${escapeHtml(value)}</span></div>`).join("")}</div>`);
+        renderStableHtml(
+            field,
+            "_dcoBoardSummaryHtml",
+            `<div class="dco-board-summary">${tiles.map(([label,value]) => `<div class="dco-summary-tile"><span class="dco-label">${escapeHtml(label)}</span><span class="dco-value">${escapeHtml(value)}</span></div>`).join("")}</div>`
+        );
     }
 
     function decorateSections(frm) {
@@ -487,7 +487,23 @@
         const field = frm.fields_dict.pieces_fast_entry;
         if (!field || !field.$wrapper) return;
         reindexPieces(frm);
-        field.$wrapper.html(shellHtml(frm));
+        const html = shellHtml(frm);
+        const root = field.$wrapper.get(0);
+        const force = Boolean(
+            field.$wrapper._dcoForceHtmlReplace
+            || (root && root._dcoForceHtmlReplace)
+        );
+        field.$wrapper._dcoForceHtmlReplace = false;
+        if (root) root._dcoForceHtmlReplace = false;
+        if (
+            force
+            || !root
+            || root._dcoFastEntryHtml !== html
+            || !field.$wrapper.find(".dco-fast-table").length
+        ) {
+            field.$wrapper.html(html);
+            if (root) root._dcoFastEntryHtml = html;
+        }
         bindFastMeasurements(frm);
         loadEdgeTypes(frm);
     }
@@ -697,7 +713,9 @@
     function refreshOperatorUI(frm) {
         installStyles();
         decorateSections(frm);
-        renderStatusStrip(frm);
+        // operator_status_strip is owned exclusively by ShopFloorOrderUX. Two
+        // renderers used to replace each other after permissions/stage context
+        // loaded, which made the summary cards appear, disappear, then change.
         renderBoardSummary(frm);
         renderFastMeasurements(frm);
     }

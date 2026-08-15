@@ -41,6 +41,56 @@
         );
     }
 
+    function permissionsResolved() {
+        const permissions = window.AlmdinaPermissions;
+        return Boolean(
+            permissions
+            && typeof permissions.version === "function"
+            && permissions.version() > 0
+        );
+    }
+
+    function primaryActionLabel(frm) {
+        const wrapper = frm && frm.page && frm.page.wrapper;
+        const root = wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
+        if (!root || typeof root.querySelector !== "function") return "";
+        const button = root.querySelector(".page-actions .primary-action, .primary-action");
+        return String(button && button.textContent || "").replace(/\s+/g, " ").trim();
+    }
+
+    function setPrimaryActionMode(frm, mode, label = "", handler = null, disabled = true) {
+        const currentLabel = primaryActionLabel(frm);
+        if (mode === "pending") {
+            // Keep Frappe's provisional button in the layout as an invisible
+            // width placeholder. ToolbarStabilityUX hides and disables it until
+            // permissions resolve, so neighbouring actions never slide.
+            frm.__almdinaPrimaryActionMode = mode;
+            frm.save_disabled = true;
+            return;
+        }
+        if (
+            frm.__almdinaPrimaryActionMode === mode
+            && currentLabel === label
+        ) {
+            frm.save_disabled = Boolean(disabled);
+            return;
+        }
+
+        frm.__almdinaPrimaryActionMode = mode;
+        if (disabled && typeof frm.disable_save === "function") {
+            frm.disable_save();
+        } else {
+            frm.save_disabled = Boolean(disabled);
+            if (frm.page && typeof frm.page.clear_primary_action === "function") {
+                frm.page.clear_primary_action();
+            }
+        }
+        if (frm.toolbar) frm.toolbar.current_status = null;
+        if (label && frm.page && typeof frm.page.set_primary_action === "function") {
+            frm.page.set_primary_action(label, handler);
+        }
+    }
+
     function revisionState(frm) {
         return (frm && frm.doc && frm.doc.revision_state) || "Current";
     }
@@ -413,51 +463,47 @@
         if (!frm || !frm.page) return;
 
         if (frm.is_new()) {
-            frm.save_disabled = false;
-            if (frm.toolbar && typeof frm.toolbar.set_primary_action === "function") {
-                frm.toolbar.set_primary_action();
-            } else if (typeof frm.enable_save === "function") {
-                frm.enable_save();
+            if (
+                frm.__almdinaPrimaryActionMode !== "new"
+                || primaryActionLabel(frm) !== SAVE_LABEL
+            ) {
+                frm.__almdinaPrimaryActionMode = "new";
+                frm.save_disabled = false;
+                if (frm.toolbar && typeof frm.toolbar.set_primary_action === "function") {
+                    frm.toolbar.set_primary_action();
+                } else if (typeof frm.enable_save === "function") {
+                    frm.enable_save();
+                }
+            } else {
+                frm.save_disabled = false;
             }
+            return;
+        }
+
+        // A saved order never exposes Frappe's provisional native «حفظ».
+        // Wait for the authoritative capability matrix, then paint exactly one
+        // final action (تعديل / حفظ / none) without an intermediate label.
+        if (!permissionsResolved()) {
+            setPrimaryActionMode(frm, "pending", "", null, true);
             return;
         }
 
         if (orderCanEdit(frm)) {
-            frm.save_disabled = false;
-            if (frm.toolbar) frm.toolbar.current_status = null;
-            frm.page.clear_primary_action();
-            frm.page.set_primary_action(SAVE_LABEL, () => commitEditSession(frm));
+            setPrimaryActionMode(frm, "save", SAVE_LABEL, () => commitEditSession(frm), false);
             return;
         }
 
         if (canOfferEditSession(frm)) {
-            // Use disable_save() so Frappe's dirty/toolbar handlers cannot flip the
-            // primary action back to native «حفظ» after plan recalculation.
-            if (typeof frm.disable_save === "function") {
-                frm.disable_save();
-            } else {
-                frm.save_disabled = true;
-                frm.page.clear_primary_action();
-            }
-            if (frm.toolbar) frm.toolbar.current_status = null;
-            frm.page.set_primary_action(EDIT_LABEL, () => enterEditSession(frm));
+            setPrimaryActionMode(frm, "edit", EDIT_LABEL, () => enterEditSession(frm), true);
             return;
         }
 
-        if (typeof frm.disable_save === "function") {
-            frm.disable_save();
-        } else {
-            frm.save_disabled = true;
-            frm.page.clear_primary_action();
-        }
+        setPrimaryActionMode(frm, "none", "", null, true);
     }
 
     function schedulePrimaryActionSync(frm) {
         syncPrimaryAction(frm);
         window.requestAnimationFrame(() => syncPrimaryAction(frm));
-        window.setTimeout(() => syncPrimaryAction(frm), 0);
-        window.setTimeout(() => syncPrimaryAction(frm), 120);
-        window.setTimeout(() => syncPrimaryAction(frm), 400);
     }
 
     function removeEditSessionButtons(frm) {

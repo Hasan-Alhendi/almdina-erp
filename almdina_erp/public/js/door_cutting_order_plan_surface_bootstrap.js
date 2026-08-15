@@ -47,6 +47,30 @@
         return typeof api.can === "function" && Boolean(api.can("view_cutting_plan"));
     }
 
+    function permissionVersion() {
+        const api = permissions();
+        return api && typeof api.version === "function" ? Number(api.version() || 0) : 0;
+    }
+
+    function surfaceSignature(frm) {
+        const doc = frm && frm.doc || {};
+        return [
+            doc.name || "",
+            doc.modified || "",
+            doc.status || "",
+            doc.packing_mode || "",
+            doc.optimization_time_limit_sec || "",
+            doc.calculated_plan_input_hash || "",
+            doc.calculated_plan_metadata_hash || "",
+            doc.approved_plan_source || "",
+            Number(doc.plan_needs_recalculation || 0),
+            String(doc.cutting_plan_json || "").length,
+            String(doc.system_plan_json || "").length,
+            String(doc.custom_plan_json || "").length,
+            permissionVersion(),
+        ].join("::");
+    }
+
     function documentIdentity(frm) {
         const context = window.AlmdinaDocumentContext;
         if (context && typeof context.capture === "function") {
@@ -105,12 +129,25 @@
             // These HTML containers carry no business data. Authorization is
             // enforced by canViewPlan plus the per-command capabilities; stale
             // site metadata must not leave an authorized container hidden.
+            let metadataChanged = false;
             if (field.df) {
-                field.df.permlevel = 0;
-                field.df.hidden = 0;
-                field.df.hidden_due_to_dependency = 0;
+                if (Number(field.df.permlevel || 0) !== 0) {
+                    field.df.permlevel = 0;
+                    metadataChanged = true;
+                }
+                if (Number(field.df.hidden || 0) !== 0) {
+                    field.df.hidden = 0;
+                    metadataChanged = true;
+                }
+                if (Number(field.df.hidden_due_to_dependency || 0) !== 0) {
+                    field.df.hidden_due_to_dependency = 0;
+                    metadataChanged = true;
+                }
             }
-            if (typeof field.refresh === "function") field.refresh();
+            // Refreshing an HTML field destroys its children. Only do it when
+            // stale metadata actually changed; ordinary permission/settle passes
+            // must preserve the already-rendered plan and command controls.
+            if (metadataChanged && typeof field.refresh === "function") field.refresh();
             if (typeof field.$wrapper.removeClass === "function") {
                 field.$wrapper.removeClass("hide-control");
             }
@@ -217,7 +254,9 @@
         }
         setWrapperOrder(wrapper(frm, "cutting_plan_html"), String(frm.doc.name || ""));
         content.apply(frm);
-        return surfaceReady(frm);
+        const ready = surfaceReady(frm);
+        if (ready) frm.__almdinaPlanSurfaceSignature = surfaceSignature(frm);
+        return ready;
     }
 
     async function recover(frm) {
@@ -225,8 +264,19 @@
         const identity = documentIdentity(frm);
 
         if (!canViewPlan(frm)) {
+            // Do not erase a valid surface while the capability matrix is still
+            // loading. A resolved denial may clear it once, without a later flash.
+            if (permissionVersion() <= 0) return false;
             clearProtectedSurface(frm);
             return false;
+        }
+
+        const signature = surfaceSignature(frm);
+        if (
+            frm.__almdinaPlanSurfaceSignature === signature
+            && surfaceReady(frm)
+        ) {
+            return true;
         }
 
         await ensureModules();

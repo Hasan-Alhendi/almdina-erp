@@ -38,7 +38,7 @@ function htmlWrapper(initial = "") {
     };
 }
 
-function buildHarness({ canViewPlan, asyncPresenter = false }) {
+function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion = 1 }) {
     const actions = htmlWrapper();
     const layout = htmlWrapper();
     const requiredAssets = [];
@@ -64,6 +64,9 @@ function buildHarness({ canViewPlan, asyncPresenter = false }) {
     const fakeWindow = {
         cur_frm: frm,
         AlmdinaPermissions: {
+            version() {
+                return permissionVersion;
+            },
             canDocument(_frm, capability) {
                 requestedCapabilities.push(capability);
                 return capability === "view_cutting_plan" && canViewPlan;
@@ -219,6 +222,19 @@ function buildHarness({ canViewPlan, asyncPresenter = false }) {
     assert.equal(denied.actions.content, "");
     assert.equal(denied.layout.content, "");
     assert.deepEqual(denied.requiredAssets, []);
+
+    const pending = buildHarness({ canViewPlan: false, permissionVersion: 0 });
+    pending.actions.html('<div class="dco-plan-actions-shell">READY</div>');
+    pending.layout.html('<div class="dco-plan-tabs">READY</div>');
+    assert.equal(
+        await pending.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(pending.frm),
+        false
+    );
+    assert.match(
+        pending.actions.content,
+        /READY/,
+        "an unresolved permission request must not erase an already-rendered surface"
+    );
 
     console.log("cutting plan surface isolation simulation passed");
 })().catch(error => {

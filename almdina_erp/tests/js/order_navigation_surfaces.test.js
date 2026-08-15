@@ -177,7 +177,6 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     const timers = [];
     const calls = [];
     const capabilities = new Set();
-    const permissionRefresh = deferred();
     let permissionRefreshCalls = 0;
     let generation = 1;
 
@@ -195,7 +194,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
             },
             refresh() {
                 permissionRefreshCalls += 1;
-                return jqueryThenable(permissionRefresh.promise);
+                return jqueryThenable(Promise.resolve({ version: 2 }));
             },
         },
         AlmdinaDocumentContext: {
@@ -302,9 +301,14 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     assert.equal(added.some(button => button.group === "صالة الإنتاج"), false);
 
     await flushPromises();
-    assert.equal(permissionRefreshCalls, 1);
+    assert.equal(
+        permissionRefreshCalls,
+        0,
+        "production action recovery must not start a second permission request"
+    );
     capabilities.add("dispatch_order");
-    permissionRefresh.resolve({ version: 2 });
+    assert.equal(typeof listeners["almdina:permissions-updated"], "function");
+    listeners["almdina:permissions-updated"]();
     await flushPromises();
     assert.equal(
         added.some(button => button.label === "إرسال للإنتاج" && !button.group),
@@ -321,7 +325,6 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), false);
     fakeWindow.AlmdinaShopFloorOrderUX.reconcileProductionActions(frm);
     assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), true);
-    assert.equal(typeof listeners["almdina:permissions-updated"], "function");
 
     capabilities.clear();
     capabilities.add("start_assigned_stage");

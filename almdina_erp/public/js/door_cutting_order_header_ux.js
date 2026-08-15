@@ -183,7 +183,10 @@
         if (!isArabic() || !tabs) return;
 
         Object.entries(TAB_LABELS).forEach(([fieldname, label]) => {
-            frm.set_df_property(fieldname, "label", label);
+            const field = frm.fields_dict && frm.fields_dict[fieldname];
+            if (field && field.df && field.df.label !== label) {
+                frm.set_df_property(fieldname, "label", label);
+            }
 
             const direct = tabs.querySelector(`[data-fieldname="${fieldname}"]`);
             if (direct) {

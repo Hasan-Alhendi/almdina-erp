@@ -196,11 +196,18 @@
         const visible = can(frm, "view_costs");
         const editable = orderCostFieldsEditable(frm);
         COST_INPUT_FIELDS.forEach(fieldname => {
-            frm.set_df_property(fieldname, "options", "costing_currency");
-            frm.set_df_property(fieldname, "hidden", visible ? 0 : 1);
-            frm.set_df_property(fieldname, "read_only", editable ? 0 : 1);
-            if (typeof frm.refresh_field === "function") {
-                frm.refresh_field(fieldname);
+            const field = frm.fields_dict && frm.fields_dict[fieldname];
+            if (!field || !field.df) return;
+            const hidden = visible ? 0 : 1;
+            const readOnly = editable ? 0 : 1;
+            if (field.df.options !== "costing_currency") {
+                frm.set_df_property(fieldname, "options", "costing_currency");
+            }
+            if (Number(field.df.hidden || 0) !== hidden) {
+                frm.set_df_property(fieldname, "hidden", hidden);
+            }
+            if (Number(field.df.read_only || 0) !== readOnly) {
+                frm.set_df_property(fieldname, "read_only", readOnly);
             }
         });
     }

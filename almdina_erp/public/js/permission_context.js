@@ -23,11 +23,10 @@
 
     if (window.AlmdinaPermissions) {
         registerProtectedModuleSurface(window.AlmdinaPermissions);
-        window.setTimeout(() => {
-            window.AlmdinaPermissions.refresh()
-                .then(() => window.AlmdinaPermissions.loadOrderModules())
-                .catch(error => console.error("Failed to refresh Almdina permissions", error));
-        }, 0);
+        // This source is present in both the Desk bundle and the DocType bundle.
+        // The form-level permission owner refreshes the matrix exactly once.
+        // Re-running it here used to emit a second update event and repaint the
+        // complete order page after it was already visible.
         return;
     }
 

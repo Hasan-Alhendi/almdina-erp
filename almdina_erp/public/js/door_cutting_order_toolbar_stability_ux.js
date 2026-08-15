@@ -121,11 +121,17 @@
                 align-items:center!important;
                 gap:6px!important;
             }
+            .page-head.dco-stable-actions-head .page-head-content {
+                position:relative!important;
+            }
             .page-head.dco-stable-actions-head .page-actions {
-                margin-right:auto!important;
-                margin-left:0!important;
+                margin:0!important;
                 justify-content:flex-start!important;
                 flex:0 0 auto!important;
+            }
+            .page-head.dco-stable-actions-head.dco-primary-action-pending .primary-action {
+                visibility:hidden!important;
+                pointer-events:none!important;
             }
             .page-head.dco-stable-actions-head .custom-actions > .btn,
             .page-head.dco-stable-actions-head .custom-actions > .btn-group,
@@ -236,6 +242,25 @@
                     max-height:none!important;
                     overflow:visible!important;
                     padding-bottom:4px!important;
+                }
+            }
+            @media(min-width:992px){
+                .page-head.dco-stable-actions-head .page-actions {
+                    position:absolute!important;
+                    left:16px!important;
+                    right:auto!important;
+                    top:50%!important;
+                    transform:translateY(-50%)!important;
+                    z-index:3!important;
+                    width:max-content!important;
+                    max-width:calc(100% - 32px)!important;
+                }
+            }
+            @media(max-width:991px){
+                .page-head.dco-stable-actions-head .page-actions {
+                    position:static!important;
+                    transform:none!important;
+                    margin-inline-start:auto!important;
                 }
             }
             @media(max-width:560px){
@@ -427,6 +452,16 @@
         if (!head.classList.contains("dco-stable-actions-head")) {
             head.classList.add("dco-stable-actions-head");
         }
+        const permissions = window.AlmdinaPermissions;
+        const permissionsReady = Boolean(
+            permissions
+            && typeof permissions.version === "function"
+            && permissions.version() > 0
+        );
+        head.classList.toggle(
+            "dco-primary-action-pending",
+            !frm.is_new() && !permissionsReady
+        );
         removeLegacyButtons(frm, head);
         removeDrawingDxfGroup(head);
         dedupeButtons(head);
@@ -439,6 +474,13 @@
         if (frm._dcoToolbarObserver) frm._dcoToolbarObserver.disconnect();
         let scheduled = false;
         const observer = new MutationObserver(() => {
+            const revision = window.AlmdinaOrderRevisionUX;
+            if (revision && typeof revision.syncPrimaryAction === "function") {
+                // MutationObserver callbacks run before the browser paints. If
+                // Frappe recreates its native Save button, restore the one owned
+                // by RevisionUX in the same frame.
+                revision.syncPrimaryAction(frm);
+            }
             if (scheduled) return;
             scheduled = true;
             scheduleFrame(frm, "toolbar-observer-frame", () => {
@@ -467,4 +509,11 @@
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
     });
+
+    if (typeof window.addEventListener === "function") {
+        window.addEventListener("almdina:permissions-updated", () => {
+            const frm = window.cur_frm;
+            if (frm && frm.doctype === "Door Cutting Order") schedule(frm);
+        });
+    }
 })();
