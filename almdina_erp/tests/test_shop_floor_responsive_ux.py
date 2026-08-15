@@ -92,10 +92,14 @@ def test_worker_list_keeps_assigned_work_first_and_completed_history_last() -> N
     assert 'terminal || completed ? "" : quickActionHtml(row)' in source
     assert 'completed ? " is-completed" : ""' in source
 
-    # Completed state keeps a dedicated green visual identity. Full-row styling
-    # belongs to the presentation layer and can evolve independently of list logic.
-    assert '.almdina-sf-order-card[data-status="Completed"]' in css
+    # Completed history—not foreign-role work—owns the green full-row treatment.
+    assert ".almdina-sf-list-title.is-completed" in css
+    assert ".almdina-sf-order-card.is-completed" in css
+    assert ".almdina-sf-order-card.is-completed[data-status]" in css
+    assert "background: #dcfce7 !important;" in css
     assert "--sf-accent: #16a34a;" in css
+    assert "is-other-role" not in css
+    assert "is-other-role" not in source
 
 
 def test_kanban_keeps_touch_users_on_explicit_server_authorized_actions() -> None:
