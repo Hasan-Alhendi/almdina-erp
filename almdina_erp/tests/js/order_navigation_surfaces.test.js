@@ -112,7 +112,7 @@ async function verifyCostSnapshotIsolation() {
         },
         __: value => value,
     });
-    vm.runInContext(source("door_cutting_order_document_context.js"), context);
+    vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
     vm.runInContext(source("door_cutting_order_cost_permissions_ux.js"), context);
 
     const makeDoc = (name, total) => ({

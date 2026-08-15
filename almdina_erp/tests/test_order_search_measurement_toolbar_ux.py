@@ -9,7 +9,7 @@ LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
 MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
 PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
-TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
+TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
 
 
 def text(path: Path) -> str:
@@ -109,7 +109,7 @@ def test_all_new_ux_layers_are_loaded_in_the_required_order():
     hooks = text(HOOKS)
     measurement = '"public/js/door_cutting_order_measurement_actions_ux.js"'
     secure_dxf = '"public/js/secure_dxf_export.js"'
-    toolbar = '"public/js/door_cutting_order_toolbar_stability_ux.js"'
+    toolbar = '"public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js"'
     assert "doctype_list_js = {" in hooks
     assert '"Door Cutting Order": "public/js/door_cutting_order_list.js"' in hooks
     assert measurement in hooks

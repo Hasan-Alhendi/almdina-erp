@@ -10,8 +10,8 @@ FORM_PATH = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_
 HOOKS_PATH = APP_ROOT / "hooks.py"
 EDIT_POLICY_PATH = APP_ROOT / "almdina_erp" / "services" / "order_edit_policy.py"
 REVISION_SERVICE_PATH = APP_ROOT / "almdina_erp" / "services" / "order_revision_service.py"
-REVISION_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
-LIFECYCLE_UX_PATH = APP_ROOT / "public" / "js" / "order_lifecycle.js"
+REVISION_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_revision_ux.js"
+LIFECYCLE_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
 
 
 class TestOrderRevisionContract(unittest.TestCase):
@@ -34,8 +34,8 @@ class TestOrderRevisionContract(unittest.TestCase):
         hooks = HOOKS_PATH.read_text(encoding="utf-8")
         target = "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft"
         self.assertGreaterEqual(hooks.count(target), 2)
-        self.assertIn('"public/js/door_cutting_order_revision_ux.js"', hooks)
-        self.assertIn('"public/js/order_lifecycle.js"', hooks)
+        self.assertIn('"public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"', hooks)
+        self.assertIn('"public/js/door_cutting_order/core/order_lifecycle.js"', hooks)
 
         revision = REVISION_SERVICE_PATH.read_text(encoding="utf-8")
         return_fn = revision.split("def return_order_to_draft", 1)[1]

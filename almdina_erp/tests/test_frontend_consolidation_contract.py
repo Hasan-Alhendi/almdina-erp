@@ -25,7 +25,12 @@ PLAN_SURFACE_BOOTSTRAP = (
     ROOT / "public" / "js" / "door_cutting_order_plan_surface_bootstrap.js"
 )
 ACTION_GUARD = (
-    ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_action_permission_guard.js"
 )
 MEASUREMENT_ACTIONS = (
     ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"

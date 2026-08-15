@@ -3,7 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
-LIFECYCLE_UX = ROOT / "public" / "js" / "order_lifecycle.js"
+LIFECYCLE_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
 PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 DRAWING_APPROVAL_SERVICE = (
     ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"

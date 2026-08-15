@@ -10,8 +10,8 @@ CONTEXT_SERVICE = ROOT / "almdina_erp" / "services" / "order_lifecycle_permissio
 APPROVAL_SERVICE = ROOT / "almdina_erp" / "services" / "order_approval_service.py"
 CANCEL_SERVICE = ROOT / "almdina_erp" / "services" / "order_lifecycle_service.py"
 REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
-LIFECYCLE_UX = ROOT / "public" / "js" / "order_lifecycle.js"
-REVISION_UX = ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
+LIFECYCLE_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
+REVISION_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_revision_ux.js"
 HOOKS = ROOT / "hooks.py"
 
 

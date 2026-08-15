@@ -29,7 +29,7 @@ class TestInputStabilityUxContract(unittest.TestCase):
         self.assertIn(doctype_token, hooks)
         self.assertGreater(
             hooks.index(doctype_token),
-            hooks.index('"public/js/door_cutting_order_revision_ux.js"'),
+            hooks.index('"public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"'),
         )
 
     def test_every_active_control_is_protected_from_async_refresh(self) -> None:

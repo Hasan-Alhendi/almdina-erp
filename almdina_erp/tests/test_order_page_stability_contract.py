@@ -31,7 +31,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
 
     def test_revision_is_the_only_save_edit_owner(self) -> None:
         production = source("shop_floor_order_ux.js")
-        revision = source("door_cutting_order_revision_ux.js")
+        revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
         presentation = production.split("function applyShopFloorPresentation", 1)[1].split(
             "function openDispatchDialog", 1
@@ -65,7 +65,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertNotIn("permissions.refresh()", recovery)
 
     def test_header_actions_are_physically_anchored_left(self) -> None:
-        toolbar = source("door_cutting_order_toolbar_stability_ux.js")
+        toolbar = source("door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js")
 
         self.assertIn("@media(min-width:992px)", toolbar)
         self.assertIn("position:fixed!important", toolbar)
