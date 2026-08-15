@@ -6,7 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TAB_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_tab_permissions_ux.js"
-COST_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
+COST_PERMISSIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_cost_permissions_ux.js"
+)
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
 PLAN_BOOTSTRAP = (
     ROOT
