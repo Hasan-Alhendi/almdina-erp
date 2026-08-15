@@ -46,10 +46,11 @@ assert.doesNotMatch(domain, /document\.createElement|querySelector|frappe\./, "p
 assert.match(view, /selectedIds\(c\)/);
 assert.match(view, /ids\.length !== 2/);
 assert.match(view, /B\.isBooleanOperand/);
-assert.match(view, /data-ddv3-boolean-action=\"union\"/);
-assert.match(view, /data-ddv3-boolean-action=\"subtract\"/);
-assert.match(view, /data-ddv3-boolean-action=\"intersect\"/);
-assert.match(view, /data-ddv3-boolean-action=\"exclude\"/);
+assert.match(view, /data-ddv3-boolean-action=\"\$\{action\}\"/);
+assert.match(view, /button\("union",\s*"دمج"/);
+assert.match(view, /button\("subtract",\s*"طرح"/);
+assert.match(view, /button\("intersect",\s*"تقاطع"/);
+assert.match(view, /button\("exclude",\s*"استبعاد"/);
 assert.match(view, /A − B/);
 
 assert.match(application, /B\.booleanContours\(primary, secondary, operation/);
