@@ -14,7 +14,14 @@ DOCUMENT_CONTEXT = (
     / "core"
     / "door_cutting_order_document_context.js"
 )
-DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
+DEFAULTS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_defaults.js"
+)
 DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
 PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
 PERMISSION_REFRESH = (
@@ -40,7 +47,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
 
         self.assertIn(context, hooks)
         for feature in (
-            '"public/js/door_cutting_order_defaults.js"',
+            '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
             '"public/js/door_cutting_order_document_print_presenter.js"',
             '"public/js/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/shop_floor_order_ux.js"',
