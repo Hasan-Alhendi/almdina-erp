@@ -10,9 +10,32 @@ EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
 PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
 SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
-OPERATOR = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-TABLE = ROOT / "public" / "js" / "door_cutting_order_table_performance_ux.js"
-MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+OPERATOR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+TABLE = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_table_performance_ux.js"
+)
+MEASUREMENT_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
 PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
 FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
 
@@ -43,10 +66,10 @@ def test_contract_loads_before_active_shape_output_consumers():
     consumers = (
         '"public/js/door_cutting_order_cutting_plan_renderer.js"',
         '"public/js/door_cutting_order_shape_print.js"',
-        '"public/js/door_cutting_order_operator_ux.js"',
+        '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"',
         '"public/js/door_cutting_order_special_shape_ux.js"',
-        '"public/js/door_cutting_order_table_performance_ux.js"',
-        '"public/js/door_cutting_order_measurement_actions_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"',
         '"public/js/door_cutting_order_document_print_presenter.js"',
     )
     for consumer in consumers:
@@ -64,10 +87,10 @@ def test_order_form_boots_shape_dependencies_before_active_consumers():
     consumers = (
         "public/js/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order_shape_print.js",
-        "public/js/door_cutting_order_operator_ux.js",
+        "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_table_performance_ux.js",
-        "public/js/door_cutting_order_measurement_actions_ux.js",
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
         "public/js/door_cutting_order_document_print_presenter.js",
     )
     assert geometry in scripts
