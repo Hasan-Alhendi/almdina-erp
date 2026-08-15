@@ -15,81 +15,87 @@ const G = V3.Geometry;
 const Domain = V3.ShapePreservingStrokeDomain;
 const Cleaner = V3.AdaptiveStrokeCleaner;
 
-function clone(points) {
-    return points.map(point => G.point(point.x, point.y));
-}
-
+function clone(points) { return points.map(point => G.point(point.x, point.y)); }
 function hasPoint(points, expected, tolerance = 0.01) {
     return points.some(point => G.distance(point, expected) <= tolerance);
 }
+function maxAbsY(points) { return Math.max(...points.map(point => Math.abs(point.y))); }
 
-const wobblyLine = [
-    G.point(0, 0),
-    G.point(25, 0.55),
-    G.point(50, -0.62),
-    G.point(75, 0.61),
-    G.point(100, -0.48),
-    G.point(125, 0.2),
+// This is intentionally much rougher than the old regression. It mirrors the
+// visibly wavy mouse stroke from the operator video rather than a laboratory line.
+const visiblyWobblyLine = [
+    G.point(0, 0), G.point(10, 2.4), G.point(20, -2.1), G.point(30, 3.0),
+    G.point(40, -2.7), G.point(50, 2.2), G.point(60, -2.9), G.point(70, 2.6),
+    G.point(80, -2.2), G.point(90, 2.8), G.point(100, -2.5), G.point(110, 1.9),
+    G.point(120, 0),
 ];
-const wobblySnapshot = clone(wobblyLine);
-const straight = Cleaner.clean(wobblyLine, "mouse");
-assert.equal(straight.straightenedRuns.length, 1, "A clearly wobbly straight stroke should be locally straightened");
-assert.equal(straight.points.length, 2, "A single straight run should become an exact segment inside the same Path");
-assert.deepEqual(straight.points[0], wobblyLine[0]);
-assert.deepEqual(straight.points[1], wobblyLine[wobblyLine.length - 1]);
-assert.ok(straight.maximumDeviationMm <= Cleaner.PROFILES.mouse.straightMaximumDeviationMm + 1e-6);
-assert.deepEqual(wobblyLine, wobblySnapshot, "Smart cleanup must never mutate the sampled source stroke");
+const wobblySnapshot = clone(visiblyWobblyLine);
+const straight = Cleaner.clean(visiblyWobblyLine, "mouse");
+assert.equal(straight.straightenedRuns.length, 1, "Visible hand tremor around one direction must still be understood as a straight intent");
+assert.equal(straight.points.length, 2, "A recognized straight intent must become one exact segment inside the same Path");
+assert.deepEqual(straight.points[0], visiblyWobblyLine[0]);
+assert.deepEqual(straight.points[1], visiblyWobblyLine[visiblyWobblyLine.length - 1]);
+assert.ok(straight.maximumDeviationMm >= 2, "The regression must prove that correction is no longer limited to sub-millimetre noise");
+assert.deepEqual(visiblyWobblyLine, wobblySnapshot, "Smart cleanup must never mutate sampled source points");
 
+const horizontalQuality = Domain.straightQuality(visiblyWobblyLine, Cleaner.PROFILES.mouse);
+assert.equal(horizontalQuality.eligible, true);
+assert.ok(horizontalQuality.curveBias < Cleaner.PROFILES.mouse.curveBiasThreshold, "Alternating jitter should look like tremor, not a deliberate curve");
+
+// Dense noisy L: trend-based corner detection must ignore the wobble but retain
+// the real 90-degree direction change.
 const roughL = [
-    G.point(0, 0),
-    G.point(20, 0.45),
-    G.point(40, -0.35),
-    G.point(60, 0.38),
-    G.point(80, 0.1),
-    G.point(80.45, 20),
-    G.point(79.62, 40),
-    G.point(80.36, 60),
-    G.point(80.05, 80),
+    G.point(0, 0), G.point(10, 1.8), G.point(20, -1.7), G.point(30, 2.0),
+    G.point(40, -1.9), G.point(50, 1.7), G.point(60, -1.8), G.point(70, 1.4),
+    G.point(80, 0),
+    G.point(81.5, 10), G.point(78.3, 20), G.point(82.0, 30), G.point(78.4, 40),
+    G.point(81.7, 50), G.point(78.6, 60), G.point(81.2, 70), G.point(80, 80),
 ];
 const lResult = Cleaner.clean(roughL, "mouse");
-assert.ok(lResult.cornerIndices.length >= 1, "A real L corner must be detected and protected");
-assert.ok(lResult.straightenedRuns.length >= 2, "Both noisy L arms should become straight runs");
+assert.ok(lResult.cornerIndices.length >= 1, "The deliberate L corner must survive trend filtering");
+assert.ok(lResult.straightenedRuns.length >= 2, "Both visibly noisy L arms must become straight intent runs");
 const protectedCorner = roughL[lResult.cornerIndices[0]];
-assert.ok(hasPoint(lResult.points, protectedCorner), "The user's sharp corner must survive cleanup exactly");
-assert.ok(lResult.points.length <= 4, "Noise points should disappear while the L topology stays simple");
+assert.ok(hasPoint(lResult.points, protectedCorner), "A protected direction-change anchor must remain exact");
+assert.ok(lResult.points.length <= 5, "High-frequency hand noise should disappear instead of remaining as many small segments");
 
-const intentionalCurve = [
-    G.point(0, 0),
-    G.point(20, 0.9),
-    G.point(40, 2.4),
-    G.point(60, 4.5),
-    G.point(80, 7.1),
-    G.point(100, 10.5),
-];
-const curve = Cleaner.clean(intentionalCurve, "mouse");
-assert.equal(curve.straightenedRuns.length, 0, "A deliberate shallow curve must never be flattened into a line");
-assert.ok(curve.points.length > 2, "The curve must remain a curve-like polyline rather than becoming one segment");
-assert.deepEqual(curve.points[0], intentionalCurve[0]);
-assert.deepEqual(curve.points[curve.points.length - 1], intentionalCurve[intentionalCurve.length - 1]);
-assert.ok(
-    curve.maximumDeviationMm <= Cleaner.PROFILES.mouse.maxCurveDisplacementMm + Cleaner.PROFILES.mouse.simplifyToleranceMm + 1e-6,
-    "Curve cleanup must remain inside the strict shape-preserving displacement envelope"
-);
+// A real shallow curve can have a similar maximum deviation to a wobbly line.
+// What differentiates it is that most residuals stay on one side of the chord.
+const intentionalShallowCurve = [];
+for (let x = 0; x <= 120; x += 10) {
+    const base = 5.2 * Math.sin(Math.PI * x / 120);
+    const handNoise = (x / 10) % 2 === 0 ? 0.35 : -0.3;
+    intentionalShallowCurve.push(G.point(x, base + handNoise));
+}
+intentionalShallowCurve[0] = G.point(0, 0);
+intentionalShallowCurve[intentionalShallowCurve.length - 1] = G.point(120, 0);
+const shallowQuality = Domain.straightQuality(intentionalShallowCurve, Cleaner.PROFILES.mouse);
+assert.equal(shallowQuality.deliberateCurve, true, "One-sided bow is evidence of a real curve, not hand tremor");
+const shallow = Cleaner.clean(intentionalShallowCurve, "mouse");
+assert.equal(shallow.straightenedRuns.length, 0, "A deliberate shallow curve must never be flattened just because it is close to a line");
+assert.ok(shallow.points.length > 2);
+assert.ok(maxAbsY(shallow.points) > 3.5, "The curve silhouette must remain visibly curved after cleanup");
 
-const irregular = [
-    G.point(0, 0), G.point(12, 4), G.point(25, 1), G.point(38, 18),
-    G.point(52, 35), G.point(68, 49), G.point(83, 38), G.point(96, 17),
-    G.point(112, 7), G.point(126, 25), G.point(139, 51), G.point(154, 58),
-];
-const irregularResult = Cleaner.clean(irregular, "mouse");
-assert.ok(irregularResult.points.length >= 4, "An irregular silhouette must remain an irregular path, not collapse into a primitive");
-assert.ok(irregularResult.maximumDeviationMm <= Cleaner.PROFILES.mouse.overallMaximumDeviationMm + 1e-6);
-assert.deepEqual(irregularResult.points[0], irregular[0]);
-assert.deepEqual(irregularResult.points[irregularResult.points.length - 1], irregular[irregular.length - 1]);
+// A larger free-form arch should get smoother without becoming a primitive or a line.
+const roughArch = [];
+for (let index = 0; index <= 24; index += 1) {
+    const x = index * 5;
+    const arch = 28 * Math.sin(Math.PI * x / 120);
+    const jitter = index % 3 === 0 ? 1.8 : (index % 3 === 1 ? -1.4 : 0.9);
+    roughArch.push(G.point(x, arch + jitter));
+}
+roughArch[0] = G.point(0, 0);
+roughArch[roughArch.length - 1] = G.point(120, 0);
+const arch = Cleaner.clean(roughArch, "mouse");
+assert.equal(arch.straightenedRuns.length, 0);
+assert.ok(arch.points.length >= 4, "An arch must remain a multi-point path");
+assert.ok(maxAbsY(arch.points) > 22, "Cleanup must retain the large-scale arch silhouette");
+assert.ok(arch.points.length < roughArch.length, "Visible micro-zigzags should be simplified out of a free curve");
+assert.deepEqual(arch.points[0], roughArch[0]);
+assert.deepEqual(arch.points[arch.points.length - 1], roughArch[roughArch.length - 1]);
 
 const penProfile = Cleaner.profile("pen");
 const mouseProfile = Cleaner.profile("mouse");
-assert.ok(penProfile.maxCurveDisplacementMm < mouseProfile.maxCurveDisplacementMm, "A stylus should receive gentler cleanup than a mouse");
+assert.ok(penProfile.maxCurveDisplacementMm < mouseProfile.maxCurveDisplacementMm, "Stylus cleanup stays gentler than mouse cleanup");
 assert.ok(penProfile.straightMaximumDeviationMm < mouseProfile.straightMaximumDeviationMm);
 assert.equal(Cleaner.profile("unknown"), Cleaner.PROFILES.mouse);
 
@@ -99,11 +105,11 @@ const domainSource = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/
 
 assert.ok(
     bootstrap.indexOf("/domain/shape_preserving_stroke_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_cleaner.js"),
-    "Pure stroke geometry must load before the adaptive application profile"
+    "Pure stroke geometry must load before the adaptive profile"
 );
 assert.ok(
     bootstrap.indexOf("/application/adaptive_stroke_cleaner.js") < bootstrap.indexOf("/application/non_destructive_smart_suggestions.js"),
-    "The cleaner must be ready before the active freehand owner"
+    "The cleaner must load before the active freehand owner"
 );
 assert.match(bootstrap, /__doorDrawingV3ShapePreservingCleaner:\s*true/);
 assert.match(bootstrap, /__doorDrawingV3LocalStraightening:\s*true/);
@@ -113,16 +119,14 @@ assert.match(application, /Cleaner\.clean\(points, pointerType\)/);
 assert.match(application, /c\.history\.execute\(rawDocument, "Draw freehand stroke"\)/);
 assert.match(application, /"Smart clean freehand stroke"/);
 assert.match(application, /G\.path\(rawObject\.id, cleaning\.points, false/);
-assert.doesNotMatch(application, /const result = I\.interpret\(points, options\)/, "Committed freehand must not use primitive or compound recognition");
-assert.match(application, /Primitive recognition remains an optional suggestion layer/);
+assert.doesNotMatch(application, /const result = I\.interpret\(points, options\)/, "Committed freehand must never use primitive or compound recognition");
 
-assert.match(domainSource, /maxCurveDisplacementMm:\s*0\.8/);
-assert.match(domainSource, /straightMaximumDeviationMm:\s*1\.8/);
-assert.match(domainSource, /detectCorners/);
-assert.match(domainSource, /smoothBounded/);
-assert.match(domainSource, /adaptiveStraightLimit/);
-assert.match(domainSource, /maxSourceDeviation/);
-assert.doesNotMatch(domainSource, /circle|rectangle|arc/i, "Shape-preserving cleaner must not recognize or construct primitive shape types");
+assert.match(domainSource, /trendSeries/);
+assert.match(domainSource, /signedDistanceToLine/);
+assert.match(domainSource, /curveBiasThreshold/);
+assert.match(domainSource, /deliberateCurve/);
+assert.match(domainSource, /smooth each intent span independently/i);
+assert.doesNotMatch(domainSource, /circle|rectangle|arc/i, "Automatic cleaner must not recognize or construct primitive types");
 assert.doesNotMatch(domainSource, /document\.|querySelector|frappe\./, "Pure stroke domain must remain DOM and Frappe independent");
 
-console.log("Door Drawing V3 shape-preserving smart cleaner passed");
+console.log("Door Drawing V3 intent-aware smart cleaner passed");
