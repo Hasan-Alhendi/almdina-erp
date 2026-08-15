@@ -6,11 +6,11 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 
 CORE_SCRIPTS = (
-    "public/js/door_cutting_order_document_context.js",
-    "public/js/door_cutting_order_action_permission_guard.js",
-    "public/js/door_cutting_order_toolbar_stability_ux.js",
-    "public/js/door_cutting_order_revision_ux.js",
-    "public/js/order_lifecycle.js",
+    "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
+    "public/js/door_cutting_order/core/door_cutting_order_action_permission_guard.js",
+    "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
+    "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
+    "public/js/door_cutting_order/core/order_lifecycle.js",
 )
 
 
