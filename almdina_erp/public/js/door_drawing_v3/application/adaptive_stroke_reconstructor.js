@@ -83,9 +83,47 @@
         return Object.freeze({ ...profile(pointerType), ...(overrides || {}) });
     }
 
-    function reconstruct(points, pointerType = "mouse", overrides = {}) {
-        return Domain.reconstruct(points, optionsFor(pointerType, overrides));
+    function wholeStrokeStraight(points, options) {
+        const sampled = Domain.resampleUniform(points, options);
+        if (sampled.length < 2) return null;
+        // A whole-stroke straight decision intentionally tolerates alternating hand
+        // tremor more than local span fitting. The deliberate-curve guard inside
+        // straightEvidence remains mandatory, so a one-sided bow cannot be flattened.
+        const evidence = Domain.straightEvidence(sampled, {
+            ...options,
+            straightMaxHeadingDeviationDeg: Math.max(26, Number(options.straightMaxHeadingDeviationDeg) || 0),
+            straightTotalTurnDeg: Math.max(90, Number(options.straightTotalTurnDeg) || 0),
+            straightLengthRatio: Math.max(1.28, Number(options.straightLengthRatio) || 1),
+        });
+        if (!evidence.eligible) return null;
+        const first = sampled[0];
+        const last = sampled[sampled.length - 1];
+        return Object.freeze({
+            points: Object.freeze([first, last]),
+            nodes: Object.freeze([
+                Object.freeze({ type: "corner", in: null, out: null }),
+                Object.freeze({ type: "corner", in: null, out: null }),
+            ]),
+            changed: sampled.length !== 2,
+            cornerCount: 0,
+            straightSegmentCount: 1,
+            curveSegmentCount: 0,
+            spans: Object.freeze([
+                Object.freeze({ startIndex: 0, endIndex: sampled.length - 1, kind: "line", evidence }),
+            ]),
+        });
     }
 
-    root.AdaptiveStrokeReconstructor = Object.freeze({ PROFILES, profile, optionsFor, reconstruct });
+    function reconstruct(points, pointerType = "mouse", overrides = {}) {
+        const options = optionsFor(pointerType, overrides);
+        return wholeStrokeStraight(points, options) || Domain.reconstruct(points, options);
+    }
+
+    root.AdaptiveStrokeReconstructor = Object.freeze({
+        PROFILES,
+        profile,
+        optionsFor,
+        wholeStrokeStraight,
+        reconstruct,
+    });
 })();
