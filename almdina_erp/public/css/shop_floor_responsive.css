@@ -86,16 +86,16 @@
     font-weight: 700;
 }
 
-/* Orders whose current stage operational role is not the worker's sit after
-   the actionable queue and are clearly separated. */
-.almdina-sf-list-title.is-other-role {
+/* Completed worker history is appended below the active queue and stays
+   visually distinct from actionable production work. */
+.almdina-sf-list-title.is-completed {
     margin-top: 22px;
     padding-top: 16px;
     border-top: 1px solid var(--border-color, #e5e7eb);
     color: #15803d;
 }
 
-.almdina-sf-list-title.is-other-role .almdina-sf-list-count {
+.almdina-sf-list-title.is-completed .almdina-sf-list-count {
     background: rgba(22, 163, 74, .12);
     color: #15803d;
 }
@@ -359,10 +359,10 @@
     --sf-accent: #16a34a;
 }
 
-/* Full-row green fill for orders outside the worker's current operational role.
-   Placed after status accents so those colors cannot override it. */
-.almdina-sf-order-card.is-other-role,
-.almdina-sf-order-card.is-other-role[data-status] {
+/* Completed history gets a full green row/card while remaining read-only for
+   production actions. Placed after status accents so those cannot override it. */
+.almdina-sf-order-card.is-completed,
+.almdina-sf-order-card.is-completed[data-status] {
     --sf-accent: #16a34a;
     border-color: #86efac !important;
     border-inline-start-color: #16a34a !important;
@@ -370,22 +370,22 @@
     box-shadow: 0 2px 12px rgba(22, 163, 74, .12) !important;
 }
 
-.almdina-sf-order-card.is-other-role::before {
+.almdina-sf-order-card.is-completed::before {
     background: #16a34a;
 }
 
-.almdina-sf-order-card.is-other-role .indicator-pill,
-.almdina-sf-order-card.is-other-role[data-status] .indicator-pill {
+.almdina-sf-order-card.is-completed .indicator-pill,
+.almdina-sf-order-card.is-completed[data-status] .indicator-pill {
     background: #16a34a !important;
     color: #fff !important;
 }
 
-.almdina-sf-order-card.is-other-role > div:nth-child(2) > div {
+.almdina-sf-order-card.is-completed > div:nth-child(2) > div {
     border-color: #bbf7d0 !important;
     background: rgba(255, 255, 255, .55) !important;
 }
 
-.almdina-sf-order-card.is-other-role .sf-open-btn {
+.almdina-sf-order-card.is-completed .sf-open-btn {
     border-color: #86efac !important;
     background: #fff !important;
     color: #15803d !important;
