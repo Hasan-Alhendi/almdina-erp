@@ -14,7 +14,7 @@ def source(name: str) -> str:
 
 class TestOrderPageStabilityContract(unittest.TestCase):
     def test_status_strip_has_one_renderer(self) -> None:
-        operator = source("door_cutting_order_operator_ux.js")
+        operator = source("door_cutting_order/order_entry/door_cutting_order_operator_ux.js")
         production = source("shop_floor_order_ux.js")
 
         self.assertNotIn("fields_dict.operator_status_strip", operator)
@@ -22,7 +22,7 @@ class TestOrderPageStabilityContract(unittest.TestCase):
         self.assertIn("_almdinaTrackingStripHtml", production)
 
     def test_measurement_editor_preserves_identical_dom(self) -> None:
-        operator = source("door_cutting_order_operator_ux.js")
+        operator = source("door_cutting_order/order_entry/door_cutting_order_operator_ux.js")
 
         self.assertIn("root._dcoFastEntryHtml !== html", operator)
         self.assertIn("root._dcoFastEntryHtml = html", operator)
