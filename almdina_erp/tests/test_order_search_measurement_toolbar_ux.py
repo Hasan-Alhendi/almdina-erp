@@ -16,7 +16,15 @@ MEASUREMENT_UX = (
     / "door_cutting_order_measurement_actions_ux.js"
 )
 PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
+EDGE_COLOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_color_ux.js"
+)
 TOOLBAR_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_toolbar_stability_ux.js"
 
 
