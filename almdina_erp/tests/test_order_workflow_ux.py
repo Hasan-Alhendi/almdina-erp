@@ -6,7 +6,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 HOOKS = ROOT / "hooks.py"
 LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
-MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+MEASUREMENT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
 EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
 PRINT_PRESENTER = (
     ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
@@ -85,7 +93,7 @@ def test_toolbar_removes_legacy_edge_button_measurement_duplicate_and_dedupes_ac
 
 def test_all_new_ux_layers_are_loaded_in_the_required_order():
     hooks = text(HOOKS)
-    measurement = '"public/js/door_cutting_order_measurement_actions_ux.js"'
+    measurement = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"'
     secure_dxf = '"public/js/secure_dxf_export.js"'
     toolbar = '"public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js"'
     assert "doctype_list_js = {" in hooks
