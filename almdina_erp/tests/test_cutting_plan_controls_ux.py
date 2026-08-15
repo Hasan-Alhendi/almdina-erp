@@ -12,7 +12,7 @@ CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
 CONTROLS_UX = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
 TEXT_BOARD_PLAN_UX = CUTTING_PLAN / "door_cutting_order_text_board_plan_ux.js"
-FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+FAST_SAVE_UX = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
 PLAN_TABS_UX = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
 ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_action_permission_guard.js"
 REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
@@ -36,7 +36,7 @@ def test_duplicate_algorithm_palette_is_removed_and_simple_controls_load_last():
     hooks = source(HOOKS)
     plan = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
     text_board = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js"'
-    fast_save = '"public/js/door_cutting_order_fast_save_ux.js"'
+    fast_save = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js"'
     controls = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"'
 
     assert not REMOVED_PALETTE.exists()

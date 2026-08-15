@@ -39,7 +39,7 @@ DRAWING_PLAN = (
     / "door_cutting_order_drawing_plan_ux.js"
 )
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
-FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
 TEXT_BOARD_PLAN = (
     ROOT
     / "public"
