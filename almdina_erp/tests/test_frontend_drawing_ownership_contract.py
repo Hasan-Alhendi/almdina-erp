@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 FACADE = ROOT / "public/js/door_cutting_order/drawing/special_shape_facade.js"
 OLD_FACADE = ROOT / "public/js/door_cutting_order_special_shape_ux.js"
 DRAWING_ROOT = ROOT / "public/js/door_drawing_v3"

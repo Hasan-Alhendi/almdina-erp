@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 HELPER = ROOT / "public" / "js" / "page_revisit_refresh.js"
 PAGES = ROOT / "almdina_erp" / "page"
 

@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 
 PRODUCTION_SCRIPT = "public/js/door_cutting_order/production/shop_floor_order_ux.js"
 HEADER_SCRIPT = "public/js/door_cutting_order/responsive/door_cutting_order_header_ux.js"
