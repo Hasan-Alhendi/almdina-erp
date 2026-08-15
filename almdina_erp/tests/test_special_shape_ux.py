@@ -29,7 +29,7 @@ COST_PERMISSIONS = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing"
 CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
 REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 CUTTING_PLAN_PIECE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "cutting_plan_piece" / "cutting_plan_piece.json"
-HOOKS = APP_ROOT / "hooks.py"
+HOOKS = APP_ROOT / "frontend_assets.py"
 
 
 def _fields(path: Path) -> dict[str, dict]:
