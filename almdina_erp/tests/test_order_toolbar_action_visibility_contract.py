@@ -59,7 +59,8 @@ class TestOrderToolbarActionVisibilityContract(unittest.TestCase):
             ".dco-actions-settling .custom-actions",
             toolbar,
         )
-        self.assertIn("left:16px!important", toolbar)
+        self.assertIn("--dco-viewport-left-compensation", toolbar)
+        self.assertIn("anchorActionsToViewportLeft(head)", toolbar)
         self.assertIn("right:auto!important", toolbar)
         self.assertIn("position:fixed!important", toolbar)
         self.assertIn("flex-wrap:nowrap!important", toolbar)

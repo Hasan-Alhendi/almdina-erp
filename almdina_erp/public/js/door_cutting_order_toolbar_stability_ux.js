@@ -243,7 +243,7 @@
             @media(min-width:992px){
                 .page-head.dco-stable-actions-head .page-actions {
                     position:fixed!important;
-                    left:16px!important;
+                    left:calc(16px + var(--dco-viewport-left-compensation, 0px))!important;
                     right:auto!important;
                     top:10px!important;
                     transform:none!important;
@@ -440,6 +440,27 @@
         });
     }
 
+    function anchorActionsToViewportLeft(head) {
+        const actions = head && head.querySelector(".page-actions");
+        if (!actions) return;
+        if (window.innerWidth < 992) {
+            actions.style.removeProperty("--dco-viewport-left-compensation");
+            return;
+        }
+
+        // A transformed Frappe ancestor turns position:fixed into a container-
+        // relative position. Compensate for that ancestor so the final screen
+        // coordinate is always 16px, matching the native top-left action row.
+        const property = "--dco-viewport-left-compensation";
+        const current = Number.parseFloat(actions.style.getPropertyValue(property)) || 0;
+        const actualLeft = actions.getBoundingClientRect().left;
+        if (!Number.isFinite(actualLeft)) return;
+        const corrected = current + (16 - actualLeft);
+        if (Math.abs(corrected - current) > 0.5) {
+            actions.style.setProperty(property, `${Math.round(corrected)}px`);
+        }
+    }
+
     function reconcile(frm) {
         installStyles();
         reconcileMeasurementToolbar(frm);
@@ -451,6 +472,7 @@
         removeLegacyButtons(frm, head);
         removeDrawingDxfGroup(head);
         dedupeButtons(head);
+        anchorActionsToViewportLeft(head);
     }
 
     function observe(frm) {
@@ -500,6 +522,11 @@
         window.addEventListener("almdina:permissions-updated", () => {
             const frm = window.cur_frm;
             if (frm && frm.doctype === "Door Cutting Order") schedule(frm);
+        });
+        window.addEventListener("resize", () => {
+            const frm = window.cur_frm;
+            if (!frm || frm.doctype !== "Door Cutting Order") return;
+            scheduleFrame(frm, "toolbar-viewport-anchor", () => reconcile(frm));
         });
     }
 })();

@@ -69,7 +69,9 @@ class TestOrderPageStabilityContract(unittest.TestCase):
 
         self.assertIn("@media(min-width:992px)", toolbar)
         self.assertIn("position:fixed!important", toolbar)
-        self.assertIn("left:16px!important", toolbar)
+        self.assertIn("--dco-viewport-left-compensation", toolbar)
+        self.assertIn("function anchorActionsToViewportLeft", toolbar)
+        self.assertIn("16 - actualLeft", toolbar)
         self.assertIn("right:auto!important", toolbar)
         self.assertIn("top:10px!important", toolbar)
         self.assertNotIn("dco-primary-action-pending", toolbar)
