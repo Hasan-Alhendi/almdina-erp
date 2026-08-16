@@ -22,7 +22,7 @@ def sync_replacement_order_status(order_name: str) -> str:
         )
         return status
 
-    from almdina_erp.almdina_erp.services.production_service import (
+    from almdina_erp.almdina_erp.services.order_status_sync_service import (
         sync_order_status,
     )
 

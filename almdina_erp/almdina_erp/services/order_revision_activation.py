@@ -81,6 +81,8 @@ def _has_open_stages(order_name: str) -> bool:
 
 
 def _has_material_activity(order_name: str) -> bool:
+    """Keep historical material activity as a hard revision-safety boundary."""
+
     return bool(
         frappe.db.exists(
             "Material Consumption Log",
@@ -131,40 +133,6 @@ def _other_current_revision(*, root_name: str, order_name: str) -> str | None:
     return str(rows[0][0]) if rows else None
 
 
-def _release_reserved_remnants(order_name: str) -> list[str]:
-    names = frappe.get_all(
-        "Board Remnant",
-        filters={"status": "Reserved", "reserved_for_order": order_name},
-        pluck="name",
-    )
-    released: list[str] = []
-    for name in names:
-        frappe.db.sql(
-            "select name from `tabBoard Remnant` where name = %s for update",
-            (name,),
-        )
-        current = frappe.db.get_value(
-            "Board Remnant",
-            name,
-            ["status", "reserved_for_order"],
-            as_dict=True,
-        )
-        if not current or current.status != "Reserved" or current.reserved_for_order != order_name:
-            continue
-        frappe.db.set_value(
-            "Board Remnant",
-            name,
-            {
-                "status": "Available",
-                "reserved_for_order": None,
-                "reservation_timestamp": None,
-            },
-            update_modified=True,
-        )
-        released.append(name)
-    return released
-
-
 def assert_order_revision_dispatchable(order: Any) -> None:
     competing = False
     has_revision_chain = any(
@@ -190,12 +158,11 @@ def assert_order_revision_dispatchable(order: Any) -> None:
 
 
 def prepare_revision_activation(order: Any) -> RevisionActivationContext | None:
-    """Retire reservations of a safe predecessor before plan approval.
+    """Validate a safe predecessor before activating a replacement revision.
 
-    The surrounding Frappe request transaction guarantees that released
-    reservations are restored automatically if plan creation, stock validation,
-    or final activation fails later in the same request. The caller must load the
-    order through ``load_locked_revision_order`` first.
+    Stock and remnant reservation management is outside the current product
+    boundary. Historical material activity remains a fail-closed safety signal,
+    while the legacy response fields are preserved as empty tuples.
     """
 
     predecessor_name = str(getattr(order, "revision_of", None) or "").strip()
@@ -239,19 +206,12 @@ def prepare_revision_activation(order: Any) -> RevisionActivationContext | None:
     except RevisionActivationNotAllowed as exc:
         _throw_domain_error(exc)
 
-    from almdina_erp.almdina_erp.services.stock_service import (
-        transition_order_reservation,
-    )
-
-    released_material = transition_order_reservation(predecessor.name, "Released")
-    released_remnants = _release_reserved_remnants(predecessor.name)
-
     return RevisionActivationContext(
         predecessor_name=predecessor.name,
         predecessor_plan=predecessor.approved_plan or None,
         revision_root=root_name,
-        released_material_reservations=tuple(released_material),
-        released_remnants=tuple(released_remnants),
+        released_material_reservations=(),
+        released_remnants=(),
     )
 
 

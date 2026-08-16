@@ -23,19 +23,13 @@ from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import (
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_PATH = ROOT / "almdina_erp" / "domain" / "orders" / "plan_fingerprint.py"
 APPLICATION_PATH = ROOT / "almdina_erp" / "application" / "orders" / "plan_payloads.py"
-FAST_CONTROLLER_PATH = (
+PLAN_ADAPTER_PATH = (
     ROOT
     / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_fast.py"
-)
-TEXT_BOARD_PATH = (
-    ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_text_board.py"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "plan_adapter.py"
 )
 
 
@@ -186,8 +180,8 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
                 self.assertNotIn("import erpnext", source)
                 self.assertNotIn(".services", source)
 
-    def test_fast_controller_delegates_payloads_and_hashes(self) -> None:
-        source = FAST_CONTROLLER_PATH.read_text(encoding="utf-8")
+    def test_active_plan_adapter_delegates_payloads_and_hashes(self) -> None:
+        source = PLAN_ADAPTER_PATH.read_text(encoding="utf-8")
         self.assertIn("application.orders.plan_payloads", source)
         self.assertIn("domain.orders.plan_fingerprint", source)
         self.assertIn("build_plan_input_payload", source)
@@ -196,9 +190,10 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
         self.assertNotIn("import hashlib", source)
         self.assertNotIn("hashlib.sha256", source)
 
-    def test_text_board_description_overlay_remains_compatible(self) -> None:
-        source = TEXT_BOARD_PATH.read_text(encoding="utf-8")
-        self.assertIn('payload.setdefault("board", {})["item"] = description', source)
+    def test_free_text_board_description_is_owned_by_active_plan_adapter(self) -> None:
+        source = PLAN_ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn("description = str(", source)
+        self.assertIn("item=description", source)
         self.assertIn('payload["board"]["description"] = description', source)
 
 

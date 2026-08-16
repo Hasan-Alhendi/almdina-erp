@@ -10,9 +10,17 @@ DOCTYPE_JSON = (
     REPOSITORY_ROOT
     / "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.json"
 )
-CONTROLLER = (
+DOCUMENT_ACCESS = (
     REPOSITORY_ROOT
-    / "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py"
+    / "almdina_erp/almdina_erp/infrastructure/frappe/orders/document_access.py"
+)
+SAVE_USE_CASE = (
+    REPOSITORY_ROOT
+    / "almdina_erp/almdina_erp/application/orders/process_order_save.py"
+)
+SAVE_GATEWAY = (
+    REPOSITORY_ROOT
+    / "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py"
 )
 
 
@@ -28,12 +36,15 @@ class HiddenPiecesContractTests(unittest.TestCase):
         self.assertNotEqual(pieces.get("reqd"), 1)
 
     def test_business_requirement_remains_enforced_on_server(self) -> None:
-        source = CONTROLLER.read_text(encoding="utf-8")
+        access = DOCUMENT_ACCESS.read_text(encoding="utf-8")
+        gateway = SAVE_GATEWAY.read_text(encoding="utf-8")
+        use_case = SAVE_USE_CASE.read_text(encoding="utf-8")
 
-        self.assertIn("def _validate_piece_inputs(self) -> None:", source)
-        self.assertIn("if not self.pieces:", source)
-        self.assertIn('frappe.throw(_("At least one piece row is required."))', source)
-        self.assertIn("self._validate_piece_inputs()", source)
+        self.assertIn("def validate_piece_inputs(self) -> None:", access)
+        self.assertIn("if not self.document.pieces:", access)
+        self.assertIn('frappe.throw(_("At least one piece row is required."))', access)
+        self.assertIn("self.access.validate_piece_inputs()", gateway)
+        self.assertIn("gateway.validate_piece_inputs()", use_case)
 
 
 if __name__ == "__main__":

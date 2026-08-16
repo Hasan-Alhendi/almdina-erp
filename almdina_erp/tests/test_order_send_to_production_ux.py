@@ -11,7 +11,7 @@ SHOP_FLOOR_UX = (
     / "shop_floor_order_ux.js"
 )
 LIFECYCLE_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
-PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
+PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
 DRAWING_APPROVAL_SERVICE = (
     ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 )
@@ -111,8 +111,8 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     plan_service = _source(PLAN_SERVICE)
     approval_service = _source(DRAWING_APPROVAL_SERVICE)
     policy = _source(DRAWING_APPROVAL_POLICY)
-    lock_impl = plan_service.split("def _lock_order_for_production", 1)[1].split(
-        "@frappe.whitelist()\ndef reject_order", 1
+    lock_impl = plan_service.split("def lock_order_for_production", 1)[1].split(
+        "\n\n__all__", 1
     )[0]
 
     assert "Capability.APPROVE_DXF" in approval_service

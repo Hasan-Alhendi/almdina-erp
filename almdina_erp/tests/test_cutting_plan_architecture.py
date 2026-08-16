@@ -25,6 +25,10 @@ CONTROLLER_PATH = (
     / "door_cutting_order"
     / "door_cutting_order_controller.py"
 )
+SERVICES = ROOT / "almdina_erp" / "services"
+SNAPSHOT_SERVICE_PATH = SERVICES / "cutting_plan_snapshot_service.py"
+COMPATIBILITY_SERVICE_PATH = SERVICES / "cutting_plan_service.py"
+DRAWING_APPROVAL_PATH = SERVICES / "drawing_approval_service.py"
 HOOKS_PATH = ROOT / "hooks.py"
 
 
@@ -63,6 +67,36 @@ class TestCuttingPlanArchitecture(unittest.TestCase):
         self.assertNotIn("expand_piece_groups(", source)
         self.assertNotIn('"industrial_metrics": metrics', source)
         self.assertNotIn('"special_shape_raw_summary":', source)
+
+    def test_snapshot_persistence_has_one_focused_owner(self) -> None:
+        snapshot = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
+        facade = COMPATIBILITY_SERVICE_PATH.read_text(encoding="utf-8")
+        drawing = DRAWING_APPROVAL_PATH.read_text(encoding="utf-8")
+
+        for symbol in (
+            "def create_plan_from_order",
+            "def approve_plan",
+            "def lock_order_for_production",
+            'frappe.new_doc("Cutting Plan")',
+            "plan.insert(ignore_permissions=True)",
+            '"status": "Approved"',
+        ):
+            self.assertIn(symbol, snapshot)
+
+        self.assertIn("Backward-compatible Cutting Plan lifecycle facade", facade)
+        self.assertIn("cutting_plan_snapshot_service as _snapshot", facade)
+        self.assertIn("def create_plan_from_order", facade)
+        self.assertIn("return _snapshot.create_plan_from_order", facade)
+        self.assertIn("return _snapshot.approve_plan", facade)
+        self.assertIn("return _snapshot.lock_order_for_production", facade)
+        self.assertNotIn('frappe.new_doc("Cutting Plan")', facade)
+        self.assertNotIn("frappe.db.set_value", facade)
+        self.assertNotIn("plan.insert(ignore_permissions=True)", facade)
+
+        self.assertIn("services.cutting_plan_snapshot_service", drawing)
+        self.assertIn("lock_order_for_production(", drawing)
+        self.assertNotIn("services.cutting_plan_service import", drawing)
+        self.assertNotIn("_lock_order_for_production(", drawing)
 
     def test_active_controller_contains_no_plan_algorithm(self) -> None:
         source = CONTROLLER_PATH.read_text(encoding="utf-8")

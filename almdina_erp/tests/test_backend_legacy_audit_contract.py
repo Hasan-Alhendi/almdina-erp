@@ -9,6 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "almdina_erp"
 INVENTORY_PATH = APP_ROOT / "backend_legacy_inventory.json"
+MIGRATIONS_PATH = APP_ROOT / "backend_legacy_migrations.json"
 HOOKS_PATH = APP_ROOT / "hooks.py"
 
 
@@ -16,13 +17,40 @@ def _inventory() -> dict:
     return json.loads(INVENTORY_PATH.read_text(encoding="utf-8"))
 
 
+def _migrations() -> dict:
+    return json.loads(MIGRATIONS_PATH.read_text(encoding="utf-8"))
+
+
+def _removed_paths() -> set[str]:
+    return {
+        path
+        for migration in _migrations()["migrations"]
+        if migration["status"] == "removed"
+        for path in migration["paths"]
+    }
+
+
+def _stage11_discoveries() -> set[str]:
+    return {
+        path
+        for migration in _migrations()["migrations"]
+        for path in migration.get("stage11_discoveries", [])
+    }
+
+
 class TestBackendLegacyAuditContract(unittest.TestCase):
-    def test_inventory_is_explicit_disjoint_and_points_to_real_sources(self) -> None:
+    def test_inventory_is_explicit_disjoint_and_tracks_migrated_sources(self) -> None:
         audit = _inventory()
         self.assertEqual(audit["version"], 1)
         self.assertEqual(
             audit["baseline_develop_sha"],
             "453c000240b574b9739fc46ba392c17c42b766c9",
+        )
+        migrations = _migrations()
+        self.assertEqual(migrations["version"], 1)
+        self.assertEqual(
+            migrations["baseline_develop_sha"],
+            "9bbd00fd197042991a3e4cc042c5ab668e25431a",
         )
         classifications = audit["classifications"]
         self.assertEqual(
@@ -30,6 +58,9 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
             {"active", "compatibility", "legacy", "dead"},
         )
 
+        removed = _removed_paths()
+        discoveries = _stage11_discoveries()
+        self.assertTrue(removed)
         seen: dict[str, str] = {}
         for classification in ("active", "compatibility", "legacy"):
             self.assertTrue(classifications[classification], classification)
@@ -37,13 +68,24 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
                 path = entry["path"]
                 self.assertNotIn(path, seen, f"{path} also classified as {seen.get(path)}")
                 seen[path] = classification
-                self.assertTrue((REPO_ROOT / path).is_file(), path)
                 self.assertTrue(entry.get("evidence"), path)
                 self.assertTrue(entry.get("stage11_action"), path)
+                if path in removed:
+                    self.assertEqual(classification, "legacy", path)
+                    self.assertFalse((REPO_ROOT / path).exists(), path)
+                else:
+                    self.assertTrue((REPO_ROOT / path).is_file(), path)
 
-        # No source met the stronger DEAD bar: zero hooks, HTTP, Python imports
-        # and tests. Stage 11 may add entries only after proving all four.
         self.assertEqual(classifications["dead"], [])
+        for path in removed:
+            if path in seen:
+                self.assertEqual(seen[path], "legacy", path)
+            else:
+                self.assertIn(path, discoveries, f"Unclassified removal: {path}")
+                self.assertFalse((REPO_ROOT / path).exists(), path)
+        for path in discoveries:
+            self.assertIn(path, removed, path)
+            self.assertNotIn(path, seen, f"Stage 11 discovery was already in Stage 10: {path}")
 
     def test_only_thin_controller_is_the_active_frappe_override(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
@@ -68,8 +110,44 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
             "FastDoorCuttingOrder",
             "TextBoardDoorCuttingOrder",
             "DomainDoorCuttingOrder",
+            "CostingDoorCuttingOrder",
+            "PlanDoorCuttingOrder",
         ):
             self.assertNotIn(alternate, source)
+
+    def test_removed_controller_chain_has_zero_runtime_python_consumers(self) -> None:
+        removed = _removed_paths()
+        expected = {
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_domain.py",
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_costing.py",
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_plan.py",
+        }
+        self.assertTrue(expected.issubset(removed))
+        for relative in expected:
+            self.assertFalse((REPO_ROOT / relative).exists(), relative)
+
+        runtime_root = APP_ROOT / "almdina_erp"
+        forbidden = (
+            "door_cutting_order_fast",
+            "door_cutting_order_text_board",
+            "door_cutting_order_domain",
+            "door_cutting_order_costing",
+            "door_cutting_order_plan",
+            "FastDoorCuttingOrder",
+            "TextBoardDoorCuttingOrder",
+            "DomainDoorCuttingOrder",
+            "CostingDoorCuttingOrder",
+            "PlanDoorCuttingOrder",
+        )
+        offenders: list[str] = []
+        for path in sorted(runtime_root.rglob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            for token in forbidden:
+                if token in source:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {token}")
+        self.assertEqual(offenders, [], "\n".join(offenders))
 
     def test_public_compatibility_routes_are_frozen_to_canonical_targets(self) -> None:
         audit = _inventory()
@@ -133,20 +211,19 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
         self.assertNotIn("frappe.db.", replacement)
         self.assertNotIn("frappe.get_doc", replacement)
 
-    def test_mixed_legacy_boundaries_stay_visible_for_stage_11(self) -> None:
+    def test_unmigrated_legacy_boundaries_stay_visible_for_stage_11(self) -> None:
         audit = _inventory()
-        legacy = {entry["path"] for entry in audit["classifications"]["legacy"]}
+        removed = _removed_paths()
+        legacy = {
+            entry["path"]
+            for entry in audit["classifications"]["legacy"]
+            if entry["path"] not in removed
+        }
         expected = {
             "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
-            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
-            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
-            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_domain.py",
             "almdina_erp/almdina_erp/services/cutting_plan_service.py",
             "almdina_erp/almdina_erp/services/production_service.py",
             "almdina_erp/almdina_erp/services/order_creation_service.py",
-            "almdina_erp/almdina_erp/services/replacement_cancellation_service.py",
-            "almdina_erp/almdina_erp/services/stock_service.py",
-            "almdina_erp/almdina_erp/services/remnant_service.py",
         }
         self.assertTrue(expected.issubset(legacy))
 
