@@ -32,22 +32,23 @@ const startNodeId = action.nodeId;
 
 let preview = engine.pointerMove(G.point(600, 1), { toleranceMm: 6 }).preview;
 assert.equal(preview.type, "angle");
-assert.equal(preview.label, "Horizontal");
+assert.equal(preview.semantic, "horizontal");
 action = engine.inputLength(600);
 assert.equal(action.kind, "segment-added");
 
 preview = engine.pointerMove(G.point(602, 1200), { toleranceMm: 6 }).preview;
 assert.equal(preview.type, "angle");
-assert.equal(preview.label, "Vertical");
+assert.equal(preview.semantic, "vertical");
 engine.inputLength(1200);
 
 preview = engine.pointerMove(G.point(0, 1198), { toleranceMm: 6 }).preview;
 assert.equal(preview.type, "angle");
-assert.equal(preview.label, "Horizontal");
+assert.equal(preview.semantic, "horizontal");
 engine.inputLength(600);
 
 preview = engine.pointerMove(G.point(2, 3), { toleranceMm: 6 }).preview;
 assert.equal(preview.type, "endpoint");
+assert.equal(preview.semantic, "endpoint");
 assert.equal(preview.nodeId, startNodeId, "near-start preview must target the original shared node");
 action = engine.pointerDown(G.point(2, 3), { toleranceMm: 6 });
 assert.equal(action.kind, "path-closed");
