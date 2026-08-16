@@ -29,6 +29,18 @@ def _is_whitelist(decorator: ast.expr) -> bool:
     )
 
 
+def _allows_guest(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for decorator in node.decorator_list:
+        if not isinstance(decorator, ast.Call) or not _is_whitelist(decorator):
+            continue
+        for keyword in decorator.keywords:
+            if keyword.arg != "allow_guest":
+                continue
+            if isinstance(keyword.value, ast.Constant) and keyword.value.value is True:
+                return True
+    return False
+
+
 def _whitelisted_functions() -> dict[str, tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]]:
     endpoints: dict[str, tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]] = {}
     for path in sorted(APP.rglob("*.py")):
@@ -65,6 +77,19 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
             "Every @frappe.whitelist() endpoint must be explicitly classified. "
             "Unclassified or stale contracts:\n"
             + "\n".join(sorted(actual.symmetric_difference(declared))),
+        )
+
+    def test_factory_endpoints_are_never_guest_exposed(self) -> None:
+        guest_endpoints = sorted(
+            endpoint
+            for endpoint, (_, node) in _whitelisted_functions().items()
+            if _allows_guest(node)
+        )
+        self.assertEqual(
+            guest_endpoints,
+            [],
+            "Factory business endpoints must never use allow_guest=True: "
+            + ", ".join(guest_endpoints),
         )
 
     def test_contract_kinds_are_closed_and_explicit(self) -> None:
