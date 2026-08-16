@@ -130,6 +130,7 @@
       "batch": 5,
       "name": "Remove retired replacement cancellation implementation",
       "status": "removed",
+      "final_sha": "0354bb4604874a7293f8bb338c0d39ce8bbba429",
       "paths": [
         "almdina_erp/almdina_erp/services/replacement_cancellation_service.py"
       ],
@@ -146,6 +147,49 @@
         "The historical HTTP path remains frozen in override_whitelisted_methods and delegates to cancel_legacy_replacement.",
         "cancel_legacy_replacement rejects historical stock-reversal semantics and delegates supported behavior to the current replacement_service facade.",
         "The removed implementation is explicitly recorded in the migration ledger so the immutable Stage 10 audit contract recognizes the removal instead of requiring the legacy file to remain present."
+      ]
+    },
+    {
+      "batch": 6,
+      "name": "Remove retired Stock and Remnant product implementation",
+      "status": "removed",
+      "paths": [
+        "almdina_erp/almdina_erp/services/actual_consumption_reversal.py",
+        "almdina_erp/almdina_erp/services/actual_consumption_service.py",
+        "almdina_erp/almdina_erp/services/performance_service.py",
+        "almdina_erp/almdina_erp/services/preflight_service.py",
+        "almdina_erp/almdina_erp/services/remnant_service.py",
+        "almdina_erp/almdina_erp/services/settings_access_service.py",
+        "almdina_erp/almdina_erp/services/stock_availability_service.py",
+        "almdina_erp/almdina_erp/services/stock_service.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/stock_execution_gateway.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/remnant_execution_gateway.py"
+      ],
+      "stage10_paths": [
+        "almdina_erp/almdina_erp/services/actual_consumption_reversal.py",
+        "almdina_erp/almdina_erp/services/actual_consumption_service.py",
+        "almdina_erp/almdina_erp/services/performance_service.py",
+        "almdina_erp/almdina_erp/services/preflight_service.py",
+        "almdina_erp/almdina_erp/services/remnant_service.py",
+        "almdina_erp/almdina_erp/services/settings_access_service.py",
+        "almdina_erp/almdina_erp/services/stock_availability_service.py",
+        "almdina_erp/almdina_erp/services/stock_service.py"
+      ],
+      "stage11_discoveries": [
+        "almdina_erp/almdina_erp/infrastructure/frappe/stock_execution_gateway.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/remnant_execution_gateway.py"
+      ],
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/services/legacy_endpoint_service.py",
+        "almdina_erp/almdina_erp/services/order_revision_activation.py",
+        "almdina_erp/almdina_erp/report/order_stock_availability/order_stock_availability.py"
+      ],
+      "evidence": [
+        "Stage 10 explicitly retired the Stock/Remnant product scope and froze historical HTTP methods to legacy_endpoint_service.retired_product_endpoint.",
+        "Revision activation preserves the historical material-activity safety gate but no longer mutates retired stock or remnant reservations; legacy response fields remain present as empty lists.",
+        "The Order Stock Availability report keeps its operational report permission guard and now fails closed through retired_product_endpoint instead of loading stock_service.",
+        "The active shop-floor command repository had no dependency on stock_execution_gateway or remnant_execution_gateway; both gateways are recorded as Stage 11 discoveries before removal.",
+        "Static contracts assert all ten removed paths are absent and reject any runtime Python reference to their module paths."
       ]
     }
   ]
