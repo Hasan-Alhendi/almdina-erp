@@ -29,7 +29,7 @@ _COMMANDS = "almdina_erp.almdina_erp.services.shop_floor_commands"
 _QUERIES = "almdina_erp.almdina_erp.services.shop_floor_query_service"
 _DXF = "almdina_erp.almdina_erp.services.shop_floor_dxf_service"
 _DISPATCH = "almdina_erp.almdina_erp.services.order_dispatch_service"
-_PRODUCTION = "almdina_erp.almdina_erp.services.production_service"
+_STATUS_SYNC = "almdina_erp.almdina_erp.services.order_status_sync_service"
 
 
 def _delegate(module_path: str, function_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -70,7 +70,7 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 
 
 def sync_order_status(order_name: str) -> str:
-    return _delegate(_PRODUCTION, "sync_order_status", order_name)
+    return _delegate(_STATUS_SYNC, "sync_order_status", order_name)
 
 
 # Read-only lifecycle aliases remain for older Python callers. Operational role
