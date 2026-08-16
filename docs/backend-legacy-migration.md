@@ -121,7 +121,7 @@ contracts inspect the focused snapshot owner instead of the facade.
 
 ## Batch 4 — Shop Floor transitional production boundary
 
-Status: ready for final CI validation.
+Status: closed on `a482920f3d4d40a96b59c4125ac8fb10428e00b3`.
 
 The historical `production_service.py` previously mixed three concerns: legacy
 stage bootstrap, order-status synchronization, and retired/public compatibility
@@ -140,7 +140,6 @@ Migrated internal consumers:
 
 - `shop_floor_service.py`
 - `order_lifecycle_service.py`
-- `replacement_cancellation_service.py`
 - `replacement_status_service.py`
 
 `production_service.py` remains only as a backward-compatible facade. It exposes
@@ -150,3 +149,22 @@ fail-closed/protected through the existing legacy endpoint boundary.
 A Static architecture scan now rejects any internal runtime import of
 `services.production_service`. This prevents the transitional facade from
 regaining business ownership while preserving compatibility for external callers.
+
+## Batch 5 — Replacement legacy implementation
+
+Status: ready for final CI validation.
+
+Removed:
+
+- `services/replacement_cancellation_service.py`
+
+The current replacement workflow remains owned by `replacement_service.py` and
+its focused application/infrastructure boundaries. The historical HTTP method
+name remains frozen in `override_whitelisted_methods` and is redirected to
+`legacy_endpoint_service.cancel_legacy_replacement`.
+
+That compatibility adapter rejects the retired `reverse_stock` behavior and
+forwards supported cancellation to the current replacement facade. Static scans
+prove no runtime Python source imports the removed implementation, and the Stage
+11 migration ledger records the removal so the immutable Stage 10 audit remains
+historically accurate.
