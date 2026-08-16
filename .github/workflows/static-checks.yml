@@ -120,6 +120,12 @@ jobs:
       - name: Run shop-floor query architecture tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_architecture
 
+      - name: Run Shop Floor Inbox frontend architecture tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_shop_floor_inbox_frontend_architecture \
+            almdina_erp.tests.test_shop_floor_inbox_frontend_security
+
       - name: Run door-piece policy tests
         run: |
           python -m unittest -v \
@@ -219,6 +225,7 @@ jobs:
           node almdina_erp/tests/js/mobile_piece_cards.test.js
           node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/shop_floor_quick_actions.test.js
+          node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/test_shape_print.js

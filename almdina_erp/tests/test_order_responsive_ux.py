@@ -44,6 +44,7 @@ QUICK_ACTIONS_UX = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
 SHOP_FLOOR_INBOX = (
     ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
 )
+SHOP_FLOOR_RENDERER = ROOT / "public" / "js" / "shop_floor_inbox" / "renderer.js"
 
 
 def source(path: Path) -> str:
@@ -179,7 +180,8 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
     quick_actions = source(QUICK_ACTIONS_UX)
-    inbox = source(SHOP_FLOOR_INBOX)
+    inbox_page = source(SHOP_FLOOR_INBOX)
+    inbox_renderer = source(SHOP_FLOOR_RENDERER)
     hooks = source(HOOKS)
 
     assert "window.AlmdinaResponsiveDevice" in list_source
@@ -203,9 +205,10 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     assert "services.shop_floor_commands.start_my_stage" in quick_actions
     assert "services.shop_floor_commands.handoff_to_next" in quick_actions
     assert "frappe.db.set_value" not in quick_actions
-    assert "sf-quick-action" in inbox
-    assert 'row.edge_color || "—"' in inbox
-    assert 'row.board_description || "—"' in inbox
+    assert "/assets/almdina_erp/js/shop_floor_inbox/renderer.js" in inbox_page
+    assert "sf-quick-action" in inbox_renderer
+    assert 'row.edge_color || "—"' in inbox_renderer
+    assert 'row.board_description || "—"' in inbox_renderer
 
 
 def test_desk_list_orders_assignments_then_completed_rows_green():
