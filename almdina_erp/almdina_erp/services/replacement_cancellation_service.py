@@ -180,7 +180,9 @@ def cancel_replacement(
             )
 
     from almdina_erp.almdina_erp.services.cost_service import sync_order_costs
-    from almdina_erp.almdina_erp.services.production_service import sync_order_status
+    from almdina_erp.almdina_erp.services.order_status_sync_service import (
+        sync_order_status,
+    )
 
     cost_summary = sync_order_costs(replacement.door_cutting_order)
     order_status = sync_order_status(replacement.door_cutting_order)
