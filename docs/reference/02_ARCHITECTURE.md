@@ -145,4 +145,10 @@ Stage 13 يثبت على الأقل:
 5. ما Endpoint/UI المطلوب؟ اربطه في Service/Page بعد ذلك.
 6. ما Capability/Document scope المطلوب؟ لا تؤجله لما بعد بناء الـUI.
 
+## 10. Frontend specialization
+
+الـFrontend يبقى داخل طبقة Presentation/UI في هذا العقد العام، لكن تنظيم state/API/render/styles/events/async lifecycle له Contract تفصيلي مستقل حتى لا تصبح صفحات Frappe مصدرًا موازيًا لقواعد العمل.
+
+أي تعديل جوهري في JavaScript/CSS/Page/Form/List UI يجب أن يراجع [13 — Frontend Architecture](13_FRONTEND_ARCHITECTURE.md) بالإضافة إلى هذا المستند. عقد الواجهة يكمّل اتجاه الاعتماد هنا ولا يستطيع توسيع Domain/Application dependencies أو تخفيف Authorization/Lifecycle/Data contracts المجمدة.
+
 راجع [Change Rules](07_CHANGE_RULES.md) قبل أي تنفيذ.
