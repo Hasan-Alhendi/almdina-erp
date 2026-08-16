@@ -9,6 +9,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v4/domain/document.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/geometry_commands.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/manufacturing_projection.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/snap_resolver.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/hit_test.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/command_history.js",
@@ -131,6 +132,7 @@
         __readOnlyMutationBoundary: true,
         __semanticUndoRedo: true,
         __nodeEditing: true,
+        __manufacturingProjection: true,
     });
 
     window.AlmdinaSpecialShapeEditor = facade;
