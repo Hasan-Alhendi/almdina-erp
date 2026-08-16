@@ -67,7 +67,15 @@ assert.equal(result.code, "open-boundary");
 result = P.project(rectangle({
     paths: [
         { id: "p1", startNodeId: "n1", segmentIds: ["s1", "s2", "s3", "s4"], closed: true },
-        { id: "p2", startNodeId: "n1", segmentIds: [], closed: false },
+        { id: "cancelled", startNodeId: "n1", segmentIds: [], closed: false },
+    ],
+}));
+assert.equal(result.ok, true, "a cancelled click-only path must not block a valid manufacturing boundary");
+
+result = P.project(rectangle({
+    paths: [
+        { id: "p1", startNodeId: "n1", segmentIds: ["s1", "s2", "s3", "s4"], closed: true },
+        { id: "p2", startNodeId: "n1", segmentIds: ["s1"], closed: false },
     ],
 }));
 assert.equal(result.ok, false);
