@@ -1,0 +1,250 @@
+(() => {
+    "use strict";
+
+    if (window.AlmdinaFactoryWorkforceController) return;
+
+    function mount(wrapper) {
+        if (!wrapper) throw new Error("Factory workforce wrapper is required");
+        if (
+            wrapper.__almdinaFactoryWorkforceController
+            && typeof wrapper.__almdinaFactoryWorkforceController.dispose === "function"
+        ) {
+            wrapper.__almdinaFactoryWorkforceController.dispose();
+        }
+
+        const frontend = window.AlmdinaFrontend;
+        const api = window.AlmdinaFactoryWorkforceApi;
+        const stateModule = window.AlmdinaFactoryWorkforceState;
+        const viewModelModule = window.AlmdinaFactoryWorkforceViewModel;
+        const rendererModule = window.AlmdinaFactoryWorkforceRenderer;
+        const interactionsModule = window.AlmdinaFactoryWorkforceInteractions;
+        const dialogsModule = window.AlmdinaFactoryWorkforceDialogs;
+        if (
+            !frontend
+            || !api
+            || !stateModule
+            || !viewModelModule
+            || !rendererModule
+            || !interactionsModule
+            || !dialogsModule
+        ) {
+            throw new Error("Factory workforce frontend modules are unavailable");
+        }
+
+        const store = stateModule.create();
+        const state = store.data;
+        const viewModel = viewModelModule.create({ translate: __ });
+        const page = frappe.ui.make_app_page({
+            parent: wrapper,
+            title: __("المستخدمون والقوى العاملة"),
+            single_column: true,
+        });
+        const $main = $(wrapper).find(".layout-main-section");
+        const renderer = rendererModule.create({
+            $main,
+            escapeHtml: value => frappe.utils.escape_html(String(value ?? "")),
+            translate: __,
+        });
+        const dialogs = dialogsModule.create({ translate: __ });
+
+        page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");
+        page.add_inner_button(__("تحديث"), load, null, "refresh");
+
+        interactionsModule.bind({
+            $main,
+            lifecycle: store.lifecycle,
+            callbacks: {
+                onSearch: value => {
+                    state.search = value;
+                    load();
+                },
+                onEnabledChanged: value => {
+                    state.enabled = value;
+                    load();
+                },
+                onRefresh: load,
+                onEdit: openEditDialog,
+                onPassword: openPasswordDialog,
+                onToggle: toggleUser,
+                onAudit: openAudit,
+                onAdopt: adoptUser,
+            },
+        });
+
+        if (window.AlmdinaPageRevisit) {
+            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
+        }
+
+        renderer.renderLoading();
+        load();
+
+        const instance = Object.freeze({
+            load,
+            dispose() {
+                store.dispose();
+                if (wrapper.__almdinaFactoryWorkforceController === instance) {
+                    wrapper.__almdinaFactoryWorkforceController = null;
+                }
+            },
+        });
+        wrapper.__almdinaFactoryWorkforceController = instance;
+        return instance;
+
+        function errorMessage(error, fallback) {
+            return frontend.errorMessage(error, fallback);
+        }
+
+        function freezeOptions(message) {
+            return { freeze: true, freezeMessage: message };
+        }
+
+        function can(capability) {
+            return viewModel.can(state, capability);
+        }
+
+        function actionAllowed(user, action) {
+            return viewModel.actionAllowed(user, action);
+        }
+
+        function syncPrimaryAction() {
+            if (page.btn_primary) page.btn_primary.toggle(can("create_users"));
+        }
+
+        function render() {
+            renderer.render(viewModel.page(state));
+        }
+
+        function load() {
+            const token = store.requests.console.begin({
+                search: state.search,
+                enabled: state.enabled,
+            });
+            if (!store.hasRows()) renderer.renderLoading();
+            return api.getConsole(state.search, state.enabled, { freeze: false }).then(data => {
+                if (!store.requests.console.isCurrent(token)) return null;
+                store.applyConsole(data || {});
+                syncPrimaryAction();
+                render();
+                return data;
+            }).catch(error => {
+                if (!store.requests.console.isCurrent(token)) return null;
+                renderer.renderError(errorMessage(error, __("تعذر تحميل البيانات.")));
+                return null;
+            });
+        }
+
+        function roleOptions(query) {
+            return viewModel.roleOptions(state.roles, query);
+        }
+
+        function userByEmail(email) {
+            return viewModel.findUser(state.users, email);
+        }
+
+        function availableUserByEmail(email) {
+            return viewModel.findUser(state.availableUsers, email);
+        }
+
+        function openCreateDialog() {
+            if (!can("create_users")) return;
+            dialogs.openCreate({
+                canAssignRoles: can("assign_user_roles"),
+                roleOptions,
+                onSubmit: payload => api.createUser(
+                    payload,
+                    freezeOptions(__("جاري إنشاء المستخدم..."))
+                ).then(() => {
+                    dialogs.showAlert(__("تم إنشاء المستخدم."));
+                    return load();
+                }),
+            });
+        }
+
+        function openEditDialog(email) {
+            const user = userByEmail(email);
+            if (!user) return;
+            const canEdit = actionAllowed(user, "edit");
+            const canAssignRoles = actionAllowed(user, "assign_roles");
+            if (!canEdit && !canAssignRoles) return;
+
+            dialogs.openEdit({
+                user,
+                canEdit,
+                canAssignRoles,
+                roleOptions,
+                onSubmit: payload => api.updateUser(
+                    user.email,
+                    payload,
+                    freezeOptions(__("جاري حفظ المستخدم..."))
+                ).then(() => {
+                    dialogs.showAlert(__("تم تحديث المستخدم."));
+                    return load();
+                }),
+            });
+        }
+
+        function openPasswordDialog(email) {
+            const user = userByEmail(email);
+            if (!user || !actionAllowed(user, "reset_password")) return;
+            dialogs.openPassword({
+                user,
+                onSubmit: temporaryPassword => api.resetPassword(
+                    user.email,
+                    temporaryPassword,
+                    freezeOptions(__("جاري تحديث كلمة المرور..."))
+                ).then(() => {
+                    dialogs.showAlert(__("تم تحديث كلمة المرور دون تسجيل قيمتها."));
+                }),
+            });
+        }
+
+        function toggleUser(email, enabled) {
+            const user = userByEmail(email);
+            const action = enabled ? "enable" : "disable";
+            if (!user || !actionAllowed(user, action)) return;
+            dialogs.confirmToggle({
+                user,
+                enabled,
+                onConfirm: () => api.setEnabled(
+                    user.email,
+                    enabled,
+                    freezeOptions(__("جاري تحديث الحساب..."))
+                ).then(() => {
+                    dialogs.showAlert(__("تم تحديث حالة المستخدم."));
+                    return load();
+                }),
+            });
+        }
+
+        function adoptUser(email) {
+            const user = availableUserByEmail(email);
+            if (!user || !can("create_users")) return;
+            dialogs.confirmAdopt({
+                user,
+                onConfirm: () => api.adoptUser(
+                    user.email,
+                    freezeOptions(__("جاري إضافة المستخدم إلى المعمل..."))
+                ).then(() => {
+                    dialogs.showAlert(__("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره."));
+                    return load();
+                }),
+            });
+        }
+
+        function openAudit(email) {
+            const user = userByEmail(email);
+            if (!user) return;
+            const token = store.requests.audit.begin({ user: email });
+            return api.getAudit(
+                user.email,
+                freezeOptions(__("جاري تحميل السجل..."))
+            ).then(data => {
+                if (!store.requests.audit.isCurrent(token)) return;
+                const events = Array.isArray(data.events) ? data.events : [];
+                dialogs.openAudit({ user, html: renderer.auditHtml(events) });
+            });
+        }
+    }
+
+    window.AlmdinaFactoryWorkforceController = Object.freeze({ mount });
+})();
