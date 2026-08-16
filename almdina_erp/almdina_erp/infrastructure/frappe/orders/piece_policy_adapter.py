@@ -22,8 +22,10 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
 )
-from almdina_erp.almdina_erp.services.special_shape_service import (
+from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service import (
     validate_special_shape_drawing,
+)
+from almdina_erp.almdina_erp.services.special_shape_service import (
     validate_special_shape_geometry,
 )
 
