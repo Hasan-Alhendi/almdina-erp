@@ -3,8 +3,28 @@
 
     const root = window.AlmdinaDoorDrawingV4 = window.AlmdinaDoorDrawingV4 || Object.create(null);
     const persistence = root.PersistenceAdapter;
+    const manufacturingProjection = root.ManufacturingProjection;
     const editorController = root.EditorController;
-    if (!persistence || !editorController) throw new Error("Drawing V4 persistence and controller must load before Frappe editor");
+    if (!persistence || !manufacturingProjection || !editorController) {
+        throw new Error("Drawing V4 persistence, manufacturing projection and controller must load before Frappe editor");
+    }
+
+    const PROJECTION_MESSAGES = Object.freeze({
+        "invalid-document": "بيانات الرسم غير صالحة. أعد فتح الرسم وحاول مرة أخرى.",
+        "invalid-blank": "أدخل عرض الدرفة وطولها قبل حفظ الرسم.",
+        "missing-boundary": "ارسم محيط الدرفة كاملًا قبل الحفظ.",
+        "ambiguous-boundary": "يجب أن يحتوي الرسم على محيط مغلق واحد للدرفة. احذف المسارات الزائدة ثم احفظ.",
+        "open-boundary": "أغلق محيط الدرفة بالعودة إلى نقطة البداية قبل الحفظ.",
+        "too-few-edges": "محيط الدرفة يحتاج ثلاثة أضلاع على الأقل.",
+        "missing-start-node": "الرسم يحتوي نقطة بداية غير صالحة.",
+        "duplicate-segment": "الرسم يحتوي ضلعًا مكررًا داخل المسار.",
+        "missing-segment": "الرسم يحتوي ضلعًا مفقودًا.",
+        "unsupported-segment": "الرسم يحتوي نوع ضلع غير مدعوم للتصنيع حاليًا.",
+        "disconnected-boundary": "محيط الدرفة غير متصل بالكامل. صِل جميع الزوايا ثم حاول الحفظ.",
+        "missing-node": "الرسم يحتوي نقطة مفقودة.",
+        "zero-length-edge": "الرسم يحتوي ضلعًا بطول صفر. احذفه أو حرّك إحدى نقطتيه.",
+        "unclosed-boundary": "محيط الدرفة غير مغلق هندسيًا.",
+    });
 
     let activeSession = null;
 
@@ -45,15 +65,57 @@
         }
     }
 
+    function projectionMessage(result) {
+        return PROJECTION_MESSAGES[result && result.code] || "تعذر تحويل الرسم إلى هندسة تصنيع صالحة.";
+    }
+
+    function manufacturingGeometry(document, row) {
+        const projected = manufacturingProjection.project(document);
+        if (!projected.ok) {
+            return Object.freeze({ ok: false, message: projectionMessage(projected) });
+        }
+
+        const contract = window.AlmdinaSpecialShapeGeometry;
+        if (!contract || typeof contract.validate !== "function" || typeof contract.serialize !== "function") {
+            throw new Error("Special shape manufacturing geometry contract is not available");
+        }
+
+        const validation = contract.validate(projected.geometry, row.width_cm, row.length_cm);
+        if (!validation.valid) {
+            return Object.freeze({
+                ok: false,
+                message: (validation.errors || []).join("\n") || "هندسة الدرفة غير صالحة للتصنيع.",
+            });
+        }
+
+        const serialized = contract.serialize(validation.geometry);
+        if (!serialized) throw new Error("Failed to serialize special shape manufacturing geometry");
+        return Object.freeze({ ok: true, serialized });
+    }
+
     function saveSession(session) {
         if (!session || session.readOnly) return;
         const document = session.controller.state().interaction.document;
         if (!documentHasGeometry(document)) {
-            frappe.msgprint("ارسم ضلعًا واحدًا على الأقل قبل الحفظ.");
+            frappe.msgprint("ارسم محيط الدرفة قبل الحفظ.");
+            return;
+        }
+
+        let manufacturing;
+        try {
+            manufacturing = manufacturingGeometry(document, session.row);
+        } catch (error) {
+            console.error("Door Drawing V4 manufacturing projection failed", error);
+            frappe.msgprint("تعذر تجهيز هندسة الدرفة للتصنيع. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+            return;
+        }
+        if (!manufacturing.ok) {
+            frappe.msgprint(manufacturing.message);
             return;
         }
 
         session.row.special_shape_drawing_json = persistence.toStored(document);
+        session.row.special_shape_geometry_json = manufacturing.serialized;
         session.row.special_shape_status = "Documented";
         session.frm.dirty();
         session.dirty = false;
@@ -64,7 +126,7 @@
 
         session.dialog.hide();
         refreshOrderUi(session.frm);
-        frappe.show_alert({ message: "تم حفظ رسم الدرفة.", indicator: "green" }, 3);
+        frappe.show_alert({ message: "تم حفظ الرسم وهندسة التصنيع.", indicator: "green" }, 3);
     }
 
     function requestClose(session) {
