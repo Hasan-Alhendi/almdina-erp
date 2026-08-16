@@ -137,6 +137,16 @@
             return Object.freeze({ kind: hit ? "path-selected" : "selection-cleared", ...state() });
         }
 
+        function constraintsForNode(nodeId) {
+            const id = String(nodeId || "");
+            const incidentSegments = new Set((document.segments || [])
+                .filter(segment => segment.startNodeId === id || segment.endNodeId === id)
+                .map(segment => segment.id));
+            return Object.freeze((document.constraints || [])
+                .filter(constraint => incidentSegments.has(constraint.segmentId))
+                .map(constraint => constraint.id));
+        }
+
         function beginNodeDrag(rawPoint, options = {}) {
             const hit = hitTest.node(document, rawPoint, hitTolerance(options));
             if (!hit) {
@@ -146,6 +156,16 @@
             }
             const origin = documentModel.nodeById(document, hit.id);
             selection = Object.freeze({ kind: "node", id: hit.id });
+            const constraintIds = constraintsForNode(hit.id);
+            if (constraintIds.length) {
+                dragSession = null;
+                return Object.freeze({
+                    kind: "constraint-protected-node",
+                    nodeId: hit.id,
+                    constraintIds,
+                    ...state(),
+                });
+            }
             dragSession = Object.freeze({
                 nodeId: hit.id,
                 origin,
