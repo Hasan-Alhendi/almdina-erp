@@ -11,6 +11,7 @@ PAGES = ROOT / "almdina_erp" / "page"
 PAGE_LOCAL_CONTROLLERS = {
     "factory_permissions": ROOT / "public" / "js" / "factory_permissions" / "controller.js",
     "factory_workforce": ROOT / "public" / "js" / "factory_workforce" / "controller.js",
+    "factory_production_settings": ROOT / "public" / "js" / "factory_production_settings" / "controller.js",
 }
 
 # Frappe renders a desk page once and only fires "show" on later visits. Every
@@ -66,7 +67,7 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
                     controller_source,
                     page,
                 )
-            elif page == "factory_workforce":
+            elif page in {"factory_workforce", "factory_production_settings"}:
                 self.assertIn(
                     "AlmdinaPageRevisit.refreshOnRevisit(wrapper, load)",
                     controller_source,
