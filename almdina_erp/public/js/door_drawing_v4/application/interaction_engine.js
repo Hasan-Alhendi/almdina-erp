@@ -6,6 +6,7 @@
     const documentModel = root.DocumentModel;
     const commands = root.GeometryCommands;
     const dimensionCommands = root.DimensionCommands;
+    const drivingDimensionCommands = root.DrivingDimensionCommands;
     const snapResolver = root.SnapResolver;
     const toolMachine = root.ToolStateMachine;
     const hitTest = root.HitTest;
@@ -298,6 +299,37 @@
             });
         }
 
+        function inputDimensionValue(valueMm) {
+            if (
+                toolState.activeTool !== toolMachine.TOOLS.DIMENSION
+                || !selection
+                || selection.kind !== "dimension"
+                || !drivingDimensionCommands
+            ) {
+                return Object.freeze({ kind: "ignored", ...state() });
+            }
+            const value = geometry.finiteNumber(valueMm);
+            if (value <= geometry.EPSILON_MM) throw new Error("Drawing dimension must be greater than zero");
+            const before = document;
+            const result = drivingDimensionCommands.drive(document, selection.id, value, { idFactory });
+            if (!result.ok) {
+                return Object.freeze({
+                    kind: "dimension-drive-failed",
+                    code: result.code || "constraint-conflict",
+                    dimensionId: selection.id,
+                    ...state(),
+                });
+            }
+            document = result.document;
+            if (before !== document) record(before, "drive-dimension");
+            return Object.freeze({
+                kind: "dimension-driven",
+                dimensionId: selection.id,
+                measurement: result.measurement,
+                ...state(),
+            });
+        }
+
         function cancel() {
             if (cancelNodeDrag()) return Object.freeze({ kind: "node-drag-cancelled", ...state() });
             if (activePathId) {
@@ -356,6 +388,7 @@
             pointerDown,
             pointerUp,
             inputLength,
+            inputDimensionValue,
             cancel,
             undo,
             redo,
