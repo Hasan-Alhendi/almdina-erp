@@ -92,26 +92,14 @@ assert.ok(penProfile.maxCurveDisplacementMm < mouseProfile.maxCurveDisplacementM
 assert.ok(penProfile.straightMaximumDeviationMm < mouseProfile.straightMaximumDeviationMm);
 assert.equal(Cleaner.profile("unknown"), Cleaner.PROFILES.mouse);
 
-const bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const activeFacade = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const application = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/application/non_destructive_smart_suggestions.js"), "utf8");
 const domainSource = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/domain/shape_preserving_stroke_domain.js"), "utf8");
 
-assert.ok(
-    bootstrap.indexOf("/domain/shape_preserving_stroke_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_cleaner.js"),
-    "Legacy shape-preserving cleaner remains loadable for its regression coverage"
-);
-assert.ok(
-    bootstrap.indexOf("/domain/smart_stroke_reconstruction_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js"),
-    "Pure smart reconstruction must load before its adaptive input profiles"
-);
-assert.ok(
-    bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js") < bootstrap.indexOf("/application/non_destructive_smart_suggestions.js"),
-    "The active reconstructor must load before the freehand owner"
-);
-assert.match(bootstrap, /__doorDrawingV3ShapePreservingCleaner:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3SmartStrokeReconstruction:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3BezierFreehandReconstruction:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3SmartCleanUndo:\s*true/);
+assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(activeFacade, /__doorDrawingV3ShapePreservingCleaner|__doorDrawingV3SmartStrokeReconstruction/);
 
 assert.match(application, /Reconstructor\.reconstruct\(points, pointerType\)/);
 assert.match(application, /c\.history\.execute\(rawDocument, "Draw freehand stroke"\)/);
@@ -127,4 +115,4 @@ assert.match(domainSource, /Smooth each intent span independently/i);
 assert.doesNotMatch(domainSource, /G\.(?:circle|rectangle|arc)\s*\(/i, "Automatic cleaner must not construct primitive geometry");
 assert.doesNotMatch(domainSource, /document\.|querySelector|frappe\./, "Pure stroke domain must remain DOM and Frappe independent");
 
-console.log("Door Drawing V3 intent-aware smart cleaner passed");
+console.log("Door Drawing V3 intent-aware smart cleaner passed as isolated legacy regression; active facade remains V4");

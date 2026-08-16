@@ -95,19 +95,17 @@ assert.equal(P.analyze(irregularOpen, {
     smoothingPasses: 0,
 }), null, "An ambiguous freehand shape should receive no automatic correction suggestion");
 
-const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const activeFacade = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const controller = fs.readFileSync(path.join(ROOT, "application/non_destructive_smart_suggestions.js"), "utf8");
 const view = fs.readFileSync(path.join(ROOT, "presentation/smart_suggestion_view.js"), "utf8");
 const smartPen = fs.readFileSync(path.join(ROOT, "application/smart_pen.js"), "utf8");
 const css = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_pen.css"), "utf8");
 
-assert.match(entry, /application\/smart_suggestion_policy\.js/);
-assert.match(entry, /presentation\/smart_suggestion_view\.js/);
-assert.match(entry, /application\/non_destructive_smart_suggestions\.js/);
-assert.ok(entry.indexOf("application/smart_suggestion_policy.js") < entry.indexOf("presentation/canvas_view.js"));
-assert.ok(entry.indexOf("presentation/smart_path_view.js") < entry.indexOf("presentation/smart_suggestion_view.js"));
-assert.ok(entry.indexOf("application/smart_pen.js") < entry.indexOf("application/non_destructive_smart_suggestions.js"));
-assert.match(entry, /__doorDrawingV3NonDestructiveSuggestions:\s*true/);
+assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(activeFacade, /__doorDrawingV3NonDestructiveSuggestions/);
 
 assert.match(controller, /window\.addEventListener\("pointermove", onPointerMove, true\)/);
 assert.match(controller, /window\.addEventListener\("pointerup", onPointerUp, true\)/);
@@ -130,4 +128,4 @@ assert.match(css, /\.ddv3-smart-suggestion-accept/);
 assert.match(smartPen, /const CLOSE_CAPTURE_PX = 8/);
 assert.match(smartPen, /const FREEHAND_ENDPOINT_SNAP_PX = 8/);
 
-console.log("Door Drawing V3 non-destructive smart suggestions passed");
+console.log("Door Drawing V3 non-destructive smart suggestions passed as isolated legacy regression; active facade remains V4");

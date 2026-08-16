@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -6,7 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
 FACADE = ROOT / "public/js/door_cutting_order/drawing/special_shape_facade.js"
 OLD_FACADE = ROOT / "public/js/door_cutting_order_special_shape_ux.js"
-DRAWING_ROOT = ROOT / "public/js/door_drawing_v3"
+DRAWING_V3_ROOT = ROOT / "public/js/door_drawing_v3"
+DRAWING_V4_ROOT = ROOT / "public/js/door_drawing_v4"
 
 
 class TestFrontendDrawingOwnershipContract(unittest.TestCase):
@@ -20,18 +22,28 @@ class TestFrontendDrawingOwnershipContract(unittest.TestCase):
         self.assertEqual(hooks.count(f'"{script}"'), 1)
         self.assertNotIn(f'"{old_script}"', hooks)
 
-    def test_facade_keeps_drawing_permissions_and_ordered_bootstrap(self):
+    def test_facade_keeps_drawing_permissions_and_ordered_v4_bootstrap(self):
         source = FACADE.read_text(encoding="utf-8")
 
         self.assertIn('can(frm, "edit_special_drawing")', source)
         self.assertIn('can(frm, "view_drawing_workspace")', source)
-        self.assertIn("SCRIPTS.reduce((promise, src) => promise.then(() => loadScript(src))", source)
+        self.assertRegex(
+            source,
+            re.compile(
+                r"SCRIPTS\s*\.reduce\(\(promise, src\) => "
+                r"promise\.then\(\(\) => loadScript\(src\)\), Promise\.resolve\(\)\)"
+            ),
+        )
         self.assertIn("script.async = false", source)
-        self.assertIn("window.AlmdinaDoorDrawingV3", source)
+        self.assertIn("window.AlmdinaDoorDrawingV4", source)
+        self.assertIn("__doorDrawingV4: true", source)
+        self.assertNotIn("window.AlmdinaDoorDrawingV3", source)
+        self.assertNotIn("door_drawing_v3/", source)
 
-    def test_door_drawing_v3_remains_a_separate_layered_editor(self):
-        for layer in ("domain", "application", "infrastructure", "presentation"):
-            self.assertTrue((DRAWING_ROOT / layer).is_dir(), f"Missing Door Drawing V3 layer: {layer}")
+    def test_active_v4_and_legacy_v3_remain_separate_layered_editors(self):
+        for root, label in ((DRAWING_V4_ROOT, "V4"), (DRAWING_V3_ROOT, "V3")):
+            for layer in ("domain", "application", "infrastructure", "presentation"):
+                self.assertTrue((root / layer).is_dir(), f"Missing Door Drawing {label} layer: {layer}")
 
 
 if __name__ == "__main__":

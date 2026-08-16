@@ -121,7 +121,7 @@
         }).filter(Boolean);
     }
 
-    const facade = Object.freeze({
+    const facade = {
         open, view, parseDrawing,
         __doorDrawingV4: true,
         __canonicalMmGeometry: true,
@@ -134,7 +134,7 @@
         __semanticUndoRedo: true,
         __nodeEditing: true,
         __manufacturingProjection: true,
-    });
+    };
 
     window.AlmdinaSpecialShapeEditor = Object.freeze(facade);
     window.AlmdinaDoorDrawingV4Bootstrap = Object.freeze({ STYLE_LINKS, SCRIPTS, boot });

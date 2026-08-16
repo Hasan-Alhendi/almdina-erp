@@ -7,7 +7,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
-const bootstrap = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
+const activeFacade = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
 const smartGuides = read("almdina_erp/public/js/door_drawing_v3/application/smart_guides.js");
 const candidates = read("almdina_erp/public/js/door_drawing_v3/application/snap_candidate_engine.js");
 const movePolicy = read("almdina_erp/public/js/door_drawing_v3/application/professional_move_policy.js");
@@ -19,41 +19,11 @@ const orientedApp = read("almdina_erp/public/js/door_drawing_v3/application/orie
 const moveCss = read("almdina_erp/public/css/door_drawing_v3_professional_move.css");
 const orientedCss = read("almdina_erp/public/css/door_drawing_v3_oriented_transform.css");
 
-for (const modulePath of [
-    "domain/oriented_transform_domain.js",
-    "application/snap_candidate_engine.js",
-    "application/professional_move_policy.js",
-    "presentation/professional_move_view.js",
-    "presentation/oriented_transform_view.js",
-    "application/professional_move.js",
-    "application/oriented_transform.js",
-]) assert.match(bootstrap, new RegExp(modulePath.replaceAll("/", "\\/").replaceAll(".", "\\.")));
-for (const flag of [
-    "__doorDrawingV3AltDragDuplicate",
-    "__doorDrawingV3ShiftAxisMove",
-    "__doorDrawingV3EqualSpacingGuides",
-    "__doorDrawingV3SnapCandidateEngine",
-    "__doorDrawingV3DuplicateSnapTargets",
-    "__doorDrawingV3GeometryPointSnap",
-    "__doorDrawingV3EndpointSurfaceSnap",
-    "__doorDrawingV3CollinearContinuation",
-    "__doorDrawingV3RepeatedSpacingGuides",
-    "__doorDrawingV3OperatorAssistLabels",
-    "__doorDrawingV3ExactLinearSnapSafety",
-    "__doorDrawingV3StickyMoveSnap",
-    "__doorDrawingV3OrientedTransform",
-    "__doorDrawingV3RotationHandle",
-    "__doorDrawingV3RotationSnap",
-    "__doorDrawingV3TransformPivot",
-]) assert.match(bootstrap, new RegExp(`${flag}:\\s*true`));
-assert.match(bootstrap, /door_drawing_v3_professional_move\.css/);
-assert.match(bootstrap, /door_drawing_v3_oriented_transform\.css/);
-
-const unifiedIndex = bootstrap.indexOf("application/unified_snap_engine.js");
-const candidateIndex = bootstrap.indexOf("application/snap_candidate_engine.js");
-const movePolicyIndex = bootstrap.indexOf("application/professional_move_policy.js");
-assert.ok(unifiedIndex >= 0 && candidateIndex > unifiedIndex, "Move candidate engine must load after unified geometry features");
-assert.ok(movePolicyIndex > candidateIndex, "Professional move policy must consume the candidate engine");
+assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(activeFacade, /__doorDrawingV3AltDragDuplicate|__doorDrawingV3OrientedTransform|__doorDrawingV3SnapCandidateEngine/);
 
 const forbiddenDom = /window\.document|globalThis\.document|document\.(querySelector|querySelectorAll|createElement|createElementNS|getElementById)|getBoundingClientRect|clientX|clientY/;
 assert.match(candidates, /function bestPointCandidate\(/);
@@ -135,4 +105,4 @@ assert.match(orientedCss, /\.ddv3-has-oriented-transform \.ddv3-transform-overla
 assert.doesNotMatch(moveCss + orientedCss, /^body\s*\{/m);
 assert.doesNotMatch(moveCss + orientedCss, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 professional interaction architecture contracts passed");
+console.log("Door Drawing V3 professional interaction legacy contracts passed; active facade remains V4");
