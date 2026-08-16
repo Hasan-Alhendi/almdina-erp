@@ -6,6 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot_json,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
@@ -236,7 +239,8 @@ def _assert_recalculation_state(doc: Any) -> None:
 def _recalculation_result(doc: Any) -> dict[str, Any]:
     """Return production-plan data only; financial data never crosses this API."""
 
-    system_plan = getattr(doc, "system_plan_json", None) or doc.cutting_plan_json
+    cutting_plan = getattr(doc, "cutting_plan_json", None) or ""
+    system_plan = getattr(doc, "system_plan_json", None) or cutting_plan
     return {
         "name": doc.name,
         "required_boards": doc.required_boards,
@@ -252,8 +256,8 @@ def _recalculation_result(doc: Any) -> dict[str, Any]:
         "trim_margin_mm": doc.trim_margin_mm,
         "optimization_time_limit_sec": doc.optimization_time_limit_sec,
         "plan_needs_recalculation": doc.plan_needs_recalculation,
-        "cutting_plan_json": doc.cutting_plan_json,
-        "system_plan_json": system_plan,
+        "cutting_plan_json": sanitize_plan_snapshot_json(cutting_plan),
+        "system_plan_json": sanitize_plan_snapshot_json(system_plan),
         "approved_plan": doc.approved_plan,
         "approved_plan_source": doc.approved_plan_source,
     }
