@@ -15,19 +15,12 @@ ACTIVE_ADAPTER_PATH = (
     / "orders"
     / "piece_policy_adapter.py"
 )
-LEGACY_DOMAIN_CONTROLLER_PATH = (
-    ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_domain.py"
-)
-CONTROLLER_PATH = (
-    ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_controller.py"
+CONTROLLER_DIR = ROOT / "almdina_erp" / "doctype" / "door_cutting_order"
+CONTROLLER_PATH = CONTROLLER_DIR / "door_cutting_order_controller.py"
+RETIRED_CONTROLLER_PATHS = (
+    CONTROLLER_DIR / "door_cutting_order_fast.py",
+    CONTROLLER_DIR / "door_cutting_order_text_board.py",
+    CONTROLLER_DIR / "door_cutting_order_domain.py",
 )
 HOOKS_PATH = ROOT / "hooks.py"
 
@@ -73,10 +66,10 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertIn("FrappeDoorCuttingOrderSaveGateway", source)
         self.assertNotIn("frappe.model.document import Document", source)
 
-    def test_old_domain_controller_remains_available_for_compatibility(self) -> None:
-        source = LEGACY_DOMAIN_CONTROLLER_PATH.read_text(encoding="utf-8")
-        self.assertIn("class DomainDoorCuttingOrder", source)
-        self.assertNotEqual(LEGACY_DOMAIN_CONTROLLER_PATH, ACTIVE_ADAPTER_PATH)
+    def test_retired_alternate_controller_chain_is_absent(self) -> None:
+        for path in RETIRED_CONTROLLER_PATHS:
+            with self.subTest(path=path.name):
+                self.assertFalse(path.exists(), path)
 
 
 if __name__ == "__main__":
