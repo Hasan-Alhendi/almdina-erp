@@ -1,0 +1,39 @@
+name: Stage 13 Quality Gates
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  architecture-quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: python -m compileall -q almdina_erp
+
+      - name: Enforce Stage 13 architecture and regression contracts
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_stage13_quality_gates \
+            almdina_erp.tests.test_backend_legacy_stage11_closure \
+            almdina_erp.tests.test_backend_legacy_audit_contract \
+            almdina_erp.tests.test_final_security_architecture \
+            almdina_erp.tests.test_stage12_security_gate \
+            almdina_erp.tests.test_shop_floor_command_architecture \
+            almdina_erp.tests.test_shop_floor_query_architecture \
+            almdina_erp.tests.test_cutting_plan_architecture \
+            almdina_erp.tests.test_order_costing_architecture \
+            almdina_erp.tests.test_unified_order_controller_architecture
