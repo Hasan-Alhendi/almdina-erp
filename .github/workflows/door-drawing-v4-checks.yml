@@ -6,11 +6,13 @@ on:
       - Develop
     paths:
       - "almdina_erp/public/js/door_drawing_v4/**"
+      - "almdina_erp/public/css/door_drawing_v4.css"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
       - ".github/workflows/door-drawing-v4-checks.yml"
   pull_request:
     paths:
       - "almdina_erp/public/js/door_drawing_v4/**"
+      - "almdina_erp/public/css/door_drawing_v4.css"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
       - ".github/workflows/door-drawing-v4-checks.yml"
 
