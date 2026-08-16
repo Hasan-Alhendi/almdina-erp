@@ -19,6 +19,7 @@
         [tools.TOOLS.SELECT]: "تحديد",
         [tools.TOOLS.NODE]: "تعديل النقاط",
         [tools.TOOLS.PEN]: "القلم الذكي",
+        [tools.TOOLS.DIMENSION]: "إضافة بُعد",
         [tools.TOOLS.HAND]: "تحريك اللوحة",
     });
     const SNAP_LABELS = Object.freeze({
@@ -107,6 +108,7 @@
             if (state.drag && state.drag.current) return `تحريك نقطة · X ${geometry.roundMm(state.drag.current.xMm)} · Y ${geometry.roundMm(state.drag.current.yMm)}`;
             if (state.selection && state.selection.kind === "node") return "نقطة محددة";
             if (state.selection && state.selection.kind === "path") return "مسار محدد";
+            if (state.selection && state.selection.kind === "dimension") return "بُعد محدد";
             return TOOL_LABELS[state.toolState.activeTool] || state.toolState.activeTool;
         }
 
@@ -125,6 +127,8 @@
             if (readOnly) shell.setHint("عرض فقط · اسحب لتحريك اللوحة · استخدم عجلة الماوس للتكبير");
             else if (state.drag) shell.setHint("حرّك النقطة · Esc لإلغاء الحركة · Ctrl+Z للتراجع بعد الإفلات");
             else if (activeTool === tools.TOOLS.NODE) shell.setHint("انقر واسحب نقطة لتعديل الشكل · A");
+            else if (activeTool === tools.TOOLS.DIMENSION && state.selection && state.selection.kind === "dimension") shell.setHint("تمت إضافة البُعد · اختر ضلعًا آخر أو Esc لإلغاء التحديد");
+            else if (activeTool === tools.TOOLS.DIMENSION) shell.setHint("انقر على أي ضلع لإظهار طوله · D");
             else if (activeTool === tools.TOOLS.SELECT && state.selection) shell.setHint("المسار محدد · A لتعديل النقاط · Esc لإلغاء التحديد");
             else if (activeTool === tools.TOOLS.PEN && state.activePathId) shell.setHint("انقر لإضافة ضلع · اكتب الطول ثم Enter · Esc لإنهاء الرسم");
             else if (activeTool === tools.TOOLS.PEN) shell.setHint("انقر لبدء الرسم · P");
