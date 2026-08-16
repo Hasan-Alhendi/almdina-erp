@@ -17,10 +17,19 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
+CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
+API = ROOT / "public" / "js" / "factory_permissions" / "api.js"
+
+
+def _page_surface() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (PAGE, CONTROLLER, API)
+    )
 
 
 def test_role_search_is_inside_one_searchable_dropdown() -> None:
-    source = PAGE.read_text(encoding="utf-8")
+    source = CONTROLLER.read_text(encoding="utf-8")
 
     assert 'role="combobox"' in source
     assert "apc-role-picker" in source
@@ -33,7 +42,7 @@ def test_role_search_is_inside_one_searchable_dropdown() -> None:
 
 
 def test_section_and_global_select_all_controls_are_present() -> None:
-    source = PAGE.read_text(encoding="utf-8")
+    source = CONTROLLER.read_text(encoding="utf-8")
 
     assert "apc-select-all-group" in source
     assert "apc-select-all-global" in source
@@ -45,7 +54,7 @@ def test_section_and_global_select_all_controls_are_present() -> None:
 
 
 def test_permission_console_never_silently_hides_server_capabilities() -> None:
-    source = PAGE.read_text(encoding="utf-8")
+    source = CONTROLLER.read_text(encoding="utf-8")
     groups = capability_catalog_payload()
     rendered_keys = [
         capability["key"]
@@ -62,7 +71,8 @@ def test_permission_console_never_silently_hides_server_capabilities() -> None:
 
 
 def test_json_export_import_round_trip_and_browser_validation() -> None:
-    source = PAGE.read_text(encoding="utf-8")
+    api_source = API.read_text(encoding="utf-8")
+    controller_source = CONTROLLER.read_text(encoding="utf-8")
     state = {
         Capability.VIEW_ORDERS: True,
         Capability.CREATE_ORDER: True,
@@ -76,10 +86,20 @@ def test_json_export_import_round_trip_and_browser_validation() -> None:
     assert imported["capabilities"][Capability.CREATE_ORDER] is True
     assert imported["capabilities"][Capability.PRINT_MEASUREMENTS] is True
 
-    assert "export_role_permissions" in source
-    assert "preview_permission_import" in source
-    assert "JSON.parse(payload)" in source
-    assert 'input.value = ""' in source
-    assert "URL.createObjectURL" in source
-    assert "URL.revokeObjectURL" in source
-    assert "لن يتغير الدور قبل الحفظ" in source
+    assert "export_role_permissions" in api_source
+    assert "preview_permission_import" in api_source
+    assert "JSON.parse(payload)" in controller_source
+    assert 'input.value = ""' in controller_source
+    assert "URL.createObjectURL" in controller_source
+    assert "URL.revokeObjectURL" in controller_source
+    assert "لن يتغير الدور قبل الحفظ" in controller_source
+
+
+def test_bootstrap_loads_the_page_owned_modules() -> None:
+    page = PAGE.read_text(encoding="utf-8")
+    surface = _page_surface()
+
+    assert "/assets/almdina_erp/js/factory_permissions/api.js" in page
+    assert "/assets/almdina_erp/js/factory_permissions/state.js" in page
+    assert "/assets/almdina_erp/js/factory_permissions/controller.js" in page
+    assert "AlmdinaFactoryPermissionsController" in surface
