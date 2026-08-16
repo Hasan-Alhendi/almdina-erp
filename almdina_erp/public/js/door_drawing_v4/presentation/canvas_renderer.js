@@ -23,6 +23,18 @@
         chipText: "#ffffff",
     });
 
+    const SNAP_LABELS = Object.freeze({
+        endpoint: "نقطة نهاية",
+        horizontal: "أفقي",
+        vertical: "عمودي",
+    });
+
+    function semanticLabel(preview) {
+        if (!preview || !preview.semantic) return "";
+        if (preview.semantic === "angle") return `${Math.round(preview.angleDeg || 0)}°`;
+        return SNAP_LABELS[preview.semantic] || "";
+    }
+
     function resizeCanvas(canvas, widthPx, heightPx, dpr = window.devicePixelRatio || 1) {
         const cssWidth = Math.max(1, Math.round(Number(widthPx) || 1));
         const cssHeight = Math.max(1, Math.round(Number(heightPx) || 1));
@@ -150,7 +162,8 @@
         const top = Math.max(8, y - height - 10);
         ctx.fillStyle = TOKENS.chipBackground;
         ctx.beginPath();
-        ctx.roundRect(left, top, width, height, 6);
+        if (typeof ctx.roundRect === "function") ctx.roundRect(left, top, width, height, 6);
+        else ctx.rect(left, top, width, height);
         ctx.fill();
         ctx.fillStyle = TOKENS.chipText;
         ctx.textBaseline = "middle";
@@ -179,7 +192,8 @@
 
         const lengthMm = geometry.distance(anchor, preview.point);
         const measurement = `${geometry.roundMm(lengthMm)} mm`;
-        const label = preview.label ? `${preview.label} · ${measurement}` : measurement;
+        const semantic = semanticLabel(preview);
+        const label = semantic ? `${semantic} · ${measurement}` : measurement;
         drawChip(ctx, label, end.x, end.y);
 
         ctx.beginPath();
