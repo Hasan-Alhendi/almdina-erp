@@ -44,7 +44,7 @@ class TestFrontendArchitectureContract(unittest.TestCase):
         source = FRONTEND_ARCH.read_text(encoding="utf-8")
 
         self.assertIn("Server authorization is authoritative", source)
-        self.assertIn("UI visibility", source)
+        self.assertIn("إخفاء زر في المتصفح UX فقط وليس Security boundary", source)
         self.assertIn("frappe.user_roles", source)
         self.assertIn("System Manager", source)
         self.assertIn("لا يقرر lifecycle أو authorization", source)
