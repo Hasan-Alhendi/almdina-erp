@@ -6,12 +6,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
-from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import enrich_plan_metrics, optimize_plan
-from almdina_erp.almdina_erp.services.cutting_engine import (
+from almdina_erp.almdina_erp.domain.cutting import (
     create_sheet,
+    enrich_plan_metrics,
     expand_piece_groups,
     find_best_position_guillotine,
     find_best_position_maxrects,
+    optimize_plan,
     place_piece_guillotine,
     place_piece_maxrects,
     sort_pieces,
