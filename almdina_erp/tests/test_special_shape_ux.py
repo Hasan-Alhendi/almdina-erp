@@ -107,7 +107,9 @@ def test_operator_opens_only_clean_v4_editor_runtime():
     assert 'placeholder="القيمة mm"' in shell
     assert "function worldPoint(" in controller
     assert "screenToleranceToMm" in controller
-    assert "engine.inputLength(lengthMm)" in controller
+    assert 'PEN_LENGTH: "pen-length"' in controller
+    assert 'DIMENSION_VALUE: "dimension-value"' in controller
+    assert "engine.inputLength(valueMm)" in controller
     assert "engine.inputDimensionValue(valueMm)" in controller
     assert "engine.undo()" in controller
     assert "engine.redo()" in controller
