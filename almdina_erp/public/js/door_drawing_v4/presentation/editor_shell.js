@@ -21,7 +21,7 @@
                 </div>
                 <div class="ald-v4-canvas-wrap">
                     <canvas class="ald-v4-canvas" tabindex="0" aria-label="مساحة الرسم"></canvas>
-                    <input class="ald-v4-length-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="طول الضلع بالميليمتر" placeholder="الطول mm" hidden>
+                    <input class="ald-v4-length-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="القيمة بالميليمتر" placeholder="القيمة mm" hidden>
                     <div class="ald-v4-hint" aria-live="polite"></div>
                     <div class="ald-v4-zoom-controls" dir="ltr" aria-label="التكبير والتصغير">
                         <button type="button" data-view-action="zoom-out" aria-label="تصغير">−</button>
