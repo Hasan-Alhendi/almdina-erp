@@ -4,29 +4,27 @@ import math
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot_json,
 )
+from almdina_erp.almdina_erp.domain.orders.editability import can_edit_order
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
     document_has_capability,
+    require_any_document_capability,
+    require_doctype_capability,
+    require_document_capability,
 )
 
 
-EDITABLE_ORDER_STATES = {"Draft", "Pending Review", "Rejected"}
-
-
 def _use_locked_preview(status: str) -> bool:
-    if status in EDITABLE_ORDER_STATES:
-        return False
-
-    from almdina_erp.almdina_erp.services.order_edit_policy import user_can_edit_order
-
-    # Order Entry keeps live preview/edit after dispatch; shop-floor stays on the snapshot.
-    return not user_can_edit_order(status)
+    # The persisted lifecycle state is authoritative. Only Draft is editable;
+    # every later state renders the immutable approved/stored plan.
+    return not can_edit_order(status)
 
 
 def _board_ready_for_plan(preview: Any) -> bool:
@@ -39,7 +37,7 @@ def _prepare_text_board_preview(preview: Any) -> bool:
     Live preview runs automatically while a form is opened or partially edited.
     It must therefore never call the historical Item-based board loader, which
     requires the hidden ``board_item`` Link field and interrupts the operator with
-    "Board Item is required.".  Invalid or incomplete preview values simply mean
+    "Board Item is required.". Invalid or incomplete preview values simply mean
     that no layout is calculated yet; strict validation remains on Save.
     """
 
@@ -72,7 +70,7 @@ def _prepare_text_board_preview(preview: Any) -> bool:
     preview.full_board_length_mm = full_length_mm
     preview.full_board_width_mm = full_width_mm
 
-    # The legacy fingerprint builder still reads board_item.  Keep this alias only
+    # The legacy fingerprint builder still reads board_item. Keep this alias only
     # on the in-memory preview document; it is never returned or persisted.
     preview.board_item = description
     return True
@@ -209,34 +207,51 @@ def _approved_snapshot_for_order(order_name: str) -> str | None:
     return sanitize_plan_snapshot_json(raw or "")
 
 
+def _existing_preview_order(name: str) -> Any | None:
+    if not name or name.startswith("new-"):
+        return None
+    # Never turn an attacker-supplied non-existent persistent name into an
+    # unsaved document. get_doc fails closed if the record is absent.
+    order = frappe.get_doc("Door Cutting Order", name)
+    order.check_permission("read")
+    return order
+
+
+def _require_live_preview_access(order: Any | None) -> None:
+    if order is None:
+        require_doctype_capability(
+            Capability.CREATE_ORDER,
+            message=_("لا تملك صلاحية إنشاء طلب ومعاينته."),
+        )
+        return
+    require_document_capability(
+        order,
+        Capability.EDIT_ORDER,
+        message=_("لا تملك صلاحية تعديل هذا الطلب أو إعادة حساب معاينته."),
+    )
+
+
 @frappe.whitelist()
 def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
-    """Calculate an editable order without saving; locked orders use the Approved Order Snapshot."""
+    """Preview authorized Draft edits; non-Draft orders render stored plan only."""
 
     payload = frappe.parse_json(doc) if isinstance(doc, str) else dict(doc or {})
     payload["doctype"] = "Door Cutting Order"
+    name = str(payload.get("name") or "").strip()
+    stored = _existing_preview_order(name)
 
-    status = payload.get("status") or "Draft"
-    name = payload.get("name") or ""
-
-    # Once approved, never regenerate a historical production plan from the
-    # current engine. Replacement Mini Plans are intentionally excluded: the
-    # order's linked immutable Order Plan is the only rendering/printing source.
-    if _use_locked_preview(status) and name and not name.startswith("new-"):
-        stored = frappe.get_doc("Door Cutting Order", name)
-        stored.check_permission("read")
-        approved_snapshot = _approved_snapshot_for_order(name)
+    # Security decisions use the persisted status, never the client payload.
+    if stored is not None and _use_locked_preview(stored.status):
+        approved_snapshot = _approved_snapshot_for_order(stored.name)
         return _serialize_order_preview(
             stored,
             cutting_plan_json=approved_snapshot or stored.cutting_plan_json,
             include_financial=_can_view_preview_costs(stored),
         )
 
+    _require_live_preview_access(stored)
     preview = frappe.get_doc(payload)
-    stored = None
-    if name and not name.startswith("new-") and frappe.db.exists("Door Cutting Order", name):
-        stored = frappe.get_doc("Door Cutting Order", name)
-        stored.check_permission("read")
+    if stored is not None:
         preview._doc_before_save = stored
 
     # Preserve legacy live-calculation behaviour without invoking the strict
@@ -251,10 +266,6 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
     )
 
     if _board_ready_for_plan(preview) and has_complete_piece and _prepare_text_board_preview(preview):
-        # The high-performance save refactor made plan calculation explicit and
-        # requires the cached settings plus a deterministic input fingerprint.
-        # Preview is an explicit calculation path, so provide both arguments
-        # instead of calling the old no-argument method signature.
         settings = preview._get_settings()
         input_fingerprint = preview._plan_input_fingerprint(settings)
         preview._calculate_cutting_plan(settings, input_fingerprint)
@@ -285,10 +296,20 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_approved_cutting_plan_snapshot(order_name: str) -> dict[str, Any]:
-    """Return immutable non-financial Order Plan metadata for print/DXF consumers."""
+    """Return immutable non-financial Order Plan metadata to plan consumers."""
 
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
+    require_any_document_capability(
+        order,
+        (
+            Capability.VIEW_CUTTING_PLAN,
+            Capability.VIEW_APPROVED_CUTTING_PLAN,
+            Capability.PRINT_CUTTING_PLAN,
+            Capability.EXPORT_DXF,
+        ),
+        message=_("لا تملك صلاحية الوصول إلى خطة القص المعتمدة لهذا الطلب."),
+    )
     plan_name = _approved_order_plan_name(order_name)
     if not plan_name:
         return {

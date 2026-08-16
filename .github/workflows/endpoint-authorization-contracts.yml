@@ -1,0 +1,25 @@
+name: Endpoint Authorization Contracts
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  endpoint-authorization:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate whitelisted endpoint contracts
+        run: python -m unittest -v almdina_erp.tests.test_whitelisted_endpoint_authorization

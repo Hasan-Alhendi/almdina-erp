@@ -153,6 +153,7 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         fake_utils.flt = lambda value=0: float(value or 0)
         fake_utils.cint = lambda value=0: int(float(value or 0))
 
+        fake_frappe._ = lambda text: text
         fake_frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
         fake_frappe.parse_json = json.loads
         fake_frappe.db = SimpleNamespace(
@@ -170,6 +171,9 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         fake_authorization = types.ModuleType(_AUTHORIZATION_GATEWAY_MODULE)
         fake_authorization.doctype_has_capability = lambda *args, **kwargs: False
         fake_authorization.document_has_capability = lambda *args, **kwargs: False
+        fake_authorization.require_any_document_capability = lambda *args, **kwargs: None
+        fake_authorization.require_doctype_capability = lambda *args, **kwargs: None
+        fake_authorization.require_document_capability = lambda *args, **kwargs: None
 
         previous_frappe = sys.modules.get("frappe")
         previous_utils = sys.modules.get("frappe.utils")
@@ -254,7 +258,10 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
             approved_plan_source="System",
             approved_plan=None,
         )
-        stored = SimpleNamespace(check_permission=lambda permission: None)
+        stored = SimpleNamespace(
+            status="Draft",
+            check_permission=lambda permission: None,
+        )
         item_loader_called = False
 
         def forbidden_item_loader():
