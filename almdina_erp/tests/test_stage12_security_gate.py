@@ -19,7 +19,7 @@ from almdina_erp.almdina_erp.domain.security.workforce import (
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 HOOKS = ROOT / "hooks.py"
-PERMISSIONS = ROOT / "permissions.py"
+NATIVE_PERMISSIONS = APP / "infrastructure" / "frappe" / "native_document_permissions.py"
 DXF_SERVICE = APP / "services" / "shop_floor_dxf_service.py"
 WORKFORCE_SERVICE = APP / "services" / "workforce_service.py"
 
@@ -45,6 +45,10 @@ class TestStage12SecurityGate(unittest.TestCase):
     def test_native_frappe_surfaces_have_query_and_document_guards(self) -> None:
         query_hooks = _literal_assignment(HOOKS, "permission_query_conditions")
         document_hooks = _literal_assignment(HOOKS, "has_permission")
+        hardened_prefix = (
+            "almdina_erp.almdina_erp.infrastructure.frappe."
+            "native_document_permissions."
+        )
         for doctype in (
             "Door Cutting Order",
             "Production Stage",
@@ -55,13 +59,27 @@ class TestStage12SecurityGate(unittest.TestCase):
             with self.subTest(doctype=doctype):
                 self.assertIn(doctype, query_hooks)
                 self.assertIn(doctype, document_hooks)
+                self.assertTrue(document_hooks[doctype].startswith(hardened_prefix))
 
     def test_native_mutations_are_fail_closed_outside_canonical_commands(self) -> None:
-        mutating = set(_literal_assignment(PERMISSIONS, "_MUTATING_PERMISSION_TYPES"))
+        mutating = set(
+            _literal_assignment(NATIVE_PERMISSIONS, "_NATIVE_MUTATING_PERMISSION_TYPES")
+        )
+        command_only = set(
+            _literal_assignment(NATIVE_PERMISSIONS, "_NATIVE_COMMAND_ONLY_PERMISSION_TYPES")
+        )
         self.assertTrue(
             {"create", "write", "delete", "submit", "cancel", "amend"}.issubset(mutating),
             mutating,
         )
+        self.assertTrue({"delete", "submit", "cancel", "amend"}.issubset(command_only))
+
+    def test_native_dco_write_rechecks_assigned_document_scope(self) -> None:
+        source = NATIVE_PERMISSIONS.read_text(encoding="utf-8")
+        self.assertIn('resolved_type == "write"', source)
+        self.assertIn("base_permissions._requires_assigned_scope", source)
+        self.assertIn("base_permissions.worker_can_view_order", source)
+        self.assertIn('getattr(doc, "name", None)', source)
 
     def test_dxf_upload_is_private_and_order_scoped(self) -> None:
         source = DXF_SERVICE.read_text(encoding="utf-8")
