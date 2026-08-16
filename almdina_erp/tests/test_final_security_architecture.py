@@ -315,7 +315,7 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("previewImport", controller)
         self.assertIn("previewExternal", controller)
         self.assertIn("updateRole", controller)
-        self.assertIn("لن يتم الحفظ تلقائيًا", page)
+        self.assertIn("لن يتم الحفظ تلقائيًا", controller)
         policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)
