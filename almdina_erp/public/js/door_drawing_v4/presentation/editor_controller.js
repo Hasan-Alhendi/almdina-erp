@@ -13,17 +13,14 @@
     }
 
     const DEFAULT_SNAP_TOLERANCE_PX = 10;
+    const DEFAULT_HIT_TOLERANCE_PX = 9;
     const TOOL_LABELS = Object.freeze({
         [tools.TOOLS.SELECT]: "تحديد",
         [tools.TOOLS.NODE]: "تعديل النقاط",
         [tools.TOOLS.PEN]: "القلم الذكي",
         [tools.TOOLS.HAND]: "تحريك اللوحة",
     });
-    const SNAP_LABELS = Object.freeze({
-        endpoint: "نقطة نهاية",
-        horizontal: "أفقي",
-        vertical: "عمودي",
-    });
+    const SNAP_LABELS = Object.freeze({ endpoint: "نقطة نهاية", horizontal: "أفقي", vertical: "عمودي" });
 
     function snapLabel(preview) {
         if (!preview || !preview.semantic) return "";
@@ -36,7 +33,7 @@
         const readOnly = Boolean(options.readOnly);
         const shell = shellFactory.mount(options.container);
         shell.setReadOnly(readOnly);
-        let engine = interaction.create({
+        const engine = interaction.create({
             document: options.document,
             blank: options.blank,
             initialTool: readOnly ? tools.TOOLS.HAND : (options.initialTool || tools.TOOLS.SELECT),
@@ -49,6 +46,7 @@
         let didInitialFit = false;
         const listeners = [];
         const snapTolerancePx = Math.max(4, Number(options.snapTolerancePx || DEFAULT_SNAP_TOLERANCE_PX));
+        const hitTolerancePx = Math.max(4, Number(options.hitTolerancePx || DEFAULT_HIT_TOLERANCE_PX));
 
         function listen(target, type, handler, listenerOptions) {
             target.addEventListener(type, handler, listenerOptions);
@@ -64,62 +62,72 @@
             return viewport.screenToWorld(camera, point);
         }
 
-        function snapOptions(event) {
+        function interactionOptions(event) {
             return Object.freeze({
                 toleranceMm: viewport.screenToleranceToMm(camera, snapTolerancePx),
+                hitToleranceMm: viewport.screenToleranceToMm(camera, hitTolerancePx),
                 angleToleranceDeg: event && event.shiftKey ? 180 : undefined,
             });
         }
 
         function notifyDocumentChange(previousDocument) {
             const nextDocument = engine.state().document;
-            if (previousDocument !== nextDocument && typeof options.onChange === "function") {
-                options.onChange(nextDocument);
-            }
+            if (previousDocument !== nextDocument && typeof options.onChange === "function") options.onChange(nextDocument);
         }
 
-        function runMutation(callback) {
+        function mutate(callback) {
             if (readOnly) return null;
-            const previousDocument = engine.state().document;
+            const before = engine.state().document;
             const result = callback();
-            notifyDocumentChange(previousDocument);
+            notifyDocumentChange(before);
             render();
             return result;
+        }
+
+        function statusText(state) {
+            if (readOnly) return "عرض فقط";
+            if (state.drag && state.drag.current) return `تحريك نقطة · X ${geometry.roundMm(state.drag.current.xMm)} · Y ${geometry.roundMm(state.drag.current.yMm)}`;
+            if (state.selection && state.selection.kind === "node") return "نقطة محددة";
+            if (state.selection && state.selection.kind === "path") return "مسار محدد";
+            return TOOL_LABELS[state.toolState.activeTool] || state.toolState.activeTool;
         }
 
         function updateStatus() {
             const state = engine.state();
             const world = worldPoint(lastScreenPoint);
-            const preview = state.preview;
             const activeTool = state.toolState.activeTool;
             shell.setActiveTool(activeTool);
-            shell.statusTool.textContent = readOnly ? "عرض فقط" : (TOOL_LABELS[activeTool] || activeTool);
+            shell.statusTool.textContent = statusText(state);
             shell.statusCoordinates.textContent = `X ${geometry.roundMm(world.xMm)} · Y ${geometry.roundMm(world.yMm)} mm`;
-            shell.statusSnap.textContent = readOnly ? "" : snapLabel(preview);
+            shell.statusSnap.textContent = readOnly ? "" : snapLabel(state.preview);
             shell.zoomValue.textContent = `${viewport.zoomPercent(camera)}%`;
             shell.editor.dataset.tool = activeTool;
+            shell.editor.classList.toggle("is-node-dragging", Boolean(state.drag));
 
-            if (readOnly) {
-                shell.setHint("عرض فقط · اسحب لتحريك اللوحة · استخدم عجلة الماوس للتكبير");
-            } else if (activeTool === tools.TOOLS.PEN && state.activePathId) {
-                shell.setHint("انقر لإضافة ضلع · اكتب الطول ثم Enter · Esc لإنهاء الرسم");
-            } else if (activeTool === tools.TOOLS.PEN) {
-                shell.setHint("انقر لبدء الرسم");
-            } else {
-                shell.setHint("");
-            }
+            if (readOnly) shell.setHint("عرض فقط · اسحب لتحريك اللوحة · استخدم عجلة الماوس للتكبير");
+            else if (state.drag) shell.setHint("حرّك النقطة · Esc لإلغاء الحركة · Ctrl+Z للتراجع بعد الإفلات");
+            else if (activeTool === tools.TOOLS.NODE) shell.setHint("انقر واسحب نقطة لتعديل الشكل · A");
+            else if (activeTool === tools.TOOLS.SELECT && state.selection) shell.setHint("المسار محدد · A لتعديل النقاط · Esc لإلغاء التحديد");
+            else if (activeTool === tools.TOOLS.PEN && state.activePathId) shell.setHint("انقر لإضافة ضلع · اكتب الطول ثم Enter · Esc لإنهاء الرسم");
+            else if (activeTool === tools.TOOLS.PEN) shell.setHint("انقر لبدء الرسم · P");
+            else shell.setHint("");
         }
 
         function render() {
             if (destroyed) return;
+            const state = engine.state();
             renderer.render(shell.canvas, {
                 camera,
-                document: engine.state().document,
-                interactionState: readOnly ? { ...engine.state(), preview: null } : engine.state(),
+                document: state.document,
+                interactionState: readOnly ? { ...state, preview: null, selection: null, drag: null } : state,
                 dpr,
-                showNodes: !readOnly && engine.state().toolState.activeTool === tools.TOOLS.NODE,
+                showNodes: !readOnly && activeNodeSurface(state),
             });
             updateStatus();
+        }
+
+        function activeNodeSurface(state) {
+            return state.toolState.activeTool === tools.TOOLS.NODE || Boolean(state.drag);
         }
 
         function resize(resizeOptions = {}) {
@@ -137,14 +145,9 @@
             render();
         }
 
-        function fitView() {
-            camera = viewport.fitBlank(camera, engine.state().document.blank);
-            render();
-        }
-
+        function fitView() { camera = viewport.fitBlank(camera, engine.state().document.blank); render(); }
         function zoomBy(factor, anchor = null) {
-            const point = anchor || { x: camera.viewportWidthPx / 2, y: camera.viewportHeightPx / 2 };
-            camera = viewport.zoomAt(camera, point, factor);
+            camera = viewport.zoomAt(camera, anchor || { x: camera.viewportWidthPx / 2, y: camera.viewportHeightPx / 2 }, factor);
             render();
         }
 
@@ -176,29 +179,26 @@
             if (event.button !== 0) return;
             event.preventDefault();
             shell.canvas.setPointerCapture(event.pointerId);
-            runMutation(() => engine.pointerDown(worldPoint(point), snapOptions(event)));
+            mutate(() => engine.pointerDown(worldPoint(point), interactionOptions(event)));
         }
 
         function handlePointerMove(event) {
             const point = screenPoint(event);
             lastScreenPoint = point;
             if (panSession && panSession.pointerId === event.pointerId) {
-                const deltaX = point.x - panSession.last.x;
-                const deltaY = point.y - panSession.last.y;
-                camera = viewport.panBy(camera, deltaX, deltaY);
+                camera = viewport.panBy(camera, point.x - panSession.last.x, point.y - panSession.last.y);
                 panSession = Object.freeze({ pointerId: event.pointerId, last: point });
                 render();
                 return;
             }
-            if (!readOnly) engine.pointerMove(worldPoint(point), snapOptions(event));
-            render();
+            if (readOnly) return render();
+            mutate(() => engine.pointerMove(worldPoint(point), interactionOptions(event)));
         }
 
         function handlePointerUp(event) {
             endPan(event);
-            if (shell.canvas.hasPointerCapture && shell.canvas.hasPointerCapture(event.pointerId)) {
-                shell.canvas.releasePointerCapture(event.pointerId);
-            }
+            if (!readOnly) mutate(() => engine.pointerUp());
+            if (shell.canvas.hasPointerCapture && shell.canvas.hasPointerCapture(event.pointerId)) shell.canvas.releasePointerCapture(event.pointerId);
             render();
         }
 
@@ -206,8 +206,7 @@
             event.preventDefault();
             const point = screenPoint(event);
             lastScreenPoint = point;
-            const factor = Math.exp(-event.deltaY * 0.0015);
-            camera = viewport.zoomAt(camera, point, factor);
+            camera = viewport.zoomAt(camera, point, Math.exp(-event.deltaY * 0.0015));
             render();
         }
 
@@ -219,74 +218,60 @@
             return true;
         }
 
+        function historyShortcut(event) {
+            if (!(event.ctrlKey || event.metaKey) || event.altKey) return false;
+            const key = String(event.key).toLowerCase();
+            if (key === "z" && event.shiftKey) { event.preventDefault(); mutate(() => engine.redo()); return true; }
+            if (key === "z") { event.preventDefault(); mutate(() => engine.undo()); return true; }
+            if (key === "y") { event.preventDefault(); mutate(() => engine.redo()); return true; }
+            return false;
+        }
+
         function handleKeyDown(event) {
             if (event.target === shell.lengthInput) return;
-            if (event.code === "Space") {
-                if (!event.repeat && !readOnly) {
-                    event.preventDefault();
-                    engine.spaceDown();
-                    render();
-                }
-                return;
-            }
             if (readOnly) return;
-            if (/^[0-9.,]$/.test(event.key) && beginLengthEntry(event.key)) {
-                event.preventDefault();
+            if (historyShortcut(event)) return;
+            if (event.code === "Space") {
+                if (!event.repeat) { event.preventDefault(); engine.spaceDown(); render(); }
                 return;
             }
+            if (/^[0-9.,]$/.test(event.key) && beginLengthEntry(event.key)) { event.preventDefault(); return; }
             const beforeTool = engine.state().toolState.activeTool;
             const nextTool = tools.toolForShortcut(event.key);
             if (nextTool || event.key === "Escape") {
                 event.preventDefault();
-                engine.keyDown(event.key);
+                mutate(() => engine.keyDown(event.key));
                 if (beforeTool !== engine.state().toolState.activeTool) shell.hideLengthInput();
-                render();
             }
         }
 
         function handleKeyUp(event) {
             if (readOnly || event.code !== "Space") return;
-            event.preventDefault();
-            engine.spaceUp();
-            endPan();
-            render();
+            event.preventDefault(); engine.spaceUp(); endPan(); render();
         }
 
         function commitLength() {
             if (readOnly) return;
-            const raw = shell.lengthInput.value.trim().replace(",", ".");
-            const lengthMm = Number(raw);
+            const lengthMm = Number(shell.lengthInput.value.trim().replace(",", "."));
             if (!Number.isFinite(lengthMm) || lengthMm <= 0) {
-                shell.lengthInput.classList.add("is-invalid");
-                shell.lengthInput.select();
-                return;
+                shell.lengthInput.classList.add("is-invalid"); shell.lengthInput.select(); return;
             }
             shell.lengthInput.classList.remove("is-invalid");
-            runMutation(() => engine.inputLength(lengthMm));
+            mutate(() => engine.inputLength(lengthMm));
             shell.hideLengthInput();
             shell.canvas.focus({ preventScroll: true });
         }
 
         function handleLengthKeyDown(event) {
             if (readOnly) return;
-            if (event.key === "Enter") {
-                event.preventDefault();
-                commitLength();
-            } else if (event.key === "Escape") {
-                event.preventDefault();
-                shell.hideLengthInput();
-                shell.canvas.focus({ preventScroll: true });
-                render();
-            }
+            if (event.key === "Enter") { event.preventDefault(); commitLength(); }
+            else if (event.key === "Escape") { event.preventDefault(); shell.hideLengthInput(); shell.canvas.focus({ preventScroll: true }); render(); }
         }
 
         function handleToolbarClick(event) {
             const button = event.target.closest("[data-tool]");
             if (!button || button.disabled) return;
-            shell.hideLengthInput();
-            engine.setTool(button.dataset.tool);
-            shell.canvas.focus({ preventScroll: true });
-            render();
+            shell.hideLengthInput(); engine.setTool(button.dataset.tool); shell.canvas.focus({ preventScroll: true }); render();
         }
 
         function handleViewClick(event) {
@@ -309,27 +294,17 @@
         listen(shell.editor, "click", handleViewClick);
 
         let resizeObserver = null;
-        if (typeof ResizeObserver === "function") {
-            resizeObserver = new ResizeObserver(() => resize());
-            resizeObserver.observe(shell.canvasWrap);
-        } else {
-            listen(window, "resize", resize);
-        }
-
+        if (typeof ResizeObserver === "function") { resizeObserver = new ResizeObserver(() => resize()); resizeObserver.observe(shell.canvasWrap); }
+        else listen(window, "resize", resize);
         requestAnimationFrame(() => resize({ fit: true }));
 
         return Object.freeze({
             shell,
             state: () => Object.freeze({ camera, interaction: engine.state(), readOnly }),
-            render,
-            resize,
-            fitView,
-            zoomBy,
-            setTool(tool) {
-                if (readOnly && tool !== tools.TOOLS.HAND) return;
-                engine.setTool(tool);
-                render();
-            },
+            render, resize, fitView, zoomBy,
+            setTool(tool) { if (!readOnly || tool === tools.TOOLS.HAND) { engine.setTool(tool); render(); } },
+            undo() { if (!readOnly) mutate(() => engine.undo()); },
+            redo() { if (!readOnly) mutate(() => engine.redo()); },
             destroy() {
                 if (destroyed) return;
                 destroyed = true;
@@ -340,8 +315,5 @@
         });
     }
 
-    root.EditorController = Object.freeze({
-        DEFAULT_SNAP_TOLERANCE_PX,
-        create,
-    });
+    root.EditorController = Object.freeze({ DEFAULT_SNAP_TOLERANCE_PX, DEFAULT_HIT_TOLERANCE_PX, create });
 })();
