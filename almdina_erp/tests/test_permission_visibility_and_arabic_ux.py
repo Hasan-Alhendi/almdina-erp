@@ -204,11 +204,19 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         matrix = (APP / "application" / "security" / "permission_matrix.py").read_text(encoding="utf-8")
         hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
         permissions = (ROOT / "permissions.py").read_text(encoding="utf-8")
+        native = (
+            APP / "infrastructure" / "frappe" / "native_document_permissions.py"
+        ).read_text(encoding="utf-8")
         self.assertIn('VIEW_PRODUCTION_INCIDENTS = "view_production_incidents"', authorization)
         self.assertIn("عرض أخطاء الإنتاج", matrix)
         self.assertIn('"Production Incident": "almdina_erp.permissions.production_incident_query"', hooks)
-        self.assertIn('"Production Incident": "almdina_erp.permissions.production_incident_has_permission"', hooks)
+        self.assertIn(
+            '"Production Incident": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.production_incident_has_permission"',
+            hooks,
+        )
         self.assertIn("Capability.VIEW_PRODUCTION_INCIDENTS", permissions)
+        self.assertIn("base_permissions.production_incident_has_permission", native)
+        self.assertIn("_NATIVE_MUTATING_PERMISSION_TYPES", native)
 
 
 if __name__ == "__main__":
