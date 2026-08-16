@@ -19,7 +19,7 @@ recorded in `almdina_erp/backend_legacy_migrations.json`.
 
 ## Batch 1 — Alternate Door Cutting Order controller chain
 
-Status: implemented; CI validation required before closure.
+Status: closed on `fca574cfbec79c8fc61d027c040088e0995e94e1`.
 
 Removed:
 
@@ -51,3 +51,35 @@ The migration contract rejects any runtime Python reference to all five removed
 modules/classes so the old inheritance branch cannot silently return. Existing
 payload, costing and plan architecture tests now assert against the active
 Application/Infrastructure owners instead of the retired controller classes.
+
+## Batch 2 — Cutting imports
+
+Status: ready for final CI validation.
+
+All in-repository runtime consumers of the historical cutting import facades now
+use the canonical pure cutting Domain directly. The migration touched imports
+only; optimizer calls, arguments, geometry, scoring and costing behavior were not
+changed.
+
+Migrated runtime consumers:
+
+- `doctype/door_cutting_order/door_cutting_order.py`
+- `services/performance_service.py`
+- `services/production_settings_service.py`
+- `services/remnant_planning.py`
+
+Canonical ownership:
+
+- `domain/cutting/__init__.py` — public pure-Domain cutting API.
+- `infrastructure/cutting/domain_engine.py` — canonical Application engine adapter.
+
+Compatibility preserved intentionally:
+
+- `services/cutting_engine.py`
+- `services/advanced_cutting_optimizer.py`
+- `infrastructure/cutting/legacy_engine.py`
+
+Those compatibility modules remain thin import aliases for historical/external
+Python callers. Runtime architecture tests scan every production Python source
+and reject any new internal dependency on them, while separate compatibility
+tests ensure the facades themselves remain behavior-free.
