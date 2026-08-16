@@ -27,10 +27,12 @@
         intersection: "تقاطع",
         midpoint: "منتصف",
         perpendicular: "عمودي",
+        edge: "على ضلع",
         parallel: "متوازي",
         extension: "امتداد",
         horizontal: "أفقي",
         vertical: "رأسي",
+        grid: "شبكة",
     });
 
     function snapLabel(preview) {
@@ -81,6 +83,7 @@
                     snapTolerancePx * DEFAULT_SNAP_RELEASE_MULTIPLIER
                 ),
                 hitToleranceMm: viewport.screenToleranceToMm(camera, hitTolerancePx),
+                gridStepMm: viewport.gridStepMm(camera),
                 angleToleranceDeg: event && event.shiftKey ? 180 : undefined,
             });
         }
