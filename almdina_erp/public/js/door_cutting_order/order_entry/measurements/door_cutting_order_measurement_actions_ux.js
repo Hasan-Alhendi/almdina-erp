@@ -247,12 +247,31 @@
     }
 
     function schedule(frm) {
-        ensureActions(frm);
-        requestAnimationFrame(() => ensureActions(frm));
-        setTimeout(() => ensureActions(frm), 180);
-        setTimeout(() => ensureActions(frm), 600);
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            ensureActions(frm);
+            requestAnimationFrame(() => ensureActions(frm));
+            setTimeout(() => ensureActions(frm), 180);
+            setTimeout(() => ensureActions(frm), 600);
+            if (frm._dcoMeasurementEntryWindow) {
+                requestAnimationFrame(() => ensureEditorRootMounted(frm));
+            }
+            return;
+        }
+
+        lifecycle.schedule(
+            frm,
+            "measurement-actions",
+            () => ensureActions(frm),
+            { delays: [180, 600] }
+        );
         if (frm._dcoMeasurementEntryWindow) {
-            requestAnimationFrame(() => ensureEditorRootMounted(frm));
+            lifecycle.schedule(
+                frm,
+                "measurement-editor-remount",
+                () => ensureEditorRootMounted(frm),
+                { immediate: false }
+            );
         }
     }
 

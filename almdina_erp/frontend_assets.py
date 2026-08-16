@@ -38,6 +38,9 @@ doctype_js = {
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js",
+        # Measurement features keep their existing Frappe hook order; this owner
+        # only centralizes cancellable frame/timer work for FE-ARCH-008.
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
