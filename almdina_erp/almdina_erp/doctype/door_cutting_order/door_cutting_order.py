@@ -10,9 +10,9 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, get_datetime, now_datetime
 
-from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
-from almdina_erp.almdina_erp.services.cutting_engine import (
+from almdina_erp.almdina_erp.domain.cutting import (
     expand_piece_groups,
+    optimize_plan,
     round_value,
     validate_plan,
 )
