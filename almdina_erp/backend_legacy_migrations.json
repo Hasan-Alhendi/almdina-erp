@@ -15,14 +15,6 @@
       "name": "Retired alternate Door Cutting Order controller chain",
       "status": "removed",
       "final_sha": "fca574cfbec79c8fc61d027c040088e0995e94e1",
-      "canonical_owner": [
-        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_controller.py",
-        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
-        "almdina_erp/almdina_erp/application/orders/process_order_save.py",
-        "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py",
-        "almdina_erp/almdina_erp/infrastructure/frappe/orders/costing_adapter.py",
-        "almdina_erp/almdina_erp/infrastructure/frappe/orders/plan_adapter.py"
-      ],
       "paths": [
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
@@ -39,13 +31,14 @@
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_costing.py",
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_plan.py"
       ],
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_controller.py",
+        "almdina_erp/almdina_erp/application/orders/process_order_save.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py"
+      ],
       "evidence": [
-        "hooks.py activates only DoorCuttingOrderController, which subclasses the canonical DoorCuttingOrder DocType controller directly.",
-        "The active save path delegates to process_order_save and FrappeDoorCuttingOrderSaveGateway rather than the alternate controller chain.",
-        "The active costing owner is FrappeOrderCostingAdapter and the active plan owner is FrappeOrderPlanAdapter/FrappeCutDimensionPlanAdapter.",
-        "PlanDoorCuttingOrder inherited CostingDoorCuttingOrder, which inherited the already-retired alternate controller branch; neither class is the Frappe override.",
-        "Architecture contracts reject PlanDoorCuttingOrder, CostingDoorCuttingOrder, DomainDoorCuttingOrder, TextBoardDoorCuttingOrder and FastDoorCuttingOrder from the active controller.",
-        "The Stage 11 contract scans runtime Python sources and rejects imports or symbol references to the complete removed chain."
+        "Only DoorCuttingOrderController is activated by hooks.py and the alternate controller chain has zero runtime consumers.",
+        "Costing and plan ownership are delegated to focused Application/Infrastructure adapters."
       ]
     },
     {
@@ -57,23 +50,14 @@
         "almdina_erp/almdina_erp/domain/cutting/__init__.py",
         "almdina_erp/almdina_erp/infrastructure/cutting/domain_engine.py"
       ],
-      "migrated_consumers": [
-        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
-        "almdina_erp/almdina_erp/services/performance_service.py",
-        "almdina_erp/almdina_erp/services/production_settings_service.py",
-        "almdina_erp/almdina_erp/services/remnant_planning.py"
-      ],
       "compatibility_preserved": [
         "almdina_erp/almdina_erp/services/cutting_engine.py",
         "almdina_erp/almdina_erp/services/advanced_cutting_optimizer.py",
         "almdina_erp/almdina_erp/infrastructure/cutting/legacy_engine.py"
       ],
       "evidence": [
-        "The canonical Door Cutting Order base now imports expand_piece_groups, optimize_plan, round_value and validate_plan directly from domain.cutting.",
-        "The runtime import scan exposed exactly three additional consumers: performance_service.py, production_settings_service.py and remnant_planning.py; each was migrated without changing call signatures or algorithms.",
-        "Per-file Git compare confirmed the three service migrations are import-only changes.",
-        "Static architecture scans reject any runtime import of the three compatibility module paths.",
-        "Compatibility facades remain thin and available for historical/external Python import stability; their removal is intentionally not part of Batch 2."
+        "Runtime cutting consumers were moved away from legacy import modules to canonical Domain/Application ownership.",
+        "Historical import facades remain thin for external Python compatibility and internal runtime scans reject new dependencies on them."
       ]
     },
     {
@@ -85,18 +69,12 @@
         "almdina_erp/almdina_erp/services/cutting_plan_snapshot_service.py",
         "almdina_erp/almdina_erp/services/drawing_approval_service.py"
       ],
-      "migrated_consumers": [
-        "almdina_erp/almdina_erp/services/drawing_approval_service.py"
-      ],
       "compatibility_preserved": [
         "almdina_erp/almdina_erp/services/cutting_plan_service.py"
       ],
       "evidence": [
-        "Cutting Plan snapshot creation, approval, and production freeze persistence moved to cutting_plan_snapshot_service.py without changing the persisted fields, validation flow, costs, status updates, or plan-source behavior.",
-        "drawing_approval_service.py now imports lock_order_for_production from the focused snapshot owner instead of the historical mixed service.",
-        "cutting_plan_service.py is now a thin compatibility facade: historical Python names delegate to the snapshot owner and historical whitelisted lifecycle methods delegate to their capability-protected canonical services.",
-        "The compatibility facade contains no frappe.new_doc, plan.insert, frappe.db.set_value, or Cutting Plan persistence logic.",
-        "Static contracts moved product-scope, special-shape geometry, production approval, and documentation/price assertions to the focused snapshot owner while retaining compatibility assertions on the old facade."
+        "Snapshot persistence and production-plan freezing moved to cutting_plan_snapshot_service.py.",
+        "cutting_plan_service.py remains a thin compatibility facade with no plan persistence ownership."
       ]
     },
     {
@@ -109,21 +87,12 @@
         "almdina_erp/almdina_erp/services/order_status_sync_service.py",
         "almdina_erp/almdina_erp/infrastructure/frappe/production_event_repository.py"
       ],
-      "migrated_consumers": [
-        "almdina_erp/almdina_erp/services/shop_floor_service.py",
-        "almdina_erp/almdina_erp/services/order_lifecycle_service.py",
-        "almdina_erp/almdina_erp/services/replacement_cancellation_service.py",
-        "almdina_erp/almdina_erp/services/replacement_status_service.py"
-      ],
       "compatibility_preserved": [
         "almdina_erp/almdina_erp/services/production_service.py"
       ],
       "evidence": [
-        "ensure_default_stages moved unchanged to production_stage_bootstrap_service.py so legacy pending-stage semantics remain intact.",
-        "sync_order_status moved unchanged to order_status_sync_service.py and shop_floor/replacement callers now use the focused owner directly.",
-        "order_lifecycle_service.py now logs cancellation events through production_event_repository instead of a private production_service helper.",
-        "production_service.py is now a compatibility facade containing only delegates and fail-closed historical HTTP endpoints.",
-        "A Static architecture scan rejects every internal runtime dependency on services.production_service while allowing the facade itself for external compatibility."
+        "Active stage bootstrap, status synchronization and production event persistence use focused owners directly.",
+        "production_service.py is retained only as a backward-compatible/fail-closed facade and has zero internal runtime consumers."
       ]
     },
     {
@@ -139,20 +108,16 @@
         "almdina_erp/almdina_erp/services/legacy_endpoint_service.py",
         "almdina_erp/almdina_erp/services/order_status_sync_service.py"
       ],
-      "compatibility_preserved": [
-        "almdina_erp.almdina_erp.services.replacement_cancellation_service.cancel_replacement -> almdina_erp.almdina_erp.services.legacy_endpoint_service.cancel_legacy_replacement"
-      ],
       "evidence": [
-        "The replacement planning Static contract scans all runtime Python sources and proves there are zero internal imports of replacement_cancellation_service.",
-        "The historical HTTP path remains frozen in override_whitelisted_methods and delegates to cancel_legacy_replacement.",
-        "cancel_legacy_replacement rejects historical stock-reversal semantics and delegates supported behavior to the current replacement_service facade.",
-        "The removed implementation is explicitly recorded in the migration ledger so the immutable Stage 10 audit contract recognizes the removal instead of requiring the legacy file to remain present."
+        "Runtime scans prove zero internal consumers of replacement_cancellation_service.py.",
+        "The historical route remains frozen to cancel_legacy_replacement, which rejects retired stock-reversal behavior."
       ]
     },
     {
       "batch": 6,
       "name": "Remove retired Stock and Remnant product implementation",
       "status": "removed",
+      "final_sha": "a593a46d636d349e416b74d1162837b885e21cbb",
       "paths": [
         "almdina_erp/almdina_erp/services/actual_consumption_reversal.py",
         "almdina_erp/almdina_erp/services/actual_consumption_service.py",
@@ -185,11 +150,47 @@
         "almdina_erp/almdina_erp/report/order_stock_availability/order_stock_availability.py"
       ],
       "evidence": [
-        "Stage 10 explicitly retired the Stock/Remnant product scope and froze historical HTTP methods to legacy_endpoint_service.retired_product_endpoint.",
-        "Revision activation preserves the historical material-activity safety gate but no longer mutates retired stock or remnant reservations; legacy response fields remain present as empty lists.",
-        "The Order Stock Availability report keeps its operational report permission guard and now fails closed through retired_product_endpoint instead of loading stock_service.",
-        "The active shop-floor command repository had no dependency on stock_execution_gateway or remnant_execution_gateway; both gateways are recorded as Stage 11 discoveries before removal.",
-        "Static contracts assert all ten removed paths are absent and reject any runtime Python reference to their module paths."
+        "Retired Stock/Remnant HTTP routes remain fail-closed while implementation modules and unused execution gateways are absent.",
+        "Revision activation preserves its material-activity safety gate without retired stock/remnant mutation side effects."
+      ]
+    },
+    {
+      "batch": 7,
+      "name": "Retire historical Order Creation implementation",
+      "status": "migrated_compatibility_preserved",
+      "final_sha": "6417c554f50b6caf2a1352bbb8c6c5fc74c62c90",
+      "canonical_owner": [
+        "Frappe native Door Cutting Order DocType creation flow"
+      ],
+      "compatibility_preserved": [
+        "almdina_erp/almdina_erp/services/order_creation_service.py"
+      ],
+      "evidence": [
+        "order_creation_service.py is a business-logic-free tombstone with zero runtime imports.",
+        "The two historical creation RPC names remain mapped to legacy_endpoint_service.retired_product_endpoint."
+      ]
+    },
+    {
+      "batch": 8,
+      "name": "Slim the Frappe-required Door Cutting Order base",
+      "status": "migrated_compatibility_preserved",
+      "final_sha": "6cb20b00abdd92434a2f2ca5f5d4c3fd65753a79",
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_controller.py",
+        "almdina_erp/almdina_erp/application/orders/process_order_save.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/plan_adapter.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/piece_policy_adapter.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/costing_adapter.py"
+      ],
+      "compatibility_preserved": [
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py"
+      ],
+      "evidence": [
+        "The canonical DocType base remains for Frappe subclassing but no longer owns cutting, costing, plan or validation algorithms.",
+        "Historical helper signatures needed by preview/simulation paths are thin delegates to focused Application/Infrastructure owners.",
+        "Exact special-shape geometry validation was preserved in the canonical Piece Policy adapter after the slimming audit exposed the former base-class dependency.",
+        "Static, Security and Frappe v16 Integration are green on the same Batch 8 final SHA."
       ]
     }
   ]
