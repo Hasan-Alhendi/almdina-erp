@@ -116,6 +116,15 @@ def test_v4_drawing_rejects_conflicting_axis_constraints():
         validate_special_shape_drawing(drawing)
 
 
+def test_v4_drawing_rejects_unsatisfied_axis_constraint():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {"id": "c1", "type": "horizontal", "segmentId": "s2"}
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
 def test_v4_drawing_rejects_invalid_fixed_length_anchor():
     drawing = _rectangle_document()
     drawing["constraints"] = [
@@ -139,6 +148,21 @@ def test_v4_drawing_rejects_non_positive_fixed_length():
             "type": "fixed-length",
             "segmentId": "s1",
             "valueMm": 0,
+            "anchorNodeId": "n1",
+        }
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_unsatisfied_fixed_length():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {
+            "id": "c1",
+            "type": "fixed-length",
+            "segmentId": "s1",
+            "valueMm": 750,
             "anchorNodeId": "n1",
         }
     ]
