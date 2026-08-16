@@ -63,7 +63,14 @@ assert.deepEqual(snap.point, G.point(50, 0));
 assert.equal(snap.nodeId, null);
 assert.equal(snap.segmentId, "s1");
 
-// Existing line-line intersection is exact and also remains geometric-only until Split Segment exists.
+// Edge snap works anywhere inside an existing line without inventing topology.
+snap = S.resolve(document, { rawPoint: G.point(25, 2), toleranceMm: 3 });
+assert.equal(snap.type, "edge");
+assert.deepEqual(snap.point, G.point(25, 0));
+assert.equal(snap.nodeId, null);
+assert.equal(snap.segmentId, "s1");
+
+// Existing line-line intersection is exact and remains geometric-only until Split Segment exists.
 document = documentWith(
     [
         { id: "a", xMm: 0, yMm: 0 },
@@ -81,7 +88,25 @@ assert.equal(snap.type, "intersection");
 assert.deepEqual(snap.point, G.point(50, 50));
 assert.equal(snap.nodeId, null);
 
-// Perpendicular foot onto an existing segment.
+// Live intersection projects the current pen direction into an existing segment.
+document = documentWith(
+    [
+        { id: "a", xMm: 40, yMm: 50 },
+        { id: "b", xMm: 100, yMm: 50 },
+    ],
+    [{ id: "s1", startNodeId: "a", endNodeId: "b" }]
+);
+snap = S.resolve(document, {
+    rawPoint: G.point(52, 52),
+    origin: G.point(0, 0),
+    toleranceMm: 3,
+});
+assert.equal(snap.type, "intersection");
+assert.deepEqual(snap.point, G.point(50, 50));
+assert.equal(snap.nodeId, null);
+assert.equal(snap.referenceSegmentId, "s1");
+
+// Perpendicular foot onto an existing segment outranks the generic edge projection.
 document = documentWith(
     [
         { id: "a", xMm: 0, yMm: 100 },
@@ -137,6 +162,26 @@ assert.equal(snap.type, "angle");
 assert.equal(snap.semantic, "horizontal");
 assert.deepEqual(snap.point, G.point(Math.hypot(100, 2), 0));
 
+// Grid is a low-priority spatial fallback and never pretends to share a node.
+snap = S.resolve(document, {
+    rawPoint: G.point(49, 52),
+    toleranceMm: 3,
+    gridStepMm: 50,
+});
+assert.equal(snap.type, "grid");
+assert.deepEqual(snap.point, G.point(50, 50));
+assert.equal(snap.nodeId, null);
+
+// A meaningful angle relation outranks the grid fallback.
+snap = S.resolve(document, {
+    rawPoint: G.point(49, 2),
+    origin: G.point(0, 0),
+    toleranceMm: 3,
+    gridStepMm: 50,
+});
+assert.equal(snap.type, "angle");
+assert.equal(snap.semantic, "horizontal");
+
 // Magnetic hysteresis: acquire inside 10px-equivalent radius, retain inside 14px-equivalent radius, then release.
 document = documentWith([{ id: "n1", xMm: 100, yMm: 0 }]);
 const acquired = S.resolve(document, { rawPoint: G.point(102, 0), toleranceMm: 3, releaseToleranceMm: 5 });
@@ -166,12 +211,14 @@ snap = S.resolve(document, { rawPoint: G.point(100, 0), toleranceMm: 2 });
 assert.equal(snap.type, "endpoint");
 assert.equal(snap.nodeId, "a");
 
-// Screen-space contract: acquire/release radii remain 10px/14px regardless of zoom.
+// Screen-space contract: acquire/release radii and adaptive grid remain stable as zoom changes.
 let camera = Viewport.create({ scalePxPerMm: 1 });
 assert.equal(Viewport.screenToleranceToMm(camera, 10), 10);
 assert.equal(Viewport.screenToleranceToMm(camera, 14), 14);
+assert.equal(Viewport.gridStepMm(camera), 50);
 camera = Viewport.create({ scalePxPerMm: 2 });
 assert.equal(Viewport.screenToleranceToMm(camera, 10), 5);
 assert.equal(Viewport.screenToleranceToMm(camera, 14), 7);
+assert.equal(Viewport.gridStepMm(camera), 20);
 
 console.log("Door Drawing V4 Smart Snap V2 tests passed");
