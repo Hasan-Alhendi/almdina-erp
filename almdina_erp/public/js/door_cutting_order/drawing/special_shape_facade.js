@@ -10,6 +10,8 @@
         "/assets/almdina_erp/js/door_drawing_v4/domain/document.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/geometry_commands.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/snap_resolver.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/hit_test.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/command_history.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/tool_state_machine.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/interaction_engine.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/viewport.js",
@@ -79,14 +81,12 @@
         let resolvedOptions = options || {};
         const readOnly = Boolean(resolvedOptions.readOnly);
         if (!readOnly && !can(frm, "edit_special_drawing")) {
-            if (can(frm, "view_drawing_workspace")) {
-                resolvedOptions = { ...resolvedOptions, readOnly: true };
-            } else {
+            if (can(frm, "view_drawing_workspace")) resolvedOptions = { ...resolvedOptions, readOnly: true };
+            else {
                 if (window.frappe) frappe.msgprint("ليس لديك صلاحية فتح مساحة رسم الدرفة الخاصة.");
                 return Promise.resolve(null);
             }
         }
-
         return boot()
             .then(() => editor().open(frm, row, resolvedOptions))
             .catch(error => {
@@ -96,16 +96,12 @@
             });
     }
 
-    function view(frm, row) {
-        return open(frm, row, { readOnly: true });
-    }
-
+    function view(frm, row) { return open(frm, row, { readOnly: true }); }
     function parseJson(raw) {
         if (!raw) return null;
         if (typeof raw === "object") return raw;
         try { return JSON.parse(String(raw)); } catch (error) { return null; }
     }
-
     function parseDrawing(raw) {
         const document = parseJson(raw);
         if (!document || document.schema !== "almdina.door-drawing" || Number(document.version) !== 4) return [];
@@ -124,9 +120,7 @@
     }
 
     const facade = Object.freeze({
-        open,
-        view,
-        parseDrawing,
+        open, view, parseDrawing,
         __doorDrawingV4: true,
         __canonicalMmGeometry: true,
         __sharedNodeTopology: true,
@@ -135,6 +129,8 @@
         __highDpiCanvas: true,
         __smartPenPointToPoint: true,
         __readOnlyMutationBoundary: true,
+        __semanticUndoRedo: true,
+        __nodeEditing: true,
     });
 
     window.AlmdinaSpecialShapeEditor = facade;
