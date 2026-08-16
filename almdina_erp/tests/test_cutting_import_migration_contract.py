@@ -25,23 +25,40 @@ class TestCuttingImportMigrationContract(unittest.TestCase):
                     )
         self.assertEqual(offenders, [], "\n".join(offenders))
 
-    def test_canonical_order_base_imports_cutting_domain_directly(self) -> None:
-        source = (
+    def test_canonical_order_base_delegates_cutting_ownership(self) -> None:
+        base = (
             RUNTIME_ROOT
             / "doctype"
             / "door_cutting_order"
             / "door_cutting_order.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("from almdina_erp.almdina_erp.domain.cutting import (", source)
+        plan_adapter = (
+            RUNTIME_ROOT
+            / "infrastructure"
+            / "frappe"
+            / "orders"
+            / "plan_adapter.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("process_order_save(self._gateway())", base)
+        self.assertIn("FrappeOrderPlanAdapter", base)
+        self.assertNotIn("from almdina_erp.almdina_erp.domain.cutting import", base)
         for symbol in (
             "expand_piece_groups",
             "optimize_plan",
-            "round_value",
             "validate_plan",
         ):
-            self.assertIn(symbol, source)
+            self.assertNotIn(symbol, base)
+
+        self.assertIn(
+            "from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (",
+            plan_adapter,
+        )
+        self.assertIn("optimize_order_plan", plan_adapter)
+        self.assertIn("domain_cutting_engine", plan_adapter)
         for legacy in LEGACY_IMPORTS:
-            self.assertNotIn(legacy, source)
+            self.assertNotIn(legacy, base)
+            self.assertNotIn(legacy, plan_adapter)
 
     def test_compatibility_modules_are_thin_and_remain_available(self) -> None:
         cutting = (RUNTIME_ROOT / "services" / "cutting_engine.py").read_text(
