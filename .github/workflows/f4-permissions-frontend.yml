@@ -1,5 +1,6 @@
 name: Factory Permissions Frontend Migration
 
+# Keep this migration gate running against the latest Develop merge context.
 on:
   push:
     branches: [main, Develop, develop]
