@@ -24,9 +24,15 @@
     });
 
     const SNAP_LABELS = Object.freeze({
+        close: "إغلاق",
         endpoint: "نقطة نهاية",
+        intersection: "تقاطع",
+        midpoint: "منتصف",
+        perpendicular: "عمودي",
+        parallel: "متوازي",
+        extension: "امتداد",
         horizontal: "أفقي",
-        vertical: "عمودي",
+        vertical: "رأسي",
     });
 
     function semanticLabel(preview) {
@@ -165,14 +171,65 @@
         ctx.fillText(text, left + paddingX, top + height / 2 + 0.5);
     }
 
+    function drawSnapGuides(ctx, camera, preview) {
+        const guides = preview && Array.isArray(preview.guides) ? preview.guides : [];
+        if (!guides.length) return;
+        ctx.save();
+        ctx.strokeStyle = TOKENS.guide;
+        ctx.globalAlpha = 0.58;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 5]);
+        guides.forEach(guide => {
+            if (!guide || !guide.start || !guide.end) return;
+            const start = viewport.worldToScreen(camera, guide.start);
+            const end = viewport.worldToScreen(camera, guide.end);
+            ctx.beginPath();
+            ctx.moveTo(start.x, start.y);
+            ctx.lineTo(end.x, end.y);
+            ctx.stroke();
+        });
+        ctx.restore();
+    }
+
+    function markerRadius(preview) {
+        if (!preview) return 4;
+        if (preview.type === "close") return 7;
+        if (preview.type === "endpoint" || preview.type === "intersection") return 6;
+        if (preview.type === "midpoint") return 5;
+        return 4;
+    }
+
+    function drawSnapMarker(ctx, preview, end) {
+        if (!preview || preview.type === "free") return;
+        ctx.beginPath();
+        ctx.arc(end.x, end.y, markerRadius(preview), 0, Math.PI * 2);
+        ctx.fillStyle = TOKENS.blankFill;
+        ctx.fill();
+        ctx.strokeStyle = TOKENS.guide;
+        ctx.lineWidth = preview.type === "close" ? 2.5 : 2;
+        ctx.stroke();
+    }
+
     function drawPreview(ctx, camera, document, interactionState) {
         const preview = interactionState && interactionState.preview;
+        if (!preview) return;
         const pathId = interactionState && interactionState.activePathId;
-        if (!preview || !pathId) return;
+        const end = viewport.worldToScreen(camera, preview.point);
+        const semantic = semanticLabel(preview);
+        drawSnapGuides(ctx, camera, preview);
+
+        if (!pathId) {
+            if (preview.type === "free") return;
+            ctx.save();
+            drawSnapMarker(ctx, preview, end);
+            drawChip(ctx, semantic, end.x, end.y);
+            ctx.restore();
+            return;
+        }
+
         const anchor = documentModel.nodeById(document, documentModel.pathEndNodeId(document, pathId));
         if (!anchor) return;
         const start = viewport.worldToScreen(camera, anchor);
-        const end = viewport.worldToScreen(camera, preview.point);
         ctx.save();
         ctx.strokeStyle = preview.type === "free" ? TOKENS.preview : TOKENS.guide;
         ctx.lineWidth = 1.5;
@@ -180,11 +237,14 @@
         ctx.beginPath(); ctx.moveTo(start.x, start.y); ctx.lineTo(end.x, end.y); ctx.stroke();
         ctx.setLineDash([]);
         const measurement = `${geometry.roundMm(geometry.distance(anchor, preview.point))} mm`;
-        const semantic = semanticLabel(preview);
         drawChip(ctx, semantic ? `${semantic} · ${measurement}` : measurement, end.x, end.y);
-        ctx.beginPath(); ctx.arc(end.x, end.y, preview.type === "endpoint" ? 6 : 4, 0, Math.PI * 2);
-        ctx.fillStyle = TOKENS.blankFill; ctx.fill();
-        ctx.strokeStyle = preview.type === "free" ? TOKENS.preview : TOKENS.guide; ctx.lineWidth = 2; ctx.stroke();
+        if (preview.type === "free") {
+            ctx.beginPath(); ctx.arc(end.x, end.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = TOKENS.blankFill; ctx.fill();
+            ctx.strokeStyle = TOKENS.preview; ctx.lineWidth = 2; ctx.stroke();
+        } else {
+            drawSnapMarker(ctx, preview, end);
+        }
         ctx.restore();
     }
 
