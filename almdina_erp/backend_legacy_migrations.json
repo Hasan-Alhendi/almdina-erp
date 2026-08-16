@@ -102,7 +102,8 @@
     {
       "batch": 4,
       "name": "Split transitional production service into focused owners",
-      "status": "ready_for_final_ci",
+      "status": "migrated_compatibility_preserved",
+      "final_sha": "a482920f3d4d40a96b59c4125ac8fb10428e00b3",
       "canonical_owner": [
         "almdina_erp/almdina_erp/services/production_stage_bootstrap_service.py",
         "almdina_erp/almdina_erp/services/order_status_sync_service.py",
@@ -123,6 +124,28 @@
         "order_lifecycle_service.py now logs cancellation events through production_event_repository instead of a private production_service helper.",
         "production_service.py is now a compatibility facade containing only delegates and fail-closed historical HTTP endpoints.",
         "A Static architecture scan rejects every internal runtime dependency on services.production_service while allowing the facade itself for external compatibility."
+      ]
+    },
+    {
+      "batch": 5,
+      "name": "Remove retired replacement cancellation implementation",
+      "status": "removed",
+      "paths": [
+        "almdina_erp/almdina_erp/services/replacement_cancellation_service.py"
+      ],
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/services/replacement_service.py",
+        "almdina_erp/almdina_erp/services/legacy_endpoint_service.py",
+        "almdina_erp/almdina_erp/services/order_status_sync_service.py"
+      ],
+      "compatibility_preserved": [
+        "almdina_erp.almdina_erp.services.replacement_cancellation_service.cancel_replacement -> almdina_erp.almdina_erp.services.legacy_endpoint_service.cancel_legacy_replacement"
+      ],
+      "evidence": [
+        "The replacement planning Static contract scans all runtime Python sources and proves there are zero internal imports of replacement_cancellation_service.",
+        "The historical HTTP path remains frozen in override_whitelisted_methods and delegates to cancel_legacy_replacement.",
+        "cancel_legacy_replacement rejects historical stock-reversal semantics and delegates supported behavior to the current replacement_service facade.",
+        "The removed implementation is explicitly recorded in the migration ledger so the immutable Stage 10 audit contract recognizes the removal instead of requiring the legacy file to remain present."
       ]
     }
   ]
