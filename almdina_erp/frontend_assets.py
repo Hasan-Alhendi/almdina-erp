@@ -69,6 +69,10 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
+        # F6.3 keeps the existing content hook position while loading its local
+        # presentation owners immediately before the orchestrator.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
