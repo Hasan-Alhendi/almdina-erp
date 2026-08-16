@@ -8,6 +8,7 @@
     const SCHEMA = "almdina.door-drawing";
     const VERSION = 4;
     const UNITS = "mm";
+    const DIMENSION_TYPES = Object.freeze({ SEGMENT_LENGTH: "segment-length" });
 
     function freezeNode(node) {
         return Object.freeze({
@@ -35,7 +36,29 @@
         });
     }
 
+    function freezeDimension(dimension) {
+        const type = String(dimension && dimension.type || "");
+        if (type !== DIMENSION_TYPES.SEGMENT_LENGTH) {
+            throw new Error(`Unsupported drawing dimension type: ${type}`);
+        }
+        return Object.freeze({
+            id: String(dimension.id),
+            type,
+            segmentId: String(dimension.segmentId),
+        });
+    }
+
     function freezeDocument(document) {
+        const nodes = Object.freeze((document.nodes || []).map(freezeNode));
+        const segments = Object.freeze((document.segments || []).map(freezeSegment));
+        const paths = Object.freeze((document.paths || []).map(freezePath));
+        const dimensions = Object.freeze((document.dimensions || []).map(freezeDimension));
+        const segmentIds = new Set(segments.map(segment => segment.id));
+        dimensions.forEach(dimension => {
+            if (!segmentIds.has(dimension.segmentId)) {
+                throw new Error(`Drawing dimension references missing segment: ${dimension.segmentId}`);
+            }
+        });
         return Object.freeze({
             schema: SCHEMA,
             version: VERSION,
@@ -44,9 +67,10 @@
                 widthMm: Math.max(0, geometry.roundMm(document.blank && document.blank.widthMm)),
                 heightMm: Math.max(0, geometry.roundMm(document.blank && document.blank.heightMm)),
             }),
-            nodes: Object.freeze((document.nodes || []).map(freezeNode)),
-            segments: Object.freeze((document.segments || []).map(freezeSegment)),
-            paths: Object.freeze((document.paths || []).map(freezePath)),
+            nodes,
+            segments,
+            paths,
+            dimensions,
         });
     }
 
@@ -59,6 +83,7 @@
             nodes: options.nodes || [],
             segments: options.segments || [],
             paths: options.paths || [],
+            dimensions: options.dimensions || [],
         });
     }
 
@@ -74,10 +99,19 @@
         return (document.paths || []).find(path => path.id === String(id)) || null;
     }
 
+    function dimensionById(document, id) {
+        return (document.dimensions || []).find(dimension => dimension.id === String(id)) || null;
+    }
+
     function ensureUniqueId(document, id) {
         const value = String(id || "");
         if (!value) throw new Error("Drawing entity id is required");
-        if (nodeById(document, value) || segmentById(document, value) || pathById(document, value)) {
+        if (
+            nodeById(document, value)
+            || segmentById(document, value)
+            || pathById(document, value)
+            || dimensionById(document, value)
+        ) {
             throw new Error(`Duplicate drawing entity id: ${value}`);
         }
         return value;
@@ -173,6 +207,31 @@
         });
     }
 
+    function addDimension(document, dimension) {
+        const id = ensureUniqueId(document, dimension && dimension.id);
+        const type = String(dimension && dimension.type || "");
+        const segmentId = String(dimension && dimension.segmentId || "");
+        if (type !== DIMENSION_TYPES.SEGMENT_LENGTH) {
+            throw new Error(`Unsupported drawing dimension type: ${type}`);
+        }
+        if (!segmentById(document, segmentId)) {
+            throw new Error(`Drawing dimension segment not found: ${segmentId}`);
+        }
+        return freezeDocument({
+            ...document,
+            dimensions: [...document.dimensions, { id, type, segmentId }],
+        });
+    }
+
+    function removeDimension(document, dimensionId) {
+        const id = String(dimensionId || "");
+        if (!dimensionById(document, id)) return document;
+        return freezeDocument({
+            ...document,
+            dimensions: document.dimensions.filter(dimension => dimension.id !== id),
+        });
+    }
+
     function serialize(document) {
         return JSON.stringify(document);
     }
@@ -181,16 +240,20 @@
         SCHEMA,
         VERSION,
         UNITS,
+        DIMENSION_TYPES,
         create,
         nodeById,
         segmentById,
         pathById,
+        dimensionById,
         pathEndNodeId,
         addNode,
         moveNode,
         addPath,
         addLineToPath,
         closePath,
+        addDimension,
+        removeDimension,
         serialize,
     });
 })();
