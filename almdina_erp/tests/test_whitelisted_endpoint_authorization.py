@@ -4,6 +4,11 @@ import ast
 import unittest
 from pathlib import Path
 
+from almdina_erp.almdina_erp.application.security.whitelisted_endpoint_contracts import (
+    EndpointAuthorizationContract,
+    WHITELISTED_ENDPOINT_CONTRACTS,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
@@ -24,8 +29,8 @@ def _is_whitelist(decorator: ast.expr) -> bool:
     )
 
 
-def _whitelisted_endpoints() -> set[str]:
-    endpoints: set[str] = set()
+def _whitelisted_functions() -> dict[str, tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    endpoints: dict[str, tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]] = {}
     for path in sorted(APP.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         module = _module_name(path)
@@ -33,22 +38,127 @@ def _whitelisted_endpoints() -> set[str]:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             if any(_is_whitelist(decorator) for decorator in node.decorator_list):
-                endpoints.add(f"{module}.{node.name}")
+                endpoints[f"{module}.{node.name}"] = (path, node)
     return endpoints
 
 
+def _call_names(node: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        target = child.func
+        if isinstance(target, ast.Name):
+            names.add(target.id)
+        elif isinstance(target, ast.Attribute):
+            names.add(target.attr)
+    return names
+
+
 class TestWhitelistedEndpointAuthorization(unittest.TestCase):
-    def test_inventory_all_whitelisted_endpoints(self) -> None:
-        # Stage 12.2 bootstraps this manifest from the AST-discovered source of
-        # truth. Keeping this empty for the first CI pass intentionally makes the
-        # failure print every currently exposed endpoint; the final contract test
-        # replaces it with an explicit classified manifest and exact-set check.
-        declared: set[str] = set()
-        actual = _whitelisted_endpoints()
+    def test_every_whitelisted_endpoint_has_one_explicit_contract(self) -> None:
+        actual = set(_whitelisted_functions())
+        declared = set(WHITELISTED_ENDPOINT_CONTRACTS)
         self.assertEqual(
             actual,
             declared,
-            "Whitelisted endpoint inventory:\n" + "\n".join(sorted(actual)),
+            "Every @frappe.whitelist() endpoint must be explicitly classified. "
+            "Unclassified or stale contracts:\n"
+            + "\n".join(sorted(actual.symmetric_difference(declared))),
+        )
+
+    def test_contract_kinds_are_closed_and_explicit(self) -> None:
+        allowed = {
+            EndpointAuthorizationContract.CAPABILITY,
+            EndpointAuthorizationContract.DELEGATE,
+            EndpointAuthorizationContract.FAIL_CLOSED,
+            EndpointAuthorizationContract.SELF_CONTEXT,
+        }
+        self.assertTrue(WHITELISTED_ENDPOINT_CONTRACTS)
+        self.assertFalse(set(WHITELISTED_ENDPOINT_CONTRACTS.values()).difference(allowed))
+        self.assertEqual(
+            {
+                endpoint
+                for endpoint, contract in WHITELISTED_ENDPOINT_CONTRACTS.items()
+                if contract == EndpointAuthorizationContract.SELF_CONTEXT
+            },
+            {
+                "almdina_erp.almdina_erp.services.master_data_service.can_open_master_data",
+                "almdina_erp.almdina_erp.services.permission_context_service.get_permission_context",
+            },
+        )
+        self.assertEqual(
+            {
+                endpoint
+                for endpoint, contract in WHITELISTED_ENDPOINT_CONTRACTS.items()
+                if contract == EndpointAuthorizationContract.FAIL_CLOSED
+            },
+            {
+                "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+                "almdina_erp.almdina_erp.services.production_service.pause_stage",
+                "almdina_erp.almdina_erp.services.production_service.resume_stage",
+            },
+        )
+
+    def test_high_risk_endpoints_keep_their_authorization_boundaries(self) -> None:
+        endpoints = _whitelisted_functions()
+        expected_calls = {
+            "almdina_erp.almdina_erp.api.preview_door_cutting_order": {
+                "_existing_preview_order",
+                "_require_live_preview_access",
+                "_use_locked_preview",
+            },
+            "almdina_erp.almdina_erp.api.get_approved_cutting_plan_snapshot": {
+                "check_permission",
+                "require_any_document_capability",
+            },
+            "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults": {
+                "require_any_doctype_capability",
+                "doctype_has_capability",
+            },
+            "almdina_erp.almdina_erp.services.cost_service.refresh_order_costs": {
+                "check_permission",
+                "require_document_capability",
+            },
+        }
+        for endpoint, required in expected_calls.items():
+            with self.subTest(endpoint=endpoint):
+                self.assertIn(endpoint, endpoints)
+                calls = _call_names(endpoints[endpoint][1])
+                self.assertTrue(
+                    required.issubset(calls),
+                    f"{endpoint} lost authorization calls: {sorted(required.difference(calls))}",
+                )
+
+    def test_preview_uses_persisted_state_not_client_status_for_security(self) -> None:
+        source = (APP / "api.py").read_text(encoding="utf-8")
+        function_source = source.split("def preview_door_cutting_order", 1)[1].split(
+            "\n\n@frappe.whitelist()",
+            1,
+        )[0]
+        self.assertIn("stored = _existing_preview_order(name)", function_source)
+        self.assertIn("_use_locked_preview(stored.status)", function_source)
+        self.assertNotIn('payload.get("status")', function_source)
+
+        helper_source = source.split("def _require_live_preview_access", 1)[1].split(
+            "\n\n@frappe.whitelist()",
+            1,
+        )[0]
+        self.assertIn("Capability.CREATE_ORDER", helper_source)
+        self.assertIn("require_doctype_capability", helper_source)
+        self.assertIn("Capability.EDIT_ORDER", helper_source)
+        self.assertIn("require_document_capability", helper_source)
+
+    def test_order_defaults_never_unconditionally_return_cost_configuration(self) -> None:
+        source = (
+            APP / "services" / "order_defaults_service.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Capability.VIEW_COSTS", source)
+        self.assertIn("doctype_has_capability", source)
+        self.assertIn('payload["cutting_cost_per_board_usd"]', source)
+        self.assertNotIn(
+            '"cutting_cost_per_board_usd": flt(settings.default_cutting_cost_per_board_usd)',
+            source,
         )
 
 
