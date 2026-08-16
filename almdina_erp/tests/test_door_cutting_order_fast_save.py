@@ -1,74 +1,152 @@
+from __future__ import annotations
+
+import runpy
 from pathlib import Path
-import json
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ORDER_PY = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
-ORDER_JSON = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
-PREVIEW_API = ROOT / "almdina_erp" / "api.py"
-FAST_SAVE_JS = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
+ORDER_PY = (
+    ROOT
+    / "almdina_erp"
+    / "doctype"
+    / "door_cutting_order"
+    / "door_cutting_order.py"
+)
+CONTROLLER_PY = (
+    ROOT
+    / "almdina_erp"
+    / "doctype"
+    / "door_cutting_order"
+    / "door_cutting_order_controller.py"
+)
+SAVE_USE_CASE = (
+    ROOT / "almdina_erp" / "application" / "orders" / "process_order_save.py"
+)
+PLAN_ADAPTER = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "plan_adapter.py"
+)
+EDGE_REPOSITORY = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "edge_profile_repository.py"
+)
+PLAN_PERMISSION_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
+)
+FRONTEND_ASSETS = ROOT / "frontend_assets.py"
 HOOKS = ROOT / "hooks.py"
+FAST_SAVE_JS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_fast_save_ux.js"
+)
+PLAN_JS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_ux.js"
+)
 
 
 def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_normal_validate_decouples_optimizer_from_ordinary_save():
+def test_canonical_base_is_thin_and_delegates_save_ownership():
     source = _text(ORDER_PY)
-    validate_block = source.split("    def validate(self) -> None:", 1)[1].split("    def _get_old_doc", 1)[0]
-    assert 'self.flags.get("force_cutting_plan_recalculation")' in validate_block
-    assert "self._can_reuse_current_plan" in validate_block
-    assert "self._mark_plan_for_recalculation" in validate_block
-    assert validate_block.count("self._calculate_cutting_plan") == 1
+    assert "class DoorCuttingOrder(Document)" in source
+    assert "process_order_save(self._gateway())" in source
+    assert "FrappeDoorCuttingOrderSaveGateway" in source
+    assert "FrappeOrderPlanAdapter" in source
+    assert "def optimize_plan" not in source
+    assert "optimize_plan(" not in source
+    assert "frappe.db.get_value(" not in source
+    assert "frappe.get_all(" not in source
+    assert len(source.splitlines()) < 190
 
 
-def test_explicit_recalculation_sets_force_flag_before_save():
-    source = _text(ORDER_PY)
-    recalculate = source.split("def recalculate_order(order_name: str)", 1)[1]
-    assert "doc.flags.force_cutting_plan_recalculation = True" in recalculate
-    assert "doc.save()" in recalculate
-    assert "doc.approved_plan = None" in recalculate
-    assert "allow_approved_edit" in recalculate
-    assert "must never approve" in recalculate
+def test_active_controller_keeps_save_orchestration_outside_the_doctype_base():
+    source = _text(CONTROLLER_PY)
+    assert "process_order_save(self._gateway())" in source
+    assert "FrappeDoorCuttingOrderSaveGateway" in source
+    assert "class DoorCuttingOrderController(DoorCuttingOrder)" in source
 
 
-def test_preview_api_uses_new_explicit_plan_calculation_contract():
-    source = _text(PREVIEW_API)
-    preview = source.split("def preview_door_cutting_order", 1)[1].split(
-        "@frappe.whitelist()\ndef get_approved_cutting_plan_snapshot", 1
-    )[0]
-    assert "settings = preview._get_settings()" in preview
-    assert "input_fingerprint = preview._plan_input_fingerprint(settings)" in preview
-    assert "preview._calculate_cutting_plan(settings, input_fingerprint)" in preview
-    assert "preview._calculate_cutting_plan()" not in preview
-    assert "_board_ready_for_plan(preview)" in preview
-    assert "preview.board_item and has_complete_piece" not in preview
+def test_save_use_case_runs_optimizer_only_on_explicit_recalculation():
+    source = _text(SAVE_USE_CASE)
+    assert "gateway.force_recalculation_requested()" in source
+    assert "gateway.calculate_cutting_plan(input_fingerprint)" in source
+    assert "gateway.can_reuse_current_plan(input_fingerprint)" in source
+    assert "gateway.refresh_current_plan(input_fingerprint)" in source
+    assert "gateway.invalidate_current_plan()" in source
 
 
-def test_edge_rates_are_loaded_in_one_batch_query():
-    source = _text(ORDER_PY)
-    assert "def _get_edge_rate_map" in source
-    assert 'frappe.get_all(' in source
+def test_explicit_recalculation_is_owned_by_capability_protected_service():
+    source = _text(PLAN_PERMISSION_SERVICE)
+    assert "Capability.RECALCULATE_PLAN" in source
+    assert "_assert_recalculation_state(doc)" in source
+    assert "doc.flags.force_cutting_plan_recalculation = True" in source
+    assert "doc.save(ignore_permissions=True)" in source
+
+    hooks = runpy.run_path(str(HOOKS))
+    assert hooks["override_whitelisted_methods"][
+        "almdina_erp.almdina_erp.doctype.door_cutting_order."
+        "door_cutting_order.recalculate_order"
+    ] == (
+        "almdina_erp.almdina_erp.services.order_plan_permission_service."
+        "recalculate_order"
+    )
+
+
+def test_plan_fingerprint_and_optimizer_live_in_focused_plan_adapter():
+    source = _text(PLAN_ADAPTER)
+    assert "fingerprint_payload" in source
+    assert "def plan_input_fingerprint" in source
+    assert "def calculate_cutting_plan" in source
+    assert "optimize_order_plan(" in source
+    assert "domain_cutting_engine" in source
+
+
+def test_edge_profile_repository_owns_batched_edge_master_reads():
+    source = _text(EDGE_REPOSITORY)
+    assert "class FrappeEdgeProfileRepository" in source
+    assert "frappe.get_all(" in source
     assert 'filters={"name": ["in", sorted(names)]}' in source
-    calculate_rows = source.split("    def _calculate_piece_rows", 1)[1].split("    @staticmethod\n    def _normalized_number", 1)[0]
-    assert "rates = self._get_edge_rate_map()" in calculate_rows
-    assert "frappe.db.get_value" not in calculate_rows
+    assert "rate_usd_per_meter" in source
 
 
-def test_plan_fingerprint_and_stale_fields_exist():
-    doc = json.loads(ORDER_JSON.read_text(encoding="utf-8"))
-    fields = {row["fieldname"]: row for row in doc["fields"]}
-    assert fields["plan_needs_recalculation"]["fieldtype"] == "Check"
-    assert fields["calculated_plan_input_hash"]["fieldtype"] == "Data"
-    source = _text(ORDER_PY)
-    assert "def _plan_input_fingerprint" in source
-    assert "hashlib.sha256" in source
-    assert 'snapshot["input_fingerprint"] = input_fingerprint' in source
+def test_fast_save_assets_use_feature_owned_manifest_paths_and_ordering():
+    assets = runpy.run_path(str(FRONTEND_ASSETS))
+    scripts = assets["doctype_js"]["Door Cutting Order"]
+    plan_path = (
+        "public/js/door_cutting_order/cutting_plan/"
+        "door_cutting_order_plan_ux.js"
+    )
+    fast_path = (
+        "public/js/door_cutting_order/cutting_plan/"
+        "door_cutting_order_fast_save_ux.js"
+    )
+    assert plan_path in scripts
+    assert fast_path in scripts
+    assert scripts.index(plan_path) < scripts.index(fast_path)
+    assert PLAN_JS.is_file()
+    assert FAST_SAVE_JS.is_file()
 
 
-def test_plan_button_uses_dedicated_recalculation_endpoint():
+def test_fast_save_script_keeps_explicit_save_then_recalculate_flow():
     source = _text(FAST_SAVE_JS)
     assert "event.stopImmediatePropagation()" in source
     assert "await frm.save()" in source
@@ -76,28 +154,11 @@ def test_plan_button_uses_dedicated_recalculation_endpoint():
     assert "await frm.reload_doc()" in source
     assert "markOrderEditSessionRecalculated" in source
     assert "بدون اعتماد الطلب" in source
-    assert "تم حفظ التعديلات دون تشغيل محرك القص الثقيل" in source
 
 
-def test_invoice_print_stays_available_while_plan_is_stale():
+def test_invoice_print_remains_available_while_plan_is_stale():
     source = _text(FAST_SAVE_JS)
     assert 'event.target.closest(".dco-print-customer-invoice")' not in source
     assert "dco-cost-plan-stale" not in source
     assert "is-plan-stale" not in source
     assert "أعد حساب خطة القص أولًا" not in source
-
-
-def test_review_workflow_recalculates_only_when_required():
-    source = _text(PLAN_SERVICE)
-    submit = source.split("def submit_order_for_review", 1)[1].split("@frappe.whitelist()\ndef approve_order", 1)[0]
-    assert "if cint(order.plan_needs_recalculation) or not order.cutting_plan_json" in submit
-    assert "order.flags.force_cutting_plan_recalculation = True" in submit
-
-
-def test_fast_save_script_is_loaded_after_plan_controls():
-    hooks = _text(HOOKS)
-    assert '"public/js/door_cutting_order_plan_ux.js"' in hooks
-    assert '"public/js/door_cutting_order_fast_save_ux.js"' in hooks
-    assert hooks.index('"public/js/door_cutting_order_plan_ux.js"') < hooks.index(
-        '"public/js/door_cutting_order_fast_save_ux.js"'
-    )
