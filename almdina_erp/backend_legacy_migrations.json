@@ -6,7 +6,8 @@
     "Stage 10 backend_legacy_inventory.json is an immutable audit baseline; completed migrations are recorded here instead of rewriting history.",
     "A removed source must have zero active hook, HTTP, Python-import and runtime consumers.",
     "The canonical Door Cutting Order DocType base must remain because Frappe requires the active override to subclass it.",
-    "Public compatibility routes remain preserved until their route contract is explicitly retired."
+    "Public compatibility routes remain preserved until their route contract is explicitly retired.",
+    "A Stage 11 discovery that was not enumerated in the Stage 10 audit must be recorded explicitly with evidence before removal."
   ],
   "migrations": [
     {
@@ -15,19 +16,35 @@
       "status": "removed",
       "canonical_owner": [
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_controller.py",
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
         "almdina_erp/almdina_erp/application/orders/process_order_save.py",
-        "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py"
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/save_gateway.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/costing_adapter.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/orders/plan_adapter.py"
       ],
       "paths": [
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_domain.py",
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_costing.py",
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_plan.py"
+      ],
+      "stage10_paths": [
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_domain.py"
+      ],
+      "stage11_discoveries": [
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_costing.py",
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_plan.py"
       ],
       "evidence": [
         "hooks.py activates only DoorCuttingOrderController, which subclasses the canonical DoorCuttingOrder DocType controller directly.",
         "The active save path delegates to process_order_save and FrappeDoorCuttingOrderSaveGateway rather than the alternate controller chain.",
-        "Architecture contracts reject FastDoorCuttingOrder, TextBoardDoorCuttingOrder and DomainDoorCuttingOrder from the active controller.",
-        "The Stage 11 contract scans runtime Python sources and rejects imports or symbol references to the removed chain."
+        "The active costing owner is FrappeOrderCostingAdapter and the active plan owner is FrappeOrderPlanAdapter/FrappeCutDimensionPlanAdapter.",
+        "PlanDoorCuttingOrder inherited CostingDoorCuttingOrder, which inherited the already-retired alternate controller branch; neither class is the Frappe override.",
+        "Architecture contracts reject PlanDoorCuttingOrder, CostingDoorCuttingOrder, DomainDoorCuttingOrder, TextBoardDoorCuttingOrder and FastDoorCuttingOrder from the active controller.",
+        "The Stage 11 contract scans runtime Python sources and rejects imports or symbol references to the complete removed chain."
       ]
     }
   ]
