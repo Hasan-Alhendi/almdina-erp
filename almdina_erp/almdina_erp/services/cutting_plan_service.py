@@ -1,9 +1,8 @@
 """Backward-compatible Cutting Plan lifecycle facade.
 
 Snapshot persistence and production-plan freezing live in
-``cutting_plan_snapshot_service``. Historical whitelisted method paths remain
-available here while hooks route them to the focused capability-protected
-services.
+``cutting_plan_snapshot_service``. Historical whitelisted method paths and
+Python-callable names remain available here as thin delegates.
 """
 
 from __future__ import annotations
@@ -12,16 +11,43 @@ from typing import Any
 
 import frappe
 
-from almdina_erp.almdina_erp.services.cutting_plan_snapshot_service import (
-    approve_plan,
-    create_plan_from_order,
-    lock_order_for_production,
-)
+from almdina_erp.almdina_erp.services import cutting_plan_snapshot_service as _snapshot
 
 
-# Historical Python callers imported the private helper from this module.
-# Keep the alias while all new runtime code depends on the focused snapshot owner.
-_lock_order_for_production = lock_order_for_production
+def create_plan_from_order(
+    order: Any,
+    snapshot_override: dict[str, Any] | None = None,
+    *,
+    plan_kind: str = "Order",
+) -> Any:
+    """Compatibility delegate to the focused snapshot persistence owner."""
+
+    return _snapshot.create_plan_from_order(
+        order,
+        snapshot_override,
+        plan_kind=plan_kind,
+    )
+
+
+def approve_plan(plan: Any) -> Any:
+    """Compatibility delegate to the focused snapshot persistence owner."""
+
+    return _snapshot.approve_plan(plan)
+
+
+def _lock_order_for_production(
+    order: Any,
+    *,
+    preserve_status: bool = False,
+    plan_source: str = "System",
+) -> dict[str, Any]:
+    """Compatibility delegate for historical Python callers."""
+
+    return _snapshot.lock_order_for_production(
+        order,
+        preserve_status=preserve_status,
+        plan_source=plan_source,
+    )
 
 
 @frappe.whitelist()
