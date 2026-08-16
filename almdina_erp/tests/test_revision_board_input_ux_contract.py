@@ -47,6 +47,9 @@ DOCTYPE_JSON = (
     / "door_cutting_order"
     / "door_cutting_order.json"
 )
+_AUTHORIZATION_GATEWAY_MODULE = (
+    "almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway"
+)
 
 
 class TestRevisionReasonUxContract(unittest.TestCase):
@@ -164,10 +167,16 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
 
         fake_frappe.get_doc = get_doc
 
+        fake_authorization = types.ModuleType(_AUTHORIZATION_GATEWAY_MODULE)
+        fake_authorization.doctype_has_capability = lambda *args, **kwargs: False
+        fake_authorization.document_has_capability = lambda *args, **kwargs: False
+
         previous_frappe = sys.modules.get("frappe")
         previous_utils = sys.modules.get("frappe.utils")
+        previous_authorization = sys.modules.get(_AUTHORIZATION_GATEWAY_MODULE)
         sys.modules["frappe"] = fake_frappe
         sys.modules["frappe.utils"] = fake_utils
+        sys.modules[_AUTHORIZATION_GATEWAY_MODULE] = fake_authorization
         try:
             spec = importlib.util.spec_from_file_location(
                 "_almdina_text_board_preview_regression",
@@ -187,6 +196,10 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
                 sys.modules.pop("frappe.utils", None)
             else:
                 sys.modules["frappe.utils"] = previous_utils
+            if previous_authorization is None:
+                sys.modules.pop(_AUTHORIZATION_GATEWAY_MODULE, None)
+            else:
+                sys.modules[_AUTHORIZATION_GATEWAY_MODULE] = previous_authorization
 
     def test_opening_an_existing_text_board_order_never_calls_item_loader(self) -> None:
         piece = SimpleNamespace(
@@ -288,6 +301,7 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         self.assertEqual(result["full_board_length_mm"], 2440)
         self.assertEqual(result["full_board_width_mm"], 1220)
         self.assertEqual(result["required_boards"], 1)
+        self.assertNotIn("total_cost_usd", result)
 
     def test_preview_source_cannot_regress_to_hidden_item_validation(self) -> None:
         source = API_PATH.read_text(encoding="utf-8")
