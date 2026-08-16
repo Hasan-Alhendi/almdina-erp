@@ -5,11 +5,21 @@
     const geometry = root.Geometry;
     const documentModel = root.DocumentModel;
     const commands = root.GeometryCommands;
+    const dimensionCommands = root.DimensionCommands;
     const snapResolver = root.SnapResolver;
     const toolMachine = root.ToolStateMachine;
     const hitTest = root.HitTest;
     const commandHistory = root.CommandHistory;
-    if (!geometry || !documentModel || !commands || !snapResolver || !toolMachine || !hitTest || !commandHistory) {
+    if (
+        !geometry
+        || !documentModel
+        || !commands
+        || !dimensionCommands
+        || !snapResolver
+        || !toolMachine
+        || !hitTest
+        || !commandHistory
+    ) {
         throw new Error("Drawing V4 dependencies must load before interaction engine");
     }
 
@@ -226,10 +236,31 @@
             });
         }
 
+        function dimensionPointerDown(rawPoint, options = {}) {
+            const hit = hitTest.segment(document, rawPoint, hitTolerance(options));
+            if (!hit) {
+                selection = null;
+                return Object.freeze({ kind: "selection-cleared", ...state() });
+            }
+            const before = document;
+            const result = dimensionCommands.ensureSegmentLength(document, hit.id, { idFactory });
+            document = result.document;
+            selection = Object.freeze({ kind: "dimension", id: result.dimensionId });
+            if (result.created) record(before, "add-dimension");
+            return Object.freeze({
+                kind: result.created ? "dimension-added" : "dimension-selected",
+                dimensionId: result.dimensionId,
+                segmentId: hit.id,
+                measurement: result.measurement,
+                ...state(),
+            });
+        }
+
         function pointerDown(rawPoint, options = {}) {
             if (toolState.activeTool === toolMachine.TOOLS.SELECT) return selectAt(rawPoint, options);
             if (toolState.activeTool === toolMachine.TOOLS.NODE) return beginNodeDrag(rawPoint, options);
             if (toolState.activeTool === toolMachine.TOOLS.PEN) return penPointerDown(rawPoint, options);
+            if (toolState.activeTool === toolMachine.TOOLS.DIMENSION) return dimensionPointerDown(rawPoint, options);
             return Object.freeze({ kind: "ignored", ...state() });
         }
 
