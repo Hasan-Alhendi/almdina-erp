@@ -21,6 +21,18 @@ REPLACEMENT_CANCELLATION = (
 LEGACY_CANCELLATION_MODULE = (
     "almdina_erp.almdina_erp.services.replacement_cancellation_service"
 )
+LEGACY_STOCK_MODULES = {
+    "almdina_erp.almdina_erp.services.stock_actual_service": RUNTIME_ROOT / "services" / "stock_actual_service.py",
+    "almdina_erp.almdina_erp.services.stock_reconciliation_service": RUNTIME_ROOT / "services" / "stock_reconciliation_service.py",
+    "almdina_erp.almdina_erp.services.reservation_service": RUNTIME_ROOT / "services" / "reservation_service.py",
+    "almdina_erp.almdina_erp.services.material_reservation": RUNTIME_ROOT / "services" / "material_reservation.py",
+    "almdina_erp.almdina_erp.services.remnant_service": RUNTIME_ROOT / "services" / "remnant_service.py",
+    "almdina_erp.almdina_erp.services.remnant_execution": RUNTIME_ROOT / "services" / "remnant_execution.py",
+    "almdina_erp.almdina_erp.services.remnant_planning": RUNTIME_ROOT / "services" / "remnant_planning.py",
+    "almdina_erp.almdina_erp.infrastructure.stock_execution_gateway": RUNTIME_ROOT / "infrastructure" / "stock_execution_gateway.py",
+    "almdina_erp.almdina_erp.infrastructure.remnant_execution_gateway": RUNTIME_ROOT / "infrastructure" / "remnant_execution_gateway.py",
+    "almdina_erp.almdina_erp.infrastructure.frappe.inventory_repository": RUNTIME_ROOT / "infrastructure" / "frappe" / "inventory_repository.py",
+}
 
 
 def _snapshot(**overrides):
@@ -138,6 +150,18 @@ class TestReplacementPlanning(unittest.TestCase):
         self.assertIn("def cancel_legacy_replacement", legacy_endpoint)
         self.assertIn("reverse_stock", legacy_endpoint)
         self.assertIn("replacement_service", legacy_endpoint)
+
+    def test_retired_stock_group_has_no_external_runtime_consumers(self) -> None:
+        target_paths = set(LEGACY_STOCK_MODULES.values())
+        offenders: list[str] = []
+        for path in sorted(RUNTIME_ROOT.rglob("*.py")):
+            if path in target_paths:
+                continue
+            source = path.read_text(encoding="utf-8")
+            for module in LEGACY_STOCK_MODULES:
+                if module in source:
+                    offenders.append(f"{path.relative_to(ROOT)} -> {module}")
+        self.assertEqual(offenders, [], "\n".join(offenders))
 
 
 if __name__ == "__main__":
