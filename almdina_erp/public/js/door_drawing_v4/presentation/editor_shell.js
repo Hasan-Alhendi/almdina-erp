@@ -54,12 +54,23 @@
             });
         }
 
+        function setReadOnly(readOnly) {
+            const locked = Boolean(readOnly);
+            editor.classList.toggle("is-readonly", locked);
+            editor.querySelectorAll("[data-tool]").forEach(button => {
+                const allowed = button.dataset.tool === "hand";
+                button.disabled = locked && !allowed;
+            });
+            lengthInput.disabled = locked;
+        }
+
         function setHint(text = "") {
             hint.textContent = text;
             hint.classList.toggle("is-visible", Boolean(text));
         }
 
         function showLengthInput(screenPoint, initialValue = "") {
+            if (lengthInput.disabled) return;
             lengthInput.hidden = false;
             const width = 116;
             const x = Math.max(12, Math.min(canvas.clientWidth - width - 12, Number(screenPoint.x) + 14));
@@ -87,6 +98,7 @@
             statusSnap,
             zoomValue,
             setActiveTool,
+            setReadOnly,
             setHint,
             showLengthInput,
             hideLengthInput,
