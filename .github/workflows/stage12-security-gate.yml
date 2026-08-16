@@ -24,7 +24,7 @@ jobs:
       - name: Run Stage 12 scope and security regression gate
         run: |
           python -m unittest -v \
-            almdina_erp.tests.test_order_scope_permissions \
+            almdina_erp.tests.test_frappe_v16_permission_hook_contract \
             almdina_erp.tests.test_native_document_permissions \
             almdina_erp.tests.test_permission_personas_e2e \
             almdina_erp.tests.test_final_security_architecture \
