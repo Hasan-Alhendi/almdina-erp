@@ -9,11 +9,11 @@
     const DEFAULT_ANGLE_INCREMENT_DEG = 45;
     const DEFAULT_ANGLE_TOLERANCE_DEG = 4;
 
-    function angleLabel(angleDeg) {
+    function angleSemantic(angleDeg) {
         const normalized = Math.round(geometry.normalizeAngleDeg(angleDeg));
-        if (normalized === 0 || normalized === 180) return "Horizontal";
-        if (normalized === 90 || normalized === 270) return "Vertical";
-        return `${normalized}°`;
+        if (normalized === 0 || normalized === 180) return "horizontal";
+        if (normalized === 90 || normalized === 270) return "vertical";
+        return "angle";
     }
 
     function nearestAngleCandidate(origin, rawPoint, options = {}) {
@@ -30,7 +30,7 @@
 
         return Object.freeze({
             type: "angle",
-            label: angleLabel(snappedAngleDeg),
+            semantic: angleSemantic(snappedAngleDeg),
             point: geometry.pointFromPolar(origin, lengthMm, snappedAngleDeg),
             nodeId: null,
             distanceMm: 0,
@@ -50,7 +50,7 @@
             .filter(candidate => candidate.distanceMm <= toleranceMm)
             .map(candidate => Object.freeze({
                 type: "endpoint",
-                label: "Endpoint",
+                semantic: "endpoint",
                 point: geometry.point(candidate.node.xMm, candidate.node.yMm),
                 nodeId: candidate.node.id,
                 distanceMm: candidate.distanceMm,
@@ -71,7 +71,7 @@
         if (!candidates.length) {
             return Object.freeze({
                 type: "free",
-                label: null,
+                semantic: null,
                 point: rawPoint,
                 nodeId: null,
                 angleDeg: null,
@@ -83,7 +83,7 @@
         const winner = candidates[0];
         return Object.freeze({
             type: winner.type,
-            label: winner.label,
+            semantic: winner.semantic,
             point: winner.point,
             nodeId: winner.nodeId,
             angleDeg: winner.angleDeg,
