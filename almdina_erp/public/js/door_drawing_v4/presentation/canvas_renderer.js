@@ -29,10 +29,12 @@
         intersection: "تقاطع",
         midpoint: "منتصف",
         perpendicular: "عمودي",
+        edge: "على ضلع",
         parallel: "متوازي",
         extension: "امتداد",
         horizontal: "أفقي",
         vertical: "رأسي",
+        grid: "شبكة",
     });
 
     function semanticLabel(preview) {
@@ -58,20 +60,8 @@
         ctx.fillRect(0, 0, widthPx, heightPx);
     }
 
-    function chooseGridStepMm(camera) {
-        const preferredPx = 48;
-        const rawMm = preferredPx / camera.scalePxPerMm;
-        const powers = [1, 2, 5];
-        const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(rawMm, 0.0001))));
-        for (const factor of powers) {
-            const candidate = factor * magnitude;
-            if (candidate * camera.scalePxPerMm >= 28) return candidate;
-        }
-        return 10 * magnitude;
-    }
-
     function drawGrid(ctx, camera) {
-        const stepMm = chooseGridStepMm(camera);
+        const stepMm = viewport.gridStepMm(camera);
         if (stepMm * camera.scalePxPerMm < 8) return;
         const left = viewport.screenToWorld(camera, { x: 0, y: 0 }).xMm;
         const top = viewport.screenToWorld(camera, { x: 0, y: 0 }).yMm;
@@ -195,7 +185,7 @@
         if (!preview) return 4;
         if (preview.type === "close") return 7;
         if (preview.type === "endpoint" || preview.type === "intersection") return 6;
-        if (preview.type === "midpoint") return 5;
+        if (preview.type === "midpoint" || preview.type === "edge") return 5;
         return 4;
     }
 
