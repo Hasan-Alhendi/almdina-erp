@@ -54,13 +54,14 @@
     function boot() {
         ensureStyles();
         if (window.__almdinaDoorDrawingV4BootPromise) return window.__almdinaDoorDrawingV4BootPromise;
-        window.__almdinaDoorDrawingV4BootPromise = SCRIPTS
-            .reduce((promise, src) => promise.then(() => loadScript(src)), Promise.resolve())
-            .catch(error => {
-                window.__almdinaDoorDrawingV4BootPromise = null;
-                console.error("Door Drawing V4 bootstrap failed", error);
-                throw error;
-            });
+        window.__almdinaDoorDrawingV4BootPromise = SCRIPTS.reduce(
+            (promise, src) => promise.then(() => loadScript(src)),
+            Promise.resolve()
+        ).catch(error => {
+            window.__almdinaDoorDrawingV4BootPromise = null;
+            console.error("Door Drawing V4 bootstrap failed", error);
+            throw error;
+        });
         return window.__almdinaDoorDrawingV4BootPromise;
     }
 
