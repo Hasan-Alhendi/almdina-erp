@@ -17,6 +17,14 @@ V4_SCHEMA = "almdina.door-drawing"
 V4_VERSION = 4
 V4_UNITS = "mm"
 V4_SEGMENT_LENGTH_DIMENSION = "segment-length"
+V4_HORIZONTAL_CONSTRAINT = "horizontal"
+V4_VERTICAL_CONSTRAINT = "vertical"
+V4_FIXED_LENGTH_CONSTRAINT = "fixed-length"
+V4_CONSTRAINT_TYPES = {
+    V4_HORIZONTAL_CONSTRAINT,
+    V4_VERTICAL_CONSTRAINT,
+    V4_FIXED_LENGTH_CONSTRAINT,
+}
 MAX_ENTITY_ID_LENGTH = 80
 MAX_DRAWING_COORDINATE_MM = 20_000
 DRAWING_EPSILON_MM = 0.001
@@ -79,14 +87,18 @@ def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
     segments = drawing.get("segments")
     paths = drawing.get("paths")
     dimensions = drawing.get("dimensions", [])
+    constraints = drawing.get("constraints", [])
     if (
         not isinstance(nodes, list)
         or not isinstance(segments, list)
         or not isinstance(paths, list)
         or not isinstance(dimensions, list)
+        or not isinstance(constraints, list)
     ):
-        frappe.throw(_("Drawing V4 must contain valid nodes, segments, paths and dimensions lists."))
-    if len(nodes) + len(segments) + len(paths) + len(dimensions) > MAX_DRAWING_ELEMENTS:
+        frappe.throw(
+            _("Drawing V4 must contain valid nodes, segments, paths, dimensions and constraints lists.")
+        )
+    if len(nodes) + len(segments) + len(paths) + len(dimensions) + len(constraints) > MAX_DRAWING_ELEMENTS:
         frappe.throw(
             _("Special shape documentation has too many entities. The maximum is {0}.").format(
                 MAX_DRAWING_ELEMENTS
@@ -178,6 +190,44 @@ def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
         if segment_id in dimensioned_segments:
             frappe.throw(_("Drawing V4 cannot contain duplicate length dimensions for one segment."))
         dimensioned_segments.add(segment_id)
+
+    constraint_keys: set[tuple[str, str]] = set()
+    orientation_constraints: dict[str, str] = {}
+    for index, constraint in enumerate(constraints, start=1):
+        if not isinstance(constraint, dict):
+            frappe.throw(_("Drawing V4 constraint {0} must be an object.").format(index))
+        constraint_id = _entity_id(
+            constraint.get("id"), _("Drawing V4 constraint {0}").format(index)
+        )
+        if constraint_id in entity_ids:
+            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
+        entity_ids.add(constraint_id)
+
+        constraint_type = str(constraint.get("type") or "")
+        if constraint_type not in V4_CONSTRAINT_TYPES:
+            frappe.throw(_("Drawing V4 contains an unsupported constraint type."))
+        segment_id = str(constraint.get("segmentId") or "")
+        if segment_id not in segment_refs:
+            frappe.throw(_("Drawing V4 constraint references a missing segment."))
+
+        semantic_key = (constraint_type, segment_id)
+        if semantic_key in constraint_keys:
+            frappe.throw(_("Drawing V4 cannot contain duplicate constraints for one segment."))
+        constraint_keys.add(semantic_key)
+
+        if constraint_type in {V4_HORIZONTAL_CONSTRAINT, V4_VERTICAL_CONSTRAINT}:
+            current_orientation = orientation_constraints.get(segment_id)
+            if current_orientation and current_orientation != constraint_type:
+                frappe.throw(_("Drawing V4 segment cannot be constrained as both horizontal and vertical."))
+            orientation_constraints[segment_id] = constraint_type
+
+        if constraint_type == V4_FIXED_LENGTH_CONSTRAINT:
+            value_mm = _finite(constraint.get("valueMm"), _("Drawing V4 fixed length"))
+            if value_mm <= DRAWING_EPSILON_MM or value_mm > MAX_DRAWING_COORDINATE_MM:
+                frappe.throw(_("Drawing V4 fixed length is outside the allowed range."))
+            anchor_node_id = str(constraint.get("anchorNodeId") or "")
+            if anchor_node_id not in segment_refs[segment_id]:
+                frappe.throw(_("Drawing V4 fixed-length anchor must be a segment endpoint."))
 
     return drawing
 
