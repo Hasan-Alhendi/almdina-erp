@@ -33,11 +33,13 @@
 
     function create(options = {}) {
         if (!options.container) throw new Error("Drawing V4 editor container is required");
+        const readOnly = Boolean(options.readOnly);
         const shell = shellFactory.mount(options.container);
+        shell.setReadOnly(readOnly);
         let engine = interaction.create({
             document: options.document,
             blank: options.blank,
-            initialTool: options.initialTool || tools.TOOLS.SELECT,
+            initialTool: readOnly ? tools.TOOLS.HAND : (options.initialTool || tools.TOOLS.SELECT),
         });
         let camera = viewport.create();
         let dpr = Math.max(1, Number(window.devicePixelRatio || 1));
@@ -77,6 +79,7 @@
         }
 
         function runMutation(callback) {
+            if (readOnly) return null;
             const previousDocument = engine.state().document;
             const result = callback();
             notifyDocumentChange(previousDocument);
@@ -90,13 +93,15 @@
             const preview = state.preview;
             const activeTool = state.toolState.activeTool;
             shell.setActiveTool(activeTool);
-            shell.statusTool.textContent = TOOL_LABELS[activeTool] || activeTool;
+            shell.statusTool.textContent = readOnly ? "عرض فقط" : (TOOL_LABELS[activeTool] || activeTool);
             shell.statusCoordinates.textContent = `X ${geometry.roundMm(world.xMm)} · Y ${geometry.roundMm(world.yMm)} mm`;
-            shell.statusSnap.textContent = snapLabel(preview);
+            shell.statusSnap.textContent = readOnly ? "" : snapLabel(preview);
             shell.zoomValue.textContent = `${viewport.zoomPercent(camera)}%`;
             shell.editor.dataset.tool = activeTool;
 
-            if (activeTool === tools.TOOLS.PEN && state.activePathId) {
+            if (readOnly) {
+                shell.setHint("عرض فقط · اسحب لتحريك اللوحة · استخدم عجلة الماوس للتكبير");
+            } else if (activeTool === tools.TOOLS.PEN && state.activePathId) {
                 shell.setHint("انقر لإضافة ضلع · اكتب الطول ثم Enter · Esc لإنهاء الرسم");
             } else if (activeTool === tools.TOOLS.PEN) {
                 shell.setHint("انقر لبدء الرسم");
@@ -110,14 +115,14 @@
             renderer.render(shell.canvas, {
                 camera,
                 document: engine.state().document,
-                interactionState: engine.state(),
+                interactionState: readOnly ? { ...engine.state(), preview: null } : engine.state(),
                 dpr,
-                showNodes: engine.state().toolState.activeTool === tools.TOOLS.NODE,
+                showNodes: !readOnly && engine.state().toolState.activeTool === tools.TOOLS.NODE,
             });
             updateStatus();
         }
 
-        function resize(options = {}) {
+        function resize(resizeOptions = {}) {
             if (destroyed) return;
             const rect = shell.canvasWrap.getBoundingClientRect();
             const widthPx = Math.max(1, rect.width);
@@ -125,7 +130,7 @@
             dpr = Math.max(1, Number(window.devicePixelRatio || 1));
             camera = viewport.resize(camera, widthPx, heightPx);
             renderer.resizeCanvas(shell.canvas, widthPx, heightPx, dpr);
-            if (!didInitialFit || options.fit) {
+            if (!didInitialFit || resizeOptions.fit) {
                 camera = viewport.fitBlank(camera, engine.state().document.blank);
                 didInitialFit = true;
             }
@@ -162,7 +167,7 @@
             const point = screenPoint(event);
             lastScreenPoint = point;
             const activeTool = engine.state().toolState.activeTool;
-            if (event.button === 1 || activeTool === tools.TOOLS.HAND) {
+            if (readOnly || event.button === 1 || activeTool === tools.TOOLS.HAND) {
                 event.preventDefault();
                 beginPan(event, point);
                 render();
@@ -185,7 +190,7 @@
                 render();
                 return;
             }
-            engine.pointerMove(worldPoint(point), snapOptions(event));
+            if (!readOnly) engine.pointerMove(worldPoint(point), snapOptions(event));
             render();
         }
 
@@ -207,6 +212,7 @@
         }
 
         function beginLengthEntry(key) {
+            if (readOnly) return false;
             const state = engine.state();
             if (state.toolState.activeTool !== tools.TOOLS.PEN || !state.activePathId || !state.preview) return false;
             shell.showLengthInput(lastScreenPoint, key === "." || key === "," ? `0${key}` : key);
@@ -216,13 +222,14 @@
         function handleKeyDown(event) {
             if (event.target === shell.lengthInput) return;
             if (event.code === "Space") {
-                if (!event.repeat) {
+                if (!event.repeat && !readOnly) {
                     event.preventDefault();
                     engine.spaceDown();
                     render();
                 }
                 return;
             }
+            if (readOnly) return;
             if (/^[0-9.,]$/.test(event.key) && beginLengthEntry(event.key)) {
                 event.preventDefault();
                 return;
@@ -238,7 +245,7 @@
         }
 
         function handleKeyUp(event) {
-            if (event.code !== "Space") return;
+            if (readOnly || event.code !== "Space") return;
             event.preventDefault();
             engine.spaceUp();
             endPan();
@@ -246,6 +253,7 @@
         }
 
         function commitLength() {
+            if (readOnly) return;
             const raw = shell.lengthInput.value.trim().replace(",", ".");
             const lengthMm = Number(raw);
             if (!Number.isFinite(lengthMm) || lengthMm <= 0) {
@@ -260,6 +268,7 @@
         }
 
         function handleLengthKeyDown(event) {
+            if (readOnly) return;
             if (event.key === "Enter") {
                 event.preventDefault();
                 commitLength();
@@ -273,7 +282,7 @@
 
         function handleToolbarClick(event) {
             const button = event.target.closest("[data-tool]");
-            if (!button) return;
+            if (!button || button.disabled) return;
             shell.hideLengthInput();
             engine.setTool(button.dataset.tool);
             shell.canvas.focus({ preventScroll: true });
@@ -311,12 +320,13 @@
 
         return Object.freeze({
             shell,
-            state: () => Object.freeze({ camera, interaction: engine.state() }),
+            state: () => Object.freeze({ camera, interaction: engine.state(), readOnly }),
             render,
             resize,
             fitView,
             zoomBy,
             setTool(tool) {
+                if (readOnly && tool !== tools.TOOLS.HAND) return;
                 engine.setTool(tool);
                 render();
             },
