@@ -15,11 +15,13 @@
         intersection: 20,
         midpoint: 30,
         perpendicular: 40,
+        edge: 45,
         parallel: 50,
         extension: 60,
         horizontal: 70,
         vertical: 71,
         angle: 80,
+        grid: 90,
     });
     const segmentCache = new WeakMap();
 
@@ -102,19 +104,31 @@
         });
     }
 
-    function interiorIntersection(first, second) {
-        const denominator = first.dx * second.dy - first.dy * second.dx;
+    function lineIntersection(origin, dx, dy, record) {
+        const denominator = dx * record.dy - dy * record.dx;
         if (Math.abs(denominator) <= 1e-9) return null;
-        const qpx = second.start.xMm - first.start.xMm;
-        const qpy = second.start.yMm - first.start.yMm;
-        const t = (qpx * second.dy - qpy * second.dx) / denominator;
-        const u = (qpx * first.dy - qpy * first.dx) / denominator;
+        const qpx = record.start.xMm - origin.xMm;
+        const qpy = record.start.yMm - origin.yMm;
+        const t = (qpx * record.dy - qpy * record.dx) / denominator;
+        const u = (qpx * dy - qpy * dx) / denominator;
+        return Object.freeze({
+            t,
+            u,
+            point: geometry.point(origin.xMm + dx * t, origin.yMm + dy * t),
+        });
+    }
+
+    function interiorIntersection(first, second) {
+        const hit = lineIntersection(first.start, first.dx, first.dy, second);
         const endpointGuard = 1e-8;
-        if (t <= endpointGuard || t >= 1 - endpointGuard || u <= endpointGuard || u >= 1 - endpointGuard) return null;
-        return geometry.point(
-            first.start.xMm + first.dx * t,
-            first.start.yMm + first.dy * t
-        );
+        if (!hit) return null;
+        if (
+            hit.t <= endpointGuard
+            || hit.t >= 1 - endpointGuard
+            || hit.u <= endpointGuard
+            || hit.u >= 1 - endpointGuard
+        ) return null;
+        return hit.point;
     }
 
     function intersections(document) {
@@ -185,7 +199,7 @@
             }));
     }
 
-    function intersectionCandidates(document, rawPoint, request, toleranceMm) {
+    function storedIntersectionCandidates(document, rawPoint, request, toleranceMm) {
         return intersections(document)
             .map(item => ({ item, distanceMm: withinTolerance(rawPoint, item.point, toleranceMm) }))
             .filter(entry => entry.distanceMm !== null && notAnchor(request.origin, entry.item.point))
@@ -198,6 +212,40 @@
                 distanceMm: entry.distanceMm,
                 priority: PRIORITY.intersection,
             }));
+    }
+
+    function liveIntersectionCandidates(document, rawPoint, request, toleranceMm) {
+        if (!request.origin) return [];
+        const dx = rawPoint.xMm - request.origin.xMm;
+        const dy = rawPoint.yMm - request.origin.yMm;
+        if (dx * dx + dy * dy <= geometry.EPSILON_MM * geometry.EPSILON_MM) return [];
+        const endpointGuard = 1e-8;
+        return segments(document).map(record => {
+            const hit = lineIntersection(request.origin, dx, dy, record);
+            if (!hit || hit.t < -endpointGuard || hit.u < -endpointGuard || hit.u > 1 + endpointGuard) return null;
+            if (!notAnchor(request.origin, hit.point)) return null;
+            const distanceMm = withinTolerance(rawPoint, hit.point, toleranceMm);
+            if (distanceMm === null) return null;
+            return candidate({
+                key: `intersection:live:${record.id}`,
+                type: "intersection",
+                semantic: "intersection",
+                point: hit.point,
+                nodeId: null,
+                segmentId: record.id,
+                referenceSegmentId: record.id,
+                distanceMm,
+                priority: PRIORITY.intersection,
+                guides: [freezeGuide("intersection", request.origin, hit.point, record.id)],
+            });
+        }).filter(Boolean);
+    }
+
+    function intersectionCandidates(document, rawPoint, request, toleranceMm) {
+        return [
+            ...storedIntersectionCandidates(document, rawPoint, request, toleranceMm),
+            ...liveIntersectionCandidates(document, rawPoint, request, toleranceMm),
+        ];
     }
 
     function midpointCandidates(document, rawPoint, request, toleranceMm) {
@@ -238,6 +286,28 @@
                 distanceMm,
                 priority: PRIORITY.perpendicular,
                 guides: [freezeGuide("perpendicular", request.origin, foot.point, record.id)],
+            });
+        }).filter(Boolean);
+    }
+
+    function edgeCandidates(document, rawPoint, request, toleranceMm) {
+        const endpointGuard = 1e-8;
+        return segments(document).map(record => {
+            const projected = projection(record, rawPoint);
+            if (projected.t <= endpointGuard || projected.t >= 1 - endpointGuard) return null;
+            if (!notAnchor(request.origin, projected.point)) return null;
+            const distanceMm = withinTolerance(rawPoint, projected.point, toleranceMm);
+            if (distanceMm === null) return null;
+            return candidate({
+                key: `edge:${record.id}`,
+                type: "edge",
+                semantic: "edge",
+                point: projected.point,
+                nodeId: null,
+                segmentId: record.id,
+                referenceSegmentId: record.id,
+                distanceMm,
+                priority: PRIORITY.edge,
             });
         }).filter(Boolean);
     }
@@ -323,6 +393,27 @@
         });
     }
 
+    function gridCandidate(rawPoint, request, toleranceMm) {
+        const stepMm = Math.max(0, geometry.finiteNumber(request.gridStepMm));
+        if (stepMm <= geometry.EPSILON_MM) return null;
+        const point = geometry.point(
+            Math.round(rawPoint.xMm / stepMm) * stepMm,
+            Math.round(rawPoint.yMm / stepMm) * stepMm
+        );
+        if (!notAnchor(request.origin, point)) return null;
+        const distanceMm = withinTolerance(rawPoint, point, toleranceMm);
+        if (distanceMm === null) return null;
+        return candidate({
+            key: `grid:${geometry.roundMm(point.xMm)}:${geometry.roundMm(point.yMm)}:${geometry.roundMm(stepMm)}`,
+            type: "grid",
+            semantic: "grid",
+            point,
+            nodeId: null,
+            distanceMm,
+            priority: PRIORITY.grid,
+        });
+    }
+
     function generate(document, rawPoint, request, toleranceMm) {
         if (toleranceMm <= 0) return [];
         const result = [
@@ -331,11 +422,14 @@
             ...intersectionCandidates(document, rawPoint, request, toleranceMm),
             ...midpointCandidates(document, rawPoint, request, toleranceMm),
             ...perpendicularCandidates(document, rawPoint, request, toleranceMm),
+            ...edgeCandidates(document, rawPoint, request, toleranceMm),
             ...parallelCandidates(document, rawPoint, request, toleranceMm),
             ...extensionCandidates(document, rawPoint, request, toleranceMm),
         ];
         const angle = nearestAngleCandidate(request.origin, rawPoint, request, toleranceMm);
         if (angle) result.push(angle);
+        const grid = gridCandidate(rawPoint, request, toleranceMm);
+        if (grid) result.push(grid);
         return result;
     }
 
