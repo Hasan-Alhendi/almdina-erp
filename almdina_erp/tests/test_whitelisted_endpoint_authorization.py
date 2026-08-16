@@ -4,7 +4,7 @@ import ast
 import unittest
 from pathlib import Path
 
-from almdina_erp.almdina_erp.application.security.whitelisted_endpoint_contracts import (
+from almdina_erp.tests.security_endpoint_contracts import (
     EndpointAuthorizationContract,
     WHITELISTED_ENDPOINT_CONTRACTS,
 )
