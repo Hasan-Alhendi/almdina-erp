@@ -222,7 +222,13 @@
         const endpointGuard = 1e-8;
         return segments(document).map(record => {
             const hit = lineIntersection(request.origin, dx, dy, record);
-            if (!hit || hit.t < -endpointGuard || hit.u < -endpointGuard || hit.u > 1 + endpointGuard) return null;
+            if (
+                !hit
+                || hit.t <= endpointGuard
+                || hit.t > 1 + endpointGuard
+                || hit.u < -endpointGuard
+                || hit.u > 1 + endpointGuard
+            ) return null;
             if (!notAnchor(request.origin, hit.point)) return null;
             const distanceMm = withinTolerance(rawPoint, hit.point, toleranceMm);
             if (distanceMm === null) return null;
