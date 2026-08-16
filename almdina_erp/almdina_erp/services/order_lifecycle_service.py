@@ -29,7 +29,9 @@ def _cutting_stage(order_name: str) -> Any | None:
 
 
 def _cancel_stages(order_name: str, reason: str) -> list[str]:
-    from almdina_erp.almdina_erp.services.production_service import _log_event
+    from almdina_erp.almdina_erp.infrastructure.frappe.production_event_repository import (
+        log_event as _log_event,
+    )
 
     stages = frappe.get_all(
         "Production Stage",
