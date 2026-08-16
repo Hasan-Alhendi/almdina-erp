@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.version import ENGINE_VERSION
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot_json,
+)
 
 from .costing_adapter import FrappeOrderCostingAdapter
 from .cut_dimension_adapter import FrappeOrderCutDimensionAdapter
@@ -10,6 +13,13 @@ from .cut_dimension_plan_adapter import FrappeCutDimensionPlanAdapter
 from .document_access import FrappeOrderDocumentAccess
 from .edge_profile_repository import FrappeEdgeProfileRepository
 from .piece_policy_adapter import FrappeOrderPiecePolicyAdapter
+
+
+_PLAN_JSON_FIELDS = (
+    "cutting_plan_json",
+    "system_plan_json",
+    "custom_plan_json",
+)
 
 
 class FrappeDoorCuttingOrderSaveGateway:
@@ -82,6 +92,21 @@ class FrappeDoorCuttingOrderSaveGateway:
 
     def invalidate_current_plan(self) -> None:
         self.plan.invalidate_current_plan()
+
+    def sanitize_plan_snapshots(self) -> None:
+        """Keep every order plan field inside the non-financial JSON contract."""
+
+        for fieldname in _PLAN_JSON_FIELDS:
+            if not self.document.meta.has_field(fieldname):
+                continue
+            current = getattr(self.document, fieldname, None)
+            if current in (None, ""):
+                continue
+            setattr(
+                self.document,
+                fieldname,
+                sanitize_plan_snapshot_json(current),
+            )
 
     def ensure_special_shapes_documented(self) -> None:
         self.piece_policy.ensure_documented()

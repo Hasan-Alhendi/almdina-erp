@@ -6,6 +6,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot,
+)
+
 
 def create_plan_from_order(
     order: Any,
@@ -15,11 +19,15 @@ def create_plan_from_order(
 ) -> Any:
     """Persist the authoritative order result as an immutable revision snapshot."""
 
-    snapshot = (
+    raw_snapshot = (
         snapshot_override
         or frappe.parse_json(order.cutting_plan_json or "{}")
         or {}
     )
+    snapshot = sanitize_plan_snapshot(raw_snapshot)
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+
     validation = snapshot.get("validation") or {}
     unplaced = snapshot.get("unplaced") or []
 
@@ -51,24 +59,14 @@ def create_plan_from_order(
         waste_area / total_source_area * 100 if total_source_area else 0
     )
     # Inventory and remnant reuse are outside the product. Every physical sheet
-    # in an approved snapshot is therefore costed as one board.
+    # in an approved snapshot is therefore costed as one board. Cost values are
+    # persisted only in protected scalar fields, never inside snapshot_json.
     full_board_count = len(snapshot.get("sheets") or [])
 
     mdf_cost = full_board_count * flt(order.board_rate_usd)
     cutting_cost = full_board_count * flt(order.cutting_cost_per_board_usd)
     edge_cost = flt(order.edge_cost_usd)
     total_cost = mdf_cost + cutting_cost + edge_cost
-
-    snapshot["approved_cost"] = {
-        "board_rate_usd": flt(order.board_rate_usd),
-        "cutting_cost_per_board_usd": flt(
-            order.cutting_cost_per_board_usd
-        ),
-        "mdf_cost_usd": mdf_cost,
-        "cutting_cost_usd": cutting_cost,
-        "edge_cost_usd": edge_cost,
-        "total_cost_usd": total_cost,
-    }
 
     metrics = snapshot.get("industrial_metrics") or {}
     plan = frappe.new_doc("Cutting Plan")

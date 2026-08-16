@@ -40,6 +40,8 @@ class OrderSaveGateway(Protocol):
 
     def invalidate_current_plan(self) -> None: ...
 
+    def sanitize_plan_snapshots(self) -> None: ...
+
 
 @dataclass(frozen=True)
 class OrderSaveOutcome:
@@ -52,6 +54,8 @@ def process_order_save(gateway: OrderSaveGateway) -> OrderSaveOutcome:
 
     Expensive optimization runs only when explicitly requested. Ordinary saves
     either refresh metadata/costs on a reusable plan or invalidate stale output.
+    Before returning to Frappe, every persisted plan JSON is reduced to its
+    non-financial operational contract.
     """
 
     gateway.enforce_immutability()
@@ -73,6 +77,8 @@ def process_order_save(gateway: OrderSaveGateway) -> OrderSaveOutcome:
     else:
         gateway.invalidate_current_plan()
         action = "invalidated"
+
+    gateway.sanitize_plan_snapshots()
 
     return OrderSaveOutcome(
         plan_action=action,

@@ -6,6 +6,15 @@ from typing import Any
 import frappe
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot_json,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
+    document_has_capability,
+)
+
 
 EDITABLE_ORDER_STATES = {"Draft", "Pending Review", "Rejected"}
 
@@ -69,12 +78,62 @@ def _prepare_text_board_preview(preview: Any) -> bool:
     return True
 
 
-def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = None) -> dict[str, Any]:
+def _can_view_preview_costs(document: Any | None = None) -> bool:
+    """Resolve financial preview visibility from the canonical capability matrix."""
+
+    if document is None:
+        return doctype_has_capability(Capability.VIEW_COSTS)
+    return document_has_capability(document, Capability.VIEW_COSTS)
+
+
+def _serialize_order_preview(
+    preview: Any,
+    *,
+    cutting_plan_json: str | None = None,
+    include_financial: bool = False,
+) -> dict[str, Any]:
     board_description = (
         str(getattr(preview, "board_description", "") or "").strip()
         or str(getattr(preview, "board_item", "") or "").strip()
     )
-    return {
+
+    pieces: list[dict[str, Any]] = []
+    for row in (preview.pieces or []):
+        piece = {
+            "piece_no": row.piece_no,
+            "area_m2": row.area_m2,
+            "edge_meters": row.edge_meters,
+            "special_shape_status": row.special_shape_status,
+        }
+        if include_financial:
+            piece.update(
+                {
+                    "edge_rate_usd": row.edge_rate_usd,
+                    "edge_cost_usd": row.edge_cost_usd,
+                    "special_shape_estimated_unit_price_usd": row.special_shape_estimated_unit_price_usd,
+                    "special_shape_custom_unit_price_usd": row.special_shape_custom_unit_price_usd,
+                    "special_shape_final_unit_price_usd": row.special_shape_final_unit_price_usd,
+                    "special_shape_price_status": row.special_shape_price_status,
+                    "special_shape_price_note": row.special_shape_price_note,
+                    "special_shape_price_approved_by": row.special_shape_price_approved_by,
+                    "special_shape_price_approved_on": row.special_shape_price_approved_on,
+                }
+            )
+        pieces.append(piece)
+
+    selected_plan = (
+        cutting_plan_json
+        if cutting_plan_json is not None
+        else getattr(preview, "cutting_plan_json", None)
+    )
+    system_plan = (
+        getattr(preview, "system_plan_json", None)
+        or getattr(preview, "cutting_plan_json", None)
+        or ""
+    )
+    custom_plan = getattr(preview, "custom_plan_json", None) or ""
+
+    payload: dict[str, Any] = {
         "board_description": board_description,
         "board_length_cm": flt(getattr(preview, "board_length_cm", 0)),
         "board_width_cm": flt(getattr(preview, "board_width_cm", 0)),
@@ -85,43 +144,34 @@ def _serialize_order_preview(preview: Any, *, cutting_plan_json: str | None = No
         "required_boards": preview.required_boards,
         "waste_area_m2": preview.waste_area_m2,
         "waste_percent": preview.waste_percent,
-        "mdf_cost_usd": preview.mdf_cost_usd,
-        "cutting_cost_usd": preview.cutting_cost_usd,
-        "edge_cost_usd": preview.edge_cost_usd,
-        "total_cost_usd": preview.total_cost_usd,
-        "special_shapes_baseline_cost_usd": preview.special_shapes_baseline_cost_usd,
-        "special_shapes_estimated_total_usd": preview.special_shapes_estimated_total_usd,
-        "special_shapes_final_total_usd": preview.special_shapes_final_total_usd,
-        "customer_quote_total_usd": preview.customer_quote_total_usd,
-        "customer_quote_status": preview.customer_quote_status,
         "packing_method": preview.packing_method,
         "packing_score": preview.packing_score,
         "packing_mode": getattr(preview, "packing_mode", None),
         "engine_version": preview.engine_version,
-        "cutting_plan_json": cutting_plan_json if cutting_plan_json is not None else preview.cutting_plan_json,
-        "system_plan_json": getattr(preview, "system_plan_json", None) or preview.cutting_plan_json,
-        "custom_plan_json": getattr(preview, "custom_plan_json", None) or "",
+        "cutting_plan_json": sanitize_plan_snapshot_json(selected_plan or ""),
+        "system_plan_json": sanitize_plan_snapshot_json(system_plan),
+        "custom_plan_json": sanitize_plan_snapshot_json(custom_plan),
         "approved_plan_source": getattr(preview, "approved_plan_source", None) or "System",
         "approved_plan": getattr(preview, "approved_plan", None),
-        "pieces": [
-            {
-                "piece_no": row.piece_no,
-                "area_m2": row.area_m2,
-                "edge_meters": row.edge_meters,
-                "edge_rate_usd": row.edge_rate_usd,
-                "edge_cost_usd": row.edge_cost_usd,
-                "special_shape_status": row.special_shape_status,
-                "special_shape_estimated_unit_price_usd": row.special_shape_estimated_unit_price_usd,
-                "special_shape_custom_unit_price_usd": row.special_shape_custom_unit_price_usd,
-                "special_shape_final_unit_price_usd": row.special_shape_final_unit_price_usd,
-                "special_shape_price_status": row.special_shape_price_status,
-                "special_shape_price_note": row.special_shape_price_note,
-                "special_shape_price_approved_by": row.special_shape_price_approved_by,
-                "special_shape_price_approved_on": row.special_shape_price_approved_on,
-            }
-            for row in (preview.pieces or [])
-        ],
+        "pieces": pieces,
     }
+
+    if include_financial:
+        payload.update(
+            {
+                "mdf_cost_usd": preview.mdf_cost_usd,
+                "cutting_cost_usd": preview.cutting_cost_usd,
+                "edge_cost_usd": preview.edge_cost_usd,
+                "total_cost_usd": preview.total_cost_usd,
+                "special_shapes_baseline_cost_usd": preview.special_shapes_baseline_cost_usd,
+                "special_shapes_estimated_total_usd": preview.special_shapes_estimated_total_usd,
+                "special_shapes_final_total_usd": preview.special_shapes_final_total_usd,
+                "customer_quote_total_usd": preview.customer_quote_total_usd,
+                "customer_quote_status": preview.customer_quote_status,
+            }
+        )
+
+    return payload
 
 
 def _approved_order_plan_name(order_name: str) -> str | None:
@@ -155,7 +205,8 @@ def _approved_snapshot_for_order(order_name: str) -> str | None:
     plan_name = _approved_order_plan_name(order_name)
     if not plan_name:
         return None
-    return frappe.db.get_value("Cutting Plan", plan_name, "snapshot_json")
+    raw = frappe.db.get_value("Cutting Plan", plan_name, "snapshot_json")
+    return sanitize_plan_snapshot_json(raw or "")
 
 
 @frappe.whitelist()
@@ -178,9 +229,11 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         return _serialize_order_preview(
             stored,
             cutting_plan_json=approved_snapshot or stored.cutting_plan_json,
+            include_financial=_can_view_preview_costs(stored),
         )
 
     preview = frappe.get_doc(payload)
+    stored = None
     if name and not name.startswith("new-") and frappe.db.exists("Door Cutting Order", name):
         stored = frappe.get_doc("Door Cutting Order", name)
         stored.check_permission("read")
@@ -224,17 +277,24 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         preview.engine_version = ""
         preview.cutting_plan_json = ""
 
-    return _serialize_order_preview(preview)
+    return _serialize_order_preview(
+        preview,
+        include_financial=_can_view_preview_costs(stored),
+    )
 
 
 @frappe.whitelist()
 def get_approved_cutting_plan_snapshot(order_name: str) -> dict[str, Any]:
-    """Return immutable Order Plan metadata used by official print/DXF consumers."""
+    """Return immutable non-financial Order Plan metadata for print/DXF consumers."""
+
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
     plan_name = _approved_order_plan_name(order_name)
     if not plan_name:
-        return {"cutting_plan": None, "snapshot_json": order.cutting_plan_json}
+        return {
+            "cutting_plan": None,
+            "snapshot_json": sanitize_plan_snapshot_json(order.cutting_plan_json or ""),
+        }
     plan = frappe.get_doc("Cutting Plan", plan_name)
     return {
         "cutting_plan": plan.name,
@@ -242,5 +302,5 @@ def get_approved_cutting_plan_snapshot(order_name: str) -> dict[str, Any]:
         "approved_by": plan.approved_by,
         "approved_on": plan.approved_on,
         "engine_version": plan.engine_version,
-        "snapshot_json": plan.snapshot_json,
+        "snapshot_json": sanitize_plan_snapshot_json(plan.snapshot_json or ""),
     }

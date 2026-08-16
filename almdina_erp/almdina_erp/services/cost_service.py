@@ -5,6 +5,10 @@ from typing import Any
 import frappe
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot_json,
+)
+
 
 def _internal_loss(order_name: str) -> float:
     return flt(
@@ -64,7 +68,30 @@ def on_replacement_update(doc: Any, method: str | None = None) -> None:
         sync_order_costs(doc.door_cutting_order)
 
 
+def _sanitize_cutting_plan_snapshot(doc: Any) -> None:
+    """Persist Cutting Plan geometry without embedded financial metadata."""
+
+    current = str(getattr(doc, "snapshot_json", None) or "")
+    if not current:
+        return
+    sanitized = sanitize_plan_snapshot_json(current)
+    if sanitized == current:
+        return
+
+    doc.snapshot_json = sanitized
+    if getattr(doc, "name", None):
+        frappe.db.set_value(
+            "Cutting Plan",
+            doc.name,
+            "snapshot_json",
+            sanitized,
+            update_modified=False,
+        )
+
+
 def on_order_plan_update(doc: Any, method: str | None = None) -> None:
+    _sanitize_cutting_plan_snapshot(doc)
+
     if (doc.plan_kind or "Order") != "Order" or doc.status != "Approved" or not doc.door_cutting_order:
         return
 
