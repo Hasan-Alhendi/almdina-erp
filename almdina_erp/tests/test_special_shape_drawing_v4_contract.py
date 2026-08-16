@@ -71,6 +71,81 @@ def test_v4_drawing_rejects_duplicate_length_dimensions_for_segment():
         validate_special_shape_drawing(drawing)
 
 
+def test_v4_drawing_accepts_constraint_foundation():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {"id": "c1", "type": "horizontal", "segmentId": "s1"},
+        {"id": "c2", "type": "vertical", "segmentId": "s2"},
+        {
+            "id": "c3",
+            "type": "fixed-length",
+            "segmentId": "s1",
+            "valueMm": 600,
+            "anchorNodeId": "n1",
+        },
+    ]
+    assert validate_special_shape_drawing(drawing) == drawing
+
+
+def test_v4_drawing_rejects_constraint_with_missing_segment():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {"id": "c1", "type": "horizontal", "segmentId": "missing"}
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_duplicate_constraint_for_segment():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {"id": "c1", "type": "horizontal", "segmentId": "s1"},
+        {"id": "c2", "type": "horizontal", "segmentId": "s1"},
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_conflicting_axis_constraints():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {"id": "c1", "type": "horizontal", "segmentId": "s1"},
+        {"id": "c2", "type": "vertical", "segmentId": "s1"},
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_invalid_fixed_length_anchor():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {
+            "id": "c1",
+            "type": "fixed-length",
+            "segmentId": "s1",
+            "valueMm": 750,
+            "anchorNodeId": "n3",
+        }
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_non_positive_fixed_length():
+    drawing = _rectangle_document()
+    drawing["constraints"] = [
+        {
+            "id": "c1",
+            "type": "fixed-length",
+            "segmentId": "s1",
+            "valueMm": 0,
+            "anchorNodeId": "n1",
+        }
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
 def test_v4_drawing_rejects_missing_node_reference():
     drawing = _rectangle_document()
     drawing["segments"][1]["endNodeId"] = "missing"
@@ -103,6 +178,9 @@ def test_v4_validation_does_not_mutate_document():
     drawing = _rectangle_document()
     drawing["dimensions"] = [
         {"id": "d1", "type": "segment-length", "segmentId": "s1"}
+    ]
+    drawing["constraints"] = [
+        {"id": "c1", "type": "horizontal", "segmentId": "s1"}
     ]
     before = copy.deepcopy(drawing)
     validate_special_shape_drawing(drawing)
