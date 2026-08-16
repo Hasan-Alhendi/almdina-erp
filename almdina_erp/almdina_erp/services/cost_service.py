@@ -3,10 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import flt
 
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot_json,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_document_capability,
 )
 
 
@@ -113,6 +118,13 @@ def on_order_plan_update(doc: Any, method: str | None = None) -> None:
 
 @frappe.whitelist()
 def refresh_order_costs(order_name: str) -> dict[str, Any]:
+    """Refresh derived cost totals only for users allowed to view order costs."""
+
     doc = frappe.get_doc("Door Cutting Order", order_name)
     doc.check_permission("read")
+    require_document_capability(
+        doc,
+        Capability.VIEW_COSTS,
+        message=_("لا تملك صلاحية عرض أو تحديث تكلفة هذا الطلب."),
+    )
     return sync_order_costs(order_name)
