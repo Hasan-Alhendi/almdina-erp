@@ -446,9 +446,19 @@
     }
 
     function schedule(frm) {
-        compactTable(frm);
-        requestAnimationFrame(() => compactTable(frm));
-        setTimeout(() => compactTable(frm), 180);
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            compactTable(frm);
+            requestAnimationFrame(() => compactTable(frm));
+            setTimeout(() => compactTable(frm), 180);
+            return;
+        }
+        lifecycle.schedule(
+            frm,
+            "compact-measurements",
+            () => compactTable(frm),
+            { delays: [180] }
+        );
     }
 
     frappe.ui.form.on("Door Cutting Order", {
