@@ -1,0 +1,68 @@
+name: F6 DCO Frontend Targeted Cleanup
+
+on:
+  push:
+    branches:
+      - "agent/f6*"
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  dco-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate measurement JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js
+          node --check almdina_erp/tests/js/measurement_lifecycle.test.js
+
+      - name: Enforce measurement lifecycle ownership contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from almdina_erp.tests import test_dco_measurement_lifecycle_architecture as checks
+          from almdina_erp.tests import test_measurement_resilience_ux as resilience_checks
+          from almdina_erp.tests import test_table_performance_ux as performance_checks
+
+          modules = [checks, resilience_checks, performance_checks]
+          total = 0
+          for module in modules:
+              tests = [
+                  getattr(module, name)
+                  for name in dir(module)
+                  if name.startswith("test_") and callable(getattr(module, name))
+              ]
+              for test in tests:
+                  print(f"Running {module.__name__}.{test.__name__}...")
+                  test()
+              total += len(tests)
+          print(f"Validated {total} DCO measurement lifecycle/UX contracts")
+          PY
+
+      - name: Simulate measurement lifecycle cancellation and freshness
+        run: node almdina_erp/tests/js/measurement_lifecycle.test.js
