@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
 HELPER = ROOT / "public" / "js" / "page_revisit_refresh.js"
 PAGES = ROOT / "almdina_erp" / "page"
+FACTORY_PERMISSIONS_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 
 # Frappe renders a desk page once and only fires "show" on later visits. Every
 # data-driven page must reload then, otherwise the operator keeps seeing the
@@ -39,8 +40,27 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
 
     def test_every_data_driven_page_reloads_when_revisited(self) -> None:
         for page in DATA_DRIVEN_PAGES:
-            source = (PAGES / page / f"{page}.js").read_text(encoding="utf-8")
-            self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", source, page)
+            page_source = (PAGES / page / f"{page}.js").read_text(encoding="utf-8")
+            if page == "factory_permissions":
+                controller_source = FACTORY_PERMISSIONS_CONTROLLER.read_text(encoding="utf-8")
+                self.assertIn(
+                    "/assets/almdina_erp/js/factory_permissions/controller.js",
+                    page_source,
+                    page,
+                )
+                self.assertIn(
+                    "AlmdinaPageRevisit.refreshOnRevisit(",
+                    controller_source,
+                    page,
+                )
+                self.assertIn(
+                    "state.saving || isDirty() ? null : loadConsole()",
+                    controller_source,
+                    page,
+                )
+                continue
+
+            self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", page_source, page)
 
     def test_inbox_opens_the_canonical_order_form_instead_of_loading_a_panel(self) -> None:
         source = (PAGES / "shop_floor_inbox" / "shop_floor_inbox.js").read_text(
