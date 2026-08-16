@@ -7,7 +7,7 @@ const path = require("node:path");
 const ROOT = path.resolve(__dirname, "../..");
 const read = relative => fs.readFileSync(path.join(ROOT, relative), "utf8");
 
-const bootstrap = read("public/js/door_cutting_order/drawing/special_shape_facade.js");
+const activeFacade = read("public/js/door_cutting_order/drawing/special_shape_facade.js");
 const domain = read("public/js/door_drawing_v3/domain/bezier_path_domain.js");
 const topologyDomain = read("public/js/door_drawing_v3/domain/path_topology_domain.js");
 const selection = read("public/js/door_drawing_v3/domain/bezier_selection_domain.js");
@@ -18,33 +18,13 @@ const editing = read("public/js/door_drawing_v3/application/bezier_path_editing.
 const topologyApp = read("public/js/door_drawing_v3/application/path_topology.js");
 const css = read("public/css/door_drawing_v3_bezier.css");
 
-function position(source, token) {
-    const index = source.indexOf(token);
-    assert.ok(index >= 0, `Expected ${token}`);
-    return index;
-}
-function before(source, first, second) {
-    assert.ok(position(source, first) < position(source, second), `${first} must load before ${second}`);
-}
-
-before(bootstrap, "/domain/smart_path_domain.js", "/domain/bezier_path_domain.js");
-before(bootstrap, "/domain/bezier_path_domain.js", "/domain/path_topology_domain.js");
-before(bootstrap, "/domain/path_topology_domain.js", "/domain/vector_selection.js");
-before(bootstrap, "/domain/vector_selection.js", "/domain/bezier_selection_domain.js");
-before(bootstrap, "/infrastructure/smart_path_persistence.js", "/infrastructure/bezier_path_persistence.js");
-before(bootstrap, "/presentation/smart_path_view.js", "/presentation/bezier_path_view.js");
-before(bootstrap, "/presentation/bezier_path_view.js", "/presentation/path_topology_view.js");
-before(bootstrap, "/application/smart_pen.js", "/application/bezier_path_editing.js");
-before(bootstrap, "/application/bezier_path_editing.js", "/application/vector_editing.js");
-before(bootstrap, "/application/vector_editing.js", "/application/path_topology.js");
-
-assert.match(bootstrap, /door_drawing_v3_bezier\.css/);
-assert.match(bootstrap, /__doorDrawingV3BezierPaths:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3BezierPen:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3AdvancedNodeEditing:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3BezierPersistence:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3PathTopology:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3PathJoinSplit:\s*true/);
+// V3 Bezier remains regression-covered as a legacy bounded subsystem. It is no
+// longer loaded by the public special-shape facade, whose runtime owner is V4.
+assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(activeFacade, /__doorDrawingV3Bezier/);
 
 assert.match(domain, /NODE_CORNER\s*=\s*"corner"/);
 assert.match(domain, /NODE_SMOOTH\s*=\s*"smooth"/);
@@ -106,4 +86,4 @@ assert.match(css, /\.ddv3-topology-control/);
 assert.match(css, /\.ddv3-topology-separator/);
 assert.match(css, /@media \(max-width: 900px\)/);
 
-console.log("Door Drawing V3 Bezier and path topology architecture contracts passed");
+console.log("Door Drawing V3 Bezier legacy subsystem contracts passed; active facade remains V4");

@@ -28,49 +28,14 @@ const magneticCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/do
 const smartPenCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_pen.css"), "utf8");
 const smartGuidesCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_guides.css"), "utf8");
 
-for (const modulePath of [
-    "door_drawing_v3/domain/geometry.js",
-    "door_drawing_v3/domain/document.js",
-    "door_drawing_v3/domain/smart_path_domain.js",
-    "door_drawing_v3/application/history.js",
-    "door_drawing_v3/infrastructure/persistence_adapter.js",
-    "door_drawing_v3/infrastructure/smart_path_persistence.js",
-    "door_drawing_v3/application/snapping.js",
-    "door_drawing_v3/application/smart_path_snapping.js",
-    "door_drawing_v3/application/move_snap_policy.js",
-    "door_drawing_v3/application/smart_guides.js",
-    "door_drawing_v3/application/shape_handles.js",
-    "door_drawing_v3/application/precision_input.js",
-    "door_drawing_v3/application/smart_freehand_policy.js",
-    "door_drawing_v3/application/smart_stroke_intelligence.js",
-    "door_drawing_v3/presentation/canvas_view.js",
-    "door_drawing_v3/presentation/canvas_policy.js",
-    "door_drawing_v3/presentation/smart_path_view.js",
-    "door_drawing_v3/presentation/smart_guides_view.js",
-    "door_drawing_v3/application/editor_stage2.js",
-    "door_drawing_v3/application/magnetic_connection.js",
-    "door_drawing_v3/application/smart_pen.js",
-]) assert.match(entry, new RegExp(modulePath.replaceAll("/", "\\/").replaceAll(".", "\\.")));
-assert.match(entry, /door_drawing_v3_precision\.css/);
-assert.match(entry, /door_drawing_v3_magnetic\.css/);
-assert.match(entry, /door_drawing_v3_smart_pen\.css/);
-assert.match(entry, /door_drawing_v3_smart_guides\.css/);
-assert.match(entry, /__doorDrawingV3:\s*true/);
-assert.match(entry, /__doorDrawingV3Shapes:\s*true/);
-assert.match(entry, /__doorDrawingV3Snapping:\s*true/);
-assert.match(entry, /__doorDrawingV3Handles:\s*true/);
-assert.match(entry, /__doorDrawingV3PrecisionInput:\s*true/);
-assert.match(entry, /__doorDrawingV3MagneticConnection:\s*true/);
-assert.match(entry, /__doorDrawingV3EasyMoveSnap:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartGuides:\s*true/);
-assert.match(entry, /__doorDrawingV3SurfaceSnap:\s*true/);
-assert.match(entry, /__doorDrawingV3EqualLengthSnap:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartPen:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartFreehand:\s*true/);
-assert.match(entry, /__doorDrawingV3LiveStabilizer:\s*true/);
-assert.match(entry, /__doorDrawingV3MixedStrokeRecognition:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartPath:\s*true/);
-assert.match(entry, /__doorDrawingV3NodeEditing:\s*true/);
+// V3 remains covered as an isolated legacy subsystem, but it no longer owns the
+// public special-shape facade. The active facade must stay V4-only so stale V3
+// assumptions cannot silently become runtime dependencies again.
+assert.match(entry, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(entry, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(entry, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(entry, /door_drawing_v3\//);
+assert.doesNotMatch(entry, /__doorDrawingV3/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
 
 for (const tool of ["line", "rectangle", "circle", "arc"]) assert.match(view, new RegExp(`data-ddv3-tool=\\"${tool}\\"`));
@@ -215,4 +180,4 @@ assert.match(smartGuidesCss, /\.ddv3-smart-guide-surface/);
 assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss + smartGuidesCss, /^body\s*\{/m);
 assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss + smartGuidesCss, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 intelligent freehand architecture contract passed");
+console.log("Door Drawing V3 legacy subsystem architecture contract passed; active facade remains V4");

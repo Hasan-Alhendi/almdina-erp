@@ -106,14 +106,15 @@ def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
         assert consumer in form_scripts
 
 
-def test_special_shape_button_resolves_v3_editor_at_click_time():
+def test_special_shape_button_resolves_v4_editor_at_click_time():
     operator = _source(OPERATOR)
     editor = _source(EDITOR)
     assert 'event.target.closest(".dco-special-sketch-button")' in operator
     assert "row && window.AlmdinaSpecialShapeEditor" in operator
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = Object.freeze(facade);" in editor
-    assert "__doorDrawingV3: true" in editor
+    assert "__doorDrawingV4: true" in editor
+    assert "door_drawing_v4/domain/geometry.js" in editor
     assert "function open(frm, row" in editor
 
 

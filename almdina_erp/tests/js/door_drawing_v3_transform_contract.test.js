@@ -7,26 +7,17 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
-const bootstrap = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
+const activeFacade = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
 const domain = read("almdina_erp/public/js/door_drawing_v3/domain/transform_domain.js");
 const view = read("almdina_erp/public/js/door_drawing_v3/presentation/transform_box_view.js");
 const application = read("almdina_erp/public/js/door_drawing_v3/application/transform_box.js");
 const css = read("almdina_erp/public/css/door_drawing_v3_transform.css");
 
-const bezierDomain = bootstrap.indexOf("domain/bezier_path_domain.js");
-const transformDomain = bootstrap.indexOf("domain/transform_domain.js");
-const vectorView = bootstrap.indexOf("presentation/vector_editing_view.js");
-const transformView = bootstrap.indexOf("presentation/transform_box_view.js");
-const shortcuts = bootstrap.indexOf("application/editor_shortcuts.js");
-const transformApplication = bootstrap.indexOf("application/transform_box.js");
-assert.ok(bezierDomain >= 0 && transformDomain > bezierDomain, "Transform domain must load after Bezier geometry");
-assert.ok(vectorView >= 0 && transformView > vectorView, "Transform view must layer on top of vector selection view");
-assert.ok(shortcuts >= 0 && transformApplication > shortcuts, "Transform interactions must install after professional keyboard policies");
-assert.match(bootstrap, /door_drawing_v3_transform\.css/);
-assert.match(bootstrap, /__doorDrawingV3TransformBox:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3TransformResize:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3TransformFlip:\s*true/);
-assert.match(bootstrap, /__doorDrawingV3TransformInspector:\s*true/);
+assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(activeFacade, /__doorDrawingV3Transform/);
 
 assert.match(domain, /function matrix\(/);
 assert.match(domain, /function multiply\(/);
@@ -76,4 +67,4 @@ assert.match(css, /\.ddv3-transform-inspector/);
 assert.doesNotMatch(css, /^body\s*\{/m);
 assert.doesNotMatch(css, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 professional transform architecture contract passed");
+console.log("Door Drawing V3 professional transform legacy contract passed; active facade remains V4");

@@ -107,14 +107,11 @@ assert.equal(M.normalizeTool("rectangle"), "rectangle");
 
 const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const modifiers = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/tool_modifiers.js"), "utf8");
-assert.match(entry, /application\/tool_modifier_policy\.js/);
-assert.match(entry, /application\/tool_modifiers\.js/);
-assert.ok(entry.indexOf("application/tool_modifier_policy.js") < entry.indexOf("presentation/canvas_view.js"), "Pure modifier policy must load before presentation/controllers");
-assert.ok(entry.indexOf("application/magnetic_connection.js") < entry.indexOf("application/tool_modifiers.js"));
-assert.ok(entry.indexOf("application/tool_modifiers.js") < entry.indexOf("application/smart_pen.js"), "Modifier controller must install before smart-pen capture handlers");
-assert.match(entry, /__doorDrawingV3PersistentTools:\s*true/);
-assert.match(entry, /__doorDrawingV3ModifierConstraints:\s*true/);
-assert.match(entry, /__doorDrawingV3TemporarySelect:\s*true/);
+assert.match(entry, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(entry, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(entry, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(entry, /door_drawing_v3\//);
+assert.doesNotMatch(entry, /__doorDrawingV3PersistentTools|__doorDrawingV3ModifierConstraints|__doorDrawingV3TemporarySelect/);
 assert.match(modifiers, /function beginConstrainedPen/);
 assert.match(modifiers, /function promoteFreehandToConstraint/);
 assert.match(modifiers, /options\.axisLock = true/);
@@ -124,4 +121,4 @@ assert.match(modifiers, /G\.line\(nextId\("line"\)/);
 assert.match(modifiers, /event\.stopImmediatePropagation\(\)/);
 assert.doesNotMatch(modifiers, /special_shape_geometry_json\s*=/, "Modifier shortcuts must not fabricate manufacturing geometry");
 
-console.log("Door Drawing V3 smart stroke intelligence and modifier-key tests passed");
+console.log("Door Drawing V3 smart stroke intelligence and modifier-key legacy tests passed; active facade remains V4");
