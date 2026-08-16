@@ -41,13 +41,13 @@ assert.equal(preview.semantic, "vertical");
 engine.inputLength(1200);
 
 preview = engine.pointerMove(G.point(0, 1198), { toleranceMm: 6 }).preview;
-assert.equal(preview.type, "angle");
-assert.equal(preview.semantic, "horizontal");
+assert.equal(preview.type, "parallel", "parallel relation must outrank a generic horizontal angle guide");
+assert.equal(preview.semantic, "parallel");
 engine.inputLength(600);
 
 preview = engine.pointerMove(G.point(2, 3), { toleranceMm: 6 }).preview;
-assert.equal(preview.type, "endpoint");
-assert.equal(preview.semantic, "endpoint");
+assert.equal(preview.type, "close", "returning near the first node must advertise a close operation");
+assert.equal(preview.semantic, "close");
 assert.equal(preview.nodeId, startNodeId, "near-start preview must target the original shared node");
 action = engine.pointerDown(G.point(2, 3), { toleranceMm: 6 });
 assert.equal(action.kind, "path-closed");
