@@ -30,6 +30,14 @@ def _removed_paths() -> set[str]:
     }
 
 
+def _stage11_discoveries() -> set[str]:
+    return {
+        path
+        for migration in _migrations()["migrations"]
+        for path in migration.get("stage11_discoveries", [])
+    }
+
+
 class TestBackendLegacyAuditContract(unittest.TestCase):
     def test_inventory_is_explicit_disjoint_and_tracks_migrated_sources(self) -> None:
         audit = _inventory()
@@ -51,6 +59,7 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
         )
 
         removed = _removed_paths()
+        discoveries = _stage11_discoveries()
         self.assertTrue(removed)
         seen: dict[str, str] = {}
         for classification in ("active", "compatibility", "legacy"):
@@ -69,7 +78,14 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
 
         self.assertEqual(classifications["dead"], [])
         for path in removed:
-            self.assertIn(path, seen)
+            if path in seen:
+                self.assertEqual(seen[path], "legacy", path)
+            else:
+                self.assertIn(path, discoveries, f"Unclassified removal: {path}")
+                self.assertFalse((REPO_ROOT / path).exists(), path)
+        for path in discoveries:
+            self.assertIn(path, removed, path)
+            self.assertNotIn(path, seen, f"Stage 11 discovery was already in Stage 10: {path}")
 
     def test_only_thin_controller_is_the_active_frappe_override(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
@@ -94,6 +110,8 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
             "FastDoorCuttingOrder",
             "TextBoardDoorCuttingOrder",
             "DomainDoorCuttingOrder",
+            "CostingDoorCuttingOrder",
+            "PlanDoorCuttingOrder",
         ):
             self.assertNotIn(alternate, source)
 
@@ -103,6 +121,8 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
             "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_fast.py",
             "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_text_board.py",
             "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_domain.py",
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_costing.py",
+            "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_plan.py",
         }
         self.assertTrue(expected.issubset(removed))
         for relative in expected:
@@ -113,9 +133,13 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
             "door_cutting_order_fast",
             "door_cutting_order_text_board",
             "door_cutting_order_domain",
+            "door_cutting_order_costing",
+            "door_cutting_order_plan",
             "FastDoorCuttingOrder",
             "TextBoardDoorCuttingOrder",
             "DomainDoorCuttingOrder",
+            "CostingDoorCuttingOrder",
+            "PlanDoorCuttingOrder",
         )
         offenders: list[str] = []
         for path in sorted(runtime_root.rglob("*.py")):
