@@ -47,12 +47,17 @@
         if (!segment) throw new Error(`Drawing segment not found: ${id}`);
         const value = geometry.roundMm(valueMm);
         if (value <= geometry.EPSILON_MM) throw new Error("Fixed length must be greater than zero");
-        const anchorNodeId = String(options.anchorNodeId || segment.startNodeId);
+
+        const current = existing(document, id, documentModel.CONSTRAINT_TYPES.FIXED_LENGTH);
+        const anchorNodeId = String(
+            options.anchorNodeId !== undefined && options.anchorNodeId !== null
+                ? options.anchorNodeId
+                : (current && current.anchorNodeId) || segment.startNodeId
+        );
         if (![segment.startNodeId, segment.endNodeId].includes(anchorNodeId)) {
             throw new Error("Fixed-length anchor must be a segment endpoint");
         }
 
-        const current = existing(document, id, documentModel.CONSTRAINT_TYPES.FIXED_LENGTH);
         if (current) {
             const unchanged = current.valueMm === value && current.anchorNodeId === anchorNodeId;
             return Object.freeze({
