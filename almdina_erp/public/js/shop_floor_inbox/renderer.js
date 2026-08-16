@@ -25,11 +25,15 @@
         });
         const $section = $(wrapper).find(".layout-main-section");
         $section.html(`
-            <div class="almdina-sf-tabs">
-                <button type="button" class="almdina-sf-tab is-active" data-sf-mode="board">${__("لوحة الإنتاج")}</button>
-                <button type="button" class="almdina-sf-tab" data-sf-mode="inbox">${__("قائمة الطلبات")}</button>
-                <button type="button" class="almdina-sf-tab" data-sf-mode="account">${__("الحساب")}</button>
-                <button type="button" class="btn btn-default almdina-sf-refresh">${__("تحديث")}</button>
+            <div class="almdina-sf-nav" aria-label="${__("التنقل في صالة الإنتاج")}">
+                <div class="almdina-sf-tabs" role="tablist" aria-label="${__("أقسام صالة الإنتاج")}">
+                    <button type="button" class="almdina-sf-tab is-active" role="tab" aria-selected="true" data-sf-mode="board">${__("لوحة الإنتاج")}</button>
+                    <button type="button" class="almdina-sf-tab" role="tab" aria-selected="false" data-sf-mode="inbox">${__("قائمة الطلبات")}</button>
+                    <button type="button" class="almdina-sf-tab" role="tab" aria-selected="false" data-sf-mode="account">${__("الحساب")}</button>
+                    <button type="button" class="btn btn-default almdina-sf-refresh" aria-label="${__("تحديث بيانات صالة الإنتاج")}">
+                        <span aria-hidden="true">↻</span><span>${__("تحديث")}</span>
+                    </button>
+                </div>
             </div>
             <div class="almdina-sf-content"></div>
         `);
@@ -49,19 +53,57 @@
 
     function syncTabs(shell, mode) {
         shell.$tabs.find(".almdina-sf-tab").each(function () {
-            $(this).toggleClass("is-active", $(this).attr("data-sf-mode") === mode);
+            const active = $(this).attr("data-sf-mode") === mode;
+            $(this).toggleClass("is-active", active);
+            $(this).attr("aria-selected", active ? "true" : "false");
         });
         shell.$tabs.find(".almdina-sf-refresh").toggle(mode !== "account");
     }
 
+    function pageHero(kicker, title, description, stats = "") {
+        return `
+            <header class="almdina-sf-hero">
+                <div class="almdina-sf-hero-copy">
+                    <span class="almdina-sf-eyebrow">${esc(kicker)}</span>
+                    <h2>${esc(title)}</h2>
+                    <p>${esc(description)}</p>
+                </div>
+                ${stats ? `<div class="almdina-sf-hero-stats">${stats}</div>` : ""}
+            </header>`;
+    }
+
+    function heroStat(label, value, tone = "neutral") {
+        return `
+            <div class="almdina-sf-hero-stat" data-tone="${esc(tone)}">
+                <b>${esc(value)}</b><span>${esc(label)}</span>
+            </div>`;
+    }
+
+    function emptyState(title, description, tone = "neutral") {
+        return `
+            <div class="almdina-sf-empty" data-tone="${esc(tone)}" role="status">
+                <span class="almdina-sf-empty-icon" aria-hidden="true">${tone === "ready" ? "✓" : "◇"}</span>
+                <div><b>${esc(title)}</b><p>${esc(description)}</p></div>
+            </div>`;
+    }
+
     function loading(shell, message) {
-        shell.$content.html(`<div class="almdina-sf-shell"><div class="text-muted">${esc(message)}</div></div>`);
+        shell.$content.html(`
+            <div class="almdina-sf-shell">
+                <div class="almdina-sf-state almdina-sf-loading" role="status" aria-live="polite">
+                    <span class="almdina-sf-spinner" aria-hidden="true"></span>
+                    <div><b>${__("جاري التحميل")}</b><span>${esc(message)}</span></div>
+                </div>
+            </div>`);
     }
 
     function renderError(shell, message) {
         shell.$content.html(`
             <div class="almdina-sf-shell">
-                <div class="almdina-sf-empty">${esc(message || __("تعذر تحميل البيانات."))}</div>
+                <div class="almdina-sf-state is-error" role="alert">
+                    <span class="almdina-sf-state-icon" aria-hidden="true">!</span>
+                    <div><b>${__("تعذر تحديث صالة الإنتاج")}</b><span>${esc(message || __("تعذر تحميل البيانات."))}</span></div>
+                </div>
             </div>
         `);
     }
@@ -71,7 +113,7 @@
         const action = controller && controller.actionFor(ViewModel.quickActionContext(row, mode));
         if (!action) return "";
         const buttonClass = action.indicator === "success" ? "btn-success" : "btn-primary";
-        return `<button type="button" class="btn ${buttonClass} sf-quick-action" style="flex:1;min-height:44px;font-weight:750;border-radius:10px">${esc(action.label)}</button>`;
+        return `<button type="button" class="btn ${buttonClass} sf-quick-action" aria-label="${esc(`${action.label} — ${row.door_cutting_order || ""}`)}">${esc(action.label)}</button>`;
     }
 
     function orderCardHtml(row, mode, { compact = false, terminal = false, completed = false } = {}) {
@@ -85,8 +127,9 @@
             : (completed && row.current_stage_type
                 ? statusLabel(row.status === "Completed" ? "Completed" : row.status)
                 : statusLabel(row.status));
+        const customerLine = [row.customer || "", row.order_date || ""].filter(Boolean).join(" · ");
         return `
-            <div class="frappe-card almdina-sf-order-card shop-floor-order-card${cardClasses}"
+            <article class="frappe-card almdina-sf-order-card shop-floor-order-card${cardClasses}"
                 data-order="${esc(row.door_cutting_order)}"
                 data-stage="${esc(row.name)}"
                 data-status="${esc(row.status)}"
@@ -96,37 +139,43 @@
                 data-can-handoff="${row.can_handoff_stage === true ? "1" : "0"}"
                 data-terminal="${terminal ? "1" : "0"}"
                 data-completed="${completed ? "1" : "0"}"
+                aria-label="${esc(`${__("طلب")} ${row.door_cutting_order || ""} — ${statusText}`)}"
                 draggable="${canDrag ? "true" : "false"}">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
-                    <div style="min-width:0;flex:1">
-                        <div style="font-size:${compact ? ".96" : "1.05"}rem;font-weight:800">${esc(row.door_cutting_order)}</div>
-                        <div class="text-muted" style="font-size:12px;margin:4px 0">${esc(row.customer || "")} ${row.order_date ? `· ${esc(row.order_date)}` : ""}</div>
-                        ${compact ? "" : `<div style="font-size:13px">${__("القسم")}: <b>${esc(stageLabel)}</b></div>`}
-                        <div style="font-size:12px">${__("الحالة")}: <b>${esc(statusText)}</b></div>
-                        ${row.assigned_to ? `<div class="text-muted" style="font-size:11px;margin-top:3px">${__("العامل")}: ${esc(row.assigned_to)}</div>` : ""}
+                <div class="almdina-sf-card-head">
+                    <div class="almdina-sf-card-identity">
+                        <span class="almdina-sf-order-number">${esc(row.door_cutting_order)}</span>
+                        <span class="almdina-sf-card-subtitle">${esc(customerLine || __("بدون بيانات زبون"))}</span>
                     </div>
                     <span class="indicator-pill ${terminal || completed ? "green" : "blue"}">${esc(terminal ? __("جاهز") : statusLabel(row.status))}</span>
                 </div>
-                <div class="almdina-sf-card-meta" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px">
-                    <div style="background:var(--subtle-fg,#f7f8fa);padding:9px 10px;border-radius:10px;min-width:0">
-                        <span class="text-muted" style="display:block;font-size:11px">${__("لون القشاط")}</span>
-                        <b style="display:block;font-size:12px;overflow-wrap:anywhere">${esc(row.edge_color || "—")}</b>
+                <div class="almdina-sf-card-context">
+                    ${compact ? "" : `<div><span>${__("القسم")}</span><b>${esc(stageLabel)}</b></div>`}
+                    <div><span>${__("الحالة")}</span><b>${esc(statusText)}</b></div>
+                    ${row.assigned_to ? `<div><span>${__("العامل")}</span><b dir="auto">${esc(row.assigned_to)}</b></div>` : ""}
+                </div>
+                <div class="almdina-sf-card-meta">
+                    <div class="almdina-sf-meta-item">
+                        <span>${__("لون القشاط")}</span>
+                        <b>${esc(row.edge_color || "—")}</b>
                     </div>
-                    <div style="background:var(--subtle-fg,#f7f8fa);padding:9px 10px;border-radius:10px;min-width:0">
-                        <span class="text-muted" style="display:block;font-size:11px">${__("اللوح")}</span>
-                        <b style="display:block;font-size:12px;overflow-wrap:anywhere">${esc(row.board_description || "—")}</b>
+                    <div class="almdina-sf-meta-item">
+                        <span>${__("اللوح")}</span>
+                        <b>${esc(row.board_description || "—")}</b>
                     </div>
                 </div>
-                <div class="almdina-sf-card-actions" style="display:flex;gap:8px;margin-top:12px">
+                <div class="almdina-sf-card-actions">
                     ${terminal || completed ? "" : quickActionHtml(row, mode)}
-                    <button type="button" class="btn btn-default sf-open-btn" style="flex:1">${__("فتح الطلب")}</button>
+                    <button type="button" class="btn btn-default sf-open-btn" aria-label="${esc(`${__("فتح الطلب")} ${row.door_cutting_order || ""}`)}">${__("فتح الطلب")}</button>
                 </div>
-                ${canDrag ? `<div class="almdina-sf-drag-hint">${__("اسحب للمرحلة التالية")}</div>` : ""}
-            </div>`;
+                ${canDrag ? `<div class="almdina-sf-drag-hint"><span aria-hidden="true">↔</span>${__("اسحب للمرحلة التالية")}</div>` : ""}
+            </article>`;
     }
 
     function boardMetric(label, value, tone) {
-        return `<div class="almdina-sf-board-metric" data-tone="${esc(tone)}"><span>${esc(label)}</span><b>${value}</b></div>`;
+        return `
+            <div class="almdina-sf-board-metric" data-tone="${esc(tone)}" aria-label="${esc(`${label}: ${value}`)}">
+                <span>${esc(label)}</span><b>${value}</b>
+            </div>`;
     }
 
     function kanbanColumn(route, stage, rows, mode, { ready = false } = {}) {
@@ -134,13 +183,14 @@
         const label = ready ? __("جاهز للتسليم") : (stage.department || stage.stage_type);
         const cards = rows.length
             ? rows.map(row => orderCardHtml(row, mode, { compact: true, terminal: ready })).join("")
-            : `<div class="almdina-sf-kanban-empty">${__("لا توجد طلبات")}</div>`;
+            : `<div class="almdina-sf-kanban-empty" role="status"><span aria-hidden="true">◇</span>${__("لا توجد طلبات")}</div>`;
         return `
             <section class="almdina-sf-kanban-column${ready ? " is-ready" : ""}"
+                aria-label="${esc(`${label} — ${rows.length} ${__("طلب")}`)}"
                 data-route="${esc(route.name)}" data-drop-stage="${esc(stageType)}">
                 <header class="almdina-sf-kanban-column-header">
                     <div><b>${esc(label)}</b>${stage && stage.is_planning_stage ? `<span>${__("تخطيط")}</span>` : ""}</div>
-                    <span class="almdina-sf-column-count">${rows.length}</span>
+                    <span class="almdina-sf-column-count" aria-label="${esc(`${rows.length} ${__("طلب")}`)}">${rows.length}</span>
                 </header>
                 <div class="almdina-sf-kanban-cards">${cards}</div>
             </section>`;
@@ -156,12 +206,15 @@
         ));
         columns.push(kanbanColumn(route, null, readyRows, mode, { ready: true }));
         return `
-            <section class="almdina-sf-route-board" data-board-route="${esc(route.name)}">
+            <section class="almdina-sf-route-board" data-board-route="${esc(route.name)}" aria-label="${esc(route.label || __("مسار غير محدد"))}">
                 <div class="almdina-sf-route-heading">
-                    <div><h3>${esc(route.label || __("مسار غير محدد"))}</h3><span>${routeRows.length + readyRows.length} ${__("طلب")}</span></div>
-                    <small>${__("يتم الانتقال فقط حسب ترتيب المسار وصلاحيات المستخدم.")}</small>
+                    <div class="almdina-sf-route-title">
+                        <span class="almdina-sf-route-icon" aria-hidden="true">⇢</span>
+                        <div><h3>${esc(route.label || __("مسار غير محدد"))}</h3><span>${routeRows.length + readyRows.length} ${__("طلب")}</span></div>
+                    </div>
+                    <small>${__("الانتقال يتبع ترتيب المسار وصلاحيات المستخدم.")}</small>
                 </div>
-                <div class="almdina-sf-kanban">${columns.join("")}</div>
+                <div class="almdina-sf-kanban" aria-label="${esc(`${__("مراحل")} ${route.label || __("مسار غير محدد")}`)}">${columns.join("")}</div>
             </section>`;
     }
 
@@ -169,27 +222,38 @@
         const routeOptions = model.routes.map(route => `<option value="${esc(route.name)}" ${model.routeFilter === route.name ? "selected" : ""}>${esc(route.label || __("مسار غير محدد"))}</option>`).join("");
         const boards = model.routeModels.length
             ? model.routeModels.map(item => routeBoardHtml(item, mode)).join("")
-            : `<div class="almdina-sf-empty">${__("لا يوجد مسار إنتاج مفعّل. فعّل مسارًا من إعدادات الإنتاج أولًا.")}</div>`;
+            : emptyState(__("لا يوجد مسار إنتاج مفعّل"), __("فعّل مسارًا من إعدادات الإنتاج ليظهر هنا."));
+        const activeCount = model.counts.pending + model.counts.progress + model.counts.paused;
         shell.$content.html(`
             <div class="almdina-sf-shell almdina-sf-board-shell">
+                ${pageHero(
+                    __("صالة الإنتاج"),
+                    __("متابعة مراحل الإنتاج"),
+                    __("شاهد الطلبات حسب مسارها، ونفّذ الإجراء المتاح دون مغادرة اللوحة."),
+                    [
+                        heroStat(__("قيد المتابعة"), activeCount, "active"),
+                        heroStat(__("جاهز للتسليم"), model.counts.ready, "ready"),
+                        heroStat(__("المسارات"), model.routes.length, "neutral"),
+                    ].join("")
+                )}
                 <div class="almdina-sf-overview">
-                    <div class="almdina-sf-board-toolbar">
-                        <div>
+                    <div class="almdina-sf-board-toolbar" aria-label="${__("تصفية لوحة الإنتاج")}">
+                        <div class="almdina-sf-filter-field">
                             <label for="almdina-sf-route-filter">${__("مسار الإنتاج")}</label>
                             <select id="almdina-sf-route-filter" class="form-control"><option value="">${__("كل المسارات")}</option>${routeOptions}</select>
                         </div>
-                        <div>
+                        <div class="almdina-sf-filter-field almdina-sf-search-field">
                             <label for="almdina-sf-board-search">${__("بحث سريع")}</label>
-                            <input id="almdina-sf-board-search" class="form-control" type="search" value="${esc(search)}" placeholder="${__("رقم الطلب، الزبون، العامل...")}">
+                            <input id="almdina-sf-board-search" class="form-control" type="search" value="${esc(search)}" placeholder="${__("رقم الطلب، الزبون، العامل...")}" autocomplete="off">
                         </div>
-                        <div class="almdina-sf-board-metrics">
+                        <div class="almdina-sf-board-metrics" aria-label="${__("ملخص حالات الطلبات")}">
                             ${boardMetric(__("بحاجة للعمل"), model.counts.pending, "pending")}
                             ${boardMetric(__("قيد العمل"), model.counts.progress, "progress")}
                             ${boardMetric(__("متوقف"), model.counts.paused, "paused")}
                             ${boardMetric(__("جاهز"), model.counts.ready, "ready")}
                         </div>
                     </div>
-                    <div class="almdina-sf-board-help">${__("استخدم الزر داخل البطاقة، أو اسحب بطاقة قيد العمل إلى المرحلة التالية. سيطلب النظام تحديد العامل التالي ويعيد التحقق من الصلاحيات على الخادم.")}</div>
+                    <div class="almdina-sf-board-help" role="note"><span aria-hidden="true">i</span><p>${__("استخدم زر الإجراء داخل البطاقة. على الكمبيوتر يمكنك أيضًا سحب بطاقة قيد العمل إلى المرحلة التالية؛ الخادم يعيد التحقق من الصلاحيات قبل التنفيذ.")}</p></div>
                     <div class="almdina-sf-boards">${boards}</div>
                 </div>
             </div>`);
@@ -199,8 +263,13 @@
         if (!rows.length) return "";
         const cards = rows.map(row => orderCardHtml(row, mode, { completed })).join("");
         return `
-            <div class="almdina-sf-list-title${completed ? " is-completed" : ""}">${esc(title)}<span class="almdina-sf-list-count">${rows.length}</span></div>
-            <div class="almdina-sf-list${completed ? " is-completed" : ""}">${cards}</div>`;
+            <section class="almdina-sf-list-section${completed ? " is-completed" : ""}">
+                <div class="almdina-sf-list-title${completed ? " is-completed" : ""}">
+                    <div><span class="almdina-sf-list-dot" aria-hidden="true"></span>${esc(title)}</div>
+                    <span class="almdina-sf-list-count">${rows.length}</span>
+                </div>
+                <div class="almdina-sf-list${completed ? " is-completed" : ""}">${cards}</div>
+            </section>`;
     }
 
     function renderList(shell, model, mode = "inbox") {
@@ -209,13 +278,24 @@
         if (model.assigned.length || model.completed.length) {
             sections = model.assigned.length
                 ? listSection(title, model.assigned, mode)
-                : `<div class="almdina-sf-list-title">${esc(title)}</div><div class="almdina-sf-empty">${__("لا توجد طلبات مسندة حاليًا.")}</div>`;
+                : `<section class="almdina-sf-list-section"><div class="almdina-sf-list-title"><div><span class="almdina-sf-list-dot" aria-hidden="true"></span>${esc(title)}</div></div>${emptyState(__("لا توجد طلبات مسندة"), __("ستظهر هنا الطلبات التي أصبحت ضمن دورك التشغيلي."))}</section>`;
             sections += listSection(__("الطلبات المنتهية"), model.completed, mode, { completed: true });
         }
         shell.$content.html(`
-            <div class="almdina-sf-shell"><div class="almdina-sf-overview">
-                ${sections || `<div class="almdina-sf-empty">${__("لا توجد طلبات في هذا القسم حاليًا.")}</div>`}
-            </div></div>`);
+            <div class="almdina-sf-shell">
+                ${pageHero(
+                    __("قائمة العمل"),
+                    __("طلباتك التشغيلية"),
+                    __("ابدأ بالطلبات المسندة، ثم راجع ما أنهيته في القسم السفلي."),
+                    [
+                        heroStat(__("مسندة"), model.assigned.length, "active"),
+                        heroStat(__("منتهية"), model.completed.length, "ready"),
+                    ].join("")
+                )}
+                <div class="almdina-sf-overview">
+                    ${sections || emptyState(__("لا توجد طلبات حاليًا"), __("لا يوجد عمل مسند أو سجل منتهٍ ضمن هذا القسم."))}
+                </div>
+            </div>`);
     }
 
     const SECTION_LABELS = Object.freeze({
@@ -230,15 +310,31 @@
 
     function renderAccount(shell, model) {
         const enabledSections = model.enabledSections.map(name => SECTION_LABELS[name] ? __(SECTION_LABELS[name]) : name);
+        const departmentText = model.departments.join(" · ") || "—";
+        const sectionText = enabledSections.join(" · ") || "—";
         shell.$content.html(`
             <div class="almdina-sf-shell">
+                ${pageHero(
+                    __("الحساب"),
+                    __("معلومات المستخدم"),
+                    __("راجع هويتك التشغيلية والأقسام المتاحة لك في النظام."),
+                    heroStat(__("الأقسام التشغيلية"), model.departments.length, "neutral")
+                )}
                 <div class="almdina-sf-account-card">
-                    <h4 style="margin:0 0 12px">${__("معلومات الحساب")}</h4>
-                    <div class="almdina-sf-account-row"><span class="text-muted">${__("الاسم")}</span><b>${esc(model.fullName)}</b></div>
-                    <div class="almdina-sf-account-row"><span class="text-muted">${__("المستخدم")}</span><b dir="ltr">${esc(model.user)}</b></div>
-                    <div class="almdina-sf-account-row"><span class="text-muted">${__("الأقسام المؤهل لها")}</span><b>${esc(model.departments.join(" · ") || "—")}</b></div>
-                    <div class="almdina-sf-account-row"><span class="text-muted">${__("أقسام النظام المتاحة")}</span><b>${esc(enabledSections.join(" · ") || "—")}</b></div>
-                    <button type="button" class="btn btn-danger almdina-sf-logout" style="width:100%;min-height:46px;margin-top:16px">${__("تسجيل الخروج")}</button>
+                    <div class="almdina-sf-account-heading">
+                        <span class="almdina-sf-account-avatar" aria-hidden="true">${esc((model.fullName || model.user || "؟").trim().charAt(0) || "؟")}</span>
+                        <div><h4>${esc(model.fullName)}</h4><span dir="ltr">${esc(model.user)}</span></div>
+                    </div>
+                    <div class="almdina-sf-account-details">
+                        <div class="almdina-sf-account-row"><span>${__("الاسم")}</span><b>${esc(model.fullName)}</b></div>
+                        <div class="almdina-sf-account-row"><span>${__("المستخدم")}</span><b dir="ltr">${esc(model.user)}</b></div>
+                        <div class="almdina-sf-account-row"><span>${__("الأقسام المؤهل لها")}</span><b>${esc(departmentText)}</b></div>
+                        <div class="almdina-sf-account-row"><span>${__("أقسام النظام المتاحة")}</span><b>${esc(sectionText)}</b></div>
+                    </div>
+                    <div class="almdina-sf-account-footer">
+                        <span>${__("تسجيل الخروج ينهي جلسة العمل الحالية على هذا الجهاز.")}</span>
+                        <button type="button" class="btn btn-danger almdina-sf-logout">${__("تسجيل الخروج")}</button>
+                    </div>
                 </div>
             </div>`);
     }
