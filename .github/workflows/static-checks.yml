@@ -46,6 +46,9 @@ jobs:
       - name: Validate Python syntax
         run: python -m compileall -q almdina_erp
 
+      - name: Enforce frontend architecture contract
+        run: python -m unittest -v almdina_erp.tests.test_frontend_architecture_contract
+
       - name: Run existing refactor and CI contract tests
         run: |
           python -m unittest -v \
