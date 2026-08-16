@@ -11,15 +11,23 @@
         return kind => `${prefix}-${kind}-${++sequence}`;
     }
 
-    function startPath(document, atPoint, options = {}) {
+    function startPath(document, target, options = {}) {
         const nextId = options.idFactory || createIdFactory();
-        const nodeId = options.nodeId || nextId("node");
         const pathId = options.pathId || nextId("path");
-        let nextDocument = documentModel.addNode(document, {
-            id: nodeId,
-            xMm: atPoint.xMm,
-            yMm: atPoint.yMm,
-        });
+        let nodeId = target && target.nodeId ? String(target.nodeId) : null;
+        let nextDocument = document;
+
+        if (nodeId) {
+            if (!documentModel.nodeById(document, nodeId)) throw new Error("Snapped drawing node does not exist");
+        } else {
+            nodeId = options.nodeId || nextId("node");
+            nextDocument = documentModel.addNode(nextDocument, {
+                id: nodeId,
+                xMm: target.point.xMm,
+                yMm: target.point.yMm,
+            });
+        }
+
         nextDocument = documentModel.addPath(nextDocument, {
             id: pathId,
             startNodeId: nodeId,
