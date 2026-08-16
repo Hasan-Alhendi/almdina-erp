@@ -21,6 +21,8 @@ RETIRED_CONTROLLER_PATHS = (
     CONTROLLER_DIR / "door_cutting_order_fast.py",
     CONTROLLER_DIR / "door_cutting_order_text_board.py",
     CONTROLLER_DIR / "door_cutting_order_domain.py",
+    CONTROLLER_DIR / "door_cutting_order_costing.py",
+    CONTROLLER_DIR / "door_cutting_order_plan.py",
 )
 HOOKS_PATH = ROOT / "hooks.py"
 
