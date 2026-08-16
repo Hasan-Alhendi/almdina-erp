@@ -52,6 +52,7 @@
       "batch": 2,
       "name": "Migrate runtime cutting imports to canonical Domain",
       "status": "migrated_compatibility_preserved",
+      "final_sha": "342103d52c35c0eb01ffbb0944526ecefeb0563c",
       "canonical_owner": [
         "almdina_erp/almdina_erp/domain/cutting/__init__.py",
         "almdina_erp/almdina_erp/infrastructure/cutting/domain_engine.py"
@@ -73,6 +74,28 @@
         "Per-file Git compare confirmed the three service migrations are import-only changes.",
         "Static architecture scans reject any runtime import of the three compatibility module paths.",
         "Compatibility facades remain thin and available for historical/external Python import stability; their removal is intentionally not part of Batch 2."
+      ]
+    },
+    {
+      "batch": 3,
+      "name": "Split Cutting Plan snapshot persistence from lifecycle compatibility",
+      "status": "migrated_compatibility_preserved",
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/services/cutting_plan_snapshot_service.py",
+        "almdina_erp/almdina_erp/services/drawing_approval_service.py"
+      ],
+      "migrated_consumers": [
+        "almdina_erp/almdina_erp/services/drawing_approval_service.py"
+      ],
+      "compatibility_preserved": [
+        "almdina_erp/almdina_erp/services/cutting_plan_service.py"
+      ],
+      "evidence": [
+        "Cutting Plan snapshot creation, approval, and production freeze persistence moved to cutting_plan_snapshot_service.py without changing the persisted fields, validation flow, costs, status updates, or plan-source behavior.",
+        "drawing_approval_service.py now imports lock_order_for_production from the focused snapshot owner instead of the historical mixed service.",
+        "cutting_plan_service.py is now a thin compatibility facade: historical Python names delegate to the snapshot owner and historical whitelisted lifecycle methods delegate to their capability-protected canonical services.",
+        "The compatibility facade contains no frappe.new_doc, plan.insert, frappe.db.set_value, or Cutting Plan persistence logic.",
+        "Static contracts moved product-scope, special-shape geometry, production approval, and documentation/price assertions to the focused snapshot owner while retaining compatibility assertions on the old facade."
       ]
     }
   ]
