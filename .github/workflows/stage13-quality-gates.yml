@@ -24,25 +24,6 @@ jobs:
       - name: Validate Python syntax
         run: python -m compileall -q almdina_erp
 
-      - name: Inventory provisioning compatibility references
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          for path in sorted(Path("almdina_erp").rglob("*.py")):
-              source = path.read_text(encoding="utf-8")
-              matched = (
-                  "application.security.provision_user" in source
-                  or "from .provision_user import" in source
-                  or (
-                      "application.security import" in source
-                      and "provision_user" in source
-                  )
-              )
-              if matched:
-                  print(f"::warning title=Provisioning compatibility reference::{path}")
-          PY
-
       - name: Enforce Domain dependency direction
         run: python -m unittest -v almdina_erp.tests.test_stage13_quality_gates.TestStage13QualityGates.test_domain_is_framework_free_and_depends_only_inward
 
