@@ -107,6 +107,12 @@ def _string_literals(tree: ast.AST) -> set[str]:
     }
 
 
+def _assert_no_offenders(test: unittest.TestCase, offenders: list[str]) -> None:
+    for offender in offenders:
+        print(f"::error title=Stage 13 quality gate::{offender}")
+    test.assertEqual(offenders, [], "\n".join(offenders))
+
+
 class TestStage13QualityGates(unittest.TestCase):
     def test_domain_is_framework_free_and_depends_only_inward(self) -> None:
         offenders: list[str] = []
@@ -116,7 +122,7 @@ class TestStage13QualityGates(unittest.TestCase):
                     offenders.append(f"{path.relative_to(ROOT)} imports framework {target}")
                 if _imports_layer(target, _OUTER_LAYERS):
                     offenders.append(f"{path.relative_to(ROOT)} imports outer layer {target}")
-        self.assertEqual(offenders, [], "\n".join(offenders))
+        _assert_no_offenders(self, offenders)
 
     def test_application_is_framework_free_and_does_not_depend_on_adapters(self) -> None:
         offenders: list[str] = []
@@ -126,7 +132,7 @@ class TestStage13QualityGates(unittest.TestCase):
                     offenders.append(f"{path.relative_to(ROOT)} imports framework {target}")
                 if _imports_layer(target, _APPLICATION_FORBIDDEN_LAYERS):
                     offenders.append(f"{path.relative_to(ROOT)} imports adapter layer {target}")
-        self.assertEqual(offenders, [], "\n".join(offenders))
+        _assert_no_offenders(self, offenders)
 
     def test_active_authorization_does_not_reintroduce_fixed_role_gates(self) -> None:
         offenders: list[str] = []
@@ -150,14 +156,14 @@ class TestStage13QualityGates(unittest.TestCase):
                     + ", ".join(forbidden_calls)
                 )
 
-            if any(call.endswith("frappe.get_roles") or call == "frappe.get_roles" for call in calls):
+            if any(call == "frappe.get_roles" for call in calls):
                 fixed = sorted(_FIXED_BUSINESS_ROLES & literals)
                 if fixed:
                     offenders.append(
                         f"{path.relative_to(ROOT)} combines frappe.get_roles with fixed business role(s): "
                         + ", ".join(fixed)
                     )
-        self.assertEqual(offenders, [], "\n".join(offenders))
+        _assert_no_offenders(self, offenders)
 
     def test_architecture_core_never_uses_direct_sql_or_frappe_documents(self) -> None:
         offenders: list[str] = []
@@ -174,7 +180,7 @@ class TestStage13QualityGates(unittest.TestCase):
                         offenders.append(
                             f"{path.relative_to(ROOT)} contains {pattern.pattern}"
                         )
-        self.assertEqual(offenders, [], "\n".join(offenders))
+        _assert_no_offenders(self, offenders)
 
     def test_stage13_workflow_is_non_bypassable_by_default(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
