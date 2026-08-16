@@ -9,6 +9,12 @@
     const VERSION = 4;
     const UNITS = "mm";
     const DIMENSION_TYPES = Object.freeze({ SEGMENT_LENGTH: "segment-length" });
+    const CONSTRAINT_TYPES = Object.freeze({
+        HORIZONTAL: "horizontal",
+        VERTICAL: "vertical",
+        FIXED_LENGTH: "fixed-length",
+    });
+    const KNOWN_CONSTRAINT_TYPES = Object.freeze(Object.values(CONSTRAINT_TYPES));
 
     function freezeNode(node) {
         return Object.freeze({
@@ -48,17 +54,71 @@
         });
     }
 
+    function freezeConstraint(constraint) {
+        const type = String(constraint && constraint.type || "");
+        if (!KNOWN_CONSTRAINT_TYPES.includes(type)) {
+            throw new Error(`Unsupported drawing constraint type: ${type}`);
+        }
+        const base = {
+            id: String(constraint.id),
+            type,
+            segmentId: String(constraint.segmentId),
+        };
+        if (type !== CONSTRAINT_TYPES.FIXED_LENGTH) return Object.freeze(base);
+        const valueMm = geometry.roundMm(constraint.valueMm);
+        if (valueMm <= geometry.EPSILON_MM) {
+            throw new Error("Fixed-length constraint must be greater than zero");
+        }
+        return Object.freeze({
+            ...base,
+            valueMm,
+            anchorNodeId: String(constraint.anchorNodeId || ""),
+        });
+    }
+
+    function assertUniqueEntityIds(groups) {
+        const seen = new Set();
+        groups.forEach(group => group.forEach(entity => {
+            if (!entity.id || seen.has(entity.id)) throw new Error(`Duplicate drawing entity id: ${entity.id}`);
+            seen.add(entity.id);
+        }));
+    }
+
     function freezeDocument(document) {
         const nodes = Object.freeze((document.nodes || []).map(freezeNode));
         const segments = Object.freeze((document.segments || []).map(freezeSegment));
         const paths = Object.freeze((document.paths || []).map(freezePath));
         const dimensions = Object.freeze((document.dimensions || []).map(freezeDimension));
-        const segmentIds = new Set(segments.map(segment => segment.id));
+        const constraints = Object.freeze((document.constraints || []).map(freezeConstraint));
+        assertUniqueEntityIds([nodes, segments, paths, dimensions, constraints]);
+
+        const nodeIds = new Set(nodes.map(node => node.id));
+        const segmentById = new Map(segments.map(segment => [segment.id, segment]));
         dimensions.forEach(dimension => {
-            if (!segmentIds.has(dimension.segmentId)) {
+            if (!segmentById.has(dimension.segmentId)) {
                 throw new Error(`Drawing dimension references missing segment: ${dimension.segmentId}`);
             }
         });
+
+        const semanticConstraints = new Set();
+        constraints.forEach(constraint => {
+            const segment = segmentById.get(constraint.segmentId);
+            if (!segment) throw new Error(`Drawing constraint references missing segment: ${constraint.segmentId}`);
+            const semanticKey = `${constraint.type}:${constraint.segmentId}`;
+            if (semanticConstraints.has(semanticKey)) {
+                throw new Error(`Duplicate drawing constraint: ${semanticKey}`);
+            }
+            semanticConstraints.add(semanticKey);
+            if (constraint.type === CONSTRAINT_TYPES.FIXED_LENGTH) {
+                if (!nodeIds.has(constraint.anchorNodeId)) {
+                    throw new Error(`Drawing constraint references missing anchor node: ${constraint.anchorNodeId}`);
+                }
+                if (![segment.startNodeId, segment.endNodeId].includes(constraint.anchorNodeId)) {
+                    throw new Error("Fixed-length constraint anchor must be one of the segment endpoints");
+                }
+            }
+        });
+
         return Object.freeze({
             schema: SCHEMA,
             version: VERSION,
@@ -71,6 +131,7 @@
             segments,
             paths,
             dimensions,
+            constraints,
         });
     }
 
@@ -84,6 +145,7 @@
             segments: options.segments || [],
             paths: options.paths || [],
             dimensions: options.dimensions || [],
+            constraints: options.constraints || [],
         });
     }
 
@@ -103,6 +165,10 @@
         return (document.dimensions || []).find(dimension => dimension.id === String(id)) || null;
     }
 
+    function constraintById(document, id) {
+        return (document.constraints || []).find(constraint => constraint.id === String(id)) || null;
+    }
+
     function ensureUniqueId(document, id) {
         const value = String(id || "");
         if (!value) throw new Error("Drawing entity id is required");
@@ -111,6 +177,7 @@
             || segmentById(document, value)
             || pathById(document, value)
             || dimensionById(document, value)
+            || constraintById(document, value)
         ) {
             throw new Error(`Duplicate drawing entity id: ${value}`);
         }
@@ -134,6 +201,23 @@
                 ? { ...node, xMm: nextPoint.xMm, yMm: nextPoint.yMm }
                 : node),
         });
+    }
+
+    function updateNodePositions(document, positions) {
+        const getPosition = nodeId => positions instanceof Map
+            ? positions.get(nodeId)
+            : positions && positions[nodeId];
+        let changed = false;
+        const nodes = document.nodes.map(node => {
+            const next = getPosition(node.id);
+            if (!next) return node;
+            const xMm = geometry.roundMm(next.xMm);
+            const yMm = geometry.roundMm(next.yMm);
+            if (node.xMm === xMm && node.yMm === yMm) return node;
+            changed = true;
+            return { ...node, xMm, yMm };
+        });
+        return changed ? freezeDocument({ ...document, nodes }) : document;
     }
 
     function addPath(document, path) {
@@ -232,6 +316,35 @@
         });
     }
 
+    function addConstraint(document, constraint) {
+        const id = ensureUniqueId(document, constraint && constraint.id);
+        return freezeDocument({
+            ...document,
+            constraints: [...document.constraints, { ...constraint, id }],
+        });
+    }
+
+    function updateConstraint(document, constraintId, patch = {}) {
+        const id = String(constraintId || "");
+        const current = constraintById(document, id);
+        if (!current) throw new Error(`Drawing constraint not found: ${id}`);
+        return freezeDocument({
+            ...document,
+            constraints: document.constraints.map(constraint => constraint.id === id
+                ? { ...constraint, ...patch, id }
+                : constraint),
+        });
+    }
+
+    function removeConstraint(document, constraintId) {
+        const id = String(constraintId || "");
+        if (!constraintById(document, id)) return document;
+        return freezeDocument({
+            ...document,
+            constraints: document.constraints.filter(constraint => constraint.id !== id),
+        });
+    }
+
     function serialize(document) {
         return JSON.stringify(document);
     }
@@ -241,19 +354,26 @@
         VERSION,
         UNITS,
         DIMENSION_TYPES,
+        CONSTRAINT_TYPES,
+        KNOWN_CONSTRAINT_TYPES,
         create,
         nodeById,
         segmentById,
         pathById,
         dimensionById,
+        constraintById,
         pathEndNodeId,
         addNode,
         moveNode,
+        updateNodePositions,
         addPath,
         addLineToPath,
         closePath,
         addDimension,
         removeDimension,
+        addConstraint,
+        updateConstraint,
+        removeConstraint,
         serialize,
     });
 })();
