@@ -6,6 +6,7 @@
     const MIN_SCALE_PX_PER_MM = 0.05;
     const MAX_SCALE_PX_PER_MM = 20;
     const DEFAULT_PADDING_PX = 48;
+    const DEFAULT_GRID_TARGET_PX = 48;
 
     function finite(value, fallback = 0) {
         const number = Number(value);
@@ -105,6 +106,17 @@
         return Math.max(0, finite(tolerancePx)) / camera.scalePxPerMm;
     }
 
+    function gridStepMm(camera, targetPx = DEFAULT_GRID_TARGET_PX) {
+        const preferredPx = Math.max(8, finite(targetPx, DEFAULT_GRID_TARGET_PX));
+        const rawMm = preferredPx / camera.scalePxPerMm;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(rawMm, 0.0001))));
+        for (const factor of [1, 2, 5]) {
+            const candidate = factor * magnitude;
+            if (candidate * camera.scalePxPerMm >= 28) return candidate;
+        }
+        return 10 * magnitude;
+    }
+
     function zoomPercent(camera, baselinePxPerMm = 1) {
         return Math.round((camera.scalePxPerMm / Math.max(MIN_SCALE_PX_PER_MM, finite(baselinePxPerMm, 1))) * 100);
     }
@@ -113,6 +125,7 @@
         MIN_SCALE_PX_PER_MM,
         MAX_SCALE_PX_PER_MM,
         DEFAULT_PADDING_PX,
+        DEFAULT_GRID_TARGET_PX,
         create,
         resize,
         worldToScreen,
@@ -121,6 +134,7 @@
         zoomAt,
         fitBlank,
         screenToleranceToMm,
+        gridStepMm,
         zoomPercent,
     });
 })();
