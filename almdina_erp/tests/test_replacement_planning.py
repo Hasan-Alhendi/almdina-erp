@@ -119,10 +119,10 @@ class TestReplacementPlanning(unittest.TestCase):
                 self.assertNotIn(token, source)
 
     def test_legacy_cancellation_route_has_no_internal_runtime_consumers(self) -> None:
+        self.assertFalse(REPLACEMENT_CANCELLATION.exists())
+
         offenders: list[str] = []
         for path in sorted(RUNTIME_ROOT.rglob("*.py")):
-            if path == REPLACEMENT_CANCELLATION:
-                continue
             source = path.read_text(encoding="utf-8")
             if LEGACY_CANCELLATION_MODULE in source:
                 offenders.append(str(path.relative_to(ROOT)))
