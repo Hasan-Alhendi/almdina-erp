@@ -100,13 +100,15 @@ def test_operator_opens_only_clean_v4_editor_runtime():
     assert "door_drawing_v4/presentation/editor_shell.js" in entry
     assert "door_drawing_v4/presentation/editor_controller.js" in entry
     assert "AlmdinaSketchEngine" not in entry
-    for tool in ("select", "node", "pen", "hand"):
+    for tool in ("select", "node", "pen", "dimension", "hand"):
         assert f'toolButton("{tool}"' in shell
     assert 'inputmode="decimal"' in shell
-    assert 'placeholder="الطول mm"' in shell
+    assert 'aria-label="القيمة بالميليمتر"' in shell
+    assert 'placeholder="القيمة mm"' in shell
     assert "function worldPoint(" in controller
     assert "screenToleranceToMm" in controller
     assert "engine.inputLength(lengthMm)" in controller
+    assert "engine.inputDimensionValue(valueMm)" in controller
     assert "engine.undo()" in controller
     assert "engine.redo()" in controller
     assert "function beginNodeDrag(" in interaction
