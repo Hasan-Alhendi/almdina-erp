@@ -23,6 +23,7 @@
         let toolState = toolMachine.create(options.initialTool || toolMachine.TOOLS.SELECT);
         let activePathId = null;
         let preview = null;
+        let snapLock = null;
         let selection = null;
         let dragSession = null;
         const history = commandHistory.create({ limit: options.historyLimit });
@@ -69,15 +70,36 @@
             history.record(before, document, label);
         }
 
+        function resetSnap() {
+            snapLock = null;
+            preview = null;
+        }
+
         function snap(rawPoint, snapOptions = {}) {
             const anchor = currentAnchor();
-            const excluded = anchor ? [anchor.id, ...(snapOptions.excludeNodeIds || [])] : (snapOptions.excludeNodeIds || []);
-            return snapResolver.resolve(document, {
+            const path = currentPath();
+            const canClose = Boolean(path && !path.closed && path.segmentIds.length >= 2);
+            const excluded = anchor
+                ? [anchor.id, ...(snapOptions.excludeNodeIds || [])]
+                : (snapOptions.excludeNodeIds || []);
+            const toleranceMm = Math.max(0, Number(snapOptions.toleranceMm) || 0);
+            const releaseToleranceMm = Math.max(
+                toleranceMm,
+                Number(snapOptions.releaseToleranceMm)
+                    || toleranceMm * snapResolver.DEFAULT_RELEASE_MULTIPLIER
+            );
+            const result = snapResolver.resolve(document, {
                 ...snapOptions,
                 rawPoint,
                 origin: anchor,
                 excludeNodeIds: excluded,
+                canClose,
+                closeNodeId: canClose ? path.startNodeId : null,
+                previousSnap: snapLock,
+                releaseToleranceMm,
             });
+            snapLock = result.type === "free" ? null : result;
+            return result;
         }
 
         function hitTolerance(options = {}) {
@@ -86,7 +108,7 @@
 
         function clearTransientState() {
             activePathId = null;
-            preview = null;
+            resetSnap();
             dragSession = null;
         }
 
@@ -151,8 +173,8 @@
 
         function pointerMove(rawPoint, options = {}) {
             if (dragSession) return moveNodeDrag(rawPoint);
-            if (toolState.activeTool !== toolMachine.TOOLS.PEN || !activePathId) {
-                preview = null;
+            if (toolState.activeTool !== toolMachine.TOOLS.PEN) {
+                resetSnap();
                 return state();
             }
             preview = snap(rawPoint, options);
@@ -161,12 +183,12 @@
 
         function penPointerDown(rawPoint, options = {}) {
             if (!activePathId) {
-                const target = snapResolver.resolve(document, { ...options, rawPoint });
+                const target = snap(rawPoint, options);
                 const before = document;
                 const result = commands.startPath(document, target, { idFactory });
                 document = result.document;
                 activePathId = result.pathId;
-                preview = null;
+                resetSnap();
                 record(before, "start-path");
                 return Object.freeze({ kind: "path-started", nodeId: result.nodeId, ...state() });
             }
@@ -181,7 +203,7 @@
                 document = commands.closePath(document, activePathId, { idFactory }).document;
                 const closedPathId = activePathId;
                 activePathId = null;
-                preview = null;
+                resetSnap();
                 record(before, "close-path");
                 return Object.freeze({ kind: "path-closed", pathId: closedPathId, ...state() });
             }
@@ -193,7 +215,7 @@
             const before = document;
             const result = commands.appendLine(document, activePathId, target, { idFactory });
             document = result.document;
-            preview = null;
+            resetSnap();
             record(before, "add-segment");
             return Object.freeze({
                 kind: "segment-added",
@@ -233,7 +255,7 @@
                 nodeId: null,
             }, { idFactory });
             document = result.document;
-            preview = null;
+            resetSnap();
             record(before, "add-segment");
             return Object.freeze({
                 kind: "segment-added",
@@ -249,13 +271,14 @@
             if (cancelNodeDrag()) return Object.freeze({ kind: "node-drag-cancelled", ...state() });
             if (activePathId) {
                 activePathId = null;
-                preview = null;
+                resetSnap();
                 return Object.freeze({ kind: "pen-session-ended", ...state() });
             }
             if (selection) {
                 selection = null;
                 return Object.freeze({ kind: "selection-cleared", ...state() });
             }
+            resetSnap();
             return Object.freeze({ kind: "ignored", ...state() });
         }
 
@@ -286,7 +309,7 @@
         function spaceDown() {
             if (dragSession) finishNodeDrag();
             toolState = toolMachine.activateTemporary(toolState, toolMachine.TOOLS.HAND);
-            preview = null;
+            resetSnap();
             return state();
         }
 
