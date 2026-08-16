@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Validate measurement JavaScript syntax
+      - name: Validate targeted DCO JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -39,17 +39,29 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
+          node --check almdina_erp/tests/js/plan_board_presenter.test.js
 
-      - name: Enforce measurement lifecycle ownership contracts
+      - name: Enforce targeted DCO architecture and UX contracts
         shell: bash
         run: |
           python - <<'PY'
-          from almdina_erp.tests import test_dco_measurement_lifecycle_architecture as checks
+          from almdina_erp.tests import test_dco_measurement_lifecycle_architecture as lifecycle_checks
           from almdina_erp.tests import test_measurement_resilience_ux as resilience_checks
           from almdina_erp.tests import test_table_performance_ux as performance_checks
+          from almdina_erp.tests import test_cutting_plan_content_architecture as plan_architecture_checks
+          from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_workspace_checks
 
-          modules = [checks, resilience_checks, performance_checks]
+          modules = [
+              lifecycle_checks,
+              resilience_checks,
+              performance_checks,
+              plan_architecture_checks,
+              plan_workspace_checks,
+          ]
           total = 0
           for module in modules:
               tests = [
@@ -61,8 +73,11 @@ jobs:
                   print(f"Running {module.__name__}.{test.__name__}...")
                   test()
               total += len(tests)
-          print(f"Validated {total} DCO measurement lifecycle/UX contracts")
+          print(f"Validated {total} targeted DCO frontend contracts")
           PY
 
       - name: Simulate measurement lifecycle cancellation and freshness
         run: node almdina_erp/tests/js/measurement_lifecycle.test.js
+
+      - name: Validate cutting plan board layout policy
+        run: node almdina_erp/tests/js/plan_board_presenter.test.js
