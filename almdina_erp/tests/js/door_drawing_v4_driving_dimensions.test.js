@@ -115,4 +115,18 @@ assert.equal(DimensionDomain.resolve(engine.state().document, "d1").valueMm, 800
 assert.equal(DimensionDomain.resolve(engine.state().document, "d1").driving, true);
 assert.equal(engine.state().constraints, undefined, "constraints stay inside the canonical document, not interaction side state");
 
+const constrainedDocument = engine.state().document;
+const undoCountBeforeProtectedDrag = engine.state().history.undoCount;
+engine.keyDown("a");
+assert.equal(engine.state().toolState.activeTool, T.TOOLS.NODE);
+action = engine.pointerDown({ xMm: 800, yMm: 0 }, { hitToleranceMm: 4 });
+assert.equal(action.kind, "constraint-protected-node", "constrained nodes must not enter free-drag mode");
+assert.equal(action.nodeId, "n2");
+assert.ok(action.constraintIds.length >= 2, "the protected node must report its attached constraints");
+assert.equal(engine.state().drag, null);
+engine.pointerMove({ xMm: 900, yMm: 100 });
+engine.pointerUp();
+assert.equal(engine.state().document, constrainedDocument, "protected drag attempts must not mutate constrained geometry");
+assert.equal(engine.state().history.undoCount, undoCountBeforeProtectedDrag, "protected drag attempts must not create history");
+
 console.log("Door Drawing V4 driving dimension tests passed");
