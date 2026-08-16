@@ -74,7 +74,7 @@ class TestProductScopeContract(unittest.TestCase):
             ROOT
             / "almdina_erp"
             / "services"
-            / "cutting_plan_service.py"
+            / "cutting_plan_snapshot_service.py"
         ).read_text(encoding="utf-8")
         self.assertNotIn("services.stock_service", approval_source)
         self.assertNotIn("services.remnant_planning", approval_source)
