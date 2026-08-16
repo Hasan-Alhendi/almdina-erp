@@ -118,11 +118,18 @@
         return true;
     }
 
-    function schedule(frm, attempt = 0) {
-        requestAnimationFrame(() => {
-            if (polish(frm)) return;
-            if (attempt < 10) setTimeout(() => schedule(frm, attempt + 1), 60);
-        });
+    function schedule(frm) {
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            requestAnimationFrame(() => polish(frm));
+            return;
+        }
+        lifecycle.retry(
+            frm,
+            "measurement-toolbar",
+            () => polish(frm),
+            { maxAttempts: 11, delay: 60 }
+        );
     }
 
     frappe.ui.form.on("Door Cutting Order", {
