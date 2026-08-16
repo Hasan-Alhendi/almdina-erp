@@ -28,6 +28,7 @@ V4_CONSTRAINT_TYPES = {
 MAX_ENTITY_ID_LENGTH = 80
 MAX_DRAWING_COORDINATE_MM = 20_000
 DRAWING_EPSILON_MM = 0.001
+CONSTRAINT_TOLERANCE_MM = 0.01
 
 
 def _finite(value: Any, label: str) -> float:
@@ -215,11 +216,22 @@ def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
             frappe.throw(_("Drawing V4 cannot contain duplicate constraints for one segment."))
         constraint_keys.add(semantic_key)
 
+        segment_start_id, segment_end_id = segment_refs[segment_id]
+        start = node_points[segment_start_id]
+        end = node_points[segment_end_id]
+
         if constraint_type in {V4_HORIZONTAL_CONSTRAINT, V4_VERTICAL_CONSTRAINT}:
             current_orientation = orientation_constraints.get(segment_id)
             if current_orientation and current_orientation != constraint_type:
                 frappe.throw(_("Drawing V4 segment cannot be constrained as both horizontal and vertical."))
             orientation_constraints[segment_id] = constraint_type
+            residual = (
+                abs(end[1] - start[1])
+                if constraint_type == V4_HORIZONTAL_CONSTRAINT
+                else abs(end[0] - start[0])
+            )
+            if residual > CONSTRAINT_TOLERANCE_MM:
+                frappe.throw(_("Drawing V4 geometry does not satisfy its axis constraint."))
 
         if constraint_type == V4_FIXED_LENGTH_CONSTRAINT:
             value_mm = _finite(constraint.get("valueMm"), _("Drawing V4 fixed length"))
@@ -228,6 +240,9 @@ def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
             anchor_node_id = str(constraint.get("anchorNodeId") or "")
             if anchor_node_id not in segment_refs[segment_id]:
                 frappe.throw(_("Drawing V4 fixed-length anchor must be a segment endpoint."))
+            actual_length = math.hypot(end[0] - start[0], end[1] - start[1])
+            if abs(actual_length - value_mm) > CONSTRAINT_TOLERANCE_MM:
+                frappe.throw(_("Drawing V4 geometry does not satisfy its fixed-length constraint."))
 
     return drawing
 
