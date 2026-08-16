@@ -45,6 +45,10 @@ def load_native_permissions():
             raise RuntimeError("Could not load native document permission boundary")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        # A real Bench may already have almdina_erp.permissions cached as a
+        # package attribute. Bind the test double directly so the same harness
+        # is deterministic both with and without an initialized Frappe app.
+        module.base_permissions = fake_base
         module._test_base = fake_base
         return module
     finally:
