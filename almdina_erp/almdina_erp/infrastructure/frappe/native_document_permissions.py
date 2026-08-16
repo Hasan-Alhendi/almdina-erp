@@ -7,11 +7,19 @@ import frappe
 from almdina_erp import permissions as base_permissions
 
 
-_NATIVE_MUTATING_PERMISSION_TYPES = frozenset(
-    {"create", "write", "delete", "submit", "cancel", "amend"}
+_NATIVE_MUTATING_PERMISSION_TYPES = (
+    "create",
+    "write",
+    "delete",
+    "submit",
+    "cancel",
+    "amend",
 )
-_NATIVE_COMMAND_ONLY_PERMISSION_TYPES = frozenset(
-    {"delete", "submit", "cancel", "amend"}
+_NATIVE_COMMAND_ONLY_PERMISSION_TYPES = (
+    "delete",
+    "submit",
+    "cancel",
+    "amend",
 )
 
 
