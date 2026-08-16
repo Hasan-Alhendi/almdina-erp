@@ -66,7 +66,7 @@ def sanitize_plan_snapshot(value: Any) -> Any:
 
 
 def sanitize_plan_snapshot_json(raw: Any) -> str:
-    """Sanitize serialized plan JSON without rewriting already-safe payloads."""
+    """Return a safe serialized plan, failing closed on malformed JSON."""
 
     text = "" if raw is None else str(raw)
     if not text.strip():
@@ -74,11 +74,10 @@ def sanitize_plan_snapshot_json(raw: Any) -> str:
 
     try:
         parsed = json.loads(text)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        # Do not destructively rewrite malformed historical data here. Callers
-        # that parse the snapshot already fail closed; the migration preserves
-        # invalid source text for forensic recovery rather than guessing.
-        return text
+    except (TypeError, ValueError):
+        # A malformed payload cannot be proven non-financial. Never return or
+        # persist the raw text through an operational plan surface.
+        return "{}"
 
     sanitized = sanitize_plan_snapshot(parsed)
     if sanitized == parsed:
