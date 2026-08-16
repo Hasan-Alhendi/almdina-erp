@@ -14,6 +14,7 @@
       "batch": 1,
       "name": "Retired alternate Door Cutting Order controller chain",
       "status": "removed",
+      "final_sha": "fca574cfbec79c8fc61d027c040088e0995e94e1",
       "canonical_owner": [
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order_controller.py",
         "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
@@ -45,6 +46,33 @@
         "PlanDoorCuttingOrder inherited CostingDoorCuttingOrder, which inherited the already-retired alternate controller branch; neither class is the Frappe override.",
         "Architecture contracts reject PlanDoorCuttingOrder, CostingDoorCuttingOrder, DomainDoorCuttingOrder, TextBoardDoorCuttingOrder and FastDoorCuttingOrder from the active controller.",
         "The Stage 11 contract scans runtime Python sources and rejects imports or symbol references to the complete removed chain."
+      ]
+    },
+    {
+      "batch": 2,
+      "name": "Migrate runtime cutting imports to canonical Domain",
+      "status": "migrated_compatibility_preserved",
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/domain/cutting/__init__.py",
+        "almdina_erp/almdina_erp/infrastructure/cutting/domain_engine.py"
+      ],
+      "migrated_consumers": [
+        "almdina_erp/almdina_erp/doctype/door_cutting_order/door_cutting_order.py",
+        "almdina_erp/almdina_erp/services/performance_service.py",
+        "almdina_erp/almdina_erp/services/production_settings_service.py",
+        "almdina_erp/almdina_erp/services/remnant_planning.py"
+      ],
+      "compatibility_preserved": [
+        "almdina_erp/almdina_erp/services/cutting_engine.py",
+        "almdina_erp/almdina_erp/services/advanced_cutting_optimizer.py",
+        "almdina_erp/almdina_erp/infrastructure/cutting/legacy_engine.py"
+      ],
+      "evidence": [
+        "The canonical Door Cutting Order base now imports expand_piece_groups, optimize_plan, round_value and validate_plan directly from domain.cutting.",
+        "The runtime import scan exposed exactly three additional consumers: performance_service.py, production_settings_service.py and remnant_planning.py; each was migrated without changing call signatures or algorithms.",
+        "Per-file Git compare confirmed the three service migrations are import-only changes.",
+        "Static architecture scans reject any runtime import of the three compatibility module paths.",
+        "Compatibility facades remain thin and available for historical/external Python import stability; their removal is intentionally not part of Batch 2."
       ]
     }
   ]
