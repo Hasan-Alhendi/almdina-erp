@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import copy
+
+import frappe
+import pytest
+
+from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service import (
+    validate_special_shape_drawing,
+)
+
+
+def _rectangle_document() -> dict:
+    return {
+        "schema": "almdina.door-drawing",
+        "version": 4,
+        "units": "mm",
+        "blank": {"widthMm": 600, "heightMm": 1200},
+        "nodes": [
+            {"id": "n1", "xMm": 0, "yMm": 0},
+            {"id": "n2", "xMm": 600, "yMm": 0},
+            {"id": "n3", "xMm": 600, "yMm": 1200},
+            {"id": "n4", "xMm": 0, "yMm": 1200},
+        ],
+        "segments": [
+            {"id": "s1", "type": "line", "startNodeId": "n1", "endNodeId": "n2"},
+            {"id": "s2", "type": "line", "startNodeId": "n2", "endNodeId": "n3"},
+            {"id": "s3", "type": "line", "startNodeId": "n3", "endNodeId": "n4"},
+            {"id": "s4", "type": "line", "startNodeId": "n4", "endNodeId": "n1"},
+        ],
+        "paths": [
+            {
+                "id": "p1",
+                "startNodeId": "n1",
+                "segmentIds": ["s1", "s2", "s3", "s4"],
+                "closed": True,
+            }
+        ],
+    }
+
+
+def test_v4_drawing_document_is_accepted():
+    drawing = _rectangle_document()
+    assert validate_special_shape_drawing(drawing) == drawing
+
+
+def test_v4_drawing_rejects_missing_node_reference():
+    drawing = _rectangle_document()
+    drawing["segments"][1]["endNodeId"] = "missing"
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_disconnected_path():
+    drawing = _rectangle_document()
+    drawing["paths"][0]["segmentIds"] = ["s1", "s3", "s2", "s4"]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_false_closed_flag():
+    drawing = _rectangle_document()
+    drawing["segments"][-1]["endNodeId"] = "n2"
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_duplicate_global_entity_ids():
+    drawing = _rectangle_document()
+    drawing["segments"][0]["id"] = drawing["nodes"][0]["id"]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_validation_does_not_mutate_document():
+    drawing = _rectangle_document()
+    before = copy.deepcopy(drawing)
+    validate_special_shape_drawing(drawing)
+    assert drawing == before
