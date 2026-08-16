@@ -224,7 +224,6 @@ class TestBackendLegacyAuditContract(unittest.TestCase):
             "almdina_erp/almdina_erp/services/cutting_plan_service.py",
             "almdina_erp/almdina_erp/services/production_service.py",
             "almdina_erp/almdina_erp/services/order_creation_service.py",
-            "almdina_erp/almdina_erp/services/replacement_cancellation_service.py",
             "almdina_erp/almdina_erp/services/stock_service.py",
             "almdina_erp/almdina_erp/services/remnant_service.py",
         }
