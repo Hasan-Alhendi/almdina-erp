@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.services.special_shape_service import (
 V4_SCHEMA = "almdina.door-drawing"
 V4_VERSION = 4
 V4_UNITS = "mm"
+V4_SEGMENT_LENGTH_DIMENSION = "segment-length"
 MAX_ENTITY_ID_LENGTH = 80
 MAX_DRAWING_COORDINATE_MM = 20_000
 DRAWING_EPSILON_MM = 0.001
@@ -77,9 +78,15 @@ def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
     nodes = drawing.get("nodes")
     segments = drawing.get("segments")
     paths = drawing.get("paths")
-    if not isinstance(nodes, list) or not isinstance(segments, list) or not isinstance(paths, list):
-        frappe.throw(_("Drawing V4 must contain nodes, segments and paths lists."))
-    if len(nodes) + len(segments) + len(paths) > MAX_DRAWING_ELEMENTS:
+    dimensions = drawing.get("dimensions", [])
+    if (
+        not isinstance(nodes, list)
+        or not isinstance(segments, list)
+        or not isinstance(paths, list)
+        or not isinstance(dimensions, list)
+    ):
+        frappe.throw(_("Drawing V4 must contain valid nodes, segments, paths and dimensions lists."))
+    if len(nodes) + len(segments) + len(paths) + len(dimensions) > MAX_DRAWING_ELEMENTS:
         frappe.throw(
             _("Special shape documentation has too many entities. The maximum is {0}.").format(
                 MAX_DRAWING_ELEMENTS
@@ -152,6 +159,25 @@ def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
 
         if bool(path.get("closed")) and segment_ids and current_node_id != start_node_id:
             frappe.throw(_("Drawing V4 closed path does not return to its start node."))
+
+    dimensioned_segments: set[str] = set()
+    for index, dimension in enumerate(dimensions, start=1):
+        if not isinstance(dimension, dict):
+            frappe.throw(_("Drawing V4 dimension {0} must be an object.").format(index))
+        dimension_id = _entity_id(
+            dimension.get("id"), _("Drawing V4 dimension {0}").format(index)
+        )
+        if dimension_id in entity_ids:
+            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
+        entity_ids.add(dimension_id)
+        if dimension.get("type") != V4_SEGMENT_LENGTH_DIMENSION:
+            frappe.throw(_("Drawing V4 contains an unsupported dimension type."))
+        segment_id = str(dimension.get("segmentId") or "")
+        if segment_id not in segment_refs:
+            frappe.throw(_("Drawing V4 dimension references a missing segment."))
+        if segment_id in dimensioned_segments:
+            frappe.throw(_("Drawing V4 cannot contain duplicate length dimensions for one segment."))
+        dimensioned_segments.add(segment_id)
 
     return drawing
 
