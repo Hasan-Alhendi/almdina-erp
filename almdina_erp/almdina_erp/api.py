@@ -10,6 +10,7 @@ from frappe.utils import cint, flt
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot_json,
 )
+from almdina_erp.almdina_erp.domain.orders.editability import can_edit_order
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
@@ -21,11 +22,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 
 
 def _use_locked_preview(status: str) -> bool:
-    from almdina_erp.almdina_erp.services.order_edit_policy import user_can_edit_order
-
     # The persisted lifecycle state is authoritative. Only Draft is editable;
     # every later state renders the immutable approved/stored plan.
-    return not user_can_edit_order(status)
+    return not can_edit_order(status)
 
 
 def _board_ready_for_plan(preview: Any) -> bool:
