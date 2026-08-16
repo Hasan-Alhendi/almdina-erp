@@ -23,7 +23,7 @@ GEOMETRY = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cut
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
 HOOKS = ROOT / "frontend_assets.py"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
-V3_GEOMETRY = ROOT / "public" / "js" / "door_drawing_v3" / "domain" / "geometry.js"
+V4_GEOMETRY = ROOT / "public" / "js" / "door_drawing_v4" / "domain" / "geometry.js"
 
 
 def _fields(path: Path) -> dict[str, dict]:
@@ -41,7 +41,7 @@ def test_exact_geometry_is_separate_from_documentation_and_persisted_in_plan():
     assert placed["special_shape_geometry_json"]["read_only"] == 1
 
 
-def test_v3_editor_is_primary_while_production_geometry_contract_remains_available():
+def test_v4_editor_is_primary_while_production_geometry_contract_remains_available():
     hooks = HOOKS.read_text(encoding="utf-8")
     geometry_hook = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"'
     contract_hook = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"'
@@ -52,13 +52,14 @@ def test_v3_editor_is_primary_while_production_geometry_contract_remains_availab
     assert hooks.index(geometry_hook) < hooks.index(contract_hook)
 
     editor = EDITOR.read_text(encoding="utf-8")
-    v3 = V3_GEOMETRY.read_text(encoding="utf-8")
-    assert "__doorDrawingV3: true" in editor
-    assert "door_drawing_v3/domain/geometry.js" in editor
-    assert 'const UNITS = "cm"' not in v3
-    assert "EPSILON_MM" in v3
-    assert "function line(" in v3
-    assert "special_shape_geometry_json" not in v3
+    v4 = V4_GEOMETRY.read_text(encoding="utf-8")
+    assert "__doorDrawingV4: true" in editor
+    assert "door_drawing_v4/domain/geometry.js" in editor
+    assert 'const EPSILON_MM = 0.001' in v4
+    assert "function point(" in v4
+    assert "function distance(" in v4
+    assert "function pointFromPolar(" in v4
+    assert "special_shape_geometry_json" not in v4
 
 
 def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geometry():

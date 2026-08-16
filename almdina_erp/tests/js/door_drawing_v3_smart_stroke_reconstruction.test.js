@@ -85,7 +85,7 @@ assert.ok(hasHandles(flowerResult));
 
 const source = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/domain/smart_stroke_reconstruction_domain.js"), "utf8");
 const app = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/application/non_destructive_smart_suggestions.js"), "utf8");
-const bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const activeFacade = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 
 assert.match(source, /resampleUniform/);
 assert.match(source, /straightEvidence/);
@@ -103,9 +103,9 @@ assert.match(app, /"vectorPathDraft"/);
 assert.match(app, /"vectorGesture"/);
 assert.match(app, /resetCompetingPenState\(c\);\s*clearSuggestion\(c\);/, "Pointer-down must isolate freehand state before the stroke owner starts");
 assert.match(app, /tool\.dataset\.ddv3Tool === "pen"\) resetCompetingPenState\(c\)/, "Selecting the freehand pen must clear stale competing drafts without a page refresh");
-assert.ok(bootstrap.indexOf("/domain/bezier_path_domain.js") < bootstrap.indexOf("/domain/smart_stroke_reconstruction_domain.js"));
-assert.ok(bootstrap.indexOf("/domain/smart_stroke_reconstruction_domain.js") < bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js"));
-assert.ok(bootstrap.indexOf("/application/adaptive_stroke_reconstructor.js") < bootstrap.indexOf("/application/non_destructive_smart_suggestions.js"));
-assert.match(bootstrap, /__doorDrawingV3PenStateIsolation:\s*true/);
+assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(activeFacade, /__doorDrawingV3PenStateIsolation/);
 
-console.log("Door Drawing V3 local smart stroke reconstruction and pen-state isolation passed");
+console.log("Door Drawing V3 local smart stroke reconstruction and pen-state isolation passed as isolated legacy regression; active facade remains V4");

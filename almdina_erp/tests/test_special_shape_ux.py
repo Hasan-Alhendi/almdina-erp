@@ -24,10 +24,11 @@ OPERATOR_UX = (
     / "door_cutting_order_operator_ux.js"
 )
 EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
-V3_VIEW = APP_ROOT / "public" / "js" / "door_drawing_v3" / "presentation" / "canvas_view.js"
-V3_EDITOR = APP_ROOT / "public" / "js" / "door_drawing_v3" / "application" / "editor_stage2.js"
-V3_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v3" / "domain" / "geometry.js"
-V3_CSS = APP_ROOT / "public" / "css" / "door_drawing_v3.css"
+V4_SHELL = APP_ROOT / "public" / "js" / "door_drawing_v4" / "presentation" / "editor_shell.js"
+V4_CONTROLLER = APP_ROOT / "public" / "js" / "door_drawing_v4" / "presentation" / "editor_controller.js"
+V4_INTERACTION = APP_ROOT / "public" / "js" / "door_drawing_v4" / "application" / "interaction_engine.js"
+V4_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v4" / "domain" / "geometry.js"
+V4_CSS = APP_ROOT / "public" / "css" / "door_drawing_v4.css"
 COST_PRESENTER = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
 COST_PERMISSIONS = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_permissions_ux.js"
 CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
@@ -79,36 +80,40 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
         assert fields[fieldname]["non_negative"] == 1
 
 
-def test_operator_opens_only_clean_v3_editor_runtime():
+def test_operator_opens_only_clean_v4_editor_runtime():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     entry = EDITOR_ENTRY.read_text(encoding="utf-8")
-    view = V3_VIEW.read_text(encoding="utf-8")
-    editor = V3_EDITOR.read_text(encoding="utf-8")
-    geometry = V3_GEOMETRY.read_text(encoding="utf-8")
-    css = V3_CSS.read_text(encoding="utf-8")
+    shell = V4_SHELL.read_text(encoding="utf-8")
+    controller = V4_CONTROLLER.read_text(encoding="utf-8")
+    interaction = V4_INTERACTION.read_text(encoding="utf-8")
+    geometry = V4_GEOMETRY.read_text(encoding="utf-8")
+    css = V4_CSS.read_text(encoding="utf-8")
     hooks = HOOKS.read_text(encoding="utf-8")
 
     assert 'data-field="piece_type"' in operator
     assert "dco-special-sketch-button" in operator
     assert "AlmdinaSpecialShapeEditor.open" in operator
     assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
-    assert "__doorDrawingV3: true" in entry
-    assert "__doorDrawingV3Shapes: true" in entry
-    assert "door_drawing_v3/domain/geometry.js" in entry
-    assert "door_drawing_v3/presentation/canvas_view.js" in entry
-    assert "door_drawing_v3/application/editor_stage2.js" in entry
+    assert "__doorDrawingV4: true" in entry
+    assert "__canonicalMmGeometry: true" in entry
+    assert "door_drawing_v4/domain/geometry.js" in entry
+    assert "door_drawing_v4/presentation/editor_shell.js" in entry
+    assert "door_drawing_v4/presentation/editor_controller.js" in entry
     assert "AlmdinaSketchEngine" not in entry
-    for tool in ("line", "select", "rectangle", "circle", "arc"):
-        assert f'data-ddv3-tool="{tool}"' in view
-    assert "function measure(" in view
-    assert "worldToScreen" in view
-    assert "screenToWorld" in view
-    assert "function handleArcClick" in editor
-    assert "G.translateObject" in editor
+    for tool in ("select", "node", "pen", "hand"):
+        assert f'toolButton("{tool}"' in shell
+    assert 'inputmode="decimal"' in shell
+    assert 'placeholder="الطول mm"' in shell
+    assert "function worldPoint(" in controller
+    assert "screenToleranceToMm" in controller
+    assert "engine.inputLength(lengthMm)" in controller
+    assert "engine.undo()" in controller
+    assert "engine.redo()" in controller
+    assert "function beginNodeDrag(" in interaction
+    assert "function finishNodeDrag(" in interaction
     assert 'const EPSILON_MM = 0.001' in geometry
-    assert 'units: "mm"' not in geometry
-    assert ".ddv3-inspector" in css
-    assert ".ddv3-toolbar" in css
+    assert ".ald-v4-editor-host" in css
+    assert ".ald-v4-dialog-actions" in css
     for retired in (
         "door_cutting_order_sketch_engine.js",
         "door_cutting_order_exact_line_ux.js",
