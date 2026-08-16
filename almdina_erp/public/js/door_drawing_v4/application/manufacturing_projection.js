@@ -42,7 +42,8 @@
         const invalid = validateDocument(document);
         if (invalid) return invalid;
 
-        const paths = Array.isArray(document.paths) ? document.paths : [];
+        const paths = (Array.isArray(document.paths) ? document.paths : [])
+            .filter(path => Array.isArray(path.segmentIds) && path.segmentIds.length > 0);
         if (paths.length !== 1) {
             return failure(paths.length ? "ambiguous-boundary" : "missing-boundary", {
                 pathCount: paths.length,
@@ -51,7 +52,7 @@
 
         const path = paths[0];
         if (!path.closed) return failure("open-boundary", { pathId: path.id });
-        if (!Array.isArray(path.segmentIds) || path.segmentIds.length < 3) {
+        if (path.segmentIds.length < 3) {
             return failure("too-few-edges", { pathId: path.id });
         }
 
