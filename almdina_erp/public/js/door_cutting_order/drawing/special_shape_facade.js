@@ -135,6 +135,6 @@
         __manufacturingProjection: true,
     });
 
-    window.AlmdinaSpecialShapeEditor = facade;
+    window.AlmdinaSpecialShapeEditor = Object.freeze(facade);
     window.AlmdinaDoorDrawingV4Bootstrap = Object.freeze({ STYLE_LINKS, SCRIPTS, boot });
 })();
