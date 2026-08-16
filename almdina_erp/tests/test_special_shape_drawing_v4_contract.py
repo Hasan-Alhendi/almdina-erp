@@ -44,6 +44,33 @@ def test_v4_drawing_document_is_accepted():
     assert validate_special_shape_drawing(drawing) == drawing
 
 
+def test_v4_drawing_accepts_segment_length_dimension():
+    drawing = _rectangle_document()
+    drawing["dimensions"] = [
+        {"id": "d1", "type": "segment-length", "segmentId": "s1"}
+    ]
+    assert validate_special_shape_drawing(drawing) == drawing
+
+
+def test_v4_drawing_rejects_dimension_with_missing_segment():
+    drawing = _rectangle_document()
+    drawing["dimensions"] = [
+        {"id": "d1", "type": "segment-length", "segmentId": "missing"}
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
+def test_v4_drawing_rejects_duplicate_length_dimensions_for_segment():
+    drawing = _rectangle_document()
+    drawing["dimensions"] = [
+        {"id": "d1", "type": "segment-length", "segmentId": "s1"},
+        {"id": "d2", "type": "segment-length", "segmentId": "s1"},
+    ]
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(drawing)
+
+
 def test_v4_drawing_rejects_missing_node_reference():
     drawing = _rectangle_document()
     drawing["segments"][1]["endNodeId"] = "missing"
@@ -74,6 +101,9 @@ def test_v4_drawing_rejects_duplicate_global_entity_ids():
 
 def test_v4_validation_does_not_mutate_document():
     drawing = _rectangle_document()
+    drawing["dimensions"] = [
+        {"id": "d1", "type": "segment-length", "segmentId": "s1"}
+    ]
     before = copy.deepcopy(drawing)
     validate_special_shape_drawing(drawing)
     assert drawing == before
