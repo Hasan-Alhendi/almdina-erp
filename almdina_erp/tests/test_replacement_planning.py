@@ -29,8 +29,8 @@ LEGACY_STOCK_MODULES = {
     "almdina_erp.almdina_erp.services.remnant_service": RUNTIME_ROOT / "services" / "remnant_service.py",
     "almdina_erp.almdina_erp.services.remnant_execution": RUNTIME_ROOT / "services" / "remnant_execution.py",
     "almdina_erp.almdina_erp.services.remnant_planning": RUNTIME_ROOT / "services" / "remnant_planning.py",
-    "almdina_erp.almdina_erp.infrastructure.stock_execution_gateway": RUNTIME_ROOT / "infrastructure" / "stock_execution_gateway.py",
-    "almdina_erp.almdina_erp.infrastructure.remnant_execution_gateway": RUNTIME_ROOT / "infrastructure" / "remnant_execution_gateway.py",
+    "almdina_erp.almdina_erp.infrastructure.frappe.stock_execution_gateway": RUNTIME_ROOT / "infrastructure" / "frappe" / "stock_execution_gateway.py",
+    "almdina_erp.almdina_erp.infrastructure.frappe.remnant_execution_gateway": RUNTIME_ROOT / "infrastructure" / "frappe" / "remnant_execution_gateway.py",
     "almdina_erp.almdina_erp.infrastructure.frappe.inventory_repository": RUNTIME_ROOT / "infrastructure" / "frappe" / "inventory_repository.py",
 }
 
