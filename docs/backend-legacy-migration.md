@@ -86,7 +86,7 @@ tests ensure the facades themselves remain behavior-free.
 
 ## Batch 3 — Cutting Plan mixed service split
 
-Status: ready for final CI validation.
+Status: closed on `e4db34e22b34cc1b85d136e7f706cd4353d16b62`.
 
 The historical `cutting_plan_service.py` previously mixed two responsibilities:
 Cutting Plan snapshot persistence/freeze behavior and historical lifecycle API
@@ -118,3 +118,35 @@ Architecture contracts enforce that the compatibility facade contains no Cutting
 Plan persistence (`frappe.new_doc`, `plan.insert`, `frappe.db.set_value`) and that
 product-scope, geometry, drawing approval, and special-price/documentation
 contracts inspect the focused snapshot owner instead of the facade.
+
+## Batch 4 — Shop Floor transitional production boundary
+
+Status: ready for final CI validation.
+
+The historical `production_service.py` previously mixed three concerns: legacy
+stage bootstrap, order-status synchronization, and retired/public compatibility
+endpoints. Those responsibilities are now separated while preserving behavior.
+
+Focused owners:
+
+- `production_stage_bootstrap_service.py` — legacy-compatible default stage
+  creation with the same pending/auto-complete semantics.
+- `order_status_sync_service.py` — canonical order-status synchronization from
+  current production stage, replacements, and lifecycle state.
+- `infrastructure/frappe/production_event_repository.py` — production-stage event
+  persistence used by lifecycle cancellation.
+
+Migrated internal consumers:
+
+- `shop_floor_service.py`
+- `order_lifecycle_service.py`
+- `replacement_cancellation_service.py`
+- `replacement_status_service.py`
+
+`production_service.py` remains only as a backward-compatible facade. It exposes
+the historical Python names as delegates and keeps legacy HTTP stage endpoints
+fail-closed/protected through the existing legacy endpoint boundary.
+
+A Static architecture scan now rejects any internal runtime import of
+`services.production_service`. This prevents the transitional facade from
+regaining business ownership while preserving compatibility for external callers.
