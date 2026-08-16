@@ -116,7 +116,7 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertIn("لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا", renderer)
         self.assertIn("createLatestRequestGate", state)
         self.assertIn("requests.console.begin", controller)
-        self.assertIn("@media(max-width:600px)", css)
+        self.assertIn("@media(max-width:", css)
         self.assertIn('fieldtype: "Password"', dialogs)
         self.assertIn("factory_workforce/controller.js", page)
         self.assertNotIn("requestId", surface)

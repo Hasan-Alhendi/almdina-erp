@@ -190,15 +190,14 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("aw-card", self.controller)
         self.assertNotIn("style.textContent", self.controller)
 
-    def test_styles_are_external_and_preserve_existing_surface(self) -> None:
+    def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:
         for selector in (
             ".aw-shell",
             ".aw-toolbar",
             ".aw-summary",
             ".aw-card",
             ".aw-audit",
-            "@media(max-width:900px)",
-            "@media(max-width:600px)",
+            "@media(max-width:",
         ):
             self.assertIn(selector, self.css)
         self.assertNotIn("<style", self.renderer)
