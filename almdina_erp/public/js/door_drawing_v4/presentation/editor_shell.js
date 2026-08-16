@@ -16,6 +16,7 @@
                     ${toolButton("node", "A", "تعديل النقاط", "◇")}
                     <span class="ald-v4-toolbar-separator" aria-hidden="true"></span>
                     ${toolButton("pen", "P", "القلم الذكي", "⌁")}
+                    ${toolButton("dimension", "D", "إضافة بُعد", "↔")}
                     ${toolButton("hand", "Space", "تحريك اللوحة", "✋")}
                 </div>
                 <div class="ald-v4-canvas-wrap">
