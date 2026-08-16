@@ -16,7 +16,8 @@ CORE_SCRIPTS = (
 ORDER_ENTRY_SCRIPTS = (
     "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
     "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
-    "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",
+    "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js",
     "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js",
     "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js",
     "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
@@ -31,6 +32,7 @@ EDGE_BANDING_SCRIPTS = (
     "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
     "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js",
     "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_double_click_guard.js",
+    "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js",
     "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js",
     "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
 )
@@ -39,6 +41,8 @@ CUTTING_PLAN_SCRIPTS = (
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js",
+    "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
     "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
@@ -136,6 +140,12 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
                 hooks,
                 f"Retired root asset path still loaded: {old_path}",
             )
+
+        self.assertNotIn(
+            '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js"',
+            hooks,
+            "Retired operator patch must not regain runtime ownership",
+        )
 
     def test_edge_banding_batch_has_canonical_feature_paths(self):
         hooks = HOOKS.read_text(encoding="utf-8")

@@ -16,9 +16,33 @@ SERVICE = APP / "services" / "workforce_service.py"
 PROVISION = APP / "services" / "workforce_provisioning_service.py"
 PAGE = APP / "page" / "factory_workforce" / "factory_workforce.js"
 PAGE_JSON = PAGE.with_suffix(".json")
+WORKFORCE_API = ROOT / "public" / "js" / "factory_workforce" / "api.js"
+WORKFORCE_STATE = ROOT / "public" / "js" / "factory_workforce" / "state.js"
+WORKFORCE_VIEW_MODEL = ROOT / "public" / "js" / "factory_workforce" / "view_model.js"
+WORKFORCE_RENDERER = ROOT / "public" / "js" / "factory_workforce" / "renderer.js"
+WORKFORCE_INTERACTIONS = ROOT / "public" / "js" / "factory_workforce" / "interactions.js"
+WORKFORCE_DIALOGS = ROOT / "public" / "js" / "factory_workforce" / "dialogs.js"
+WORKFORCE_CONTROLLER = ROOT / "public" / "js" / "factory_workforce" / "controller.js"
+WORKFORCE_CSS = ROOT / "public" / "css" / "factory_workforce.css"
+WORKFORCE_FRONTEND_MODULES = (
+    WORKFORCE_API,
+    WORKFORCE_STATE,
+    WORKFORCE_VIEW_MODEL,
+    WORKFORCE_RENDERER,
+    WORKFORCE_INTERACTIONS,
+    WORKFORCE_DIALOGS,
+    WORKFORCE_CONTROLLER,
+)
 AUDIT_JSON = APP / "doctype" / "almdina_user_audit" / "almdina_user_audit.json"
 WORKSPACE = APP / "workspace" / "almdina_settings" / "almdina_settings.json"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
+
+
+def _workforce_browser_surface() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (PAGE, *WORKFORCE_FRONTEND_MODULES)
+    )
 
 
 class TestWorkforceManagementArchitecture(unittest.TestCase):
@@ -63,9 +87,18 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
         self.assertFalse((APP / "application" / "security" / "provision_user.py").exists())
 
     def test_workforce_page_is_role_driven_responsive_and_race_safe(self) -> None:
-        source = PAGE.read_text(encoding="utf-8")
+        page = PAGE.read_text(encoding="utf-8")
+        api = WORKFORCE_API.read_text(encoding="utf-8")
+        state = WORKFORCE_STATE.read_text(encoding="utf-8")
+        view_model = WORKFORCE_VIEW_MODEL.read_text(encoding="utf-8")
+        renderer = WORKFORCE_RENDERER.read_text(encoding="utf-8")
+        dialogs = WORKFORCE_DIALOGS.read_text(encoding="utf-8")
+        controller = WORKFORCE_CONTROLLER.read_text(encoding="utf-8")
+        css = WORKFORCE_CSS.read_text(encoding="utf-8")
+        surface = _workforce_browser_surface()
         metadata = json.loads(PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(metadata["roles"], [])
+
         for endpoint in (
             "get_workforce_console",
             "create_workforce_user",
@@ -74,21 +107,24 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
             "reset_workforce_password",
             "get_workforce_user_audit",
         ):
-            self.assertIn(endpoint, source)
-        self.assertIn("MultiSelectList", source)
-        self.assertIn("assign_user_roles", source)
-        self.assertIn("available_users", source)
-        self.assertIn("مستخدمون غير مضافين إلى المعمل", source)
-        self.assertIn("إضافة إلى المعمل", source)
-        self.assertIn("لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا", source)
-        self.assertIn("requestId", source)
-        self.assertIn("@media(max-width:600px)", source)
-        self.assertIn('fieldtype: "Password"', source)
-        self.assertNotIn("profileOptions", source)
-        self.assertNotIn("profile_label", source)
-        self.assertNotIn("manage_users", source)
-        self.assertNotIn("frappe.user_roles", source)
-        self.assertNotIn("frappe.get_roles", source)
+            self.assertIn(endpoint, api)
+        self.assertIn('fieldtype: "MultiSelectList"', dialogs)
+        self.assertIn("assign_user_roles", view_model)
+        self.assertIn("availableUsers", state)
+        self.assertIn("مستخدمون غير مضافين إلى المعمل", renderer)
+        self.assertIn("إضافة إلى المعمل", renderer)
+        self.assertIn("لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا", renderer)
+        self.assertIn("createLatestRequestGate", state)
+        self.assertIn("requests.console.begin", controller)
+        self.assertIn("@media(max-width:", css)
+        self.assertIn('fieldtype: "Password"', dialogs)
+        self.assertIn("factory_workforce/controller.js", page)
+        self.assertNotIn("requestId", surface)
+        self.assertNotIn("profileOptions", surface)
+        self.assertNotIn("profile_label", surface)
+        self.assertNotIn("manage_users", surface)
+        self.assertNotIn("frappe.user_roles", surface)
+        self.assertNotIn("frappe.get_roles", surface)
 
     def test_audit_is_append_only_private_and_password_free(self) -> None:
         metadata = json.loads(AUDIT_JSON.read_text(encoding="utf-8"))

@@ -32,11 +32,18 @@ jobs:
           node --check almdina_erp/almdina_erp/page/factory_permissions/factory_permissions.js
           node --check almdina_erp/public/js/factory_permissions/api.js
           node --check almdina_erp/public/js/factory_permissions/state.js
+          node --check almdina_erp/public/js/factory_permissions/view_model.js
+          node --check almdina_erp/public/js/factory_permissions/renderer.js
+          node --check almdina_erp/public/js/factory_permissions/interactions.js
           node --check almdina_erp/public/js/factory_permissions/controller.js
           node --check almdina_erp/tests/js/factory_permissions_foundation.test.js
+          node --check almdina_erp/tests/js/factory_permissions_view_model.test.js
 
       - name: Enforce Factory Permissions frontend architecture
         run: python -m unittest -v almdina_erp.tests.test_factory_permissions_frontend_architecture
 
       - name: Run Factory Permissions API and state simulation
         run: node almdina_erp/tests/js/factory_permissions_foundation.test.js
+
+      - name: Run Factory Permissions view-model simulation
+        run: node almdina_erp/tests/js/factory_permissions_view_model.test.js

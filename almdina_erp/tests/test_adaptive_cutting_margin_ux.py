@@ -22,6 +22,14 @@ PLAN_CONTENT_UX = (
     / "cutting_plan"
     / "door_cutting_order_plan_content_ux.js"
 )
+PLAN_CONTENT_STYLES = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_styles.js"
+)
 
 
 def _command(
@@ -159,6 +167,7 @@ def test_impossible_piece_is_not_hidden_by_margin_relaxation():
 
 def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+    styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
     assert "function ensureMarginPolicyAlert" in source
     assert "normalizedMarginNotes" in source
@@ -168,7 +177,7 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert 'existing.dataset.marginSignature === signature' in source
     assert 'role", "status"' in source
     assert 'aria-live", "polite"' in source
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in source
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in styles
     assert '["يمين", policy.right_mm]' in source
     assert '["يسار", policy.left_mm]' in source
     assert '["أعلى", policy.top_mm]' in source
@@ -177,14 +186,15 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
 
 def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+    styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
     assert "function zeroMarginEdges" in source
     assert "function ensureOriginalBoardEdges" in source
     assert "function buildOriginalEdgeMarker" in source
-    assert "dco-board-original-edge--top" in source
-    assert "dco-board-original-edge--bottom" in source
-    assert "dco-board-original-edge--left" in source
-    assert "dco-board-original-edge--right" in source
+    assert "dco-board-original-edge--top" in styles
+    assert "dco-board-original-edge--bottom" in styles
+    assert "dco-board-original-edge--left" in styles
+    assert "dco-board-original-edge--right" in styles
     assert "حافة أصلية · أعلى" in source
     assert "حافة أصلية · أسفل" in source
     assert "originalEdgeSignature" in source
@@ -194,6 +204,7 @@ def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
 
 def test_margin_warning_is_compact_except_when_original_edge_is_used():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
+    styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
     assert "const hasOriginalEdge = zeroEdges.length > 0" in source
     assert "const detailNotes = hasOriginalEdge ? notes : []" in source
@@ -202,7 +213,7 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     assert "dco-margin-policy-alert__summary" in source
     assert "dco-margin-policy-alert__details" in source
     assert "dco-margin-policy-alert__edge${zeroClass}" in source
-    assert ".dco-margin-policy-alert__edge.is-zero" in source
+    assert ".dco-margin-policy-alert__edge.is-zero" in styles
 
 
 def test_cutting_plan_sections_are_always_arabic_for_factory_operator_ui():

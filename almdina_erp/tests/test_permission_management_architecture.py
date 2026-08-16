@@ -23,6 +23,9 @@ PROVISION = ROOT / "almdina_erp" / "services" / "workforce_provisioning_service.
 PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
 PERMISSION_API = ROOT / "public" / "js" / "factory_permissions" / "api.js"
 PERMISSION_STATE = ROOT / "public" / "js" / "factory_permissions" / "state.js"
+PERMISSION_VIEW_MODEL = ROOT / "public" / "js" / "factory_permissions" / "view_model.js"
+PERMISSION_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
+PERMISSION_INTERACTIONS = ROOT / "public" / "js" / "factory_permissions" / "interactions.js"
 PERMISSION_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 PAGE_JSON = PAGE.with_suffix(".json")
 SETTINGS_PAGE_JSON = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.json"
@@ -34,10 +37,7 @@ SETTINGS_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_settings" / "
 
 class TestPermissionManagementArchitecture(unittest.TestCase):
     def test_pure_matrix_policy_has_no_framework_dependency(self) -> None:
-        source = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (POLICY, SUPPORT_POLICY)
-        )
+        source = "\n".join(path.read_text(encoding="utf-8") for path in (POLICY, SUPPORT_POLICY))
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
         self.assertNotIn("Custom DocPerm", source)
@@ -47,14 +47,12 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         projected = PROJECTED_REPOSITORY.read_text(encoding="utf-8")
         support = SUPPORT_REPOSITORY.read_text(encoding="utf-8")
         service = SERVICE.read_text(encoding="utf-8")
-
         self.assertIn('"Custom DocPerm"', repository)
         self.assertIn('"Almdina Permission Audit"', repository)
         self.assertIn("FrappePermissionMatrixRepository", projected)
         self.assertIn("SupportingDoctypePermissionRepository", projected)
         self.assertIn('"Custom DocPerm"', support)
         self.assertIn("setup_custom_perms", support)
-
         self.assertNotIn('frappe.get_doc("Custom DocPerm"', service)
         self.assertNotIn("frappe.db.sql", service)
         self.assertIn("ProjectedPermissionMatrixRepository", service)
@@ -72,7 +70,6 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         workforce = WORKFORCE_REPOSITORY.read_text(encoding="utf-8")
         gateway = AUTHORIZATION_GATEWAY.read_text(encoding="utf-8")
         cleanup = AUTOMATIC_ROLE_CLEANUP.read_text(encoding="utf-8")
-
         for role in ("All", "Guest", "Desk User", "System Manager"):
             self.assertIn(f'"{role}"', policy)
         self.assertIn("PROTECTED_ROLES = PROTECTED_SYSTEM_ROLES", repository)
@@ -83,10 +80,7 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn('PROTECTED_ASSIGNMENT_ROLES = frozenset(', workforce)
 
     def test_administration_services_use_capabilities_not_role_names(self) -> None:
-        combined = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (SERVICE, SETTINGS_SERVICE, WORKFORCE_SERVICE, PROVISION)
-        )
+        combined = "\n".join(path.read_text(encoding="utf-8") for path in (SERVICE, SETTINGS_SERVICE, WORKFORCE_SERVICE, PROVISION))
         self.assertIn("MANAGE_PERMISSIONS", combined)
         self.assertIn("decide_settings_update", combined)
         self.assertIn("WorkforceAction", combined)
@@ -113,8 +107,11 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         page = PAGE.read_text(encoding="utf-8")
         api = PERMISSION_API.read_text(encoding="utf-8")
         state = PERMISSION_STATE.read_text(encoding="utf-8")
+        view_model = PERMISSION_VIEW_MODEL.read_text(encoding="utf-8")
+        renderer = PERMISSION_RENDERER.read_text(encoding="utf-8")
+        interactions = PERMISSION_INTERACTIONS.read_text(encoding="utf-8")
         controller = PERMISSION_CONTROLLER.read_text(encoding="utf-8")
-        browser_surface = "\n".join((page, api, state, controller))
+        browser_surface = "\n".join((page, api, state, view_model, renderer, interactions, controller))
 
         self.assertIn("preview_role_permissions", api)
         self.assertIn("update_role_permissions", api)
@@ -123,12 +120,14 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("requests.role.begin", controller)
         self.assertIn("requests.preview.begin", controller)
         self.assertIn("requests.transfer.begin", controller)
-        self.assertIn("apc-savebar", controller)
+        self.assertIn("apc-savebar", renderer)
         self.assertIn("Promise.resolve(loadPreview()).then", controller)
         self.assertIn("const executeSave = async", controller)
         self.assertIn("finally {", controller)
         self.assertIn("state.saving = false", controller)
         self.assertIn("await refreshRuntimePermissions()", controller)
+        self.assertIn("completeCatalog", view_model)
+        self.assertIn("lifecycle.track", interactions)
         self.assertNotIn("roleRequest", browser_surface)
         self.assertNotIn("previewRequest", browser_surface)
         self.assertNotIn("transferRequest", browser_surface)
@@ -139,7 +138,6 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
     def test_shared_shell_uses_surface_policy_not_raw_capabilities(self) -> None:
         source = SHARED_SHELL.read_text(encoding="utf-8")
         surface_policy = SURFACE_POLICY.read_text(encoding="utf-8")
-
         self.assertIn("SURFACE_ROUTE_RULES", source)
         self.assertIn("surfaceAllowed", source)
         self.assertIn('surface: "permissions"', source)
@@ -154,7 +152,6 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertNotIn("frappe.user_roles", source)
         self.assertNotIn("manage_users", source)
         self.assertNotIn("manage_factory_settings", source)
-
         self.assertIn("Capability.MANAGE_PERMISSIONS", surface_policy)
         self.assertIn("Capability.VIEW_USERS", surface_policy)
         self.assertIn("Capability.VIEW_PRODUCTION_ROUTINGS", surface_policy)
@@ -168,7 +165,6 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertEqual(targets["إدارة المستخدمين"], "factory-workforce")
         self.assertEqual(targets["إدارة الصلاحيات"], "factory-permissions")
         self.assertEqual(targets["إدارة مسارات الإنتاج"], "factory-master-data")
-
         shell = SHARED_SHELL.read_text(encoding="utf-8")
         self.assertIn('{ surface: "permissions", routes: ["factory-permissions"] }', shell)
         self.assertIn('surface: "role_admin"', shell)

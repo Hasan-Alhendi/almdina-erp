@@ -37,7 +37,12 @@ doctype_js = {
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
-        "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js",
+        # Qty+Enter is a focused keyboard behavior layered on the operator's
+        # existing row materialization/model-sync contract; it owns no rendering.
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",
+        # Measurement features keep their existing Frappe hook order; this owner
+        # only centralizes cancellable frame/timer work for FE-ARCH-008.
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js",
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js",
@@ -50,6 +55,9 @@ doctype_js = {
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js",
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_double_click_guard.js",
+        # Multi-edge/profile modules keep their feature APIs, while one structural
+        # runtime owner prevents their historical broad observers from competing.
+        "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js",
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js",
         "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
@@ -66,6 +74,10 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
+        # F6.3 keeps the existing content hook position while loading its local
+        # presentation owners immediately before the orchestrator.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",

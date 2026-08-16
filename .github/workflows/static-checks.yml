@@ -89,6 +89,8 @@ jobs:
             almdina_erp.tests.test_final_security_architecture \
             almdina_erp.tests.test_workforce_authorization \
             almdina_erp.tests.test_workforce_management_architecture \
+            almdina_erp.tests.test_factory_workforce_frontend_architecture \
+            almdina_erp.tests.test_factory_workforce_frontend_security \
             almdina_erp.tests.test_factory_master_data_authorization \
             almdina_erp.tests.test_factory_master_data_architecture \
             almdina_erp.tests.test_production_routing_management_application \
@@ -117,6 +119,12 @@ jobs:
 
       - name: Run shop-floor query architecture tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_architecture
+
+      - name: Run Shop Floor Inbox frontend architecture tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_shop_floor_inbox_frontend_architecture \
+            almdina_erp.tests.test_shop_floor_inbox_frontend_security
 
       - name: Run door-piece policy tests
         run: |
@@ -166,13 +174,14 @@ jobs:
             almdina_erp.tests.test_product_scope_contract \
             almdina_erp.tests.test_replacement_planning
 
-      - name: Run revision, board input, and typing stability regression tests
+      - name: Run revision, board input, typing stability, and page revisit regression tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_revision_board_input_ux_contract \
             almdina_erp.tests.test_document_context_ux_contract \
             almdina_erp.tests.test_frontend_consolidation_contract \
-            almdina_erp.tests.test_input_stability_ux_contract
+            almdina_erp.tests.test_input_stability_ux_contract \
+            almdina_erp.tests.test_page_revisit_refresh_contract
 
       - name: Run UI, DXF, invoice, and optimizer function contracts
         run: |
@@ -216,7 +225,9 @@ jobs:
           node almdina_erp/tests/js/mobile_piece_cards.test.js
           node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/shop_floor_quick_actions.test.js
+          node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
+          node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/test_shape_print.js
 
       - name: Run Door Drawing V3 geometry and architecture regressions

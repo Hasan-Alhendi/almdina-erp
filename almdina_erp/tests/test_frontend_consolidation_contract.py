@@ -30,6 +30,14 @@ PLAN_CONTENT = (
     / "cutting_plan"
     / "door_cutting_order_plan_content_ux.js"
 )
+PLAN_CONTENT_STYLES = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_styles.js"
+)
 DRAWING_PLAN = (
     ROOT
     / "public"
@@ -217,6 +225,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
     def test_plan_page_has_one_control_surface_and_no_duplicate_summary(self) -> None:
         source = PLAN_CONTENT.read_text(encoding="utf-8")
+        styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
         drawing = DRAWING_PLAN.read_text(encoding="utf-8")
 
         # Order metadata, aggregate cards and the measurement list already live on
@@ -232,7 +241,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("dco-plan-actions-native", source)
         self.assertIn("dco-drawing-plan-panel-host", source)
         self.assertIn("dco-drawing-plan-panel", source)
-        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
+        self.assertNotIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
+        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", styles)
         self.assertIn("renderInboxPanel", drawing)
         self.assertIn("buildDrawingPanelHtml", drawing)
 

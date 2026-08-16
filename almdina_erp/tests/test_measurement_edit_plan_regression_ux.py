@@ -95,30 +95,39 @@ def test_kerf_and_trim_follow_order_input_plan_staleness() -> None:
 
 
 def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observers() -> None:
-    operator_patch = source("door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js")
+    edge_owner = source(
+        "door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js"
+    )
+    removed_patch = PUBLIC_JS / "door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js"
 
-    assert "disconnectCompetingEdgeObservers" in operator_patch
-    assert '"_dcoSideEdgeObserver"' in operator_patch
-    assert '"_dcoCompactEdgeProfileControlsObserver"' in operator_patch
-    assert "structuralMeasurementMutation" in operator_patch
-    assert "__dcoEdgeStructureObserver" in operator_patch
-    assert "observer.observe(wrapper, { childList: true, subtree: true })" in operator_patch
+    assert not removed_patch.exists()
+    assert "function disconnectLegacyObservers(wrapper)" in edge_owner
+    assert '"_dcoSideEdgeObserver"' in edge_owner
+    assert '"_dcoCompactEdgeProfileControlsObserver"' in edge_owner
+    assert "function structuralMeasurementMutation(mutation)" in edge_owner
+    assert "const observer = new MutationObserver" in edge_owner
+    assert edge_owner.count("new MutationObserver") == 1
+    assert "frm.__dcoEdgeRenderObserver" in edge_owner
+    assert "observer.observe(wrapper, { childList: true, subtree: true })" in edge_owner
 
-    refresh_body = operator_patch.split("function refreshEdgeDecorations(frm)", 1)[1].split(
-        "function stabilizeEdgeRendering(frm)", 1
+    render_body = edge_owner.split("function renderDecorations(frm)", 1)[1].split(
+        "function scheduleStructuralRefresh(frm)", 1
     )[0]
-    assert "const wrapper = measurementWrapper(frm);" in refresh_body
-    assert "disconnectCompetingEdgeObservers(wrapper);" in refresh_body
-    assert "disconnectCompetingEdgeObservers(root);" not in refresh_body
-    assert "disconnectCompetingEdgeObservers(measurementRoot(frm))" not in refresh_body
+    assert "const wrapper = measurementWrapper(frm);" in render_body
+    assert "multiEdge.schedule(frm);" in render_body
+    assert "controls.schedule(frm);" in render_body
+    assert render_body.index("multiEdge.schedule(frm);") < render_body.index("controls.schedule(frm);")
+    assert "disconnectLegacyObservers(wrapper);" in render_body
 
 
 def test_special_edge_visual_highlight_is_scoped_to_special_rows() -> None:
-    operator_patch = source("door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js")
+    edge_owner = source(
+        "door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js"
+    )
 
-    assert 'SPECIAL_EDGE_STYLE_ID = "dco-special-edge-visual-guard-css"' in operator_patch
-    assert "tr:not(.dco-special-row)" in operator_patch
-    assert ".is-edge-missing.is-checked" in operator_patch
-    assert "tr.dco-special-row" in operator_patch
-    assert "background:#b5701c!important" in operator_patch
-    assert "background:var(--primary,#2490ef)!important" in operator_patch
+    assert 'STYLE_ID = "dco-special-edge-visual-guard-css"' in edge_owner
+    assert "tr:not(.dco-special-row)" in edge_owner
+    assert ".is-edge-missing.is-checked" in edge_owner
+    assert "tr.dco-special-row" in edge_owner
+    assert "background:#b5701c!important" in edge_owner
+    assert "background:var(--primary,#2490ef)!important" in edge_owner

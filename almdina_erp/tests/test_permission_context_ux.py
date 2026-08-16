@@ -14,6 +14,10 @@ SHOP_FLOOR_PAGE_PATH = (
     REPOSITORY_ROOT
     / "almdina_erp/almdina_erp/page/shop_floor_inbox/shop_floor_inbox.js"
 )
+SHOP_FLOOR_MODULE_ROOT = REPOSITORY_ROOT / "almdina_erp/public/js/shop_floor_inbox"
+SHOP_FLOOR_API_PATH = SHOP_FLOOR_MODULE_ROOT / "api.js"
+SHOP_FLOOR_VIEW_MODEL_PATH = SHOP_FLOOR_MODULE_ROOT / "view_model.js"
+SHOP_FLOOR_CONTROLLER_PATH = SHOP_FLOOR_MODULE_ROOT / "controller.js"
 SHOP_FLOOR_PAGE_JSON_PATH = SHOP_FLOOR_PAGE_PATH.with_suffix(".json")
 SHOP_FLOOR_WORKSPACE_PATH = (
     REPOSITORY_ROOT
@@ -85,19 +89,26 @@ def test_shared_shell_keeps_desk_and_uses_navigation_context() -> None:
 
 
 def test_shop_floor_page_uses_server_context_and_shared_order_form() -> None:
-    source = SHOP_FLOOR_PAGE_PATH.read_text(encoding="utf-8")
-    assert "get_shop_floor_context" in source
-    assert "get_my_inbox" in source
-    assert "can_start_stage" in source
-    assert "can_handoff_stage" in source
-    assert 'frappe.set_route("Form", "Door Cutting Order", context.order)' in source
-    assert "requestId !== listRequest" in source
-    assert "document_capabilities" not in source
-    assert "buildPlanTabsHtml" not in source
-    assert "renderDetail" not in source
-    assert "frappe.user_roles" not in source
+    page = SHOP_FLOOR_PAGE_PATH.read_text(encoding="utf-8")
+    api = SHOP_FLOOR_API_PATH.read_text(encoding="utf-8")
+    view_model = SHOP_FLOOR_VIEW_MODEL_PATH.read_text(encoding="utf-8")
+    controller = SHOP_FLOOR_CONTROLLER_PATH.read_text(encoding="utf-8")
+    combined = "\n".join((page, api, view_model, controller))
+
+    assert "/assets/almdina_erp/js/shop_floor_inbox/api.js" in page
+    assert "/assets/almdina_erp/js/shop_floor_inbox/controller.js" in page
+    assert "get_shop_floor_context" in api
+    assert "get_my_inbox" in api
+    assert "can_start_stage === true" in view_model
+    assert "can_handoff_stage === true" in view_model
+    assert 'frappe.set_route("Form", "Door Cutting Order", context.order)' in controller
+    assert "isCurrentListRequest" in controller
+    assert "document_capabilities" not in combined
+    assert "buildPlanTabsHtml" not in combined
+    assert "renderDetail" not in combined
+    assert "frappe.user_roles" not in combined
     for role in ("Production Manager", "System Manager", "عامل رسم", "عامل CNC"):
-        assert role not in source
+        assert role not in combined
 
 
 def test_shop_floor_workspace_and_page_have_no_fixed_roles() -> None:

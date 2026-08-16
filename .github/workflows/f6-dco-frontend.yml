@@ -1,0 +1,91 @@
+name: F6 DCO Frontend Targeted Cleanup
+
+on:
+  push:
+    branches:
+      - "agent/f6*"
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  dco-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate targeted DCO JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_toolbar_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js
+          node --check almdina_erp/tests/js/measurement_lifecycle.test.js
+          node --check almdina_erp/tests/js/plan_board_presenter.test.js
+          node --check almdina_erp/tests/js/operator_edge_ownership.test.js
+
+      - name: Enforce targeted DCO architecture and UX contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from almdina_erp.tests import test_dco_measurement_lifecycle_architecture as lifecycle_checks
+          from almdina_erp.tests import test_measurement_resilience_ux as resilience_checks
+          from almdina_erp.tests import test_table_performance_ux as performance_checks
+          from almdina_erp.tests import test_cutting_plan_content_architecture as plan_architecture_checks
+          from almdina_erp.tests import test_cutting_plan_workspace_ux as plan_workspace_checks
+          from almdina_erp.tests import test_operator_edge_ownership_architecture as ownership_checks
+
+          modules = [
+              lifecycle_checks,
+              resilience_checks,
+              performance_checks,
+              plan_architecture_checks,
+              plan_workspace_checks,
+              ownership_checks,
+          ]
+          total = 0
+          for module in modules:
+              tests = [
+                  getattr(module, name)
+                  for name in dir(module)
+                  if name.startswith("test_") and callable(getattr(module, name))
+              ]
+              for test in tests:
+                  print(f"Running {module.__name__}.{test.__name__}...")
+                  test()
+              total += len(tests)
+          print(f"Validated {total} targeted DCO frontend contracts")
+          PY
+
+      - name: Simulate measurement lifecycle cancellation and freshness
+        run: node almdina_erp/tests/js/measurement_lifecycle.test.js
+
+      - name: Validate cutting plan board layout policy
+        run: node almdina_erp/tests/js/plan_board_presenter.test.js
+
+      - name: Validate operator and edge ownership helpers
+        run: node almdina_erp/tests/js/operator_edge_ownership.test.js

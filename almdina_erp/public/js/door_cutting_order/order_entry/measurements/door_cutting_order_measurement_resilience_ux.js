@@ -383,9 +383,19 @@
     }
 
     function schedule(frm) {
-        enhance(frm);
-        requestAnimationFrame(() => enhance(frm));
-        setTimeout(() => enhance(frm), 180);
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            enhance(frm);
+            requestAnimationFrame(() => enhance(frm));
+            setTimeout(() => enhance(frm), 180);
+            return;
+        }
+        lifecycle.schedule(
+            frm,
+            "measurement-resilience",
+            () => enhance(frm),
+            { delays: [180] }
+        );
     }
 
     frappe.ui.form.on("Door Cutting Order", {
