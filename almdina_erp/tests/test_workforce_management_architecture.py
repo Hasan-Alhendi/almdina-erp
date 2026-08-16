@@ -9,10 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 DOMAIN = APP / "domain" / "security" / "workforce.py"
 APPLICATION = APP / "application" / "security" / "workforce_management.py"
+APPLICATION_PACKAGE = APP / "application" / "security" / "__init__.py"
 SURFACE_POLICY = APP / "application" / "security" / "surface_access.py"
 REPOSITORY = APP / "infrastructure" / "frappe" / "workforce_repository.py"
 SERVICE = APP / "services" / "workforce_service.py"
-PROVISION = APP / "application" / "security" / "provision_user.py"
+PROVISION = APP / "services" / "workforce_provisioning_service.py"
 PAGE = APP / "page" / "factory_workforce" / "factory_workforce.js"
 PAGE_JSON = PAGE.with_suffix(".json")
 AUDIT_JSON = APP / "doctype" / "almdina_user_audit" / "almdina_user_audit.json"
@@ -51,11 +52,15 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
 
     def test_provisioner_accepts_roles_not_profiles(self) -> None:
         source = PROVISION.read_text(encoding="utf-8")
-        self.assertIn("workforce_provisioning_service", source)
+        application_package = APPLICATION_PACKAGE.read_text(encoding="utf-8")
         self.assertIn("roles: Sequence[str]", source)
+        self.assertIn("FrappeWorkforceRepository", source)
+        self.assertIn("create_workforce_user", source)
         self.assertNotIn("profile:", source)
         self.assertNotIn("PROFILES", source)
-        self.assertNotIn("import frappe", source)
+        self.assertNotIn('"PROFILES"', application_package)
+        self.assertNotIn('"provision_user"', application_package)
+        self.assertFalse((APP / "application" / "security" / "provision_user.py").exists())
 
     def test_workforce_page_is_role_driven_responsive_and_race_safe(self) -> None:
         source = PAGE.read_text(encoding="utf-8")

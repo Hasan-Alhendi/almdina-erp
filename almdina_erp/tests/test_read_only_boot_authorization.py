@@ -19,9 +19,8 @@ INSTALL_PATH = PACKAGE_ROOT / "install.py"
 PROVISION_PATH = (
     PACKAGE_ROOT
     / "almdina_erp"
-    / "application"
-    / "security"
-    / "provision_user.py"
+    / "services"
+    / "workforce_provisioning_service.py"
 )
 
 
