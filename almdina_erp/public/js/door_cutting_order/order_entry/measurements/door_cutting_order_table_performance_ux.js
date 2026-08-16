@@ -375,15 +375,39 @@
     }
 
     function schedule(frm) {
-        enhance(frm);
-        requestAnimationFrame(() => enhance(frm));
-        setTimeout(() => enhance(frm), 220);
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            enhance(frm);
+            requestAnimationFrame(() => enhance(frm));
+            setTimeout(() => enhance(frm), 220);
+            return;
+        }
+        lifecycle.schedule(
+            frm,
+            "table-performance",
+            () => enhance(frm),
+            { delays: [220] }
+        );
+    }
+
+    function scheduleRowRefresh(frm) {
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            requestAnimationFrame(() => enhance(frm));
+            return;
+        }
+        lifecycle.schedule(
+            frm,
+            "table-performance-row",
+            () => enhance(frm),
+            { immediate: false }
+        );
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
-        pieces_add(frm) { requestAnimationFrame(() => enhance(frm)); },
-        pieces_remove(frm) { requestAnimationFrame(() => enhance(frm)); },
+        pieces_add(frm) { scheduleRowRefresh(frm); },
+        pieces_remove(frm) { scheduleRowRefresh(frm); },
     });
 })();
