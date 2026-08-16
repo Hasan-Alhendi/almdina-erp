@@ -47,7 +47,10 @@ jobs:
         run: python -m compileall -q almdina_erp
 
       - name: Enforce frontend architecture contract
-        run: python -m unittest -v almdina_erp.tests.test_frontend_architecture_contract
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_frontend_architecture_contract \
+            almdina_erp.tests.test_frontend_foundation_contract
 
       - name: Run existing refactor and CI contract tests
         run: |
@@ -198,6 +201,7 @@ jobs:
 
       - name: Run active frontend browser simulations
         run: |
+          node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/permission_context.test.js
           node almdina_erp/tests/js/order_lifecycle_permissions.test.js
           node almdina_erp/tests/js/financial_documents.test.js
