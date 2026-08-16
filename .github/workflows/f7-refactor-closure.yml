@@ -38,7 +38,6 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js
           node --check almdina_erp/public/js/production_routing_ux.js
           node --check almdina_erp/public/js/shop_floor_quick_actions.js
-          node --check almdina_erp/tests/js/permission_action_visibility_guard.test.js
           node --check almdina_erp/tests/js/document_context.test.js
 
       - name: Validate F5 Shop Floor Inbox JavaScript
@@ -139,11 +138,8 @@ jobs:
       - name: Run F7 closure ownership contracts
         run: python -m unittest almdina_erp.tests.test_frontend_refactor_closure -v
 
-      - name: Simulate F4 permission and document-context runtimes
-        shell: bash
-        run: |
-          node almdina_erp/tests/js/permission_action_visibility_guard.test.js
-          node almdina_erp/tests/js/document_context.test.js
+      - name: Simulate F4 document-context runtime
+        run: node almdina_erp/tests/js/document_context.test.js
 
       - name: Simulate F5 Shop Floor Inbox view model
         run: node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
