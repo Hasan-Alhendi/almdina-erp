@@ -4,6 +4,9 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
     const MODULES = Object.freeze([
         "/assets/almdina_erp/js/factory_permissions/api.js",
         "/assets/almdina_erp/js/factory_permissions/state.js",
+        "/assets/almdina_erp/js/factory_permissions/view_model.js",
+        "/assets/almdina_erp/js/factory_permissions/renderer.js",
+        "/assets/almdina_erp/js/factory_permissions/interactions.js",
         "/assets/almdina_erp/js/factory_permissions/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_permissions.css";
