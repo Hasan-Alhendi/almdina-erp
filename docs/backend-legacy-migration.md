@@ -7,164 +7,88 @@ recorded in `almdina_erp/backend_legacy_migrations.json`.
 ## Safety rules
 
 - Migrate consumers before deleting a compatibility source.
-- Keep the canonical Frappe DocType controller base even when its old business
-  implementation is being slimmed.
-- Preserve historical public HTTP routes until their compatibility contract is
-  explicitly retired.
-- Keep retired product routes fail-closed while obsolete implementation modules
-  are removed.
+- Keep the canonical Frappe DocType controller base even when its old business implementation is being slimmed.
+- Preserve historical public HTTP routes until their compatibility contract is explicitly retired.
+- Keep retired product routes fail-closed while obsolete implementation modules are removed.
 - Record Stage 11 discoveries explicitly rather than rewriting the Stage 10 audit.
-- Close each batch only after Static, Security, and Frappe v16 Integration are
-  green on the same final SHA.
+- Close each batch only after Static, Security, and Frappe v16 Integration are green on the same final SHA.
 
 ## Batch 1 — Alternate Door Cutting Order controller chain
 
 Status: closed on `fca574cfbec79c8fc61d027c040088e0995e94e1`.
 
-Removed:
-
-- `door_cutting_order_fast.py`
-- `door_cutting_order_text_board.py`
-- `door_cutting_order_domain.py`
-- `door_cutting_order_costing.py`
-- `door_cutting_order_plan.py`
-
-The first three files were identified in the Stage 10 audit. During Frappe app
-regression tests, the migration contract exposed two more members of the same
-inactive inheritance branch: `CostingDoorCuttingOrder(DomainDoorCuttingOrder)`
-and `PlanDoorCuttingOrder(CostingDoorCuttingOrder)`. They are recorded as Stage
-11 discoveries in the migration ledger before removal.
-
-Canonical ownership remains:
-
-- `door_cutting_order_controller.py` — only `override_doctype_class` entry point.
-- `door_cutting_order.py` — canonical Frappe DocType base required by the
-  framework subclass contract.
-- `application/orders/process_order_save.py` — save orchestration.
-- `infrastructure/frappe/orders/save_gateway.py` — composition root for focused
-  order adapters.
-- `infrastructure/frappe/orders/costing_adapter.py` — active costing adapter.
-- `infrastructure/frappe/orders/plan_adapter.py` and
-  `cut_dimension_plan_adapter.py` — active plan adapters.
-
-The migration contract rejects any runtime Python reference to all five removed
-modules/classes so the old inheritance branch cannot silently return. Existing
-payload, costing and plan architecture tests now assert against the active
-Application/Infrastructure owners instead of the retired controller classes.
+Removed `door_cutting_order_fast.py`, `door_cutting_order_text_board.py`,
+`door_cutting_order_domain.py`, `door_cutting_order_costing.py`, and
+`door_cutting_order_plan.py`. Canonical ownership remains in the thin Frappe
+override, the required base DocType controller, and focused Application/Frappe
+save, costing, and plan adapters.
 
 ## Batch 2 — Cutting imports
 
 Status: closed on `342103d52c35c0eb01ffbb0944526ecefeb0563c`.
 
-All in-repository runtime consumers of the historical cutting import facades now
-use the canonical pure cutting Domain directly. The migration touched imports
-only; optimizer calls, arguments, geometry, scoring and costing behavior were not
-changed.
-
-Migrated runtime consumers:
-
-- `doctype/door_cutting_order/door_cutting_order.py`
-- `services/performance_service.py`
-- `services/production_settings_service.py`
-- `services/remnant_planning.py`
-
-Canonical ownership:
-
-- `domain/cutting/__init__.py` — public pure-Domain cutting API.
-- `infrastructure/cutting/domain_engine.py` — canonical Application engine adapter.
-
-Compatibility preserved intentionally:
-
-- `services/cutting_engine.py`
-- `services/advanced_cutting_optimizer.py`
-- `infrastructure/cutting/legacy_engine.py`
-
-Those compatibility modules remain thin import aliases for historical/external
-Python callers. Runtime architecture tests scan every production Python source
-and reject any new internal dependency on them, while separate compatibility
-tests ensure the facades themselves remain behavior-free.
+All in-repository runtime consumers use the canonical pure cutting Domain. The
+historical cutting import facades remain only for external/Python compatibility,
+and architecture scans reject new internal dependencies on them.
 
 ## Batch 3 — Cutting Plan mixed service split
 
 Status: closed on `e4db34e22b34cc1b85d136e7f706cd4353d16b62`.
 
-The historical `cutting_plan_service.py` previously mixed two responsibilities:
-Cutting Plan snapshot persistence/freeze behavior and historical lifecycle API
-compatibility. The persistence responsibility now has one focused owner:
-`cutting_plan_snapshot_service.py`.
-
-Moved without changing the business behavior:
-
-- `create_plan_from_order`
-- `approve_plan`
-- production-plan freeze behavior, now named `lock_order_for_production`
-
-The focused snapshot owner still performs the same geometry validation, special
-shape/documentation checks, special-price gate, snapshot persistence, approval
-supersession, cost snapshot, selected system/custom plan validation, and order
-field updates.
-
-`drawing_approval_service.py` now calls the focused snapshot owner directly.
-
-Compatibility preserved intentionally in `cutting_plan_service.py`:
-
-- Python delegates: `create_plan_from_order`, `approve_plan`, and historical
-  `_lock_order_for_production`.
-- Historical whitelisted lifecycle endpoints: submit, approve, reject,
-  pre-dispatch validation, and cutting-plan lock. Hooks continue routing those
-  HTTP paths to their focused capability-protected services.
-
-Architecture contracts enforce that the compatibility facade contains no Cutting
-Plan persistence (`frappe.new_doc`, `plan.insert`, `frappe.db.set_value`) and that
-product-scope, geometry, drawing approval, and special-price/documentation
-contracts inspect the focused snapshot owner instead of the facade.
+Cutting Plan snapshot creation, approval, and production freeze persistence moved
+to `cutting_plan_snapshot_service.py`. `cutting_plan_service.py` remains a thin
+compatibility facade for historical Python and whitelisted API names, with no
+Cutting Plan persistence ownership.
 
 ## Batch 4 — Shop Floor transitional production boundary
 
 Status: closed on `a482920f3d4d40a96b59c4125ac8fb10428e00b3`.
 
-The historical `production_service.py` previously mixed three concerns: legacy
-stage bootstrap, order-status synchronization, and retired/public compatibility
-endpoints. Those responsibilities are now separated while preserving behavior.
-
-Focused owners:
-
-- `production_stage_bootstrap_service.py` — legacy-compatible default stage
-  creation with the same pending/auto-complete semantics.
-- `order_status_sync_service.py` — canonical order-status synchronization from
-  current production stage, replacements, and lifecycle state.
-- `infrastructure/frappe/production_event_repository.py` — production-stage event
-  persistence used by lifecycle cancellation.
-
-Migrated internal consumers:
-
-- `shop_floor_service.py`
-- `order_lifecycle_service.py`
-- `replacement_status_service.py`
-
-`production_service.py` remains only as a backward-compatible facade. It exposes
-the historical Python names as delegates and keeps legacy HTTP stage endpoints
-fail-closed/protected through the existing legacy endpoint boundary.
-
-A Static architecture scan now rejects any internal runtime import of
-`services.production_service`. This prevents the transitional facade from
-regaining business ownership while preserving compatibility for external callers.
+Stage bootstrap and order-status synchronization moved to focused owners, and
+lifecycle event persistence uses `production_event_repository.py` directly.
+`production_service.py` remains only as a backward-compatible/fail-closed facade.
+Static architecture scans reject internal runtime dependencies on it.
 
 ## Batch 5 — Replacement legacy implementation
 
+Status: closed on `0354bb4604874a7293f8bb338c0d39ce8bbba429`.
+
+Removed `services/replacement_cancellation_service.py`. The current replacement
+workflow remains owned by `replacement_service.py` and focused boundaries. The
+historical HTTP path remains frozen in `override_whitelisted_methods` and routes
+to `legacy_endpoint_service.cancel_legacy_replacement`, which rejects retired
+stock-reversal semantics and delegates supported cancellation to the current
+replacement facade.
+
+## Batch 6 — Retired Stock / Remnant product implementation
+
 Status: ready for final CI validation.
 
-Removed:
+Removed the eight Stage 10 legacy product modules:
 
-- `services/replacement_cancellation_service.py`
+- `actual_consumption_reversal.py`
+- `actual_consumption_service.py`
+- `performance_service.py`
+- `preflight_service.py`
+- `remnant_service.py`
+- `settings_access_service.py`
+- `stock_availability_service.py`
+- `stock_service.py`
 
-The current replacement workflow remains owned by `replacement_service.py` and
-its focused application/infrastructure boundaries. The historical HTTP method
-name remains frozen in `override_whitelisted_methods` and is redirected to
-`legacy_endpoint_service.cancel_legacy_replacement`.
+Also removed two Stage 11 discoveries that were no longer referenced by the
+active Shop Floor command path:
 
-That compatibility adapter rejects the retired `reverse_stock` behavior and
-forwards supported cancellation to the current replacement facade. Static scans
-prove no runtime Python source imports the removed implementation, and the Stage
-11 migration ledger records the removal so the immutable Stage 10 audit remains
-historically accurate.
+- `infrastructure/frappe/stock_execution_gateway.py`
+- `infrastructure/frappe/remnant_execution_gateway.py`
+
+The historical Stock/Remnant HTTP routes remain mapped to
+`legacy_endpoint_service.retired_product_endpoint` and therefore fail closed.
+`order_revision_activation.py` keeps the historical material-activity check as a
+revision safety boundary but no longer mutates retired stock/remnant reservations;
+its legacy release fields remain present as empty values. The historical Order
+Stock Availability report keeps its operational report permission guard and then
+fails closed instead of importing the retired Stock service.
+
+Static contracts assert that all ten implementation paths are absent, reject any
+runtime Python references to their module paths, and confirm the two removed
+Shop Floor execution gateways cannot silently return.
