@@ -15,12 +15,22 @@ assert.equal(facade.__canonicalMmGeometry, true);
 assert.equal(facade.__sharedNodeTopology, true);
 assert.equal(facade.__singleInteractionOwner, true);
 assert.equal(facade.__highDpiCanvas, true);
+assert.equal(facade.__segmentDimensions, true, "active V4 facade must advertise persistent segment dimensions");
 
 assert.ok(bootstrap, "V4 bootstrap must be registered");
 assert.ok(bootstrap.SCRIPTS.length > 0);
 assert.ok(bootstrap.SCRIPTS.every(src => src.includes("/door_drawing_v4/")), "active facade must load V4 modules only");
 assert.ok(bootstrap.SCRIPTS.every(src => !src.includes("door_drawing_v3")), "active facade must never load V3 modules");
 assert.equal(global.window.AlmdinaDoorDrawingV3Bootstrap, undefined, "legacy bootstrap must not be exposed by the active facade");
+
+const documentIndex = bootstrap.SCRIPTS.findIndex(src => src.endsWith("/domain/document.js"));
+const dimensionDomainIndex = bootstrap.SCRIPTS.findIndex(src => src.endsWith("/domain/dimension.js"));
+const geometryCommandsIndex = bootstrap.SCRIPTS.findIndex(src => src.endsWith("/application/geometry_commands.js"));
+const dimensionCommandsIndex = bootstrap.SCRIPTS.findIndex(src => src.endsWith("/application/dimension_commands.js"));
+const interactionIndex = bootstrap.SCRIPTS.findIndex(src => src.endsWith("/application/interaction_engine.js"));
+assert.ok(documentIndex >= 0 && dimensionDomainIndex > documentIndex, "dimension domain must load after document model");
+assert.ok(geometryCommandsIndex >= 0 && dimensionCommandsIndex > geometryCommandsIndex, "dimension commands must load after geometry commands");
+assert.ok(interactionIndex > dimensionCommandsIndex, "interaction engine must load after dimension commands");
 
 const raw = JSON.stringify({
     schema: "almdina.door-drawing",
@@ -36,6 +46,9 @@ const raw = JSON.stringify({
     ],
     paths: [
         { id: "p1", startNodeId: "n1", segmentIds: ["s1"], closed: false },
+    ],
+    dimensions: [
+        { id: "d1", type: "segment-length", segmentId: "s1" },
     ],
 });
 const drawing = facade.parseDrawing(raw);

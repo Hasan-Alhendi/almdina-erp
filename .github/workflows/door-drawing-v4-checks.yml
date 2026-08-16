@@ -48,12 +48,23 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          output_file="$RUNNER_TEMP/door-drawing-v4-tests.log"
+          : > "$output_file"
           tests=(almdina_erp/tests/js/door_drawing_v4_*.test.js)
           if (( ${#tests[@]} == 0 )); then
-            echo "No Door Drawing V4 regression tests found" >&2
+            echo "No Door Drawing V4 regression tests found" | tee -a "$output_file" >&2
             exit 1
           fi
           for test_file in "${tests[@]}"; do
-            echo "==> $test_file"
-            node "$test_file"
+            echo "==> $test_file" | tee -a "$output_file"
+            node "$test_file" 2>&1 | tee -a "$output_file"
           done
+
+      - name: Upload Door Drawing V4 failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: door-drawing-v4-test-output
+          path: ${{ runner.temp }}/door-drawing-v4-tests.log
+          if-no-files-found: ignore
+          retention-days: 7

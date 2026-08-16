@@ -5,11 +5,22 @@
     const geometry = root.Geometry;
     const documentModel = root.DocumentModel;
     const commands = root.GeometryCommands;
+    const dimensionCommands = root.DimensionCommands;
+    const drivingDimensionCommands = root.DrivingDimensionCommands;
     const snapResolver = root.SnapResolver;
     const toolMachine = root.ToolStateMachine;
     const hitTest = root.HitTest;
     const commandHistory = root.CommandHistory;
-    if (!geometry || !documentModel || !commands || !snapResolver || !toolMachine || !hitTest || !commandHistory) {
+    if (
+        !geometry
+        || !documentModel
+        || !commands
+        || !dimensionCommands
+        || !snapResolver
+        || !toolMachine
+        || !hitTest
+        || !commandHistory
+    ) {
         throw new Error("Drawing V4 dependencies must load before interaction engine");
     }
 
@@ -23,6 +34,7 @@
         let toolState = toolMachine.create(options.initialTool || toolMachine.TOOLS.SELECT);
         let activePathId = null;
         let preview = null;
+        let snapLock = null;
         let selection = null;
         let dragSession = null;
         const history = commandHistory.create({ limit: options.historyLimit });
@@ -69,15 +81,36 @@
             history.record(before, document, label);
         }
 
+        function resetSnap() {
+            snapLock = null;
+            preview = null;
+        }
+
         function snap(rawPoint, snapOptions = {}) {
             const anchor = currentAnchor();
-            const excluded = anchor ? [anchor.id, ...(snapOptions.excludeNodeIds || [])] : (snapOptions.excludeNodeIds || []);
-            return snapResolver.resolve(document, {
+            const path = currentPath();
+            const canClose = Boolean(path && !path.closed && path.segmentIds.length >= 2);
+            const excluded = anchor
+                ? [anchor.id, ...(snapOptions.excludeNodeIds || [])]
+                : (snapOptions.excludeNodeIds || []);
+            const toleranceMm = Math.max(0, Number(snapOptions.toleranceMm) || 0);
+            const releaseToleranceMm = Math.max(
+                toleranceMm,
+                Number(snapOptions.releaseToleranceMm)
+                    || toleranceMm * snapResolver.DEFAULT_RELEASE_MULTIPLIER
+            );
+            const result = snapResolver.resolve(document, {
                 ...snapOptions,
                 rawPoint,
                 origin: anchor,
                 excludeNodeIds: excluded,
+                canClose,
+                closeNodeId: canClose ? path.startNodeId : null,
+                previousSnap: snapLock,
+                releaseToleranceMm,
             });
+            snapLock = result.type === "free" ? null : result;
+            return result;
         }
 
         function hitTolerance(options = {}) {
@@ -86,7 +119,7 @@
 
         function clearTransientState() {
             activePathId = null;
-            preview = null;
+            resetSnap();
             dragSession = null;
         }
 
@@ -104,6 +137,16 @@
             return Object.freeze({ kind: hit ? "path-selected" : "selection-cleared", ...state() });
         }
 
+        function constraintsForNode(nodeId) {
+            const id = String(nodeId || "");
+            const incidentSegments = new Set((document.segments || [])
+                .filter(segment => segment.startNodeId === id || segment.endNodeId === id)
+                .map(segment => segment.id));
+            return Object.freeze((document.constraints || [])
+                .filter(constraint => incidentSegments.has(constraint.segmentId))
+                .map(constraint => constraint.id));
+        }
+
         function beginNodeDrag(rawPoint, options = {}) {
             const hit = hitTest.node(document, rawPoint, hitTolerance(options));
             if (!hit) {
@@ -113,6 +156,16 @@
             }
             const origin = documentModel.nodeById(document, hit.id);
             selection = Object.freeze({ kind: "node", id: hit.id });
+            const constraintIds = constraintsForNode(hit.id);
+            if (constraintIds.length) {
+                dragSession = null;
+                return Object.freeze({
+                    kind: "constraint-protected-node",
+                    nodeId: hit.id,
+                    constraintIds,
+                    ...state(),
+                });
+            }
             dragSession = Object.freeze({
                 nodeId: hit.id,
                 origin,
@@ -151,8 +204,8 @@
 
         function pointerMove(rawPoint, options = {}) {
             if (dragSession) return moveNodeDrag(rawPoint);
-            if (toolState.activeTool !== toolMachine.TOOLS.PEN || !activePathId) {
-                preview = null;
+            if (toolState.activeTool !== toolMachine.TOOLS.PEN) {
+                resetSnap();
                 return state();
             }
             preview = snap(rawPoint, options);
@@ -161,12 +214,12 @@
 
         function penPointerDown(rawPoint, options = {}) {
             if (!activePathId) {
-                const target = snapResolver.resolve(document, { ...options, rawPoint });
+                const target = snap(rawPoint, options);
                 const before = document;
                 const result = commands.startPath(document, target, { idFactory });
                 document = result.document;
                 activePathId = result.pathId;
-                preview = null;
+                resetSnap();
                 record(before, "start-path");
                 return Object.freeze({ kind: "path-started", nodeId: result.nodeId, ...state() });
             }
@@ -181,7 +234,7 @@
                 document = commands.closePath(document, activePathId, { idFactory }).document;
                 const closedPathId = activePathId;
                 activePathId = null;
-                preview = null;
+                resetSnap();
                 record(before, "close-path");
                 return Object.freeze({ kind: "path-closed", pathId: closedPathId, ...state() });
             }
@@ -193,7 +246,7 @@
             const before = document;
             const result = commands.appendLine(document, activePathId, target, { idFactory });
             document = result.document;
-            preview = null;
+            resetSnap();
             record(before, "add-segment");
             return Object.freeze({
                 kind: "segment-added",
@@ -204,10 +257,31 @@
             });
         }
 
+        function dimensionPointerDown(rawPoint, options = {}) {
+            const hit = hitTest.segment(document, rawPoint, hitTolerance(options));
+            if (!hit) {
+                selection = null;
+                return Object.freeze({ kind: "selection-cleared", ...state() });
+            }
+            const before = document;
+            const result = dimensionCommands.ensureSegmentLength(document, hit.id, { idFactory });
+            document = result.document;
+            selection = Object.freeze({ kind: "dimension", id: result.dimensionId });
+            if (result.created) record(before, "add-dimension");
+            return Object.freeze({
+                kind: result.created ? "dimension-added" : "dimension-selected",
+                dimensionId: result.dimensionId,
+                segmentId: hit.id,
+                measurement: result.measurement,
+                ...state(),
+            });
+        }
+
         function pointerDown(rawPoint, options = {}) {
             if (toolState.activeTool === toolMachine.TOOLS.SELECT) return selectAt(rawPoint, options);
             if (toolState.activeTool === toolMachine.TOOLS.NODE) return beginNodeDrag(rawPoint, options);
             if (toolState.activeTool === toolMachine.TOOLS.PEN) return penPointerDown(rawPoint, options);
+            if (toolState.activeTool === toolMachine.TOOLS.DIMENSION) return dimensionPointerDown(rawPoint, options);
             return Object.freeze({ kind: "ignored", ...state() });
         }
 
@@ -233,7 +307,7 @@
                 nodeId: null,
             }, { idFactory });
             document = result.document;
-            preview = null;
+            resetSnap();
             record(before, "add-segment");
             return Object.freeze({
                 kind: "segment-added",
@@ -245,17 +319,49 @@
             });
         }
 
+        function inputDimensionValue(valueMm) {
+            if (
+                toolState.activeTool !== toolMachine.TOOLS.DIMENSION
+                || !selection
+                || selection.kind !== "dimension"
+                || !drivingDimensionCommands
+            ) {
+                return Object.freeze({ kind: "ignored", ...state() });
+            }
+            const value = geometry.finiteNumber(valueMm);
+            if (value <= geometry.EPSILON_MM) throw new Error("Drawing dimension must be greater than zero");
+            const before = document;
+            const result = drivingDimensionCommands.drive(document, selection.id, value, { idFactory });
+            if (!result.ok) {
+                return Object.freeze({
+                    kind: "dimension-drive-failed",
+                    code: result.code || "constraint-conflict",
+                    dimensionId: selection.id,
+                    ...state(),
+                });
+            }
+            document = result.document;
+            if (before !== document) record(before, "drive-dimension");
+            return Object.freeze({
+                kind: "dimension-driven",
+                dimensionId: selection.id,
+                measurement: result.measurement,
+                ...state(),
+            });
+        }
+
         function cancel() {
             if (cancelNodeDrag()) return Object.freeze({ kind: "node-drag-cancelled", ...state() });
             if (activePathId) {
                 activePathId = null;
-                preview = null;
+                resetSnap();
                 return Object.freeze({ kind: "pen-session-ended", ...state() });
             }
             if (selection) {
                 selection = null;
                 return Object.freeze({ kind: "selection-cleared", ...state() });
             }
+            resetSnap();
             return Object.freeze({ kind: "ignored", ...state() });
         }
 
@@ -286,7 +392,7 @@
         function spaceDown() {
             if (dragSession) finishNodeDrag();
             toolState = toolMachine.activateTemporary(toolState, toolMachine.TOOLS.HAND);
-            preview = null;
+            resetSnap();
             return state();
         }
 
@@ -302,6 +408,7 @@
             pointerDown,
             pointerUp,
             inputLength,
+            inputDimensionValue,
             cancel,
             undo,
             redo,

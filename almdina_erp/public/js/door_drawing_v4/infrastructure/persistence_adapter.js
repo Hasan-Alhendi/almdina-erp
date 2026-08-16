@@ -34,6 +34,8 @@
                 nodes: Array.isArray(raw.nodes) ? raw.nodes : [],
                 segments: Array.isArray(raw.segments) ? raw.segments : [],
                 paths: Array.isArray(raw.paths) ? raw.paths : [],
+                dimensions: Array.isArray(raw.dimensions) ? raw.dimensions : [],
+                constraints: Array.isArray(raw.constraints) ? raw.constraints : [],
             });
         } catch (error) {
             console.warn("Ignoring invalid Door Drawing V4 payload", error);
