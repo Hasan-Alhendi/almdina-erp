@@ -48,6 +48,7 @@ SAVE_GATEWAY_PATH = (
     / "save_gateway.py"
 )
 ORDER_SAVE_PATH = ROOT / "almdina_erp" / "application" / "orders" / "process_order_save.py"
+SNAPSHOT_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
 API_PATH = ROOT / "almdina_erp" / "api.py"
 COST_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "cost_service.py"
 PATCHES_PATH = ROOT / "patches.txt"
@@ -257,9 +258,9 @@ class TestPlanPayloadApplication(unittest.TestCase):
         self.assertEqual(cleaned["sheets"][0]["pieces"][0], {"x": 1})
         self.assertNotIn("total_cost_usd", cleaned)
 
-    def test_malformed_snapshot_is_preserved_for_forensic_recovery(self) -> None:
-        raw = '{"sheets": [invalid]}'
-        self.assertEqual(sanitize_plan_snapshot_json(raw), raw)
+    def test_malformed_snapshot_fails_closed(self) -> None:
+        raw = '{"approved_cost":{"total_cost_usd":99},invalid}'
+        self.assertEqual(sanitize_plan_snapshot_json(raw), "{}")
 
 
 class TestPlanPayloadArchitecture(unittest.TestCase):
@@ -291,6 +292,7 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
     def test_non_financial_snapshot_contract_is_wired_across_persistence_and_api(self) -> None:
         order_save = ORDER_SAVE_PATH.read_text(encoding="utf-8")
         save_gateway = SAVE_GATEWAY_PATH.read_text(encoding="utf-8")
+        snapshot_service = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
         cost_service = COST_SERVICE_PATH.read_text(encoding="utf-8")
         api = API_PATH.read_text(encoding="utf-8")
         patches = PATCHES_PATH.read_text(encoding="utf-8")
@@ -300,6 +302,11 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
         self.assertIn('"cutting_plan_json"', save_gateway)
         self.assertIn('"system_plan_json"', save_gateway)
         self.assertIn('"custom_plan_json"', save_gateway)
+
+        self.assertIn("sanitize_plan_snapshot", snapshot_service)
+        self.assertNotIn('snapshot["approved_cost"]', snapshot_service)
+        self.assertIn("plan.board_rate_usd", snapshot_service)
+        self.assertIn("plan.total_cost_usd", snapshot_service)
 
         self.assertIn("_sanitize_cutting_plan_snapshot(doc)", cost_service)
         self.assertIn("sanitize_plan_snapshot_json", cost_service)
