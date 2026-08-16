@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.replacements.planning import (
     ReplacementPlanError,
     build_replacement_snapshot,
     calculate_edge_meters,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_ROOT = ROOT / "almdina_erp"
+HOOKS = ROOT / "hooks.py"
+LEGACY_ENDPOINT = RUNTIME_ROOT / "services" / "legacy_endpoint_service.py"
+REPLACEMENT_CANCELLATION = (
+    RUNTIME_ROOT / "services" / "replacement_cancellation_service.py"
+)
+LEGACY_CANCELLATION_MODULE = (
+    "almdina_erp.almdina_erp.services.replacement_cancellation_service"
 )
 
 
@@ -104,6 +117,27 @@ class TestReplacementPlanning(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertNotIn(token, source)
+
+    def test_legacy_cancellation_route_has_no_internal_runtime_consumers(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(RUNTIME_ROOT.rglob("*.py")):
+            if path == REPLACEMENT_CANCELLATION:
+                continue
+            source = path.read_text(encoding="utf-8")
+            if LEGACY_CANCELLATION_MODULE in source:
+                offenders.append(str(path.relative_to(ROOT)))
+        self.assertEqual(offenders, [], "\n".join(offenders))
+
+        hooks = HOOKS.read_text(encoding="utf-8")
+        legacy_endpoint = LEGACY_ENDPOINT.read_text(encoding="utf-8")
+        self.assertIn(
+            f'"{LEGACY_CANCELLATION_MODULE}.cancel_replacement"',
+            hooks,
+        )
+        self.assertIn("legacy_endpoint_service.cancel_legacy_replacement", hooks)
+        self.assertIn("def cancel_legacy_replacement", legacy_endpoint)
+        self.assertIn("reverse_stock", legacy_endpoint)
+        self.assertIn("replacement_service", legacy_endpoint)
 
 
 if __name__ == "__main__":
