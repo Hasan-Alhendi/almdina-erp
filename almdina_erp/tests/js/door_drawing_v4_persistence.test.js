@@ -29,6 +29,9 @@ const document = D.create({
     paths: [
         { id: "p1", startNodeId: "n1", segmentIds: ["s1"], closed: false },
     ],
+    dimensions: [
+        { id: "d1", type: D.DIMENSION_TYPES.SEGMENT_LENGTH, segmentId: "s1" },
+    ],
 });
 
 const stored = P.toStored(document);
@@ -39,6 +42,9 @@ assert.equal(parsed.units, "mm");
 assert.equal(parsed.meta, undefined, "V4 storage must not create a legacy compatibility envelope");
 assert.equal(parsed.nodes.length, 2);
 assert.equal(parsed.segments.length, 1);
+assert.deepEqual(parsed.dimensions, [
+    { id: "d1", type: "segment-length", segmentId: "s1" },
+]);
 
 const restored = P.fromStored(stored, row);
 assert.equal(restored.schema, D.SCHEMA);
@@ -47,11 +53,26 @@ assert.deepEqual(restored.blank, { widthMm: 600, heightMm: 1200 });
 assert.equal(restored.nodes.length, 2);
 assert.equal(restored.segments.length, 1);
 assert.equal(restored.paths.length, 1);
+assert.deepEqual(restored.dimensions, [
+    { id: "d1", type: "segment-length", segmentId: "s1" },
+]);
+
+const withoutDimensions = P.fromStored(JSON.stringify({
+    schema: D.SCHEMA,
+    version: D.VERSION,
+    units: D.UNITS,
+    blank: { widthMm: 600, heightMm: 1200 },
+    nodes: [],
+    segments: [],
+    paths: [],
+}), row);
+assert.deepEqual(withoutDimensions.dimensions, [], "pre-dimension V4 documents must remain valid");
 
 const legacyPayload = JSON.stringify({ version: 1, meta: { door_drawing_v3: { schema: "almdina.door-drawing", version: 3 } } });
 const ignoredLegacy = P.fromStored(legacyPayload, row);
 assert.equal(ignoredLegacy.nodes.length, 0, "legacy drawings are intentionally ignored in the clean V4 development reset");
 assert.equal(ignoredLegacy.segments.length, 0);
+assert.equal(ignoredLegacy.dimensions.length, 0);
 assert.deepEqual(ignoredLegacy.blank, { widthMm: 600, heightMm: 1200 });
 
 console.log("Door Drawing V4 persistence tests passed");
