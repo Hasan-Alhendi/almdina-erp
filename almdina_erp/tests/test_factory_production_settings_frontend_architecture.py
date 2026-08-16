@@ -171,15 +171,14 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn(".html(", self.controller)
         self.assertNotIn("aps-section", self.controller)
 
-    def test_styles_are_external_and_visually_neutral(self) -> None:
+    def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:
         for marker in (
             ".aps-shell",
             ".aps-hero",
             ".aps-sections",
             ".aps-section",
             ".aps-legacy",
-            "@media(max-width:950px)",
-            "@media(max-width:620px)",
+            "@media(max-width:",
         ):
             self.assertIn(marker, self.css)
         self.assertNotIn("<style", self.renderer)
