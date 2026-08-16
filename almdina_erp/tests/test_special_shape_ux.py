@@ -9,6 +9,10 @@ DETAIL_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail"
 ORDER_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 SETTINGS_JSON = APP_ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
 ORDER_PY = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
+PIECE_POLICY = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "piece_policy_adapter.py"
+COSTING_ADAPTER = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "costing_adapter.py"
+COSTING_DOMAIN = APP_ROOT / "almdina_erp" / "domain" / "orders" / "costing.py"
+OPTIMIZE_APPLICATION = APP_ROOT / "almdina_erp" / "application" / "cutting" / "optimize_order_plan.py"
 PLAN_RENDERER = APP_ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
 OPERATOR_UX = (
@@ -102,7 +106,7 @@ def test_operator_opens_only_clean_v3_editor_runtime():
     assert "function handleArcClick" in editor
     assert "G.translateObject" in editor
     assert 'const EPSILON_MM = 0.001' in geometry
-    assert 'units: "mm"' not in geometry  # primitives are unit-agnostic functions named explicitly in mm
+    assert 'units: "mm"' not in geometry
     assert ".ddv3-inspector" in css
     assert ".ddv3-toolbar" in css
     for retired in (
@@ -116,22 +120,29 @@ def test_operator_opens_only_clean_v3_editor_runtime():
 
 def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_authoritative():
     service = SERVICE_PY.read_text(encoding="utf-8")
-    order = ORDER_PY.read_text(encoding="utf-8")
+    policy = PIECE_POLICY.read_text(encoding="utf-8")
+    costing = COSTING_DOMAIN.read_text(encoding="utf-8")
+    adapter = COSTING_ADAPTER.read_text(encoding="utf-8")
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     assert "validate_special_shape_drawing" in service
     assert "MAX_DRAWING_BYTES" in service
     assert "MAX_DRAWING_ELEMENTS" in service
     assert "MAX_DRAWING_POINTS" in service
     assert 'ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}' in service
-    assert "long_edges = cint(row.edge_long_right) + cint(row.edge_long_left)" in order
-    assert "width_edges = cint(row.edge_width_top) + cint(row.edge_width_bottom)" in order
-    assert "special_shape_raw_summary" in order
+    assert "validate_special_shape_drawing(current_raw)" in policy
+    assert '"long_right": (' in costing
+    assert "bool(piece.edge_long_right)" in costing
+    assert '"width_top": (' in costing
+    assert "bool(piece.edge_width_top)" in costing
+    assert "long_meters = right_meters + left_meters" in costing
+    assert "width_meters = top_meters + bottom_meters" in costing
+    assert "summary = calculate_piece_costs(" in adapter
     assert 'if ((row.piece_type || "Regular") === "Special") return 0' not in operator
 
 
 def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
-    order = ORDER_PY.read_text(encoding="utf-8")
+    policy = PIECE_POLICY.read_text(encoding="utf-8")
     permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
 
     assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
@@ -141,8 +152,6 @@ def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometr
     assert "special_shape_price_approved_on = now_datetime()" in service
     assert "order.save(ignore_permissions=True)" in service
 
-    # Current UX edits the price inline only inside an authorized edit session,
-    # then flushes the pending value through the server capability boundary.
     assert "function canEditInlinePiecePrice(frm, piece)" in permissions
     assert '"approve_special_price"' in permissions
     assert "function applyInlinePriceToPiece(piece, kind, rawValue)" in permissions
@@ -150,18 +159,23 @@ def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometr
     assert "special_shape_service.approve_special_piece_price" in permissions
     assert 'note: piece.special_shape_price_note || ""' in permissions
 
-    assert "old_drawing != drawing" in order
-    assert "if pricing_basis_changed and not approval_action" in order
+    assert "old_special_geometry != special_geometry" in policy
+    assert "decision = evaluate_special_shape(" in policy
+    assert "if decision.reset_price:" in policy
+    assert "document_has_capability(" in policy
 
 
 def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
-    order = ORDER_PY.read_text(encoding="utf-8")
+    costing = COSTING_DOMAIN.read_text(encoding="utf-8")
+    adapter = COSTING_ADAPTER.read_text(encoding="utf-8")
     presenter = COST_PRESENTER.read_text(encoding="utf-8")
     permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
 
-    assert "invoice_base_total = board_and_cutting_cost + regular_edge_total" in order
-    assert "self.customer_quote_total_usd = round_value(invoice_base_total + final_total, 3)" in order
-    assert "self.total_cost_usd = round_value(total_cost, 3)" in order
+    assert "invoice_base_total = board_and_cutting_cost + regular_edge_total" in costing
+    assert "customer_quote_total_usd=round_value(invoice_base_total + final_total, 3)" in costing
+    assert "total_cost_usd=round_value(mdf_cost + cutting_cost + edge_cost, 3)" in costing
+    assert "self.document.customer_quote_total_usd = (" in adapter
+    assert "self.document.total_cost_usd = summary.total_cost_usd" in adapter
     assert "boardCount * boardRate" in presenter
     assert "boardCount * cuttingRate" in presenter
     assert "function quoteTotal(frm)" in presenter
@@ -183,11 +197,11 @@ def test_review_and_production_approval_gate_special_documentation_and_price():
 
 def test_cutting_plan_visually_audits_every_special_raw_piece():
     order_js = PLAN_RENDERER.read_text(encoding="utf-8")
-    order_py = ORDER_PY.read_text(encoding="utf-8")
+    optimization = OPTIMIZE_APPLICATION.read_text(encoding="utf-8")
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
     assert "✦ درفة خاصة · خام CNC" in order_js
     assert "render_piece_edge_lines(piece)" in order_js
-    assert '"special_shape_raw_summary": self._special_shape_raw_summary(' in order_py
+    assert '"special_shape_raw_summary": summarize_special_shapes(expanded, plan)' in optimization
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning

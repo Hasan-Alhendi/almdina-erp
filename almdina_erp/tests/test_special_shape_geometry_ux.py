@@ -10,7 +10,9 @@ from almdina_erp.almdina_erp.domain.cutting.strategies.maxrects import pack_maxr
 ROOT = Path(__file__).resolve().parents[1]
 DETAIL = ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
 PLACED = ROOT / "almdina_erp" / "doctype" / "cutting_plan_piece" / "cutting_plan_piece.json"
-ORDER = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
+PIECE_POLICY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "piece_policy_adapter.py"
+SAVE_GATEWAY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "save_gateway.py"
+SAVE_USE_CASE = ROOT / "almdina_erp" / "application" / "orders" / "process_order_save.py"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
 SERVICE = ROOT / "almdina_erp" / "services" / "special_shape_service.py"
@@ -61,7 +63,9 @@ def test_v3_editor_is_primary_while_production_geometry_contract_remains_availab
 
 def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geometry():
     service = SERVICE.read_text(encoding="utf-8")
-    order = ORDER.read_text(encoding="utf-8")
+    policy = PIECE_POLICY.read_text(encoding="utf-8")
+    gateway = SAVE_GATEWAY.read_text(encoding="utf-8")
+    save_use_case = SAVE_USE_CASE.read_text(encoding="utf-8")
     assert "def validate_special_shape_geometry" in service
     assert "MAX_GEOMETRY_VERTICES = 64" in service
     assert "_geometry_has_self_intersection(points)" in service
@@ -69,10 +73,12 @@ def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geomet
     assert "Special shape geometry must touch all four raw-piece bounds." in service
     assert "Special shape geometry width does not match the piece width." in service
     assert "Special shape geometry length does not match the piece length." in service
-    assert "validate_special_shape_geometry(" in order
-    assert "old_special_geometry != special_geometry" in order
-    assert "if special_geometry or (drawing and drawing.get(\"elements\"))" in order
-    assert '"special_shape_geometry_json"' in order
+    assert "validate_special_shape_geometry(" in policy
+    assert "old_special_geometry != special_geometry" in policy
+    assert "special_geometry or drawing_has_elements" in policy
+    assert '"special_shape_geometry_json"' in policy
+    assert "self.piece_policy.validate_rows()" in gateway
+    assert "gateway.validate_piece_policies()" in save_use_case
 
 
 def test_exact_geometry_survives_every_packing_and_approved_export_path():
