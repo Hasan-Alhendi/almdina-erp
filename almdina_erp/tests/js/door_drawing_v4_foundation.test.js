@@ -7,7 +7,9 @@ global.window = {};
 const load = file => require(path.resolve(__dirname, `../../public/js/door_drawing_v4/${file}`));
 load("domain/geometry.js");
 load("domain/document.js");
+load("domain/dimension.js");
 load("application/geometry_commands.js");
+load("application/dimension_commands.js");
 load("application/snap_resolver.js");
 load("application/hit_test.js");
 load("application/command_history.js");
@@ -21,6 +23,7 @@ const T = V4.ToolStateMachine;
 
 const engine = V4.InteractionEngine.create({ document: D.create({ widthMm: 1220, heightMm: 2440 }) });
 assert.equal(engine.state().toolState.activeTool, T.TOOLS.SELECT);
+assert.equal(T.toolForShortcut("d"), T.TOOLS.DIMENSION, "D must activate the dimension tool");
 engine.keyDown("p");
 assert.equal(engine.state().toolState.activeTool, T.TOOLS.PEN, "P must activate the geometric smart pen");
 
@@ -59,6 +62,7 @@ assert.equal(rectangle.closed, true);
 assert.equal(rectangle.segmentIds.length, 4, "rectangle must have four manufacturing edges");
 assert.equal(document.nodes.length, 4, "closing must reuse the first node instead of creating a duplicate point");
 assert.equal(document.segments.length, 4);
+assert.equal(document.dimensions.length, 0, "dimensions stay opt-in and must not alter geometry creation");
 const lastSegment = D.segmentById(document, rectangle.segmentIds.at(-1));
 assert.equal(lastSegment.endNodeId, startNodeId, "closing edge must reference the exact first node id");
 assert.deepEqual(document.nodes.map(node => [node.xMm, node.yMm]), [[0, 0], [600, 0], [600, 1200], [0, 1200]]);
