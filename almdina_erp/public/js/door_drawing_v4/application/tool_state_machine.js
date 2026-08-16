@@ -7,6 +7,7 @@
         SELECT: "select",
         NODE: "node",
         PEN: "pen",
+        DIMENSION: "dimension",
         HAND: "hand",
     });
     const KNOWN_TOOLS = Object.freeze(Object.values(TOOLS));
@@ -59,6 +60,7 @@
         if (value === "v") return TOOLS.SELECT;
         if (value === "a") return TOOLS.NODE;
         if (value === "p") return TOOLS.PEN;
+        if (value === "d") return TOOLS.DIMENSION;
         return null;
     }
 
