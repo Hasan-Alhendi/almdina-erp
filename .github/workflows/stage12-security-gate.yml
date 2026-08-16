@@ -25,6 +25,7 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_order_scope_permissions \
+            almdina_erp.tests.test_native_document_permissions \
             almdina_erp.tests.test_permission_personas_e2e \
             almdina_erp.tests.test_final_security_architecture \
             almdina_erp.tests.test_stage12_security_gate
