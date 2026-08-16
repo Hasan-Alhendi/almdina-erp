@@ -9,8 +9,11 @@
         "/assets/almdina_erp/js/door_drawing_v4/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v4/domain/document.js",
         "/assets/almdina_erp/js/door_drawing_v4/domain/dimension.js",
+        "/assets/almdina_erp/js/door_drawing_v4/domain/constraint.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/geometry_commands.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/dimension_commands.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/constraint_commands.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/constraint_solver.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/manufacturing_projection.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/snap_resolver.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/hit_test.js",
@@ -134,6 +137,8 @@
         __nodeEditing: true,
         __manufacturingProjection: true,
         __segmentDimensions: true,
+        __constraintFoundation: true,
+        __transactionalConstraintSolver: true,
     };
 
     window.AlmdinaSpecialShapeEditor = Object.freeze(facade);
