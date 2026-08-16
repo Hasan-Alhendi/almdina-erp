@@ -4,8 +4,11 @@
     const root = window.AlmdinaDoorDrawingV4 = window.AlmdinaDoorDrawingV4 || Object.create(null);
     const geometry = root.Geometry;
     const documentModel = root.DocumentModel;
+    const dimensionDomain = root.DimensionDomain;
     const viewport = root.Viewport;
-    if (!geometry || !documentModel || !viewport) throw new Error("Drawing V4 domain and viewport must load before renderer");
+    if (!geometry || !documentModel || !dimensionDomain || !viewport) {
+        throw new Error("Drawing V4 domain and viewport must load before renderer");
+    }
 
     const TOKENS = Object.freeze({
         background: "#f4f6f8",
@@ -15,6 +18,8 @@
         gridMajor: "rgba(15, 23, 42, 0.085)",
         geometry: "#111827",
         selected: "#2563eb",
+        dimension: "#64748b",
+        dimensionSelected: "#2563eb",
         nodeFill: "#ffffff",
         nodeStroke: "#2563eb",
         preview: "#2563eb",
@@ -123,6 +128,106 @@
             ctx.moveTo(start.x, start.y);
             ctx.lineTo(end.x, end.y);
             ctx.stroke();
+        });
+    }
+
+    function drawDimensionLabel(ctx, text, x, y, color) {
+        ctx.save();
+        ctx.font = "700 11px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        const width = Math.ceil(ctx.measureText(text).width) + 10;
+        const height = 20;
+        ctx.fillStyle = "rgba(255,255,255,.94)";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") ctx.roundRect(x - width / 2, y - height / 2, width, height, 5);
+        else ctx.rect(x - width / 2, y - height / 2, width, height);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, x, y + 0.5);
+        ctx.restore();
+    }
+
+    function outwardNormal(start, end, blankCenter) {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const length = Math.hypot(dx, dy);
+        if (length <= 0.001) return { x: 0, y: -1 };
+        let nx = -dy / length;
+        let ny = dx / length;
+        const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+        const fromCenterX = midpoint.x - blankCenter.x;
+        const fromCenterY = midpoint.y - blankCenter.y;
+        if (fromCenterX * nx + fromCenterY * ny < 0) {
+            nx *= -1;
+            ny *= -1;
+        }
+        return { x: nx, y: ny };
+    }
+
+    function drawDimensions(ctx, camera, document, selection) {
+        const measurements = dimensionDomain.all(document);
+        if (!measurements.length) return;
+        const blankCenter = viewport.worldToScreen(camera, {
+            xMm: document.blank.widthMm / 2,
+            yMm: document.blank.heightMm / 2,
+        });
+        measurements.forEach(measurement => {
+            const start = viewport.worldToScreen(camera, measurement.start);
+            const end = viewport.worldToScreen(camera, measurement.end);
+            const normal = outwardNormal(start, end, blankCenter);
+            const offsetPx = 30;
+            const extensionPx = 7;
+            const startDim = { x: start.x + normal.x * offsetPx, y: start.y + normal.y * offsetPx };
+            const endDim = { x: end.x + normal.x * offsetPx, y: end.y + normal.y * offsetPx };
+            const selected = Boolean(selection && selection.kind === "dimension" && selection.id === measurement.id);
+            const color = selected ? TOKENS.dimensionSelected : TOKENS.dimension;
+
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = selected ? 1.5 : 1;
+            ctx.beginPath();
+            ctx.moveTo(start.x + normal.x * extensionPx, start.y + normal.y * extensionPx);
+            ctx.lineTo(startDim.x, startDim.y);
+            ctx.moveTo(end.x + normal.x * extensionPx, end.y + normal.y * extensionPx);
+            ctx.lineTo(endDim.x, endDim.y);
+            ctx.moveTo(startDim.x, startDim.y);
+            ctx.lineTo(endDim.x, endDim.y);
+            ctx.stroke();
+
+            const dx = endDim.x - startDim.x;
+            const dy = endDim.y - startDim.y;
+            const length = Math.max(1, Math.hypot(dx, dy));
+            const tx = dx / length;
+            const ty = dy / length;
+            const arrow = 6;
+            [[startDim, 1], [endDim, -1]].forEach(([point, direction]) => {
+                ctx.beginPath();
+                ctx.moveTo(point.x, point.y);
+                ctx.lineTo(
+                    point.x + tx * arrow * direction + normal.x * arrow * 0.55,
+                    point.y + ty * arrow * direction + normal.y * arrow * 0.55
+                );
+                ctx.lineTo(
+                    point.x + tx * arrow * direction - normal.x * arrow * 0.55,
+                    point.y + ty * arrow * direction - normal.y * arrow * 0.55
+                );
+                ctx.closePath();
+                ctx.fill();
+            });
+            ctx.restore();
+
+            drawDimensionLabel(
+                ctx,
+                `${geometry.roundMm(measurement.valueMm)} mm`,
+                (startDim.x + endDim.x) / 2,
+                (startDim.y + endDim.y) / 2,
+                color
+            );
         });
     }
 
@@ -258,6 +363,7 @@
         drawGrid(ctx, camera);
         drawBlank(ctx, camera, document.blank);
         drawGeometry(ctx, camera, document, interactionState.selection);
+        drawDimensions(ctx, camera, document, interactionState.selection);
         drawNodes(ctx, camera, document, { showNodes: Boolean(input.showNodes), selection: interactionState.selection });
         drawPreview(ctx, camera, document, interactionState);
         drawDragFeedback(ctx, camera, interactionState.drag);
