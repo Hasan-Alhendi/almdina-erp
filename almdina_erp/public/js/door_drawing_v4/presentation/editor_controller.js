@@ -13,6 +13,7 @@
     }
 
     const DEFAULT_SNAP_TOLERANCE_PX = 10;
+    const DEFAULT_SNAP_RELEASE_MULTIPLIER = 1.4;
     const DEFAULT_HIT_TOLERANCE_PX = 9;
     const TOOL_LABELS = Object.freeze({
         [tools.TOOLS.SELECT]: "تحديد",
@@ -20,7 +21,17 @@
         [tools.TOOLS.PEN]: "القلم الذكي",
         [tools.TOOLS.HAND]: "تحريك اللوحة",
     });
-    const SNAP_LABELS = Object.freeze({ endpoint: "نقطة نهاية", horizontal: "أفقي", vertical: "عمودي" });
+    const SNAP_LABELS = Object.freeze({
+        close: "إغلاق",
+        endpoint: "نقطة نهاية",
+        intersection: "تقاطع",
+        midpoint: "منتصف",
+        perpendicular: "عمودي",
+        parallel: "متوازي",
+        extension: "امتداد",
+        horizontal: "أفقي",
+        vertical: "رأسي",
+    });
 
     function snapLabel(preview) {
         if (!preview || !preview.semantic) return "";
@@ -65,6 +76,10 @@
         function interactionOptions(event) {
             return Object.freeze({
                 toleranceMm: viewport.screenToleranceToMm(camera, snapTolerancePx),
+                releaseToleranceMm: viewport.screenToleranceToMm(
+                    camera,
+                    snapTolerancePx * DEFAULT_SNAP_RELEASE_MULTIPLIER
+                ),
                 hitToleranceMm: viewport.screenToleranceToMm(camera, hitTolerancePx),
                 angleToleranceDeg: event && event.shiftKey ? 180 : undefined,
             });
@@ -315,5 +330,10 @@
         });
     }
 
-    root.EditorController = Object.freeze({ DEFAULT_SNAP_TOLERANCE_PX, DEFAULT_HIT_TOLERANCE_PX, create });
+    root.EditorController = Object.freeze({
+        DEFAULT_SNAP_TOLERANCE_PX,
+        DEFAULT_SNAP_RELEASE_MULTIPLIER,
+        DEFAULT_HIT_TOLERANCE_PX,
+        create,
+    });
 })();
