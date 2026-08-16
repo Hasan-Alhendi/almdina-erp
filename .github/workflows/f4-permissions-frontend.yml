@@ -1,0 +1,42 @@
+name: Factory Permissions Frontend Migration
+
+# Keep this migration gate running against the latest Develop merge context.
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  permissions-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate migrated JavaScript syntax
+        run: |
+          node --check almdina_erp/almdina_erp/page/factory_permissions/factory_permissions.js
+          node --check almdina_erp/public/js/factory_permissions/api.js
+          node --check almdina_erp/public/js/factory_permissions/state.js
+          node --check almdina_erp/public/js/factory_permissions/controller.js
+          node --check almdina_erp/tests/js/factory_permissions_foundation.test.js
+
+      - name: Enforce Factory Permissions frontend architecture
+        run: python -m unittest -v almdina_erp.tests.test_factory_permissions_frontend_architecture
+
+      - name: Run Factory Permissions API and state simulation
+        run: node almdina_erp/tests/js/factory_permissions_foundation.test.js

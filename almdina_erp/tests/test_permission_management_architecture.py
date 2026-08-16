@@ -21,6 +21,9 @@ SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_serv
 WORKFORCE_SERVICE = ROOT / "almdina_erp" / "services" / "workforce_service.py"
 PROVISION = ROOT / "almdina_erp" / "services" / "workforce_provisioning_service.py"
 PAGE = ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js"
+PERMISSION_API = ROOT / "public" / "js" / "factory_permissions" / "api.js"
+PERMISSION_STATE = ROOT / "public" / "js" / "factory_permissions" / "state.js"
+PERMISSION_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 PAGE_JSON = PAGE.with_suffix(".json")
 SETTINGS_PAGE_JSON = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.json"
 SETTINGS_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
@@ -107,22 +110,31 @@ class TestPermissionManagementArchitecture(unittest.TestCase):
         self.assertIn("Permission audit records are immutable", controller)
 
     def test_permission_console_has_preview_audit_and_race_guards(self) -> None:
-        source = PAGE.read_text(encoding="utf-8")
-        self.assertIn("preview_role_permissions", source)
-        self.assertIn("update_role_permissions", source)
-        self.assertIn("requires_self_lockout_confirmation", source)
-        self.assertIn("roleRequest", source)
-        self.assertIn("previewRequest", source)
-        self.assertIn("apc-savebar", source)
-        self.assertIn("Promise.resolve(loadPreview()).then", source)
-        self.assertIn("const executeSave = async", source)
-        self.assertIn("finally {", source)
-        self.assertIn("state.saving = false", source)
-        self.assertIn("await refreshRuntimePermissions()", source)
-        self.assertNotIn(").finally(() => {\n                state.saving = false", source)
-        self.assertNotIn("frappe.user_roles", source)
+        page = PAGE.read_text(encoding="utf-8")
+        api = PERMISSION_API.read_text(encoding="utf-8")
+        state = PERMISSION_STATE.read_text(encoding="utf-8")
+        controller = PERMISSION_CONTROLLER.read_text(encoding="utf-8")
+        browser_surface = "\n".join((page, api, state, controller))
+
+        self.assertIn("preview_role_permissions", api)
+        self.assertIn("update_role_permissions", api)
+        self.assertIn("requires_self_lockout_confirmation", controller)
+        self.assertIn("createLatestRequestGate", state)
+        self.assertIn("requests.role.begin", controller)
+        self.assertIn("requests.preview.begin", controller)
+        self.assertIn("requests.transfer.begin", controller)
+        self.assertIn("apc-savebar", controller)
+        self.assertIn("Promise.resolve(loadPreview()).then", controller)
+        self.assertIn("const executeSave = async", controller)
+        self.assertIn("finally {", controller)
+        self.assertIn("state.saving = false", controller)
+        self.assertIn("await refreshRuntimePermissions()", controller)
+        self.assertNotIn("roleRequest", browser_surface)
+        self.assertNotIn("previewRequest", browser_surface)
+        self.assertNotIn("transferRequest", browser_surface)
+        self.assertNotIn("frappe.user_roles", browser_surface)
         for role in ("Production Manager", "System Manager", "Order Entry"):
-            self.assertNotIn(role, source)
+            self.assertNotIn(role, browser_surface)
 
     def test_shared_shell_uses_surface_policy_not_raw_capabilities(self) -> None:
         source = SHARED_SHELL.read_text(encoding="utf-8")

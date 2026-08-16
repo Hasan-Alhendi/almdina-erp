@@ -14,6 +14,10 @@ PAGES = APP / "page"
 REPORTS = APP / "report"
 PERMISSION_SERVICE = SERVICES / "permission_management_service.py"
 PERMISSION_PAGE = PAGES / "factory_permissions" / "factory_permissions.js"
+PERMISSION_API = ROOT / "public" / "js" / "factory_permissions" / "api.js"
+PERMISSION_STATE = ROOT / "public" / "js" / "factory_permissions" / "state.js"
+PERMISSION_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
+PERMISSION_FRONTEND_MODULES = (PERMISSION_API, PERMISSION_STATE, PERMISSION_CONTROLLER)
 CUTTING_PLAN_SERVICE = SERVICES / "cutting_plan_service.py"
 SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
@@ -82,6 +86,10 @@ def _loaded_javascript_paths() -> list[Path]:
         for value in values:
             paths.add(ROOT / "public" / str(value).removeprefix("public/"))
     paths.update(PAGES.rglob("*.js"))
+    # Factory Permissions modules are page-local assets loaded through
+    # frappe.require(), so they must remain inside the browser security scan
+    # even though they are intentionally absent from the global asset manifest.
+    paths.update(PERMISSION_FRONTEND_MODULES)
     return sorted(path for path in paths if path.exists())
 
 
@@ -283,6 +291,9 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
     def test_permission_transfer_is_preview_first_and_server_authorized(self) -> None:
         service = PERMISSION_SERVICE.read_text(encoding="utf-8")
         page = PERMISSION_PAGE.read_text(encoding="utf-8")
+        api = PERMISSION_API.read_text(encoding="utf-8")
+        controller = PERMISSION_CONTROLLER.read_text(encoding="utf-8")
+        browser_surface = "\n".join((page, api, controller))
         for endpoint in (
             "get_permission_console",
             "export_role_permissions",
@@ -297,17 +308,20 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("confirm_self_lockout", service)
         self.assertIn("save_role_states", service)
         self.assertNotIn("preview_permission_template", service)
-        self.assertNotIn("preview_permission_template", page)
-        self.assertNotIn("apc-template", page)
-        self.assertIn("preview_permission_import", page)
-        self.assertIn("export_role_permissions", page)
-        self.assertIn("لن يتم الحفظ تلقائيًا", page)
+        self.assertNotIn("preview_permission_template", browser_surface)
+        self.assertNotIn("apc-template", browser_surface)
+        self.assertIn("preview_permission_import", api)
+        self.assertIn("export_role_permissions", api)
+        self.assertIn("previewImport", controller)
+        self.assertIn("previewExternal", controller)
+        self.assertIn("updateRole", controller)
+        self.assertIn("لن يتم الحفظ تلقائيًا", controller)
         policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)
         self.assertIn("checksum", policy)
         self.assertNotIn("PermissionTemplate", policy)
-        self.assertNotIn("frappe.user_roles", page)
+        self.assertNotIn("frappe.user_roles", browser_surface)
 
     def test_hooks_keep_old_api_paths_on_protected_services(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
