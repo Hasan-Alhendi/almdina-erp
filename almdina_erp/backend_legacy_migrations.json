@@ -80,6 +80,7 @@
       "batch": 3,
       "name": "Split Cutting Plan snapshot persistence from lifecycle compatibility",
       "status": "migrated_compatibility_preserved",
+      "final_sha": "e4db34e22b34cc1b85d136e7f706cd4353d16b62",
       "canonical_owner": [
         "almdina_erp/almdina_erp/services/cutting_plan_snapshot_service.py",
         "almdina_erp/almdina_erp/services/drawing_approval_service.py"
@@ -96,6 +97,32 @@
         "cutting_plan_service.py is now a thin compatibility facade: historical Python names delegate to the snapshot owner and historical whitelisted lifecycle methods delegate to their capability-protected canonical services.",
         "The compatibility facade contains no frappe.new_doc, plan.insert, frappe.db.set_value, or Cutting Plan persistence logic.",
         "Static contracts moved product-scope, special-shape geometry, production approval, and documentation/price assertions to the focused snapshot owner while retaining compatibility assertions on the old facade."
+      ]
+    },
+    {
+      "batch": 4,
+      "name": "Split transitional production service into focused owners",
+      "status": "ready_for_final_ci",
+      "canonical_owner": [
+        "almdina_erp/almdina_erp/services/production_stage_bootstrap_service.py",
+        "almdina_erp/almdina_erp/services/order_status_sync_service.py",
+        "almdina_erp/almdina_erp/infrastructure/frappe/production_event_repository.py"
+      ],
+      "migrated_consumers": [
+        "almdina_erp/almdina_erp/services/shop_floor_service.py",
+        "almdina_erp/almdina_erp/services/order_lifecycle_service.py",
+        "almdina_erp/almdina_erp/services/replacement_cancellation_service.py",
+        "almdina_erp/almdina_erp/services/replacement_status_service.py"
+      ],
+      "compatibility_preserved": [
+        "almdina_erp/almdina_erp/services/production_service.py"
+      ],
+      "evidence": [
+        "ensure_default_stages moved unchanged to production_stage_bootstrap_service.py so legacy pending-stage semantics remain intact.",
+        "sync_order_status moved unchanged to order_status_sync_service.py and shop_floor/replacement callers now use the focused owner directly.",
+        "order_lifecycle_service.py now logs cancellation events through production_event_repository instead of a private production_service helper.",
+        "production_service.py is now a compatibility facade containing only delegates and fail-closed historical HTTP endpoints.",
+        "A Static architecture scan rejects every internal runtime dependency on services.production_service while allowing the facade itself for external compatibility."
       ]
     }
   ]
