@@ -79,25 +79,10 @@ jobs:
       - name: Run F4 lightweight architecture contracts
         shell: bash
         run: |
-          python - <<'PY'
-          from almdina_erp.tests import test_factory_permissions_frontend as permission_checks
-          from almdina_erp.tests import test_dco_document_context_architecture as document_checks
-          from almdina_erp.tests import test_production_settings_frontend as production_checks
-
-          modules = [permission_checks, document_checks, production_checks]
-          total = 0
-          for module in modules:
-              tests = [
-                  getattr(module, name)
-                  for name in dir(module)
-                  if name.startswith("test_") and callable(getattr(module, name))
-              ]
-              for test in tests:
-                  print(f"Running {module.__name__}.{test.__name__}...")
-                  test()
-              total += len(tests)
-          print(f"Validated {total} F4 frontend contracts")
-          PY
+          set -euo pipefail
+          python -m unittest almdina_erp.tests.test_factory_permissions_frontend_architecture -v
+          python -m unittest almdina_erp.tests.test_factory_workforce_frontend_architecture -v
+          python -m unittest almdina_erp.tests.test_factory_production_settings_frontend_architecture -v
 
       - name: Run F5 Shop Floor Inbox architecture contracts
         run: python -m unittest almdina_erp.tests.test_shop_floor_inbox_frontend_architecture -v
