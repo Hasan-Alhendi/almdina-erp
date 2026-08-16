@@ -20,6 +20,8 @@ REQUIRED_REFERENCE_DOCS = (
     "08_TESTING_QUALITY.md",
     "09_OPERATIONS_RELEASE.md",
     "10_GLOSSARY.md",
+    "11_COMMON_TASKS.md",
+    "12_TROUBLESHOOTING.md",
     "ARCHITECTURE_FREEZE.md",
 )
 
@@ -45,6 +47,8 @@ class TestStage15DocumentationContract(unittest.TestCase):
 
         self.assertIn("docs/reference/README.md", readme)
         self.assertIn("docs/PRODUCT_SCOPE_v1.1.md", readme)
+        self.assertIn("docs/reference/11_COMMON_TASKS.md", readme)
+        self.assertIn("docs/reference/12_TROUBLESHOOTING.md", readme)
         self.assertIn("docs/reference/07_CHANGE_RULES.md", agents)
         self.assertIn("reference/ARCHITECTURE_FREEZE.md", docs_index)
 
@@ -70,6 +74,28 @@ class TestStage15DocumentationContract(unittest.TestCase):
             self.assertIn(value, source)
         self.assertIn("Review/Approve القديم", source)
         self.assertIn("اعتماد Cutting Plan", source)
+
+    def test_operational_reference_covers_common_admin_and_factory_tasks(self) -> None:
+        source = (REFERENCE / "11_COMMON_TASKS.md").read_text(encoding="utf-8")
+        for value in (
+            "Door Cutting Order",
+            "Cutting Plan",
+            "dispatch_order",
+            "shop_floor_inbox",
+            "Production Routing",
+            "factory_permissions",
+            "factory_workforce",
+            "Incident",
+            "Replacement",
+        ):
+            self.assertIn(value, source)
+
+    def test_troubleshooting_reference_requires_evidence_before_broad_fix(self) -> None:
+        source = (REFERENCE / "12_TROUBLESHOOTING.md").read_text(encoding="utf-8")
+        for value in ("Exact Git SHA", "DCO", "assignee", "IDOR", "view_costs", "DXF"):
+            self.assertIn(value, source)
+        self.assertIn("لا hard-code", source)
+        self.assertIn("Architecture Freeze", source)
 
     def test_scope_and_freeze_reject_inventory_as_new_active_product_authority(self) -> None:
         overview = (REFERENCE / "01_SYSTEM_OVERVIEW.md").read_text(encoding="utf-8")

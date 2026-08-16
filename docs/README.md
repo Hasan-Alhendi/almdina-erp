@@ -17,6 +17,8 @@
 - [`reference/08_TESTING_QUALITY.md`](reference/08_TESTING_QUALITY.md) — CI والاختبارات.
 - [`reference/09_OPERATIONS_RELEASE.md`](reference/09_OPERATIONS_RELEASE.md) — التشغيل والإصدار.
 - [`reference/10_GLOSSARY.md`](reference/10_GLOSSARY.md) — قاموس المصطلحات.
+- [`reference/11_COMMON_TASKS.md`](reference/11_COMMON_TASKS.md) — دليل عملي للمهام اليومية والتدريب.
+- [`reference/12_TROUBLESHOOTING.md`](reference/12_TROUBLESHOOTING.md) — تشخيص المشاكل وجمع الأدلة قبل الإصلاح.
 - [`reference/ARCHITECTURE_FREEZE.md`](reference/ARCHITECTURE_FREEZE.md) — قرارات Stage 15 المجمدة.
 
 ## 2. حدود المنتج ومتطلبات العمل — Binding Business Sources

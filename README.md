@@ -11,9 +11,10 @@
 ## لمن هذا المستودع؟
 
 - **الإدارة وصاحب المنتج:** اقرأ [نظرة عامة على النظام](docs/reference/01_SYSTEM_OVERVIEW.md).
-- **مدخل البيانات والمشرف التشغيلي:** اقرأ [دورة الطلب والإنتاج](docs/reference/03_WORKFLOWS.md) و[خريطة الواجهات والبيانات](docs/reference/06_DATA_UI_MAP.md).
-- **مسؤول الصلاحيات:** اقرأ [الصلاحيات والأمان](docs/reference/04_SECURITY_PERMISSIONS.md).
+- **مدخل البيانات والمشرف التشغيلي:** ابدأ بـ[دليل المهام اليومية](docs/reference/11_COMMON_TASKS.md)، ثم [دورة الطلب والإنتاج](docs/reference/03_WORKFLOWS.md).
+- **مسؤول الصلاحيات:** اقرأ [الصلاحيات والأمان](docs/reference/04_SECURITY_PERMISSIONS.md) و[دليل المهام اليومية](docs/reference/11_COMMON_TASKS.md).
 - **عامل الرسم/CNC:** اقرأ [القص والرسم وDXF](docs/reference/05_CUTTING_DRAWING_DXF.md).
+- **الدعم الفني:** ابدأ بـ[دليل التشخيص وحل المشاكل](docs/reference/12_TROUBLESHOOTING.md).
 - **المطور أو Coding AI:** اقرأ [المعمارية](docs/reference/02_ARCHITECTURE.md)، ثم [قواعد التعديل](docs/reference/07_CHANGE_RULES.md)، ثم [`AGENTS.md`](AGENTS.md).
 - **QA:** اقرأ [الاختبارات وبوابات الجودة](docs/reference/08_TESTING_QUALITY.md).
 - **DevOps/الإصدار:** اقرأ [التشغيل والإصدارات](docs/reference/09_OPERATIONS_RELEASE.md).

@@ -10,23 +10,26 @@
 
 الهدف أن يستطيع شخص جديد فهم المشروع دون الاعتماد على ذاكرة مطور أو محادثة سابقة، وأن يجد المطور/AI قواعد واضحة تمنعه من إصلاح شيء وكسر شيء آخر.
 
-هذا المرجع يجيب عن ستة أسئلة:
+هذا المرجع يجيب عن سبعة أسئلة:
 
 1. ما الذي يفعله النظام وما الذي لا يفعله؟
 2. كيف تنتقل البيانات والطلبات بين المراحل؟
-3. أين يجب أن يعيش كل نوع من المنطق في الكود؟
-4. من يملك صلاحية ماذا، ولماذا؟
-5. ما الاختبارات التي تحمي كل Contract؟
-6. كيف نضيف Feature جديدة بدون تدمير سلوك غير مرتبط؟
+3. كيف ينفذ الموظف المهام اليومية الصحيحة؟
+4. أين يجب أن يعيش كل نوع من المنطق في الكود؟
+5. من يملك صلاحية ماذا، ولماذا؟
+6. ما الاختبارات التي تحمي كل Contract؟
+7. كيف نشخّص ونضيف Feature بدون تدمير سلوك غير مرتبط؟
 
 ## طريق القراءة حسب دورك
 
 | أنت | اقرأ أولًا | ثم |
 |---|---|---|
 | صاحب المنتج/الإدارة | [01 — نظرة عامة](01_SYSTEM_OVERVIEW.md) | [03 — Workflow](03_WORKFLOWS.md) |
-| مدخل البيانات/التشغيل | [03 — Workflow](03_WORKFLOWS.md) | [06 — UI/Data Map](06_DATA_UI_MAP.md) |
-| عامل رسم/CNC | [05 — Cutting/Drawing/DXF](05_CUTTING_DRAWING_DXF.md) | [03 — Workflow](03_WORKFLOWS.md) |
-| مسؤول صلاحيات | [04 — Security/Permissions](04_SECURITY_PERMISSIONS.md) | [06 — UI/Data Map](06_DATA_UI_MAP.md) |
+| موظف جديد/مدخل بيانات | [11 — المهام اليومية](11_COMMON_TASKS.md) | [03 — Workflow](03_WORKFLOWS.md) |
+| عامل رسم/CNC | [05 — Cutting/Drawing/DXF](05_CUTTING_DRAWING_DXF.md) | [11 — المهام اليومية](11_COMMON_TASKS.md) |
+| مشرف إنتاج | [11 — المهام اليومية](11_COMMON_TASKS.md) | [03 — Workflow](03_WORKFLOWS.md) |
+| مسؤول صلاحيات | [04 — Security/Permissions](04_SECURITY_PERMISSIONS.md) | [11 — المهام اليومية](11_COMMON_TASKS.md) |
+| Support | [12 — Troubleshooting](12_TROUBLESHOOTING.md) | [06 — UI/Data Map](06_DATA_UI_MAP.md) |
 | Developer | [02 — Architecture](02_ARCHITECTURE.md) | [07 — Change Rules](07_CHANGE_RULES.md) |
 | Coding AI | `AGENTS.md` | [02](02_ARCHITECTURE.md) + [07](07_CHANGE_RULES.md) |
 | QA | [08 — Testing/Quality](08_TESTING_QUALITY.md) | [03](03_WORKFLOWS.md) + [04](04_SECURITY_PERMISSIONS.md) |
@@ -44,6 +47,8 @@
 - [08 — Testing & Quality Gates](08_TESTING_QUALITY.md)
 - [09 — Operations & Releases](09_OPERATIONS_RELEASE.md)
 - [10 — Glossary](10_GLOSSARY.md)
+- [11 — Common Tasks / دليل المهام اليومية](11_COMMON_TASKS.md)
+- [12 — Troubleshooting / التشخيص](12_TROUBLESHOOTING.md)
 - [Architecture Freeze](ARCHITECTURE_FREEZE.md)
 
 ## قاعدة “مصدر الحقيقة”
