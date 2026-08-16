@@ -6,23 +6,31 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_doctype_capability,
+    require_document_capability,
+)
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
     order_board_thickness_mm,
 )
 
-# Only the drawing operator needs the editable geometry; other shop-floor
-# operators work from the rendered plan and the approved production DXF.
-DXF_EXPORT_ROLES = ("عامل رسم", "Production Manager", "System Manager")
 
-
-def _assert_can_export_dxf() -> None:
-    if not set(frappe.get_roles()).intersection(DXF_EXPORT_ROLES):
-        frappe.throw(
-            _("You do not have permission to export the design as DXF."),
-            frappe.PermissionError,
+def _assert_can_export_dxf(order: Any | None = None) -> None:
+    message = _("You do not have permission to export the design as DXF.")
+    if order is not None:
+        require_document_capability(
+            order,
+            Capability.EXPORT_DXF,
+            message=message,
         )
+        return
+    require_doctype_capability(
+        Capability.EXPORT_DXF,
+        message=message,
+    )
 
 
 def _rects_overlap(a: dict[str, float], b: dict[str, float], tol: float = 1e-7) -> bool:
@@ -393,9 +401,9 @@ def get_validated_dxf_plan(
     order_name: str | None = None,
     doc: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    _assert_can_export_dxf()
     if order_name:
         order = frappe.get_doc("Door Cutting Order", order_name)
+        _assert_can_export_dxf(order)
         order.check_permission("read")
         if order.approved_plan:
             plan = frappe.get_doc("Cutting Plan", order.approved_plan)
@@ -442,6 +450,11 @@ def get_validated_dxf_plan(
     if doc is None:
         frappe.throw(_("Editable DXF export requires the current Door Cutting Order document payload."))
     payload = frappe.parse_json(doc) if isinstance(doc, str) else dict(doc or {})
+    payload_name = str(payload.get("name") or "").strip()
+    if payload_name and frappe.db.exists("Door Cutting Order", payload_name):
+        _assert_can_export_dxf(frappe.get_doc("Door Cutting Order", payload_name))
+    else:
+        _assert_can_export_dxf()
     editable, snapshot = _strict_editable_snapshot(payload)
     manifest = {
         "order": editable.name or "UNSAVED",
