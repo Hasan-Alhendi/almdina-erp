@@ -7,8 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.services.advanced_cutting_optimizer import optimize_plan
-from almdina_erp.almdina_erp.services.cutting_engine import expand_piece_groups
+from almdina_erp.almdina_erp.domain.cutting import expand_piece_groups, optimize_plan
 
 
 MAX_EXPANDED_PIECES = 200
