@@ -1,3 +1,95 @@
+.ald-v4-modal .modal-dialog {
+    width: min(96vw, 1600px) !important;
+    max-width: min(96vw, 1600px) !important;
+}
+
+.ald-v4-modal .modal-content {
+    overflow: hidden;
+}
+
+.ald-v4-modal .modal-body {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+.ald-v4-frappe-host {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) 58px;
+    height: min(80vh, 840px);
+    min-height: 560px;
+    background: #f4f6f8;
+}
+
+.ald-v4-editor-host {
+    min-width: 0;
+    min-height: 0;
+}
+
+.ald-v4-dialog-actions {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 18px;
+    direction: rtl;
+    background: #111827;
+    color: #fff;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.ald-v4-dialog-message {
+    min-width: 0;
+    overflow: hidden;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ald-v4-dialog-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.ald-v4-action {
+    min-height: 38px;
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ald-v4-action:active {
+    transform: translateY(1px);
+}
+
+.ald-v4-action-primary {
+    background: #fff;
+    color: #111827;
+}
+
+.ald-v4-action-primary:hover {
+    background: #f1f5f9;
+}
+
+.ald-v4-action-secondary {
+    border-color: #475569;
+    background: transparent;
+    color: #e2e8f0;
+}
+
+.ald-v4-action-secondary:hover {
+    background: #1f2937;
+}
+
 .ald-v4-editor {
     --ald-v4-bg: #f4f6f8;
     --ald-v4-panel: rgba(255, 255, 255, 0.94);
@@ -16,7 +108,7 @@
     color: var(--ald-v4-text);
     font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
     overflow: hidden;
-    border-radius: 14px;
+    border-radius: 0;
 }
 
 .ald-v4-canvas-wrap {
@@ -42,7 +134,8 @@
 }
 
 .ald-v4-editor[data-tool="hand"] .ald-v4-canvas,
-.ald-v4-editor.is-panning .ald-v4-canvas {
+.ald-v4-editor.is-panning .ald-v4-canvas,
+.ald-v4-editor.is-readonly .ald-v4-canvas {
     cursor: grab;
 }
 
@@ -80,12 +173,17 @@
     transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
-.ald-v4-tool:hover {
+.ald-v4-tool:hover:not(:disabled) {
     background: #f2f4f7;
 }
 
-.ald-v4-tool:active {
+.ald-v4-tool:active:not(:disabled) {
     transform: translateY(1px);
+}
+
+.ald-v4-tool:disabled {
+    opacity: 0.32;
+    cursor: not-allowed;
 }
 
 .ald-v4-tool.is-active {
@@ -254,9 +352,36 @@
 }
 
 @media (max-width: 767px) {
+    .ald-v4-modal .modal-dialog {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        margin: 0 !important;
+    }
+
+    .ald-v4-frappe-host {
+        height: calc(100dvh - 58px);
+        min-height: 420px;
+        grid-template-rows: minmax(0, 1fr) 64px;
+    }
+
+    .ald-v4-dialog-actions {
+        padding: 0 10px;
+    }
+
+    .ald-v4-dialog-message {
+        display: none;
+    }
+
+    .ald-v4-dialog-buttons {
+        width: 100%;
+    }
+
+    .ald-v4-action {
+        flex: 1 1 0;
+    }
+
     .ald-v4-editor {
         min-height: 440px;
-        border-radius: 10px;
     }
 
     .ald-v4-toolbar {
