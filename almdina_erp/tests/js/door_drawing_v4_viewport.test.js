@@ -7,6 +7,7 @@ global.window = { devicePixelRatio: 2 };
 const load = file => require(path.resolve(__dirname, `../../public/js/door_drawing_v4/${file}`));
 load("domain/geometry.js");
 load("domain/document.js");
+load("domain/dimension.js");
 load("application/viewport.js");
 load("presentation/canvas_renderer.js");
 
