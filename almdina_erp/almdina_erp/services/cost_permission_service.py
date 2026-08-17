@@ -121,7 +121,17 @@ def update_order_cost_settings(
 ) -> dict[str, Any]:
     """Update plan-owned cost inputs without granting full document write access."""
 
-    order = _authorized_order(order_name, Capability.EDIT_COST_SETTINGS)
+    name = str(order_name or "").strip()
+    if not name:
+        frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
+
+    # Serialize cost edits with recalculation and approval, which already lock
+    # the same order row before selecting or mutating its current Cutting Plan.
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (name,),
+    )
+    order = _authorized_order(name, Capability.EDIT_COST_SETTINGS)
     _require_cost_visibility(order)
     if order.status not in EDITABLE_ORDER_STATUSES:
         frappe.throw(_("Cost settings can only be changed while the order is editable."))
