@@ -23,6 +23,8 @@
         "/assets/almdina_erp/js/door_drawing_v4/presentation/canvas_renderer.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_session.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/keyboard_controller.js",
+        "/assets/almdina_erp/js/door_drawing_v4/professional/editor_view_model.js",
+        "/assets/almdina_erp/js/door_drawing_v4/professional/selection_overlay.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_shell.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_api.js",
@@ -66,9 +68,7 @@
         return bootstrap(wrapper).then(() => {
             if (wrapper.__almdinaDoorDrawingController) return wrapper.__almdinaDoorDrawingController;
             const factory = window.AlmdinaDoorDrawingProfessional && window.AlmdinaDoorDrawingProfessional.WorkspaceController;
-            if (!factory || typeof factory.mount !== "function") {
-                throw new Error("Professional drawing workspace did not initialize");
-            }
+            if (!factory || typeof factory.mount !== "function") throw new Error("Professional drawing workspace did not initialize");
             wrapper.__almdinaDoorDrawingController = factory.mount(wrapper);
             return wrapper.__almdinaDoorDrawingController;
         });
