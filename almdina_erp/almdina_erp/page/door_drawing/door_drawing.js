@@ -115,8 +115,13 @@
         });
     }
 
-    function enterFullscreenMode() { document.body.classList.add("ald-professional-drawing-active"); }
-    function leaveFullscreenMode() { document.body.classList.remove("ald-professional-drawing-active"); }
+    function enterFullscreenMode() {
+        document.body.classList.add("ald-professional-drawing-active");
+    }
+
+    function leaveFullscreenMode() {
+        document.body.classList.remove("ald-professional-drawing-active");
+    }
 
     function bindLifecycle(wrapper) {
         if (wrapper.__almdinaDoorDrawingLifecycleBound) return;
