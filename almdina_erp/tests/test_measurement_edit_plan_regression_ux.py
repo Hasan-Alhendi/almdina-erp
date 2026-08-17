@@ -70,28 +70,24 @@ def test_optimizer_only_recalculation_does_not_require_order_save() -> None:
     assert "__almdina_pending_order_input_persistence" not in mark_optimizer_body
 
 
-def test_kerf_and_trim_follow_order_input_plan_staleness() -> None:
+def test_kerf_and_trim_follow_focused_optimizer_plan_staleness() -> None:
     fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
-    revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
+    field_access = source(
+        "door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js"
+    )
 
-    assert "kerf_mm(frm) { markOrderInputPlanStale(frm); }" in fast_save
-    assert "trim_margin_mm(frm) { markOrderInputPlanStale(frm); }" in fast_save
-    assert "kerf_mm(frm) { markOptimizerPlanStale(frm); }" not in fast_save
-    assert "trim_margin_mm(frm) { markOptimizerPlanStale(frm); }" not in fast_save
+    assert "kerf_mm(frm) { markOptimizerPlanStale(frm); }" in fast_save
+    assert "trim_margin_mm(frm) { markOptimizerPlanStale(frm); }" in fast_save
+    assert "kerf_mm(frm) { markOrderInputPlanStale(frm); }" not in fast_save
+    assert "trim_margin_mm(frm) { markOrderInputPlanStale(frm); }" not in fast_save
 
-    order_inputs = revision.split("const ORDER_INPUT_FIELDS = [", 1)[1].split("];", 1)[0]
-    assert '"kerf_mm"' in order_inputs
-    assert '"trim_margin_mm"' in order_inputs
-    assert '"packing_mode"' not in order_inputs
-    assert '"cutting_machine_type"' not in order_inputs
-    assert '"optimization_time_limit_sec"' not in order_inputs
-
-    assert "ORDER_CUT_GEOMETRY_FIELDS" in revision
-    apply_body = revision.split("function applyEditableFields(frm)", 1)[1].split(
-        "function syncPrimaryAction(frm)", 1
-    )[0]
-    assert "ORDER_CUT_GEOMETRY_FIELDS.forEach" in apply_body
-    assert 'set_df_property(fieldname, "read_only", desiredReadOnly)' in apply_body
+    # The final field-state bridge runs after order edit-session locking and
+    # delegates the actual decision back to PlanControls. Kerf/trim therefore do
+    # not require an order-save checkpoint or broad EDIT_ORDER authority.
+    assert "controls.applyOptimizerFieldAccess(frm)" in field_access
+    assert "almdina_edit_session_changed(frm) { schedule(frm); }" in field_access
+    assert "refresh_plan_controls(frm) { schedule(frm); }" in field_access
+    assert "frm.perm" not in field_access
 
 
 def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observers() -> None:

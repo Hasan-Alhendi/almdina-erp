@@ -2,7 +2,7 @@
     "use strict";
 
     frappe.provide("frappe.almdina");
-    if (typeof frappe.almdina.upload_production_dxf === "function") return;
+    if (frappe.almdina.__secureDxfUploadInstalled) return;
 
     const UPLOAD_METHOD =
         "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf";
@@ -16,11 +16,17 @@
         const orderName = frm.doc.name;
         const replacing = Boolean(frm.doc.production_dxf);
 
-        // Security contract: the browser creates only a private, unattached File.
-        // The server authorizes and validates it before linking it to the order.
+        // Security contract: create a brand-new private File without a document
+        // attachment. The server owns authorization, geometry validation, and the
+        // final attachment to the Door Cutting Order after validation succeeds.
         return new frappe.ui.FileUploader({
             folder: "Home/Attachments",
-            is_private: 1,
+            make_attachments_public: false,
+            allow_toggle_private: false,
+            allow_multiple: false,
+            disable_file_browser: true,
+            allow_web_link: false,
+            allow_take_photo: false,
             restrictions: {
                 allowed_file_types: [".dxf"],
                 max_file_size: 10 * 1024 * 1024,
@@ -50,5 +56,9 @@
         });
     }
 
+    // Always install the secure owner, even if a legacy bundle defined the same
+    // public helper first. This prevents a stale uploader from attaching the File
+    // to the order before the granular DXF authorization runs.
     frappe.almdina.upload_production_dxf = uploadProductionDxf;
+    frappe.almdina.__secureDxfUploadInstalled = true;
 })();
