@@ -4,7 +4,11 @@
     const workspace = window.AlmdinaDoorDrawingWorkspace = window.AlmdinaDoorDrawingWorkspace || Object.create(null);
     const api = workspace.Api;
     const shellFactory = workspace.Shell;
-    if (!api || !shellFactory) throw new Error("Door drawing workspace API and shell must load before session controller");
+    const referenceFactory = workspace.ReferenceController;
+    const referenceRuntime = window.AlmdinaDoorDrawingReference;
+    if (!api || !shellFactory || !referenceFactory || !referenceRuntime || !referenceRuntime.Domain) {
+        throw new Error("Door drawing workspace dependencies must load before session controller");
+    }
 
     const PROJECTION_MESSAGES = Object.freeze({
         "invalid-document": "بيانات الرسم غير صالحة. أعد فتح الرسم وحاول مرة أخرى.",
@@ -60,13 +64,19 @@
         return Object.freeze({ ok: true, serialized });
     }
 
+    function confirmAsync(message) {
+        return new Promise(resolve => frappe.confirm(message, () => resolve(true), () => resolve(false)));
+    }
+
     function create(options = {}) {
         if (!options.container) throw new Error("Door drawing workspace session requires a container");
         const shell = shellFactory.create(options.container);
         let editor = null;
+        let referenceController = null;
         let context = null;
         let readOnly = true;
         let dirty = false;
+        let activeContent = "drawing";
         let loadToken = 0;
         let destroyed = false;
 
@@ -78,11 +88,29 @@
             return context && context.piece && context.piece.name;
         }
 
-        function setDirty(next) {
-            dirty = Boolean(next);
+        function refreshSaveState() {
             if (readOnly) shell.setSaveState("readonly", "للعرض فقط");
+            else if (activeContent === "image") shell.setSaveState("saved", "الصورة محفوظة");
             else if (dirty) shell.setSaveState("dirty", "غير محفوظ");
             else shell.setSaveState("saved", "محفوظ");
+        }
+
+        function setDirty(next) {
+            dirty = Boolean(next);
+            refreshSaveState();
+        }
+
+        function notify(message, level = "info") {
+            if (level === "success") {
+                frappe.show_alert({ message, indicator: "green" }, 3);
+                return;
+            }
+            const scannerUnavailable = level === "scanner-unavailable";
+            frappe.msgprint({
+                title: scannerUnavailable ? "Scanner غير متصل" : (level === "error" ? "تعذر تنفيذ العملية" : "معلومة"),
+                message,
+                indicator: scannerUnavailable ? "orange" : (level === "error" ? "red" : "blue"),
+            });
         }
 
         function destroyEditor() {
@@ -90,6 +118,18 @@
                 try { editor.destroy(); } catch (error) { console.warn("Door drawing editor cleanup failed", error); }
             }
             editor = null;
+        }
+
+        function destroyReferenceController() {
+            if (referenceController) {
+                try { referenceController.destroy(); } catch (error) { console.warn("Reference image controller cleanup failed", error); }
+            }
+            referenceController = null;
+        }
+
+        function clearContent() {
+            destroyEditor();
+            destroyReferenceController();
             shell.elements.editorHost.innerHTML = "";
         }
 
@@ -97,7 +137,7 @@
             const target = orderName();
             if (!target) return;
             const navigate = () => frappe.set_route("Form", "Door Cutting Order", target);
-            if (force || readOnly || !dirty) {
+            if (force || readOnly || !dirty || activeContent === "image") {
                 navigate();
                 return;
             }
@@ -111,8 +151,100 @@
             return editor && editor.state().interaction.document;
         }
 
+        function onSourceBusy(isBusy, label) {
+            shell.setSourceBusy(isBusy, label);
+            if (isBusy) shell.setSaveState("saving", label || "جارٍ التنفيذ…");
+            else refreshSaveState();
+        }
+
+        async function beforeReferencePersist() {
+            if (activeContent !== "drawing") return true;
+            const hasDrawing = dirty || documentHasGeometry(currentDocument());
+            if (!hasDrawing) return true;
+            return confirmAsync(
+                "سيتم اعتماد الصورة بدل الرسم اليدوي الحالي، وسيتم مسح هندسة الرسم الحالية حتى لا تُستخدم هندسة قديمة مع صورة جديدة. هل تريد المتابعة؟"
+            );
+        }
+
+        function schedule(callback) {
+            if (typeof window.queueMicrotask === "function") window.queueMicrotask(callback);
+            else window.setTimeout(callback, 0);
+        }
+
+        function createReferenceActions(renderView) {
+            destroyReferenceController();
+            referenceController = referenceFactory.create({
+                container: shell.elements.editorHost,
+                notify,
+                confirm: confirmAsync,
+                onBusy: onSourceBusy,
+                beforePersist: beforeReferencePersist,
+                onSaved(nextContext) {
+                    context = nextContext;
+                    shell.setContext(context);
+                    setDirty(false);
+                    if (activeContent !== "image") schedule(() => activateContent("image"));
+                    else {
+                        shell.setMode("image");
+                        refreshSaveState();
+                    }
+                },
+                onRemoved(nextContext) {
+                    context = nextContext;
+                    shell.setContext(context);
+                    setDirty(false);
+                    schedule(() => activateContent("drawing"));
+                },
+            });
+            referenceController.setContext(context, readOnly, renderView);
+        }
+
+        function activateDrawing() {
+            clearContent();
+            activeContent = "drawing";
+            shell.setMode("drawing");
+            const runtime = v4();
+            const initial = runtime.PersistenceAdapter.fromStored(
+                context.piece.special_shape_drawing_json,
+                context.piece
+            );
+            editor = runtime.EditorController.create({
+                container: shell.elements.editorHost,
+                document: initial,
+                readOnly,
+                onChange() {
+                    if (!readOnly) setDirty(true);
+                },
+            });
+            createReferenceActions(false);
+            setDirty(false);
+        }
+
+        function activateImage() {
+            clearContent();
+            activeContent = "image";
+            shell.setMode("image");
+            createReferenceActions(true);
+            setDirty(false);
+        }
+
+        function activateContent(forceMode = "") {
+            if (!context || destroyed) return;
+            const imageMode = forceMode === "image" || (
+                forceMode !== "drawing" && referenceRuntime.Domain.active(context.piece)
+            );
+            if (imageMode) activateImage();
+            else activateDrawing();
+        }
+
         async function save(options = {}) {
-            if (readOnly || !context || !editor) return false;
+            if (readOnly || !context) return false;
+            if (activeContent === "image") {
+                refreshSaveState();
+                if (options.returnAfter) returnToOrder(true);
+                return true;
+            }
+            if (!editor) return false;
             if (!dirty) {
                 if (options.returnAfter) returnToOrder(true);
                 return true;
@@ -161,10 +293,11 @@
 
         async function load(order, piece, mode = "edit") {
             const token = ++loadToken;
-            destroyEditor();
+            clearContent();
             context = null;
             readOnly = true;
             dirty = false;
+            activeContent = "drawing";
             shell.setLoading();
 
             if (!order || !piece) {
@@ -180,31 +313,18 @@
 
                 const requestedViewOnly = String(mode || "edit").toLowerCase() === "view";
                 readOnly = requestedViewOnly || !Boolean(context.permissions && context.permissions.can_edit);
-                const runtime = v4();
-                const initial = runtime.PersistenceAdapter.fromStored(
-                    context.piece.special_shape_drawing_json,
-                    context.piece
-                );
-
-                editor = runtime.EditorController.create({
-                    container: shell.elements.editorHost,
-                    document: initial,
-                    readOnly,
-                    onChange() {
-                        if (!readOnly) setDirty(true);
-                    },
-                });
+                activateContent();
 
                 if (readOnly) {
                     shell.markReadOnlyControls();
                     shell.setReadOnly(
                         requestedViewOnly
-                            ? "تم فتح الرسم في وضع العرض فقط."
-                            : (context.permissions && context.permissions.edit_reason) || "لا يمكن تعديل الرسم في حالة الطلب الحالية."
+                            ? "تم فتح التوثيق في وضع العرض فقط."
+                            : (context.permissions && context.permissions.edit_reason) || "لا يمكن تعديل توثيق الدرفة في حالة الطلب الحالية."
                     );
                     shell.setSaveState("readonly", "للعرض فقط");
                 } else {
-                    setDirty(false);
+                    refreshSaveState();
                 }
                 return context;
             } catch (error) {
@@ -218,12 +338,18 @@
         shell.elements.back.addEventListener("click", () => returnToOrder(false));
         shell.elements.save.addEventListener("click", () => save({ returnAfter: false }));
         shell.elements.saveReturn.addEventListener("click", () => save({ returnAfter: true }));
+        shell.elements.uploadImage.addEventListener("click", () => {
+            if (referenceController) referenceController.uploadFromDevice();
+        });
+        shell.elements.scan.addEventListener("click", () => {
+            if (referenceController) referenceController.scanFromScanner();
+        });
 
         function destroy() {
             if (destroyed) return;
             destroyed = true;
             loadToken += 1;
-            destroyEditor();
+            clearContent();
         }
 
         return Object.freeze({
@@ -232,7 +358,7 @@
             returnToOrder,
             destroy,
             state() {
-                return Object.freeze({ context, readOnly, dirty });
+                return Object.freeze({ context, readOnly, dirty, activeContent });
             },
         });
     }
