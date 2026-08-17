@@ -53,7 +53,7 @@
         df[STATUS_OWNER_KEY] = true;
     }
 
-    function syncNativeStatus(frm, field) {
+    function syncNativeStatus(frm, fieldname, field) {
         if (!field || !field.df) return;
         installNativeStatusOwner(field);
 
@@ -63,10 +63,16 @@
             && typeof editor.planSettingsMayWrite === "function"
             && editor.planSettingsMayWrite(frm)
         );
-        field.df[STATUS_KEY] = Number(field.df.read_only || 0) === 0
-            && editingAllowed
-            ? "Write"
-            : "Read";
+
+        // PlanControls still owns generic optimizer/recalculation access. These
+        // five focused settings add an explicit edit-session gate on top. When an
+        // authorized designer starts that session, this final native adapter must
+        // clear a stage-role-derived read_only flag left by the generic owner.
+        field.df[STATUS_KEY] = editingAllowed ? "Write" : "Read";
+        const desiredReadOnly = editingAllowed ? 0 : 1;
+        if (Number(field.df.read_only || 0) !== desiredReadOnly) {
+            frm.set_df_property(fieldname, "read_only", desiredReadOnly);
+        }
 
         if (typeof field.refresh === "function") field.refresh();
     }
@@ -81,7 +87,7 @@
 
         controls.applyOptimizerFieldAccess(frm);
         PLAN_SETTING_FIELDS.forEach((fieldname) => {
-            syncNativeStatus(frm, frm.fields_dict[fieldname]);
+            syncNativeStatus(frm, fieldname, frm.fields_dict[fieldname]);
         });
         return true;
     }

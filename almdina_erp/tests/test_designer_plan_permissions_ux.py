@@ -6,9 +6,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_CONTROLS = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
+PLAN_EDIT_SESSION = CUTTING_PLAN / "door_cutting_order_plan_edit_session_ux.js"
 FIELD_ACCESS = CUTTING_PLAN / "door_cutting_order_plan_field_access_adapter.js"
 FAST_SAVE = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
 SECURE_DXF_UPLOAD = CUTTING_PLAN / "secure_dxf_upload.js"
+PLAN_SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
+DOCUMENT_CONTEXT = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_document_context.js"
+)
 MANIFEST = ROOT / "frontend_assets.py"
 
 
@@ -36,16 +46,15 @@ def test_focused_plan_fields_use_frappe_native_df_status_without_document_write(
         assert f'"{fieldname}"' in adapter
         assert f'"{fieldname}"' in controls
 
-    # PlanControls remains the only business-policy owner. The adapter records
-    # its decision and uses Frappe v16's supported df.get_status extension point,
-    # which is evaluated before broad DocType write permission.
+    # PlanControls keeps generic optimizer/recalculation policy. The final adapter
+    # composes that with explicit PlanEditSession intent for these five fields and
+    # uses Frappe v16's supported df.get_status/read_only extension points.
     assert "controls.applyOptimizerFieldAccess(frm)" in adapter
     assert "df.get_status = function almdinaFocusedPlanFieldStatus" in adapter
     assert 'STATUS_KEY = "__almdinaFocusedPlanStatus"' in adapter
-    assert 'field.df[STATUS_KEY] = Number(field.df.read_only || 0) === 0' in adapter
+    assert 'field.df[STATUS_KEY] = editingAllowed ? "Write" : "Read"' in adapter
+    assert 'frm.set_df_property(fieldname, "read_only", desiredReadOnly)' in adapter
     assert 'this.hidden || this.hidden_due_to_dependency' in adapter
-    assert '? "Write"' in adapter
-    assert ': "Read"' in adapter
     assert "almdina_edit_session_changed(frm) { schedule(frm); }" in adapter
     assert "refresh_plan_controls(frm) { schedule(frm); }" in adapter
 
@@ -54,6 +63,46 @@ def test_focused_plan_fields_use_frappe_native_df_status_without_document_write(
     assert "AlmdinaPermissions" not in adapter
     assert "user_roles" not in adapter
     assert "ignore_permissions" not in adapter
+
+
+def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -> None:
+    session = source(PLAN_EDIT_SESSION)
+    service = source(PLAN_SETTINGS_SERVICE)
+    context = source(DOCUMENT_CONTEXT)
+
+    # This focused edit surface is owned by edit_optimizer_settings. An active
+    # production stage is only a lifecycle signal; the designer does not need the
+    # current worker-stage operational role just to edit these five settings.
+    assert 'can(frm, "edit_optimizer_settings")' in session
+    assert "function hasActiveProductionStage(frm)" in session
+    assert "if (hasProductionRoute(frm))" in session
+    assert "return hasActiveProductionStage(frm);" in session
+    assert "context.canTuneCuttingAlgorithm(frm)" not in session
+
+    assert "Capability.EDIT_OPTIMIZER_SETTINGS" in service
+    assert "require_stage_operational_access" not in service
+    assert "if _has_active_production_stage(doc):" in service
+    assert "انتهى المسار الإنتاجي الحالي" in service
+
+    # Recalculation/stage-scoped actions deliberately keep their separate role
+    # policy. Fixing the edit button must not silently broaden those commands.
+    assert "function canTuneCuttingAlgorithm" in context
+    assert "canMutateCurrentStage(frm)" in context
+
+
+def test_plan_edit_session_keeps_hard_lifecycle_locks() -> None:
+    session = source(PLAN_EDIT_SESSION)
+    service = source(PLAN_SETTINGS_SERVICE)
+
+    assert "Number(frm.doc.docstatus || 0) !== 0" in session
+    assert 'String(frm.doc.approved_plan || "").trim()' in session
+    assert '(frm.doc.revision_state || "Current") === "Superseded"' in session
+    assert 'DRAFT_LIKE.has(frm.doc.status || "Draft")' in session
+
+    assert 'getattr(doc, "docstatus", 0)' in service
+    assert 'getattr(doc, "approved_plan", None)' in service
+    assert 'getattr(doc, "revision_state", "Current")' in service
+    assert "DRAFT_LIKE_STATUSES" in service
 
 
 def test_plan_field_status_adapter_is_the_final_dco_runtime_owner() -> None:
