@@ -2,21 +2,32 @@
     "use strict";
 
     const PAGE_ROUTE = "door-drawing";
-    const WORKSPACE_CSS = "/assets/almdina_erp/css/door_drawing_workspace.css";
     const BOOTSTRAP_SRC = "/assets/almdina_erp/js/door_drawing_v4/bootstrap.js";
+    const WORKSPACE_STYLES = Object.freeze([
+        Object.freeze({ id: "almdina-door-drawing-workspace-css", href: "/assets/almdina_erp/css/door_drawing_workspace.css" }),
+        Object.freeze({ id: "almdina-door-drawing-reference-css", href: "/assets/almdina_erp/css/door_drawing_reference.css" }),
+    ]);
     const WORKSPACE_SCRIPTS = Object.freeze([
+        "/assets/almdina_erp/js/door_drawing_v4/reference/domain.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/device_source.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/scanner_bridge.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/cropper.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/reference_view.js",
         "/assets/almdina_erp/js/door_drawing_v4/workspace/api.js",
         "/assets/almdina_erp/js/door_drawing_v4/workspace/shell.js",
+        "/assets/almdina_erp/js/door_drawing_v4/workspace/reference_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/workspace/session_controller.js",
     ]);
 
-    function ensureStyle() {
-        if (document.getElementById("almdina-door-drawing-workspace-css")) return;
-        const link = document.createElement("link");
-        link.id = "almdina-door-drawing-workspace-css";
-        link.rel = "stylesheet";
-        link.href = WORKSPACE_CSS;
-        document.head.appendChild(link);
+    function ensureStyles() {
+        WORKSPACE_STYLES.forEach(item => {
+            if (document.getElementById(item.id)) return;
+            const link = document.createElement("link");
+            link.id = item.id;
+            link.rel = "stylesheet";
+            link.href = item.href;
+            document.head.appendChild(link);
+        });
     }
 
     function scriptNode(src) {
@@ -64,7 +75,7 @@
         if (window.__almdinaStandaloneDrawingWorkspaceBoot) {
             return window.__almdinaStandaloneDrawingWorkspaceBoot;
         }
-        ensureStyle();
+        ensureStyles();
         window.__almdinaStandaloneDrawingWorkspaceBoot = ensureBootstrap()
             .then(bootstrap => bootstrap.boot())
             .then(() => WORKSPACE_SCRIPTS.reduce(
@@ -142,10 +153,6 @@
         }
         window.addEventListener("beforeunload", beforeUnload);
 
-        // Frappe v16's page container emits a jQuery `hide` event when switching
-        // away from a Desk Page; custom Page objects only dispatch on_page_show.
-        // Bind directly to the real lifecycle event so canvas observers/listeners
-        // cannot survive after navigating back to the order or to another page.
         $(wrapper)
             .off("hide.aldDoorDrawingWorkspace")
             .on("hide.aldDoorDrawingWorkspace", hide);
