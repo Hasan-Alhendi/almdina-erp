@@ -8,6 +8,7 @@ const load = file => require(path.resolve(__dirname, `../../public/js/door_drawi
 load("domain/geometry.js");
 load("domain/document.js");
 load("domain/dimension.js");
+load("application/geometry_commands.js");
 load("application/dimension_commands.js");
 load("presentation/editor_view_model.js");
 
