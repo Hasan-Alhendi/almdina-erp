@@ -82,7 +82,7 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
             )
         )
 
-    def test_drawing_recalculation_requires_permission_stage_and_unapproved_plan(self) -> None:
+    def test_drawing_recalculation_allows_preparing_replacement_for_approved_plan(self) -> None:
         allowed = dict(
             has_recalculate_permission=True,
             approved_plan=None,
@@ -91,11 +91,26 @@ class TestOrderEditabilityPolicy(unittest.TestCase):
             current_stage_type=None,
         )
         self.assertTrue(can_recalculate_drawing_system_plan(**allowed))
+        self.assertTrue(
+            can_recalculate_drawing_system_plan(
+                **{**allowed, "approved_plan": "PLAN-0001"}
+            )
+        )
 
         blocked_cases = (
             {**allowed, "has_recalculate_permission": False},
-            {**allowed, "approved_plan": "PLAN-0001"},
-            {**allowed, "status": "At CNC", "current_stage_type": "CNC"},
+            {
+                **allowed,
+                "approved_plan": "PLAN-0001",
+                "status": "At CNC",
+                "current_stage_type": "CNC",
+            },
+            {
+                **allowed,
+                "approved_plan": "PLAN-0001",
+                "status": "At Sanding",
+                "current_stage_type": "Sanding",
+            },
         )
         for case in blocked_cases:
             with self.subTest(case=case):
