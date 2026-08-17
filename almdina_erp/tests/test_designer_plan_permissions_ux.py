@@ -70,18 +70,21 @@ def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -
     service = source(PLAN_SETTINGS_SERVICE)
     context = source(DOCUMENT_CONTEXT)
 
-    # This focused edit surface is owned by edit_optimizer_settings. An active
-    # production stage is only a lifecycle signal; the designer does not need the
-    # current worker-stage operational role just to edit these five settings.
+    # This focused edit surface is owned by edit_optimizer_settings. Production
+    # lifecycle may be proven by a current-stage snapshot or by the authoritative
+    # `At ...` order status. Neither path requires the current worker-stage role.
     assert 'can(frm, "edit_optimizer_settings")' in session
     assert "function hasActiveProductionStage(frm)" in session
+    assert "function hasActiveRoutedLifecycle(frm)" in session
     assert "if (hasProductionRoute(frm))" in session
-    assert "return hasActiveProductionStage(frm);" in session
+    assert "return hasActiveRoutedLifecycle(frm);" in session
+    assert '"At Drawing"' in session
     assert "context.canTuneCuttingAlgorithm(frm)" not in session
 
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in service
     assert "require_stage_operational_access" not in service
-    assert "if _has_active_production_stage(doc):" in service
+    assert "SHOP_FLOOR_ORDER_STATUSES" in service
+    assert "if _has_active_routed_lifecycle(doc):" in service
     assert "انتهى المسار الإنتاجي الحالي" in service
 
     # Recalculation/stage-scoped actions deliberately keep their separate role

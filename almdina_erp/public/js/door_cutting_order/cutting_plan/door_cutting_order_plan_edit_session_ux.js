@@ -11,6 +11,12 @@
         "optimization_time_limit_sec",
     ]);
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
+    const ACTIVE_ROUTED_STATUSES = new Set([
+        "At Sharyoun",
+        "At Drawing",
+        "At CNC",
+        "At Sanding",
+    ]);
     const SAVE_METHOD =
         "almdina_erp.almdina_erp.services.plan_settings_edit_service.save_plan_settings";
     const BLOCKED_PLAN_ACTIONS = [
@@ -59,6 +65,12 @@
         );
     }
 
+    function hasActiveRoutedLifecycle(frm) {
+        if (hasActiveProductionStage(frm)) return true;
+        const status = String((frm && frm.doc && frm.doc.status) || "").trim();
+        return ACTIVE_ROUTED_STATUSES.has(status);
+    }
+
     function lifecycleAllowsEdit(frm) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
         if (frm.is_new && frm.is_new()) return false;
@@ -66,12 +78,12 @@
         if (String(frm.doc.approved_plan || "").trim()) return false;
         if ((frm.doc.revision_state || "Current") === "Superseded") return false;
 
-        // The focused plan-settings capability owns this edit surface. An active
-        // production stage keeps the order in a mutable lifecycle, but its
-        // operational role is not a second authorization gate for these fields.
-        // Recalculation and other stage commands retain their separate policy.
+        // The focused plan-settings capability owns this edit surface. A routed
+        // order is still active when its authoritative order status is one of the
+        // shop-floor `At ...` states, even if current_production_stage is absent
+        // from the form snapshot. This mirrors the order lifecycle domain.
         if (hasProductionRoute(frm)) {
-            return hasActiveProductionStage(frm);
+            return hasActiveRoutedLifecycle(frm);
         }
         return DRAFT_LIKE.has(frm.doc.status || "Draft");
     }
