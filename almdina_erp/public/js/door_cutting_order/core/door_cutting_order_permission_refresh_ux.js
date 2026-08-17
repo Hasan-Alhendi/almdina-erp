@@ -112,7 +112,8 @@
         );
     }
 
-    function refreshPermissions(frm, options = {}) {
+    function refreshPermissions(frm) {
+        const options = arguments.length > 1 && arguments[1] ? arguments[1] : {};
         if (!frm || frm.doctype !== "Door Cutting Order") {
             return Promise.resolve(false);
         }
