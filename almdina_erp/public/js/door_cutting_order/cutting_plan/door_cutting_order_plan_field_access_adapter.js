@@ -76,6 +76,11 @@
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { schedule(frm); },
         refresh(frm) { schedule(frm); },
+        // Revision UX can reapply the ordinary order-edit lock while changing an
+        // edit session. Re-run the focused owner afterwards so plan-only fields
+        // still follow their dedicated capability rather than EDIT_ORDER.
+        almdina_edit_session_changed(frm) { schedule(frm); },
+        refresh_plan_controls(frm) { schedule(frm); },
         packing_mode(frm) { schedule(frm); },
         cutting_machine_type(frm) { schedule(frm); },
         kerf_mm(frm) { schedule(frm); },
