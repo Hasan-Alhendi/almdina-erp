@@ -96,15 +96,18 @@ assert.equal(P.analyze(irregularOpen, {
 }), null, "An ambiguous freehand shape should receive no automatic correction suggestion");
 
 const activeFacade = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const v4Bootstrap = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v4/bootstrap.js"), "utf8");
 const controller = fs.readFileSync(path.join(ROOT, "application/non_destructive_smart_suggestions.js"), "utf8");
 const view = fs.readFileSync(path.join(ROOT, "presentation/smart_suggestion_view.js"), "utf8");
 const smartPen = fs.readFileSync(path.join(ROOT, "application/smart_pen.js"), "utf8");
 const css = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_pen.css"), "utf8");
 
-assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(activeFacade, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(activeFacade, /__doorDrawingV3NonDestructiveSuggestions/);
 
 assert.match(controller, /window\.addEventListener\("pointermove", onPointerMove, true\)/);
