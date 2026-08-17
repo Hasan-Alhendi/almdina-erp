@@ -2,8 +2,7 @@ body.ald-professional-drawing-active {
     overflow: hidden;
 }
 
-body.ald-professional-drawing-active > .navbar,
-body.ald-professional-drawing-active .navbar.navbar-expand {
+body.ald-professional-drawing-active .navbar {
     display: none !important;
 }
 
