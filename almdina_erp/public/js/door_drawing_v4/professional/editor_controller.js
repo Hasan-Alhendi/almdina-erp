@@ -26,6 +26,9 @@
     const SNAP_RELEASE_PX = 16;
     const HIT_TOLERANCE_PX = 9;
     const ANGLE_INCREMENT_DEG = 45;
+    const SMART_STROKE_SAMPLE_PX = 0.9;
+    const SMART_STROKE_SIMPLIFY_PX = 3.2;
+    const SMART_STROKE_CLOSE_PX = 14;
 
     function create(options = {}) {
         if (!options.container) throw new Error("Professional editor requires a container");
@@ -41,6 +44,7 @@
         let dpr = Math.max(1, Number(window.devicePixelRatio || 1));
         let lastScreenPoint = Object.freeze({ x: 0, y: 0 });
         let pan = null;
+        let smartStroke = null;
         let numericMode = null;
         let dirty = false;
         let destroyed = false;
@@ -94,6 +98,18 @@
             });
         }
 
+        function smartStrokeOptions(event) {
+            const snapDisabled = Boolean(event && event.altKey);
+            return Object.freeze({
+                minSampleDistanceMm: viewport.screenToleranceToMm(camera, SMART_STROKE_SAMPLE_PX),
+                simplificationToleranceMm: viewport.screenToleranceToMm(camera, SMART_STROKE_SIMPLIFY_PX),
+                closeToleranceMm: viewport.screenToleranceToMm(camera, SMART_STROKE_CLOSE_PX),
+                snapToleranceMm: viewport.screenToleranceToMm(camera, snapDisabled ? 0 : SNAP_TOLERANCE_PX),
+                angleIncrementDeg: ANGLE_INCREMENT_DEG,
+                angleToleranceDeg: 7,
+            });
+        }
+
         function markDirty() {
             if (readOnly || dirty) return;
             dirty = true;
@@ -117,8 +133,8 @@
             if (destroyed) return;
             const state = session.state();
             const interactionState = readOnly
-                ? { ...state, preview: null, selection: null, drag: null }
-                : state;
+                ? { ...state, preview: null, selection: null, drag: null, strokePreview: null }
+                : { ...state, strokePreview: smartStroke ? Object.freeze([...smartStroke.points]) : null };
 
             canvasRenderer.render(shell.canvas, {
                 camera,
@@ -141,7 +157,7 @@
             shell.setStatus(
                 viewModel.TOOL_LABELS[state.toolState.activeTool] || state.toolState.activeTool,
                 `X ${geometry.roundMm(cursor.xMm)} · Y ${geometry.roundMm(cursor.yMm)} mm`,
-                viewModel.snapText(state.preview)
+                smartStroke ? `رسم حر · ${smartStroke.points.length} نقطة` : viewModel.snapText(state.preview)
             );
             shell.setZoom(`${viewport.zoomPercent(camera)}%`);
             shell.setHint(viewModel.hint(state, readOnly));
@@ -151,6 +167,7 @@
             );
             shell.renderProperties(viewModel.properties(state));
             shell.workspace.classList.toggle("is-panning", Boolean(pan));
+            shell.workspace.classList.toggle("is-smart-stroking", Boolean(smartStroke));
         }
 
         function resize(resizeOptions = {}) {
@@ -177,6 +194,20 @@
             render();
         }
 
+        function cancelSmartStroke() {
+            if (!smartStroke) return false;
+            smartStroke = null;
+            render();
+            return true;
+        }
+
+        function appendSmartStrokePoint(point) {
+            if (!smartStroke) return;
+            const last = smartStroke.points[smartStroke.points.length - 1];
+            const minimum = viewport.screenToleranceToMm(camera, SMART_STROKE_SAMPLE_PX * 0.6);
+            if (!last || geometry.distance(last, point) >= minimum) smartStroke.points.push(geometry.clonePoint(point));
+        }
+
         function hideNumeric() {
             numericMode = null;
             shell.hideNumeric();
@@ -198,6 +229,11 @@
 
             event.preventDefault();
             if (shell.canvas.setPointerCapture) shell.canvas.setPointerCapture(event.pointerId);
+            if (tool === tools.TOOLS.SMART_PENCIL) {
+                smartStroke = { pointerId: event.pointerId, points: [worldPoint(point)] };
+                render();
+                return;
+            }
             const result = mutate(() => session.pointerDown(
                 interactionWorldPoint(event, point),
                 interactionOptions(event)
@@ -216,6 +252,11 @@
                 render();
                 return;
             }
+            if (smartStroke && smartStroke.pointerId === event.pointerId) {
+                appendSmartStrokePoint(worldPoint(point));
+                render();
+                return;
+            }
             if (readOnly) {
                 render();
                 return;
@@ -226,12 +267,35 @@
             ));
         }
 
-        function pointerUp(event) {
-            endPan(event);
-            if (!readOnly) mutate(() => session.pointerUp());
+        function releasePointer(event) {
             if (shell.canvas.hasPointerCapture && shell.canvas.hasPointerCapture(event.pointerId)) {
                 shell.canvas.releasePointerCapture(event.pointerId);
             }
+        }
+
+        function pointerUp(event) {
+            endPan(event);
+            if (smartStroke && smartStroke.pointerId === event.pointerId) {
+                appendSmartStrokePoint(worldPoint(screenPoint(event)));
+                const points = [...smartStroke.points];
+                smartStroke = null;
+                const result = mutate(() => session.commitSmartStroke(points, smartStrokeOptions(event)));
+                if (result && result.kind === "smart-stroke-ignored") {
+                    shell.setHint("الضربة قصيرة جدًا. ارسم حركة أوضح ثم ارفع المؤشر.");
+                }
+                releasePointer(event);
+                return;
+            }
+            if (!readOnly) mutate(() => session.pointerUp());
+            releasePointer(event);
+        }
+
+        function pointerCancel(event) {
+            endPan(event);
+            if (smartStroke && smartStroke.pointerId === event.pointerId) smartStroke = null;
+            else if (!readOnly) mutate(() => session.pointerUp());
+            releasePointer(event);
+            render();
         }
 
         function wheel(event) {
@@ -245,6 +309,7 @@
         function setTool(tool) {
             if (readOnly && tool !== tools.TOOLS.HAND) return;
             hideNumeric();
+            smartStroke = null;
             session.setTool(tool);
             render();
         }
@@ -312,10 +377,12 @@
         }
 
         function undo() {
+            smartStroke = null;
             if (!readOnly) mutate(() => session.undo());
         }
 
         function redo() {
+            smartStroke = null;
             if (!readOnly) mutate(() => session.redo());
         }
 
@@ -366,7 +433,7 @@
         listen(shell.canvas, "pointerdown", pointerDown);
         listen(shell.canvas, "pointermove", pointerMove);
         listen(shell.canvas, "pointerup", pointerUp);
-        listen(shell.canvas, "pointercancel", pointerUp);
+        listen(shell.canvas, "pointercancel", pointerCancel);
         listen(shell.canvas, "wheel", wheel, { passive: false });
         listen(shell.workspace, "click", handleClick);
         listen(shell.numeric, "keydown", numericKey);
@@ -374,12 +441,14 @@
         const keys = keyboard.mount(shell.workspace, {
             tool: setTool,
             escape() {
+                if (cancelSmartStroke()) return;
                 if (!readOnly) mutate(() => session.cancel());
                 else render();
             },
             undo,
             redo,
             spaceDown() {
+                smartStroke = null;
                 session.spaceDown();
                 render();
             },
@@ -402,7 +471,7 @@
         requestAnimationFrame(() => resize({ fit: true }));
 
         return Object.freeze({
-            state: () => Object.freeze({ interaction: session.state(), camera, readOnly, dirty }),
+            state: () => Object.freeze({ interaction: session.state(), camera, readOnly, dirty, smartStroke }),
             render,
             resize,
             setTool,
@@ -422,6 +491,7 @@
             destroy() {
                 if (destroyed) return;
                 destroyed = true;
+                smartStroke = null;
                 keys.destroy();
                 listeners.splice(0).forEach(dispose => dispose());
                 if (resizeObserver) resizeObserver.disconnect();
