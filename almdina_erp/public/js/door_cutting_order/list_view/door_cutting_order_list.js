@@ -206,6 +206,7 @@
             canStart: authorized.canStart === true,
             canHandoff: authorized.canHandoff === true,
             assignmentState: authorized.assignmentState || "",
+            queueState: authorized.queueState || "",
         };
     }
 
@@ -234,7 +235,8 @@
     }
 
     function cardState(doc, context, action) {
-        const completed = context.assignmentState === "completed"
+        const completed = context.queueState === "completed"
+            || context.assignmentState === "completed"
             || COMPLETED_ORDER_STATUSES.has(String(doc.status || ""));
         if (completed) {
             return Object.freeze({
@@ -244,7 +246,8 @@
             });
         }
 
-        const inProgress = String(doc.department_status || "").trim() === "قيد العمل"
+        const inProgress = context.queueState === "in_progress"
+            || String(doc.department_status || "").trim() === "قيد العمل"
             || (action && action.kind === "handoff");
         if (inProgress) {
             return Object.freeze({
@@ -255,7 +258,8 @@
         }
 
         const hasProductionContext = Boolean(
-            String(doc.current_production_stage || "").trim()
+            context.queueState === "ready"
+            || String(doc.current_production_stage || "").trim()
             || String(doc.current_department || "").trim()
             || String(doc.current_assignee || "").trim()
             || context.assignmentState === "assigned"
@@ -567,6 +571,52 @@
         return compared ? compared * direction : left.name.localeCompare(right.name);
     }
 
+    function personalQueueState(doc, flag = {}) {
+        if (flag.assignment_state === "completed") return "completed";
+        if (String(doc && doc.department_status || "").trim() === "قيد العمل") {
+            return "in_progress";
+        }
+        return "ready";
+    }
+
+    function sortPersonalQueueItems(items) {
+        const inProgress = [];
+        const ready = [];
+        const completed = [];
+
+        items.forEach(item => {
+            const state = personalQueueState(item.doc, item.flag);
+            if (state === "completed") {
+                completed.push(item);
+            } else if (state === "in_progress") {
+                inProgress.push(item);
+            } else {
+                ready.push(item);
+            }
+        });
+
+        inProgress.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "assignment_time",
+            1
+        ));
+        ready.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "assignment_time",
+            1
+        ));
+        completed.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "completion_time",
+            -1
+        ));
+
+        return [...inProgress, ...ready, ...completed];
+    }
+
     function applyOperationalRolePresentation(listview, payload) {
         const root = rootNode(listview);
         const result = root && root.querySelector(".result");
@@ -584,6 +634,7 @@
                 canStart: flag.can_start_stage === true,
                 canHandoff: flag.can_handoff_stage === true,
                 assignmentState: flag.assignment_state || "",
+                queueState: personalQueueState(doc, flag),
             };
         });
         renderMobileCards(listview);
@@ -592,13 +643,13 @@
             return;
         }
 
-        const assigned = [];
-        const completed = [];
+        const queueItems = [];
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
             if (!name) return;
             const flag = flags[name] || {};
-            const isCompleted = flag.assignment_state === "completed";
+            const doc = docs.get(name) || {};
+            const isCompleted = personalQueueState(doc, flag) === "completed";
             container.classList.remove("dco-list-row-other-role");
             container.classList.toggle("dco-list-row-completed", isCompleted);
             const card = container.querySelector(".dco-mobile-order-card");
@@ -606,22 +657,10 @@
                 card.classList.remove("dco-list-row-other-role");
                 card.classList.toggle("dco-list-row-completed", isCompleted);
             }
-            (isCompleted ? completed : assigned).push({ container, flag, name });
+            queueItems.push({ container, flag, name, doc });
         });
 
-        assigned.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "assignment_time",
-            1
-        ));
-        completed.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "completion_time",
-            -1
-        ));
-        const ordered = [...assigned, ...completed].map(item => item.container);
+        const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);
         const current = [...result.querySelectorAll(".list-row-container")]
             .filter(container => Boolean(rowDocumentName(container)));
         const needsReorder = ordered.some((container, index) => current[index] !== container);
@@ -720,7 +759,9 @@
         buildCard,
         cardViewModel,
         isPhoneLayout,
+        personalQueueState,
         quickActionContext,
         renderMobileCards,
+        sortPersonalQueueItems,
     });
 })();
