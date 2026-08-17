@@ -295,7 +295,9 @@ _CONTRACTS = {
         "almdina_erp.almdina_erp.services.special_shape_workspace_service",
         EndpointAuthorizationContract.CAPABILITY,
         "get_drawing_workspace",
+        "remove_reference_image",
         "save_drawing_workspace",
+        "save_reference_image",
     ),
     **_contracts(
         "almdina_erp.almdina_erp.services.workforce_service",
