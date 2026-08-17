@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 import frappe
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     DRAFT,
@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
 from almdina_erp.almdina_erp.domain.orders.costing import calculate_order_costs
 
 
+COST_SNAPSHOT_VERSION = 1
 PLAN_COST_FIELDS = (
     "board_rate_usd",
     "cutting_cost_per_board_usd",
@@ -55,6 +56,24 @@ def initial_plan_cost_values(
     }
 
 
+def initialize_draft_plan_cost_snapshot(order: Any, plan: Any) -> bool:
+    """Adopt one legacy Draft into A3 ownership without guessing from zero values."""
+
+    if cint(getattr(plan, "cost_snapshot_version", 0)) >= COST_SNAPSHOT_VERSION:
+        return False
+    if str(getattr(plan, "status", None) or "") != DRAFT:
+        return False
+
+    values = initial_plan_cost_values(
+        order.name,
+        based_on_plan=str(getattr(plan, "based_on_plan", None) or "").strip() or None,
+    )
+    for fieldname, value in values.items():
+        setattr(plan, fieldname, value)
+    plan.cost_snapshot_version = COST_SNAPSHOT_VERSION
+    return True
+
+
 def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[str, float]:
     """Calculate and store the plan-owned financial result without touching geometry."""
 
@@ -75,6 +94,7 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
     }
     for fieldname, value in values.items():
         setattr(plan, fieldname, value)
+    plan.cost_snapshot_version = COST_SNAPSHOT_VERSION
     return values
 
 
@@ -130,10 +150,21 @@ def current_cost_plan(order: Any) -> Any | None:
 
 
 def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[str, float]:
-    """Return Plan-owned cost values, falling back only for pre-A3 legacy orders."""
+    """Return Plan-owned values with a read-only bridge for legacy A2 Drafts."""
 
     resolved_plan = plan if plan is not None else current_cost_plan(order)
-    source = resolved_plan if resolved_plan is not None else order
+    if resolved_plan is None:
+        source = order
+    elif (
+        str(getattr(resolved_plan, "status", None) or "") == DRAFT
+        and cint(getattr(resolved_plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION
+    ):
+        # A2 Draft plans had cost columns but did not own them. Until the first
+        # A3 command adopts that Draft, the legacy DCO remains the safe read bridge.
+        source = order
+    else:
+        # Historical Approved plans already stored the reviewed cost snapshot in A2.
+        source = resolved_plan
     return {fieldname: flt(getattr(source, fieldname, 0)) for fieldname in PLAN_COST_FIELDS}
 
 
@@ -152,11 +183,13 @@ def overlay_authoritative_costs(
 
 
 __all__ = [
+    "COST_SNAPSHOT_VERSION",
     "PLAN_COST_FIELDS",
     "apply_plan_costs",
     "authoritative_cost_values",
     "current_cost_plan",
     "initial_plan_cost_values",
+    "initialize_draft_plan_cost_snapshot",
     "overlay_authoritative_costs",
     "project_plan_costs_to_order",
 ]
