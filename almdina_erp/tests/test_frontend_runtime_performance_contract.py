@@ -5,6 +5,12 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_JS = APP_ROOT / "public" / "js"
+DCO_LIST_JS = (
+    PUBLIC_JS
+    / "door_cutting_order"
+    / "list_view"
+    / "door_cutting_order_list.js"
+)
 
 
 def _read_js(name: str) -> str:
@@ -78,3 +84,43 @@ def test_shared_shell_scans_are_batched_and_stop_after_navigation_settles():
     assert "function schedulePermissionScan()" not in js
     assert "[100, 300, 800].forEach" not in js
     assert "[100, 300, 900, 1800].forEach" not in js
+
+
+def test_dco_list_has_one_refresh_owner_and_no_delayed_render_storm():
+    js = DCO_LIST_JS.read_text(encoding="utf-8")
+
+    assert "function schedulePresentation(" in js
+    assert "_dcoPresentationNeedsRoleRefresh" in js
+    assert 'schedulePresentation(listview, { refreshRoleFlags: true });' in js
+    assert "requestAnimationFrame" in js
+
+    # The previous implementation rendered immediately, in rAF, after 100 ms
+    # and after 350 ms for the same refresh. Keep that retry storm retired.
+    assert "setTimeout(() => {\n            renderMobileCards(listview);" not in js
+    assert "}, 100);" not in js
+    assert "}, 350);" not in js
+
+
+def test_dco_list_role_flags_are_requested_once_per_refresh_generation():
+    js = DCO_LIST_JS.read_text(encoding="utf-8")
+
+    assert "function requestOperationalRoleFlags(" in js
+    assert "_dcoRoleFlagGeneration" in js
+    assert "_dcoRoleFlagsPendingKey" in js
+    assert "_dcoRoleFlagsPendingPromise" in js
+    assert js.count("frappe.call({") == 1
+    assert "applyOperationalRoleRows" not in js
+
+    # DOM row arrival may replay cached presentation, but must never own a new
+    # server request. The Frappe refresh hook is the only request lifecycle owner.
+    assert "if (frappeRowsAdded) schedulePresentation(listview);" in js
+
+
+def test_dco_mobile_cards_use_incremental_dom_updates():
+    js = DCO_LIST_JS.read_text(encoding="utf-8")
+
+    assert "function cardRenderSignature(" in js
+    assert "previous.dataset.dcoRenderSignature === signature" in js
+    assert "card.dataset.dcoRenderSignature = signature" in js
+    assert "containers.forEach(removeMobileCard);" in js
+    assert "if (next === listview._dcoLastCardLayout) return;" in js
