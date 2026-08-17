@@ -11,6 +11,7 @@ FIELD_ACCESS = CUTTING_PLAN / "door_cutting_order_plan_field_access_adapter.js"
 FAST_SAVE = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
 SECURE_DXF_UPLOAD = CUTTING_PLAN / "secure_dxf_upload.js"
 PLAN_SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
+ORDER_PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 DOCUMENT_CONTEXT = (
     ROOT
     / "public"
@@ -46,9 +47,6 @@ def test_focused_plan_fields_use_frappe_native_df_status_without_document_write(
         assert f'"{fieldname}"' in adapter
         assert f'"{fieldname}"' in controls
 
-    # PlanControls keeps generic optimizer/recalculation policy. The final adapter
-    # composes that with explicit PlanEditSession intent for these five fields and
-    # uses Frappe v16's supported df.get_status/read_only extension points.
     assert "controls.applyOptimizerFieldAccess(frm)" in adapter
     assert "df.get_status = function almdinaFocusedPlanFieldStatus" in adapter
     assert 'STATUS_KEY = "__almdinaFocusedPlanStatus"' in adapter
@@ -58,7 +56,6 @@ def test_focused_plan_fields_use_frappe_native_df_status_without_document_write(
     assert "almdina_edit_session_changed(frm) { schedule(frm); }" in adapter
     assert "refresh_plan_controls(frm) { schedule(frm); }" in adapter
 
-    # Never synthesize or mutate broad Door Cutting Order permissions in the UI.
     assert "frm.perm" not in adapter
     assert "AlmdinaPermissions" not in adapter
     assert "user_roles" not in adapter
@@ -70,9 +67,6 @@ def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -
     service = source(PLAN_SETTINGS_SERVICE)
     context = source(DOCUMENT_CONTEXT)
 
-    # This focused edit surface is owned by edit_optimizer_settings. Production
-    # lifecycle may be proven by a current-stage snapshot or by the authoritative
-    # `At ...` order status. Neither path requires the current worker-stage role.
     assert 'can(frm, "edit_optimizer_settings")' in session
     assert "function hasActiveProductionStage(frm)" in session
     assert "function hasActiveRoutedLifecycle(frm)" in session
@@ -87,25 +81,34 @@ def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -
     assert "if _has_active_routed_lifecycle(doc):" in service
     assert "انتهى المسار الإنتاجي الحالي" in service
 
-    # Recalculation/stage-scoped actions deliberately keep their separate role
-    # policy. Fixing the edit button must not silently broaden those commands.
     assert "function canTuneCuttingAlgorithm" in context
     assert "canMutateCurrentStage(frm)" in context
 
 
-def test_plan_edit_session_keeps_hard_lifecycle_locks() -> None:
+def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages() -> None:
     session = source(PLAN_EDIT_SESSION)
+    controls = source(PLAN_CONTROLS)
     service = source(PLAN_SETTINGS_SERVICE)
+    recalculation = source(ORDER_PLAN_SERVICE)
 
     assert "Number(frm.doc.docstatus || 0) !== 0" in session
-    assert 'String(frm.doc.approved_plan || "").trim()' in session
     assert '(frm.doc.revision_state || "Current") === "Superseded"' in session
+    assert "function isDrawingStage(frm)" in session
+    assert 'String(frm.doc.approved_plan || "").trim() && !isDrawingStage(frm)' in session
     assert 'DRAFT_LIKE.has(frm.doc.status || "Draft")' in session
 
     assert 'getattr(doc, "docstatus", 0)' in service
-    assert 'getattr(doc, "approved_plan", None)' in service
     assert 'getattr(doc, "revision_state", "Current")' in service
-    assert "DRAFT_LIKE_STATUSES" in service
+    assert "is_order_at_drawing_stage(doc)" in service
+    assert 'getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc)' in service
+    assert "خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم" in service
+
+    assert "function isDrawingStage(frm)" in controls
+    assert "frm.doc.approved_plan && isDrawingStage(frm)" in controls
+    assert "frm.doc.approved_plan && !isDrawingStage(frm)" in controls
+    assert "drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(doc)" in recalculation
+    assert 'getattr(doc, "approved_plan", None) and not drawing_recalculation_allowed' in recalculation
+    assert "require_stage_operational_access(doc)" in recalculation
 
 
 def test_plan_field_status_adapter_is_the_final_dco_runtime_owner() -> None:
@@ -165,9 +168,6 @@ def test_secure_dxf_owner_is_private_unattached_and_form_scoped_before_plan_ui()
     form_secure = '"public/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"'
     plan_ui = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
 
-    # The helper must be evaluated in the same deterministic doctype script batch
-    # before plan_ux registers the upload button. Loading it only as a Desk global
-    # allowed the legacy document-attached fallback to win in real sessions.
     assert global_secure not in global_assets
     assert dco_assets.count(form_secure) == 1
     assert dco_assets.index(form_secure) < dco_assets.index(plan_ui)
