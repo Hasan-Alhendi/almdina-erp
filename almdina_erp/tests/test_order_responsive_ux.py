@@ -177,7 +177,7 @@ def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel()
     assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
 
 
-def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions():
+def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     css = source(RESPONSIVE_CSS)
     mobile_css = source(MOBILE_LIST_CSS)
     list_source = source(LIST_UX)
@@ -191,20 +191,30 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     assert 'root.classList.toggle("dco-order-card-layout"' in list_source
     assert 'node.matches(".list-row-container")' in list_source
     assert 'class="dco-mobile-order-card' in list_source
-    assert 'field("لون القشاط", doc.edge_color' in list_source
-    assert 'field("صنف اللوح", doc.board_description, "dco-card-wide-field")' in list_source
-    assert 'class="dco-card-workflow"' in list_source
-    assert 'class="dco-card-assignee"' in list_source
+    assert 'class="dco-card-customer-block"' in list_source
+    assert 'class="dco-card-state-pill"' in list_source
+    assert 'class="dco-card-order-link"' in list_source
+    assert 'class="dco-card-info-grid"' in list_source
+    assert 'renderInfoTile("لون اللوح", model.boardColor' in list_source
+    assert 'renderInfoTile("لون القشاط", model.edgeColor' in list_source
+    assert 'renderInfoTile("نوع القشاط", model.edgeType' in list_source
+    assert '"default_edge_type"' in list_source
+    assert 'class="dco-card-workflow"' not in list_source
+    assert 'class="dco-card-assignee"' not in list_source
     assert "const quickActions = window.AlmdinaShopFloorQuickActions" in list_source
     assert "quickActions.perform" in list_source
     assert 'matchMedia("(max-width: 600px)")' in list_source
     assert 'if (!applyCardLayoutClass(listview)) return;' in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=4"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
     assert ".dco-card-production-action.is-start" in mobile_css
     assert ".dco-card-production-action.is-finish" in mobile_css
     assert ".dco-card-complete-state" in mobile_css
+    assert ".dco-mobile-order-card.is-ready" in mobile_css
+    assert ".dco-mobile-order-card.is-progress" in mobile_css
+    assert ".dco-mobile-order-card.is-completed" in mobile_css
     assert ".dco-order-card-container > .list-row" in css
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
