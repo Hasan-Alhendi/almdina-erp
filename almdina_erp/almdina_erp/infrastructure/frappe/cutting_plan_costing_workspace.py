@@ -33,7 +33,7 @@ def initial_plan_cost_values(
     order_name: str,
     *,
     based_on_plan: str | None = None,
-) -> dict[str, float]:
+) -> dict[str, float | int]:
     """Seed the financial snapshot only when a new plan revision is created.
 
     Plan lineage is authoritative once it exists. The DCO fallback is a one-time
@@ -51,8 +51,11 @@ def initial_plan_cost_values(
         as_dict=True,
     ) or {}
     return {
-        fieldname: flt(values.get(fieldname))
-        for fieldname in PLAN_COST_FIELDS
+        **{
+            fieldname: flt(values.get(fieldname))
+            for fieldname in PLAN_COST_FIELDS
+        },
+        "cost_snapshot_version": COST_SNAPSHOT_VERSION,
     }
 
 
@@ -70,7 +73,6 @@ def initialize_draft_plan_cost_snapshot(order: Any, plan: Any) -> bool:
     )
     for fieldname, value in values.items():
         setattr(plan, fieldname, value)
-    plan.cost_snapshot_version = COST_SNAPSHOT_VERSION
     return True
 
 
