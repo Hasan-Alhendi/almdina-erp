@@ -170,13 +170,16 @@ assert.deepEqual(restoredNote.geometry.position, G.point(22.5, 30.25));
 // public special-shape facade is exclusively V4.
 const publicRoot = path.resolve(__dirname, "../../public");
 const activeFacade = fs.readFileSync(path.join(publicRoot, "js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const v4Bootstrap = fs.readFileSync(path.join(publicRoot, "js/door_drawing_v4/bootstrap.js"), "utf8");
 const textEditorSource = fs.readFileSync(path.join(publicRoot, "js/door_drawing_v3/application/text_annotation_editor.js"), "utf8");
 const textViewSource = fs.readFileSync(path.join(publicRoot, "js/door_drawing_v3/presentation/text_annotation_view.js"), "utf8");
 const textCssSource = fs.readFileSync(path.join(publicRoot, "css/door_drawing_v3_text.css"), "utf8");
-assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(activeFacade, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(activeFacade, /text_annotation_domain|advanced_snap_engine|text_annotation_editor/);
 assert.ok(textViewSource.includes('data-ddv3-tool="text"'));
 assert.ok(textEditorSource.includes("startInline"));
