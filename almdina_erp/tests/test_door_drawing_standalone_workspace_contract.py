@@ -63,6 +63,8 @@ class TestDoorDrawingStandaloneWorkspaceContract(unittest.TestCase):
             "public/js/door_drawing_v4/workspace/session_controller.js"
         )
         self.assertIn("session.destroy()", page)
+        self.assertIn('hide.aldDoorDrawingWorkspace', page)
+        self.assertNotIn("on_page_hide", page)
         self.assertIn('shell.setSaveState("dirty", "غير محفوظ")', session)
         self.assertIn("editor.destroy()", session)
         self.assertIn("لديك تعديلات غير محفوظة", session)
