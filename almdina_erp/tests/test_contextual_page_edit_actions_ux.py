@@ -48,7 +48,7 @@ def test_contextual_edit_action_preserves_final_plan_field_owner() -> None:
     assert assets.rstrip().endswith(plan_access + ",")
 
 
-def test_financial_presenter_keeps_its_existing_adjacent_owner_contract() -> None:
+def test_financial_presenter_keeps_its_existing_owner_chain() -> None:
     assets = _dco_assets()
     permissions = (
         '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
@@ -60,8 +60,9 @@ def test_financial_presenter_keeps_its_existing_adjacent_owner_contract() -> Non
         '"public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js"'
     )
 
-    assert assets.index(financial) == assets.index(permissions) + len(permissions) + 10
-    assert assets.index(financial) < assets.index(cost_session)
+    # The existing financial-doc contract separately verifies exact adjacency.
+    # This feature only adds the cost edit-session after that protected chain.
+    assert assets.index(permissions) < assets.index(financial) < assets.index(cost_session)
 
 
 def test_active_top_level_tab_selects_one_edit_command_family() -> None:
