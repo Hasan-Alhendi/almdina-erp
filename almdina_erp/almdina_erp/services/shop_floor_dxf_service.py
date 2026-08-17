@@ -32,7 +32,7 @@ _POLICY_MESSAGES = {
 }
 
 
-def _drawing_state(order: Any) -> DrawingActionState:
+def _drawing_state(order: Any, *, production_dxf: str | None = None) -> DrawingActionState:
     return DrawingActionState(
         status=str(order.status or ""),
         production_path=str(order.production_path or ""),
@@ -40,7 +40,11 @@ def _drawing_state(order: Any) -> DrawingActionState:
         current_assignee=str(order.current_assignee or ""),
         session_user=str(frappe.session.user or ""),
         approved_plan=str(order.approved_plan or ""),
-        production_dxf=str(order.production_dxf or ""),
+        production_dxf=(
+            str(production_dxf)
+            if production_dxf is not None
+            else str(order.production_dxf or "")
+        ),
     )
 
 
@@ -97,7 +101,7 @@ def _get_authorized_order(
 def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
     """Accept only a private, unattached DXF staging file.
 
-    The browser uploads the file before any order mutation. Keeping the staged
+    The browser uploads the file before any plan mutation. Keeping the staged
     File unattached prevents an unauthorized or invalid upload from becoming a
     document attachment before authorization and geometry validation succeed.
     """
@@ -155,16 +159,16 @@ def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
     return normalized_url, file_row
 
 
-def _attach_validated_dxf_file(order: Any, file_row: Any) -> None:
-    """Attach only a staging file that has already passed every security check."""
+def _attach_validated_dxf_file(plan: Any, file_row: Any) -> None:
+    """Attach only a staging file that has passed authorization and validation."""
 
     frappe.db.set_value(
         "File",
         file_row.name,
         {
-            "attached_to_doctype": order.doctype,
-            "attached_to_name": order.name,
-            "attached_to_field": "production_dxf",
+            "attached_to_doctype": "Cutting Plan",
+            "attached_to_name": plan.name,
+            "attached_to_field": "dxf_file",
         },
         update_modified=False,
     )
@@ -216,20 +220,32 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
-    # The file already exists at this point, but it must still be a private,
-    # unattached staging object. Authorization and geometry validation happen
-    # before it is ever linked to the Door Cutting Order.
+    # Security order is intentional and regression-tested:
+    # private+unattached staging -> authorization -> geometry validation ->
+    # Cutting Plan persistence -> File attachment -> compatibility projection.
     normalized_url, file_row = _validate_dxf_file_metadata(file_url)
 
     order = shop_floor_gateway.get_order(order_name)
-    upload_capability = required_upload_capability(_drawing_state(order))
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
+        current_uploaded_dxf_file,
+        mirror_uploaded_dxf_projection,
+        save_uploaded_dxf_plan,
+    )
+
+    canonical_existing_file = current_uploaded_dxf_file(order.name)
+    # One-time migration fallback for a legacy pre-A2 custom DXF that has not yet
+    # been represented by a Cutting Plan revision.
+    existing_file = canonical_existing_file or str(order.production_dxf or "")
+    upload_capability = required_upload_capability(
+        _drawing_state(order, production_dxf=existing_file)
+    )
     order = _authorize_order(
         order,
         upload_capability,
         require_assigned_designer=False,
         require_stage_role=True,
     )
-    replacing_existing_file = bool(order.production_dxf)
+    replacing_existing_file = bool(existing_file)
 
     from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
     from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
@@ -245,25 +261,18 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     if not validation.get("is_valid"):
         _throw_dxf_validation_errors(validation.get("errors") or [])
 
-    # Only accepted geometry becomes the order's production DXF attachment.
-    _attach_validated_dxf_file(order, file_row)
-
-    from almdina_erp.almdina_erp.services.dual_plan_fields import (
-        has_dual_plan_field,
+    plan = save_uploaded_dxf_plan(
+        order,
+        custom_snapshot,
+        normalized_url,
+        capability=upload_capability,
     )
 
-    update_values: dict[str, Any] = {
-        "production_dxf": normalized_url,
-        "drawing_dxf_status": "Uploaded",
-    }
-    if has_dual_plan_field("custom_plan_json"):
-        update_values["custom_plan_json"] = frappe.as_json(custom_snapshot)
-    frappe.db.set_value(
-        "Door Cutting Order",
-        order.name,
-        update_values,
-        update_modified=True,
-    )
+    # The file is linked only after all business authorization, geometry checks,
+    # and canonical plan persistence have succeeded.
+    _attach_validated_dxf_file(plan, file_row)
+    mirror_uploaded_dxf_projection(order, plan)
+
     order.add_comment(
         "Info",
         text=_("DXF file {0} by {1}.").format(
@@ -273,9 +282,10 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     )
     return {
         "name": order.name,
+        "cutting_plan": plan.name,
         "production_dxf": normalized_url,
         "drawing_dxf_status": "Uploaded",
-        "custom_plan_json": frappe.as_json(custom_snapshot),
+        "custom_plan_json": str(plan.snapshot_json or ""),
         "required_capability": upload_capability,
     }
 
