@@ -84,6 +84,9 @@
 
     function markOptimizerPlanStale(frm) {
         if (!can(frm, "edit_optimizer_settings")) return;
+        // Optimizer values, including kerf and trim, are sent explicitly through
+        // the focused recalculation command. They must never request a broad
+        // Door Cutting Order save checkpoint from a plan-only user.
         markPlanStale(frm);
     }
 
@@ -155,8 +158,8 @@
         board_length_cm(frm) { markOrderInputPlanStale(frm); },
         board_width_cm(frm) { markOrderInputPlanStale(frm); },
         default_edge_type(frm) { markOrderInputPlanStale(frm); },
-        kerf_mm(frm) { markOrderInputPlanStale(frm); },
-        trim_margin_mm(frm) { markOrderInputPlanStale(frm); },
+        kerf_mm(frm) { markOptimizerPlanStale(frm); },
+        trim_margin_mm(frm) { markOptimizerPlanStale(frm); },
         packing_mode(frm) { markOptimizerPlanStale(frm); },
         cutting_machine_type(frm) { markOptimizerPlanStale(frm); },
         optimization_time_limit_sec(frm) { markOptimizerPlanStale(frm); },
