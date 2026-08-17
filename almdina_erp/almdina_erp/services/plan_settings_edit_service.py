@@ -61,22 +61,12 @@ def _assert_edit_lifecycle(doc: Any) -> None:
             frappe.ValidationError,
         )
 
-    # An approved Cutting Plan is an immutable historical snapshot, not a
-    # permanent lock on preparing its replacement. While the order is still at
-    # Drawing, EDIT_OPTIMIZER_SETTINGS may change only these focused settings;
-    # the old approved_plan remains production-authoritative until an explicit
-    # recalculation + re-approval creates the replacement snapshot.
     if getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc):
         frappe.throw(
             _("خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم."),
             frappe.ValidationError,
         )
 
-    # Editing these five focused settings is authorized by
-    # EDIT_OPTIMIZER_SETTINGS itself. A routed order remains mutable when the
-    # authoritative order status is one of the shop-floor `At ...` states, even
-    # if current_production_stage is absent from the document snapshot. This
-    # mirrors the order lifecycle domain instead of adding a worker-role gate.
     if _has_production_route(doc):
         if _has_active_routed_lifecycle(doc):
             return
@@ -149,27 +139,6 @@ def _normalize_updates(doc: Any, values: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
-def _same_value(fieldname: str, left: Any, right: Any) -> bool:
-    if fieldname in _NUMERIC_FIELDS:
-        return abs(flt(left) - flt(right)) < 0.000001
-    return str(left or "").strip() == str(right or "").strip()
-
-
-def _settings_payload(doc: Any, values: dict[str, Any] | None = None) -> dict[str, Any]:
-    resolved = values or {}
-    payload = {
-        fieldname: resolved.get(fieldname, doc.get(fieldname))
-        for fieldname in PLAN_SETTING_FIELDS
-    }
-    payload["plan_needs_recalculation"] = int(
-        resolved.get(
-            "plan_needs_recalculation",
-            getattr(doc, "plan_needs_recalculation", 0) or 0,
-        )
-    )
-    return payload
-
-
 @frappe.whitelist()
 def save_plan_settings(
     order_name: str,
@@ -179,11 +148,12 @@ def save_plan_settings(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
-    """Persist only cutting-plan settings through their focused capability.
+    """Persist optimizer settings on the canonical Draft Cutting Plan.
 
-    Authorization and lifecycle are re-evaluated under a row lock immediately
-    before the five whitelisted settings are persisted. This command deliberately
-    performs no broad Door Cutting Order save.
+    Door Cutting Order is authorized and row-locked because it owns customer and
+    production lifecycle state. The five optimizer fields themselves are written
+    to Cutting Plan. DCO receives only a temporary read projection for the legacy
+    form until the A4/A5 UI cutover removes those duplicated fields.
     """
 
     name = str(order_name or "").strip()
@@ -213,29 +183,12 @@ def save_plan_settings(
             "optimization_time_limit_sec": optimization_time_limit_sec,
         },
     )
-    changed = [
-        fieldname
-        for fieldname, value in updates.items()
-        if not _same_value(fieldname, doc.get(fieldname), value)
-    ]
 
-    if not changed:
-        result = _settings_payload(doc)
-        result.update({"name": doc.name, "changed_fields": []})
-        return result
-
-    persisted = {fieldname: updates[fieldname] for fieldname in changed}
-    persisted["plan_needs_recalculation"] = 1
-    frappe.db.set_value(
-        "Door Cutting Order",
-        doc.name,
-        persisted,
-        update_modified=True,
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
+        save_system_plan_settings,
     )
 
-    result = _settings_payload(doc, persisted)
-    result.update({"name": doc.name, "changed_fields": changed})
-    return result
+    return save_system_plan_settings(doc, updates)
 
 
 __all__ = ["PLAN_SETTING_FIELDS", "save_plan_settings"]
