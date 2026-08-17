@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 import frappe
+from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
@@ -10,7 +11,13 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
-from almdina_erp.almdina_erp.domain.orders.costing import calculate_order_costs
+from almdina_erp.almdina_erp.domain.orders.costing import (
+    CostingError,
+    SpecialPricingPieceInput,
+    SpecialPricingSettings,
+    calculate_order_costs,
+    calculate_special_pricing,
+)
 
 
 COST_SNAPSHOT_VERSION = 1
@@ -118,6 +125,65 @@ def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
     return values
 
 
+def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
+    """Refresh only quote totals that depend on the plan-owned board/cutting cost.
+
+    Special-piece approval remains DCO-owned in this phase. This focused
+    projection recalculates order-level aggregates without saving the full order
+    or touching cutting geometry.
+    """
+
+    settings = frappe.get_cached_doc("Almdina ERP Settings")
+    pricing_settings = SpecialPricingSettings(
+        design_fee_usd=flt(settings.default_special_design_fee_usd),
+        cnc_fee_usd=flt(settings.default_special_cnc_fee_usd),
+        manual_edge_fee_usd=flt(settings.default_special_manual_edge_fee_usd),
+        margin_percent=flt(settings.default_special_margin_percent),
+    )
+    try:
+        summary = calculate_special_pricing(
+            (
+                SpecialPricingPieceInput(
+                    piece_type=str(piece.piece_type or "Regular"),
+                    qty=cint(piece.qty),
+                    area_m2=flt(piece.area_m2),
+                    edge_cost_usd=flt(piece.edge_cost_usd),
+                    price_status=str(piece.special_shape_price_status or ""),
+                    approved_by=str(piece.special_shape_price_approved_by or ""),
+                    custom_unit_price_usd=flt(piece.special_shape_custom_unit_price_usd),
+                )
+                for piece in (order.pieces or [])
+            ),
+            settings=pricing_settings,
+            total_area_m2=flt(order.total_area_m2),
+            board_and_cutting_cost_usd=(
+                flt(plan.mdf_cost_usd) + flt(plan.cutting_cost_usd)
+            ),
+            total_cost_usd=flt(plan.total_cost_usd),
+        )
+    except CostingError as error:
+        if str(error) == "special_shape_defaults_negative":
+            frappe.throw(_("Special shape estimate defaults cannot be negative."))
+        raise
+
+    values = {
+        "special_shapes_baseline_cost_usd": summary.baseline_cost_usd,
+        "special_shapes_estimated_total_usd": summary.estimated_total_usd,
+        "special_shapes_final_total_usd": summary.final_total_usd,
+        "customer_quote_total_usd": summary.customer_quote_total_usd,
+        "customer_quote_status": summary.customer_quote_status,
+    }
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        values,
+        update_modified=False,
+    )
+    for fieldname, value in values.items():
+        setattr(order, fieldname, value)
+    return values
+
+
 def current_cost_plan(order: Any) -> Any | None:
     """Resolve the plan used for financial reads without creating or mutating data."""
 
@@ -194,4 +260,5 @@ __all__ = [
     "initialize_draft_plan_cost_snapshot",
     "overlay_authoritative_costs",
     "project_plan_costs_to_order",
+    "refresh_order_commercial_totals",
 ]
