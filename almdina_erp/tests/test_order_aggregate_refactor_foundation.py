@@ -224,6 +224,9 @@ def test_a2_plan_command_path_does_not_bypass_permissions_or_save_the_order() ->
     command_source = (
         APP_ROOT / "services" / "cutting_plan_command_service.py"
     ).read_text(encoding="utf-8")
+    legacy_recalculation = (
+        APP_ROOT / "services" / "order_plan_permission_service.py"
+    ).read_text(encoding="utf-8")
     native_permissions = (
         APP_ROOT / "infrastructure" / "frappe" / "native_document_permissions.py"
     ).read_text(encoding="utf-8")
@@ -240,3 +243,10 @@ def test_a2_plan_command_path_does_not_bypass_permissions_or_save_the_order() ->
     assert 'resolved_type in {"create", "write"}' in native_permissions
     assert "save_system_plan_settings" in settings_service
     assert 'frappe.db.set_value(\n        "Door Cutting Order"' not in settings_service
+
+    # The method path used by the existing browser UI is now a compatibility
+    # facade only; it must never reintroduce a broad Door Cutting Order save.
+    assert "cutting_plan_command_service import" in legacy_recalculation
+    assert "recalculate_order_plan(" in legacy_recalculation
+    assert "ignore_permissions=True" not in legacy_recalculation
+    assert "doc.save(" not in legacy_recalculation
