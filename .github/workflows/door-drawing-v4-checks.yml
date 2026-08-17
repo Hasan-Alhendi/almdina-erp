@@ -9,11 +9,15 @@ on:
       - "almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js"
       - "almdina_erp/public/css/door_drawing_v4.css"
       - "almdina_erp/public/css/door_drawing_professional*.css"
+      - "almdina_erp/public/css/door_drawing_reference.css"
+      - "almdina_erp/almdina_erp/doctype/door_cutting_order_detail/door_cutting_order_detail.json"
       - "almdina_erp/almdina_erp/page/door_drawing/**"
       - "almdina_erp/almdina_erp/services/special_shape_workspace_service.py"
+      - "almdina_erp/almdina_erp/services/special_shape_reference_image_service.py"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
       - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
       - "almdina_erp/tests/test_door_drawing_professional_workspace_contract.py"
+      - "almdina_erp/tests/test_special_shape_reference_image_architecture.py"
       - ".github/workflows/door-drawing-v4-checks.yml"
   pull_request:
     paths:
@@ -21,11 +25,15 @@ on:
       - "almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js"
       - "almdina_erp/public/css/door_drawing_v4.css"
       - "almdina_erp/public/css/door_drawing_professional*.css"
+      - "almdina_erp/public/css/door_drawing_reference.css"
+      - "almdina_erp/almdina_erp/doctype/door_cutting_order_detail/door_cutting_order_detail.json"
       - "almdina_erp/almdina_erp/page/door_drawing/**"
       - "almdina_erp/almdina_erp/services/special_shape_workspace_service.py"
+      - "almdina_erp/almdina_erp/services/special_shape_reference_image_service.py"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
       - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
       - "almdina_erp/tests/test_door_drawing_professional_workspace_contract.py"
+      - "almdina_erp/tests/test_special_shape_reference_image_architecture.py"
       - ".github/workflows/door-drawing-v4-checks.yml"
 
 permissions:
@@ -64,7 +72,10 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile almdina_erp/almdina_erp/services/special_shape_workspace_service.py
-          python -m unittest -v almdina_erp.tests.test_door_drawing_professional_workspace_contract
+          python -m py_compile almdina_erp/almdina_erp/services/special_shape_reference_image_service.py
+          python -m unittest -v \
+            almdina_erp.tests.test_door_drawing_professional_workspace_contract \
+            almdina_erp.tests.test_special_shape_reference_image_architecture
 
       - name: Run Door Drawing V4 regression tests
         shell: bash
