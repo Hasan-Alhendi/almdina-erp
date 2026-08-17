@@ -65,6 +65,10 @@ doctype_js = {
         "public/js/door_cutting_order/printing/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
+        # Cost permissions own visibility/capability policy. This edit-session
+        # adapter is loaded immediately afterwards and adds explicit user intent
+        # before native cost inputs can become writable.
+        "public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js",
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
@@ -97,14 +101,13 @@ doctype_js = {
         "public/js/door_cutting_order/core/order_lifecycle.js",
         "public/js/input_stability.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
-        # Explicit user intent is a separate gate from capability/stage policy:
-        # this owner renders Edit/Save/Cancel and must load immediately before the
-        # final native field-status adapter that consumes its edit-session state.
+        # Explicit user intent is a separate gate from capability/stage policy.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js",
-        # Last owner on purpose: translate PlanControls' focused capability
-        # decision plus the explicit edit-session gate into Frappe native field
-        # status after every compatibility layer that can refresh the form.
+        # Native plan fields consume capability + explicit plan edit-session state.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
+        # Final page-action owner: the same top-toolbar location now delegates to
+        # Order / Cutting Plan / Cost edit sessions according to the active tab.
+        "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Routing": "public/js/production_routing_ux.js",
