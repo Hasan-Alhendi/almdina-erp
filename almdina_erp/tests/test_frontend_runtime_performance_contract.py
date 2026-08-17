@@ -11,6 +11,12 @@ DCO_LIST_JS = (
     / "list_view"
     / "door_cutting_order_list.js"
 )
+DCO_PERMISSION_REFRESH_JS = (
+    PUBLIC_JS
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_permission_refresh_ux.js"
+)
 
 
 def _read_js(name: str) -> str:
@@ -135,3 +141,31 @@ def test_dco_personal_queue_ordering_remains_active_ready_completed():
     assert 'return [...inProgress, ...ready, ...completed];' in js
     assert 'queueState: personalQueueState(doc, flag)' in js
     assert 'flag.assignment_state === "completed"' in js
+
+
+def test_order_permission_refresh_is_coalesced_by_document_identity_and_short_ttl():
+    js = DCO_PERMISSION_REFRESH_JS.read_text(encoding="utf-8")
+
+    assert "const REFRESH_TTL_MS = 30_000;" in js
+    assert "function identityKey(identity)" in js
+    assert "function hasFreshContext(frm, identity)" in js
+    assert "function markFresh(frm, identity)" in js
+    assert "if (!force && hasFreshContext(frm, identity))" in js
+    assert "frm.__almdinaPermissionRefreshPromise" in js
+    assert "Date.now() - refreshedAt < REFRESH_TTL_MS" in js
+    assert "markFresh(frm, capture(frm));" in js
+
+
+def test_permission_module_recovery_uses_router_and_document_context_without_boot_polling():
+    js = _read_js("permission_context.js")
+
+    assert 'frappe.router.on("change"' in js
+    assert 'registerProtectedModuleSurface(permissions);' in js
+    assert 'window.setTimeout(ensureOrderModules, 0);' in js
+
+    # Keep the short 50ms loader wait only as a fallback for a module that is
+    # actually being required. The retired Desk-wide boot poll was 100 attempts
+    # at 100ms even when the user never opened an order.
+    assert "let attempts = 0;" not in js
+    assert "attempts >= 100" not in js
+    assert "}, 100);" not in js
