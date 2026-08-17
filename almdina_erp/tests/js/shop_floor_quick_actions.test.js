@@ -11,9 +11,14 @@ const source = fs.readFileSync(
 
 assert(!source.includes('context.stageType === "Sanding"'), "quick actions must not hard-code the final production stage");
 assert(source.includes("get_handoff_context"), "handoff decisions must come from the server routing context");
+assert(!source.includes('fieldtype: "Select"'), "worker handoff must not use a native mobile select picker");
+assert(!source.includes("frappe.prompt("), "worker handoff must use the anchored dropdown dialog instead of prompt Select");
+assert(source.includes("shop_floor_worker_dropdown.css"), "the focused worker dropdown stylesheet must be lazy-loaded");
 
 const calls = [];
 const alerts = [];
+const dialogs = [];
+let dropdownHideCount = 0;
 let confirmationCount = 0;
 let handoffContext = {
     final_stage: false,
@@ -29,10 +34,31 @@ const button = {
     setAttribute(name, value) { this.attributes[name] = value; },
 };
 
+class FakeDialog {
+    constructor(config) {
+        this.config = config;
+        this.fields_dict = { next_assignee_dropdown: {} };
+        dialogs.push(this);
+    }
+
+    show() {
+        // The production surface renders an HTML dropdown. The simulation omits
+        // a DOM and relies on the intentional single-worker preselection before
+        // submitting the dialog action on the next microtask.
+        Promise.resolve().then(() => this.config.primary_action());
+    }
+
+    hide() {
+        dropdownHideCount += 1;
+    }
+}
+
 const context = {
     console,
+    Promise,
     __(value) { return value; },
     frappe: {
+        ui: { Dialog: FakeDialog },
         call(options) {
             calls.push(options);
             if (options.method.endsWith("get_handoff_context")) {
@@ -53,7 +79,6 @@ const context = {
             confirmationCount += 1;
             yes();
         },
-        prompt(fields, submit) { submit({ next_assignee: "cnc@example.com" }); },
         show_alert(message) { alerts.push(message); },
         msgprint(message) { throw new Error(message); },
     },
@@ -87,6 +112,10 @@ vm.runInContext(source, context);
     }, { button });
     await new Promise(resolve => setImmediate(resolve));
     assert(calls.some(call => call.method.endsWith("get_handoff_context")));
+    assert.strictEqual(dialogs.length, 1, "non-final handoff must open one worker dropdown dialog");
+    assert.strictEqual(dialogs[0].config.title, "إنهاء وإرسال");
+    assert.strictEqual(dialogs[0].config.fields[0].fieldtype, "HTML");
+    assert.strictEqual(dropdownHideCount, 1, "handoff dialog must close after a worker is submitted");
     assert(calls.some(call => (
         call.method.endsWith("handoff_to_next")
         && call.args.next_assignee === "cnc@example.com"
