@@ -23,6 +23,7 @@ GEOMETRY = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cut
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
 HOOKS = ROOT / "frontend_assets.py"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
+V4_BOOTSTRAP = ROOT / "public" / "js" / "door_drawing_v4" / "bootstrap.js"
 V4_GEOMETRY = ROOT / "public" / "js" / "door_drawing_v4" / "domain" / "geometry.js"
 
 
@@ -52,9 +53,12 @@ def test_v4_editor_is_primary_while_production_geometry_contract_remains_availab
     assert hooks.index(geometry_hook) < hooks.index(contract_hook)
 
     editor = EDITOR.read_text(encoding="utf-8")
+    bootstrap = V4_BOOTSTRAP.read_text(encoding="utf-8")
     v4 = V4_GEOMETRY.read_text(encoding="utf-8")
     assert "__doorDrawingV4: true" in editor
-    assert "door_drawing_v4/domain/geometry.js" in editor
+    assert 'const BOOTSTRAP_SRC = "/assets/almdina_erp/js/door_drawing_v4/bootstrap.js"' in editor
+    assert "door_drawing_v4/domain/geometry.js" in bootstrap
+    assert "door_drawing_v4/application/manufacturing_projection.js" in bootstrap
     assert 'const EPSILON_MM = 0.001' in v4
     assert "function point(" in v4
     assert "function distance(" in v4
