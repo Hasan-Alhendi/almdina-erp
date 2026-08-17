@@ -13,7 +13,8 @@
     const TOOL_LABELS = Object.freeze({
         select: "تحديد",
         node: "تعديل النقاط",
-        pen: "القلم الذكي",
+        pen: "أداة المسار",
+        "smart-pencil": "القلم الذكي",
         dimension: "الأبعاد",
         hand: "تحريك اللوحة",
     });
@@ -26,6 +27,8 @@
         edge: "على ضلع",
         parallel: "متوازي",
         extension: "امتداد",
+        "align-x": "محاذاة رأسية",
+        "align-y": "محاذاة أفقية",
         horizontal: "أفقي",
         vertical: "رأسي",
         angle: "زاوية",
@@ -116,7 +119,7 @@
                 { label: "W", value: `${geometry.roundMm(state.document.blank.widthMm)} mm` },
                 { label: "H", value: `${geometry.roundMm(state.document.blank.heightMm)} mm` },
             ]),
-            help: "P القلم الذكي · D الأبعاد · Space للتحريك",
+            help: "P أداة المسار · Shift+P القلم الذكي · D الأبعاد · Space للتحريك",
         });
     }
 
@@ -131,13 +134,16 @@
         if (state.drag) return "Snap ذكي أثناء تحريك النقطة · Shift لقفل 45° · Alt لتعطيل Snap · Esc للإلغاء";
         if (state.toolState.activeTool === "pen") {
             return state.activePathId
-                ? "انقر لإضافة ضلع · Shift لقفل 45° · Alt لتعطيل Snap · اقترب من البداية للإغلاق · اكتب الطول مباشرة"
-                : "انقر لبدء الرسم · P";
+                ? "انقر لإضافة ضلع · محاذاة ذكية مع النقاط الأخرى · Shift لقفل 45° · Alt لتعطيل Snap · اقترب من البداية للإغلاق · اكتب الطول مباشرة"
+                : "انقر لبدء مسار مستقيم · P";
+        }
+        if (state.toolState.activeTool === "smart-pencil") {
+            return "اضغط واسحب بحرية ثم ارفع المؤشر؛ سيحوّل القلم الحركة إلى أضلاع هندسية نظيفة · Shift+P";
         }
         if (state.toolState.activeTool === "node") return "انقر واسحب نقطة · A";
         if (state.toolState.activeTool === "dimension") return "انقر على ضلع لإضافة/تحديد البعد · D";
         if (state.selection) return "العنصر محدد · A للنقاط · Esc لإلغاء التحديد";
-        return "V تحديد · A نقاط · P قلم · D أبعاد";
+        return "V تحديد · A نقاط · P مسار · Shift+P قلم ذكي · D أبعاد";
     }
 
     root.EditorViewModel = Object.freeze({
