@@ -79,10 +79,13 @@
 
     async function health() {
         const result = await request("/health", { timeoutMs: 2500 });
+        const deviceCount = Math.max(0, Number(result && result.device_count || 0));
         return Object.freeze({
             ok: Boolean(result && result.ok),
             version: String(result && result.version || ""),
             provider: String(result && result.provider || "wia"),
+            ready: Boolean(result && result.ready) && deviceCount > 0,
+            deviceCount,
         });
     }
 
