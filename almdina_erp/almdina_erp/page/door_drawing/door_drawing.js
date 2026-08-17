@@ -37,6 +37,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/reference/domain.js",
         "/assets/almdina_erp/js/door_drawing_v4/reference/cropper.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/scanner_bridge.js",
         "/assets/almdina_erp/js/door_drawing_v4/reference/reference_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_api.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_controller.js",
