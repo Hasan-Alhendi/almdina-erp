@@ -1,6 +1,7 @@
 (() => {
     "use strict";
 
+    const PAGE_ROUTE = "door-drawing";
     const CORE_MODULES = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v4/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v4/domain/document.js",
@@ -25,7 +26,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_shell.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_api.js",
-        "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_controller.js"
+        "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/door_drawing_professional.css";
 
@@ -40,7 +41,10 @@
             (promise, asset) => promise.then(() => Promise.resolve(frappe.require(asset))),
             Promise.resolve()
         );
-        wrapper.__almdinaDoorDrawingProfessionalPromise = Promise.all([stylePromise, modulePromise]);
+        wrapper.__almdinaDoorDrawingProfessionalPromise = Promise.all([stylePromise, modulePromise]).catch(error => {
+            wrapper.__almdinaDoorDrawingProfessionalPromise = null;
+            throw error;
+        });
         return wrapper.__almdinaDoorDrawingProfessionalPromise;
     }
 
@@ -52,33 +56,49 @@
         });
     }
 
-    frappe.pages["door-drawing"].on_page_load = function (wrapper) {
-        bootstrap(wrapper).then(() => {
-            const controller = window.AlmdinaDoorDrawingProfessional && window.AlmdinaDoorDrawingProfessional.WorkspaceController;
-            if (!controller || typeof controller.mount !== "function") throw new Error("Professional drawing workspace did not initialize");
-            wrapper.__almdinaDoorDrawingController = controller.mount(wrapper);
-        }).catch(error => {
-            console.error("Door Drawing workspace bootstrap failed", error);
-            const main = wrapper.querySelector(".layout-main-section");
-            if (main) main.innerHTML = '<div class="ald-prof-fatal">تعذر تحميل مساحة الرسم. أعد تحميل الصفحة ثم حاول مرة أخرى.</div>';
+    function showBootstrapError(wrapper, error) {
+        console.error("Door Drawing workspace bootstrap failed", error);
+        const main = wrapper.querySelector(".layout-main-section");
+        if (main) main.innerHTML = '<div class="ald-prof-fatal">تعذر تحميل مساحة الرسم. أعد تحميل الصفحة ثم حاول مرة أخرى.</div>';
+    }
+
+    function ensureController(wrapper) {
+        return bootstrap(wrapper).then(() => {
+            if (wrapper.__almdinaDoorDrawingController) return wrapper.__almdinaDoorDrawingController;
+            const factory = window.AlmdinaDoorDrawingProfessional && window.AlmdinaDoorDrawingProfessional.WorkspaceController;
+            if (!factory || typeof factory.mount !== "function") {
+                throw new Error("Professional drawing workspace did not initialize");
+            }
+            wrapper.__almdinaDoorDrawingController = factory.mount(wrapper);
+            return wrapper.__almdinaDoorDrawingController;
         });
+    }
+
+    function bindLifecycle(wrapper) {
+        if (wrapper.__almdinaDoorDrawingLifecycleBound) return;
+        wrapper.__almdinaDoorDrawingLifecycleBound = true;
+        $(wrapper)
+            .off("hide.aldProfessionalDoorDrawing")
+            .on("hide.aldProfessionalDoorDrawing", () => {
+                const controller = wrapper.__almdinaDoorDrawingController;
+                if (controller && typeof controller.suspend === "function") controller.suspend();
+            });
+    }
+
+    frappe.pages[PAGE_ROUTE].on_page_load = function (wrapper) {
+        bindLifecycle(wrapper);
+        ensureController(wrapper).catch(error => showBootstrapError(wrapper, error));
     };
 
-    frappe.pages["door-drawing"].on_page_show = function (wrapper) {
-        bootstrap(wrapper).then(() => {
-            const controller = wrapper.__almdinaDoorDrawingController;
-            if (!controller) return;
+    frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+        bindLifecycle(wrapper);
+        ensureController(wrapper).then(controller => {
             const context = routeContext();
             if (!context.orderName || !context.pieceName) {
                 controller.showRouteError("رابط الرسم غير مكتمل. افتح الرسم من داخل الطلب.");
                 return;
             }
             controller.open(context);
-        });
-    };
-
-    frappe.pages["door-drawing"].on_page_hide = function (wrapper) {
-        const controller = wrapper.__almdinaDoorDrawingController;
-        if (controller && typeof controller.suspend === "function") controller.suspend();
+        }).catch(error => showBootstrapError(wrapper, error));
     };
 })();
