@@ -10,6 +10,7 @@
         "trim_margin_mm",
         "optimization_time_limit_sec",
     ]);
+    const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
     const SAVE_METHOD =
         "almdina_erp.almdina_erp.services.plan_settings_edit_service.save_plan_settings";
     const BLOCKED_PLAN_ACTIONS = [
@@ -45,18 +46,37 @@
         return typeof permissions.can === "function" && Boolean(permissions.can(capability));
     }
 
-    function lifecycleAllowsEdit(frm) {
-        const context = documentContext();
+    function hasActiveProductionStage(frm) {
+        return Boolean(String(
+            (frm && frm.doc && frm.doc.current_production_stage) || ""
+        ).trim());
+    }
+
+    function hasProductionRoute(frm) {
         return Boolean(
-            context
-            && typeof context.canTuneCuttingAlgorithm === "function"
-            && context.canTuneCuttingAlgorithm(frm)
+            hasActiveProductionStage(frm)
+            || String((frm && frm.doc && frm.doc.production_path) || "").trim()
         );
     }
 
-    function canEditPlanSettings(frm) {
+    function lifecycleAllowsEdit(frm) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
         if (frm.is_new && frm.is_new()) return false;
+        if (Number(frm.doc.docstatus || 0) !== 0) return false;
+        if (String(frm.doc.approved_plan || "").trim()) return false;
+        if ((frm.doc.revision_state || "Current") === "Superseded") return false;
+
+        // The focused plan-settings capability owns this edit surface. An active
+        // production stage keeps the order in a mutable lifecycle, but its
+        // operational role is not a second authorization gate for these fields.
+        // Recalculation and other stage commands retain their separate policy.
+        if (hasProductionRoute(frm)) {
+            return hasActiveProductionStage(frm);
+        }
+        return DRAFT_LIKE.has(frm.doc.status || "Draft");
+    }
+
+    function canEditPlanSettings(frm) {
         return Boolean(
             can(frm, "edit_optimizer_settings")
             && lifecycleAllowsEdit(frm)
@@ -303,11 +323,7 @@
 
     function startEditing(frm) {
         if (!canEditPlanSettings(frm)) {
-            const context = documentContext();
-            const reason = context && typeof context.stageMutationBlockReason === "function"
-                ? context.stageMutationBlockReason(frm)
-                : "";
-            frappe.msgprint(__(reason || "لا تملك صلاحية تعديل إعدادات خطة القص في المرحلة الحالية."));
+            frappe.msgprint(__("لا تملك صلاحية تعديل إعدادات خطة القص أو أن حالة الطلب الحالية لا تسمح بذلك."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
@@ -336,7 +352,7 @@
         if (!canEditPlanSettings(frm)) {
             setEditing(frm, false);
             refreshFieldAccess(frm);
-            frappe.msgprint(__("لم تعد المرحلة الحالية تسمح لك بتعديل إعدادات خطة القص."));
+            frappe.msgprint(__("لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص."));
             return false;
         }
 
