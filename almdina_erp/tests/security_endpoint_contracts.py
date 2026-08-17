@@ -64,6 +64,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.shop_floor_dxf_service", C, ("approve_production_dxf", "mark_dxf_exported", "recalculate_drawing_plan", "upload_production_dxf")),
     ("almdina_erp.almdina_erp.services.shop_floor_query_service", C, ("get_current_stage_context", "get_dispatch_options", "get_my_archive", "get_my_inbox", "get_order_operational_role_flags", "get_revert_targets", "get_shop_floor_context")),
     ("almdina_erp.almdina_erp.services.special_shape_service", D, ("approve_special_piece_price",)),
+    ("almdina_erp.almdina_erp.services.special_shape_reference_image_service", C, ("get_reference_image", "remove_reference_image", "save_reference_image")),
     ("almdina_erp.almdina_erp.services.special_shape_workspace_service", C, ("get_drawing_workspace", "save_drawing_workspace")),
     ("almdina_erp.almdina_erp.services.workforce_service", C, ("adopt_workforce_user", "create_workforce_user", "get_workforce_console", "get_workforce_user_audit", "reset_workforce_password", "set_workforce_user_enabled", "update_workforce_user")),
 )
