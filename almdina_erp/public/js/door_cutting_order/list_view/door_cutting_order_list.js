@@ -5,7 +5,7 @@
         doctype: "Door Cutting Order",
     });
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=4";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -16,6 +16,7 @@
         "At Sanding": "عند التقشيط",
         "Ready for Delivery": "جاهز للتسليم",
         Delivered: "تم التسليم",
+        Completed: "تم الإنجاز",
         Rejected: "مرفوض",
         "On Hold": "متوقف",
         Cancelled: "ملغى",
@@ -26,6 +27,11 @@
         CNC: "CNC",
         "تقشيط": "Sanding",
     });
+    const COMPLETED_ORDER_STATUSES = new Set([
+        "Ready for Delivery",
+        "Delivered",
+        "Completed",
+    ]);
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -102,7 +108,6 @@
             const term = normalizedTerm(field && typeof field.get_value === "function" ? field.get_value() : "");
             if (!term) return args;
 
-            // Replace only Frappe's standard ID filter. All other filters remain AND.
             args.filters = (args.filters || []).filter(filter => !isNameFilter(filter, this.doctype));
             const pattern = `%${term}%`;
             args.or_filters = [
@@ -142,19 +147,12 @@
 
     function isPhoneLayout(root) {
         const responsiveDevice = window.AlmdinaResponsiveDevice;
-        if (
-            responsiveDevice
-            && typeof responsiveDevice.usesCardLayout === "function"
-        ) {
+        if (responsiveDevice && typeof responsiveDevice.usesCardLayout === "function") {
             return responsiveDevice.usesCardLayout(root);
         }
-        if (
-            responsiveDevice
-            && typeof responsiveDevice.isPhoneLayout === "function"
-        ) {
+        if (responsiveDevice && typeof responsiveDevice.isPhoneLayout === "function") {
             return responsiveDevice.isPhoneLayout(root);
         }
-        // Last-resort fallback when the shared detector is unavailable.
         try {
             return Boolean(
                 window.matchMedia
@@ -199,25 +197,6 @@
         return String(value);
     }
 
-    function statusLabel(doc) {
-        if (doc.status === "Ready for Delivery") return __("جاهز للتسليم");
-        if (doc.status === "Delivered") return __("تم التسليم");
-        return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
-    }
-
-    function statusTone(status) {
-        if (["Ready for Delivery", "Delivered"].includes(status)) return "is-success";
-        if (["Rejected", "Cancelled", "On Hold"].includes(status)) return "is-danger";
-        if (["At Sharyoun", "At Drawing", "At CNC", "At Sanding"].includes(status)) return "is-active";
-        return "is-neutral";
-    }
-
-    function productionPathLabel(path) {
-        if (path === "Sharyoun") return __("شريون ثم تقشيط");
-        if (path === "Drawing") return __("رسم ثم CNC ثم تقشيط");
-        return displayValue(path);
-    }
-
     function quickActionContext(doc) {
         const authorized = doc.__almdinaProductionActionContext || {};
         return {
@@ -239,8 +218,7 @@
 
     function mobileActionClass(action) {
         if (!action) return "";
-        if (action.kind === "handoff") return "is-finish";
-        return "is-start";
+        return action.kind === "handoff" ? "is-finish" : "is-start";
     }
 
     function mobileActionConfirmation(action, doc) {
@@ -251,90 +229,201 @@
         return `${__("هل تريد بدء العمل على الطلب؟")} ${orderName}`;
     }
 
-    function field(label, value, className = "") {
-        if (!String(value ?? "").trim()) return "";
+    function fallbackStatusLabel(doc) {
+        return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
+    }
+
+    function cardState(doc, context, action) {
+        const completed = context.assignmentState === "completed"
+            || COMPLETED_ORDER_STATUSES.has(String(doc.status || ""));
+        if (completed) {
+            return Object.freeze({
+                key: "completed",
+                label: __("تم الإنجاز"),
+                cardClass: "is-completed",
+            });
+        }
+
+        const inProgress = String(doc.department_status || "").trim() === "قيد العمل"
+            || (action && action.kind === "handoff");
+        if (inProgress) {
+            return Object.freeze({
+                key: "progress",
+                label: __("قيد التنفيذ"),
+                cardClass: "is-progress",
+            });
+        }
+
+        const hasProductionContext = Boolean(
+            String(doc.current_production_stage || "").trim()
+            || String(doc.current_department || "").trim()
+            || String(doc.current_assignee || "").trim()
+            || context.assignmentState === "assigned"
+            || (action && action.kind === "start")
+        );
+        if (hasProductionContext) {
+            return Object.freeze({
+                key: "ready",
+                label: __("جاهز للبدء"),
+                cardClass: "is-ready",
+            });
+        }
+
+        return Object.freeze({
+            key: "neutral",
+            label: fallbackStatusLabel(doc),
+            cardClass: "is-neutral",
+        });
+    }
+
+    function cardViewModel(doc) {
+        const context = quickActionContext(doc);
+        const quickActions = window.AlmdinaShopFloorQuickActions;
+        const action = quickActions && quickActions.actionFor(context);
+        const state = cardState(doc, context, action);
+        return Object.freeze({
+            orderId: displayValue(doc.name),
+            customer: displayValue(doc.customer),
+            boardColor: displayValue(doc.board_description),
+            edgeColor: displayValue(doc.edge_color),
+            edgeType: displayValue(doc.default_edge_type),
+            date: dateLabel(doc.order_date),
+            context,
+            action,
+            state,
+            completed: state.key === "completed",
+        });
+    }
+
+    function iconSvg(name, className = "") {
+        const paths = {
+            user: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
+            board: '<path d="M5 5.5h14v13H5z"/><path d="M8 8.5h8M8 12h8M8 15.5h5"/>',
+            droplet: '<path d="M12 3s-5 5.2-5 10a5 5 0 0 0 10 0c0-4.8-5-10-5-10Z"/>',
+            layers: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 17l8 4 8-4"/>',
+            calendar: '<path d="M5 5h14v15H5z"/><path d="M8 3v4M16 3v4M5 9h14"/>',
+            play: '<path d="m10 8 6 4-6 4V8Z"/>',
+            check: '<path d="m7.5 12.5 3 3 6-7"/>',
+            chevron: '<path d="m10 7 5 5-5 5"/>',
+        };
+        const body = paths[name] || "";
+        return `<svg class="dco-card-icon ${escapeHtml(className)}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+    }
+
+    function renderStatusPill(state) {
         return `
-            <div class="dco-card-field ${className}">
-                <span>${escapeHtml(__(label))}</span>
-                <b>${escapeHtml(displayValue(value))}</b>
+            <span class="dco-card-state-pill" role="status">
+                <span class="dco-card-state-dot" aria-hidden="true"></span>
+                <span>${escapeHtml(state.label)}</span>
+            </span>
+        `;
+    }
+
+    function renderCustomer(model) {
+        return `
+            <div class="dco-card-customer-block">
+                <span class="dco-card-customer-avatar" aria-hidden="true">${iconSvg("user")}</span>
+                <div class="dco-card-customer-copy">
+                    <span class="dco-card-eyebrow">${escapeHtml(__("اسم العميل"))}</span>
+                    <strong class="dco-card-customer-name">${escapeHtml(model.customer)}</strong>
+                </div>
             </div>
         `;
     }
 
-    function buildCard(doc, hasSelection) {
-        const context = quickActionContext(doc);
-        const quickActions = window.AlmdinaShopFloorQuickActions;
-        const action = quickActions && quickActions.actionFor(context);
-        const isCompleted = context.assignmentState === "completed";
-        const completedClass = isCompleted ? " dco-list-row-completed" : "";
-        const department = String(doc.current_department || "").trim() || __("لم يبدأ الإنتاج");
-        const departmentStatus = String(doc.department_status || "").trim() || __("غير مسند");
-        const assignee = String(doc.current_assignee || "").trim();
-        const workflowFooter = action
-            ? `
+    function renderOrderLink(model) {
+        return `
+            <div class="dco-card-order-row">
+                <span class="dco-card-order-label">${escapeHtml(__("ID الطلب"))}</span>
+                <button
+                    type="button"
+                    class="dco-card-order-link"
+                    aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(model.orderId)}"
+                    title="${escapeHtml(__("فتح الطلب"))}"
+                >
+                    <span>${escapeHtml(model.orderId)}</span>
+                    ${iconSvg("chevron", "dco-card-order-chevron")}
+                </button>
+            </div>
+        `;
+    }
+
+    function renderInfoTile(label, value, iconName, className) {
+        return `
+            <div class="dco-card-info-tile ${escapeHtml(className || "")}">
+                <span class="dco-card-info-icon" aria-hidden="true">${iconSvg(iconName)}</span>
+                <div class="dco-card-info-copy">
+                    <span>${escapeHtml(__(label))}</span>
+                    <strong>${escapeHtml(value)}</strong>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderDate(model) {
+        return `
+            <div class="dco-card-date-row">
+                ${iconSvg("calendar", "dco-card-date-icon")}
+                <strong>${escapeHtml(model.date)}</strong>
+            </div>
+        `;
+    }
+
+    function renderAction(model) {
+        if (model.action) {
+            const icon = model.action.kind === "handoff" ? "check" : "play";
+            return `
                 <footer class="dco-card-actions">
                     <button
                         type="button"
-                        class="btn dco-card-production-action ${mobileActionClass(action)}"
-                        data-action-kind="${escapeHtml(action.kind)}"
-                    >${escapeHtml(mobileActionLabel(action))}</button>
+                        class="btn dco-card-production-action ${mobileActionClass(model.action)}"
+                        data-action-kind="${escapeHtml(model.action.kind)}"
+                    >
+                        <span>${escapeHtml(mobileActionLabel(model.action))}</span>
+                        <span class="dco-card-action-icon" aria-hidden="true">${iconSvg(icon)}</span>
+                    </button>
                 </footer>
-            `
-            : isCompleted
-                ? `
-                    <div class="dco-card-complete-state" role="status">
-                        <span class="dco-card-complete-icon" aria-hidden="true">✓</span>
-                        <span>${escapeHtml(__("تم الإنجاز"))}</span>
-                    </div>
-                `
-                : "";
-        return `
-            <article class="dco-mobile-order-card${completedClass}" data-order-name="${escapeHtml(doc.name)}">
-                <header class="dco-card-header">
-                    <div class="dco-card-leading">
-                        ${hasSelection ? `<input type="checkbox" class="dco-card-select" aria-label="${escapeHtml(__("تحديد الطلب"))} ${escapeHtml(doc.name)}">` : ""}
-                        <div class="dco-card-identity">
-                            <button
-                                type="button"
-                                class="dco-card-order-link"
-                                aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(doc.name)}"
-                                title="${escapeHtml(__("فتح الطلب"))}"
-                            >
-                                <span>${escapeHtml(doc.name)}</span>
-                                <span class="dco-card-order-link-arrow" aria-hidden="true">‹</span>
-                            </button>
-                            <span class="dco-card-customer">${escapeHtml(displayValue(doc.customer))}</span>
-                        </div>
-                    </div>
-                    <div class="dco-card-header-actions">
-                        <span class="dco-card-status ${statusTone(doc.status)}">${escapeHtml(statusLabel(doc))}</span>
-                    </div>
-                </header>
-                <section class="dco-card-workflow" aria-label="${escapeHtml(__("حالة الإنتاج"))}">
-                    <div class="dco-card-workflow-main">
-                        <span class="dco-card-workflow-label">${escapeHtml(__("المرحلة الحالية"))}</span>
-                        <b class="dco-card-workflow-value">${escapeHtml(department)}</b>
-                    </div>
-                    <span class="dco-card-stage-status">${escapeHtml(departmentStatus)}</span>
-                    ${assignee ? `
-                        <div class="dco-card-assignee">
-                            <span class="dco-card-assignee-label">${escapeHtml(__("العامل"))}</span>
-                            <b class="dco-card-assignee-value">${escapeHtml(assignee)}</b>
-                        </div>
-                    ` : ""}
-                </section>
-                <div class="dco-card-fields">
-                    ${field("صنف اللوح", doc.board_description, "dco-card-wide-field")}
-                    ${field("لون القشاط", doc.edge_color, "dco-card-edge-color")}
-                    ${field("تاريخ الطلب", dateLabel(doc.order_date))}
-                    ${field("مسار الإنتاج", productionPathLabel(doc.production_path), "dco-card-wide-field")}
+            `;
+        }
+        if (model.completed) {
+            return `
+                <div class="dco-card-complete-state" role="status">
+                    <span>${escapeHtml(__("تم الإنجاز"))}</span>
+                    <span class="dco-card-complete-icon" aria-hidden="true">${iconSvg("check")}</span>
                 </div>
-                ${workflowFooter}
+            `;
+        }
+        return "";
+    }
+
+    function buildCard(doc, hasSelection) {
+        const model = cardViewModel(doc);
+        const completedClass = model.completed ? " dco-list-row-completed" : "";
+        return `
+            <article
+                class="dco-mobile-order-card ${model.state.cardClass}${completedClass}"
+                data-order-name="${escapeHtml(doc.name)}"
+                data-card-state="${escapeHtml(model.state.key)}"
+                data-selectable="${hasSelection ? "1" : "0"}"
+                dir="rtl"
+            >
+                <header class="dco-card-header">
+                    ${renderCustomer(model)}
+                    ${renderStatusPill(model.state)}
+                </header>
+                ${renderOrderLink(model)}
+                <section class="dco-card-info-grid" aria-label="${escapeHtml(__("بيانات الطلب"))}">
+                    ${renderInfoTile("لون اللوح", model.boardColor, "board", "is-board")}
+                    ${renderInfoTile("لون القشاط", model.edgeColor, "droplet", "is-edge-color")}
+                    ${renderInfoTile("نوع القشاط", model.edgeType, "layers", "is-edge-type")}
+                </section>
+                ${renderDate(model)}
+                ${renderAction(model)}
             </article>
         `;
     }
 
-    function bindCard(listview, container, card, doc, originalCheckbox) {
+    function bindCard(listview, container, card, doc) {
         const open = event => {
             event.preventDefault();
             event.stopPropagation();
@@ -342,19 +431,6 @@
         };
         const orderLink = card.querySelector(".dco-card-order-link");
         if (orderLink) orderLink.addEventListener("click", open);
-
-        const mobileCheckbox = card.querySelector(".dco-card-select");
-        if (mobileCheckbox && originalCheckbox) {
-            mobileCheckbox.checked = Boolean(originalCheckbox.checked);
-            mobileCheckbox.addEventListener("click", event => event.stopPropagation());
-            mobileCheckbox.addEventListener("change", event => {
-                event.stopPropagation();
-                if (Boolean(originalCheckbox.checked) !== Boolean(mobileCheckbox.checked)) {
-                    originalCheckbox.click();
-                }
-                mobileCheckbox.checked = Boolean(originalCheckbox.checked);
-            });
-        }
 
         const actionButton = card.querySelector(".dco-card-production-action");
         const quickActions = window.AlmdinaShopFloorQuickActions;
@@ -370,8 +446,6 @@
                     () => quickActions.perform(context, {
                         button: actionButton,
                         onSuccess: () => listview.refresh(),
-                        // The mobile card already asked for confirmation. Avoid a
-                        // second confirmation when this happens to be the final stage.
                         skipFinalConfirmation: action.kind === "handoff",
                     })
                 );
@@ -391,8 +465,7 @@
                 .find(child => child.classList.contains("dco-mobile-order-card"));
             if (previous) previous.remove();
         });
-        // The list header uses the same .list-row-container class in Frappe.
-        // Only containers that resolve to an actual document may receive cards.
+
         const containers = allContainers
             .map(container => ({ container, name: rowDocumentName(container) }))
             .filter(item => item.name && docs.has(item.name));
@@ -408,7 +481,7 @@
             const card = holder.firstElementChild;
             if (!card) return;
             container.appendChild(card);
-            bindCard(listview, container, card, doc, originalCheckbox);
+            bindCard(listview, container, card, doc);
         });
     }
 
@@ -422,7 +495,6 @@
                 renderMobileCards(listview);
                 return;
             }
-            // Keep cards in sync when the list reflows while already in card mode.
             if (needsPhoneLayout) renderMobileCards(listview);
         };
         if (typeof ResizeObserver === "function") {
@@ -514,8 +586,6 @@
                 assignmentState: flag.assignment_state || "",
             };
         });
-        // The first paint intentionally has no guessed action. Rebuild phone
-        // cards only after the server-authorized action context arrives.
         renderMobileCards(listview);
         if (!personalView) {
             clearOperationalRoleRows(listview);
@@ -539,8 +609,6 @@
             (isCompleted ? completed : assigned).push({ container, flag, name });
         });
 
-        // Current assignments: oldest assignment first. Completed work follows:
-        // newest finish first. Order creation time is deliberately irrelevant.
         assigned.sort((left, right) => compareServerTimes(
             left,
             right,
@@ -554,8 +622,6 @@
             -1
         ));
         const ordered = [...assigned, ...completed].map(item => item.container);
-        // Do not move nodes when they are already ordered: moving a node triggers
-        // Frappe's mutation observer and used to start another request/reorder loop.
         const current = [...result.querySelectorAll(".list-row-container")]
             .filter(container => Boolean(rowDocumentName(container)));
         const needsReorder = ordered.some((container, index) => current[index] !== container);
@@ -622,7 +688,7 @@
         add_fields: [...new Set([
             ...(existing.add_fields || []),
             "customer", "order_date", "status",
-            "board_description", "edge_color", "production_path",
+            "board_description", "edge_color", "default_edge_type", "production_path",
             "current_department", "current_assignee", "department_status",
             "current_production_stage",
         ])],
@@ -652,6 +718,7 @@
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
         buildCard,
+        cardViewModel,
         isPhoneLayout,
         quickActionContext,
         renderMobileCards,
