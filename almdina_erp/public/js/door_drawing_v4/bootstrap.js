@@ -27,6 +27,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/application/viewport.js",
         "/assets/almdina_erp/js/door_drawing_v4/infrastructure/persistence_adapter.js",
         "/assets/almdina_erp/js/door_drawing_v4/presentation/canvas_renderer.js",
+        "/assets/almdina_erp/js/door_drawing_v4/presentation/selection_overlay.js",
         "/assets/almdina_erp/js/door_drawing_v4/presentation/editor_view_model.js",
         "/assets/almdina_erp/js/door_drawing_v4/presentation/editor_shell.js",
         "/assets/almdina_erp/js/door_drawing_v4/presentation/editor_controller.js",
