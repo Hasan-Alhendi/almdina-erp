@@ -21,9 +21,8 @@ app_include_js = [
     "/assets/almdina_erp/js/input_stability.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
     "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js",
-    # Load the secure DXF owner at Desk bootstrap as well as on the form. That
-    # guarantees the plan UI never falls through to a legacy document-attached
-    # uploader before the focused authorization service is available.
+    # Single owner: install the secure DXF helper at Desk bootstrap before any
+    # Door Cutting Order form-specific plan script can register a legacy uploader.
     "/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_upload.js",
     "/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
     "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js",
@@ -74,15 +73,10 @@ doctype_js = {
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_save_render_performance_ux.js",
-        "public/js/door_cutting_order/cutting_plan/secure_dxf_upload.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",
-        # PlanControls owns the capability policy. This focused adapter is loaded
-        # after it only to translate that decision into Frappe's native per-field
-        # display status without granting broad Door Cutting Order write access.
-        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
         # F6.3 keeps the existing content hook position while loading its local
         # presentation owners immediately before the orchestrator.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js",
@@ -99,6 +93,10 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
         "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
+        # PlanControls owns the capability policy. Load the focused status bridge
+        # after the revision/edit-session compatibility layer so its final render
+        # cannot re-lock plan-only fields for users without broad order write.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
         "public/js/door_cutting_order/core/order_lifecycle.js",
         "public/js/input_stability.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
