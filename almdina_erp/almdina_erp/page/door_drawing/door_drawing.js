@@ -154,7 +154,7 @@
         ensureController(wrapper).then(controller => {
             const context = routeContext();
             if (!context.orderName || !context.pieceName) {
-                controller.showRouteError("رابط الرسم غير مكتمل. افتح الرسم من الطلب وتحقق من الرابط.");
+                controller.showRouteError("رابط الرسم غير مكتمل. افتح الرسم من داخل الطلب.");
                 return;
             }
             controller.open(context);
