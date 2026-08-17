@@ -35,6 +35,21 @@
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_controller.js",
     ]);
 
+    function ensurePageScaffold(wrapper) {
+        if (wrapper.querySelector(".layout-main-section")) return;
+        if (!frappe.ui || typeof frappe.ui.make_app_page !== "function") {
+            throw new Error("Frappe page scaffold factory is unavailable");
+        }
+        frappe.ui.make_app_page({
+            parent: wrapper,
+            title: __("رسم الدرفة الخاصة"),
+            single_column: true,
+        });
+        if (!wrapper.querySelector(".layout-main-section")) {
+            throw new Error("Door drawing page scaffold did not create a main section");
+        }
+    }
+
     function ensureStyles() {
         const frontend = window.AlmdinaFrontend;
         if (frontend && typeof frontend.ensureStylesheet === "function") {
@@ -44,6 +59,7 @@
     }
 
     function bootstrap(wrapper) {
+        ensurePageScaffold(wrapper);
         if (wrapper.__almdinaDoorDrawingProfessionalPromise) return wrapper.__almdinaDoorDrawingProfessionalPromise;
         wrapper.classList.add("ald-prof-page");
         const modulePromise = CORE_MODULES.reduce(
@@ -67,11 +83,22 @@
 
     function showBootstrapError(wrapper, error) {
         console.error("Door Drawing workspace bootstrap failed", error);
-        const main = wrapper.querySelector(".layout-main-section");
-        if (main) main.innerHTML = '<div class="ald-prof-fatal">تعذر تحميل مساحة الرسم. أعد تحميل الصفحة ثم حاول مرة أخرى.</div>';
+        let main = wrapper.querySelector(".layout-main-section");
+        if (!main) {
+            try {
+                ensurePageScaffold(wrapper);
+                main = wrapper.querySelector(".layout-main-section");
+            } catch (scaffoldError) {
+                console.error("Door Drawing page scaffold failed", scaffoldError);
+            }
+        }
+        if (main) {
+            main.innerHTML = '<div class="ald-prof-fatal">تعذر تحميل مساحة الرسم. أعد تحميل الصفحة ثم حاول مرة أخرى.</div>';
+        }
     }
 
     function ensureController(wrapper) {
+        ensurePageScaffold(wrapper);
         return bootstrap(wrapper).then(() => {
             if (wrapper.__almdinaDoorDrawingController) return wrapper.__almdinaDoorDrawingController;
             const factory = window.AlmdinaDoorDrawingProfessional && window.AlmdinaDoorDrawingProfessional.WorkspaceController;
@@ -102,13 +129,25 @@
     }
 
     frappe.pages[PAGE_ROUTE].on_page_load = function (wrapper) {
-        bindLifecycle(wrapper);
-        ensureController(wrapper).catch(error => showBootstrapError(wrapper, error));
+        try {
+            ensurePageScaffold(wrapper);
+            bindLifecycle(wrapper);
+            ensureController(wrapper).catch(error => showBootstrapError(wrapper, error));
+        } catch (error) {
+            showBootstrapError(wrapper, error);
+        }
     };
 
     frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
-        enterFullscreenMode();
-        bindLifecycle(wrapper);
+        try {
+            ensurePageScaffold(wrapper);
+            enterFullscreenMode();
+            bindLifecycle(wrapper);
+        } catch (error) {
+            leaveFullscreenMode();
+            showBootstrapError(wrapper, error);
+            return;
+        }
         ensureController(wrapper).then(controller => {
             const context = routeContext();
             if (!context.orderName || !context.pieceName) {
