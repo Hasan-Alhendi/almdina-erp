@@ -49,7 +49,8 @@ jobs:
             almdina_erp.tests.test_read_only_boot_authorization \
             almdina_erp.tests.test_protected_order_surface_recovery \
             almdina_erp.tests.test_frontend_consolidation_contract \
-            almdina_erp.tests.test_frontend_runtime_performance_contract
+            almdina_erp.tests.test_frontend_runtime_performance_contract \
+            almdina_erp.tests.test_order_list_query_performance
 
       - name: Validate changed browser modules
         run: |
@@ -57,6 +58,7 @@ jobs:
           node --check almdina_erp/public/js/permission_context.js
           node --check almdina_erp/public/js/permission_action_visibility_guard.js
           node --check almdina_erp/public/js/shared_shell.js
+          node --check almdina_erp/public/js/door_cutting_order/list_view/door_cutting_order_list.js
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_action_permission_guard.js
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js
@@ -64,6 +66,7 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/secure_dxf_export.js
+          node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/plan_surface_isolation.test.js
           node almdina_erp/tests/js/approved_plan_navigation.test.js
           node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
