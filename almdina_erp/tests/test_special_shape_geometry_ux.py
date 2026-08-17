@@ -38,6 +38,8 @@ def test_exact_geometry_is_separate_from_documentation_and_persisted_in_plan():
     assert detail["special_shape_drawing_json"]["fieldtype"] == "Long Text"
     assert detail["special_shape_geometry_json"]["fieldtype"] == "Long Text"
     assert detail["special_shape_geometry_json"]["hidden"] == 1
+    assert detail["special_shape_documentation_mode"]["options"] == "Drawing\nImage"
+    assert detail["special_shape_reference_image"]["fieldtype"] == "Attach Image"
     assert placed["special_shape_geometry_json"]["fieldtype"] == "Long Text"
     assert placed["special_shape_geometry_json"]["read_only"] == 1
 
@@ -80,10 +82,26 @@ def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geomet
     assert "Special shape geometry length does not match the piece length." in service
     assert "validate_special_shape_geometry(" in policy
     assert "old_special_geometry != special_geometry" in policy
-    assert "special_geometry or drawing_has_elements" in policy
+    assert "special_geometry" in policy
+    assert "drawing_has_elements" in policy
+    assert "reference_has_content" in policy
+    assert "or reference_has_content" in policy
     assert '"special_shape_geometry_json"' in policy
     assert "self.piece_policy.validate_rows()" in gateway
     assert "gateway.validate_piece_policies()" in save_use_case
+
+
+def test_image_documentation_is_not_promoted_to_exact_manufacturing_geometry():
+    policy = PIECE_POLICY.read_text(encoding="utf-8")
+    assert "def _reference_has_content" in policy
+    assert "reference_has_content" in policy
+    assert "special_geometry" in policy
+    # The image can satisfy documentation, but only validated special geometry is
+    # carried into packing/export paths below.
+    for path in (PLAN, REMNANTS, EXPORT):
+        source = path.read_text(encoding="utf-8")
+        assert "special_shape_geometry_json" in source, path
+        assert "special_shape_reference_image" not in source, path
 
 
 def test_exact_geometry_survives_every_packing_and_approved_export_path():
