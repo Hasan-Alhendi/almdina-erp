@@ -44,6 +44,16 @@ class TestDoorDrawingProfessionalWorkspaceContract(unittest.TestCase):
             self.assertNotIn("frappe.ui.Dialog", source, path)
             self.assertNotIn("frappe.ui.dialog", source, path)
 
+    def test_active_tool_state_cannot_impersonate_a_tool_button(self) -> None:
+        shell = (PROFESSIONAL / "workspace_shell.js").read_text(encoding="utf-8")
+        css = CSS.read_text(encoding="utf-8")
+        self.assertIn("workspace.dataset.activeTool = tool", shell)
+        self.assertNotIn("workspace.dataset.tool = tool", shell)
+        self.assertIn('[data-active-tool="pen"]', css)
+        self.assertIn('[data-active-tool="dimension"]', css)
+        self.assertIn('[data-active-tool="hand"]', css)
+        self.assertNotIn('.ald-prof-workspace[data-tool=', css)
+
     def test_page_creates_frappe_scaffold_before_workspace_mount(self) -> None:
         page = PAGE.read_text(encoding="utf-8")
         self.assertIn("function ensurePageScaffold(wrapper)", page)

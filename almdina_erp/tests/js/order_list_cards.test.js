@@ -208,4 +208,50 @@ const otherWorker = {
 assert.strictEqual(api.quickActionContext(otherWorker).canStart, false);
 assert(!api.buildCard(otherWorker, false).includes("dco-card-production-action"));
 
+const queueItems = [
+    {
+        name: "READY-OLD",
+        doc: { department_status: "بحاجة للعمل" },
+        flag: { assignment_state: "assigned", assignment_time: "2026-08-17 08:00:00" },
+    },
+    {
+        name: "COMPLETED-OLD",
+        doc: { department_status: "مكتمل" },
+        flag: { assignment_state: "completed", completion_time: "2026-08-17 11:00:00" },
+    },
+    {
+        name: "READY-NEW",
+        doc: { department_status: "بحاجة للعمل" },
+        flag: { assignment_state: "assigned", assignment_time: "2026-08-17 10:00:00" },
+    },
+    {
+        name: "IN-PROGRESS",
+        doc: { department_status: "قيد العمل" },
+        flag: { assignment_state: "assigned", assignment_time: "2026-08-17 09:00:00" },
+    },
+    {
+        name: "COMPLETED-NEW",
+        doc: { department_status: "مكتمل" },
+        flag: { assignment_state: "completed", completion_time: "2026-08-17 12:00:00" },
+    },
+];
+assert.deepStrictEqual(
+    Array.from(api.sortPersonalQueueItems(queueItems), item => item.name),
+    ["IN-PROGRESS", "READY-OLD", "READY-NEW", "COMPLETED-NEW", "COMPLETED-OLD"],
+    "worker queue must prioritize active work, preserve FIFO readiness, and show newest completions first"
+);
+assert.strictEqual(
+    api.personalQueueState({ department_status: "قيد العمل" }, { assignment_state: "assigned" }),
+    "in_progress"
+);
+assert.strictEqual(
+    api.personalQueueState({ department_status: "بحاجة للعمل" }, { assignment_state: "assigned" }),
+    "ready"
+);
+assert.strictEqual(
+    api.personalQueueState({ department_status: "قيد العمل" }, { assignment_state: "completed" }),
+    "completed",
+    "completion must remain authoritative over stale display status"
+);
+
 console.log("Door Cutting Order approved mobile-card simulation passed");

@@ -59,6 +59,8 @@ for (const [key, expected] of [["v", "select"], ["a", "node"], ["p", "pen"], ["d
     assert.equal(keydown(key), true, `${key.toUpperCase()} must be owned by the visible drawing workspace`);
     assert.deepEqual(calls.at(-1), ["tool", expected, key]);
 }
+assert.equal(keydown("p", { code: "KeyP", shiftKey: true }), true, "Shift+P must activate the separate smart pencil");
+assert.deepEqual(calls.at(-1), ["tool", "smart-pencil", "shift+p"]);
 
 // event.code identifies the physical key even when Windows/browser input language is Arabic.
 // The actual event.key can therefore be Arabic and the design shortcuts must still work.
@@ -71,6 +73,8 @@ for (const [key, code, expected, label] of [
     assert.equal(keydown(key, { code }), true, `${code} must work regardless of Arabic keyboard layout`);
     assert.deepEqual(calls.at(-1), ["tool", expected, label]);
 }
+assert.equal(keydown("ح", { code: "KeyP", shiftKey: true }), true, "Shift+P must work on Arabic keyboard layout too");
+assert.deepEqual(calls.at(-1), ["tool", "smart-pencil", "shift+p"]);
 
 keydown("z", { ctrlKey: true, code: "KeyZ" });
 assert.deepEqual(calls.at(-1), ["undo"]);
@@ -102,4 +106,4 @@ mounted.destroy();
 assert.equal(listeners.has("keydown"), false);
 assert.equal(listeners.has("keyup"), false);
 
-console.log("Professional drawing keyboard behavior passed, including Arabic layout");
+console.log("Professional drawing keyboard behavior passed, including Arabic layout and Smart Pencil");

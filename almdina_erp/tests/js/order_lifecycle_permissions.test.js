@@ -9,6 +9,13 @@ const source = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/core/order_lifecycle.js"),
     "utf8"
 );
+const planEditSource = fs.readFileSync(
+    path.resolve(
+        __dirname,
+        "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js"
+    ),
+    "utf8"
+);
 
 function makeForm(name = "DCO-TEST-001", status = "Draft") {
     const added = [];
@@ -113,6 +120,59 @@ function load(capabilities, responseFactory) {
         routes,
         frappe: fakeFrappe,
         handlers,
+    };
+}
+
+function loadPlanEditSession({ allowed = true } = {}) {
+    const fakeWindow = {
+        AlmdinaPermissions: {
+            canDocument(_frm, capability) {
+                return allowed && capability === "edit_optimizer_settings";
+            },
+        },
+        addEventListener() {},
+        requestAnimationFrame() {},
+    };
+    const fakeFrappe = {
+        ui: {
+            form: {
+                on() {},
+            },
+        },
+    };
+    const context = vm.createContext({
+        window: fakeWindow,
+        frappe: fakeFrappe,
+        console,
+        Object,
+        Set,
+        String,
+        Number,
+        Boolean,
+        Promise,
+    });
+    vm.runInContext(planEditSource, context, {
+        filename: "door_cutting_order_plan_edit_session_ux.js",
+    });
+    return fakeWindow.AlmdinaPlanEditSessionUX;
+}
+
+function makePlanEditForm(overrides = {}) {
+    return {
+        doctype: "Door Cutting Order",
+        is_new() {
+            return false;
+        },
+        doc: {
+            name: "DCO-2026-00005",
+            docstatus: 0,
+            approved_plan: null,
+            revision_state: "Current",
+            status: "At Drawing",
+            production_path: "ROUTE-DRAWING",
+            current_production_stage: null,
+            ...overrides,
+        },
     };
 }
 
@@ -223,6 +283,36 @@ function load(capabilities, responseFactory) {
     await stale.api.loadContext(staleForm);
     assert.equal(staleForm.__almdina_lifecycle_context, null);
     assert.deepEqual(staleForm.added, []);
+
+    // Regression for DCO-2026-00005 from the real designer surface: an order at
+    // `At Drawing` remains in an active routed lifecycle even when the form
+    // snapshot does not expose current_production_stage. The focused capability
+    // must therefore surface the plan-settings edit action.
+    const authorizedPlanEdit = loadPlanEditSession({ allowed: true });
+    assert.equal(
+        authorizedPlanEdit.canEditPlanSettings(makePlanEditForm()),
+        true,
+        "authorized designer at At Drawing must be able to start plan settings editing without a current stage snapshot"
+    );
+    assert.equal(
+        authorizedPlanEdit.canEditPlanSettings(makePlanEditForm({ status: "Completed" })),
+        false,
+        "finished routed orders must remain locked when no active stage exists"
+    );
+    assert.equal(
+        authorizedPlanEdit.canEditPlanSettings(
+            makePlanEditForm({ approved_plan: "CP-APPROVED-001" })
+        ),
+        false,
+        "approved cutting plans must remain locked"
+    );
+
+    const deniedPlanEdit = loadPlanEditSession({ allowed: false });
+    assert.equal(
+        deniedPlanEdit.canEditPlanSettings(makePlanEditForm()),
+        false,
+        "At Drawing must never bypass edit_optimizer_settings"
+    );
 
     console.log("Order lifecycle permission simulation passed");
 })().catch(error => {

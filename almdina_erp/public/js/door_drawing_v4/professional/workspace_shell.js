@@ -3,9 +3,9 @@
 
     const root = window.AlmdinaDoorDrawingProfessional = window.AlmdinaDoorDrawingProfessional || Object.create(null);
     const ICONS = Object.freeze({
-        select: "↖", node: "◇", pen: "⌁", dimension: "↔", hand: "✋"
+        select: "↖", node: "◇", pen: "⌁", "smart-pencil": "✎", dimension: "↔", hand: "✋"
     });
-    const KEYS = Object.freeze({ select: "V", node: "A", pen: "P", dimension: "D", hand: "Space" });
+    const KEYS = Object.freeze({ select: "V", node: "A", pen: "P", "smart-pencil": "⇧P", dimension: "D", hand: "Space" });
 
     function toolButton(tool, label) {
         return `<button type="button" class="ald-prof-tool" data-tool="${tool}" title="${label} (${KEYS[tool]})" aria-label="${label}"><span class="ald-prof-tool-icon">${ICONS[tool]}</span><span class="ald-prof-tool-key">${KEYS[tool]}</span></button>`;
@@ -42,7 +42,7 @@
                         <input class="ald-prof-numeric" data-numeric type="text" inputmode="decimal" autocomplete="off" spellcheck="false" hidden aria-label="القيمة بالميليمتر">
                         <div class="ald-prof-zoom"><button type="button" data-view="out">−</button><button type="button" data-view="fit" data-zoom>100%</button><button type="button" data-view="in">+</button></div>
                         <div class="ald-prof-toolbar" role="toolbar" aria-label="أدوات الرسم">
-                            ${toolButton("select", "تحديد")}${toolButton("node", "تعديل النقاط")}<span class="ald-prof-separator"></span>${toolButton("pen", "القلم الذكي")}${toolButton("dimension", "الأبعاد")}${toolButton("hand", "تحريك اللوحة")}
+                            ${toolButton("select", "تحديد")}${toolButton("node", "تعديل النقاط")}<span class="ald-prof-separator"></span>${toolButton("pen", "أداة المسار")}${toolButton("smart-pencil", "القلم الذكي")}<span class="ald-prof-separator"></span>${toolButton("dimension", "الأبعاد")}${toolButton("hand", "تحريك اللوحة")}
                         </div>
                     </main>
                     <aside class="ald-prof-sidebar ald-prof-sidebar-right">
@@ -63,14 +63,14 @@
 
         return Object.freeze({
             workspace, stage, canvas, numeric, layers, properties, hint,
-            setActiveTool(tool) { workspace.dataset.tool = tool; workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === tool)); },
+            setActiveTool(tool) { workspace.dataset.activeTool = tool; workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === tool)); },
             setSaveState(text, state = "saved") { saveState.textContent = text; saveState.dataset.state = state; },
             setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = Boolean(saving); button.textContent = saving ? "يتم الحفظ…" : "حفظ"; },
             setHint(text = "") { hint.textContent = text; hint.classList.toggle("is-visible", Boolean(text)); },
             setStatus(tool, coordinates, snap = "") { workspace.querySelector("[data-tool-status]").textContent = tool; workspace.querySelector("[data-coordinates]").textContent = coordinates; workspace.querySelector("[data-snap]").textContent = snap; },
             setZoom(value) { workspace.querySelector("[data-zoom]").textContent = value; },
             renderLayers(items, selectedId) {
-                layers.innerHTML = items.length ? items.map((item, index) => `<button type="button" class="ald-prof-layer ${item.id === selectedId ? "is-selected" : ""}" data-path-id="${escapeHtml(item.id)}"><span class="ald-prof-layer-icon">◇</span><span><strong>${escapeHtml(item.label || `محيط ${index + 1}`)}</strong><small>${item.closed ? "مغلق" : "مفتوح"}</small></span></button>`).join("") : '<div class="ald-prof-empty">ابدأ بالقلم P لرسم محيط الدرفة.</div>';
+                layers.innerHTML = items.length ? items.map((item, index) => `<button type="button" class="ald-prof-layer ${item.id === selectedId ? "is-selected" : ""}" data-path-id="${escapeHtml(item.id)}"><span class="ald-prof-layer-icon">◇</span><span><strong>${escapeHtml(item.label || `محيط ${index + 1}`)}</strong><small>${item.closed ? "مغلق" : "مفتوح"}</small></span></button>`).join("") : '<div class="ald-prof-empty">P لمسار مستقيم · Shift+P للرسم الحر الذكي.</div>';
             },
             renderProperties(model) {
                 if (!model || model.kind === "empty") { properties.innerHTML = '<div class="ald-prof-empty">حدد عنصرًا لعرض خصائصه.</div>'; return; }

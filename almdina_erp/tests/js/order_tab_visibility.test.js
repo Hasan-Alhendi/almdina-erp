@@ -9,6 +9,10 @@ const source = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js"),
     "utf8"
 );
+const pageEditSource = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js"),
+    "utf8"
+);
 
 function tabNode() {
     const nav = {
@@ -116,5 +120,54 @@ assert.equal(costs.nav.hidden, true);
 assert.equal(costs.nav.style.display, "none");
 assert.equal(costs.nav.attributes["aria-hidden"], "true");
 assert.match(planHtml.html, /PLAN-SENTINEL/);
+
+// Frappe v16 keeps the selected tab on Form.active_tab_map and exposes it
+// through get_active_tab(). Layout.current_tab is only the layout-construction
+// cursor and may still point at a later/hidden Tab Break such as cost_tab.
+const pageEditWindow = {
+    addEventListener() {},
+    requestAnimationFrame() {},
+};
+const pageEditFrappe = {
+    ui: {
+        form: {
+            on(doctype) {
+                assert.equal(doctype, "Door Cutting Order");
+            },
+        },
+    },
+};
+const pageEditContext = vm.createContext({
+    window: pageEditWindow,
+    frappe: pageEditFrappe,
+    console,
+    Object,
+    String,
+    Boolean,
+    Promise,
+});
+vm.runInContext(pageEditSource, pageEditContext, {
+    filename: "door_cutting_order_page_edit_action_ux.js",
+});
+
+const activeTab = { df: { fieldname: "results_tab" } };
+const routedPlanForm = {
+    doctype: "Door Cutting Order",
+    doc: { name: "DCO-2026-00005" },
+    get_active_tab() {
+        return activeTab;
+    },
+    // Intentionally contradictory: this is the stale construction cursor that
+    // caused the visible Plan tab to be treated as Cost before the regression.
+    layout: { current_tab: { df: { fieldname: "cost_tab" } } },
+    wrapper: [{ querySelector() { return null; } }],
+};
+assert.equal(
+    pageEditWindow.AlmdinaPageEditActionUX.activeKind(routedPlanForm),
+    "plan",
+    "visible results_tab must win over the layout construction cursor"
+);
+activeTab.df.fieldname = "order_tab";
+assert.equal(pageEditWindow.AlmdinaPageEditActionUX.activeKind(routedPlanForm), "order");
 
 console.log("order tab visibility simulation passed");
