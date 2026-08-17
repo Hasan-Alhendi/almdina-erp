@@ -192,7 +192,6 @@
                 }
                 .dco-special-sketch-button:hover { transform:translateY(-1px); border-style:solid; box-shadow:0 5px 14px rgba(83,58,40,.12); }
                 .dco-special-sketch-button.is-documented { border-style:solid; border-color:rgba(31,130,82,.35); background:rgba(31,130,82,.08); color:#17643f; }
-                .dco-special-sketch-button.is-image-reference { border-color:rgba(13,153,255,.4); background:rgba(13,153,255,.08); color:#0b70b8; }
                 .dco-special-sketch-button:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
                 .dco-special-row { background:rgba(176,112,28,.035); }
                 .dco-special-row .dco-col-edges {
@@ -357,15 +356,9 @@
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
         const shapeOutput = window.AlmdinaShapeOutputContract;
-        const hasDocumentation = Boolean(
-            isSpecial
-            && shapeOutput
-            && shapeOutput.hasDocumentation(data)
-        );
-        const hasImageReference = Boolean(
-            isSpecial
-            && shapeOutput
-            && shapeOutput.referenceImageFromPiece(data)
+        const hasDrawing = Boolean(
+            shapeOutput
+            && shapeOutput.drawingFromPiece(data)
         );
         const hasExactGeometry = Boolean(
             isSpecial
@@ -375,19 +368,15 @@
         const cornerSummary = isClipped && window.AlmdinaClippedCornerGeometry
             ? window.AlmdinaClippedCornerGeometry.summary(data)
             : "";
-        const shapeIcon = isClipped ? "⌑" : (hasDocumentation ? (hasImageReference ? "▣" : "✓") : "✎");
+        const shapeIcon = isClipped ? "⌑" : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
         const shapeLabel = isClipped
             ? (isArabic() ? "ضبط" : "Set")
-            : (hasDocumentation
-                ? (hasImageReference
-                    ? (isArabic() ? "صورة موثقة" : "Image documented")
-                    : (isArabic() ? "موثقة" : "Documented"))
+            : ((hasDrawing || hasExactGeometry)
+                ? (isArabic() ? "موثقة" : "Documented")
                 : (isArabic() ? "ارسم" : "Sketch"));
         const shapeTitle = isClipped
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-            : (hasImageReference
-                ? (isArabic() ? "افتح صورة الدرفة الموثقة" : "Open documented door image")
-                : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes"));
+            : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
         return `
             <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
@@ -407,7 +396,7 @@
                     ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
                 </div></td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${disabled}>${edgeOptions(frm, virtual ? "" : (data.edge_type || ""))}</select></td>
-                <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDocumentation ? "is-documented" : ""} ${hasImageReference ? "is-image-reference" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
+                <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
                     <span aria-hidden="true">${shapeIcon}</span>
                     <span>${shapeLabel}</span>
                 </button></td>
@@ -470,173 +459,277 @@
     function refreshEdgeSelects(frm) {
         const field = frm.fields_dict.pieces_fast_entry;
         if (!field || !field.$wrapper) return;
-        field.$wrapper.find("select[data-field='edge_type']").each((_, node) => {
-            const tr = node.closest("tr[data-row-name]");
-            const row = tr ? rowByName(frm, tr.dataset.rowName) : null;
-            if (!row) return;
-            const current = node.value;
-            node.innerHTML = edgeOptions(frm, row.edge_type || "");
-            node.value = row.edge_type || current || "";
+        field.$wrapper.find("select[data-field='edge_type']").each(function () {
+            const current = this.value;
+            this.innerHTML = edgeOptions(frm, current);
+            this.value = current;
         });
     }
 
-    function updateRowFromControl(frm, control, options = {}) {
-        const tr = control.closest("tr[data-row-name]");
+    function loadEdgeTypes(frm) {
+        if (frm._dco_edge_types_loaded || frm._dco_edge_types_loading) return;
+        frm._dco_edge_types_loading = true;
+        frappe.db.get_list("Edge Banding Type", {
+            fields:["name","edge_type_name"],
+            filters:{ disabled:0 },
+            order_by:"width_cm asc, edge_type_name asc",
+            limit:100,
+        }).then(rows => {
+            frm._dco_edge_types = rows || [];
+            frm._dco_edge_types_loaded = true;
+            refreshEdgeSelects(frm);
+        }).catch(error => console.error("Failed to load edge types", error)).finally(() => {
+            frm._dco_edge_types_loading = false;
+        });
+    }
+
+    function renderFastMeasurements(frm) {
+        const field = frm.fields_dict.pieces_fast_entry;
+        if (!field || !field.$wrapper) return;
+        reindexPieces(frm);
+        const html = shellHtml(frm);
+        const root = field.$wrapper.get(0);
+        const force = Boolean(
+            field.$wrapper._dcoForceHtmlReplace
+            || (root && root._dcoForceHtmlReplace)
+        );
+        field.$wrapper._dcoForceHtmlReplace = false;
+        if (root) root._dcoForceHtmlReplace = false;
+        if (
+            force
+            || !root
+            || root._dcoFastEntryHtml !== html
+            || !field.$wrapper.find(".dco-fast-table").length
+        ) {
+            field.$wrapper.html(html);
+            if (root) root._dcoFastEntryHtml = html;
+        }
+        bindFastMeasurements(frm);
+        loadEdgeTypes(frm);
+    }
+
+    function getOrMaterializeRow(frm, tr) {
         if (!tr) return null;
-        let row = rowByName(frm, tr.dataset.rowName);
-        if (!row && tr.classList.contains("dco-virtual-row")) row = materializeVirtualRow(frm, tr);
+        return materializeVirtualRow(frm, tr);
+    }
+
+    function syncInputToModel(frm, input, trigger = false) {
+        const tr = input.closest("tr[data-row-name]");
+        const fieldname = input.dataset.field;
+        if (!tr || !fieldname) return null;
+        const row = getOrMaterializeRow(frm, tr);
         if (!row) return null;
-        const fieldname = control.dataset.field;
-        let value = control.value;
+        let value = input.value;
         if (NUMBER_FIELDS.has(fieldname)) value = num(value);
-        if (fieldname === "qty") value = Math.max(1, Math.round(value || 1));
+        if (fieldname === "qty") value = Math.max(1, Math.trunc(value || 1));
         row[fieldname] = value;
         frm.dirty();
         updateCalculatedCells(tr, row);
-        triggerChildField(frm, row, fieldname, options.delay || 0);
+        if (trigger) triggerChildField(frm, row, fieldname, 0);
         return row;
     }
 
-    function moveToNextWidth(field, currentRowName) {
-        const rows = [...field.$wrapper.find("tr[data-row-name]")];
-        const currentIndex = rows.findIndex(row => row.dataset.rowName === currentRowName);
-        const target = rows[currentIndex + 1] || rows[rows.length - 1];
-        if (!target) return;
-        const width = target.querySelector("[data-field='width_cm']");
-        if (width) {
-            width.focus();
-            width.select();
-        }
+    function focusWidth(tr) {
+        if (!tr) return false;
+        const input = tr.querySelector("input[data-field='width_cm']");
+        if (!input) return false;
+        input.focus({ preventScroll:true });
+        input.select();
+        return document.activeElement === input;
     }
 
-    function handleFastEntryChange(frm, event) {
-        const control = event.target.closest("[data-field]");
-        if (!control) return;
-        updateRowFromControl(frm, control, { delay: control.dataset.field === "notes" ? 250 : 0 });
+    function moveToNextWidth(frm, currentTr) {
+        let next = currentTr.nextElementSibling;
+        if (!next) {
+            ensureSingleVirtualRow(frm);
+            next = currentTr.nextElementSibling;
+        }
+        if (!next) return;
+        // DOM insertion and focus are both synchronous: no timer, no grid refresh,
+        // no server round-trip, and no simulated click.
+        focusWidth(next);
+        next.scrollIntoView({ block:"nearest", inline:"nearest" });
     }
 
-    function handleFastEntryClick(frm, event) {
-        const toggleButton = event.target.closest("[data-check-field]");
-        if (toggleButton) {
-            const tr = toggleButton.closest("tr[data-row-name]");
-            let row = rowByName(frm, tr && tr.dataset.rowName);
-            if (!row && tr && tr.classList.contains("dco-virtual-row")) row = materializeVirtualRow(frm, tr);
-            if (!row) return;
-            const fieldname = toggleButton.dataset.checkField;
-            row[fieldname] = row[fieldname] ? 0 : 1;
-            toggleButton.classList.toggle("is-checked", Boolean(row[fieldname]));
-            toggleButton.setAttribute("aria-pressed", row[fieldname] ? "true" : "false");
-            const mark = toggleButton.querySelector(".dco-check-mark");
-            if (mark) mark.textContent = row[fieldname] ? "✓" : "";
-            frm.dirty();
-            updateCalculatedCells(tr, row);
-            triggerChildField(frm, row, fieldname);
-            return;
-        }
+    function toggleCheck(frm, button) {
+        const tr = button.closest("tr[data-row-name]");
+        const fieldname = button.dataset.checkField;
+        if (!tr || !CHECK_FIELDS.has(fieldname)) return;
+        const row = getOrMaterializeRow(frm, tr);
+        if (!row) return;
+        const next = row[fieldname] ? 0 : 1;
+        row[fieldname] = next;
+        frm.dirty();
+        button.classList.toggle("is-checked", Boolean(next));
+        button.setAttribute("aria-pressed", next ? "true" : "false");
+        const mark = button.querySelector(".dco-check-mark");
+        if (mark) mark.textContent = next ? "✓" : "";
+        updateCalculatedCells(tr, row);
+        triggerChildField(frm, row, fieldname, 0);
+    }
 
-        const deleteButton = event.target.closest(".dco-delete-row");
-        if (deleteButton) {
-            const tr = deleteButton.closest("tr[data-row-name]");
-            const row = rowByName(frm, tr && tr.dataset.rowName);
-            if (!row) return;
-            frappe.confirm(
-                isArabic() ? "حذف هذا السطر؟" : "Delete this row?",
-                () => {
-                    frappe.model.clear_doc(row.doctype, row.name);
-                    reindexPieces(frm);
-                    frm.dirty();
-                    renderFastEntry(frm);
-                    Promise.resolve(frm.script_manager.trigger("pieces", row.doctype, row.name)).catch(() => {});
-                }
-            );
-            return;
+    function deleteRow(frm, tr) {
+        const name = tr.dataset.rowName || "";
+        const row = rowByName(frm, name);
+        if (!row) return;
+        const index = (frm.doc.pieces || []).indexOf(row);
+        if (index >= 0) frm.doc.pieces.splice(index, 1);
+        try { frappe.model.clear_doc(row.doctype, row.name); } catch (error) { /* row already detached */ }
+        frm.dirty();
+        tr.remove();
+        reindexPieces(frm);
+        const field = frm.fields_dict.pieces_fast_entry;
+        if (field && field.$wrapper) {
+            field.$wrapper.find("tbody tr:not(.dco-virtual-row)").each(function (idx) {
+                const number = this.querySelector(".dco-row-number");
+                if (number) number.textContent = idx + 1;
+            });
         }
+        ensureSingleVirtualRow(frm);
+        Promise.resolve(frm.script_manager.trigger("pieces_remove")).catch(() => {});
+    }
 
-        const sketchButton = event.target.closest(".dco-special-sketch-button");
-        if (sketchButton && !sketchButton.disabled) {
-            const tr = sketchButton.closest("tr[data-row-name]");
-            const row = rowByName(frm, tr && tr.dataset.rowName);
-            if (!row) return;
-            if ((row.piece_type || "Regular") === "Clipped Corner") {
-                if (window.AlmdinaClippedCornerEditor && typeof window.AlmdinaClippedCornerEditor.open === "function") {
-                    window.AlmdinaClippedCornerEditor.open(frm, row);
-                } else {
-                    frappe.msgprint(isArabic() ? "تعذر فتح محرر الزاوية المقصوصة." : "Clipped-corner editor is unavailable.");
-                }
+    function bindFastMeasurements(frm) {
+        const field = frm.fields_dict.pieces_fast_entry;
+        if (!field || !field.$wrapper) return;
+        const root = field.$wrapper.get(0);
+        if (!root) return;
+
+        // Keep the live form identity even when this root is rebound after refresh.
+        // Listeners must stay singular: html() replaces children, not this wrapper, so
+        // re-attaching on every render would open stacked shape/corner dialogs.
+        root._dcoFastEntryForm = frm;
+        if (root._dcoFastMeasurementsBound) return;
+        root._dcoFastMeasurementsBound = true;
+
+        root.addEventListener("input", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const input = event.target.closest(".dco-fast-input[data-field]");
+            if (!input || !root.contains(input) || !currentFrm) return;
+            syncInputToModel(currentFrm, input, false);
+        });
+
+        root.addEventListener("change", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const control = event.target.closest("[data-field]");
+            if (!control || !root.contains(control) || !currentFrm) return;
+            const row = syncInputToModel(currentFrm, control, false);
+            if (row) {
+                triggerChildField(currentFrm, row, control.dataset.field, 0);
+                if (control.dataset.field === "piece_type") renderFastMeasurements(currentFrm);
+            }
+        });
+
+        root.addEventListener("blur", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
+            if (!input || !root.contains(input) || !currentFrm) return;
+            const row = syncInputToModel(currentFrm, input, false);
+            if (row) triggerChildField(currentFrm, row, input.dataset.field, 180);
+        }, true);
+
+        root.addEventListener("keydown", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const input = event.target.closest("input[data-field]");
+            if (!input || !root.contains(input) || !currentFrm) return;
+            const fieldname = input.dataset.field;
+            const tr = input.closest("tr[data-row-name]");
+
+            // Width -> Tab is intentionally untouched. Because this is a plain HTML
+            // editor, the browser moves directly to Length with zero Frappe row activation.
+            if (event.key === "Tab" && !event.shiftKey && fieldname === "width_cm") return;
+
+            if (event.key === "Enter" && fieldname === "width_cm") {
+                event.preventDefault();
+                const length = tr.querySelector("input[data-field='length_cm']");
+                if (length) { length.focus({ preventScroll:true }); length.select(); }
                 return;
             }
-            if (window.AlmdinaSpecialShapeEditor && typeof window.AlmdinaSpecialShapeEditor.open === "function") {
-                window.AlmdinaSpecialShapeEditor.open(frm, row);
-            } else {
-                frappe.msgprint(isArabic() ? "تعذر فتح محرر الدرفة الخاصة." : "Special-shape editor is unavailable.");
+
+            if (event.key === "Enter" && fieldname === "length_cm") {
+                event.preventDefault();
+                event.stopPropagation();
+                const row = syncInputToModel(currentFrm, input, false);
+                if (row) triggerChildField(currentFrm, row, "length_cm", 0);
+                moveToNextWidth(currentFrm, tr);
             }
-        }
-    }
-
-    function handleFastEntryKeydown(frm, event) {
-        const control = event.target.closest("[data-field]");
-        if (!control) return;
-        const tr = control.closest("tr[data-row-name]");
-        if (!tr) return;
-        if (control.dataset.field === "length_cm" && event.key === "Enter") {
-            event.preventDefault();
-            const row = updateRowFromControl(frm, control);
-            if (row) moveToNextWidth(frm.fields_dict.pieces_fast_entry, tr.dataset.rowName);
-        }
-        if (control.dataset.field === "qty" && event.key === "Enter") {
-            event.preventDefault();
-            const row = updateRowFromControl(frm, control);
-            if (row) moveToNextWidth(frm.fields_dict.pieces_fast_entry, tr.dataset.rowName);
-        }
-    }
-
-    function bindFastEntryEvents(frm) {
-        const field = frm.fields_dict.pieces_fast_entry;
-        if (!field || !field.$wrapper) return;
-        const wrapper = field.$wrapper.get(0);
-        if (wrapper._dcoFastBound) return;
-        wrapper._dcoFastBound = true;
-        wrapper.addEventListener("change", event => handleFastEntryChange(frm, event));
-        wrapper.addEventListener("input", event => {
-            const control = event.target.closest("[data-field='notes']");
-            if (control) updateRowFromControl(frm, control, { delay:250 });
         });
-        wrapper.addEventListener("click", event => handleFastEntryClick(frm, event));
-        wrapper.addEventListener("keydown", event => handleFastEntryKeydown(frm, event));
+
+        root.addEventListener("pointerdown", event => {
+            const button = event.target.closest(".dco-check-toggle,.dco-delete-row");
+            if (!button || !root.contains(button)) return;
+            // No parent Frappe grid exists here, but stop pointer bubbling so no
+            // surrounding form handler can turn a checkbox click into row activation.
+            event.stopPropagation();
+        }, true);
+
+        root.addEventListener("click", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            if (!currentFrm) return;
+            const check = event.target.closest(".dco-check-toggle[data-check-field]");
+            if (check && root.contains(check)) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleCheck(currentFrm, check);
+                return;
+            }
+            const del = event.target.closest(".dco-delete-row");
+            if (del && root.contains(del)) {
+                event.preventDefault();
+                event.stopPropagation();
+                deleteRow(currentFrm, del.closest("tr[data-row-name]"));
+                return;
+            }
+            const sketch = event.target.closest(".dco-special-sketch-button");
+            if (sketch && root.contains(sketch)) {
+                event.preventDefault();
+                event.stopPropagation();
+                const tr = sketch.closest("tr[data-row-name]");
+                const row = rowByName(currentFrm, tr && tr.dataset.rowName);
+                if (row && row.piece_type === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
+                    window.AlmdinaClippedCornerEditor.open(currentFrm, row);
+                } else if (row && window.AlmdinaSpecialShapeEditor) {
+                    window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
+                }
+            }
+        });
     }
 
-    function renderFastEntry(frm) {
-        const field = frm.fields_dict.pieces_fast_entry;
-        if (!field || !field.$wrapper) return;
+    function pruneEmptyTrailingRows(frm) {
+        const rows = frm.doc.pieces || [];
+        let changed = false;
+        for (let index = rows.length - 1; index >= 0; index--) {
+            const row = rows[index];
+            const empty = !num(row.width_cm) && !num(row.length_cm) && !String(row.notes || "").trim() &&
+                !row.edge_long_right && !row.edge_long_left && !row.edge_width_top && !row.edge_width_bottom && !row.edge_type;
+            if (!empty) break;
+            rows.splice(index, 1);
+            try { frappe.model.clear_doc(row.doctype, row.name); } catch (error) { /* no-op */ }
+            changed = true;
+        }
+        if (changed) reindexPieces(frm);
+    }
+
+    function refreshOperatorUI(frm) {
         installStyles();
-        renderStableHtml(field, "_dcoFastEntryHtml", shellHtml(frm));
-        bindFastEntryEvents(frm);
-    }
-
-    function renderStatusStrip(frm) {
-        const field = frm.fields_dict.order_status_html;
-        if (!field || !field.$wrapper) return;
-        const status = frm.doc.status || "Draft";
-        const pieces = frm.doc.pieces || [];
-        const specialCount = pieces.filter(row => (row.piece_type || "Regular") === "Special").length;
-        const documentedCount = pieces.filter(row => (row.piece_type || "Regular") === "Special" && row.special_shape_status === "Documented").length;
-        const tiles = [
-            [isArabic() ? "حالة الطلب" : "Order status", `<span class="dco-status-badge"><span class="dco-status-dot"></span>${escapeHtml(status)}</span>`],
-            [isArabic() ? "عدد الدرف" : "Pieces", String(pieces.reduce((sum,row) => sum + Math.max(0,num(row.qty)),0))],
-            [isArabic() ? "الدرف الخاصة" : "Special doors", specialCount ? `${documentedCount}/${specialCount} ${isArabic() ? "موثقة" : "documented"}` : (isArabic() ? "لا يوجد" : "None")],
-        ];
-        renderStableHtml(
-            field,
-            "_dcoStatusStripHtml",
-            `<div class="dco-status-strip">${tiles.map(([label,value]) => `<div class="dco-summary-tile"><span class="dco-label">${escapeHtml(label)}</span><span class="dco-value">${value}</span></div>`).join("")}</div>`
-        );
-    }
-
-    function apply(frm) {
-        renderStatusStrip(frm);
+        decorateSections(frm);
+        // operator_status_strip is owned exclusively by ShopFloorOrderUX. Two
+        // renderers used to replace each other after permissions/stage context
+        // loaded, which made the summary cards appear, disappear, then change.
         renderBoardSummary(frm);
-        renderFastEntry(frm);
+        renderFastMeasurements(frm);
     }
 
-    window.AlmdinaDcoOperatorUx = Object.freeze({ apply, renderFastEntry, renderStatusStrip, renderBoardSummary });
+    frappe.ui.form.on("Door Cutting Order", {
+        onload_post_render(frm) { refreshOperatorUI(frm); },
+        refresh(frm) { refreshOperatorUI(frm); },
+        almdina_edit_session_changed(frm) { refreshOperatorUI(frm); },
+        default_edge_type(frm) { refreshEdgeSelects(frm); },
+        before_save(frm) { pruneEmptyTrailingRows(frm); },
+    });
+
+    window.AlmdinaDoorCuttingFastEntry = Object.assign(
+        window.AlmdinaDoorCuttingFastEntry || {},
+        { render: renderFastMeasurements }
+    );
 })();
