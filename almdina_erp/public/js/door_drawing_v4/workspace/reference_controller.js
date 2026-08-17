@@ -119,10 +119,20 @@
 
         async function scanFromScanner() {
             if (readOnly || busy) return null;
-            setBusy(true, "جاري الاتصال بالـScanner…");
+            setBusy(true, "جاري فحص الـScanner…");
             try {
-                await reference.ScannerBridge.health();
-                setBusy(true, "اختر الـScanner وابدأ المسح من النافذة المحلية…");
+                const health = await reference.ScannerBridge.health();
+                if (!health.ready || health.deviceCount < 1) {
+                    notify(
+                        "برنامج Scanner Bridge يعمل، لكن Windows لا يرى أي Scanner عبر WIA. ثبّت تعريف الجهاز وتأكد أنه يظهر في Windows ثم أعد المحاولة.",
+                        "scanner-not-ready"
+                    );
+                    return null;
+                }
+                setBusy(true, health.deviceCount > 1
+                    ? `تم العثور على ${health.deviceCount} أجهزة. اختر الـScanner وابدأ المسح من نافذة Windows…`
+                    : "تم العثور على Scanner جاهز. ابدأ المسح من نافذة Windows…"
+                );
                 const scanned = await reference.ScannerBridge.scan({ dpi: 300, showUi: true, colorMode: "color" });
                 setBusy(false);
                 if (destroyed) return null;
