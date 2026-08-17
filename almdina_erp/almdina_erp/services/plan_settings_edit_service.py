@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import flt
 
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
+from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -24,6 +25,7 @@ _NUMERIC_FIELDS = frozenset(
     {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
 )
 _SELECT_FIELDS = frozenset({"packing_mode", "cutting_machine_type"})
+_ACTIVE_ROUTED_ORDER_STATUSES = frozenset(SHOP_FLOOR_ORDER_STATUSES.values())
 
 
 def _has_active_production_stage(doc: Any) -> bool:
@@ -35,6 +37,13 @@ def _has_production_route(doc: Any) -> bool:
         _has_active_production_stage(doc)
         or str(getattr(doc, "production_path", None) or "").strip()
     )
+
+
+def _has_active_routed_lifecycle(doc: Any) -> bool:
+    if _has_active_production_stage(doc):
+        return True
+    status = str(getattr(doc, "status", None) or "").strip()
+    return status in _ACTIVE_ROUTED_ORDER_STATUSES
 
 
 def _assert_edit_lifecycle(doc: Any) -> None:
@@ -57,11 +66,12 @@ def _assert_edit_lifecycle(doc: Any) -> None:
         )
 
     # Editing these five focused settings is authorized by
-    # EDIT_OPTIMIZER_SETTINGS itself. The current production stage remains a
-    # lifecycle signal, not a second role-based authorization gate. Separate
-    # stage-scoped commands (recalculate, handoff, etc.) keep their own policy.
+    # EDIT_OPTIMIZER_SETTINGS itself. A routed order remains mutable when the
+    # authoritative order status is one of the shop-floor `At ...` states, even
+    # if current_production_stage is absent from the document snapshot. This
+    # mirrors the order lifecycle domain instead of adding a worker-role gate.
     if _has_production_route(doc):
-        if _has_active_production_stage(doc):
+        if _has_active_routed_lifecycle(doc):
             return
         frappe.throw(
             _("انتهى المسار الإنتاجي الحالي ولا يمكن تعديل إعدادات خطة القص."),
