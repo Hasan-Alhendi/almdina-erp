@@ -5,12 +5,10 @@
     window.__almdinaPermissionActionVisibilityGuard = true;
 
     /*
-     * Frappe v16 does not consistently expose a route/link_to attribute on
-     * rendered Workspace shortcuts or persistent sidebar entries. In those
-     * cases it exposes only the configured Workspace label (often through
-     * data-widget-name/data-name or visible text). Keep this bridge explicit:
-     * labels identify UI widgets, while the server-provided surface flag stays
-     * the sole authorization decision.
+     * This module is a UI compatibility guard only. Server-side permissions
+     * remain the authorization source of truth. Keep scans route-scoped and
+     * short-lived so Desk mutations outside Almdina surfaces do not trigger
+     * repeated document-wide work.
      */
     const WORKSPACE_LABEL_SURFACES = Object.freeze({
         "أنواع القشاط وأسعاره": "edge_banding_types",
@@ -60,6 +58,15 @@
         ]),
     });
 
+    const ALMDINA_WORKSPACE_ROUTES = Object.freeze(new Set([
+        "almdina-erp",
+        "shop-floor",
+        "almdina-control-center",
+        "almdina-reports",
+        "almdina-settings",
+        "almdina-go-live",
+    ]));
+
     const STRUCTURAL_WORKSPACE_ITEM_SELECTOR = [
         ".shortcut-widget-box",
         ".widget.shortcut-widget-box",
@@ -89,8 +96,11 @@
         Object.keys(WORKSPACE_LABEL_SURFACES).sort((left, right) => right.length - left.length)
     );
 
+    const TRANSIENT_OBSERVER_MS = 5000;
+    const pendingRoots = new Set();
     let observer = null;
-    let timer = null;
+    let observerStopTimer = null;
+    let scheduledFrame = null;
 
     function permissions() {
         return window.AlmdinaPermissions || null;
@@ -119,17 +129,28 @@
             .replace(/^-+|-+$/g, "");
     }
 
-    function currentRoute() {
+    function routeState() {
         if (window.frappe && typeof frappe.get_route === "function") {
             const route = frappe.get_route();
             if (Array.isArray(route) && route.length) {
-                if (["list", "form", "query-report", "report"].includes(String(route[0] || "").toLowerCase())) {
-                    return routeSlug(route[1]);
+                const head = String(route[0] || "").toLowerCase();
+                if (["workspace", "workspaces"].includes(head)) {
+                    return { kind: "workspace", route: routeSlug(route[1] || route[0]) };
                 }
-                return routeSlug(route[0]);
+                if (["list", "form", "query-report", "report"].includes(head)) {
+                    return { kind: "route", route: routeSlug(route[1]) };
+                }
+                return { kind: "route", route: routeSlug(route[0]) };
             }
         }
-        return routeSlug(window.location.pathname || "");
+        return { kind: "route", route: routeSlug(window.location.pathname || "") };
+    }
+
+    function surfaceMode() {
+        const state = routeState();
+        if (state.route === "factory-workforce") return "workforce";
+        if (state.kind === "workspace" || ALMDINA_WORKSPACE_ROUTES.has(state.route)) return "workspace";
+        return "none";
     }
 
     function normalizedText(value) {
@@ -138,6 +159,16 @@
 
     function buttonText(button) {
         return normalizedText(button && button.textContent);
+    }
+
+    function queryWithin(root, selector) {
+        if (!root) return [];
+        const results = [];
+        if (root.nodeType === Node.ELEMENT_NODE && typeof root.matches === "function" && root.matches(selector)) {
+            results.push(root);
+        }
+        if (typeof root.querySelectorAll === "function") results.push(...root.querySelectorAll(selector));
+        return results;
     }
 
     function setHidden(element, hidden, marker) {
@@ -188,9 +219,7 @@
         ].map(normalizedText).filter(Boolean);
 
         for (const value of values) {
-            if (Object.prototype.hasOwnProperty.call(WORKSPACE_LABEL_SURFACES, value)) {
-                return value;
-            }
+            if (Object.prototype.hasOwnProperty.call(WORKSPACE_LABEL_SURFACES, value)) return value;
         }
 
         if (!allowVisibleText) return "";
@@ -206,14 +235,12 @@
         if (!element) return null;
         const structural = element.closest && element.closest(STRUCTURAL_WORKSPACE_ITEM_SELECTOR);
         if (structural) return structural;
-        if (typeof element.matches === "function" && element.matches("[data-widget-name]")) {
-            return element;
-        }
+        if (typeof element.matches === "function" && element.matches("[data-widget-name]")) return element;
         return null;
     }
 
-    function guardWorkspaceItems() {
-        document.querySelectorAll(WORKSPACE_ITEM_SELECTOR).forEach(element => {
+    function guardWorkspaceItems(root) {
+        queryWithin(root, WORKSPACE_ITEM_SELECTOR).forEach(element => {
             const container = workspaceItemContainer(element);
             if (!container) return;
             const structural = Boolean(
@@ -229,9 +256,7 @@
 
     function sectionLabel(element) {
         const value = normalizedText(element && element.textContent);
-        return Object.prototype.hasOwnProperty.call(WORKSPACE_SECTION_SURFACES, value)
-            ? value
-            : "";
+        return Object.prototype.hasOwnProperty.call(WORKSPACE_SECTION_SURFACES, value) ? value : "";
     }
 
     function sectionHeaderContainer(element) {
@@ -242,8 +267,8 @@
         );
     }
 
-    function guardWorkspaceSections() {
-        document.querySelectorAll(WORKSPACE_HEADER_SELECTOR).forEach(element => {
+    function guardWorkspaceSections(root) {
+        queryWithin(root, WORKSPACE_HEADER_SELECTOR).forEach(element => {
             const label = sectionLabel(element);
             if (!label) return;
             const allowed = WORKSPACE_SECTION_SURFACES[label].some(surfaceAllowed);
@@ -255,50 +280,91 @@
         });
     }
 
-    function guardWorkforceActions() {
-        if (currentRoute() !== "factory-workforce") return;
-        const mayCreate = can("create_users");
-        document.querySelectorAll(".page-head .btn-primary, .page-actions .btn-primary").forEach(button => {
+    function guardWorkforceActions(root) {
+        queryWithin(root, ".page-head .btn-primary, .page-actions .btn-primary").forEach(button => {
             const text = buttonText(button);
             if (/إضافة مستخدم|إنشاء مستخدم|add user|create user/i.test(text)) {
-                hideButton(button, !mayCreate);
+                hideButton(button, !can("create_users"));
             }
         });
     }
 
-    function apply() {
-        guardWorkspaceItems();
-        guardWorkspaceSections();
-        guardWorkforceActions();
+    function applyRoot(root) {
+        const mode = surfaceMode();
+        if (mode === "workspace") {
+            guardWorkspaceItems(root);
+            guardWorkspaceSections(root);
+            return;
+        }
+        if (mode === "workforce") guardWorkforceActions(root);
     }
 
-    function schedule() {
-        if (timer) window.clearTimeout(timer);
-        timer = window.setTimeout(() => {
-            timer = null;
-            apply();
-        }, 0);
+    function compactPendingRoots() {
+        const roots = Array.from(pendingRoots);
+        return roots.filter((candidate, index) => {
+            if (!candidate || candidate.nodeType !== Node.ELEMENT_NODE) return false;
+            return !roots.some((other, otherIndex) => (
+                otherIndex !== index
+                && other
+                && other.nodeType === Node.ELEMENT_NODE
+                && typeof other.contains === "function"
+                && other.contains(candidate)
+            ));
+        });
     }
 
-    function startObserver() {
-        if (observer || !document.body) return;
+    function flushPendingRoots() {
+        scheduledFrame = null;
+        const roots = compactPendingRoots();
+        pendingRoots.clear();
+        roots.forEach(applyRoot);
+    }
+
+    function scheduleRoot(root) {
+        if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
+        pendingRoots.add(root);
+        if (scheduledFrame !== null) return;
+        const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+        scheduledFrame = schedule(flushPendingRoots);
+    }
+
+    function disconnectObserver() {
+        if (observer) observer.disconnect();
+        observer = null;
+        if (observerStopTimer) window.clearTimeout(observerStopTimer);
+        observerStopTimer = null;
+        pendingRoots.clear();
+    }
+
+    function startTransientObserver() {
+        if (!document.body || surfaceMode() === "none") return;
         observer = new MutationObserver(mutations => {
-            if (mutations.some(mutation => mutation.addedNodes && mutation.addedNodes.length)) {
-                schedule();
+            for (const mutation of mutations) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) scheduleRoot(node);
+                    else if (node.parentElement) scheduleRoot(node.parentElement);
+                });
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
+        observerStopTimer = window.setTimeout(disconnectObserver, TRANSIENT_OBSERVER_MS);
+    }
+
+    function refreshSurface() {
+        disconnectObserver();
+        const mode = surfaceMode();
+        if (mode === "none") return;
+        applyRoot(document);
+        startTransientObserver();
     }
 
     function start() {
-        startObserver();
-        apply();
+        refreshSurface();
         if (window.frappe && frappe.router && !frappe.router.__almdinaActionVisibilityGuard) {
             frappe.router.__almdinaActionVisibilityGuard = true;
-            frappe.router.on("change", schedule);
+            frappe.router.on("change", () => window.setTimeout(refreshSurface, 0));
         }
-        window.addEventListener("almdina:permissions-updated", schedule);
-        [100, 300, 800, 1600].forEach(delay => window.setTimeout(apply, delay));
+        window.addEventListener("almdina:permissions-updated", refreshSurface);
     }
 
     if (document.readyState === "loading") {
