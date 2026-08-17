@@ -206,8 +206,16 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'matchMedia("(max-width: 600px)")' in list_source
     assert 'if (!applyCardLayoutClass(listview)) return;' in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=4"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=5"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
+    scoped_result_rule = mobile_css.split(
+        ".dco-order-list.dco-order-card-layout .result {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "height: auto !important;" in scoped_result_rule
+    assert "min-height: 100%;" in scoped_result_rule
+    assert "max-height:" not in scoped_result_rule
+    assert "overflow: hidden" not in scoped_result_rule
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
     assert ".dco-card-production-action.is-start" in mobile_css
     assert ".dco-card-production-action.is-finish" in mobile_css
@@ -219,6 +227,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
     assert ".dco-order-list:not(.dco-order-card-layout)" in css
+    assert ".dco-order-list:not(.dco-order-card-layout)" not in mobile_css
     assert "min-width: 980px" in css
 
     assert '"/assets/almdina_erp/js/shop_floor_quick_actions.js"' in hooks
