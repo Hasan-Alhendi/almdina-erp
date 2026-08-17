@@ -9,11 +9,12 @@
     const dimensions = v4.DimensionCommands;
     const driving = v4.DrivingDimensionCommands;
     const inference = v4.ConstraintInference;
+    const solver = v4.ConstraintSolver;
     const snapResolver = v4.SnapResolver;
     const hitTest = v4.HitTest;
     const historyFactory = v4.CommandHistory;
     const tools = v4.ToolStateMachine;
-    if (!geometry || !documentModel || !commands || !dimensions || !driving || !inference || !snapResolver || !hitTest || !historyFactory || !tools) {
+    if (!geometry || !documentModel || !commands || !dimensions || !driving || !inference || !solver || !snapResolver || !hitTest || !historyFactory || !tools) {
         throw new Error("Door Drawing professional session dependencies are incomplete");
     }
 
@@ -46,7 +47,10 @@
                     nodeId: drag.nodeId,
                     origin: drag.origin,
                     current,
-                    delta: Object.freeze({ xMm: geometry.roundMm(current.xMm - drag.origin.xMm), yMm: geometry.roundMm(current.yMm - drag.origin.yMm) }),
+                    delta: Object.freeze({
+                        xMm: geometry.roundMm(current.xMm - drag.origin.xMm),
+                        yMm: geometry.roundMm(current.yMm - drag.origin.yMm),
+                    }),
                 }) : null,
                 history: history.snapshot(),
             });
@@ -66,7 +70,10 @@
                 canClose,
                 closeNodeId: canClose ? currentPath.startNodeId : null,
                 previousSnap: snapLock,
-                releaseToleranceMm: Math.max(toleranceMm, Number(input.releaseToleranceMm) || toleranceMm * snapResolver.DEFAULT_RELEASE_MULTIPLIER),
+                releaseToleranceMm: Math.max(
+                    toleranceMm,
+                    Number(input.releaseToleranceMm) || toleranceMm * snapResolver.DEFAULT_RELEASE_MULTIPLIER
+                ),
             });
             snapLock = result.type === "free" ? null : result;
             return result;
@@ -75,6 +82,20 @@
             const result = inference.inferSegmentAxis(document, segmentId, { idFactory, toleranceMm: 0.01 });
             document = result.document;
             return result;
+        }
+        function incidentSegments(nodeId, source = document) {
+            return (source.segments || []).filter(segment => segment.startNodeId === nodeId || segment.endNodeId === nodeId);
+        }
+        function otherNode(segment, nodeId, source = document) {
+            const otherId = segment.startNodeId === nodeId ? segment.endNodeId : segment.startNodeId;
+            return documentModel.nodeById(source, otherId);
+        }
+        function fixedLengthConstraintsFor(nodeId) {
+            const segmentIds = new Set(incidentSegments(nodeId).map(segment => segment.id));
+            return (document.constraints || []).filter(constraint => (
+                constraint.type === documentModel.CONSTRAINT_TYPES.FIXED_LENGTH
+                && segmentIds.has(constraint.segmentId)
+            ));
         }
         function setTool(tool) {
             if (drag) cancelDrag();
@@ -90,15 +111,28 @@
                 const target = snapResolver.resolve(document, {
                     ...input,
                     rawPoint,
-                    origin: drag.origin,
+                    origin: drag.referenceNode,
                     excludeNodeIds: [drag.nodeId],
                     canClose: false,
                     previousSnap: snapLock,
-                    releaseToleranceMm: Math.max(toleranceMm, Number(input.releaseToleranceMm) || toleranceMm * snapResolver.DEFAULT_RELEASE_MULTIPLIER),
+                    releaseToleranceMm: Math.max(
+                        toleranceMm,
+                        Number(input.releaseToleranceMm) || toleranceMm * snapResolver.DEFAULT_RELEASE_MULTIPLIER
+                    ),
                 });
                 snapLock = target.type === "free" ? null : target;
                 preview = target;
-                document = documentModel.moveNode(document, drag.nodeId, target.point);
+                const moved = documentModel.moveNode(document, drag.nodeId, target.point);
+                const solved = solver.solve(moved, {
+                    pinnedNodeIds: [drag.nodeId],
+                    toleranceMm: 0.01,
+                });
+                if (solved.ok) {
+                    document = solved.document;
+                    drag.lastValid = document;
+                } else {
+                    document = drag.lastValid;
+                }
                 return state();
             }
             if (toolState.activeTool !== tools.TOOLS.PEN) {
@@ -131,7 +165,9 @@
                 selection = Object.freeze({ kind: "path", id: closedPathId });
                 return Object.freeze({ kind: "path-closed", pathId: closedPathId, ...state() });
             }
-            if (geometry.distance(currentAnchor, target.point) <= geometry.EPSILON_MM) return Object.freeze({ kind: "ignored-zero-length", ...state() });
+            if (geometry.distance(currentAnchor, target.point) <= geometry.EPSILON_MM) {
+                return Object.freeze({ kind: "ignored-zero-length", ...state() });
+            }
             const before = document;
             const result = commands.appendLine(document, activePathId, target, { idFactory });
             document = result.document;
@@ -142,27 +178,37 @@
         }
         function beginNodeDrag(rawPoint, input = {}) {
             const hit = hitTest.node(document, rawPoint, Math.max(0, Number(input.hitToleranceMm ?? input.toleranceMm) || 0));
-            if (!hit) { selection = null; return Object.freeze({ kind: "selection-cleared", ...state() }); }
-            const node = documentModel.nodeById(document, hit.id);
-            const incident = (document.segments || []).filter(segment => segment.startNodeId === hit.id || segment.endNodeId === hit.id);
-            const constrained = new Set((document.constraints || []).map(item => item.segmentId));
-            if (incident.some(segment => constrained.has(segment.id))) {
-                selection = Object.freeze({ kind: "node", id: hit.id });
-                return Object.freeze({ kind: "constraint-protected-node", nodeId: hit.id, ...state() });
+            if (!hit) {
+                selection = null;
+                return Object.freeze({ kind: "selection-cleared", ...state() });
             }
+            const node = documentModel.nodeById(document, hit.id);
             selection = Object.freeze({ kind: "node", id: hit.id });
-            drag = Object.freeze({ nodeId: hit.id, origin: node, before: document });
+            if (fixedLengthConstraintsFor(hit.id).length) {
+                return Object.freeze({ kind: "fixed-length-protected-node", nodeId: hit.id, ...state() });
+            }
+            const incident = incidentSegments(hit.id);
+            const referenceNode = incident.length ? otherNode(incident[0], hit.id) : null;
+            drag = {
+                nodeId: hit.id,
+                origin: node,
+                referenceNode,
+                before: document,
+                lastValid: document,
+            };
             resetSnap();
             return Object.freeze({ kind: "node-drag-started", nodeId: hit.id, ...state() });
         }
         function finishDrag() {
             if (!drag) return Object.freeze({ kind: "ignored", ...state() });
-            const session = drag;
+            const dragSession = drag;
             drag = null;
             resetSnap();
-            const current = documentModel.nodeById(document, session.nodeId);
-            if (geometry.distance(session.origin, current) > geometry.EPSILON_MM) record(session.before, "move-node");
-            return Object.freeze({ kind: "node-drag-finished", nodeId: session.nodeId, ...state() });
+            const current = documentModel.nodeById(document, dragSession.nodeId);
+            if (geometry.distance(dragSession.origin, current) > geometry.EPSILON_MM) {
+                record(dragSession.before, "move-node");
+            }
+            return Object.freeze({ kind: "node-drag-finished", nodeId: dragSession.nodeId, ...state() });
         }
         function cancelDrag() {
             if (!drag) return false;
@@ -173,7 +219,10 @@
         }
         function dimensionDown(rawPoint, input = {}) {
             const hit = hitTest.segment(document, rawPoint, Math.max(0, Number(input.hitToleranceMm ?? input.toleranceMm) || 0));
-            if (!hit) { selection = null; return Object.freeze({ kind: "selection-cleared", ...state() }); }
+            if (!hit) {
+                selection = null;
+                return Object.freeze({ kind: "selection-cleared", ...state() });
+            }
             const before = document;
             const result = dimensions.ensureSegmentLength(document, hit.id, { idFactory });
             document = result.document;
@@ -192,16 +241,25 @@
             }
             return Object.freeze({ kind: "ignored", ...state() });
         }
-        function pointerUp() { return drag ? finishDrag() : Object.freeze({ kind: "ignored", ...state() }); }
+        function pointerUp() {
+            return drag ? finishDrag() : Object.freeze({ kind: "ignored", ...state() });
+        }
         function inputLength(lengthMm) {
-            if (toolState.activeTool !== tools.TOOLS.PEN || !activePathId || !preview) return Object.freeze({ kind: "ignored", ...state() });
+            if (toolState.activeTool !== tools.TOOLS.PEN || !activePathId || !preview) {
+                return Object.freeze({ kind: "ignored", ...state() });
+            }
             const length = geometry.finiteNumber(lengthMm);
             if (length <= geometry.EPSILON_MM) return Object.freeze({ kind: "invalid-length", ...state() });
             const currentAnchor = anchor();
             const angleDeg = geometry.angleDeg(currentAnchor, preview.point);
             const exactPoint = geometry.pointFromPolar(currentAnchor, length, angleDeg);
             const before = document;
-            const result = commands.appendLine(document, activePathId, { type: "numeric", semantic: "numeric", point: exactPoint, nodeId: null }, { idFactory });
+            const result = commands.appendLine(document, activePathId, {
+                type: "numeric",
+                semantic: "numeric",
+                point: exactPoint,
+                nodeId: null,
+            }, { idFactory });
             document = result.document;
             smartenSegment(result.segmentId);
             resetSnap();
@@ -209,7 +267,9 @@
             return Object.freeze({ kind: "segment-added", source: "numeric-length", segmentId: result.segmentId, ...state() });
         }
         function inputDimensionValue(valueMm) {
-            if (toolState.activeTool !== tools.TOOLS.DIMENSION || !selection || selection.kind !== "dimension") return Object.freeze({ kind: "ignored", ...state() });
+            if (toolState.activeTool !== tools.TOOLS.DIMENSION || !selection || selection.kind !== "dimension") {
+                return Object.freeze({ kind: "ignored", ...state() });
+            }
             const before = document;
             const result = driving.drive(document, selection.id, geometry.finiteNumber(valueMm), { idFactory });
             if (!result.ok) return Object.freeze({ kind: "dimension-drive-failed", code: result.code, ...state() });
@@ -219,17 +279,67 @@
         }
         function cancel() {
             if (cancelDrag()) return Object.freeze({ kind: "node-drag-cancelled", ...state() });
-            if (activePathId) { activePathId = null; resetSnap(); return Object.freeze({ kind: "pen-session-ended", ...state() }); }
-            if (selection) { selection = null; return Object.freeze({ kind: "selection-cleared", ...state() }); }
+            if (activePathId) {
+                activePathId = null;
+                resetSnap();
+                return Object.freeze({ kind: "pen-session-ended", ...state() });
+            }
+            if (selection) {
+                selection = null;
+                return Object.freeze({ kind: "selection-cleared", ...state() });
+            }
             return Object.freeze({ kind: "ignored", ...state() });
         }
-        function undo() { cancelDrag(); activePathId = null; selection = null; resetSnap(); const result = history.undo(document); document = result.document; return Object.freeze({ kind: result.changed ? "undo" : "ignored", ...state() }); }
-        function redo() { cancelDrag(); activePathId = null; selection = null; resetSnap(); const result = history.redo(document); document = result.document; return Object.freeze({ kind: result.changed ? "redo" : "ignored", ...state() }); }
-        function spaceDown() { if (drag) finishDrag(); toolState = tools.activateTemporary(toolState, tools.TOOLS.HAND); resetSnap(); return state(); }
-        function spaceUp() { toolState = tools.restoreTemporary(toolState); return state(); }
-        function selectPath(id) { selection = documentModel.pathById(document, id) ? Object.freeze({ kind: "path", id: String(id) }) : null; return state(); }
+        function undo() {
+            cancelDrag();
+            activePathId = null;
+            selection = null;
+            resetSnap();
+            const result = history.undo(document);
+            document = result.document;
+            return Object.freeze({ kind: result.changed ? "undo" : "ignored", ...state() });
+        }
+        function redo() {
+            cancelDrag();
+            activePathId = null;
+            selection = null;
+            resetSnap();
+            const result = history.redo(document);
+            document = result.document;
+            return Object.freeze({ kind: result.changed ? "redo" : "ignored", ...state() });
+        }
+        function spaceDown() {
+            if (drag) finishDrag();
+            toolState = tools.activateTemporary(toolState, tools.TOOLS.HAND);
+            resetSnap();
+            return state();
+        }
+        function spaceUp() {
+            toolState = tools.restoreTemporary(toolState);
+            return state();
+        }
+        function selectPath(id) {
+            selection = documentModel.pathById(document, id)
+                ? Object.freeze({ kind: "path", id: String(id) })
+                : null;
+            return state();
+        }
 
-        return Object.freeze({ state, setTool, pointerMove, pointerDown, pointerUp, inputLength, inputDimensionValue, cancel, undo, redo, spaceDown, spaceUp, selectPath });
+        return Object.freeze({
+            state,
+            setTool,
+            pointerMove,
+            pointerDown,
+            pointerUp,
+            inputLength,
+            inputDimensionValue,
+            cancel,
+            undo,
+            redo,
+            spaceDown,
+            spaceUp,
+            selectPath,
+        });
     }
 
     root.EditorSession = Object.freeze({ create });
