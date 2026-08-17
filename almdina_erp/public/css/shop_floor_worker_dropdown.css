@@ -1,0 +1,189 @@
+/*
+ * Worker handoff dropdown presentation.
+ *
+ * This stylesheet intentionally styles a custom, anchored dropdown instead of a
+ * native <select>. Mobile browsers may promote native selects into system-level
+ * pickers detached from the Frappe dialog; this surface must remain visually
+ * attached to the "next worker" field.
+ */
+
+.almdina-worker-dropdown-field {
+    --almdina-dropdown-border: var(--border-color, #dfe3e8);
+    --almdina-dropdown-bg: var(--card-bg, var(--fg-color, #fff));
+    --almdina-dropdown-text: var(--text-color, #0f172a);
+    --almdina-dropdown-muted: var(--text-muted, #64748b);
+    --almdina-dropdown-primary: var(--primary, #2490ef);
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    direction: rtl;
+}
+
+.almdina-worker-dropdown-label {
+    color: var(--almdina-dropdown-text);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.6;
+}
+
+.almdina-worker-dropdown {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+
+.almdina-worker-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 13px;
+    border: 1px solid var(--almdina-dropdown-border);
+    border-radius: 11px;
+    background: var(--control-bg, var(--almdina-dropdown-bg));
+    color: var(--almdina-dropdown-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.almdina-worker-dropdown-trigger:hover {
+    border-color: color-mix(in srgb, var(--almdina-dropdown-primary) 42%, var(--almdina-dropdown-border));
+}
+
+.almdina-worker-dropdown-trigger:focus-visible,
+.almdina-worker-dropdown.is-open .almdina-worker-dropdown-trigger {
+    outline: none;
+    border-color: var(--almdina-dropdown-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--almdina-dropdown-primary) 15%, transparent);
+}
+
+.almdina-worker-dropdown-value {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 1.5;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-worker-dropdown-value.is-placeholder {
+    color: var(--almdina-dropdown-muted);
+    font-weight: 500;
+}
+
+.almdina-worker-dropdown-chevron {
+    flex: 0 0 auto;
+    color: var(--almdina-dropdown-muted);
+    font-size: 17px;
+    line-height: 1;
+    transform: rotate(0deg);
+    transition: transform .16s ease;
+}
+
+.almdina-worker-dropdown.is-open .almdina-worker-dropdown-chevron {
+    transform: rotate(180deg);
+}
+
+.almdina-worker-dropdown-menu {
+    position: absolute;
+    z-index: 1085;
+    top: calc(100% + 7px);
+    inset-inline: 0;
+    display: grid;
+    gap: 4px;
+    max-height: min(280px, 36vh);
+    margin: 0;
+    padding: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--almdina-dropdown-border);
+    border-radius: 12px;
+    background: var(--almdina-dropdown-bg);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, .16);
+    -webkit-overflow-scrolling: touch;
+}
+
+.almdina-worker-dropdown-menu[hidden] {
+    display: none;
+}
+
+.almdina-worker-dropdown.is-drop-up .almdina-worker-dropdown-menu {
+    top: auto;
+    bottom: calc(100% + 7px);
+}
+
+.almdina-worker-dropdown-option {
+    display: grid;
+    gap: 1px;
+    width: 100%;
+    min-height: 46px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--almdina-dropdown-text);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.almdina-worker-dropdown-option:hover,
+.almdina-worker-dropdown-option:focus-visible {
+    outline: none;
+    background: var(--subtle-fg, #f7f8fa);
+}
+
+.almdina-worker-dropdown-option[aria-selected="true"] {
+    background: color-mix(in srgb, var(--almdina-dropdown-primary) 10%, var(--almdina-dropdown-bg));
+    color: var(--almdina-dropdown-primary);
+}
+
+.almdina-worker-dropdown-option-name {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-worker-dropdown-option-meta {
+    overflow: hidden;
+    color: var(--almdina-dropdown-muted);
+    font-size: 11px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: ltr;
+    text-align: start;
+}
+
+@media (max-width: 600px) {
+    .almdina-worker-dropdown-trigger {
+        min-height: 52px;
+        padding: 11px 13px;
+        border-radius: 12px;
+    }
+
+    .almdina-worker-dropdown-menu {
+        max-height: min(248px, 32dvh);
+    }
+
+    .almdina-worker-dropdown-option {
+        min-height: 50px;
+        padding: 9px 11px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-worker-dropdown-trigger,
+    .almdina-worker-dropdown-chevron {
+        transition: none;
+    }
+}
