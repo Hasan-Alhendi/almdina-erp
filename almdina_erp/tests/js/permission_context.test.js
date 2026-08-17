@@ -16,6 +16,10 @@ function load(rawContext) {
             return 1;
         },
         clearInterval() {},
+        setTimeout(callback) {
+            callback();
+            return 1;
+        },
     };
     const fakeFrappe = {
         boot: rawContext === undefined ? {} : { almdina_permissions: rawContext },
