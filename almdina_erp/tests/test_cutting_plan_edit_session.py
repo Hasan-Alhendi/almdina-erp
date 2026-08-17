@@ -84,7 +84,8 @@ def test_plan_settings_are_read_only_until_explicit_edit_button() -> None:
     assert "function planSettingsMayWrite(frm)" in edit_session
     assert "isEditing(frm) && canEditPlanSettings(frm)" in edit_session
     assert 'can(frm, "edit_optimizer_settings")' in edit_session
-    assert "context.canTuneCuttingAlgorithm(frm)" in edit_session
+    assert "context.canTuneCuttingAlgorithm(frm)" not in edit_session
+    assert "function lifecycleAllowsEdit(frm)" in edit_session
 
     assert "dco-plan-settings-edit" in edit_session
     assert "dco-plan-settings-save" in edit_session
@@ -95,7 +96,8 @@ def test_plan_settings_are_read_only_until_explicit_edit_button() -> None:
 
     assert "window.AlmdinaPlanEditSessionUX" in adapter
     assert "editor.planSettingsMayWrite(frm)" in adapter
-    assert "!editor.planSettingsMayWrite(frm)" in adapter
+    assert 'field.df[STATUS_KEY] = editingAllowed ? "Write" : "Read"' in adapter
+    assert 'frm.set_df_property(fieldname, "read_only", desiredReadOnly)' in adapter
     assert 'return "Read";' in adapter
 
 
@@ -121,7 +123,7 @@ def test_focused_save_contract_never_uses_broad_order_save_or_permission_bypass(
     assert "plan_settings_edit_service.save_plan_settings" in frontend
     assert "require_document_capability(" in backend
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in backend
-    assert "require_stage_operational_access(doc)" in backend
+    assert "require_stage_operational_access" not in backend
     assert 'frappe.db.set_value(' in backend
     assert '"plan_needs_recalculation"' in backend
     assert "ignore_permissions" not in backend
@@ -130,32 +132,26 @@ def test_focused_save_contract_never_uses_broad_order_save_or_permission_bypass(
 
 
 class TestPlanSettingsEditService(TestCase):
-    def test_routed_order_requires_current_stage_operational_access(self) -> None:
+    def test_routed_order_with_active_stage_uses_focused_capability_not_stage_role(self) -> None:
         doc = FakeOrder(
             status="In Production",
             current_production_stage="STAGE-001",
             production_path="ROUTE-001",
         )
 
-        with patch.object(service, "require_stage_operational_access") as stage_gate:
-            service._assert_edit_lifecycle(doc)
+        # The whitelist command has already required EDIT_OPTIMIZER_SETTINGS.
+        # Lifecycle validation must not add a second current-worker role gate.
+        service._assert_edit_lifecycle(doc)
 
-        stage_gate.assert_called_once_with(doc)
-
-    def test_handed_off_order_fails_closed_when_stage_access_is_denied(self) -> None:
+    def test_finished_routed_order_without_active_stage_fails_closed(self) -> None:
         doc = FakeOrder(
             status="Completed",
             current_production_stage=None,
             production_path="ROUTE-001",
         )
 
-        with patch.object(
-            service,
-            "require_stage_operational_access",
-            side_effect=frappe.PermissionError("not current stage actor"),
-        ):
-            with self.assertRaises(frappe.PermissionError):
-                service._assert_edit_lifecycle(doc)
+        with self.assertRaises(frappe.PermissionError):
+            service._assert_edit_lifecycle(doc)
 
     def test_save_persists_only_changed_plan_settings_and_marks_plan_stale(self) -> None:
         doc = FakeOrder()
