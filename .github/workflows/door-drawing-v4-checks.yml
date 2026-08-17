@@ -8,14 +8,22 @@ on:
       - "almdina_erp/public/js/door_drawing_v4/**"
       - "almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js"
       - "almdina_erp/public/css/door_drawing_v4.css"
+      - "almdina_erp/public/css/door_drawing_professional.css"
+      - "almdina_erp/almdina_erp/page/door_drawing/**"
+      - "almdina_erp/almdina_erp/services/special_shape_workspace_service.py"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
+      - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
       - ".github/workflows/door-drawing-v4-checks.yml"
   pull_request:
     paths:
       - "almdina_erp/public/js/door_drawing_v4/**"
       - "almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js"
       - "almdina_erp/public/css/door_drawing_v4.css"
+      - "almdina_erp/public/css/door_drawing_professional.css"
+      - "almdina_erp/almdina_erp/page/door_drawing/**"
+      - "almdina_erp/almdina_erp/services/special_shape_workspace_service.py"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
+      - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
       - ".github/workflows/door-drawing-v4-checks.yml"
 
 permissions:
@@ -34,7 +42,12 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Validate Door Drawing V4 JavaScript syntax
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Door Drawing JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -42,6 +55,13 @@ jobs:
             node --check "$file"
           done < <(find almdina_erp/public/js/door_drawing_v4 -type f -name '*.js' -print0)
           node --check almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js
+          node --check almdina_erp/almdina_erp/page/door_drawing/door_drawing.js
+
+      - name: Validate professional workspace Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile almdina_erp/almdina_erp/services/special_shape_workspace_service.py
 
       - name: Run Door Drawing V4 regression tests
         shell: bash
@@ -50,9 +70,12 @@ jobs:
           shopt -s nullglob
           output_file="$RUNNER_TEMP/door-drawing-v4-tests.log"
           : > "$output_file"
-          tests=(almdina_erp/tests/js/door_drawing_v4_*.test.js)
+          tests=(
+            almdina_erp/tests/js/door_drawing_v4_*.test.js
+            almdina_erp/tests/js/door_drawing_professional_*.test.js
+          )
           if (( ${#tests[@]} == 0 )); then
-            echo "No Door Drawing V4 regression tests found" | tee -a "$output_file" >&2
+            echo "No Door Drawing regression tests found" | tee -a "$output_file" >&2
             exit 1
           fi
           for test_file in "${tests[@]}"; do
@@ -60,7 +83,7 @@ jobs:
             node "$test_file" 2>&1 | tee -a "$output_file"
           done
 
-      - name: Upload Door Drawing V4 failure diagnostics
+      - name: Upload Door Drawing failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
