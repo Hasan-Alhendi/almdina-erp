@@ -2,7 +2,12 @@
     "use strict";
 
     const root = window.AlmdinaDoorDrawingProfessional = window.AlmdinaDoorDrawingProfessional || Object.create(null);
-    const TOOL_SHORTCUTS = Object.freeze({ v: "select", a: "node", p: "pen", d: "dimension" });
+    const TOOL_SHORTCUTS = Object.freeze({
+        KeyV: Object.freeze({ tool: "select", label: "v" }),
+        KeyA: Object.freeze({ tool: "node", label: "a" }),
+        KeyP: Object.freeze({ tool: "pen", label: "p" }),
+        KeyD: Object.freeze({ tool: "dimension", label: "d" }),
+    });
 
     function isTextEditingTarget(target) {
         if (!target || target === document.body) return false;
@@ -18,6 +23,10 @@
         return Boolean(scope && scope.isConnected && scope.getClientRects && scope.getClientRects().length);
     }
 
+    function physicalCode(event) {
+        return String(event && event.code || "");
+    }
+
     function mount(scope, handlers = {}) {
         if (!scope) throw new Error("Keyboard controller requires a workspace scope");
         let spaceHeld = false;
@@ -26,19 +35,20 @@
         function keydown(event) {
             if (destroyed || !visible(scope) || event.isComposing || isTextEditingTarget(event.target)) return;
             const key = String(event.key || "").toLowerCase();
+            const code = physicalCode(event);
             const command = event.ctrlKey || event.metaKey;
-            if (command && !event.altKey && key === "z") {
+            if (command && !event.altKey && (code === "KeyZ" || key === "z")) {
                 event.preventDefault();
                 if (event.shiftKey) handlers.redo && handlers.redo();
                 else handlers.undo && handlers.undo();
                 return;
             }
-            if (command && !event.altKey && key === "y") {
+            if (command && !event.altKey && (code === "KeyY" || key === "y")) {
                 event.preventDefault();
                 handlers.redo && handlers.redo();
                 return;
             }
-            if (event.code === "Space") {
+            if (code === "Space") {
                 event.preventDefault();
                 if (!spaceHeld && !event.repeat) {
                     spaceHeld = true;
@@ -46,9 +56,10 @@
                 }
                 return;
             }
-            if (TOOL_SHORTCUTS[key]) {
+            const shortcut = TOOL_SHORTCUTS[code];
+            if (shortcut && !command && !event.altKey) {
                 event.preventDefault();
-                handlers.tool && handlers.tool(TOOL_SHORTCUTS[key], key);
+                handlers.tool && handlers.tool(shortcut.tool, shortcut.label);
                 return;
             }
             if (event.key === "Escape") {
@@ -70,7 +81,7 @@
         }
 
         function keyup(event) {
-            if (destroyed || event.code !== "Space" || !spaceHeld) return;
+            if (destroyed || physicalCode(event) !== "Space" || !spaceHeld) return;
             event.preventDefault();
             spaceHeld = false;
             handlers.spaceUp && handlers.spaceUp();
