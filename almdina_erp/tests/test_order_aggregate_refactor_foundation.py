@@ -25,17 +25,23 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
     SYSTEM,
+    UPLOADED_DXF,
     CuttingPlanLifecycleError,
     revision_from_approved,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
+    PLAN_COMMAND_FLAG,
+    is_authorized_plan_command,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = ROOT / "almdina_erp"
 
 
 def _doctype_json(name: str) -> dict:
     slug = name.lower().replace(" ", "_")
-    path = ROOT / "almdina_erp" / "doctype" / slug / f"{slug}.json"
+    path = APP_ROOT / "doctype" / slug / f"{slug}.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -112,6 +118,28 @@ def test_plan_revision_use_case_copies_settings_without_mutating_approved_plan()
     assert repository.plan == approved
 
 
+def test_new_revision_can_switch_from_uploaded_dxf_to_system_source() -> None:
+    approved = PlanRecord(
+        name="CP-DXF-0001",
+        order_name="DCO-0001",
+        revision=4,
+        status=APPROVED,
+        source_type=UPLOADED_DXF,
+        based_on_plan="CP-0003",
+        settings=_settings(),
+    )
+    repository = MemoryPlanRepository(approved)
+    created = create_revision(
+        CreatePlanRevisionCommand("CP-DXF-0001", source_type=SYSTEM),
+        repository,
+    )
+    assert created.status == DRAFT
+    assert created.revision == 5
+    assert created.source_type == SYSTEM
+    assert created.based_on_plan == "CP-DXF-0001"
+    assert repository.plan == approved
+
+
 def test_only_draft_plan_settings_are_mutable() -> None:
     draft = PlanRecord(
         name="CP-0002",
@@ -136,6 +164,21 @@ def test_only_draft_plan_settings_are_mutable() -> None:
     repository.plan = replace(draft, status=APPROVED)
     with pytest.raises(CuttingPlanLifecycleError):
         update_settings(UpdatePlanSettingsCommand("CP-0002", _settings()), repository)
+
+
+def test_scoped_plan_command_flag_is_ephemeral_authorization_boundary() -> None:
+    class Flags(dict):
+        pass
+
+    class Doc:
+        flags = Flags()
+
+    doc = Doc()
+    assert not is_authorized_plan_command(doc)
+    doc.flags[PLAN_COMMAND_FLAG] = "recalculate_plan"
+    assert is_authorized_plan_command(doc)
+    doc.flags[PLAN_COMMAND_FLAG] = "edit_order"
+    assert not is_authorized_plan_command(doc)
 
 
 def test_costing_lifecycle_tracks_preliminary_and_approved_prices() -> None:
@@ -172,3 +215,28 @@ def test_costing_schema_is_separate_from_order_and_plan_geometry() -> None:
     line_fields = _field_map(_doctype_json("Door Cutting Costing Line"))
     assert line_fields["piece_uid"]["reqd"] == 1
     assert line_fields["edge_cost_usd"]["read_only"] == 1
+
+
+def test_a2_plan_command_path_does_not_bypass_permissions_or_save_the_order() -> None:
+    repository_source = (
+        APP_ROOT / "infrastructure" / "frappe" / "cutting_plan_command_repository.py"
+    ).read_text(encoding="utf-8")
+    command_source = (
+        APP_ROOT / "services" / "cutting_plan_command_service.py"
+    ).read_text(encoding="utf-8")
+    native_permissions = (
+        APP_ROOT / "infrastructure" / "frappe" / "native_document_permissions.py"
+    ).read_text(encoding="utf-8")
+    settings_service = (
+        APP_ROOT / "services" / "plan_settings_edit_service.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ignore_permissions" not in repository_source
+    assert "ignore_permissions" not in command_source
+    assert "order.save(" not in command_source
+    assert "calculate_system_plan(order, plan)" in command_source
+    assert "FrappeCuttingPlanCommandRepository" in command_source
+    assert "is_authorized_plan_command" in native_permissions
+    assert 'resolved_type in {"create", "write"}' in native_permissions
+    assert "save_system_plan_settings" in settings_service
+    assert 'frappe.db.set_value(\n        "Door Cutting Order"' not in settings_service
