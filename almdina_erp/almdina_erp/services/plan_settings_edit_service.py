@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.services.order_edit_policy import is_order_at_drawing_stage
 
 
 PLAN_SETTING_FIELDS = (
@@ -54,14 +55,20 @@ def _assert_edit_lifecycle(doc: Any) -> None:
             _("لا يمكن تعديل إعدادات خطة القص بعد اعتماد المستند."),
             frappe.ValidationError,
         )
-    if getattr(doc, "approved_plan", None):
-        frappe.throw(
-            _("خطة القص معتمدة ومقفلة ولا يمكن تعديل إعداداتها."),
-            frappe.ValidationError,
-        )
     if str(getattr(doc, "revision_state", "Current") or "Current") == "Superseded":
         frappe.throw(
             _("لا يمكن تعديل إعدادات خطة القص في نسخة طلب مستبدلة."),
+            frappe.ValidationError,
+        )
+
+    # An approved Cutting Plan is an immutable historical snapshot, not a
+    # permanent lock on preparing its replacement. While the order is still at
+    # Drawing, EDIT_OPTIMIZER_SETTINGS may change only these focused settings;
+    # the old approved_plan remains production-authoritative until an explicit
+    # recalculation + re-approval creates the replacement snapshot.
+    if getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc):
+        frappe.throw(
+            _("خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم."),
             frappe.ValidationError,
         )
 
