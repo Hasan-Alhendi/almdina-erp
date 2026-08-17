@@ -18,10 +18,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
     require_stage_operational_access,
 )
-from almdina_erp.almdina_erp.services.order_edit_policy import (
-    assert_order_editable,
-    user_can_recalculate_drawing_system_plan,
-)
 
 
 _OPTIMIZER_FIELDS = (
@@ -114,12 +110,12 @@ def _drawing_changed(doc: Any, old: Any | None) -> bool:
 
 
 def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) -> None:
-    """Protect capability-bound fields before any Door Cutting Order save.
+    """Protect capability-bound legacy DCO fields before an ordinary order save.
 
-    Standard ``write`` permission remains necessary for ordinary order edits, but
-    it never grants optimizer or special-drawing authority implicitly. Focused
-    plan commands may save with ``ignore_permissions`` only after the same
-    capability checks have succeeded here.
+    During A2 these duplicated plan fields are compatibility projections only.
+    Native Door Cutting Order writes still cannot use them to acquire optimizer
+    or drawing authority. Focused plan commands authorize the related order and
+    persist the canonical Cutting Plan through its scoped command repository.
     """
 
     del method
@@ -148,8 +144,6 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
     else:
         drawing_changed = _drawing_changed(doc, old)
 
-    # Once the order has entered (or left) a production route, capability alone
-    # is not enough: the actor must hold the current stage's operational role.
     if (optimizer_changed or drawing_changed) and (
         getattr(doc, "current_production_stage", None)
         or getattr(doc, "production_path", None)
@@ -177,65 +171,6 @@ def _requested_optimizer_updates(
     if optimization_time_limit_sec is not None:
         updates["optimization_time_limit_sec"] = flt(optimization_time_limit_sec)
     return updates
-
-
-def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
-    changed = [
-        fieldname
-        for fieldname, value in updates.items()
-        if not _same_value(fieldname, doc.get(fieldname), value)
-    ]
-    if not changed:
-        return []
-
-    optimizer_changed = [
-        fieldname for fieldname in changed if fieldname in _OPTIMIZER_FIELDS
-    ]
-    if optimizer_changed:
-        require_document_capability(
-            doc,
-            Capability.EDIT_OPTIMIZER_SETTINGS,
-            message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
-        )
-        if getattr(doc, "current_production_stage", None) or getattr(
-            doc, "production_path", None
-        ):
-            require_stage_operational_access(doc)
-
-    for fieldname in changed:
-        doc.set(fieldname, updates[fieldname])
-    return optimizer_changed
-
-
-def _assert_recalculation_state(doc: Any) -> None:
-    drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(doc)
-
-    # Approval freezes the production snapshot, not Drawing's ability to prepare
-    # an explicit replacement. Only the Drawing-stage exception may recalculate
-    # while an approved plan exists; later production stages remain hard-locked.
-    if getattr(doc, "approved_plan", None) and not drawing_recalculation_allowed:
-        frappe.throw(
-            _("خطة القص المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم."),
-            frappe.ValidationError,
-        )
-
-    # On a production route, recalculation is a stage-scoped mutation:
-    # capability + current stage operational role (denied after the route ends).
-    if getattr(doc, "current_production_stage", None) or getattr(
-        doc, "production_path", None
-    ):
-        require_stage_operational_access(doc)
-        return
-
-    # Drawing-stage planners are intentionally allowed to recalculate through
-    # the focused capability without receiving full EDIT_ORDER authority.
-    if drawing_recalculation_allowed:
-        return
-
-    # Before production, keep the existing lifecycle boundary. This checks state,
-    # not cost permissions, and does not require a full document write grant for
-    # draft-like orders.
-    assert_order_editable(doc)
 
 
 def _recalculation_result(doc: Any) -> dict[str, Any]:
@@ -274,47 +209,26 @@ def recalculate_order(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
-    """Recalculate one plan through granular plan capabilities only.
+    """Compatibility endpoint delegating to the canonical Cutting Plan command.
 
-    ``RECALCULATE_PLAN`` authorizes running the engine. Changing packing mode,
-    machine type, kerf, trim margin, or time limit additionally requires
-    ``EDIT_OPTIMIZER_SETTINGS``. Neither operation requires cost visibility or
-    cost editing authority.
+    The existing DCO frontend keeps this stable method path during A2, while the
+    actual authorization, lifecycle checks, engine execution, and persistence are
+    owned by ``cutting_plan_command_service.recalculate_order_plan``. No broad
+    Door Cutting Order save occurs on this path.
     """
 
-    name = str(order_name or "").strip()
-    frappe.db.sql(
-        "select name from `tabDoor Cutting Order` where name = %s for update",
-        (name,),
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
+        recalculate_order_plan,
     )
-    doc = frappe.get_doc("Door Cutting Order", name)
-    doc.check_permission("read")
-    require_document_capability(
-        doc,
-        Capability.RECALCULATE_PLAN,
-        message=_("لا تملك صلاحية إعادة حساب خطة القص لهذا الطلب."),
-    )
-    _assert_recalculation_state(doc)
 
-    updates = _requested_optimizer_updates(
+    return recalculate_order_plan(
+        order_name=order_name,
         packing_mode=packing_mode,
         cutting_machine_type=cutting_machine_type,
         kerf_mm=kerf_mm,
         trim_margin_mm=trim_margin_mm,
         optimization_time_limit_sec=optimization_time_limit_sec,
     )
-    changed = _apply_optimizer_updates(doc, updates)
-
-    doc.flags.force_cutting_plan_recalculation = True
-    doc.save(ignore_permissions=True)
-    doc.add_comment(
-        "Info",
-        text=_("تمت إعادة حساب خطة القص بواسطة {0}{1}.").format(
-            frappe.session.user,
-            _(" مع تحديث إعدادات المحسن") if changed else "",
-        ),
-    )
-    return _recalculation_result(doc)
 
 
 @frappe.whitelist()
@@ -329,9 +243,7 @@ def simulate_optimizer_plan(
     """Run the engine on a throwaway copy and return the result without saving.
 
     Comparing algorithms is an inspection, not an edit, so this answers to
-    ``EDIT_OPTIMIZER_SETTINGS`` alone: no stage operational role, no lifecycle
-    state, and no approved-plan unlock. Nothing is persisted, which is what
-    keeps the wide audience safe on live production orders.
+    ``EDIT_OPTIMIZER_SETTINGS`` alone. Nothing is persisted.
     """
 
     name = str(order_name or "").strip()

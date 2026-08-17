@@ -29,6 +29,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.cost_document_service", C, ("get_customer_invoice_document", "get_internal_cost_report_document")),
     ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "update_clipped_corner_edge_price", "update_order_cost_settings")),
     ("almdina_erp.almdina_erp.services.cost_service", C, ("refresh_order_costs",)),
+    ("almdina_erp.almdina_erp.services.cutting_plan_command_service", C, ("recalculate_order_plan",)),
     ("almdina_erp.almdina_erp.services.cutting_plan_service", D, ("approve_order", "lock_cutting_plan", "reject_order", "send_order_to_production", "submit_order_for_review")),
     ("almdina_erp.almdina_erp.services.drawing_approval_service", C, ("approve_production_dxf",)),
     ("almdina_erp.almdina_erp.services.dxf_export_service", C, ("get_validated_dxf_plan",)),

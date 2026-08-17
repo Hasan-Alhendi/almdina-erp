@@ -5,6 +5,9 @@ from typing import Any, Callable
 import frappe
 
 from almdina_erp import permissions as base_permissions
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
+    is_authorized_plan_command,
+)
 
 
 _NATIVE_MUTATING_PERMISSION_TYPES = (
@@ -123,12 +126,26 @@ def cutting_plan_has_permission(
     ptype: str | None = None,
     permission_type: str | None = None,
 ) -> bool:
+    """Keep Cutting Plan CRUD closed except inside authorized command services.
+
+    A command service must first authorize the related Door Cutting Order, then
+    set the ephemeral command flag on the in-memory Cutting Plan document. This
+    allows normal ``insert``/``save`` permission enforcement without granting
+    unrestricted Desk write access and without using ``ignore_permissions``.
+    """
+
+    resolved_type = _permission_type(ptype, permission_type)
+    resolved_user = _user(user)
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in {"create", "write"} and is_authorized_plan_command(doc):
+        return True
     return _command_owned_document_permission(
         base_permissions.cutting_plan_has_permission,
         doc,
-        user=user,
-        ptype=ptype,
-        permission_type=permission_type,
+        user=resolved_user,
+        ptype=resolved_type,
+        permission_type=resolved_type,
     )
 
 

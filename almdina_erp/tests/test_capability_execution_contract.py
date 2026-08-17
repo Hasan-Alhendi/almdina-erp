@@ -14,6 +14,9 @@ HOOKS = ROOT / "hooks.py"
 PLAN_PERMISSION_SERVICE = (
     ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 )
+PLAN_COMMAND_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
+)
 PLAN_CONTROLS = (
     ROOT
     / "public"
@@ -63,7 +66,8 @@ class TestCapabilityExecutionContract(unittest.TestCase):
 
     def test_recalculation_is_overridden_by_explicit_capability_service(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
-        service = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
+        facade = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
+        service = PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
 
         self.assertIn(
             '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"',
@@ -73,15 +77,28 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"',
             hooks,
         )
+
+        # The public legacy method remains stable for the current browser, but
+        # authorization and mutation ownership live in the canonical plan command.
+        self.assertIn("cutting_plan_command_service import", facade)
+        self.assertIn("recalculate_order_plan(", facade)
+        self.assertNotIn("ignore_permissions=True", facade)
+        self.assertNotIn("doc.save(", facade)
+
         self.assertIn("Capability.RECALCULATE_PLAN", service)
         self.assertIn("Capability.EDIT_OPTIMIZER_SETTINGS", service)
         self.assertIn("require_document_capability", service)
         self.assertIn("for update", service)
         self.assertIn("assert_order_editable", service)
+        self.assertIn("FrappeCuttingPlanCommandRepository", service)
+        self.assertNotIn("order.save(", service)
+        self.assertNotIn("ignore_permissions", service)
 
     def test_recalculation_response_never_exposes_internal_costs(self) -> None:
-        service = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
-        self.assertIn("def _recalculation_result", service)
+        facade = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
+        service = PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
+        self.assertIn("def _recalculation_result", facade)
+        self.assertIn("def plan_payload", service)
         for financial_field in (
             "mdf_cost_usd",
             "cutting_cost_usd",
@@ -91,6 +108,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             "customer_quote_total_usd",
         ):
             with self.subTest(financial_field=financial_field):
+                self.assertNotIn(financial_field, facade)
                 self.assertNotIn(financial_field, service)
 
     def test_algorithm_preview_is_capability_only_and_never_persists(self) -> None:
@@ -103,7 +121,6 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.EDIT_OPTIMIZER_SETTINGS", preview)
         self.assertIn("frappe.copy_doc(stored)", preview)
         self.assertIn("_calculate_cutting_plan", preview)
-        # Inspection only: no persistence, no stage gate, no lifecycle unlock.
         self.assertNotIn("save(", preview)
         self.assertNotIn("db_set", preview)
         self.assertNotIn("require_stage_operational_access", preview)
@@ -197,6 +214,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.UPLOAD_DXF", policy)
         self.assertIn("Capability.REPLACE_DXF", policy)
         self.assertIn("_attach_validated_dxf_file", service)
+
 
 if __name__ == "__main__":
     unittest.main()

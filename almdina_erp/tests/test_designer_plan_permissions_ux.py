@@ -12,6 +12,7 @@ FAST_SAVE = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
 SECURE_DXF_UPLOAD = CUTTING_PLAN / "secure_dxf_upload.js"
 PLAN_SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
 ORDER_PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
+PLAN_COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
 DOCUMENT_CONTEXT = (
     ROOT
     / "public"
@@ -89,7 +90,8 @@ def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages(
     session = source(PLAN_EDIT_SESSION)
     controls = source(PLAN_CONTROLS)
     service = source(PLAN_SETTINGS_SERVICE)
-    recalculation = source(ORDER_PLAN_SERVICE)
+    legacy_recalculation = source(ORDER_PLAN_SERVICE)
+    recalculation = source(PLAN_COMMAND_SERVICE)
 
     assert "Number(frm.doc.docstatus || 0) !== 0" in session
     assert '(frm.doc.revision_state || "Current") === "Superseded"' in session
@@ -106,9 +108,14 @@ def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages(
     assert "function isDrawingStage(frm)" in controls
     assert "frm.doc.approved_plan && isDrawingStage(frm)" in controls
     assert "frm.doc.approved_plan && !isDrawingStage(frm)" in controls
-    assert "drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(doc)" in recalculation
-    assert 'getattr(doc, "approved_plan", None) and not drawing_recalculation_allowed' in recalculation
-    assert "require_stage_operational_access(doc)" in recalculation
+
+    # A2 moves recalculation policy into the canonical Cutting Plan command owner.
+    assert "drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(order)" in recalculation
+    assert 'getattr(order, "approved_plan", None) and not drawing_recalculation_allowed' in recalculation
+    assert "require_stage_operational_access(order)" in recalculation
+    assert "cutting_plan_command_service import" in legacy_recalculation
+    assert "recalculate_order_plan(" in legacy_recalculation
+    assert "ignore_permissions=True" not in legacy_recalculation
 
 
 def test_plan_field_status_adapter_is_the_final_dco_runtime_owner() -> None:

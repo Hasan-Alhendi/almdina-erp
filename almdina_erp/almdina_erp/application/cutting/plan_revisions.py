@@ -53,6 +53,7 @@ class CuttingPlanRepository(Protocol):
 @dataclass(frozen=True, slots=True)
 class CreatePlanRevisionCommand:
     approved_plan_name: str
+    source_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +71,7 @@ def create_revision(
         current_name=approved.name,
         current_revision=approved.revision,
         current_status=approved.status,
-        source_type=approved.source_type,
+        source_type=command.source_type or approved.source_type,
     )
     return repository.create_draft(
         order_name=approved.order_name,

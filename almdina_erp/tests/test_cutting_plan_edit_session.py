@@ -7,6 +7,9 @@ from unittest.mock import patch
 
 import frappe
 
+from almdina_erp.almdina_erp.services import (
+    cutting_plan_command_service as command_service,
+)
 from almdina_erp.almdina_erp.services import plan_settings_edit_service as service
 
 
@@ -16,6 +19,7 @@ EDIT_SESSION = CUTTING_PLAN / "door_cutting_order_plan_edit_session_ux.js"
 FIELD_ACCESS = CUTTING_PLAN / "door_cutting_order_plan_field_access_adapter.js"
 MANIFEST = ROOT / "frontend_assets.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
+COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
 
 
 def source(path: Path) -> str:
@@ -118,8 +122,9 @@ def test_edit_session_loads_immediately_before_final_field_status_owner() -> Non
     assert dco_assets.rstrip().endswith(adapter + ",")
 
 
-def test_focused_save_contract_never_uses_broad_order_save_or_permission_bypass() -> None:
+def test_focused_save_contract_delegates_persistence_to_plan_command_owner() -> None:
     backend = source(SERVICE)
+    command_backend = source(COMMAND_SERVICE)
     frontend = source(EDIT_SESSION)
 
     assert "plan_settings_edit_service.save_plan_settings" in frontend
@@ -127,11 +132,17 @@ def test_focused_save_contract_never_uses_broad_order_save_or_permission_bypass(
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in backend
     assert "require_stage_operational_access" not in backend
     assert "SHOP_FLOOR_ORDER_STATUSES" in backend
-    assert 'frappe.db.set_value(' in backend
-    assert '"plan_needs_recalculation"' in backend
+    assert "save_system_plan_settings" in backend
+    assert "frappe.db.set_value(" not in backend
     assert "ignore_permissions" not in backend
     assert "doc.save(" not in backend
     assert "order.save(" not in backend
+
+    assert "FrappeCuttingPlanCommandRepository" in command_backend
+    assert "require_document_capability(" in command_backend
+    assert '"plan_needs_recalculation"' in command_backend
+    assert "ignore_permissions" not in command_backend
+    assert "order.save(" not in command_backend
 
 
 class TestPlanSettingsEditService(TestCase):
@@ -165,14 +176,22 @@ class TestPlanSettingsEditService(TestCase):
         with self.assertRaises(frappe.PermissionError):
             service._assert_edit_lifecycle(doc)
 
-    def test_save_persists_only_changed_plan_settings_and_marks_plan_stale(self) -> None:
+    def test_save_delegates_normalized_settings_to_plan_command_owner(self) -> None:
         doc = FakeOrder()
+        expected = {
+            "changed_fields": ["packing_mode", "kerf_mm"],
+            "plan_needs_recalculation": 1,
+        }
 
         with (
             patch.object(service.frappe.db, "sql") as lock_row,
             patch.object(service.frappe, "get_doc", return_value=doc),
             patch.object(service, "require_document_capability") as capability_gate,
-            patch.object(service.frappe.db, "set_value") as set_value,
+            patch.object(
+                command_service,
+                "save_system_plan_settings",
+                return_value=expected,
+            ) as save_command,
         ):
             result = service.save_plan_settings(
                 order_name=doc.name,
@@ -186,18 +205,17 @@ class TestPlanSettingsEditService(TestCase):
         lock_row.assert_called_once()
         self.assertEqual(doc.checked_permissions, ["read"])
         capability_gate.assert_called_once()
-        set_value.assert_called_once_with(
-            "Door Cutting Order",
-            doc.name,
+        save_command.assert_called_once_with(
+            doc,
             {
                 "packing_mode": "Auto Pro",
+                "cutting_machine_type": "Panel Saw",
                 "kerf_mm": 4.0,
-                "plan_needs_recalculation": 1,
+                "trim_margin_mm": 5.0,
+                "optimization_time_limit_sec": 10.0,
             },
-            update_modified=True,
         )
-        self.assertEqual(result["changed_fields"], ["packing_mode", "kerf_mm"])
-        self.assertEqual(result["plan_needs_recalculation"], 1)
+        self.assertEqual(result, expected)
 
     def test_save_at_drawing_without_stage_snapshot_uses_focused_capability(self) -> None:
         doc = FakeOrder(
@@ -205,12 +223,20 @@ class TestPlanSettingsEditService(TestCase):
             current_production_stage=None,
             production_path="ROUTE-DRAWING",
         )
+        expected = {
+            "changed_fields": ["kerf_mm"],
+            "plan_needs_recalculation": 1,
+        }
 
         with (
             patch.object(service.frappe.db, "sql"),
             patch.object(service.frappe, "get_doc", return_value=doc),
             patch.object(service, "require_document_capability") as capability_gate,
-            patch.object(service.frappe.db, "set_value") as set_value,
+            patch.object(
+                command_service,
+                "save_system_plan_settings",
+                return_value=expected,
+            ) as save_command,
         ):
             result = service.save_plan_settings(
                 order_name=doc.name,
@@ -218,13 +244,8 @@ class TestPlanSettingsEditService(TestCase):
             )
 
         capability_gate.assert_called_once()
-        set_value.assert_called_once_with(
-            "Door Cutting Order",
-            doc.name,
-            {"kerf_mm": 4.0, "plan_needs_recalculation": 1},
-            update_modified=True,
-        )
-        self.assertEqual(result["changed_fields"], ["kerf_mm"])
+        save_command.assert_called_once_with(doc, {"kerf_mm": 4.0})
+        self.assertEqual(result, expected)
 
     def test_negative_plan_setting_is_rejected_before_persistence(self) -> None:
         doc = FakeOrder()
