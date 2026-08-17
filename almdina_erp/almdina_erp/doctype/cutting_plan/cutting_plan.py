@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     CANCELLED,
     DRAFT,
     SUPERSEDED,
+    UPLOADED_DXF,
     CuttingPlanLifecycleError,
     normalize_source_type,
 )
@@ -47,6 +48,11 @@ class CuttingPlan(Document):
     def _validate_source_type(self) -> None:
         if self.plan_kind == "Replacement":
             return
+        # Historical Custom DXF callers set plan_kind but had no first-class
+        # source_type field. Normalize that path into the new aggregate contract
+        # while A2 migrates those callers to Cutting Plan commands directly.
+        if self.plan_kind == "Custom DXF" and str(self.source_type or "") in {"", "System"}:
+            self.source_type = UPLOADED_DXF
         try:
             self.source_type = normalize_source_type(self.source_type)
         except CuttingPlanLifecycleError:
