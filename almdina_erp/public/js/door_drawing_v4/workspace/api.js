@@ -35,5 +35,31 @@
         );
     }
 
-    root.Api = Object.freeze({ load, save });
+    function saveReferenceImage(orderName, pieceName, imageDataUrl, metadata) {
+        return call(
+            "almdina_erp.almdina_erp.services.special_shape_workspace_service.save_reference_image",
+            {
+                order_name: orderName,
+                piece_name: pieceName,
+                image_data_url: imageDataUrl,
+                metadata_json: metadata,
+            },
+            { freeze: true, freezeMessage: "يتم حفظ صورة الدرفة…" }
+        );
+    }
+
+    function removeReferenceImage(orderName, pieceName) {
+        return call(
+            "almdina_erp.almdina_erp.services.special_shape_workspace_service.remove_reference_image",
+            { order_name: orderName, piece_name: pieceName },
+            { freeze: true, freezeMessage: "يتم حذف صورة الدرفة…" }
+        );
+    }
+
+    root.Api = Object.freeze({
+        load,
+        save,
+        saveReferenceImage,
+        removeReferenceImage,
+    });
 })();
