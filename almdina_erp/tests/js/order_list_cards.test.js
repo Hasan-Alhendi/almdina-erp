@@ -103,6 +103,27 @@ assert(inProgressHtml.includes("إنهاء العمل"), "an active mobile assig
 assert(inProgressHtml.includes('data-action-kind="handoff"'));
 assert(!inProgressHtml.includes("إنهاء وإرسال"), "the compact mobile label should describe the worker action, not routing internals");
 
+// Permission denial is represented by the server-authorized action flags being
+// false even while the stage is still assigned to this worker. In that case no
+// production action may be rendered at all.
+const permissionDenied = {
+    ...doc,
+    department_status: "بحاجة للعمل",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        assignmentState: "assigned",
+    },
+};
+const permissionDeniedHtml = api.buildCard(permissionDenied, false);
+assert(
+    !permissionDeniedHtml.includes("dco-card-production-action"),
+    "an assigned worker without the server-granted production capability must not see a workflow button"
+);
+assert(!permissionDeniedHtml.includes("بدء العمل"));
+assert(!permissionDeniedHtml.includes("إنهاء العمل"));
+
 const completed = {
     ...doc,
     department_status: "منتهٍ",
