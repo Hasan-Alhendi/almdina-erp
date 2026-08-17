@@ -33,7 +33,7 @@ def initial_plan_cost_values(
     *,
     based_on_plan: str | None = None,
 ) -> dict[str, float]:
-    """Seed cost inputs only when a new plan revision is created.
+    """Seed the financial snapshot only when a new plan revision is created.
 
     Plan lineage is authoritative once it exists. The DCO fallback is a one-time
     migration bridge for the first plan created for an older order; zero is a
@@ -46,13 +46,12 @@ def initial_plan_cost_values(
     values = frappe.db.get_value(
         source_doctype,
         source_name,
-        ["board_rate_usd", "cutting_cost_per_board_usd", "edge_cost_usd"],
+        list(PLAN_COST_FIELDS),
         as_dict=True,
     ) or {}
     return {
-        "board_rate_usd": flt(values.get("board_rate_usd")),
-        "cutting_cost_per_board_usd": flt(values.get("cutting_cost_per_board_usd")),
-        "edge_cost_usd": flt(values.get("edge_cost_usd")),
+        fieldname: flt(values.get(fieldname))
+        for fieldname in PLAN_COST_FIELDS
     }
 
 
@@ -130,11 +129,11 @@ def current_cost_plan(order: Any) -> Any | None:
     return frappe.get_doc("Cutting Plan", latest[0]) if latest else None
 
 
-def authoritative_cost_values(order: Any) -> dict[str, float]:
+def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[str, float]:
     """Return Plan-owned cost values, falling back only for pre-A3 legacy orders."""
 
-    plan = current_cost_plan(order)
-    source = plan if plan is not None else order
+    resolved_plan = plan if plan is not None else current_cost_plan(order)
+    source = resolved_plan if resolved_plan is not None else order
     return {fieldname: flt(getattr(source, fieldname, 0)) for fieldname in PLAN_COST_FIELDS}
 
 
@@ -145,8 +144,8 @@ def overlay_authoritative_costs(
     """Overlay the current plan cost projection onto a DCO-shaped read model."""
 
     result = dict(snapshot)
-    result.update(authoritative_cost_values(order))
     plan = current_cost_plan(order)
+    result.update(authoritative_cost_values(order, plan=plan))
     if plan is not None:
         result["required_boards"] = int(plan.required_boards or 0)
     return result
