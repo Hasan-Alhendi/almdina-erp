@@ -6,10 +6,15 @@ from pathlib import Path
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = APP_ROOT.parent
 
 
 def _read(relative_path: str) -> str:
     return (APP_ROOT / relative_path).read_text(encoding="utf-8")
+
+
+def _read_repo(relative_path: str) -> str:
+    return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
 class TestDoorDrawingStandaloneWorkspaceContract(unittest.TestCase):
@@ -79,6 +84,69 @@ class TestDoorDrawingStandaloneWorkspaceContract(unittest.TestCase):
             '"public/css/door_drawing_workspace.css"',
             assets,
         )
+
+    def test_reference_image_is_private_documentation_not_exact_geometry(self) -> None:
+        service = _read("almdina_erp/services/special_shape_workspace_service.py")
+        self.assertIn("def save_reference_image(", service)
+        self.assertIn("def remove_reference_image(", service)
+        self.assertIn('Capability.EDIT_SPECIAL_DRAWING', service)
+        self.assertIn("_assert_editable(order)", service)
+        self.assertIn("is_private=1", service)
+        self.assertIn('piece.special_shape_documentation_mode = "Image"', service)
+        self.assertIn('piece.special_shape_status = "Documented"', service)
+        self.assertIn('piece.special_shape_drawing_json = ""', service)
+        self.assertIn('piece.special_shape_geometry_json = ""', service)
+        self.assertIn('_REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024', service)
+
+    def test_reference_image_fields_are_explicit_child_row_state(self) -> None:
+        payload = json.loads(
+            _read(
+                "almdina_erp/doctype/door_cutting_order_detail/door_cutting_order_detail.json"
+            )
+        )
+        fields = {field["fieldname"]: field for field in payload["fields"]}
+        self.assertEqual(fields["special_shape_documentation_mode"]["options"], "Drawing\nImage")
+        self.assertEqual(fields["special_shape_reference_image"]["fieldtype"], "Attach Image")
+        self.assertEqual(fields["special_shape_reference_image"]["hidden"], 1)
+        self.assertIn("special_shape_reference_image_meta_json", fields)
+
+    def test_reference_image_change_participates_in_piece_policy_invalidation(self) -> None:
+        adapter = _read(
+            "almdina_erp/infrastructure/frappe/orders/piece_policy_adapter.py"
+        )
+        self.assertIn("def _reference_snapshot", adapter)
+        self.assertIn("def _reference_has_content", adapter)
+        self.assertIn("reference_changed", adapter)
+        self.assertIn("or reference_has_content", adapter)
+        self.assertIn("or reference_changed", adapter)
+
+    def test_page_loads_reference_runtime_before_workspace_session(self) -> None:
+        page = _read("almdina_erp/page/door_drawing/door_drawing.js")
+        tokens = [
+            "/reference/domain.js",
+            "/reference/device_source.js",
+            "/reference/scanner_bridge.js",
+            "/reference/cropper.js",
+            "/reference/reference_view.js",
+            "/workspace/api.js",
+            "/workspace/reference_controller.js",
+            "/workspace/session_controller.js",
+        ]
+        positions = [page.index(token) for token in tokens]
+        self.assertTrue(all(position >= 0 for position in positions))
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("door_drawing_reference.css", page)
+
+    def test_scanner_bridge_is_loopback_and_origin_restricted(self) -> None:
+        bridge = _read_repo("tools/scanner_bridge/windows/AlmdinaScannerBridge.ps1")
+        browser = _read("public/js/door_drawing_v4/reference/scanner_bridge.js")
+        self.assertIn("http://127.0.0.1:", bridge)
+        self.assertNotIn("http://+:", bridge)
+        self.assertIn("AllowedOrigins", bridge)
+        self.assertIn("WIA.CommonDialog", bridge)
+        self.assertIn("ShowAcquireImage", bridge)
+        self.assertIn("http://127.0.0.1:17654", browser)
+        self.assertIn("X-Almdina-Scanner-Bridge", browser)
 
 
 if __name__ == "__main__":
