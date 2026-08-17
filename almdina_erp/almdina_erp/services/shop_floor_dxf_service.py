@@ -5,6 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     DrawingActionDenied,
@@ -50,15 +51,14 @@ def _throw_policy_error(error: DrawingActionDenied) -> None:
     )
 
 
-def _get_authorized_order(
-    order_name: str,
+def _authorize_order(
+    order: Any,
     capability: str,
     *,
     require_unlocked_plan: bool = True,
     require_assigned_designer: bool = True,
     require_stage_role: bool = False,
 ) -> Any:
-    order = shop_floor_gateway.get_order(order_name)
     order.check_permission("read")
     require_document_capability(order, capability)
     if require_stage_role:
@@ -76,7 +76,32 @@ def _get_authorized_order(
     return order
 
 
-def _validate_dxf_file_metadata(order: Any, file_url: str) -> tuple[str, Any]:
+def _get_authorized_order(
+    order_name: str,
+    capability: str,
+    *,
+    require_unlocked_plan: bool = True,
+    require_assigned_designer: bool = True,
+    require_stage_role: bool = False,
+) -> Any:
+    order = shop_floor_gateway.get_order(order_name)
+    return _authorize_order(
+        order,
+        capability,
+        require_unlocked_plan=require_unlocked_plan,
+        require_assigned_designer=require_assigned_designer,
+        require_stage_role=require_stage_role,
+    )
+
+
+def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
+    """Accept only a private, unattached DXF staging file.
+
+    The browser uploads the file before any order mutation. Keeping the staged
+    File unattached prevents an unauthorized or invalid upload from becoming a
+    document attachment before authorization and geometry validation succeed.
+    """
+
     normalized_url = str(file_url or "").strip()
     if not normalized_url:
         frappe.throw(_("اختر ملف DXF ثم أعد المحاولة."), title=_("ملف DXF مطلوب"))
@@ -95,6 +120,7 @@ def _validate_dxf_file_metadata(order: Any, file_url: str) -> tuple[str, Any]:
             "is_private",
             "attached_to_doctype",
             "attached_to_name",
+            "attached_to_field",
         ],
         as_dict=True,
     )
@@ -103,6 +129,21 @@ def _validate_dxf_file_metadata(order: Any, file_url: str) -> tuple[str, Any]:
             _("تعذر العثور على الملف المرفوع داخل النظام. أعد اختيار ملف DXF ورفعه مرة أخرى."),
             title=_("الملف غير موجود"),
         )
+    if not cint(file_row.is_private):
+        frappe.throw(
+            _("يجب رفع ملف DXF كملف خاص Private قبل التحقق منه."),
+            title=_("ملف DXF غير خاص"),
+        )
+    if (
+        file_row.attached_to_doctype
+        or file_row.attached_to_name
+        or file_row.attached_to_field
+    ):
+        frappe.throw(
+            _("ملف DXF المرفوع مرتبط مسبقًا بمستند ولا يمكن استخدامه. ارفع ملفًا خاصًا غير مرتبط ثم أعد المحاولة."),
+            title=_("الملف مرتبط مسبقًا"),
+        )
+
     file_size = int(file_row.file_size or 0)
     if file_size > MAX_DXF_FILE_SIZE:
         frappe.throw(
@@ -111,25 +152,16 @@ def _validate_dxf_file_metadata(order: Any, file_url: str) -> tuple[str, Any]:
             ),
             title=_("ملف DXF كبير جدًا"),
         )
-    if file_row.attached_to_doctype and (
-        file_row.attached_to_doctype != order.doctype
-        or file_row.attached_to_name != order.name
-    ):
-        frappe.throw(
-            _("ملف DXF المرفوع مرتبط بمستند آخر ولا يمكن استخدامه لهذا الطلب. ارفع نسخة مخصصة لهذا الطلب."),
-            title=_("الملف مرتبط بمستند آخر"),
-        )
     return normalized_url, file_row
 
 
 def _attach_validated_dxf_file(order: Any, file_row: Any) -> None:
-    # FileUploader already uploads privately; enforcing the metadata here protects
-    # API callers and keeps every accepted production DXF private and order-scoped.
+    """Attach only a staging file that has already passed every security check."""
+
     frappe.db.set_value(
         "File",
         file_row.name,
         {
-            "is_private": 1,
             "attached_to_doctype": order.doctype,
             "attached_to_name": order.name,
             "attached_to_field": "production_dxf",
@@ -184,18 +216,20 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
+    # The file already exists at this point, but it must still be a private,
+    # unattached staging object. Authorization and geometry validation happen
+    # before it is ever linked to the Door Cutting Order.
+    normalized_url, file_row = _validate_dxf_file_metadata(file_url)
+
     order = shop_floor_gateway.get_order(order_name)
     upload_capability = required_upload_capability(_drawing_state(order))
-    # Upload/replace remains governed by the existing capability matrix and
-    # current production-stage operational role. This change does not alter workflow policy.
-    order = _get_authorized_order(
-        order_name,
+    order = _authorize_order(
+        order,
         upload_capability,
         require_assigned_designer=False,
         require_stage_role=True,
     )
     replacing_existing_file = bool(order.production_dxf)
-    normalized_url, file_row = _validate_dxf_file_metadata(order, file_url)
 
     from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
     from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
