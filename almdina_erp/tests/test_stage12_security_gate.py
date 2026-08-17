@@ -88,8 +88,9 @@ class TestStage12SecurityGate(unittest.TestCase):
             "file_row.attached_to_doctype",
             "file_row.attached_to_name",
             "file_row.attached_to_field",
-            '"attached_to_doctype": order.doctype',
-            '"attached_to_name": order.name',
+            '"attached_to_doctype": "Cutting Plan"',
+            '"attached_to_name": plan.name',
+            '"attached_to_field": "dxf_file"',
             'require_stage_operational_access(order)',
             'order.check_permission("read")',
             'require_document_capability(order, capability)',
@@ -100,10 +101,12 @@ class TestStage12SecurityGate(unittest.TestCase):
         staged = upload_source.index("_validate_dxf_file_metadata(file_url)")
         authorized = upload_source.index("_authorize_order(")
         validated = upload_source.index("parse_production_dxf(")
+        persisted = upload_source.index("save_uploaded_dxf_plan(")
         attached = upload_source.index("_attach_validated_dxf_file(")
         self.assertLess(staged, authorized)
         self.assertLess(authorized, validated)
-        self.assertLess(validated, attached)
+        self.assertLess(validated, persisted)
+        self.assertLess(persisted, attached)
 
     def test_workforce_blocks_self_role_change_and_self_disable(self) -> None:
         role_decision = decide_workforce_action(
