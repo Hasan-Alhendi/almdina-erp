@@ -1,0 +1,80 @@
+$ErrorActionPreference = "Stop"
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "يجب تشغيل install.ps1 بواسطة Run as administrator." -ForegroundColor Yellow
+    exit 1
+}
+
+$sourceBridge = Join-Path $PSScriptRoot "AlmdinaScannerBridge.ps1"
+$sourceConfig = Join-Path $PSScriptRoot "config.example.json"
+if (-not (Test-Path $sourceBridge)) { throw "AlmdinaScannerBridge.ps1 not found." }
+if (-not (Test-Path $sourceConfig)) { throw "config.example.json not found." }
+
+$installDir = Join-Path $env:LOCALAPPDATA "AlmdinaScannerBridge"
+New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+Copy-Item -Force $sourceBridge (Join-Path $installDir "AlmdinaScannerBridge.ps1")
+
+$configPath = Join-Path $installDir "config.json"
+if (-not (Test-Path $configPath)) {
+    Copy-Item -Force $sourceConfig $configPath
+}
+
+$config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+$port = if ($config.port) { [int]$config.port } else { 17654 }
+if ($port -lt 1024 -or $port -gt 65535) {
+    throw "Scanner Bridge port must be between 1024 and 65535."
+}
+
+$prefix = "http://127.0.0.1:$port/"
+$userName = "$env:USERDOMAIN\$env:USERNAME"
+& netsh http delete urlacl url=$prefix 2>$null | Out-Null
+& netsh http add urlacl url=$prefix user="$userName" | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "تعذر حجز عنوان Scanner Bridge في Windows HTTP Service."
+}
+
+$startupDir = [Environment]::GetFolderPath("Startup")
+$shortcutPath = Join-Path $startupDir "Almdina Scanner Bridge.lnk"
+$targetScript = Join-Path $installDir "AlmdinaScannerBridge.ps1"
+$powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $powershell
+$shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$targetScript`" -ConfigPath `"$configPath`""
+$shortcut.WorkingDirectory = $installDir
+$shortcut.Save()
+
+Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*AlmdinaScannerBridge.ps1*" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+Start-Process -WindowStyle Hidden -FilePath $powershell -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-File", "`"$targetScript`"",
+    "-ConfigPath", "`"$configPath`""
+)
+
+Start-Sleep -Milliseconds 1000
+try {
+    $health = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:$port/health" -Headers @{ "X-Almdina-Scanner-Bridge" = "1" } -TimeoutSec 5
+    if (-not $health.ok) { throw "Health check failed." }
+
+    Write-Host "تم تثبيت وتشغيل Almdina Scanner Bridge بنجاح." -ForegroundColor Green
+    Write-Host "العنوان المحلي: http://127.0.0.1:$port/"
+    Write-Host "ملف الإعدادات: $configPath"
+    if ([int]$health.device_count -gt 0) {
+        Write-Host "تم العثور على $($health.device_count) سكانر عبر WIA." -ForegroundColor Green
+    }
+    else {
+        Write-Host "البرنامج يعمل، لكن Windows لا يرى أي سكانر عبر WIA حاليًا." -ForegroundColor Yellow
+        Write-Host "ثبّت تعريف السكانر وتأكد من تشغيل Windows Image Acquisition (WIA)."
+    }
+}
+catch {
+    Write-Host "تم التثبيت لكن فحص التشغيل لم ينجح: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "شغّل AlmdinaScannerBridge.ps1 يدويًا لمعرفة الخطأ."
+    exit 2
+}
