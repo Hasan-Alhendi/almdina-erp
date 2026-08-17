@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
@@ -40,7 +41,9 @@ def _piece_rows(order: Any) -> tuple[dict[str, Any], ...]:
     )
 
 
-def _input_fingerprint(order: Any, plan: Any) -> str:
+def plan_input_fingerprint(order: Any, plan: Any) -> str:
+    """Fingerprint only the order requirements and plan-owned working settings."""
+
     width_mm, length_mm = _board_dimensions_mm(order)
     return fingerprint_payload(
         {
@@ -73,7 +76,7 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
 
     width_mm, length_mm = _board_dimensions_mm(order)
     settings = frappe.get_cached_doc("Almdina ERP Settings")
-    fingerprint = _input_fingerprint(order, plan)
+    fingerprint = plan_input_fingerprint(order, plan)
     outcome = optimize_order_plan(
         OptimizeOrderPlanCommand(
             engine_version=ENGINE_VERSION,
@@ -101,14 +104,15 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
     return outcome
 
 
-def apply_calculation_outcome(
+def _apply_snapshot(
     order: Any,
     plan: Any,
-    outcome: OptimizationOutcome,
+    snapshot: dict[str, Any],
     *,
     fingerprint: str,
+    method_label_fallback: str = "",
+    engine_version_fallback: str = "",
 ) -> None:
-    snapshot = sanitize_plan_snapshot(outcome.snapshot)
     validation = snapshot.get("validation") or {}
     metrics = snapshot.get("industrial_metrics") or {}
     width_mm, length_mm = _board_dimensions_mm(order)
@@ -119,10 +123,10 @@ def apply_calculation_outcome(
     plan.usable_board_width_mm = flt(snapshot.get("usable_board_width_cm")) * 10
     plan.usable_board_length_mm = flt(snapshot.get("usable_board_length_cm")) * 10
     plan.method_key = snapshot.get("method_key") or ""
-    plan.method_label = snapshot.get("method_label") or outcome.method_label or ""
+    plan.method_label = snapshot.get("method_label") or method_label_fallback
     plan.ordering_strategy = snapshot.get("ordering_strategy") or ""
     plan.score = flt(snapshot.get("score"))
-    plan.engine_version = snapshot.get("engine_version") or ENGINE_VERSION
+    plan.engine_version = snapshot.get("engine_version") or engine_version_fallback
     plan.attempts = cint(snapshot.get("attempts"))
     plan.solver_status = snapshot.get("solver_status") or ""
     plan.search_elapsed_sec = flt(snapshot.get("search_elapsed_sec"))
@@ -219,4 +223,53 @@ def apply_calculation_outcome(
             )
 
 
-__all__ = ["apply_calculation_outcome", "calculate_system_plan"]
+def apply_calculation_outcome(
+    order: Any,
+    plan: Any,
+    outcome: OptimizationOutcome,
+    *,
+    fingerprint: str,
+) -> None:
+    snapshot = sanitize_plan_snapshot(outcome.snapshot)
+    _apply_snapshot(
+        order,
+        plan,
+        snapshot,
+        fingerprint=fingerprint,
+        method_label_fallback=outcome.method_label or "",
+        engine_version_fallback=ENGINE_VERSION,
+    )
+
+
+def apply_validated_dxf_snapshot(
+    order: Any,
+    plan: Any,
+    raw_snapshot: dict[str, Any],
+) -> None:
+    """Map one already-validated DXF snapshot into the Draft Cutting Plan."""
+
+    snapshot = sanitize_plan_snapshot(raw_snapshot)
+    validation = snapshot.get("validation") or {}
+    if not snapshot.get("sheets") or not validation.get("is_valid"):
+        frappe.throw(
+            _("لا يمكن حفظ ملف DXF كخطة قص قبل نجاح التحقق الهندسي."),
+            frappe.ValidationError,
+        )
+
+    fingerprint = plan_input_fingerprint(order, plan)
+    _apply_snapshot(
+        order,
+        plan,
+        snapshot,
+        fingerprint=fingerprint,
+        method_label_fallback="DXF",
+        engine_version_fallback="DXF Import",
+    )
+
+
+__all__ = [
+    "apply_calculation_outcome",
+    "apply_validated_dxf_snapshot",
+    "calculate_system_plan",
+    "plan_input_fingerprint",
+]

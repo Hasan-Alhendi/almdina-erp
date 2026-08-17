@@ -97,6 +97,9 @@ class TestCapabilityExecutionContract(unittest.TestCase):
     def test_recalculation_response_never_exposes_internal_costs(self) -> None:
         facade = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
         service = PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
+        plan_payload = service.split("def plan_payload", 1)[1].split(
+            "\n\ndef current_uploaded_dxf_file", 1
+        )[0]
         self.assertIn("def _recalculation_result", facade)
         self.assertIn("def plan_payload", service)
         for financial_field in (
@@ -109,7 +112,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         ):
             with self.subTest(financial_field=financial_field):
                 self.assertNotIn(financial_field, facade)
-                self.assertNotIn(financial_field, service)
+                self.assertNotIn(financial_field, plan_payload)
 
     def test_algorithm_preview_is_capability_only_and_never_persists(self) -> None:
         service = PLAN_PERMISSION_SERVICE.read_text(encoding="utf-8")
@@ -190,14 +193,22 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("MutationObserver(scheduleObserverApply)", source)
 
     def test_plan_approval_locks_and_rejects_stale_system_plan(self) -> None:
-        service = APPROVAL_SERVICE.read_text(encoding="utf-8")
+        boundary = APPROVAL_SERVICE.read_text(encoding="utf-8")
+        command = PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
         controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        approval_command = command.split("def approve_order_plan", 1)[1].split(
+            "\n\ndef save_system_plan_settings", 1
+        )[0]
 
-        self.assertIn("Capability.APPROVE_DXF", service)
-        self.assertIn("for update", service)
-        self.assertIn("_assert_reviewed_system_plan", service)
-        self.assertIn("plan_needs_recalculation", service)
-        self.assertNotIn("force_cutting_plan_recalculation", service)
+        self.assertIn("Capability.APPROVE_DXF", boundary)
+        self.assertIn("for update", boundary)
+        self.assertIn("approve_order_plan", boundary)
+        self.assertNotIn("cutting_plan_snapshot_service", boundary)
+        self.assertIn("_assert_plan_ready_for_approval", command)
+        self.assertIn("plan_input_fingerprint", command)
+        self.assertIn("plan_needs_recalculation", command)
+        self.assertNotIn("recalculate_system_plan", approval_command)
+        self.assertNotIn("force_cutting_plan_recalculation", approval_command)
         self.assertIn('"اعتماد خطة القص"', controls)
         self.assertIn('can(frm, "approve_dxf")', controls)
         self.assertIn("plan_needs_recalculation", controls)
@@ -214,6 +225,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("Capability.UPLOAD_DXF", policy)
         self.assertIn("Capability.REPLACE_DXF", policy)
         self.assertIn("_attach_validated_dxf_file", service)
+        self.assertIn("current_uploaded_dxf_file", service)
 
 
 if __name__ == "__main__":

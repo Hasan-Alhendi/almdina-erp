@@ -28,7 +28,14 @@ CONTROLLER_PATH = (
 SERVICES = ROOT / "almdina_erp" / "services"
 SNAPSHOT_SERVICE_PATH = SERVICES / "cutting_plan_snapshot_service.py"
 COMPATIBILITY_SERVICE_PATH = SERVICES / "cutting_plan_service.py"
+COMMAND_SERVICE_PATH = SERVICES / "cutting_plan_command_service.py"
 DRAWING_APPROVAL_PATH = SERVICES / "drawing_approval_service.py"
+COMMAND_REPOSITORY_PATH = (
+    ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_command_repository.py"
+)
+WORKSPACE_PATH = (
+    ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_workspace.py"
+)
 HOOKS_PATH = ROOT / "hooks.py"
 
 
@@ -69,34 +76,42 @@ class TestCuttingPlanArchitecture(unittest.TestCase):
         self.assertNotIn('"special_shape_raw_summary":', source)
 
     def test_snapshot_persistence_has_one_focused_owner(self) -> None:
-        snapshot = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
+        legacy_snapshot = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
         facade = COMPATIBILITY_SERVICE_PATH.read_text(encoding="utf-8")
         drawing = DRAWING_APPROVAL_PATH.read_text(encoding="utf-8")
+        command = COMMAND_SERVICE_PATH.read_text(encoding="utf-8")
+        repository = COMMAND_REPOSITORY_PATH.read_text(encoding="utf-8")
+        workspace = WORKSPACE_PATH.read_text(encoding="utf-8")
 
+        # Historical lifecycle functions remain reachable only through the frozen
+        # compatibility facade while A2 cuts active runtime ownership over.
         for symbol in (
             "def create_plan_from_order",
             "def approve_plan",
             "def lock_order_for_production",
-            'frappe.new_doc("Cutting Plan")',
-            "plan.insert(ignore_permissions=True)",
-            '"status": "Approved"',
         ):
-            self.assertIn(symbol, snapshot)
-
+            self.assertIn(symbol, legacy_snapshot)
         self.assertIn("Backward-compatible Cutting Plan lifecycle facade", facade)
         self.assertIn("cutting_plan_snapshot_service as _snapshot", facade)
-        self.assertIn("def create_plan_from_order", facade)
-        self.assertIn("return _snapshot.create_plan_from_order", facade)
-        self.assertIn("return _snapshot.approve_plan", facade)
-        self.assertIn("return _snapshot.lock_order_for_production", facade)
         self.assertNotIn('frappe.new_doc("Cutting Plan")', facade)
         self.assertNotIn("frappe.db.set_value", facade)
-        self.assertNotIn("plan.insert(ignore_permissions=True)", facade)
 
-        self.assertIn("services.cutting_plan_snapshot_service", drawing)
-        self.assertIn("lock_order_for_production(", drawing)
-        self.assertNotIn("services.cutting_plan_service import", drawing)
-        self.assertNotIn("_lock_order_for_production(", drawing)
+        # Active approval no longer creates a second snapshot or calls the legacy
+        # snapshot service. The plan command + repository own the mutation.
+        self.assertIn("services.cutting_plan_command_service import", drawing)
+        self.assertIn("approve_order_plan", drawing)
+        self.assertNotIn("services.cutting_plan_snapshot_service", drawing)
+        self.assertNotIn("lock_order_for_production(", drawing)
+        self.assertIn("FrappeCuttingPlanCommandRepository", command)
+        self.assertIn("repository.save_document(plan, allow_status_transition=True)", command)
+        self.assertNotIn("ignore_permissions", command)
+        self.assertNotIn("order.save(", command)
+
+        self.assertIn("PLAN_COMMAND_FLAG", repository)
+        self.assertIn("allow_status_transition", repository)
+        self.assertNotIn("ignore_permissions", repository)
+        self.assertIn("def _apply_snapshot", workspace)
+        self.assertIn("def apply_validated_dxf_snapshot", workspace)
 
     def test_active_controller_contains_no_plan_algorithm(self) -> None:
         source = CONTROLLER_PATH.read_text(encoding="utf-8")

@@ -11,7 +11,12 @@ from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
     PlanSettings,
     create_revision,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    DRAFT,
+    SYSTEM,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
     PLAN_COMMAND_FLAG,
 )
@@ -20,10 +25,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context 
 class FrappeCuttingPlanCommandRepository:
     """Persistence adapter for command-owned Cutting Plan mutations.
 
-    The adapter never bypasses Frappe permissions. Instead, the caller supplies
-    the business capability that was already authorized on the related order;
-    the capability is placed on the ephemeral Document.flags only while the
-    native insert/save operation runs.
+    The adapter never bypasses Frappe permissions. The related order capability
+    is authorized before this repository is used, then carried only in ephemeral
+    Document.flags while the native insert/save operation runs.
     """
 
     def __init__(self, capability: str):
@@ -39,6 +43,19 @@ class FrappeCuttingPlanCommandRepository:
             trim_margin_mm=flt(plan.trim_margin_mm),
         )
 
+    @staticmethod
+    def _settings_from_order(order: Any) -> PlanSettings:
+        return PlanSettings(
+            optimization_mode=str(getattr(order, "packing_mode", None) or "Auto Pro"),
+            machine_type=str(getattr(order, "cutting_machine_type", None) or "Auto"),
+            optimization_time_limit_sec=flt(
+                getattr(order, "optimization_time_limit_sec", 0)
+            )
+            or 10,
+            kerf_mm=flt(getattr(order, "kerf_mm", 0)) or 3,
+            trim_margin_mm=flt(getattr(order, "trim_margin_mm", 0)) or 5,
+        )
+
     @classmethod
     def _record(cls, plan: Any) -> PlanRecord:
         return PlanRecord(
@@ -51,8 +68,16 @@ class FrappeCuttingPlanCommandRepository:
             settings=cls._settings(plan),
         )
 
-    def _run_persist(self, plan: Any, operation: str) -> Any:
+    def _run_persist(
+        self,
+        plan: Any,
+        operation: str,
+        *,
+        allow_status_transition: bool = False,
+    ) -> Any:
         plan.flags[PLAN_COMMAND_FLAG] = self.capability
+        if allow_status_transition:
+            plan.flags.allow_status_transition = True
         try:
             if operation == "insert":
                 plan.insert()
@@ -60,6 +85,8 @@ class FrappeCuttingPlanCommandRepository:
                 plan.save()
         finally:
             plan.flags.pop(PLAN_COMMAND_FLAG, None)
+            if allow_status_transition:
+                plan.flags.pop("allow_status_transition", None)
         return plan
 
     def get_document(self, plan_name: str) -> Any:
@@ -105,8 +132,17 @@ class FrappeCuttingPlanCommandRepository:
         self._run_persist(plan, "save")
         return self._record(plan)
 
-    def save_document(self, plan: Any) -> Any:
-        return self._run_persist(plan, "save")
+    def save_document(
+        self,
+        plan: Any,
+        *,
+        allow_status_transition: bool = False,
+    ) -> Any:
+        return self._run_persist(
+            plan,
+            "save",
+            allow_status_transition=allow_status_transition,
+        )
 
     @staticmethod
     def _latest_plan_row(order_name: str, **filters: Any) -> dict[str, Any] | None:
@@ -119,6 +155,37 @@ class FrappeCuttingPlanCommandRepository:
             limit_page_length=1,
         )
         return rows[0] if rows else None
+
+    def latest_document(
+        self,
+        order_name: str,
+        *,
+        source_type: str | None = None,
+        status: str | None = None,
+    ) -> Any | None:
+        filters: dict[str, Any] = {"plan_kind": "Order"}
+        if source_type:
+            filters["source_type"] = source_type
+        if status:
+            filters["status"] = status
+        row = self._latest_plan_row(order_name, **filters)
+        return self.get_document(row["name"]) if row else None
+
+    def approved_documents(self, order_name: str, *, exclude: str | None = None) -> list[Any]:
+        filters: dict[str, Any] = {
+            "door_cutting_order": order_name,
+            "plan_kind": "Order",
+            "status": APPROVED,
+        }
+        if exclude:
+            filters["name"] = ["!=", exclude]
+        names = frappe.get_all(
+            "Cutting Plan",
+            filters=filters,
+            pluck="name",
+            order_by="revision asc, creation asc",
+        )
+        return [self.get_document(name) for name in names]
 
     def ensure_system_draft(self, order: Any) -> Any:
         current = self._latest_plan_row(
@@ -134,7 +201,7 @@ class FrappeCuttingPlanCommandRepository:
         latest_approved = self._latest_plan_row(
             order.name,
             plan_kind="Order",
-            status="Approved",
+            status=APPROVED,
         )
         next_revision = (cint(latest_any.get("revision")) + 1) if latest_any else 1
 
@@ -149,23 +216,48 @@ class FrappeCuttingPlanCommandRepository:
             )
             return self.get_document(created.name)
 
-        settings = PlanSettings(
-            optimization_mode=str(getattr(order, "packing_mode", None) or "Auto Pro"),
-            machine_type=str(getattr(order, "cutting_machine_type", None) or "Auto"),
-            optimization_time_limit_sec=flt(
-                getattr(order, "optimization_time_limit_sec", 0)
-            )
-            or 10,
-            kerf_mm=flt(getattr(order, "kerf_mm", 0)) or 3,
-            trim_margin_mm=flt(getattr(order, "trim_margin_mm", 0)) or 5,
-        )
         created = self.create_draft(
             order_name=order.name,
             revision=next_revision,
             status=DRAFT,
             source_type=SYSTEM,
             based_on_plan=None,
-            settings=settings,
+            settings=self._settings_from_order(order),
+        )
+        return self.get_document(created.name)
+
+    def ensure_uploaded_dxf_draft(self, order: Any) -> Any:
+        """Return the editable Uploaded DXF revision for the current order.
+
+        Switching plan source never mutates an approved revision. A new Draft is
+        based on the latest approved plan for lineage, while its working settings
+        come from the current DCO compatibility projection used by the DXF parser.
+        """
+
+        current = self._latest_plan_row(
+            order.name,
+            plan_kind="Order",
+            source_type=UPLOADED_DXF,
+            status=DRAFT,
+        )
+        if current:
+            return self.get_document(current["name"])
+
+        latest_any = self._latest_plan_row(order.name, plan_kind="Order")
+        latest_approved = self._latest_plan_row(
+            order.name,
+            plan_kind="Order",
+            status=APPROVED,
+        )
+        next_revision = (cint(latest_any.get("revision")) + 1) if latest_any else 1
+        based_on = latest_approved["name"] if latest_approved else None
+        created = self.create_draft(
+            order_name=order.name,
+            revision=next_revision,
+            status=DRAFT,
+            source_type=UPLOADED_DXF,
+            based_on_plan=based_on,
+            settings=self._settings_from_order(order),
         )
         return self.get_document(created.name)
 

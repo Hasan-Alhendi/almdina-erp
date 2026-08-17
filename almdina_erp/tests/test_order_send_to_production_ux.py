@@ -11,7 +11,7 @@ SHOP_FLOOR_UX = (
     / "shop_floor_order_ux.js"
 )
 LIFECYCLE_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
-PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
+PLAN_COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
 DRAWING_APPROVAL_SERVICE = (
     ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 )
@@ -108,12 +108,15 @@ def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
 
 
 def test_role_managed_drawing_approval_preserves_shop_floor_status():
-    plan_service = _source(PLAN_SERVICE)
     approval_service = _source(DRAWING_APPROVAL_SERVICE)
+    command_service = _source(PLAN_COMMAND_SERVICE)
     policy = _source(DRAWING_APPROVAL_POLICY)
-    lock_impl = plan_service.split("def lock_order_for_production", 1)[1].split(
-        "\n\n__all__", 1
+    approval_command = command_service.split("def approve_order_plan", 1)[1].split(
+        "\n\ndef save_system_plan_settings", 1
     )[0]
+    order_projection = command_service.split(
+        "def _set_approved_order_projection", 1
+    )[1].split("\n\ndef plan_payload", 1)[0]
 
     assert "Capability.APPROVE_DXF" in approval_service
     assert "require_document_capability" in approval_service
@@ -121,10 +124,18 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     assert "current_assignee" not in policy
     assert "session_user" not in policy
     assert "approval_warning" in policy
-    assert "preserve_status=True" in approval_service
+
+    # A2.2 preserves the shop-floor status by not mutating Door Cutting Order
+    # lifecycle state at all. Only the Cutting Plan transitions to Approved.
+    assert "approve_order_plan" in approval_service
+    assert "lock_order_for_production" not in approval_service
+    assert "order.save(" not in approval_service
+    assert "frappe.db.set_value" not in approval_service
+    assert "plan.status = APPROVED" in approval_command
+    assert "order.status" not in approval_command
+    assert '"status"' not in order_projection
+    assert '"approved_plan": plan.name' in order_projection
     assert "was_previously_approved" in approval_service
-    assert "if preserve_status:" in lock_impl
-    assert '"status": "Approved"' in lock_impl
     assert "require_any_role" not in approval_service
 
 
