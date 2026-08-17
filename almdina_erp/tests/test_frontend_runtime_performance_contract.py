@@ -39,9 +39,11 @@ def test_permission_visibility_guard_is_route_scoped_and_transient():
     js = _read_js("permission_action_visibility_guard.js")
 
     # The UI guard is not authorization. It only needs to settle relevant
-    # workspace/workforce surfaces and then disconnect.
+    # Almdina workspace/workforce surfaces and then disconnect.
     assert "TRANSIENT_OBSERVER_MS" in js
     assert "function surfaceMode()" in js
+    assert 'if (ALMDINA_WORKSPACE_ROUTES.has(state.route)) return "workspace";' in js
+    assert 'state.kind === "workspace" ||' not in js
     assert "function startTransientObserver()" in js
     assert "observerStopTimer = window.setTimeout(disconnectObserver, TRANSIENT_OBSERVER_MS)" in js
     assert '[100, 300, 800, 1600].forEach' not in js
