@@ -97,9 +97,13 @@ doctype_js = {
         "public/js/door_cutting_order/core/order_lifecycle.js",
         "public/js/input_stability.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
+        # Explicit user intent is a separate gate from capability/stage policy:
+        # this owner renders Edit/Save/Cancel and must load immediately before the
+        # final native field-status adapter that consumes its edit-session state.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js",
         # Last owner on purpose: translate PlanControls' focused capability
-        # decision into Frappe native field status after every compatibility layer
-        # that can refresh the form or ordinary order-edit state.
+        # decision plus the explicit edit-session gate into Frappe native field
+        # status after every compatibility layer that can refresh the form.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
