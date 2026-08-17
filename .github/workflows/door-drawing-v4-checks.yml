@@ -13,6 +13,7 @@ on:
       - "almdina_erp/almdina_erp/services/special_shape_workspace_service.py"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
       - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
+      - "almdina_erp/tests/test_door_drawing_professional_workspace_contract.py"
       - ".github/workflows/door-drawing-v4-checks.yml"
   pull_request:
     paths:
@@ -24,6 +25,7 @@ on:
       - "almdina_erp/almdina_erp/services/special_shape_workspace_service.py"
       - "almdina_erp/tests/js/door_drawing_v4_*.test.js"
       - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
+      - "almdina_erp/tests/test_door_drawing_professional_workspace_contract.py"
       - ".github/workflows/door-drawing-v4-checks.yml"
 
 permissions:
@@ -57,11 +59,12 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js
           node --check almdina_erp/almdina_erp/page/door_drawing/door_drawing.js
 
-      - name: Validate professional workspace Python syntax
+      - name: Validate professional workspace Python syntax and architecture
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile almdina_erp/almdina_erp/services/special_shape_workspace_service.py
+          python -m unittest -v almdina_erp.tests.test_door_drawing_professional_workspace_contract
 
       - name: Run Door Drawing V4 regression tests
         shell: bash
