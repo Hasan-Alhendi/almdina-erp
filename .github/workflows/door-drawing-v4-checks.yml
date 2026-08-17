@@ -81,7 +81,7 @@ jobs:
           python -m py_compile almdina_erp/almdina_erp/infrastructure/frappe/orders/piece_policy_adapter.py
           python -m unittest -v almdina_erp.tests.test_door_drawing_standalone_workspace_contract
 
-      - name: Validate scanner bridge security contract
+      - name: Validate scanner bridge PowerShell syntax and security contract
         shell: bash
         run: |
           set -euo pipefail
@@ -92,6 +92,20 @@ jobs:
           grep -Fq 'AllowedOrigins' "$bridge"
           grep -Fq 'X-Almdina-Scanner-Bridge' "$bridge"
           grep -Fq 'WIA.CommonDialog' "$bridge"
+          pwsh -NoProfile -Command '
+            $failed = $false
+            Get-ChildItem "tools/scanner_bridge/windows" -Filter "*.ps1" | ForEach-Object {
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+              if ($errors.Count -gt 0) {
+                Write-Host "PowerShell syntax errors in $($_.FullName):"
+                $errors | ForEach-Object { Write-Host $_.Message }
+                $failed = $true
+              }
+            }
+            if ($failed) { exit 1 }
+          '
 
       - name: Run Door Drawing V4 regression tests
         shell: bash
