@@ -1,72 +1,52 @@
 (() => {
     "use strict";
 
-    const STYLE_LINKS = Object.freeze([
-        Object.freeze({ id: "almdina-door-drawing-v4-css", href: "/assets/almdina_erp/css/door_drawing_v4.css" }),
-    ]);
+    const BOOTSTRAP_SRC = "/assets/almdina_erp/js/door_drawing_v4/bootstrap.js";
+    const WORKSPACE_ROUTE = "door-drawing";
 
-    const SCRIPTS = Object.freeze([
-        "/assets/almdina_erp/js/door_drawing_v4/domain/geometry.js",
-        "/assets/almdina_erp/js/door_drawing_v4/domain/document.js",
-        "/assets/almdina_erp/js/door_drawing_v4/domain/dimension.js",
-        "/assets/almdina_erp/js/door_drawing_v4/domain/constraint.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/geometry_commands.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/dimension_commands.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/constraint_commands.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/constraint_solver.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/constraint_inference.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/driving_dimension_commands.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/manufacturing_projection.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/snap_resolver.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/hit_test.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/command_history.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/tool_state_machine.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/interaction_engine.js",
-        "/assets/almdina_erp/js/door_drawing_v4/application/viewport.js",
-        "/assets/almdina_erp/js/door_drawing_v4/infrastructure/persistence_adapter.js",
-        "/assets/almdina_erp/js/door_drawing_v4/presentation/canvas_renderer.js",
-        "/assets/almdina_erp/js/door_drawing_v4/presentation/editor_shell.js",
-        "/assets/almdina_erp/js/door_drawing_v4/presentation/editor_controller.js",
-        "/assets/almdina_erp/js/door_drawing_v4/presentation/frappe_editor.js",
-    ]);
+    function loadBootstrap() {
+        if (window.AlmdinaDoorDrawingV4Bootstrap && window.AlmdinaDoorDrawingV4Bootstrap.boot) {
+            return Promise.resolve(window.AlmdinaDoorDrawingV4Bootstrap);
+        }
+        if (window.__almdinaDoorDrawingV4BootstrapPromise) {
+            return window.__almdinaDoorDrawingV4BootstrapPromise;
+        }
 
-    function ensureStyles() {
-        STYLE_LINKS.forEach(item => {
-            if (document.getElementById(item.id)) return;
-            const link = document.createElement("link");
-            link.id = item.id;
-            link.rel = "stylesheet";
-            link.href = item.href;
-            document.head.appendChild(link);
-        });
-    }
+        window.__almdinaDoorDrawingV4BootstrapPromise = new Promise((resolve, reject) => {
+            const existing = document.querySelector(`script[data-door-drawing-bootstrap="${BOOTSTRAP_SRC}"]`);
+            const finish = () => {
+                const bootstrap = window.AlmdinaDoorDrawingV4Bootstrap;
+                if (!bootstrap || typeof bootstrap.boot !== "function") {
+                    reject(new Error("Door Drawing V4 bootstrap did not initialize"));
+                    return;
+                }
+                resolve(bootstrap);
+            };
+            if (existing) {
+                if (window.AlmdinaDoorDrawingV4Bootstrap) finish();
+                else {
+                    existing.addEventListener("load", finish, { once: true });
+                    existing.addEventListener("error", () => reject(new Error("Failed to load Door Drawing V4 bootstrap")), { once: true });
+                }
+                return;
+            }
 
-    function loaded(src) {
-        return Boolean(document.querySelector(`script[data-door-drawing-v4="${src}"]`));
-    }
-
-    function loadScript(src) {
-        return new Promise((resolve, reject) => {
-            if (loaded(src)) return resolve();
             const script = document.createElement("script");
-            script.src = src;
+            script.src = BOOTSTRAP_SRC;
             script.async = false;
-            script.dataset.doorDrawingV4 = src;
-            script.onload = resolve;
-            script.onerror = () => reject(new Error(`Failed to load Door Drawing V4 module: ${src}`));
+            script.dataset.doorDrawingBootstrap = BOOTSTRAP_SRC;
+            script.addEventListener("load", finish, { once: true });
+            script.addEventListener("error", () => reject(new Error("Failed to load Door Drawing V4 bootstrap")), { once: true });
             document.head.appendChild(script);
+        }).catch(error => {
+            window.__almdinaDoorDrawingV4BootstrapPromise = null;
+            throw error;
         });
+        return window.__almdinaDoorDrawingV4BootstrapPromise;
     }
 
     function boot() {
-        ensureStyles();
-        if (window.__almdinaDoorDrawingV4BootPromise) return window.__almdinaDoorDrawingV4BootPromise;
-        window.__almdinaDoorDrawingV4BootPromise = SCRIPTS.reduce((promise, src) => promise.then(() => loadScript(src)), Promise.resolve()).catch(error => {
-            window.__almdinaDoorDrawingV4BootPromise = null;
-            console.error("Door Drawing V4 bootstrap failed", error);
-            throw error;
-        });
-        return window.__almdinaDoorDrawingV4BootPromise;
+        return loadBootstrap().then(bootstrap => bootstrap.boot());
     }
 
     function can(frm, capability) {
@@ -77,37 +57,85 @@
             : typeof permissions.can === "function" && Boolean(permissions.can(capability));
     }
 
-    function editor() {
-        const instance = window.AlmdinaDoorDrawingV4 && window.AlmdinaDoorDrawingV4.Editor;
-        if (!instance) throw new Error("Door Drawing V4 editor is not ready");
-        return instance;
+    function formIsDirty(frm) {
+        if (!frm) return false;
+        if (typeof frm.is_dirty === "function") return Boolean(frm.is_dirty());
+        return Boolean(frm.doc && frm.doc.__unsaved);
+    }
+
+    function rowIsLocal(row) {
+        if (!row || !row.name) return true;
+        return Boolean(row.__islocal || String(row.name).startsWith("new-"));
+    }
+
+    function resolveSavedRow(frm, originalRow) {
+        const rows = (frm.doc && frm.doc.pieces) || [];
+        const byName = rows.find(row => row.name && originalRow.name && row.name === originalRow.name);
+        if (byName && !rowIsLocal(byName)) return byName;
+        const originalIndex = Number(originalRow.idx || originalRow.piece_no || 0);
+        const byIndex = rows.find(row => Number(row.idx || row.piece_no || 0) === originalIndex);
+        return byIndex && !rowIsLocal(byIndex) ? byIndex : null;
+    }
+
+    function ensurePersisted(frm, row) {
+        if (!frm || !frm.doc || !row) return Promise.reject(new Error("Door drawing requires a form and piece row"));
+        const needsSave = !frm.doc.name || (typeof frm.is_new === "function" && frm.is_new()) || formIsDirty(frm) || rowIsLocal(row);
+        if (!needsSave) return Promise.resolve({ orderName: frm.doc.name, row });
+
+        if (window.frappe) {
+            frappe.show_alert({ message: "يتم حفظ مسودة الطلب قبل فتح مساحة الرسم…", indicator: "blue" }, 3);
+        }
+        return Promise.resolve(frm.save()).then(() => {
+            const savedRow = resolveSavedRow(frm, row);
+            if (!frm.doc.name || !savedRow) {
+                throw new Error("Could not resolve persisted special-door row after saving the order");
+            }
+            return { orderName: frm.doc.name, row: savedRow };
+        });
+    }
+
+    function navigate(orderName, row, readOnly) {
+        if (!window.frappe || typeof frappe.set_route !== "function") {
+            throw new Error("Frappe router is required for the standalone drawing workspace");
+        }
+        frappe.set_route(WORKSPACE_ROUTE, orderName, row.name, readOnly ? "view" : "edit");
+        return { orderName, pieceName: row.name, readOnly };
     }
 
     function open(frm, row, options = {}) {
-        let resolvedOptions = options || {};
-        const readOnly = Boolean(resolvedOptions.readOnly);
+        if ((row && row.piece_type || "Regular") !== "Special") {
+            if (window.frappe) frappe.msgprint("حوّل نوع الدرفة إلى «خاصة» أولًا.");
+            return Promise.resolve(null);
+        }
+
+        let readOnly = Boolean(options && options.readOnly);
         if (!readOnly && !can(frm, "edit_special_drawing")) {
-            if (can(frm, "view_drawing_workspace")) resolvedOptions = { ...resolvedOptions, readOnly: true };
+            if (can(frm, "view_drawing_workspace")) readOnly = true;
             else {
                 if (window.frappe) frappe.msgprint("ليس لديك صلاحية فتح مساحة رسم الدرفة الخاصة.");
                 return Promise.resolve(null);
             }
         }
-        return boot()
-            .then(() => editor().open(frm, row, resolvedOptions))
+
+        return ensurePersisted(frm, row)
+            .then(context => navigate(context.orderName, context.row, readOnly))
             .catch(error => {
-                console.error(error);
-                if (window.frappe) frappe.msgprint("تعذر تحميل محرر رسم الدرفة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
+                console.error("Failed to open standalone door drawing workspace", error);
+                if (window.frappe) frappe.msgprint("تعذر فتح مساحة رسم الدرفة. تأكد من حفظ الطلب ثم حاول مرة أخرى.");
                 return null;
             });
     }
 
-    function view(frm, row) { return open(frm, row, { readOnly: true }); }
+    function view(frm, row) {
+        return open(frm, row, { readOnly: true });
+    }
+
     function parseJson(raw) {
         if (!raw) return null;
         if (typeof raw === "object") return raw;
         try { return JSON.parse(String(raw)); } catch (error) { return null; }
     }
+
     function parseDrawing(raw) {
         const document = parseJson(raw);
         if (!document || document.schema !== "almdina.door-drawing" || Number(document.version) !== 4) return [];
@@ -126,8 +154,13 @@
     }
 
     const facade = {
-        open, view, parseDrawing,
+        open,
+        view,
+        boot,
+        parseDrawing,
+        workspaceRoute: WORKSPACE_ROUTE,
         __doorDrawingV4: true,
+        __standaloneWorkspace: true,
         __canonicalMmGeometry: true,
         __sharedNodeTopology: true,
         __singleInteractionOwner: true,
@@ -145,5 +178,4 @@
     };
 
     window.AlmdinaSpecialShapeEditor = Object.freeze(facade);
-    window.AlmdinaDoorDrawingV4Bootstrap = Object.freeze({ STYLE_LINKS, SCRIPTS, boot });
 })();

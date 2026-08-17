@@ -95,6 +95,39 @@ class FrappeOrderPiecePolicyAdapter:
             else Capability.APPROVE_SPECIAL_PRICE
         )
 
+    @staticmethod
+    def _reference_snapshot(row: Any | None) -> str:
+        if not row:
+            return ""
+        return drawing_token(
+            {
+                "mode": str(
+                    getattr(row, "special_shape_documentation_mode", None)
+                    or "Drawing"
+                ),
+                "image": str(
+                    getattr(row, "special_shape_reference_image", None) or ""
+                ),
+                "metadata": str(
+                    getattr(row, "special_shape_reference_image_meta_json", None)
+                    or ""
+                ),
+            }
+        )
+
+    @staticmethod
+    def _reference_has_content(row: Any | None) -> bool:
+        if not row:
+            return False
+        return bool(
+            str(
+                getattr(row, "special_shape_documentation_mode", None)
+                or "Drawing"
+            )
+            == "Image"
+            and getattr(row, "special_shape_reference_image", None)
+        )
+
     def _validate_clipped_corner(self, row: Any, index: int) -> None:
         try:
             result = resolve_clipped_corner(
@@ -170,9 +203,9 @@ class FrappeOrderPiecePolicyAdapter:
                 if old_row
                 else ""
             )
-            drawing_changed = current_raw != old_raw
+            vector_drawing_changed = current_raw != old_raw
 
-            if current_raw and drawing_changed:
+            if current_raw and vector_drawing_changed:
                 drawing = validate_special_shape_drawing(current_raw)
                 drawing_has_elements = bool(drawing and drawing.get("elements"))
             elif current_raw:
@@ -183,15 +216,21 @@ class FrappeOrderPiecePolicyAdapter:
             else:
                 drawing_has_elements = False
 
+            current_reference = self._reference_snapshot(row)
+            old_reference = self._reference_snapshot(old_row)
+            reference_changed = current_reference != old_reference
+            reference_has_content = self._reference_has_content(row)
+
             special_geometry = self._validated_special_geometry(row)
             old_special_geometry = self._validated_special_geometry(old_row)
             geometry_payload_changed = bool(
                 old_row and old_special_geometry != special_geometry
             )
             documentation_changed = bool(
-                drawing_changed
+                vector_drawing_changed
+                or reference_changed
                 or geometry_payload_changed
-                or (not old_row and special_geometry)
+                or (not old_row and (special_geometry or reference_has_content))
             )
 
             decision = evaluate_special_shape(
@@ -201,9 +240,15 @@ class FrappeOrderPiecePolicyAdapter:
                 ),
                 old_price=self._price_snapshot(old_row),
                 current_price=self._price_snapshot(row) or SpecialPrice(),
-                drawing_changed=bool(drawing_changed or geometry_payload_changed),
+                drawing_changed=bool(
+                    vector_drawing_changed
+                    or reference_changed
+                    or geometry_payload_changed
+                ),
                 drawing_has_elements=bool(
-                    special_geometry or drawing_has_elements
+                    special_geometry
+                    or drawing_has_elements
+                    or reference_has_content
                 ),
                 default_edge_changed=default_edge_changed,
                 approval_action=approval_action,

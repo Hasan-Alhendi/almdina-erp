@@ -8,8 +8,9 @@
     const interaction = root.InteractionEngine;
     const tools = root.ToolStateMachine;
     const renderer = root.CanvasRenderer;
+    const viewModel = root.EditorViewModel;
     const shellFactory = root.EditorShell;
-    if (!geometry || !dimensionDomain || !viewport || !interaction || !tools || !renderer || !shellFactory) {
+    if (!geometry || !dimensionDomain || !viewport || !interaction || !tools || !renderer || !viewModel || !shellFactory) {
         throw new Error("Drawing V4 dependencies must load before editor controller");
     }
 
@@ -166,6 +167,7 @@
                 dpr,
                 showNodes: !readOnly && activeNodeSurface(state),
             });
+            shell.renderViewModel(viewModel.build(state.document, state));
             updateStatus();
         }
 

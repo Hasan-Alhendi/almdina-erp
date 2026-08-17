@@ -24,6 +24,7 @@ OPERATOR_UX = (
     / "door_cutting_order_operator_ux.js"
 )
 EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
+V4_BOOTSTRAP = APP_ROOT / "public" / "js" / "door_drawing_v4" / "bootstrap.js"
 V4_SHELL = APP_ROOT / "public" / "js" / "door_drawing_v4" / "presentation" / "editor_shell.js"
 V4_CONTROLLER = APP_ROOT / "public" / "js" / "door_drawing_v4" / "presentation" / "editor_controller.js"
 V4_INTERACTION = APP_ROOT / "public" / "js" / "door_drawing_v4" / "application" / "interaction_engine.js"
@@ -83,6 +84,7 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
 def test_operator_opens_only_clean_v4_editor_runtime():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     entry = EDITOR_ENTRY.read_text(encoding="utf-8")
+    bootstrap = V4_BOOTSTRAP.read_text(encoding="utf-8")
     shell = V4_SHELL.read_text(encoding="utf-8")
     controller = V4_CONTROLLER.read_text(encoding="utf-8")
     interaction = V4_INTERACTION.read_text(encoding="utf-8")
@@ -96,9 +98,10 @@ def test_operator_opens_only_clean_v4_editor_runtime():
     assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
     assert "__doorDrawingV4: true" in entry
     assert "__canonicalMmGeometry: true" in entry
-    assert "door_drawing_v4/domain/geometry.js" in entry
-    assert "door_drawing_v4/presentation/editor_shell.js" in entry
-    assert "door_drawing_v4/presentation/editor_controller.js" in entry
+    assert 'const BOOTSTRAP_SRC = "/assets/almdina_erp/js/door_drawing_v4/bootstrap.js"' in entry
+    assert "door_drawing_v4/domain/geometry.js" in bootstrap
+    assert "door_drawing_v4/presentation/editor_shell.js" in bootstrap
+    assert "door_drawing_v4/presentation/editor_controller.js" in bootstrap
     assert "AlmdinaSketchEngine" not in entry
     for tool in ("select", "node", "pen", "dimension", "hand"):
         assert f'toolButton("{tool}"' in shell

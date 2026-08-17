@@ -8,13 +8,16 @@ const repoRoot = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(repoRoot, relative), "utf8");
 
 const activeFacade = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
+const v4Bootstrap = read("almdina_erp/public/js/door_drawing_v4/bootstrap.js");
 const shortcuts = read("almdina_erp/public/js/door_drawing_v3/application/editor_shortcuts.js");
 const nodePolicy = read("almdina_erp/public/js/door_drawing_v3/application/node_selection_policy.js");
 
-assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(activeFacade, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(activeFacade, /__doorDrawingV3ProfessionalShortcuts|__doorDrawingV3MultiClipboard|__doorDrawingV3SelectionNodeDrag/);
 
 assert.match(shortcuts, /KeyA:\s*"a"/, "Select-all must use the physical KeyA location");

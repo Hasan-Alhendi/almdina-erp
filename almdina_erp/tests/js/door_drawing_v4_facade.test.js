@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 global.window = {};
+require(path.resolve(__dirname, "../../public/js/door_drawing_v4/bootstrap.js"));
 require(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"));
 
 const facade = global.window.AlmdinaSpecialShapeEditor;
@@ -11,16 +12,18 @@ const bootstrap = global.window.AlmdinaDoorDrawingV4Bootstrap;
 
 assert.ok(facade, "active special-shape facade must be registered");
 assert.equal(facade.__doorDrawingV4, true);
+assert.equal(facade.__standaloneWorkspace, true, "special-door editing must route to the standalone workspace");
+assert.equal(facade.workspaceRoute, "door-drawing");
 assert.equal(facade.__canonicalMmGeometry, true);
 assert.equal(facade.__sharedNodeTopology, true);
 assert.equal(facade.__singleInteractionOwner, true);
 assert.equal(facade.__highDpiCanvas, true);
 assert.equal(facade.__segmentDimensions, true, "active V4 facade must advertise persistent segment dimensions");
 
-assert.ok(bootstrap, "V4 bootstrap must be registered");
+assert.ok(bootstrap, "V4 bootstrap must be registered by the dedicated bootstrap module");
 assert.ok(bootstrap.SCRIPTS.length > 0);
-assert.ok(bootstrap.SCRIPTS.every(src => src.includes("/door_drawing_v4/")), "active facade must load V4 modules only");
-assert.ok(bootstrap.SCRIPTS.every(src => !src.includes("door_drawing_v3")), "active facade must never load V3 modules");
+assert.ok(bootstrap.SCRIPTS.every(src => src.includes("/door_drawing_v4/")), "active bootstrap must load V4 modules only");
+assert.ok(bootstrap.SCRIPTS.every(src => !src.includes("door_drawing_v3")), "active bootstrap must never load V3 modules");
 assert.equal(global.window.AlmdinaDoorDrawingV3Bootstrap, undefined, "legacy bootstrap must not be exposed by the active facade");
 
 const documentIndex = bootstrap.SCRIPTS.findIndex(src => src.endsWith("/domain/document.js"));
@@ -61,4 +64,4 @@ assert.deepEqual(drawing[0], {
 });
 assert.deepEqual(facade.parseDrawing(JSON.stringify({ version: 1 })), []);
 
-console.log("Door Drawing V4 facade tests passed");
+console.log("Door Drawing V4 standalone facade tests passed");

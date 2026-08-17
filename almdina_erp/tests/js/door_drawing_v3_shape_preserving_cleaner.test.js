@@ -93,12 +93,16 @@ assert.ok(penProfile.straightMaximumDeviationMm < mouseProfile.straightMaximumDe
 assert.equal(Cleaner.profile("unknown"), Cleaner.PROFILES.mouse);
 
 const activeFacade = fs.readFileSync(path.join(ROOT, "public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const v4Bootstrap = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v4/bootstrap.js"), "utf8");
 const application = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/application/non_destructive_smart_suggestions.js"), "utf8");
 const domainSource = fs.readFileSync(path.join(ROOT, "public/js/door_drawing_v3/domain/shape_preserving_stroke_domain.js"), "utf8");
 
-assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(activeFacade, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(activeFacade, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(activeFacade, /__doorDrawingV3ShapePreservingCleaner|__doorDrawingV3SmartStrokeReconstruction/);
 
 assert.match(application, /Reconstructor\.reconstruct\(points, pointerType\)/);

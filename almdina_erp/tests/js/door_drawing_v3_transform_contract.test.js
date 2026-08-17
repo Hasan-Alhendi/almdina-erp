@@ -8,15 +8,18 @@ const root = path.resolve(__dirname, "../../..");
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8");
 
 const activeFacade = read("almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js");
+const v4Bootstrap = read("almdina_erp/public/js/door_drawing_v4/bootstrap.js");
 const domain = read("almdina_erp/public/js/door_drawing_v3/domain/transform_domain.js");
 const view = read("almdina_erp/public/js/door_drawing_v3/presentation/transform_box_view.js");
 const application = read("almdina_erp/public/js/door_drawing_v3/application/transform_box.js");
 const css = read("almdina_erp/public/css/door_drawing_v3_transform.css");
 
-assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(activeFacade, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(activeFacade, /__doorDrawingV3Transform/);
 
 assert.match(domain, /function matrix\(/);

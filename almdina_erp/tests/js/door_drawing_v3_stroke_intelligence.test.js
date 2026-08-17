@@ -106,9 +106,11 @@ assert.equal(M.effectiveTool("pen", false), "pen", "Releasing Ctrl must restore 
 assert.equal(M.normalizeTool("rectangle"), "rectangle");
 
 const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const v4Bootstrap = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v4/bootstrap.js"), "utf8");
 const modifiers = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/tool_modifiers.js"), "utf8");
-assert.match(entry, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(entry, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(entry, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(entry, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(entry, /door_drawing_v3\//);
 assert.doesNotMatch(entry, /__doorDrawingV3PersistentTools|__doorDrawingV3ModifierConstraints|__doorDrawingV3TemporarySelect/);

@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const read = relative => fs.readFileSync(path.join(ROOT, relative), "utf8");
 
 const activeFacade = read("public/js/door_cutting_order/drawing/special_shape_facade.js");
+const v4Bootstrap = read("public/js/door_drawing_v4/bootstrap.js");
 const domain = read("public/js/door_drawing_v3/domain/bezier_path_domain.js");
 const topologyDomain = read("public/js/door_drawing_v3/domain/path_topology_domain.js");
 const selection = read("public/js/door_drawing_v3/domain/bezier_selection_domain.js");
@@ -20,10 +21,12 @@ const css = read("public/css/door_drawing_v3_bezier.css");
 
 // V3 Bezier remains regression-covered as a legacy bounded subsystem. It is no
 // longer loaded by the public special-shape facade, whose runtime owner is V4.
-assert.match(activeFacade, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(activeFacade, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(activeFacade, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(activeFacade, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(activeFacade, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(activeFacade, /__doorDrawingV3Bezier/);
 
 assert.match(domain, /NODE_CORNER\s*=\s*"corner"/);
