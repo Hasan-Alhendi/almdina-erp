@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
+const v4Bootstrap = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v4/bootstrap.js"), "utf8");
 const geometry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"), "utf8");
 const smartPathDomain = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/smart_path_domain.js"), "utf8");
 const smartPathPersistence = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/infrastructure/smart_path_persistence.js"), "utf8");
@@ -29,12 +30,14 @@ const smartPenCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/do
 const smartGuidesCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_guides.css"), "utf8");
 
 // V3 remains covered as an isolated legacy subsystem, but it no longer owns the
-// public special-shape facade. The active facade must stay V4-only so stale V3
-// assumptions cannot silently become runtime dependencies again.
-assert.match(entry, /door_drawing_v4\/domain\/geometry\.js/);
-assert.match(entry, /door_drawing_v4\/presentation\/editor_controller\.js/);
+// public special-shape facade. The active facade delegates V4 module ownership to
+// the centralized bootstrap so stale V3 assumptions cannot become runtime dependencies.
+assert.match(entry, /door_drawing_v4\/bootstrap\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(v4Bootstrap, /door_drawing_v4\/presentation\/editor_controller\.js/);
 assert.match(entry, /__doorDrawingV4:\s*true/);
 assert.doesNotMatch(entry, /door_drawing_v3\//);
+assert.doesNotMatch(v4Bootstrap, /door_drawing_v3\//);
 assert.doesNotMatch(entry, /__doorDrawingV3/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
 
