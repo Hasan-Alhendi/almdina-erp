@@ -75,12 +75,17 @@
     }
 
     function currentTabFieldname(frm) {
+        // Frappe v16 exposes the user-selected tab through Form.get_active_tab().
+        // Layout.current_tab is only the layout construction cursor and may point
+        // at a hidden/later Tab Break (for example cost_tab) while the user is
+        // visibly on results_tab. Never use it as interaction state.
+        const activeTab = frm && typeof frm.get_active_tab === "function"
+            ? frm.get_active_tab()
+            : null;
         const native = String(
-            frm
-            && frm.layout
-            && frm.layout.current_tab
-            && frm.layout.current_tab.df
-            && frm.layout.current_tab.df.fieldname
+            activeTab
+            && activeTab.df
+            && activeTab.df.fieldname
             || ""
         );
         if (TAB_KIND[native]) return native;
