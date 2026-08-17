@@ -65,12 +65,13 @@ doctype_js = {
         "public/js/door_cutting_order/printing/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
-        # Cost permissions own visibility/capability policy. This edit-session
-        # adapter is loaded immediately afterwards and adds explicit user intent
-        # before native cost inputs can become writable.
-        "public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js",
+        # Preserve the established secure-document ownership chain: the financial
+        # documents presenter must remain immediately after cost permissions.
         "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js",
+        # Explicit cost-edit intent is layered after the existing cost presenters;
+        # it owns only the focused native input status for editable cost settings.
+        "public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js",
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_save_render_performance_ux.js",
@@ -101,13 +102,14 @@ doctype_js = {
         "public/js/door_cutting_order/core/order_lifecycle.js",
         "public/js/input_stability.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
-        # Explicit user intent is a separate gate from capability/stage policy.
+        # Explicit user intent remains separate from capability/stage policy.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js",
-        # Native plan fields consume capability + explicit plan edit-session state.
-        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
-        # Final page-action owner: the same top-toolbar location now delegates to
-        # Order / Cutting Plan / Cost edit sessions according to the active tab.
+        # The page coordinator owns only the visible top action and delegates
+        # Order / Cutting Plan / Cost editing to their established session owners.
         "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js",
+        # Final field-status owner on purpose: no later compatibility layer may
+        # re-open or re-lock focused plan inputs after the plan-session decision.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
     "Production Routing": "public/js/production_routing_ux.js",
