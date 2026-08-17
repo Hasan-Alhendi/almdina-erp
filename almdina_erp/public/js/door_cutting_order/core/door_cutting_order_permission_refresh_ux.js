@@ -3,6 +3,8 @@
 
     if (window.AlmdinaOrderPermissionRefreshUX) return;
 
+    const REFRESH_TTL_MS = 30_000;
+
     function context() {
         return window.AlmdinaDocumentContext || null;
     }
@@ -13,6 +15,12 @@
             return documentContext.capture(frm);
         }
         return `${frm.doctype || ""}::${frm.doc && frm.doc.name || "__new__"}`;
+    }
+
+    function identityKey(identity) {
+        if (typeof identity === "string") return identity;
+        if (!identity || typeof identity !== "object") return "";
+        return `${String(identity.identity || "")}::${Number(identity.generation || 0)}`;
     }
 
     function isCurrent(frm, identity) {
@@ -86,10 +94,39 @@
         }
     }
 
-    function refreshPermissions(frm) {
+    function markFresh(frm, identity) {
+        if (!frm) return;
+        frm.__almdinaPermissionRefreshCompletedContext = identityKey(identity);
+        frm.__almdinaPermissionRefreshCompletedAt = Date.now();
+    }
+
+    function hasFreshContext(frm, identity) {
+        if (!frm) return false;
+        const key = identityKey(identity);
+        const refreshedAt = Number(frm.__almdinaPermissionRefreshCompletedAt || 0);
+        return Boolean(
+            key
+            && frm.__almdinaPermissionRefreshCompletedContext === key
+            && refreshedAt > 0
+            && Date.now() - refreshedAt < REFRESH_TTL_MS
+        );
+    }
+
+    function refreshPermissions(frm, options = {}) {
         if (!frm || frm.doctype !== "Door Cutting Order") {
             return Promise.resolve(false);
         }
+
+        const identity = capture(frm);
+        const force = Boolean(options && options.force === true);
+        if (!force && hasFreshContext(frm, identity)) {
+            if (surfaceNeedsRecovery(frm, window.AlmdinaPermissions)) {
+                applySurfaces(frm);
+                return Promise.resolve(true);
+            }
+            return Promise.resolve(false);
+        }
+
         if (
             frm.__almdinaPermissionRefreshPromise
             && isCurrent(frm, frm.__almdinaPermissionRefreshContext)
@@ -97,7 +134,6 @@
             return frm.__almdinaPermissionRefreshPromise;
         }
 
-        const identity = capture(frm);
         const permissions = window.AlmdinaPermissions;
         const beforeSignature = permissionSignature(permissions);
         const operation = permissions && typeof permissions.refresh === "function"
@@ -107,6 +143,7 @@
         const refreshPromise = Promise.resolve(operation)
             .then(() => {
                 if (!isCurrent(frm, identity)) return false;
+                markFresh(frm, identity);
                 const changed = permissionSignature(permissions) !== beforeSignature;
                 if (changed || surfaceNeedsRecovery(frm, permissions)) {
                     applySurfaces(frm);
@@ -143,10 +180,14 @@
 
     window.addEventListener("almdina:permissions-updated", () => {
         const frm = window.cur_frm;
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+
+        // Any permission-updated event means the shared context has just been
+        // refreshed from the server. Mark this document identity fresh so the
+        // form hooks do not immediately issue the same request again.
+        markFresh(frm, capture(frm));
         if (
-            frm
-            && frm.doctype === "Door Cutting Order"
-            && !frm.__almdinaPermissionRefreshPromise
+            !frm.__almdinaPermissionRefreshPromise
             && surfaceNeedsRecovery(frm, window.AlmdinaPermissions)
         ) {
             applySurfaces(frm);
