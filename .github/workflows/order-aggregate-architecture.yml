@@ -1,0 +1,30 @@
+name: Order Aggregate Architecture
+
+on:
+  pull_request:
+    branches: [Develop, develop]
+  push:
+    branches: [Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  aggregate-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Validate aggregate boundaries
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_order_aggregate_refactor_foundation.py
