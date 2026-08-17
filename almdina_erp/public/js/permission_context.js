@@ -218,7 +218,7 @@
             return Promise.resolve(frappe.require(module.asset))
                 .then(() => {
                     if (!globalExists(module.global)) {
-                        throw new Error(`Module did not initialize: ${module.global}`));
+                        throw new Error(`Module did not initialize: ${module.global}`);
                     }
                     return window[module.global];
                 });
