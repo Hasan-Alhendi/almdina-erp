@@ -28,6 +28,12 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    COST_SNAPSHOT_VERSION,
+    apply_plan_costs,
+    initialize_draft_plan_cost_snapshot,
+    project_plan_costs_to_order,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     apply_validated_dxf_snapshot,
     calculate_system_plan,
@@ -149,12 +155,7 @@ def _assert_recalculation_state(order: Any) -> None:
 
 
 def _set_order_projection(order: Any, plan: Any, *, include_snapshot: bool) -> None:
-    """Maintain the legacy DCO UI as a read projection during A2 migration.
-
-    Cutting Plan remains authoritative. These fields exist only so the current
-    Door Cutting Order form can keep rendering until A4/A5 remove the legacy
-    plan fields from the order UI.
-    """
+    """Maintain the legacy DCO UI as a read projection during migration."""
 
     values: dict[str, Any] = {
         "packing_mode": plan.optimization_mode,
@@ -242,22 +243,6 @@ def _canonical_plan_source(plan_source: str) -> str:
     raise AssertionError("unreachable")
 
 
-def _copy_compatibility_costs_to_plan(order: Any, plan: Any) -> None:
-    """Preserve the current commercial projection until A3 moves costing fully."""
-
-    board_count = cint(plan.required_boards)
-    plan.board_rate_usd = flt(getattr(order, "board_rate_usd", 0))
-    plan.cutting_cost_per_board_usd = flt(
-        getattr(order, "cutting_cost_per_board_usd", 0)
-    )
-    plan.mdf_cost_usd = board_count * plan.board_rate_usd
-    plan.cutting_cost_usd = board_count * plan.cutting_cost_per_board_usd
-    plan.edge_cost_usd = flt(getattr(order, "edge_cost_usd", 0))
-    plan.total_cost_usd = (
-        plan.mdf_cost_usd + plan.cutting_cost_usd + plan.edge_cost_usd
-    )
-
-
 def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if str(plan.status or "") != DRAFT:
         frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
@@ -266,6 +251,11 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if cint(plan.plan_needs_recalculation):
         frappe.throw(
             _("خطة القص قديمة. أعد حسابها أو ارفع DXF جديدًا ثم راجع النتيجة قبل الاعتماد."),
+            frappe.ValidationError,
+        )
+    if cint(getattr(plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION:
+        frappe.throw(
+            _("تكلفة خطة القص قديمة. حدّث الخطة أو احفظ إعدادات التكلفة ثم راجع النتيجة قبل الاعتماد."),
             frappe.ValidationError,
         )
 
@@ -303,10 +293,6 @@ def _set_approved_order_projection(order: Any, plan: Any) -> None:
         "required_boards": plan.required_boards,
         "waste_area_m2": plan.waste_area_m2,
         "waste_percent": plan.waste_percent,
-        "mdf_cost_usd": plan.mdf_cost_usd,
-        "cutting_cost_usd": plan.cutting_cost_usd,
-        "edge_cost_usd": plan.edge_cost_usd,
-        "total_cost_usd": plan.total_cost_usd,
         "packing_method": plan.method_label,
         "packing_score": (
             f"ألواح: {int(plan.required_boards or 0)} | "
@@ -400,7 +386,9 @@ def save_uploaded_dxf_plan(
 
     repository = FrappeCuttingPlanCommandRepository(capability)
     plan = repository.ensure_uploaded_dxf_draft(order)
+    initialize_draft_plan_cost_snapshot(order, plan)
     apply_validated_dxf_snapshot(order, plan, snapshot)
+    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     plan.dxf_file = str(file_url or "").strip()
     plan.dxf_status = "Validated"
     plan.dxf_uploaded_by = frappe.session.user
@@ -411,6 +399,7 @@ def save_uploaded_dxf_plan(
 
 def mirror_uploaded_dxf_projection(order: Any, plan: Any) -> None:
     _set_dxf_order_projection(order, plan)
+    project_plan_costs_to_order(order, plan)
 
 
 def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
@@ -439,7 +428,6 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     _assert_plan_ready_for_approval(order, plan)
     order.ensure_special_shapes_documented()
     order.ensure_special_prices_approved()
-    _copy_compatibility_costs_to_plan(order, plan)
 
     for previous in repository.approved_documents(order.name, exclude=plan.name):
         previous.status = SUPERSEDED
@@ -450,6 +438,7 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     plan.approved_on = now_datetime()
     repository.save_document(plan, allow_status_transition=True)
     _set_approved_order_projection(order, plan)
+    project_plan_costs_to_order(order, plan)
 
     return {
         "name": order.name,
@@ -498,6 +487,7 @@ def recalculate_system_plan(
     )
     repository = FrappeCuttingPlanCommandRepository(Capability.RECALCULATE_PLAN)
     plan = repository.ensure_system_draft(order)
+    initialize_draft_plan_cost_snapshot(order, plan)
     changed = _changed_settings(plan, updates or {})
     if changed:
         require_document_capability(
@@ -516,10 +506,13 @@ def recalculate_system_plan(
             edit_repository,
         )
         plan = repository.get_document(plan.name)
+        initialize_draft_plan_cost_snapshot(order, plan)
 
     calculate_system_plan(order, plan)
+    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     repository.save_document(plan)
     _set_order_projection(order, plan, include_snapshot=True)
+    project_plan_costs_to_order(order, plan)
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
     return result
