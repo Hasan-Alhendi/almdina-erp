@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -57,15 +58,7 @@ class MemoryPlanRepository:
 
     def save_settings(self, plan_name: str, settings: PlanSettings) -> PlanRecord:
         assert plan_name == self.plan.name
-        self.plan = PlanRecord(
-            name=self.plan.name,
-            order_name=self.plan.order_name,
-            revision=self.plan.revision,
-            status=self.plan.status,
-            source_type=self.plan.source_type,
-            based_on_plan=self.plan.based_on_plan,
-            settings=settings,
-        )
+        self.plan = replace(self.plan, settings=settings)
         return self.plan
 
 
@@ -140,9 +133,7 @@ def test_only_draft_plan_settings_are_mutable() -> None:
     assert updated.settings.kerf_mm == 4
     assert updated.settings.trim_margin_mm == 2
 
-    repository.plan = PlanRecord(
-        **{**draft.__dict__, "status": APPROVED}
-    )
+    repository.plan = replace(draft, status=APPROVED)
     with pytest.raises(CuttingPlanLifecycleError):
         update_settings(UpdatePlanSettingsCommand("CP-0002", _settings()), repository)
 
