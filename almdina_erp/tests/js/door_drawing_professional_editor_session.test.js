@@ -18,6 +18,8 @@ const modules = [
     "public/js/door_drawing_v4/application/constraint_inference.js",
     "public/js/door_drawing_v4/application/driving_dimension_commands.js",
     "public/js/door_drawing_v4/application/snap_resolver.js",
+    "public/js/door_drawing_v4/application/point_alignment_snap.js",
+    "public/js/door_drawing_v4/application/stroke_interpreter.js",
     "public/js/door_drawing_v4/application/hit_test.js",
     "public/js/door_drawing_v4/application/command_history.js",
     "public/js/door_drawing_v4/application/tool_state_machine.js",
@@ -41,7 +43,7 @@ assert.equal(session.state().toolState.activeTool, "pen");
 assert.equal(session.pointerDown({ xMm: 10, yMm: 10 }, interaction).kind, "path-started");
 
 let moved = session.pointerMove({ xMm: 100, yMm: 11 }, interaction);
-assert.equal(moved.preview.semantic, "horizontal", "Smart Pen must infer horizontal intent near the axis");
+assert.equal(moved.preview.semantic, "horizontal", "Path tool must infer horizontal intent near the axis");
 let added = session.pointerDown({ xMm: 100, yMm: 11 }, interaction);
 assert.equal(added.kind, "segment-added");
 let firstSegment = documentModel.segmentById(session.state().document, added.segmentId);
@@ -51,7 +53,7 @@ assert.equal(firstStart.yMm, firstEnd.yMm, "horizontal snap must become exact ge
 assert.ok(session.state().document.constraints.some(item => item.segmentId === added.segmentId && item.type === "horizontal"), "horizontal intent must persist as a constraint");
 
 moved = session.pointerMove({ xMm: 101, yMm: 100 }, interaction);
-assert.equal(moved.preview.semantic, "vertical", "Smart Pen must infer vertical intent near the axis");
+assert.equal(moved.preview.semantic, "vertical", "Path tool must infer vertical intent near the axis");
 added = session.pointerDown({ xMm: 101, yMm: 100 }, interaction);
 assert.ok(session.state().document.constraints.some(item => item.segmentId === added.segmentId && item.type === "vertical"), "vertical intent must persist as a constraint");
 
@@ -91,4 +93,4 @@ assert.notDeepEqual(session.state().document.nodes, afterDrag.nodes, "node drag 
 assert.equal(session.redo().kind, "redo");
 assert.deepEqual(session.state().document.nodes, afterDrag.nodes);
 
-console.log("Professional Smart Pen and node editing behavior passed");
+console.log("Professional path tool and node editing behavior passed");
