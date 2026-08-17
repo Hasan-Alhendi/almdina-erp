@@ -145,6 +145,18 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
                 "check_permission",
                 "require_document_capability",
             },
+            "almdina_erp.almdina_erp.services.special_shape_workspace_service.get_drawing_workspace": {
+                "_get_order",
+                "_get_piece",
+                "_edit_state",
+            },
+            "almdina_erp.almdina_erp.services.special_shape_workspace_service.save_drawing_workspace": {
+                "_get_order",
+                "_assert_editable",
+                "_get_piece",
+                "validate_special_shape_drawing",
+                "validate_special_shape_geometry",
+            },
         }
         for endpoint, required in expected_calls.items():
             with self.subTest(endpoint=endpoint):
