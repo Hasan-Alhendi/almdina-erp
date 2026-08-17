@@ -18,6 +18,10 @@
         return window.AlmdinaPlanControlsUX || null;
     }
 
+    function editSessionOwner() {
+        return window.AlmdinaPlanEditSessionUX || null;
+    }
+
     function installNativeStatusOwner(field) {
         if (!field || !field.df || field.df[STATUS_OWNER_KEY]) return;
 
@@ -26,10 +30,6 @@
             ? df.get_status
             : null;
 
-        // Frappe v16 consults df.get_status before it derives field status from
-        // the broad DocType write permission. Plan fields intentionally have a
-        // narrower capability model, so this is the stable framework extension
-        // point for translating the PlanControls decision into the native input.
         df.get_status = function almdinaFocusedPlanFieldStatus(control) {
             if (this.hidden || this.hidden_due_to_dependency) return "None";
 
@@ -38,20 +38,33 @@
                 if (previousStatus === "None") return "None";
             }
 
-            return this[STATUS_KEY] === "Write" ? "Write" : "Read";
+            if (this[STATUS_KEY] !== "Write") return "Read";
+            const editor = editSessionOwner();
+            const frm = control && control.frm;
+            if (
+                !editor
+                || typeof editor.planSettingsMayWrite !== "function"
+                || !editor.planSettingsMayWrite(frm)
+            ) {
+                return "Read";
+            }
+            return "Write";
         };
         df[STATUS_OWNER_KEY] = true;
     }
 
-    function syncNativeStatus(field) {
+    function syncNativeStatus(frm, field) {
         if (!field || !field.df) return;
         installNativeStatusOwner(field);
 
-        // PlanControls is the one policy owner. It has just projected the
-        // capability + lifecycle/stage decision to df.read_only; persist that
-        // decision separately so an unrelated order-edit refresh cannot replace
-        // it with the broad Door Cutting Order write state afterwards.
+        const editor = editSessionOwner();
+        const editingAllowed = Boolean(
+            editor
+            && typeof editor.planSettingsMayWrite === "function"
+            && editor.planSettingsMayWrite(frm)
+        );
         field.df[STATUS_KEY] = Number(field.df.read_only || 0) === 0
+            && editingAllowed
             ? "Write"
             : "Read";
 
@@ -68,7 +81,7 @@
 
         controls.applyOptimizerFieldAccess(frm);
         PLAN_SETTING_FIELDS.forEach((fieldname) => {
-            syncNativeStatus(frm.fields_dict[fieldname]);
+            syncNativeStatus(frm, frm.fields_dict[fieldname]);
         });
         return true;
     }
