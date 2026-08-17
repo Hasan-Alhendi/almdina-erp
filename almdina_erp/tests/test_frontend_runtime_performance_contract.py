@@ -105,11 +105,12 @@ def test_dco_list_role_flags_are_requested_once_per_refresh_generation():
     js = DCO_LIST_JS.read_text(encoding="utf-8")
 
     assert "function requestOperationalRoleFlags(" in js
+    assert "function applyOperationalRoleRows(listview)" in js
+    assert "return requestOperationalRoleFlags(listview);" in js
     assert "_dcoRoleFlagGeneration" in js
     assert "_dcoRoleFlagsPendingKey" in js
     assert "_dcoRoleFlagsPendingPromise" in js
     assert js.count("frappe.call({") == 1
-    assert "applyOperationalRoleRows" not in js
 
     # DOM row arrival may replay cached presentation, but must never own a new
     # server request. The Frappe refresh hook is the only request lifecycle owner.
@@ -124,3 +125,13 @@ def test_dco_mobile_cards_use_incremental_dom_updates():
     assert "card.dataset.dcoRenderSignature = signature" in js
     assert "containers.forEach(removeMobileCard);" in js
     assert "if (next === listview._dcoLastCardLayout) return;" in js
+
+
+def test_dco_personal_queue_ordering_remains_active_ready_completed():
+    js = DCO_LIST_JS.read_text(encoding="utf-8")
+
+    assert "function personalQueueState(" in js
+    assert "function sortPersonalQueueItems(" in js
+    assert 'return [...inProgress, ...ready, ...completed];' in js
+    assert 'queueState: personalQueueState(doc, flag)' in js
+    assert 'flag.assignment_state === "completed"' in js
