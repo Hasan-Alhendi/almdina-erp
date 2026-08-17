@@ -24,6 +24,7 @@
         let view = null;
         let busy = false;
         let destroyed = false;
+        let renderEnabled = true;
 
         function notify(message, level = "info") {
             if (typeof options.notify === "function") options.notify(message, level);
@@ -40,7 +41,7 @@
         }
 
         function render() {
-            if (destroyed || !context) return;
+            if (destroyed || !context || !renderEnabled) return;
             destroyView();
             view = reference.ReferenceView.mount(options.container, context, {
                 readOnly,
@@ -53,13 +54,15 @@
             });
         }
 
-        function setContext(nextContext, nextReadOnly = false) {
+        function setContext(nextContext, nextReadOnly = false, shouldRender = true) {
             context = nextContext;
             readOnly = Boolean(nextReadOnly);
-            render();
+            renderEnabled = Boolean(shouldRender);
+            if (renderEnabled) render();
+            else destroyView();
         }
 
-        async function persist(file, cropResult) {
+        async function persist(cropResult) {
             if (!context || !cropResult || readOnly || busy) return null;
             setBusy(true, "يتم حفظ الصورة…");
             try {
@@ -95,7 +98,7 @@
             try {
                 const cropped = await reference.Cropper.open(file, { source, scanner });
                 if (!cropped || destroyed) return null;
-                return await persist(file, cropped);
+                return await persist(cropped);
             } catch (error) {
                 console.error("Reference image crop failed", error);
                 notify(error && error.message ? error.message : "تعذر قراءة الصورة أو قصها.", "error");
@@ -183,7 +186,7 @@
             if (destroyed) return;
             destroyed = true;
             destroyView();
-            options.container.innerHTML = "";
+            if (renderEnabled) options.container.innerHTML = "";
         }
 
         return Object.freeze({
@@ -193,7 +196,7 @@
             recrop,
             remove,
             destroy,
-            state: () => Object.freeze({ context, readOnly, busy }),
+            state: () => Object.freeze({ context, readOnly, busy, renderEnabled }),
         });
     }
 
