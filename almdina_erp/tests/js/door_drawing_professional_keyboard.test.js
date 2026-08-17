@@ -60,9 +60,23 @@ for (const [key, expected] of [["v", "select"], ["a", "node"], ["p", "pen"], ["d
     assert.deepEqual(calls.at(-1), ["tool", expected, key]);
 }
 
-keydown("z", { ctrlKey: true });
+// event.code identifies the physical key even when Windows/browser input language is Arabic.
+// The actual event.key can therefore be Arabic and the design shortcuts must still work.
+for (const [key, code, expected, label] of [
+    ["ر", "KeyV", "select", "v"],
+    ["ش", "KeyA", "node", "a"],
+    ["ح", "KeyP", "pen", "p"],
+    ["ي", "KeyD", "dimension", "d"],
+]) {
+    assert.equal(keydown(key, { code }), true, `${code} must work regardless of Arabic keyboard layout`);
+    assert.deepEqual(calls.at(-1), ["tool", expected, label]);
+}
+
+keydown("z", { ctrlKey: true, code: "KeyZ" });
 assert.deepEqual(calls.at(-1), ["undo"]);
-keydown("z", { ctrlKey: true, shiftKey: true });
+keydown("ئ", { ctrlKey: true, code: "KeyZ" });
+assert.deepEqual(calls.at(-1), ["undo"], "Ctrl+Z must use the physical key on Arabic layout too");
+keydown("z", { ctrlKey: true, shiftKey: true, code: "KeyZ" });
 assert.deepEqual(calls.at(-1), ["redo"]);
 keydown("Escape");
 assert.deepEqual(calls.at(-1), ["escape"]);
@@ -73,14 +87,14 @@ assert.deepEqual(calls.at(-1), ["space-up"]);
 
 const countBeforeInput = calls.length;
 const textInput = { tagName: "INPUT", type: "text", isContentEditable: false };
-assert.equal(keydown("p", { target: textInput }), false, "typing in an input must not switch tools");
+assert.equal(keydown("p", { code: "KeyP", target: textInput }), false, "typing in an input must not switch tools");
 assert.equal(calls.length, countBeforeInput);
 const contentEditable = { tagName: "DIV", isContentEditable: true };
-assert.equal(keydown("a", { target: contentEditable }), false, "contenteditable typing must not switch tools");
+assert.equal(keydown("a", { code: "KeyA", target: contentEditable }), false, "contenteditable typing must not switch tools");
 assert.equal(calls.length, countBeforeInput);
 
 scope.isConnected = false;
-assert.equal(keydown("v"), false, "hidden/unmounted workspace must not capture shortcuts");
+assert.equal(keydown("v", { code: "KeyV" }), false, "hidden/unmounted workspace must not capture shortcuts");
 assert.equal(calls.length, countBeforeInput);
 scope.isConnected = true;
 
@@ -88,4 +102,4 @@ mounted.destroy();
 assert.equal(listeners.has("keydown"), false);
 assert.equal(listeners.has("keyup"), false);
 
-console.log("Professional drawing keyboard behavior passed");
+console.log("Professional drawing keyboard behavior passed, including Arabic layout");
