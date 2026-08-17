@@ -19,6 +19,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/application/driving_dimension_commands.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/manufacturing_projection.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/snap_resolver.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/stroke_interpreter.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/hit_test.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/command_history.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/tool_state_machine.js",
