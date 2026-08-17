@@ -18,6 +18,8 @@ on:
       - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
       - "almdina_erp/tests/test_door_drawing_professional_workspace_contract.py"
       - "almdina_erp/tests/test_special_shape_reference_image_architecture.py"
+      - "almdina_erp/tests/test_scanner_bridge_architecture.py"
+      - "tools/scanner_bridge/windows/**"
       - ".github/workflows/door-drawing-v4-checks.yml"
   pull_request:
     paths:
@@ -34,6 +36,8 @@ on:
       - "almdina_erp/tests/js/door_drawing_professional_*.test.js"
       - "almdina_erp/tests/test_door_drawing_professional_workspace_contract.py"
       - "almdina_erp/tests/test_special_shape_reference_image_architecture.py"
+      - "almdina_erp/tests/test_scanner_bridge_architecture.py"
+      - "tools/scanner_bridge/windows/**"
       - ".github/workflows/door-drawing-v4-checks.yml"
 
 permissions:
@@ -67,6 +71,14 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js
           node --check almdina_erp/almdina_erp/page/door_drawing/door_drawing.js
 
+      - name: Validate Windows scanner bridge PowerShell syntax
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-ChildItem tools/scanner_bridge/windows -Filter *.ps1 | ForEach-Object {
+            [void][ScriptBlock]::Create((Get-Content -Raw $_.FullName))
+          }
+
       - name: Validate professional workspace Python syntax and architecture
         shell: bash
         run: |
@@ -75,7 +87,8 @@ jobs:
           python -m py_compile almdina_erp/almdina_erp/services/special_shape_reference_image_service.py
           python -m unittest -v \
             almdina_erp.tests.test_door_drawing_professional_workspace_contract \
-            almdina_erp.tests.test_special_shape_reference_image_architecture
+            almdina_erp.tests.test_special_shape_reference_image_architecture \
+            almdina_erp.tests.test_scanner_bridge_architecture
 
       - name: Run Door Drawing V4 regression tests
         shell: bash
