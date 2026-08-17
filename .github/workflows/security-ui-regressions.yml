@@ -50,7 +50,8 @@ jobs:
             almdina_erp.tests.test_protected_order_surface_recovery \
             almdina_erp.tests.test_frontend_consolidation_contract \
             almdina_erp.tests.test_frontend_runtime_performance_contract \
-            almdina_erp.tests.test_order_list_query_performance
+            almdina_erp.tests.test_order_list_query_performance \
+            almdina_erp.tests.test_production_routing_runtime_cache
 
       - name: Validate changed browser modules
         run: |
