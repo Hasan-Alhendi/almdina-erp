@@ -38,6 +38,8 @@ def test_focused_plan_fields_bridge_native_frappe_status_without_document_write(
     assert 'frameworkStatus === "None"' in adapter
     assert '? "Write"' in adapter
     assert ': "Read"' in adapter
+    assert "almdina_edit_session_changed(frm) { schedule(frm); }" in adapter
+    assert "refresh_plan_controls(frm) { schedule(frm); }" in adapter
 
     # Never synthesize or mutate broad Door Cutting Order permissions in the UI.
     assert "frm.perm" not in adapter
@@ -83,11 +85,18 @@ def test_secure_dxf_owner_is_private_unattached_and_loaded_before_plan_ui() -> N
     form_secure = '"public/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"'
     plan_ui = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
     controls = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"'
+    revision = '"public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"'
     adapter = (
         '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js"'
     )
 
+    # Secure upload has exactly one runtime owner: global Desk bootstrap. This
+    # makes it available before the form plan UI without violating the frontend
+    # ownership closure by dual-loading the same module.
     assert global_secure in manifest
-    assert form_secure in manifest
-    assert manifest.index(form_secure) < manifest.index(plan_ui)
-    assert manifest.index(controls) < manifest.index(adapter)
+    assert form_secure not in manifest
+    assert manifest.index(global_secure) < manifest.index(plan_ui)
+
+    # The policy owner loads before the compatibility edit-session layer; the
+    # focused status bridge runs last and reapplies PlanControls after that layer.
+    assert manifest.index(controls) < manifest.index(revision) < manifest.index(adapter)
