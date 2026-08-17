@@ -57,15 +57,23 @@ assert.equal(aligned.point.xMm, 100);
 assert.equal(aligned.point.yMm, 70);
 assert.ok(aligned.guides.length, "point alignment must expose a visible guide");
 
+// Use a standalone reference node so this verifies point alignment itself rather than
+// competing with the intentionally stronger extension snap of the existing line.
+alignmentDoc = documentModel.addNode(alignmentDoc, {
+    id: "alignment-reference-node",
+    xMm: 250,
+    yMm: 200,
+});
 aligned = v4.SnapResolver.resolve(alignmentDoc, {
-    rawPoint: { xMm: 160, yMm: 12 },
+    rawPoint: { xMm: 160, yMm: 202 },
     toleranceMm: 4,
     releaseToleranceMm: 6,
     gridStepMm: 0,
 });
 assert.equal(aligned.semantic, "align-y");
-assert.equal(aligned.point.yMm, 10);
+assert.equal(aligned.point.yMm, 200);
 assert.equal(aligned.point.xMm, 160);
+assert.ok(aligned.guides.length, "Y alignment must expose a visible guide");
 
 // A noisy freehand stroke should simplify to clean geometric segments.
 const interpretedLine = v4.StrokeInterpreter.interpret([
