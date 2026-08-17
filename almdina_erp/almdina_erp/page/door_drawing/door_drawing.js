@@ -19,6 +19,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/application/driving_dimension_commands.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/manufacturing_projection.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/snap_resolver.js",
+        "/assets/almdina_erp/js/door_drawing_v4/application/point_alignment_snap.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/stroke_interpreter.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/hit_test.js",
         "/assets/almdina_erp/js/door_drawing_v4/application/command_history.js",
@@ -26,6 +27,7 @@
         "/assets/almdina_erp/js/door_drawing_v4/application/viewport.js",
         "/assets/almdina_erp/js/door_drawing_v4/infrastructure/persistence_adapter.js",
         "/assets/almdina_erp/js/door_drawing_v4/presentation/canvas_renderer.js",
+        "/assets/almdina_erp/js/door_drawing_v4/presentation/stroke_preview_renderer.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_session.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/keyboard_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_view_model.js",
@@ -152,7 +154,7 @@
         ensureController(wrapper).then(controller => {
             const context = routeContext();
             if (!context.orderName || !context.pieceName) {
-                controller.showRouteError("رابط الرسم غير مكتمل. افتح الرسم من داخل الطلب.");
+                controller.showRouteError("رابط الرسم غير مكتمل. افتح الرسم من الطلب وتحقق من الرابط.");
                 return;
             }
             controller.open(context);
