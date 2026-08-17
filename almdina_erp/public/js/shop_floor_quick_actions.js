@@ -14,7 +14,7 @@
 
     let workerDropdownSequence = 0;
 
-    function ensureShopFloorStylesheet() {
+    function ensureStylesheet() {
         if (typeof document === "undefined" || !document.head) return;
         if (document.getElementById(SHOP_FLOOR_STYLESHEET_ID)) return;
         const link = document.createElement("link");
@@ -401,7 +401,7 @@
         return guard;
     }
 
-    ensureShopFloorStylesheet();
+    ensureStylesheet();
 
     window.AlmdinaShopFloorQuickActions = Object.freeze({
         actionFor,
