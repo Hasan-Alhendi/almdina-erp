@@ -220,7 +220,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual([row["name"] for row in rows], ["PST-CURRENT"])
         self.assertEqual(rows[0]["can_handoff_to"], "CNC")
         self.assertEqual(rows[0]["department_label"], "رسم")
-        self.assertFalse(rows[0]["can_handoff_stage"])
+        # Authorization/action visibility stays true for the assigned worker;
+        # planning readiness is reported independently by the block metadata.
+        self.assertTrue(rows[0]["can_handoff_stage"])
         self.assertEqual(rows[0]["handoff_block_code"], "plan_not_approved")
         self.assertIn("اعتمد خطة القص", rows[0]["handoff_block_reason"])
         self.assertFalse(rows[0]["can_start_stage"])
@@ -468,9 +470,11 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertEqual(detail["active_plan_source"], "System")
         self.assertEqual(detail["stage_snapshot"]["active_stage_type"], "Drawing")
         self.assertEqual(detail["stage_snapshot"]["can_handoff_to"], "CNC")
-        self.assertFalse(detail["stage_snapshot"]["can_handoff_stage"])
+        # The worker owns the handoff action, so the UI may show it. The separate
+        # readiness metadata remains the command-layer reason it cannot finish yet.
+        self.assertTrue(detail["stage_snapshot"]["can_handoff_stage"])
         self.assertEqual(detail["stage_snapshot"]["handoff_block_code"], "plan_not_approved")
-        self.assertFalse(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
+        self.assertTrue(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
         self.assertTrue(detail["stage_snapshot"]["can_reassign_worker"])
         self.assertTrue(detail["can_recalculate_drawing_plan"])
         self.assertTrue(detail["document_capabilities"][Capability.VIEW_CUTTING_PLAN])
