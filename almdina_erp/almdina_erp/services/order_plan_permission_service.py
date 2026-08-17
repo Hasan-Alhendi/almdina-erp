@@ -208,9 +208,14 @@ def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
 
 
 def _assert_recalculation_state(doc: Any) -> None:
-    if getattr(doc, "approved_plan", None):
+    drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(doc)
+
+    # Approval freezes the production snapshot, not Drawing's ability to prepare
+    # an explicit replacement. Only the Drawing-stage exception may recalculate
+    # while an approved plan exists; later production stages remain hard-locked.
+    if getattr(doc, "approved_plan", None) and not drawing_recalculation_allowed:
         frappe.throw(
-            _("لا يمكن إعادة حساب خطة قص تم اعتمادها. ألغِ الاعتماد أو أنشئ مسار تعديل معتمد أولًا."),
+            _("خطة القص المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم."),
             frappe.ValidationError,
         )
 
@@ -224,7 +229,7 @@ def _assert_recalculation_state(doc: Any) -> None:
 
     # Drawing-stage planners are intentionally allowed to recalculate through
     # the focused capability without receiving full EDIT_ORDER authority.
-    if user_can_recalculate_drawing_system_plan(doc):
+    if drawing_recalculation_allowed:
         return
 
     # Before production, keep the existing lifecycle boundary. This checks state,
