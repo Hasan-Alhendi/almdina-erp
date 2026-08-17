@@ -7,15 +7,17 @@
 
     const MIN_CROP_PX = 32;
     const MAX_OUTPUT_EDGE_PX = 3200;
+    const MAX_OUTPUT_BYTES = 6 * 1024 * 1024;
+    const OUTPUT_MIME = "image/jpeg";
+    const ENCODE_QUALITIES = Object.freeze([0.92, 0.85, 0.78, 0.70]);
 
     function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
     function copyRect(rect) { return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }; }
-    function outputMime(file) { return String(file && file.type || "").toLowerCase() === "image/png" ? "image/png" : "image/jpeg"; }
-    function canvasBlob(canvas, mime) {
+    function canvasBlob(canvas, mime, quality) {
         return new Promise((resolve, reject) => canvas.toBlob(
             blob => blob ? resolve(blob) : reject(new Error("Failed to encode cropped image")),
             mime,
-            mime === "image/jpeg" ? 0.94 : undefined
+            quality
         ));
     }
     function decode(file) {
@@ -35,13 +37,46 @@
         const canvas = document.createElement("canvas");
         canvas.width = swap ? image.naturalHeight : image.naturalWidth;
         canvas.height = swap ? image.naturalWidth : image.naturalHeight;
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { alpha: false });
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.save();
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate(rotation * Math.PI / 180);
         ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
         ctx.restore();
         return canvas;
+    }
+
+    function scaledCanvas(source, scale) {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(source.width * scale));
+        canvas.height = Math.max(1, Math.round(source.height * scale));
+        const ctx = canvas.getContext("2d", { alpha: false });
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(source, 0, 0, source.width, source.height, 0, 0, canvas.width, canvas.height);
+        return canvas;
+    }
+
+    async function encodeBounded(source) {
+        let working = source;
+        let lastBlob = null;
+        for (let round = 0; round < 4; round += 1) {
+            for (const quality of ENCODE_QUALITIES) {
+                lastBlob = await canvasBlob(working, OUTPUT_MIME, quality);
+                if (lastBlob.size <= MAX_OUTPUT_BYTES) {
+                    return Object.freeze({ blob: lastBlob, canvas: working, quality });
+                }
+            }
+            if (round >= 3 || !lastBlob) break;
+            const ideal = Math.sqrt(MAX_OUTPUT_BYTES / Math.max(1, lastBlob.size)) * 0.92;
+            const scale = clamp(ideal, 0.65, 0.90);
+            working = scaledCanvas(working, scale);
+        }
+        throw new Error("تعذر ضغط الصورة للحجم الآمن. قلّل مساحة الاقتصاص ثم حاول مرة أخرى.");
     }
 
     async function open(file, options = {}) {
@@ -51,6 +86,12 @@
         const decoded = await decode(file);
         const originalWidth = Math.max(1, Number(decoded.image.naturalWidth || decoded.image.width));
         const originalHeight = Math.max(1, Number(decoded.image.naturalHeight || decoded.image.height));
+        const dimensions = domain.validateDecodedDimensions(originalWidth, originalHeight);
+        if (!dimensions.ok) {
+            URL.revokeObjectURL(decoded.url);
+            throw Object.assign(new Error(dimensions.message), { code: dimensions.code });
+        }
+
         let rotationDeg = 0;
         let working = rotatedCanvas(decoded.image, rotationDeg);
         let crop = null;
@@ -201,11 +242,22 @@
                     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, output.width, output.height);
                     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
                     ctx.drawImage(working, sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height, 0, 0, output.width, output.height);
-                    const mime = outputMime(file);
-                    const blob = await canvasBlob(output, mime);
+                    const encoded = await encodeBounded(output);
                     finish(Object.freeze({
-                        blob,
-                        metadata: domain.buildMetadata({ source: options.source, originalName: file.name, originalMime: file.type, sourceWidthPx: originalWidth, sourceHeightPx: originalHeight, rotationDeg, crop: sourceCrop, outputWidthPx: output.width, outputHeightPx: output.height, outputMime: mime, scanner: options.scanner }),
+                        blob: encoded.blob,
+                        metadata: domain.buildMetadata({
+                            source: options.source,
+                            originalName: file.name,
+                            originalMime: file.type,
+                            sourceWidthPx: originalWidth,
+                            sourceHeightPx: originalHeight,
+                            rotationDeg,
+                            crop: sourceCrop,
+                            outputWidthPx: encoded.canvas.width,
+                            outputHeightPx: encoded.canvas.height,
+                            outputMime: OUTPUT_MIME,
+                            scanner: options.scanner,
+                        }),
                     }));
                 } catch (error) {
                     confirmButton.disabled = false; confirmButton.textContent = "اعتماد الصورة"; reject(error); cleanup();
@@ -229,5 +281,5 @@
         return promise;
     }
 
-    root.Cropper = Object.freeze({ open, MAX_OUTPUT_EDGE_PX });
+    root.Cropper = Object.freeze({ open, MAX_OUTPUT_EDGE_PX, MAX_OUTPUT_BYTES, OUTPUT_MIME });
 })();
