@@ -43,10 +43,12 @@ class TestSpecialShapeReferenceImageArchitecture(unittest.TestCase):
         source = PAGE.read_text(encoding="utf-8")
         domain = source.index('/reference/domain.js')
         cropper = source.index('/reference/cropper.js')
+        scanner = source.index('/reference/scanner_bridge.js')
         controller = source.index('/reference/reference_controller.js')
         workspace = source.index('/professional/workspace_controller.js')
         self.assertLess(domain, cropper)
-        self.assertLess(cropper, controller)
+        self.assertLess(cropper, scanner)
+        self.assertLess(scanner, controller)
         self.assertLess(controller, workspace)
         self.assertIn("door_drawing_reference.css", source)
 
