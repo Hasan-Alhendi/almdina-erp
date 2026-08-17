@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import flt
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
@@ -14,11 +15,21 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot_json,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_document_capability,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     calculate_system_plan,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
+    require_stage_operational_access,
+)
+from almdina_erp.almdina_erp.services.order_edit_policy import (
+    assert_order_editable,
+    user_can_recalculate_drawing_system_plan,
 )
 
 
@@ -29,6 +40,9 @@ _DCO_TO_PLAN_FIELDS = {
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
 }
+_NUMERIC_SETTING_FIELDS = frozenset(
+    {"optimization_time_limit_sec", "kerf_mm", "trim_margin_mm"}
+)
 
 
 def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> PlanSettings:
@@ -50,7 +64,7 @@ def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> Pla
 
 
 def _same_value(fieldname: str, left: Any, right: Any) -> bool:
-    if fieldname in {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}:
+    if fieldname in _NUMERIC_SETTING_FIELDS:
         return abs(flt(left) - flt(right)) < 0.000001
     return str(left or "").strip() == str(right or "").strip()
 
@@ -66,6 +80,62 @@ def _changed_settings(plan: Any, updates: dict[str, Any]) -> list[str]:
             value,
         )
     ]
+
+
+def _requested_updates(
+    *,
+    packing_mode: str | None,
+    cutting_machine_type: str | None,
+    kerf_mm: float | None,
+    trim_margin_mm: float | None,
+    optimization_time_limit_sec: float | None,
+) -> dict[str, Any]:
+    raw = {
+        "packing_mode": packing_mode,
+        "cutting_machine_type": cutting_machine_type,
+        "kerf_mm": kerf_mm,
+        "trim_margin_mm": trim_margin_mm,
+        "optimization_time_limit_sec": optimization_time_limit_sec,
+    }
+    updates: dict[str, Any] = {}
+    for fieldname, value in raw.items():
+        if value is None:
+            continue
+        if fieldname in _NUMERIC_SETTING_FIELDS:
+            try:
+                normalized = float(value)
+            except (TypeError, ValueError):
+                frappe.throw(_("إحدى قيم إعدادات خطة القص غير صالحة."), frappe.ValidationError)
+            if normalized < 0:
+                frappe.throw(_("لا يمكن أن تكون إعدادات خطة القص الرقمية سالبة."), frappe.ValidationError)
+            updates[fieldname] = flt(normalized)
+        else:
+            normalized = str(value or "").strip()
+            if not normalized:
+                frappe.throw(_("يجب تحديد قيمة صالحة لإعدادات خطة القص."), frappe.ValidationError)
+            updates[fieldname] = normalized
+    return updates
+
+
+def _assert_recalculation_state(order: Any) -> None:
+    drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(order)
+
+    if getattr(order, "approved_plan", None) and not drawing_recalculation_allowed:
+        frappe.throw(
+            _("خطة القص المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم."),
+            frappe.ValidationError,
+        )
+
+    if getattr(order, "current_production_stage", None) or getattr(
+        order, "production_path", None
+    ):
+        require_stage_operational_access(order)
+        return
+
+    if drawing_recalculation_allowed:
+        return
+
+    assert_order_editable(order)
 
 
 def _set_order_projection(order: Any, plan: Any, *, include_snapshot: bool) -> None:
@@ -156,6 +226,11 @@ def save_system_plan_settings(
     order: Any,
     updates: dict[str, Any],
 ) -> dict[str, Any]:
+    require_document_capability(
+        order,
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        message=_("لا تملك صلاحية تعديل إعدادات خطة القص لهذا الطلب."),
+    )
     repository = FrappeCuttingPlanCommandRepository(Capability.EDIT_OPTIMIZER_SETTINGS)
     plan = repository.ensure_system_draft(order)
     changed = _changed_settings(plan, updates)
@@ -178,10 +253,20 @@ def recalculate_system_plan(
     order: Any,
     updates: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    require_document_capability(
+        order,
+        Capability.RECALCULATE_PLAN,
+        message=_("لا تملك صلاحية إعادة حساب خطة القص لهذا الطلب."),
+    )
     repository = FrappeCuttingPlanCommandRepository(Capability.RECALCULATE_PLAN)
     plan = repository.ensure_system_draft(order)
     changed = _changed_settings(plan, updates or {})
     if changed:
+        require_document_capability(
+            order,
+            Capability.EDIT_OPTIMIZER_SETTINGS,
+            message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
+        )
         edit_repository = FrappeCuttingPlanCommandRepository(
             Capability.EDIT_OPTIMIZER_SETTINGS
         )
@@ -202,8 +287,57 @@ def recalculate_system_plan(
     return result
 
 
+@frappe.whitelist()
+def recalculate_order_plan(
+    order_name: str,
+    packing_mode: str | None = None,
+    cutting_machine_type: str | None = None,
+    kerf_mm: float | None = None,
+    trim_margin_mm: float | None = None,
+    optimization_time_limit_sec: float | None = None,
+) -> dict[str, Any]:
+    """Canonical plan-owned replacement for the legacy DCO recalculation save."""
+
+    name = str(order_name or "").strip()
+    if not name:
+        frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
+
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (name,),
+    )
+    order = frappe.get_doc("Door Cutting Order", name)
+    order.check_permission("read")
+    require_document_capability(
+        order,
+        Capability.RECALCULATE_PLAN,
+        message=_("لا تملك صلاحية إعادة حساب خطة القص لهذا الطلب."),
+    )
+    _assert_recalculation_state(order)
+
+    result = recalculate_system_plan(
+        order,
+        _requested_updates(
+            packing_mode=packing_mode,
+            cutting_machine_type=cutting_machine_type,
+            kerf_mm=kerf_mm,
+            trim_margin_mm=trim_margin_mm,
+            optimization_time_limit_sec=optimization_time_limit_sec,
+        ),
+    )
+    order.add_comment(
+        "Info",
+        text=_("تمت إعادة حساب خطة القص {0} بواسطة {1}.").format(
+            result.get("cutting_plan") or "",
+            frappe.session.user,
+        ),
+    )
+    return result
+
+
 __all__ = [
     "plan_payload",
+    "recalculate_order_plan",
     "recalculate_system_plan",
     "save_system_plan_settings",
 ]
