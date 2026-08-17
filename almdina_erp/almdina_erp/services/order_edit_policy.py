@@ -61,13 +61,9 @@ def user_can_recalculate_drawing_system_plan(order: Any, user: str | None = None
     if not doctype_has_capability(Capability.RECALCULATE_PLAN, user=user):
         return False
 
-    approved_plan = _value(order, "approved_plan")
-    if approved_plan:
-        return False
-
     return can_recalculate_drawing_system_plan(
         has_recalculate_permission=True,
-        approved_plan=approved_plan,
+        approved_plan=_value(order, "approved_plan"),
         production_path=_value(order, "production_path"),
         status=order_status(order),
         current_stage_type=_current_stage_type(order),
