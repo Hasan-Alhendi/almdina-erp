@@ -64,6 +64,10 @@
 
         async function persist(cropResult) {
             if (!context || !cropResult || readOnly || busy) return null;
+            if (typeof options.beforePersist === "function") {
+                const allowed = await options.beforePersist(context, cropResult);
+                if (!allowed || destroyed) return null;
+            }
             setBusy(true, "يتم حفظ الصورة…");
             try {
                 const imageDataUrl = await blobToDataUrl(cropResult.blob);
