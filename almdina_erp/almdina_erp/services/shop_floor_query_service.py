@@ -5,7 +5,8 @@ from typing import Any, Callable, TypeVar
 import frappe
 from frappe import _
 
-from almdina_erp.almdina_erp.application.shop_floor import order_list_query, queries
+from almdina_erp.almdina_erp.application.shop_floor import order_list_query
+from almdina_erp.almdina_erp.application.shop_floor import queries
 from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
