@@ -78,6 +78,13 @@
         return payload && payload.points.length >= 3 ? payload : null;
     }
 
+    function referenceImageFromPiece(piece) {
+        if (!piece) return "";
+        const mode = String(piece.special_shape_documentation_mode || "").trim();
+        const url = String(piece.special_shape_reference_image || "").trim();
+        return mode === "Image" && url ? url : "";
+    }
+
     function canonicalGeometryPiece(piece) {
         if (!piece || piece.special_shape_geometry_json || !piece.geometry_json) return piece;
         return {
@@ -99,6 +106,14 @@
 
     function hasVisual(piece) {
         return Boolean(visual(piece));
+    }
+
+    function hasDocumentation(piece) {
+        return Boolean(
+            referenceImageFromPiece(piece)
+            || hasVisual(piece)
+            || (piece && String(piece.special_shape_status || "") === "Documented")
+        );
     }
 
     function hasExactCutPath(piece) {
@@ -131,8 +146,10 @@
         parseGeometry,
         drawingFromPiece,
         geometryFromPiece,
+        referenceImageFromPiece,
         visual,
         hasVisual,
+        hasDocumentation,
         hasExactCutPath,
         pointsAttribute,
         dxfPoints,
