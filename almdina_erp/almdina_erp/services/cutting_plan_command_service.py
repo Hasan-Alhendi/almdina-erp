@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt, now_datetime
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
     PlanSettings,
@@ -14,6 +14,13 @@ from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot_json,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    DRAFT,
+    SUPERSEDED,
+    SYSTEM,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -22,7 +29,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_reposito
     FrappeCuttingPlanCommandRepository,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+    apply_validated_dxf_snapshot,
     calculate_system_plan,
+    plan_input_fingerprint,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
     require_stage_operational_access,
@@ -43,6 +52,7 @@ _DCO_TO_PLAN_FIELDS = {
 _NUMERIC_SETTING_FIELDS = frozenset(
     {"optimization_time_limit_sec", "kerf_mm", "trim_margin_mm"}
 )
+_DXF_COMMAND_CAPABILITIES = frozenset({Capability.UPLOAD_DXF, Capability.REPLACE_DXF})
 
 
 def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> PlanSettings:
@@ -188,6 +198,147 @@ def _set_order_projection(order: Any, plan: Any, *, include_snapshot: bool) -> N
             setattr(order, fieldname, value)
 
 
+def _set_dxf_order_projection(order: Any, plan: Any) -> None:
+    """Project canonical Uploaded DXF state to the legacy order form only."""
+
+    snapshot_json = str(plan.snapshot_json or "")
+    values: dict[str, Any] = {
+        "cutting_plan_source": "Custom",
+        "production_dxf": plan.dxf_file,
+        "drawing_dxf_status": "Uploaded",
+        "custom_plan_json": snapshot_json,
+        "cutting_plan_json": snapshot_json,
+        "required_boards": plan.required_boards,
+        "waste_area_m2": plan.waste_area_m2,
+        "waste_percent": plan.waste_percent,
+        "packing_method": plan.method_label,
+        "plan_needs_recalculation": int(plan.plan_needs_recalculation or 0),
+        "calculated_plan_input_hash": plan.input_fingerprint,
+    }
+    meta = frappe.get_meta("Door Cutting Order")
+    values = {key: value for key, value in values.items() if meta.has_field(key)}
+    if values:
+        frappe.db.set_value(
+            "Door Cutting Order",
+            order.name,
+            values,
+            update_modified=False,
+        )
+        for fieldname, value in values.items():
+            setattr(order, fieldname, value)
+
+
+def _legacy_plan_source(source_type: str) -> str:
+    return "Custom" if source_type == UPLOADED_DXF else "System"
+
+
+def _canonical_plan_source(plan_source: str) -> str:
+    normalized = str(plan_source or "System").strip().lower()
+    if normalized == "system":
+        return SYSTEM
+    if normalized in {"custom", "uploaded dxf", "uploaded_dxf", "dxf"}:
+        return UPLOADED_DXF
+    frappe.throw(_("مصدر خطة القص المحدد غير مدعوم."), frappe.ValidationError)
+    raise AssertionError("unreachable")
+
+
+def _copy_compatibility_costs_to_plan(order: Any, plan: Any) -> None:
+    """Preserve the current commercial projection until A3 moves costing fully."""
+
+    board_count = cint(plan.required_boards)
+    plan.board_rate_usd = flt(getattr(order, "board_rate_usd", 0))
+    plan.cutting_cost_per_board_usd = flt(
+        getattr(order, "cutting_cost_per_board_usd", 0)
+    )
+    plan.mdf_cost_usd = board_count * plan.board_rate_usd
+    plan.cutting_cost_usd = board_count * plan.cutting_cost_per_board_usd
+    plan.edge_cost_usd = flt(getattr(order, "edge_cost_usd", 0))
+    plan.total_cost_usd = (
+        plan.mdf_cost_usd + plan.cutting_cost_usd + plan.edge_cost_usd
+    )
+
+
+def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
+    if str(plan.status or "") != DRAFT:
+        frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
+    if str(plan.validation_status or "") != "Valid" or not str(plan.snapshot_json or "").strip():
+        frappe.throw(_("خطة القص غير موجودة أو لم تنجح في التحقق الهندسي."), frappe.ValidationError)
+    if cint(plan.plan_needs_recalculation):
+        frappe.throw(
+            _("خطة القص قديمة. أعد حسابها أو ارفع DXF جديدًا ثم راجع النتيجة قبل الاعتماد."),
+            frappe.ValidationError,
+        )
+
+    expected_fingerprint = plan_input_fingerprint(order, plan)
+    if not str(plan.input_fingerprint or "").strip() or plan.input_fingerprint != expected_fingerprint:
+        frappe.throw(
+            _("خطة القص لم تعد مطابقة لبيانات الطلب الحالية. حدّث الخطة ثم اعتمدها."),
+            frappe.ValidationError,
+        )
+
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    if snapshot.get("unplaced"):
+        settings = frappe.get_single("Almdina ERP Settings")
+        if not cint(settings.allow_unplaced_approval):
+            frappe.throw(
+                _("خطة القص تحتوي قطعًا غير موضوعة ولا يمكن اعتمادها."),
+                frappe.ValidationError,
+            )
+
+    if str(plan.source_type or SYSTEM) == UPLOADED_DXF:
+        if not str(plan.dxf_file or "").strip() or str(plan.dxf_status or "") != "Validated":
+            frappe.throw(
+                _("ارفع ملف DXF صالحًا وتحقق منه قبل اعتماد الخطة."),
+                frappe.ValidationError,
+            )
+
+
+def _set_approved_order_projection(order: Any, plan: Any) -> None:
+    source_label = _legacy_plan_source(str(plan.source_type or SYSTEM))
+    snapshot_json = str(plan.snapshot_json or "")
+    values: dict[str, Any] = {
+        "approved_plan": plan.name,
+        "approved_plan_source": source_label,
+        "cutting_plan_source": source_label,
+        "required_boards": plan.required_boards,
+        "waste_area_m2": plan.waste_area_m2,
+        "waste_percent": plan.waste_percent,
+        "mdf_cost_usd": plan.mdf_cost_usd,
+        "cutting_cost_usd": plan.cutting_cost_usd,
+        "edge_cost_usd": plan.edge_cost_usd,
+        "total_cost_usd": plan.total_cost_usd,
+        "packing_method": plan.method_label,
+        "packing_score": (
+            f"ألواح: {int(plan.required_boards or 0)} | "
+            f"هدر: {flt(plan.waste_percent):.2f}% | "
+            f"الخوارزمية: {plan.method_label or plan.optimization_mode or ''}"
+        ),
+        "cutting_plan_json": snapshot_json,
+        "plan_needs_recalculation": 0,
+    }
+    if source_label == "System":
+        values["system_plan_json"] = snapshot_json
+    else:
+        values.update(
+            {
+                "custom_plan_json": snapshot_json,
+                "production_dxf": plan.dxf_file,
+                "drawing_dxf_status": "Approved by Drawing",
+            }
+        )
+
+    meta = frappe.get_meta("Door Cutting Order")
+    values = {key: value for key, value in values.items() if meta.has_field(key)}
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        values,
+        update_modified=False,
+    )
+    for fieldname, value in values.items():
+        setattr(order, fieldname, value)
+
+
 def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
     snapshot_json = str(plan.snapshot_json or "")
     payload = {
@@ -220,6 +371,93 @@ def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
         payload["approved_plan"] = getattr(order, "approved_plan", None)
         payload["approved_plan_source"] = getattr(order, "approved_plan_source", None)
     return payload
+
+
+def current_uploaded_dxf_file(order_name: str) -> str:
+    repository = FrappeCuttingPlanCommandRepository(Capability.UPLOAD_DXF)
+    plan = repository.latest_document(
+        order_name,
+        source_type=UPLOADED_DXF,
+        status=DRAFT,
+    )
+    return str(getattr(plan, "dxf_file", None) or "") if plan else ""
+
+
+def save_uploaded_dxf_plan(
+    order: Any,
+    snapshot: dict[str, Any],
+    file_url: str,
+    *,
+    capability: str,
+) -> Any:
+    if capability not in _DXF_COMMAND_CAPABILITIES:
+        frappe.throw(_("صلاحية رفع DXF غير صالحة لهذا الأمر."), frappe.PermissionError)
+    require_document_capability(
+        order,
+        capability,
+        message=_("لا تملك صلاحية رفع أو استبدال DXF لهذا الطلب."),
+    )
+
+    repository = FrappeCuttingPlanCommandRepository(capability)
+    plan = repository.ensure_uploaded_dxf_draft(order)
+    apply_validated_dxf_snapshot(order, plan, snapshot)
+    plan.dxf_file = str(file_url or "").strip()
+    plan.dxf_status = "Validated"
+    plan.dxf_uploaded_by = frappe.session.user
+    plan.dxf_uploaded_on = now_datetime()
+    repository.save_document(plan)
+    return plan
+
+
+def mirror_uploaded_dxf_projection(order: Any, plan: Any) -> None:
+    _set_dxf_order_projection(order, plan)
+
+
+def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
+    """Approve the reviewed Draft Cutting Plan without recalculation or DCO save."""
+
+    require_document_capability(
+        order,
+        Capability.APPROVE_DXF,
+        message=_("لا تملك صلاحية اعتماد خطة القص لهذا الطلب."),
+    )
+    source_type = _canonical_plan_source(plan_source)
+    repository = FrappeCuttingPlanCommandRepository(Capability.APPROVE_DXF)
+    plan = repository.latest_document(
+        order.name,
+        source_type=source_type,
+        status=DRAFT,
+    )
+    if not plan:
+        message = (
+            _("لا توجد خطة قص من النظام جاهزة للاعتماد. أعد حساب الخطة أولًا.")
+            if source_type == SYSTEM
+            else _("لا توجد خطة DXF صالحة جاهزة للاعتماد. ارفع DXF أولًا.")
+        )
+        frappe.throw(message, frappe.ValidationError)
+
+    _assert_plan_ready_for_approval(order, plan)
+    order.ensure_special_shapes_documented()
+    order.ensure_special_prices_approved()
+    _copy_compatibility_costs_to_plan(order, plan)
+
+    for previous in repository.approved_documents(order.name, exclude=plan.name):
+        previous.status = SUPERSEDED
+        repository.save_document(previous, allow_status_transition=True)
+
+    plan.status = APPROVED
+    plan.approved_by = frappe.session.user
+    plan.approved_on = now_datetime()
+    repository.save_document(plan, allow_status_transition=True)
+    _set_approved_order_projection(order, plan)
+
+    return {
+        "name": order.name,
+        "status": "Approved",
+        "cutting_plan": plan.name,
+        "revision": cint(plan.revision),
+        "approved_plan_source": _legacy_plan_source(source_type),
+    }
 
 
 def save_system_plan_settings(
@@ -336,8 +574,12 @@ def recalculate_order_plan(
 
 
 __all__ = [
+    "approve_order_plan",
+    "current_uploaded_dxf_file",
+    "mirror_uploaded_dxf_projection",
     "plan_payload",
     "recalculate_order_plan",
     "recalculate_system_plan",
     "save_system_plan_settings",
+    "save_uploaded_dxf_plan",
 ]
