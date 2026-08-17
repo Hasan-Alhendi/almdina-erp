@@ -318,9 +318,12 @@ def lock_order_for_production(
             )
         plan_kind = "Custom DXF"
     else:
+        # Generic callers may still request a system-plan refresh before locking.
+        # approve_dxf rejects stale/missing plans earlier, so a reviewed, current
+        # System plan reaches this branch without a full Door Cutting Order save.
         if cint(order.plan_needs_recalculation) or not order.cutting_plan_json:
             order.flags.force_cutting_plan_recalculation = True
-        order.save(ignore_permissions=True)
+            order.save(ignore_permissions=True)
 
         approval_snapshot = (
             frappe.parse_json(order.cutting_plan_json or "{}") or {}

@@ -81,19 +81,29 @@ class TestStage12SecurityGate(unittest.TestCase):
         self.assertIn("base_permissions.worker_can_view_order", source)
         self.assertIn('getattr(doc, "name", None)', source)
 
-    def test_dxf_upload_is_private_and_order_scoped(self) -> None:
+    def test_dxf_upload_is_private_unattached_then_authorized_and_scoped(self) -> None:
         source = DXF_SERVICE.read_text(encoding="utf-8")
         for marker in (
-            '"is_private": 1',
+            "if not cint(file_row.is_private)",
+            "file_row.attached_to_doctype",
+            "file_row.attached_to_name",
+            "file_row.attached_to_field",
             '"attached_to_doctype": order.doctype',
             '"attached_to_name": order.name',
-            'file_row.attached_to_doctype != order.doctype',
-            'file_row.attached_to_name != order.name',
             'require_stage_operational_access(order)',
             'order.check_permission("read")',
             'require_document_capability(order, capability)',
         ):
             self.assertIn(marker, source)
+
+        upload_source = source.split("def upload_production_dxf", 1)[1]
+        staged = upload_source.index("_validate_dxf_file_metadata(file_url)")
+        authorized = upload_source.index("_authorize_order(")
+        validated = upload_source.index("parse_production_dxf(")
+        attached = upload_source.index("_attach_validated_dxf_file(")
+        self.assertLess(staged, authorized)
+        self.assertLess(authorized, validated)
+        self.assertLess(validated, attached)
 
     def test_workforce_blocks_self_role_change_and_self_disable(self) -> None:
         role_decision = decide_workforce_action(

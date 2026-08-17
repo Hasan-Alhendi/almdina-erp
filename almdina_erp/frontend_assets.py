@@ -70,6 +70,7 @@ doctype_js = {
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_save_render_performance_ux.js",
+        "public/js/door_cutting_order/cutting_plan/secure_dxf_upload.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js",

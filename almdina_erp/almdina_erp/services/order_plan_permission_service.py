@@ -27,16 +27,15 @@ from almdina_erp.almdina_erp.services.order_edit_policy import (
 _OPTIMIZER_FIELDS = (
     "packing_mode",
     "cutting_machine_type",
-    "optimization_time_limit_sec",
-)
-# Cut geometry belongs to ordinary order editing, not algorithm tuning.
-_CUT_GEOMETRY_FIELDS = (
     "kerf_mm",
     "trim_margin_mm",
+    "optimization_time_limit_sec",
 )
 _OPTIMIZER_DEFAULTS = {
     "packing_mode": "default_packing_mode",
     "cutting_machine_type": "default_cutting_machine_type",
+    "kerf_mm": "default_kerf_mm",
+    "trim_margin_mm": "default_trim_margin_mm",
     "optimization_time_limit_sec": "default_optimization_time_limit_sec",
 }
 _NUMERIC_PLAN_INPUT_FIELDS = frozenset(
@@ -192,8 +191,6 @@ def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
     optimizer_changed = [
         fieldname for fieldname in changed if fieldname in _OPTIMIZER_FIELDS
     ]
-    # kerf/trim may ride along in the recalculate payload via _CUT_GEOMETRY_FIELDS
-    # without requiring EDIT_OPTIMIZER_SETTINGS.
     if optimizer_changed:
         require_document_capability(
             doc,
@@ -275,9 +272,9 @@ def recalculate_order(
     """Recalculate one plan through granular plan capabilities only.
 
     ``RECALCULATE_PLAN`` authorizes running the engine. Changing packing mode,
-    machine type, or time limit additionally requires ``EDIT_OPTIMIZER_SETTINGS``.
-    Kerf and trim are ordinary order inputs and do not require optimizer authority.
-    Neither operation requires cost visibility or cost editing authority.
+    machine type, kerf, trim margin, or time limit additionally requires
+    ``EDIT_OPTIMIZER_SETTINGS``. Neither operation requires cost visibility or
+    cost editing authority.
     """
 
     name = str(order_name or "").strip()
