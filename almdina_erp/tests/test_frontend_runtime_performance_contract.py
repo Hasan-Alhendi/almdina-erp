@@ -59,3 +59,20 @@ def test_permission_visibility_guard_only_runs_full_scan_on_relevant_surface_ent
     assert "applyRoot(document);" in js
     assert "roots.forEach(applyRoot);" in js
     assert "requestAnimationFrame" in js
+
+
+def test_shared_shell_scans_are_batched_and_stop_after_navigation_settles():
+    js = _read_js("shared_shell.js")
+
+    assert "NAVIGATION_SETTLE_MS" in js
+    assert "function startNavigationSettleWindow()" in js
+    assert "function stopNavigationSettleWindow()" in js
+    assert "navigationObserverStopTimer = window.setTimeout(stopNavigationSettleWindow, NAVIGATION_SETTLE_MS)" in js
+    assert "roots.forEach(hideUnauthorizedShortcuts);" in js
+    assert "requestAnimationFrame" in js
+
+    # Regression guard against the old permanent/full-document retry loops.
+    assert "function observeDeskMutations()" not in js
+    assert "function schedulePermissionScan()" not in js
+    assert "[100, 300, 800].forEach" not in js
+    assert "[100, 300, 900, 1800].forEach" not in js
