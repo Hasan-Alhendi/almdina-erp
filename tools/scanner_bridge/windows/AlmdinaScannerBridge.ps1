@@ -16,6 +16,9 @@ function Read-BridgeConfig {
     if (Test-Path $ConfigPath) {
         $raw = Get-Content -Raw -Path $ConfigPath | ConvertFrom-Json
         $port = if ($raw.port) { [int]$raw.port } else { $DefaultPort }
+        if ($port -lt 1024 -or $port -gt 65535) {
+            throw "Scanner Bridge port must be between 1024 and 65535."
+        }
         $origins = @($raw.allowedOrigins | ForEach-Object { [string]$_ })
         if (-not $origins.Count) { $origins = $DefaultOrigins }
         return [pscustomobject]@{ Port = $port; AllowedOrigins = $origins }
@@ -66,6 +69,35 @@ function Read-RequestJson {
     return $body | ConvertFrom-Json
 }
 
+function Get-WiaScannerCount {
+    $manager = $null
+    try {
+        $manager = New-Object -ComObject WIA.DeviceManager
+        $count = 0
+        foreach ($deviceInfo in $manager.DeviceInfos) {
+            try {
+                # WIA device type 1 is ScannerDeviceType.
+                if ([int]$deviceInfo.Type -eq 1) { $count += 1 }
+            }
+            finally {
+                if ($deviceInfo) {
+                    try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($deviceInfo) } catch {}
+                }
+            }
+        }
+        return $count
+    }
+    catch {
+        # WIA itself being unavailable is different from having zero scanners.
+        throw "تعذر الوصول إلى خدمة WIA في Windows. تأكد من تثبيت تعريف الـScanner وتشغيل Windows Image Acquisition (WIA)."
+    }
+    finally {
+        if ($manager) {
+            try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($manager) } catch {}
+        }
+    }
+}
+
 function Convert-WiaImageToJpeg {
     param($WiaImage)
     $id = [guid]::NewGuid().ToString("N")
@@ -106,6 +138,11 @@ function Convert-WiaImageToJpeg {
 
 function Acquire-ScannerImage {
     param($Options)
+    $scannerCount = Get-WiaScannerCount
+    if ($scannerCount -lt 1) {
+        throw "لا يوجد Scanner معرّف في Windows عبر WIA. ثبّت تعريف الجهاز وتأكد أنه يظهر في إعدادات Windows ثم أعد المحاولة."
+    }
+
     $dialog = New-Object -ComObject WIA.CommonDialog
     try {
         # WIA's native acquisition dialog owns device selection and scanner-specific
@@ -165,10 +202,13 @@ try {
 
             $path = $context.Request.Url.AbsolutePath
             if ($context.Request.HttpMethod -eq "GET" -and $path -eq "/health") {
+                $scannerCount = Get-WiaScannerCount
                 Write-JsonResponse -Context $context -Payload @{
                     ok = $true
-                    version = "1.0.0"
+                    version = "1.1.0"
                     provider = "wia"
+                    device_count = $scannerCount
+                    ready = ($scannerCount -gt 0)
                 }
                 continue
             }
