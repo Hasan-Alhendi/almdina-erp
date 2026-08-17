@@ -111,24 +111,26 @@ def test_cutting_plan_browser_authority_never_depends_on_cost_visibility():
     assert '"edit_optimizer_settings"' in controls
 
 
-def test_kerf_and_trim_are_not_optimizer_fields_in_plan_ui():
+def test_kerf_and_trim_are_optimizer_fields_in_the_frontend_permission_owner():
     controls = source(CONTROLS_UX)
-    guard = source(ACTION_GUARD_UX)
     plan = source(PLAN_UX)
 
-    for module in (controls, guard):
-        optimizer_block = module.split("const OPTIMIZER_FIELDS = [", 1)[1].split("];", 1)[0]
-        assert '"kerf_mm"' not in optimizer_block
-        assert '"trim_margin_mm"' not in optimizer_block
-        assert '"packing_mode"' in optimizer_block
-        assert '"cutting_machine_type"' in optimizer_block
-        assert '"optimization_time_limit_sec"' in optimizer_block
+    optimizer_block = controls.split("const OPTIMIZER_FIELDS = [", 1)[1].split("];", 1)[0]
+    for fieldname in (
+        "packing_mode",
+        "cutting_machine_type",
+        "kerf_mm",
+        "trim_margin_mm",
+        "optimization_time_limit_sec",
+    ):
+        assert f'"{fieldname}"' in optimizer_block
 
-    # Recalculation still reads current order geometry values.
+    assert 'can(frm, "edit_optimizer_settings")' in controls
     assert "kerf_mm: frm.doc.kerf_mm" in controls
     assert "trim_margin_mm: frm.doc.trim_margin_mm" in controls
 
-    # plan_ux must not unlock kerf/trim via optimizer read_only control.
+    # The presenter delegates read-only ownership to PlanControlsUX instead of
+    # independently unlocking kerf/trim through a second permission source.
     read_only_body = plan.split("function applyReadOnlyState(frm)", 1)[1].split(
         "function refreshPlanUX(frm)", 1
     )[0]
@@ -137,15 +139,16 @@ def test_kerf_and_trim_are_not_optimizer_fields_in_plan_ui():
     assert '"packing_mode"' in read_only_body
 
 
-def test_server_treats_kerf_and_trim_as_cut_geometry_not_optimizer_settings():
+def test_server_treats_kerf_and_trim_as_optimizer_settings():
     service = source(PLAN_PERMISSION_SERVICE)
     optimizer_block = service.split("_OPTIMIZER_FIELDS = (", 1)[1].split(")", 1)[0]
-    geometry_block = service.split("_CUT_GEOMETRY_FIELDS = (", 1)[1].split(")", 1)[0]
-    assert '"kerf_mm"' not in optimizer_block
-    assert '"trim_margin_mm"' not in optimizer_block
-    assert '"kerf_mm"' in geometry_block
-    assert '"trim_margin_mm"' in geometry_block
-    assert "Kerf and trim are ordinary order inputs" in service
+
+    assert '"kerf_mm"' in optimizer_block
+    assert '"trim_margin_mm"' in optimizer_block
+    assert '"kerf_mm": "default_kerf_mm"' in service
+    assert '"trim_margin_mm": "default_trim_margin_mm"' in service
+    assert "_CUT_GEOMETRY_FIELDS" not in service
+    assert "Capability.EDIT_OPTIMIZER_SETTINGS" in service
 
 
 def test_piece_financial_fields_are_protected_at_cost_permission_level():
