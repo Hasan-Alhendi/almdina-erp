@@ -37,7 +37,7 @@
     position: relative;
     z-index: 30;
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.2fr) minmax(250px, 1fr);
+    grid-template-columns: minmax(180px, 1fr) minmax(340px, 1.5fr) minmax(300px, 1fr);
     align-items: center;
     gap: 10px;
     padding: 0 10px;
@@ -59,7 +59,8 @@
 .ald-ddw-topbar-end { justify-content: flex-start; }
 
 .ald-ddw-back,
-.ald-ddw-action {
+.ald-ddw-action,
+.ald-ddw-source-action {
     height: 32px;
     border: 1px solid #4a4a4a;
     border-radius: 5px;
@@ -74,10 +75,41 @@
 }
 
 .ald-ddw-back:hover,
-.ald-ddw-action:hover:not(:disabled) { background: #3a3a3a; border-color: #555; }
+.ald-ddw-action:hover:not(:disabled),
+.ald-ddw-source-action:hover:not(:disabled) { background: #3a3a3a; border-color: #555; }
 .ald-ddw-action-primary { border-color: var(--ald-ddw-accent); background: var(--ald-ddw-accent); color: #fff; }
 .ald-ddw-action-primary:hover:not(:disabled) { background: #168de1; border-color: #168de1; }
-.ald-ddw-action:disabled { opacity: 0.45; cursor: not-allowed; }
+.ald-ddw-action:disabled,
+.ald-ddw-source-action:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.ald-ddw-source-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid #404040;
+    border-radius: 7px;
+    background: #242424;
+}
+.ald-ddw-source-action { height: 28px; border: 0; background: transparent; font-size: 10px; }
+.ald-ddw[data-content-mode="image"] .ald-ddw-source-action { color: #d9efff; }
+.ald-ddw.is-source-busy .ald-ddw-source-actions { opacity: .65; }
+
+.ald-ddw-mode-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    height: 22px;
+    padding: 0 7px;
+    border: 1px solid #444;
+    border-radius: 999px;
+    background: #292929;
+    color: #b8b8b8;
+    font-size: 9px;
+    font-weight: 700;
+}
+.ald-ddw-mode-pill[data-mode="image"] { border-color: rgba(13,153,255,.5); background: rgba(13,153,255,.12); color: #8dceff; }
 
 .ald-ddw-title { min-width: 0; }
 .ald-ddw-title strong,
@@ -85,7 +117,7 @@
 .ald-ddw-title strong { font-size: 12px; font-weight: 700; }
 .ald-ddw-title span { margin-top: 1px; color: var(--ald-ddw-muted); font-size: 9px; }
 
-.ald-ddw-piece-meta { min-width: 0; color: #ddd; font-size: 11px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ald-ddw-piece-meta { min-width: 0; color: #ddd; font-size: 10px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ald-ddw-save-state { display: inline-flex; align-items: center; gap: 5px; min-width: 76px; color: var(--ald-ddw-muted); font-size: 10px; font-weight: 650; white-space: nowrap; }
 .ald-ddw-save-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #737373; }
 .ald-ddw-save-state[data-state="dirty"]::before { background: #f7b955; }
@@ -142,17 +174,25 @@
     box-shadow: 0 4px 14px rgba(0, 0, 0, .10);
 }
 
+@media (max-width: 1120px) {
+    .ald-ddw-topbar { grid-template-columns: minmax(170px, .9fr) minmax(300px, 1.3fr) minmax(250px, 1fr); }
+    .ald-ddw-piece-meta { display: none; }
+}
+
 @media (max-width: 900px) {
     .ald-ddw { --ald-ddw-topbar: 96px; }
     .ald-ddw-topbar { grid-template-columns: 1fr auto; grid-template-rows: 44px 44px; gap: 0 8px; padding: 4px 8px; }
-    .ald-ddw-topbar-center { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; border-top: 1px solid #3a3a3a; }
+    .ald-ddw-topbar-center { grid-column: 1 / -1; grid-row: 2; justify-content: center; border-top: 1px solid #3a3a3a; }
     .ald-ddw-topbar-start { grid-column: 1; grid-row: 1; }
     .ald-ddw-topbar-end { grid-column: 2; grid-row: 1; }
     .ald-ddw-action-save-return { display: none; }
+    .ald-ddw-piece-meta { display: none; }
     .ald-ddw-readonly-banner { right: 12px; bottom: 58px; max-width: calc(100% - 24px); }
 }
 
 @media (max-width: 560px) {
-    .ald-ddw-topbar-end .ald-ddw-save-state { display: none; }
-    .ald-ddw-piece-meta { font-size: 10px; }
+    .ald-ddw-topbar-end .ald-ddw-save-state,
+    .ald-ddw-mode-pill { display: none; }
+    .ald-ddw-source-actions { width: 100%; }
+    .ald-ddw-source-action { flex: 1; }
 }
