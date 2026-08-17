@@ -19,6 +19,8 @@
     const OPTIMIZER_FIELDS = [
         "packing_mode",
         "cutting_machine_type",
+        "kerf_mm",
+        "trim_margin_mm",
         "optimization_time_limit_sec",
     ];
 
@@ -143,8 +145,8 @@
     }
 
     function applyOptimizerFieldAccess(frm) {
-        // Only the packing-algorithm fields open here (mode/machine/time). Kerf and
-        // trim are ordinary order inputs governed by the edit session.
+        // The optimizer capability owns algorithm selection and all persisted
+        // execution parameters, including kerf and trim margin.
         const mayEdit = Boolean(
             canTuneCuttingAlgorithm(frm) && can(frm, "edit_optimizer_settings")
         );
