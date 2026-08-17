@@ -7,6 +7,7 @@
         SELECT: "select",
         NODE: "node",
         PEN: "pen",
+        SMART_PENCIL: "smart-pencil",
         DIMENSION: "dimension",
         HAND: "hand",
     });
@@ -55,11 +56,11 @@
         });
     }
 
-    function toolForShortcut(key) {
+    function toolForShortcut(key, options = {}) {
         const value = String(key || "").toLowerCase();
         if (value === "v") return TOOLS.SELECT;
         if (value === "a") return TOOLS.NODE;
-        if (value === "p") return TOOLS.PEN;
+        if (value === "p") return options.shiftKey ? TOOLS.SMART_PENCIL : TOOLS.PEN;
         if (value === "d") return TOOLS.DIMENSION;
         return null;
     }

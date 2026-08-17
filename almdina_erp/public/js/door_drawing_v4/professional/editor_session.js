@@ -11,10 +11,11 @@
     const inference = v4.ConstraintInference;
     const solver = v4.ConstraintSolver;
     const snapResolver = v4.SnapResolver;
+    const strokeInterpreter = v4.StrokeInterpreter;
     const hitTest = v4.HitTest;
     const historyFactory = v4.CommandHistory;
     const tools = v4.ToolStateMachine;
-    if (!geometry || !documentModel || !commands || !dimensions || !driving || !inference || !solver || !snapResolver || !hitTest || !historyFactory || !tools) {
+    if (!geometry || !documentModel || !commands || !dimensions || !driving || !inference || !solver || !snapResolver || !strokeInterpreter || !hitTest || !historyFactory || !tools) {
         throw new Error("Door Drawing professional session dependencies are incomplete");
     }
 
@@ -102,7 +103,7 @@
             activePathId = null;
             resetSnap();
             toolState = tools.activate(toolState, tool);
-            if (tool === tools.TOOLS.PEN) selection = null;
+            if (tool === tools.TOOLS.PEN || tool === tools.TOOLS.SMART_PENCIL) selection = null;
             return state();
         }
         function pointerMove(rawPoint, input = {}) {
@@ -175,6 +176,77 @@
             resetSnap();
             record(before, "add-segment");
             return Object.freeze({ kind: "segment-added", segmentId: result.segmentId, ...state() });
+        }
+        function smartStrokeTarget(rawPoint, origin, input = {}) {
+            const toleranceMm = Math.max(0, Number(input.snapToleranceMm ?? input.toleranceMm) || 0);
+            if (toleranceMm <= 0) {
+                return Object.freeze({ type: "smart-stroke", semantic: "smart-stroke", point: geometry.clonePoint(rawPoint), nodeId: null });
+            }
+            return snapResolver.resolve(document, {
+                rawPoint,
+                origin: origin || null,
+                toleranceMm,
+                releaseToleranceMm: toleranceMm,
+                excludeNodeIds: origin && origin.id ? [origin.id] : [],
+                canClose: false,
+                gridStepMm: 0,
+            });
+        }
+        function commitSmartStroke(rawPoints, input = {}) {
+            if (toolState.activeTool !== tools.TOOLS.SMART_PENCIL) {
+                return Object.freeze({ kind: "ignored", ...state() });
+            }
+            const interpreted = strokeInterpreter.interpret(rawPoints, input);
+            if (!interpreted.ok) {
+                return Object.freeze({ kind: "smart-stroke-ignored", code: interpreted.code, ...state() });
+            }
+
+            const before = document;
+            const firstTarget = smartStrokeTarget(interpreted.points[0], null, input);
+            const started = commands.startPath(document, firstTarget, { idFactory });
+            document = started.document;
+            const strokePathId = started.pathId;
+            const segmentIds = [];
+
+            for (let index = 1; index < interpreted.points.length; index += 1) {
+                const currentNodeId = documentModel.pathEndNodeId(document, strokePathId);
+                const currentAnchor = documentModel.nodeById(document, currentNodeId);
+                const isLast = index === interpreted.points.length - 1;
+                const target = isLast && !interpreted.closed
+                    ? smartStrokeTarget(interpreted.points[index], currentAnchor, input)
+                    : Object.freeze({
+                        type: "smart-stroke",
+                        semantic: "smart-stroke",
+                        point: geometry.clonePoint(interpreted.points[index]),
+                        nodeId: null,
+                    });
+                if (geometry.distance(currentAnchor, target.point) <= geometry.EPSILON_MM) continue;
+                const appended = commands.appendLine(document, strokePathId, target, { idFactory });
+                document = appended.document;
+                segmentIds.push(appended.segmentId);
+                smartenSegment(appended.segmentId);
+            }
+
+            if (!segmentIds.length) {
+                document = before;
+                return Object.freeze({ kind: "smart-stroke-ignored", code: "too-short", ...state() });
+            }
+            if (interpreted.closed && segmentIds.length >= 2) {
+                document = commands.closePath(document, strokePathId, { idFactory }).document;
+            }
+            activePathId = null;
+            resetSnap();
+            selection = Object.freeze({ kind: "path", id: strokePathId });
+            record(before, "smart-stroke");
+            return Object.freeze({
+                kind: "smart-stroke-added",
+                pathId: strokePathId,
+                segmentIds: Object.freeze([...segmentIds]),
+                sourcePointCount: interpreted.sourcePointCount,
+                simplifiedPointCount: interpreted.simplifiedPointCount,
+                closed: interpreted.closed,
+                ...state(),
+            });
         }
         function beginNodeDrag(rawPoint, input = {}) {
             const hit = hitTest.node(document, rawPoint, Math.max(0, Number(input.hitToleranceMm ?? input.toleranceMm) || 0));
@@ -331,6 +403,7 @@
             pointerMove,
             pointerDown,
             pointerUp,
+            commitSmartStroke,
             inputLength,
             inputDimensionValue,
             cancel,

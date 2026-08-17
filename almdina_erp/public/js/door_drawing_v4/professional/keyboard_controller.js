@@ -5,7 +5,7 @@
     const TOOL_SHORTCUTS = Object.freeze({
         KeyV: Object.freeze({ tool: "select", label: "v" }),
         KeyA: Object.freeze({ tool: "node", label: "a" }),
-        KeyP: Object.freeze({ tool: "pen", label: "p" }),
+        KeyP: Object.freeze({ tool: "pen", shiftedTool: "smart-pencil", label: "p", shiftedLabel: "shift+p" }),
         KeyD: Object.freeze({ tool: "dimension", label: "d" }),
     });
 
@@ -59,7 +59,11 @@
             const shortcut = TOOL_SHORTCUTS[code];
             if (shortcut && !command && !event.altKey) {
                 event.preventDefault();
-                handlers.tool && handlers.tool(shortcut.tool, shortcut.label);
+                const shifted = Boolean(event.shiftKey && shortcut.shiftedTool);
+                handlers.tool && handlers.tool(
+                    shifted ? shortcut.shiftedTool : shortcut.tool,
+                    shifted ? shortcut.shiftedLabel : shortcut.label
+                );
                 return;
             }
             if (event.key === "Escape") {
