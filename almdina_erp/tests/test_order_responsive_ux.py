@@ -206,7 +206,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'matchMedia("(max-width: 600px)")' in list_source
     assert 'if (!applyCardLayoutClass(listview)) return;' in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=4"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=5"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
     assert ".dco-card-production-action.is-start" in mobile_css
