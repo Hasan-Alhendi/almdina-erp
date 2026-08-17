@@ -41,6 +41,7 @@ class CuttingPlanRepository(Protocol):
         *,
         order_name: str,
         revision: int,
+        status: str,
         source_type: str,
         based_on_plan: str | None,
         settings: PlanSettings,
@@ -74,6 +75,7 @@ def create_revision(
     return repository.create_draft(
         order_name=approved.order_name,
         revision=revision.revision,
+        status=revision.status,
         source_type=revision.source_type,
         based_on_plan=revision.based_on_plan,
         settings=approved.settings,
