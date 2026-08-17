@@ -1,0 +1,44 @@
+name: Door Drawing V3 Diagnostics
+
+on:
+  pull_request:
+    branches: [Develop, develop]
+    paths:
+      - "almdina_erp/tests/js/door_drawing_v3_*.test.js"
+      - "almdina_erp/public/js/door_cutting_order/drawing/special_shape_facade.js"
+      - "almdina_erp/public/js/door_drawing_v4/bootstrap.js"
+      - ".github/workflows/door-drawing-v3-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  v3-contract:
+    name: V3 ${{ matrix.test }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - door_drawing_v3_architecture_contract.test.js
+          - door_drawing_v3_bezier_contract.test.js
+          - door_drawing_v3_boolean_contract.test.js
+          - door_drawing_v3_professional_interactions_contract.test.js
+          - door_drawing_v3_shape_preserving_cleaner.test.js
+          - door_drawing_v3_shortcuts_contract.test.js
+          - door_drawing_v3_smart_stroke_reconstruction.test.js
+          - door_drawing_v3_smart_suggestions.test.js
+          - door_drawing_v3_transform_contract.test.js
+          - door_drawing_v3_unified_snap_engine.test.js
+          - door_drawing_v3_vector_editing_contract.test.js
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run regression contract
+        run: node "almdina_erp/tests/js/${{ matrix.test }}"
