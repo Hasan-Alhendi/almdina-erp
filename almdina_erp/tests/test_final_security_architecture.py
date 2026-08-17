@@ -14,11 +14,26 @@ PAGES = APP / "page"
 REPORTS = APP / "report"
 PERMISSION_SERVICE = SERVICES / "permission_management_service.py"
 PERMISSION_PAGE = PAGES / "factory_permissions" / "factory_permissions.js"
+PERMISSION_API = ROOT / "public" / "js" / "factory_permissions" / "api.js"
+PERMISSION_STATE = ROOT / "public" / "js" / "factory_permissions" / "state.js"
+PERMISSION_VIEW_MODEL = ROOT / "public" / "js" / "factory_permissions" / "view_model.js"
+PERMISSION_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
+PERMISSION_INTERACTIONS = ROOT / "public" / "js" / "factory_permissions" / "interactions.js"
+PERMISSION_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
+PERMISSION_FRONTEND_MODULES = (
+    PERMISSION_API,
+    PERMISSION_STATE,
+    PERMISSION_VIEW_MODEL,
+    PERMISSION_RENDERER,
+    PERMISSION_INTERACTIONS,
+    PERMISSION_CONTROLLER,
+)
 CUTTING_PLAN_SERVICE = SERVICES / "cutting_plan_service.py"
 SHOP_FLOOR_FACADE = SERVICES / "shop_floor_service.py"
 GATEWAY_FACADE = APP / "infrastructure" / "frappe" / "shop_floor_gateway.py"
 TRANSFER_POLICY = APP / "application" / "security" / "permission_transfer.py"
 HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 ROLLOUT = ROOT.parent / "docs" / "permission-rollout-checklist.md"
 
 _FIXED_BUSINESS_ROLES = (
@@ -55,8 +70,8 @@ _RETIRED_TARGET = (
 )
 
 
-def _literal_assignment(name: str) -> Any:
-    tree = ast.parse(HOOKS.read_text(encoding="utf-8"))
+def _literal_assignment(name: str, source_path: Path = HOOKS) -> Any:
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
             isinstance(target, ast.Name) and target.id == name
@@ -69,18 +84,22 @@ def _literal_assignment(name: str) -> Any:
             and node.target.id == name
         ):
             return ast.literal_eval(node.value)
-    raise AssertionError(f"Missing hooks assignment: {name}")
+    raise AssertionError(f"Missing assignment in {source_path.name}: {name}")
 
 
 def _loaded_javascript_paths() -> list[Path]:
     paths: set[Path] = set()
-    for asset in _literal_assignment("app_include_js"):
+    for asset in _literal_assignment("app_include_js", MANIFEST):
         paths.add(ROOT / "public" / "js" / str(asset).rsplit("/", 1)[-1])
-    for configured in _literal_assignment("doctype_js").values():
+    for configured in _literal_assignment("doctype_js", MANIFEST).values():
         values = configured if isinstance(configured, list) else [configured]
         for value in values:
             paths.add(ROOT / "public" / str(value).removeprefix("public/"))
     paths.update(PAGES.rglob("*.js"))
+    # Factory Permissions modules are page-local assets loaded through
+    # frappe.require(), so they must remain inside the browser security scan
+    # even though they are intentionally absent from the global asset manifest.
+    paths.update(PERMISSION_FRONTEND_MODULES)
     return sorted(path for path in paths if path.exists())
 
 
@@ -112,9 +131,7 @@ def _whitelisted_functions(path: Path) -> set[str]:
 
 
 def _contains_role_gate(source: str) -> list[str]:
-    markers = [
-        f"fixed role {role}" for role in _FIXED_BUSINESS_ROLES if role in source
-    ]
+    markers = [f"fixed role {role}" for role in _FIXED_BUSINESS_ROLES if role in source]
     markers.extend(
         f"role gate {pattern}"
         for pattern in _ROLE_GATE_PATTERNS
@@ -194,10 +211,7 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         candidates = [
             path
             for name in names
-            for path in (
-                SERVICES / name,
-                APP / "infrastructure" / "frappe" / name,
-            )
+            for path in (SERVICES / name, APP / "infrastructure" / "frappe" / name)
             if path.exists()
         ]
         offenders = [
@@ -209,16 +223,10 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
 
     def test_retired_product_endpoints_are_fail_closed_and_not_loaded(self) -> None:
         overrides = _override_methods()
-        loaded_js = "\n".join(
-            str(path.relative_to(ROOT)) for path in _loaded_javascript_paths()
-        )
+        loaded_js = "\n".join(str(path.relative_to(ROOT)) for path in _loaded_javascript_paths())
         for module in _RETIRED_PRODUCT_MODULES:
             prefix = f"almdina_erp.almdina_erp.services.{module}."
-            mappings = {
-                source: target
-                for source, target in overrides.items()
-                if source.startswith(prefix)
-            }
+            mappings = {source: target for source, target in overrides.items() if source.startswith(prefix)}
             self.assertTrue(mappings, f"Missing retired mapping for {module}")
             self.assertTrue(all(target == _RETIRED_TARGET for target in mappings.values()), mappings)
             self.assertNotIn(module, loaded_js)
@@ -282,6 +290,10 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
     def test_permission_transfer_is_preview_first_and_server_authorized(self) -> None:
         service = PERMISSION_SERVICE.read_text(encoding="utf-8")
         page = PERMISSION_PAGE.read_text(encoding="utf-8")
+        frontend_modules = [path.read_text(encoding="utf-8") for path in PERMISSION_FRONTEND_MODULES]
+        api = PERMISSION_API.read_text(encoding="utf-8")
+        controller = PERMISSION_CONTROLLER.read_text(encoding="utf-8")
+        browser_surface = "\n".join((page, *frontend_modules))
         for endpoint in (
             "get_permission_console",
             "export_role_permissions",
@@ -296,17 +308,20 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("confirm_self_lockout", service)
         self.assertIn("save_role_states", service)
         self.assertNotIn("preview_permission_template", service)
-        self.assertNotIn("preview_permission_template", page)
-        self.assertNotIn("apc-template", page)
-        self.assertIn("preview_permission_import", page)
-        self.assertIn("export_role_permissions", page)
-        self.assertIn("لن يتم الحفظ تلقائيًا", page)
+        self.assertNotIn("preview_permission_template", browser_surface)
+        self.assertNotIn("apc-template", browser_surface)
+        self.assertIn("preview_permission_import", api)
+        self.assertIn("export_role_permissions", api)
+        self.assertIn("previewImport", controller)
+        self.assertIn("previewExternal", controller)
+        self.assertIn("updateRole", controller)
+        self.assertIn("لن يتم الحفظ تلقائيًا", browser_surface)
         policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)
         self.assertIn("checksum", policy)
         self.assertNotIn("PermissionTemplate", policy)
-        self.assertNotIn("frappe.user_roles", page)
+        self.assertNotIn("frappe.user_roles", browser_surface)
 
     def test_hooks_keep_old_api_paths_on_protected_services(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")

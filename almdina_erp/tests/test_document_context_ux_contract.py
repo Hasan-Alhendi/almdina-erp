@@ -5,40 +5,87 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
-DOCUMENT_CONTEXT = ROOT / "public" / "js" / "door_cutting_order_document_context.js"
-DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
-DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
-PRODUCTION_ACTIONS = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+MANIFEST = ROOT / "frontend_assets.py"
+DOCUMENT_CONTEXT = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_document_context.js"
+)
+DEFAULTS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_defaults.js"
+)
+DRAWING_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_plan_ux.js"
+)
+PRODUCTION_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
+PERMISSION_REFRESH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_permission_refresh_ux.js"
+)
 TOOLBAR_STABILITY = (
-    ROOT / "public" / "js" / "door_cutting_order_toolbar_stability_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_toolbar_stability_ux.js"
 )
 DOCUMENT_PRINT = (
-    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
 )
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 
 
 class TestDocumentContextUxContract(unittest.TestCase):
     def test_document_context_loads_before_every_active_order_feature(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
-        context = '"public/js/door_cutting_order_document_context.js"'
+        manifest = MANIFEST.read_text(encoding="utf-8")
+        context = '"public/js/door_cutting_order/core/door_cutting_order_document_context.js"'
 
-        self.assertIn(context, hooks)
+        self.assertIn(context, manifest)
         for feature in (
-            '"public/js/door_cutting_order_defaults.js"',
-            '"public/js/door_cutting_order_document_print_presenter.js"',
-            '"public/js/door_cutting_order_drawing_plan_ux.js"',
-            '"public/js/shop_floor_order_ux.js"',
-            '"public/js/order_lifecycle.js"',
+            '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
+            '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
+            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
+            '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
+            '"public/js/door_cutting_order/core/order_lifecycle.js"',
             '"public/js/input_stability.js"',
         ):
-            self.assertLess(hooks.index(context), hooks.index(feature))
+            self.assertLess(manifest.index(context), manifest.index(feature))
 
         # The context owns the surface-readiness registry that the permission
         # bundle registers into.
         self.assertLess(
-            hooks.index(context),
-            hooks.index('"public/js/permission_context.js"'),
+            manifest.index(context),
+            manifest.index('"public/js/permission_context.js"'),
         )
 
         for retired in (
@@ -46,7 +93,7 @@ class TestDocumentContextUxContract(unittest.TestCase):
             '"public/js/door_cutting_order_cost_invoice_ux.js"',
             '"public/js/production_stage.js"',
         ):
-            self.assertNotIn(retired, hooks)
+            self.assertNotIn(retired, manifest)
 
     def test_identity_transition_clears_every_document_owned_html_region(self) -> None:
         source = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
@@ -70,17 +117,16 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("ensureStageContext(frm)", source)
 
     def test_stage_context_is_loaded_before_stage_gated_surfaces_render(self) -> None:
-        plan = (ROOT / "public" / "js" / "door_cutting_order_plan_ux.js").read_text(
+        plan = (CUTTING_PLAN / "door_cutting_order_plan_ux.js").read_text(
             encoding="utf-8"
         )
         controls = (
-            ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+            CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
         ).read_text(encoding="utf-8")
 
         self.assertIn("ensureStageContext(frm).then", plan)
         self.assertIn("almdina:stage-context-ready", plan)
         self.assertIn("function canOperatePlanEngine(frm)", plan)
-        self.assertIn("function canEditOptimizerSettings(frm)", plan)
         self.assertIn("function canUseDocumentPlanActions(frm)", plan)
         # Upload / export / print stay available on an active stage; the gate is
         # the capability plus the stage's operational role, never the stage alone.
@@ -96,18 +142,19 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("ensureStageContext(frm).then", controls)
         self.assertIn("isStageContextPending", controls)
         self.assertIn("canMutateCurrentStage(frm)", controls)
-        self.assertIn(
-            "Only the packing-algorithm fields open here",
-            controls,
-        )
+        self.assertIn('"kerf_mm"', controls)
+        self.assertIn('"trim_margin_mm"', controls)
+        self.assertIn('can(frm, "edit_optimizer_settings")', controls)
+        self.assertIn("function applyOptimizerFieldAccess(frm)", controls)
+        self.assertNotIn("function canEditOptimizerSettings(frm)", plan)
 
     def test_cutting_algorithm_surface_never_waits_for_an_order_edit_session(self) -> None:
         context = DOCUMENT_CONTEXT.read_text(encoding="utf-8")
-        plan = (ROOT / "public" / "js" / "door_cutting_order_plan_ux.js").read_text(
+        plan = (CUTTING_PLAN / "door_cutting_order_plan_ux.js").read_text(
             encoding="utf-8"
         )
         controls = (
-            ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+            CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
         ).read_text(encoding="utf-8")
         drawing = DRAWING_PLAN.read_text(encoding="utf-8")
 
@@ -167,12 +214,18 @@ class TestDocumentContextUxContract(unittest.TestCase):
         )
         self.assertIn("frm.doc.default_edge_type !== requestedType", source)
 
-    def test_production_actions_wait_for_permissions_without_detaching_groups(self) -> None:
+    def test_production_actions_wait_for_central_permission_refresh_without_detaching_groups(self) -> None:
         production = PRODUCTION_ACTIONS.read_text(encoding="utf-8")
+        permission_refresh = PERMISSION_REFRESH.read_text(encoding="utf-8")
         toolbar = TOOLBAR_STABILITY.read_text(encoding="utf-8")
 
         self.assertIn("recoverProductionActions", production)
-        self.assertIn('typeof permissions.refresh === "function"', production)
+        self.assertIn("capabilitiesResolved", production)
+        self.assertIn("PermissionRefreshUX is the sole owner of the permission request", production)
+        self.assertNotIn('typeof permissions.refresh === "function"', production)
+        self.assertIn("function refreshPermissions(frm)", permission_refresh)
+        self.assertIn('typeof permissions.refresh === "function"', permission_refresh)
+        self.assertIn("production.reconcileProductionActions(frm)", permission_refresh)
         self.assertIn("Promise.resolve(frappe.call({", production)
         self.assertNotIn("removeEmptyGroups", toolbar)
         self.assertIn('ASYNC_ACTION_GROUPS = new Set(["صالة الإنتاج"])', toolbar)
@@ -208,9 +261,9 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn('"__almdinaSurfaceSettleTimer"', source)
 
         for owner, probe in (
-            ("door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
-            ("door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
-            ("shop_floor_order_ux.js", '"production-actions"'),
+            ("door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js", '"cutting-plan"'),
+            ("door_cutting_order/core/door_cutting_order_permission_refresh_ux.js", '"order-permission-surfaces"'),
+            ("door_cutting_order/production/shop_floor_order_ux.js", '"production-actions"'),
             ("permission_context.js", '"order-protected-modules"'),
         ):
             owner_source = (ROOT / "public" / "js" / owner).read_text(encoding="utf-8")

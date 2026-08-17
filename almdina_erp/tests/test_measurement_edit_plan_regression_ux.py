@@ -20,7 +20,7 @@ def source(name: str) -> str:
 
 
 def test_special_door_pricing_does_not_block_ordinary_save() -> None:
-    cost_permissions = source("door_cutting_order_cost_permissions_ux.js")
+    cost_permissions = source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js")
     adapter = PIECE_POLICY_ADAPTER.read_text(encoding="utf-8")
     validate_rows = adapter.split("def validate_rows(self)", 1)[1].split(
         "def ensure_documented(self)", 1
@@ -35,9 +35,9 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
 
 
 def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
-    plan_controls = source("door_cutting_order_plan_controls_ux.js")
-    fast_save = source("door_cutting_order_fast_save_ux.js")
-    revision = source("door_cutting_order_revision_ux.js")
+    plan_controls = source("door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js")
+    fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
+    revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
     assert "async function persistPendingOrderInputs(frm)" in fast_save
     assert "editPolicy.persistOrderEditCheckpoint(frm)" in fast_save
@@ -58,7 +58,7 @@ def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -
 
 
 def test_optimizer_only_recalculation_does_not_require_order_save() -> None:
-    fast_save = source("door_cutting_order_fast_save_ux.js")
+    fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
 
     mark_order_body = fast_save.split("function markOrderInputPlanStale(frm)", 1)[1].split(
         "function markOptimizerPlanStale(frm)", 1
@@ -70,31 +70,60 @@ def test_optimizer_only_recalculation_does_not_require_order_save() -> None:
     assert "__almdina_pending_order_input_persistence" not in mark_optimizer_body
 
 
+def test_kerf_and_trim_follow_focused_optimizer_plan_staleness() -> None:
+    fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
+    field_access = source(
+        "door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js"
+    )
+
+    assert "kerf_mm(frm) { markOptimizerPlanStale(frm); }" in fast_save
+    assert "trim_margin_mm(frm) { markOptimizerPlanStale(frm); }" in fast_save
+    assert "kerf_mm(frm) { markOrderInputPlanStale(frm); }" not in fast_save
+    assert "trim_margin_mm(frm) { markOrderInputPlanStale(frm); }" not in fast_save
+
+    # The final field-state bridge runs after order edit-session locking and
+    # delegates the actual decision back to PlanControls. Kerf/trim therefore do
+    # not require an order-save checkpoint or broad EDIT_ORDER authority.
+    assert "controls.applyOptimizerFieldAccess(frm)" in field_access
+    assert "almdina_edit_session_changed(frm) { schedule(frm); }" in field_access
+    assert "refresh_plan_controls(frm) { schedule(frm); }" in field_access
+    assert "frm.perm" not in field_access
+
+
 def test_edge_rendering_uses_one_structural_observer_instead_of_feedback_observers() -> None:
-    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+    edge_owner = source(
+        "door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js"
+    )
+    removed_patch = PUBLIC_JS / "door_cutting_order/order_entry/door_cutting_order_operator_ux_patch.js"
 
-    assert "disconnectCompetingEdgeObservers" in operator_patch
-    assert '"_dcoSideEdgeObserver"' in operator_patch
-    assert '"_dcoCompactEdgeProfileControlsObserver"' in operator_patch
-    assert "structuralMeasurementMutation" in operator_patch
-    assert "__dcoEdgeStructureObserver" in operator_patch
-    assert "observer.observe(wrapper, { childList: true, subtree: true })" in operator_patch
+    assert not removed_patch.exists()
+    assert "function disconnectLegacyObservers(wrapper)" in edge_owner
+    assert '"_dcoSideEdgeObserver"' in edge_owner
+    assert '"_dcoCompactEdgeProfileControlsObserver"' in edge_owner
+    assert "function structuralMeasurementMutation(mutation)" in edge_owner
+    assert "const observer = new MutationObserver" in edge_owner
+    assert edge_owner.count("new MutationObserver") == 1
+    assert "frm.__dcoEdgeRenderObserver" in edge_owner
+    assert "observer.observe(wrapper, { childList: true, subtree: true })" in edge_owner
 
-    refresh_body = operator_patch.split("function refreshEdgeDecorations(frm)", 1)[1].split(
-        "function stabilizeEdgeRendering(frm)", 1
+    render_body = edge_owner.split("function renderDecorations(frm)", 1)[1].split(
+        "function scheduleStructuralRefresh(frm)", 1
     )[0]
-    assert "const wrapper = measurementWrapper(frm);" in refresh_body
-    assert "disconnectCompetingEdgeObservers(wrapper);" in refresh_body
-    assert "disconnectCompetingEdgeObservers(root);" not in refresh_body
-    assert "disconnectCompetingEdgeObservers(measurementRoot(frm))" not in refresh_body
+    assert "const wrapper = measurementWrapper(frm);" in render_body
+    assert "multiEdge.schedule(frm);" in render_body
+    assert "controls.schedule(frm);" in render_body
+    assert render_body.index("multiEdge.schedule(frm);") < render_body.index("controls.schedule(frm);")
+    assert "disconnectLegacyObservers(wrapper);" in render_body
 
 
 def test_special_edge_visual_highlight_is_scoped_to_special_rows() -> None:
-    operator_patch = source("door_cutting_order_operator_ux_patch.js")
+    edge_owner = source(
+        "door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_render_owner.js"
+    )
 
-    assert 'SPECIAL_EDGE_STYLE_ID = "dco-special-edge-visual-guard-css"' in operator_patch
-    assert "tr:not(.dco-special-row)" in operator_patch
-    assert ".is-edge-missing.is-checked" in operator_patch
-    assert "tr.dco-special-row" in operator_patch
-    assert "background:#b5701c!important" in operator_patch
-    assert "background:var(--primary,#2490ef)!important" in operator_patch
+    assert 'STYLE_ID = "dco-special-edge-visual-guard-css"' in edge_owner
+    assert "tr:not(.dco-special-row)" in edge_owner
+    assert ".is-edge-missing.is-checked" in edge_owner
+    assert "tr.dco-special-row" in edge_owner
+    assert "background:#b5701c!important" in edge_owner
+    assert "background:var(--primary,#2490ef)!important" in edge_owner

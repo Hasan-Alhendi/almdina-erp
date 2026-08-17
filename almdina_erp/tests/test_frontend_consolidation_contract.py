@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 CANONICAL_FORM = (
     ROOT
     / "almdina_erp"
@@ -13,20 +14,113 @@ CANONICAL_FORM = (
     / "door_cutting_order"
     / "door_cutting_order.js"
 )
-PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
-PLAN_CONTENT = ROOT / "public" / "js" / "door_cutting_order_plan_content_ux.js"
-DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order_drawing_plan_ux.js"
+PLAN_RENDERER = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_cutting_plan_renderer.js"
+)
+PLAN_CONTENT = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_ux.js"
+)
+PLAN_CONTENT_STYLES = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_content_styles.js"
+)
+DRAWING_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_plan_ux.js"
+)
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
-FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-TEXT_BOARD_PLAN = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
-PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
+FAST_SAVE = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_text_board_plan_ux.js"
+)
+PLAN_CONTROLS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_controls_ux.js"
+)
+PLAN_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_ux.js"
+)
+PLAN_SURFACE_BOOTSTRAP = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_surface_bootstrap.js"
+)
+ACTION_GUARD = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_action_permission_guard.js"
+)
 MEASUREMENT_ACTIONS = (
-    ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
 )
 DOCUMENT_PRINT = (
-    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
 )
-SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
+SECURE_DXF = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "secure_dxf_export.js"
+)
+SPECIAL_SHAPE_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "drawing"
+    / "special_shape_facade.js"
+)
 
 
 class TestFrontendConsolidationContract(unittest.TestCase):
@@ -42,37 +136,38 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("board_item", source)
 
     def test_focused_renderer_loads_before_every_active_plan_consumer(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
-        renderer = '"public/js/door_cutting_order_cutting_plan_renderer.js"'
+        manifest = MANIFEST.read_text(encoding="utf-8")
+        renderer = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"'
 
-        self.assertIn(renderer, hooks)
+        self.assertIn(renderer, manifest)
         for consumer in (
-            '"public/js/door_cutting_order_plan_tabs_ux.js"',
-            '"public/js/door_cutting_order_drawing_plan_ux.js"',
-            '"public/js/shop_floor_order_ux.js"',
+            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"',
+            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
+            '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
         ):
-            self.assertLess(hooks.index(renderer), hooks.index(consumer))
+            self.assertLess(manifest.index(renderer), manifest.index(consumer))
 
     def test_protected_surfaces_have_deterministic_form_load_order(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
-        cost_presenter = '"public/js/door_cutting_order_cost_presenter.js"'
-        cost_permissions = '"public/js/door_cutting_order_cost_permissions_ux.js"'
-        plan_tabs = '"public/js/door_cutting_order_plan_tabs_ux.js"'
-        permission_refresh = '"public/js/door_cutting_order_permission_refresh_ux.js"'
+        manifest = MANIFEST.read_text(encoding="utf-8")
+        cost_presenter = '"public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"'
+        cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
+        plan_tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
+        permission_refresh = '"public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"'
 
         self.assertIn('"route": "/desk"', hooks)
         self.assertNotIn('"route": "/desk/almdina-erp"', hooks)
-        self.assertLess(hooks.index(cost_presenter), hooks.index(cost_permissions))
-        self.assertLess(hooks.index(plan_tabs), hooks.index(permission_refresh))
+        self.assertLess(manifest.index(cost_presenter), manifest.index(cost_permissions))
+        self.assertLess(manifest.index(plan_tabs), manifest.index(permission_refresh))
 
     def test_duplicate_legacy_form_controllers_are_not_loaded(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
         for legacy in (
             '"public/js/door_cutting_order_workflow.js"',
             '"public/js/door_cutting_order_cost_invoice_ux.js"',
             '"public/js/production_stage.js"',
         ):
-            self.assertNotIn(legacy, hooks)
+            self.assertNotIn(legacy, manifest)
 
     def test_renderer_owns_drawing_only(self) -> None:
         source = PLAN_RENDERER.read_text(encoding="utf-8")
@@ -130,6 +225,7 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
     def test_plan_page_has_one_control_surface_and_no_duplicate_summary(self) -> None:
         source = PLAN_CONTENT.read_text(encoding="utf-8")
+        styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
         drawing = DRAWING_PLAN.read_text(encoding="utf-8")
 
         # Order metadata, aggregate cards and the measurement list already live on
@@ -141,11 +237,12 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
         # The form has one authoritative optimizer/action deck above the layout.
         # The drawing optimizer panel stays available only for inbox/shop-floor use.
-        self.assertIn("movePlanActionsToFullWidth", source)
-        self.assertIn("dco-plan-action-row", source)
+        self.assertIn("stabilizePlanActionsLayout", source)
+        self.assertIn("dco-plan-actions-native", source)
         self.assertIn("dco-drawing-plan-panel-host", source)
         self.assertIn("dco-drawing-plan-panel", source)
-        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
+        self.assertNotIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
+        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", styles)
         self.assertIn("renderInboxPanel", drawing)
         self.assertIn("buildDrawingPanelHtml", drawing)
 
@@ -184,6 +281,66 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("__almdinaSecureDxfExportLoaded", secure_dxf)
         self.assertNotIn("DXF_EXPORT_ROLES", secure_dxf)
         self.assertNotIn("frappe.user_roles", secure_dxf)
+
+    def test_plan_controls_are_the_only_optimizer_field_permission_owner(self) -> None:
+        controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        presenter = PLAN_UX.read_text(encoding="utf-8")
+        guard = ACTION_GUARD.read_text(encoding="utf-8")
+
+        self.assertIn("function applyOptimizerFieldAccess(frm)", controls)
+        self.assertIn('frm.set_df_property(fieldname, "read_only"', controls)
+        self.assertNotIn('frm.set_df_property(fieldname, "read_only"', presenter)
+        self.assertNotIn('frm.set_df_property(fieldname, "read_only"', guard)
+
+    def test_plan_presenter_calls_the_optimizer_access_owner_by_its_current_name(self) -> None:
+        presenter = PLAN_UX.read_text(encoding="utf-8")
+
+        self.assertIn("function applyReadOnlyState(frm)", presenter)
+        self.assertEqual(presenter.count("applyReadOnlyState(frm)"), 3)
+        self.assertNotIn("applyOptimizerFieldPresentation", presenter)
+
+    def test_frozen_special_shape_facade_enforces_its_own_permission(self) -> None:
+        editor = SPECIAL_SHAPE_UX.read_text(encoding="utf-8")
+        guard = ACTION_GUARD.read_text(encoding="utf-8")
+
+        self.assertIn('can(frm, "edit_special_drawing")', editor)
+        self.assertIn('can(frm, "view_drawing_workspace")', editor)
+        self.assertIn("window.AlmdinaSpecialShapeEditor = Object.freeze(facade)", editor)
+        self.assertNotIn("editor.open =", guard)
+
+    def test_plan_action_control_stays_in_frappe_native_layout(self) -> None:
+        content = PLAN_CONTENT.read_text(encoding="utf-8")
+
+        self.assertIn('sectionElement(frm, "plan_actions_section")', content)
+        self.assertIn('addClass("dco-plan-actions-native")', content)
+        self.assertNotIn("host.append(field.$wrapper)", content)
+        self.assertNotIn("dco-plan-action-row", content)
+
+    def test_empty_plan_action_surface_recovers_before_approval_controls(self) -> None:
+        controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        simplify = controls.split("function simplifyActions(frm)", 1)[1].split(
+            "function apply(frm)", 1
+        )[0]
+
+        self.assertIn('.find(".dco-plan-actions-shell").first()', simplify)
+        self.assertIn("window.AlmdinaDoorCuttingPlanUX", simplify)
+        self.assertIn("presenter.refresh(frm)", simplify)
+        self.assertLess(
+            simplify.index("presenter.refresh(frm)"),
+            simplify.index("installApprovalAction(frm, field)"),
+        )
+
+    def test_plan_surface_waits_for_stage_context_before_readiness_check(self) -> None:
+        presenter = PLAN_UX.read_text(encoding="utf-8")
+        bootstrap = PLAN_SURFACE_BOOTSTRAP.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "return context.ensureStageContext(frm).then(run)",
+            presenter,
+        )
+        self.assertIn("async function renderSurface(frm)", bootstrap)
+        self.assertIn("await Promise.resolve(presenter.refresh(frm))", bootstrap)
+        self.assertIn("const ready = await renderSurface(frm)", bootstrap)
 
     def test_input_policy_uses_public_form_surface_only(self) -> None:
         source = INPUT_STABILITY.read_text(encoding="utf-8")

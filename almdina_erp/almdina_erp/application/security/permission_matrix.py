@@ -51,6 +51,11 @@ def _presentation(label: str, description: str, risk: str = "normal") -> dict[st
 
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
+    Capability.VIEW_ALL_ORDERS: _presentation(
+        "عرض جميع الطلبات",
+        "تجاوز نطاق الإسناد وعرض طلبات جميع العاملين. تُمنح للإدارة المخولة فقط.",
+        "critical",
+    ),
     Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
     Capability.EDIT_ORDER: _presentation(
         "تعديل الطلب",
@@ -256,14 +261,20 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.VIEW_REPLACEMENTS] = True
     if state[Capability.ARCHIVE_APPROVED_PLAN]:
         state[Capability.VIEW_CUTTING_PLAN] = True
+        state[Capability.VIEW_APPROVED_CUTTING_PLAN] = True
         state[Capability.PRINT_CUTTING_PLAN] = True
     # Legacy umbrella: roles that only stored view_cutting_plan keep all three tabs
-    # until an admin explicitly configures the granular tab grants.
-    if state[Capability.VIEW_CUTTING_PLAN] and not any(
-        key in supplied for key in _PLAN_TAB_VIEW_ACTIONS
-    ):
-        for capability in _PLAN_TAB_VIEW_ACTIONS:
-            state[capability] = True
+    # until an admin explicitly configures the granular tab grants. A newly saved
+    # matrix may explicitly contain all three tab keys as false; that state is
+    # contradictory (visible plan section with no visible plan), so keep the
+    # System tab as the safe minimum instead of rendering a second, empty UI.
+    if state[Capability.VIEW_CUTTING_PLAN]:
+        granular_supplied = any(key in supplied for key in _PLAN_TAB_VIEW_ACTIONS)
+        if not granular_supplied:
+            for capability in _PLAN_TAB_VIEW_ACTIONS:
+                state[capability] = True
+        elif not any(state[capability] for capability in _PLAN_TAB_VIEW_ACTIONS):
+            state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
     if state[Capability.VIEW_FINANCIAL_REPORTS]:
         state[Capability.VIEW_OPERATIONAL_REPORTS] = True
         state[Capability.VIEW_COSTS] = True

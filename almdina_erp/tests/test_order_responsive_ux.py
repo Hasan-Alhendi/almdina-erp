@@ -4,17 +4,48 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
+HOOKS = ROOT / "frontend_assets.py"
 RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
+MOBILE_LIST_CSS = ROOT / "public" / "css" / "door_cutting_order_mobile_list.css"
 RESPONSIVE_DEVICE = ROOT / "public" / "js" / "responsive_device.js"
-MOBILE_CARDS_UX = ROOT / "public" / "js" / "door_cutting_order_mobile_cards_ux.js"
-OPERATOR_UX = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-BULK_ROWS_UX = ROOT / "public" / "js" / "door_cutting_order_bulk_rows_ux.js"
-LIST_UX = ROOT / "public" / "js" / "door_cutting_order_list.js"
+MOBILE_CARDS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "responsive"
+    / "door_cutting_order_mobile_cards_ux.js"
+)
+OPERATOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+BULK_ROWS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_bulk_rows_ux.js"
+)
+LIST_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "list_view"
+    / "door_cutting_order_list.js"
+)
 QUICK_ACTIONS_UX = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
 SHOP_FLOOR_INBOX = (
     ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
 )
+SHOP_FLOOR_RENDERER = ROOT / "public" / "js" / "shop_floor_inbox" / "renderer.js"
 
 
 def source(path: Path) -> str:
@@ -33,10 +64,10 @@ def test_responsive_presentation_uses_scoped_css_and_a_focused_card_adapter():
     assert ".page-head.dco-responsive-head" in css
     assert "frappe.ui.form.on" not in css
     assert "MutationObserver" not in css
-    assert '"public/js/door_cutting_order_mobile_cards_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"' in hooks
     assert '"/assets/almdina_erp/js/responsive_device.js"' in hooks
     assert hooks.index('"public/js/input_stability.js"') < hooks.index(
-        '"public/js/door_cutting_order_mobile_cards_ux.js"'
+        '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"'
     )
     assert "ResizeObserver" in cards
     assert "MutationObserver" not in cards
@@ -146,46 +177,88 @@ def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel()
     assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
 
 
-def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions():
+def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     css = source(RESPONSIVE_CSS)
+    mobile_css = source(MOBILE_LIST_CSS)
     list_source = source(LIST_UX)
     quick_actions = source(QUICK_ACTIONS_UX)
-    inbox = source(SHOP_FLOOR_INBOX)
+    inbox_page = source(SHOP_FLOOR_INBOX)
+    inbox_renderer = source(SHOP_FLOOR_RENDERER)
     hooks = source(HOOKS)
 
     assert "window.AlmdinaResponsiveDevice" in list_source
     assert "usesCardLayout" in list_source
     assert 'root.classList.toggle("dco-order-card-layout"' in list_source
     assert 'node.matches(".list-row-container")' in list_source
-    assert 'class="dco-mobile-order-card"' in list_source
-    assert 'field("لون القشاط", doc.edge_color' in list_source
-    assert 'field("صنف اللوح", doc.board_description, "dco-card-wide-field")' in list_source
-    assert 'class="dco-card-workflow"' in list_source
-    assert 'class="dco-card-assignee"' in list_source
-    assert "AlmdinaShopFloorQuickActions.perform" in list_source
+    assert 'class="dco-mobile-order-card' in list_source
+    assert 'class="dco-card-customer-block"' in list_source
+    assert 'class="dco-card-state-pill"' in list_source
+    assert 'class="dco-card-order-link"' in list_source
+    assert 'class="dco-card-info-grid"' in list_source
+    assert 'renderInfoTile("لون اللوح", model.boardColor' in list_source
+    assert 'renderInfoTile("لون القشاط", model.edgeColor' in list_source
+    assert 'renderInfoTile("نوع القشاط", model.edgeType' in list_source
+    assert '"default_edge_type"' in list_source
+    assert 'class="dco-card-workflow"' not in list_source
+    assert 'class="dco-card-assignee"' not in list_source
+    assert "const quickActions = window.AlmdinaShopFloorQuickActions" in list_source
+    assert "quickActions.perform" in list_source
     assert 'matchMedia("(max-width: 600px)")' in list_source
+    assert 'if (!applyCardLayoutClass(listview)) {' in list_source
+    assert "containers.forEach(removeMobileCard);" in list_source
+    assert "ensureMobileCardStylesheet();" in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=5"' in list_source
+    assert ".dco-order-list.dco-order-card-layout" in mobile_css
+    scoped_result_rule = mobile_css.split(
+        ".dco-order-list.dco-order-card-layout .result {",
+        1,
+    )[1].split("}", 1)[0]
+    assert "height: auto !important;" in scoped_result_rule
+    assert "min-height: 100%;" in scoped_result_rule
+    assert "max-height:" not in scoped_result_rule
+    assert "overflow: hidden" not in scoped_result_rule
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
+    assert ".dco-card-production-action.is-start" in mobile_css
+    assert ".dco-card-production-action.is-finish" in mobile_css
+    assert ".dco-card-complete-state" in mobile_css
+    assert ".dco-mobile-order-card.is-ready" in mobile_css
+    assert ".dco-mobile-order-card.is-progress" in mobile_css
+    assert ".dco-mobile-order-card.is-completed" in mobile_css
     assert ".dco-order-card-container > .list-row" in css
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
     assert ".dco-order-list:not(.dco-order-card-layout)" in css
+    assert ".dco-order-list:not(.dco-order-card-layout)" not in mobile_css
     assert "min-width: 980px" in css
 
     assert '"/assets/almdina_erp/js/shop_floor_quick_actions.js"' in hooks
     assert "services.shop_floor_commands.start_my_stage" in quick_actions
     assert "services.shop_floor_commands.handoff_to_next" in quick_actions
     assert "frappe.db.set_value" not in quick_actions
-    assert "sf-quick-action" in inbox
-    assert 'row.edge_color || "—"' in inbox
-    assert 'row.board_description || "—"' in inbox
+    assert "/assets/almdina_erp/js/shop_floor_inbox/renderer.js" in inbox_page
+    assert "sf-quick-action" in inbox_renderer
+    assert 'row.edge_color || "—"' in inbox_renderer
+    assert 'row.board_description || "—"' in inbox_renderer
 
 
-def test_desk_list_paints_foreign_operational_role_rows_green():
+def test_desk_list_prioritizes_active_then_ready_then_completed_rows_green():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
 
     assert "function applyOperationalRoleRows(listview)" in list_source
     assert "get_order_operational_role_flags" in list_source
-    assert 'classList.toggle("dco-list-row-other-role"' in list_source
-    assert "[...mine, ...other].forEach(container => result.appendChild(container))" in list_source
-    assert ".list-row-container.dco-list-row-other-role > .list-row" in css
+    assert "function personalQueueState(doc, flag = {})" in list_source
+    assert 'if (flag.assignment_state === "completed") return "completed";' in list_source
+    assert 'return "in_progress";' in list_source
+    assert 'return "ready";' in list_source
+    assert "function sortPersonalQueueItems(items)" in list_source
+    assert '"assignment_time"' in list_source
+    assert '"completion_time"' in list_source
+    assert "return [...inProgress, ...ready, ...completed];" in list_source
+    assert "const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);" in list_source
+    assert 'classList.toggle("dco-list-row-completed"' in list_source
+    assert "const needsReorder = ordered.some" in list_source
+    assert "ordered.forEach(container => result.appendChild(container));" in list_source
+    assert ".list-row-container.dco-list-row-completed > .list-row" in css
+    assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
     assert "background: #dcfce7 !important;" in css

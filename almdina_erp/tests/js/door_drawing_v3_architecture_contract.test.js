@@ -4,19 +4,21 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_ux.js"), "utf8");
+const entry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/special_shape_facade.js"), "utf8");
 const geometry = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"), "utf8");
 const smartPathDomain = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/smart_path_domain.js"), "utf8");
 const smartPathPersistence = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/infrastructure/smart_path_persistence.js"), "utf8");
 const snapping = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snapping.js"), "utf8");
 const smartPathSnapping = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_path_snapping.js"), "utf8");
 const moveSnapPolicy = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/move_snap_policy.js"), "utf8");
+const smartGuides = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_guides.js"), "utf8");
 const handles = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/shape_handles.js"), "utf8");
 const precision = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/precision_input.js"), "utf8");
 const freehand = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_freehand_policy.js"), "utf8");
 const intelligence = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_stroke_intelligence.js"), "utf8");
 const view = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/canvas_view.js"), "utf8");
 const smartPathView = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/smart_path_view.js"), "utf8");
+const smartGuidesView = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/presentation/smart_guides_view.js"), "utf8");
 const editor = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/editor_stage2.js"), "utf8");
 const magnetic = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/magnetic_connection.js"), "utf8");
 const smartPen = fs.readFileSync(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_pen.js"), "utf8");
@@ -24,44 +26,16 @@ const css = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawi
 const precisionCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_precision.css"), "utf8");
 const magneticCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_magnetic.css"), "utf8");
 const smartPenCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_pen.css"), "utf8");
+const smartGuidesCss = fs.readFileSync(path.resolve(__dirname, "../../public/css/door_drawing_v3_smart_guides.css"), "utf8");
 
-for (const modulePath of [
-    "door_drawing_v3/domain/geometry.js",
-    "door_drawing_v3/domain/document.js",
-    "door_drawing_v3/domain/smart_path_domain.js",
-    "door_drawing_v3/application/history.js",
-    "door_drawing_v3/infrastructure/persistence_adapter.js",
-    "door_drawing_v3/infrastructure/smart_path_persistence.js",
-    "door_drawing_v3/application/snapping.js",
-    "door_drawing_v3/application/smart_path_snapping.js",
-    "door_drawing_v3/application/move_snap_policy.js",
-    "door_drawing_v3/application/shape_handles.js",
-    "door_drawing_v3/application/precision_input.js",
-    "door_drawing_v3/application/smart_freehand_policy.js",
-    "door_drawing_v3/application/smart_stroke_intelligence.js",
-    "door_drawing_v3/presentation/canvas_view.js",
-    "door_drawing_v3/presentation/canvas_policy.js",
-    "door_drawing_v3/presentation/smart_path_view.js",
-    "door_drawing_v3/application/editor_stage2.js",
-    "door_drawing_v3/application/magnetic_connection.js",
-    "door_drawing_v3/application/smart_pen.js",
-]) assert.match(entry, new RegExp(modulePath.replaceAll("/", "\\/").replaceAll(".", "\\.")));
-assert.match(entry, /door_drawing_v3_precision\.css/);
-assert.match(entry, /door_drawing_v3_magnetic\.css/);
-assert.match(entry, /door_drawing_v3_smart_pen\.css/);
-assert.match(entry, /__doorDrawingV3:\s*true/);
-assert.match(entry, /__doorDrawingV3Shapes:\s*true/);
-assert.match(entry, /__doorDrawingV3Snapping:\s*true/);
-assert.match(entry, /__doorDrawingV3Handles:\s*true/);
-assert.match(entry, /__doorDrawingV3PrecisionInput:\s*true/);
-assert.match(entry, /__doorDrawingV3MagneticConnection:\s*true/);
-assert.match(entry, /__doorDrawingV3EasyMoveSnap:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartPen:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartFreehand:\s*true/);
-assert.match(entry, /__doorDrawingV3LiveStabilizer:\s*true/);
-assert.match(entry, /__doorDrawingV3MixedStrokeRecognition:\s*true/);
-assert.match(entry, /__doorDrawingV3SmartPath:\s*true/);
-assert.match(entry, /__doorDrawingV3NodeEditing:\s*true/);
+// V3 remains covered as an isolated legacy subsystem, but it no longer owns the
+// public special-shape facade. The active facade must stay V4-only so stale V3
+// assumptions cannot silently become runtime dependencies again.
+assert.match(entry, /door_drawing_v4\/domain\/geometry\.js/);
+assert.match(entry, /door_drawing_v4\/presentation\/editor_controller\.js/);
+assert.match(entry, /__doorDrawingV4:\s*true/);
+assert.doesNotMatch(entry, /door_drawing_v3\//);
+assert.doesNotMatch(entry, /__doorDrawingV3/);
 assert.doesNotMatch(entry, /AlmdinaSketchEngine|AlmdinaExactLineModel|AlmdinaSketchHistory/);
 
 for (const tool of ["line", "rectangle", "circle", "arc"]) assert.match(view, new RegExp(`data-ddv3-tool=\\"${tool}\\"`));
@@ -120,8 +94,16 @@ assert.match(snapping, /forcedAxis/);
 assert.match(smartPathSnapping, /function pathAnchors/);
 assert.match(smartPathSnapping, /role:\s*`node-\$\{index\}`/);
 assert.match(smartPathSnapping, /function resolveObjectMove/);
-assert.match(moveSnapPolicy, /const EASY_MOVE_JOIN_SNAP_PX = 60/);
-assert.doesNotMatch(snapping + smartPathSnapping + moveSnapPolicy, /clientX|clientY|getBoundingClientRect/, "Snapping application policy must stay independent from DOM coordinates");
+assert.match(moveSnapPolicy, /const EASY_MOVE_JOIN_SNAP_PX = 20/);
+assert.match(smartGuides, /const SURFACE_SNAP_PX = 14/);
+assert.match(smartGuides, /const ALIGN_SNAP_PX = 9/);
+assert.match(smartGuides, /function nearestSurface/);
+assert.match(smartGuides, /function anchorAlignment/);
+assert.match(smartGuides, /function equalLengthCandidate/);
+assert.match(smartGuides, /kind: "surface"/);
+assert.match(smartGuides, /kind: "alignment"/);
+assert.match(smartGuides, /kind: "equal-length"/);
+assert.doesNotMatch(snapping + smartPathSnapping + moveSnapPolicy + smartGuides, /clientX|clientY|getBoundingClientRect/, "Snapping application policy must stay independent from DOM coordinates");
 
 assert.match(handles, /function handlesFor/);
 assert.match(handles, /function resizeRectangle/);
@@ -156,7 +138,13 @@ assert.match(smartPathView, /data-ddv3-path-node/);
 assert.match(smartPathView, /data-ddv3-path-segment/);
 assert.match(smartPathView, /is-freehand/);
 assert.match(smartPathView, /function renderPathInspector/);
-assert.match(smartPen, /const CLOSE_CAPTURE_PX = 18/);
+assert.match(smartGuidesView, /function guideMarkup/);
+assert.match(smartGuidesView, /horizontal-alignment/);
+assert.match(smartGuidesView, /vertical-alignment/);
+assert.match(smartGuidesView, /equal-length/);
+assert.match(smartPen, /const CLOSE_CAPTURE_PX = 8/);
+assert.match(smartPen, /const FREEHAND_ENDPOINT_SNAP_PX = 8/);
+assert.match(smartPen, /snapPx:\s*FREEHAND_ENDPOINT_SNAP_PX/);
 assert.match(smartPen, /function beginFreehand/);
 assert.match(smartPen, /function moveFreehand/);
 assert.match(smartPen, /function finishFreehand/);
@@ -171,7 +159,7 @@ assert.match(smartPen, /function insertNodeAtEvent/);
 assert.match(smartPen, /G\.setPathPoint/);
 assert.match(smartPen, /G\.removePathPoint/);
 assert.doesNotMatch(smartPen, /Math\.round\(angle \/ 45\) \* 45|event\.detail >= 2/, "The pen must be freehand, not click-to-place polygon drafting");
-assert.doesNotMatch(editor + view + magnetic + smartPen + smartPathView, /special_shape_geometry_json\s*=/, "Drawing editor must not fabricate manufacturing geometry from visual output");
+assert.doesNotMatch(editor + view + magnetic + smartPen + smartPathView + smartGuidesView, /special_shape_geometry_json\s*=/, "Drawing editor must not fabricate manufacturing geometry from visual output");
 
 assert.match(css, /\.ddv3-app/);
 assert.match(css, /\.ddv3-inspector/);
@@ -187,7 +175,9 @@ assert.match(smartPenCss, /\.ddv3-path-stroke/);
 assert.match(smartPenCss, /\.ddv3-path-node/);
 assert.match(smartPenCss, /\.ddv3-pen-draft\.is-freehand/);
 assert.match(smartPenCss, /\.ddv3-freehand-tip/);
-assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss, /^body\s*\{/m);
-assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss, /^\.form-layout\s*\{/m);
+assert.match(smartGuidesCss, /\.ddv3-smart-guide/);
+assert.match(smartGuidesCss, /\.ddv3-smart-guide-surface/);
+assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss + smartGuidesCss, /^body\s*\{/m);
+assert.doesNotMatch(css + precisionCss + magneticCss + smartPenCss + smartGuidesCss, /^\.form-layout\s*\{/m);
 
-console.log("Door Drawing V3 intelligent freehand architecture contract passed");
+console.log("Door Drawing V3 legacy subsystem architecture contract passed; active facade remains V4");

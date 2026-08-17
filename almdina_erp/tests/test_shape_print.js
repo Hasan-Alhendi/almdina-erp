@@ -7,15 +7,15 @@ global.window = {};
 
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_special_shape_geometry.js"
+    "../public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
 ));
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_shape_output_contract.js"
+    "../public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
 ));
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_shape_print.js"
+    "../public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"
 ));
 
 const renderer = window.AlmdinaShapePrint;

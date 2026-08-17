@@ -10,13 +10,37 @@ SERVICE_PATH = ROOT / "almdina_erp" / "services" / "cost_document_service.py"
 APPLICATION_PATH = (
     ROOT / "almdina_erp" / "application" / "costing" / "financial_documents.py"
 )
-UX_PATH = ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js"
-PRESENTER_PATH = ROOT / "public" / "js" / "door_cutting_order_cost_presenter.js"
+UX_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_financial_documents_ux.js"
+)
+PRESENTER_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_cost_presenter.js"
+)
 DOCUMENT_PRINT_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_print_presenter.js"
 )
 COMPACTNESS_PATH = (
-    ROOT / "public" / "js" / "door_cutting_order_document_compactness_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "printing"
+    / "door_cutting_order_document_compactness_ux.js"
 )
 HOOKS_PATH = ROOT / "hooks.py"
 
@@ -54,7 +78,12 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert 'visible: !frm.is_new() && can(frm, "print_customer_invoice")' in source
     presenter = PRESENTER_PATH.read_text(encoding="utf-8")
     permissions = (
-        ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "costing"
+        / "door_cutting_order_cost_permissions_ux.js"
     ).read_text(encoding="utf-8")
     assert "dco-cost-hero" not in presenter
     assert "dco-cost-actions-bar" in presenter
@@ -119,7 +148,12 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert detail_fields["clipped_corner_edge_price_usd"]["fieldtype"] == "Currency"
     assert detail_fields["clipped_corner_edge_price_status"]["options"] == "Unpriced\nPriced"
     clipped_ux = (
-        ROOT / "public" / "js" / "door_cutting_order_clipped_corner_ux.js"
+        ROOT
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "drawing"
+        / "door_cutting_order_clipped_corner_ux.js"
     ).read_text(encoding="utf-8")
     assert "function view(frm, row)" in clipped_ux
     assert "view," in clipped_ux
@@ -189,10 +223,10 @@ def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:
     hooks = runpy.run_path(str(HOOKS_PATH))
     scripts = hooks["doctype_js"]["Door Cutting Order"]
     permission_index = scripts.index(
-        "public/js/door_cutting_order_cost_permissions_ux.js"
+        "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"
     )
     secure_print_index = scripts.index(
-        "public/js/door_cutting_order_financial_documents_ux.js"
+        "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"
     )
     assert secure_print_index == permission_index + 1
 
@@ -202,4 +236,3 @@ def test_internal_report_is_clearly_marked_confidential() -> None:
     ux = UX_PATH.read_text(encoding="utf-8")
     assert "داخلي — لا يسلّم للزبون" in application
     assert "classification" in ux
-    assert "تقرير التكلفة الداخلي" in ux

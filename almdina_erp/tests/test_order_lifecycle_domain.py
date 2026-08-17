@@ -104,14 +104,13 @@ class OrderLifecycleDomainTests(unittest.TestCase):
         self.assertTrue(can_mark_delivered("Ready for Delivery"))
         self.assertFalse(can_mark_delivered("At Sanding"))
 
-        for status in ("Pending Review", "Approved", "At CNC", "Ready for Delivery"):
+        for status in ("Pending Review", "Approved", "At CNC", "Ready for Delivery", "Draft", "Rejected", "Delivered", "Cancelled"):
             self.assertTrue(can_return_to_draft(status))
-        for status in ("Draft", "Rejected", "Delivered", "Cancelled"):
-            self.assertFalse(can_return_to_draft(status))
 
         self.assertTrue(can_revert_department("At CNC", production_path="Drawing"))
-        self.assertFalse(can_revert_department("Delivered", production_path="Drawing"))
-        self.assertFalse(can_revert_department("At CNC", production_path=None))
+        self.assertTrue(can_revert_department("Delivered", production_path="Drawing"))
+        self.assertTrue(can_revert_department("At CNC", production_path=None))
+        self.assertTrue(can_revert_department("Draft", production_path=None))
 
     def test_replacement_status_has_highest_priority(self) -> None:
         status = derive_order_status(

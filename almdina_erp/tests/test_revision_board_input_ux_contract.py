@@ -10,12 +10,35 @@ from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION_UX = ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
-LIFECYCLE_UX = ROOT / "public" / "js" / "order_lifecycle.js"
+REVISION_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_revision_ux.js"
+)
+LIFECYCLE_UX = (
+    ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
+)
 REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
-BOARD_TEXT_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
-FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+BOARD_TEXT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_board_text_ux.js"
+)
+FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_text_board_plan_ux.js"
+)
 API_PATH = ROOT / "almdina_erp" / "api.py"
 DOCTYPE_JSON = (
     ROOT
@@ -23,6 +46,9 @@ DOCTYPE_JSON = (
     / "doctype"
     / "door_cutting_order"
     / "door_cutting_order.json"
+)
+_AUTHORIZATION_GATEWAY_MODULE = (
+    "almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway"
 )
 
 
@@ -67,13 +93,15 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         # Missing reason is filled with a default audit message — never rejected.
         self.assertNotIn("if not reason:", return_fn)
 
-    def test_legacy_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
+    def test_retired_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
         source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("const RETIRED_LABELS = Object.freeze([", source)
+        self.assertIn("function removeRetiredLifecycleButtons(frm)", source)
+        self.assertIn("RETIRED_LABELS.forEach", source)
         self.assertIn("function removeLifecycleButtons(frm)", source)
-        self.assertIn("LEGACY_LABELS.forEach", source)
         self.assertIn('__("إعادة للمسودة")', source)
         self.assertIn('__("Cancel Order")', source)
-        self.assertIn("removeLifecycleButtons(frm)", source)
+        self.assertIn("removeRetiredLifecycleButtons(frm)", source)
         self.assertNotIn('document.addEventListener("click"', source)
         self.assertNotIn("stopImmediatePropagation", source)
 
@@ -125,6 +153,7 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         fake_utils.flt = lambda value=0: float(value or 0)
         fake_utils.cint = lambda value=0: int(float(value or 0))
 
+        fake_frappe._ = lambda text: text
         fake_frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
         fake_frappe.parse_json = json.loads
         fake_frappe.db = SimpleNamespace(
@@ -139,10 +168,19 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
 
         fake_frappe.get_doc = get_doc
 
+        fake_authorization = types.ModuleType(_AUTHORIZATION_GATEWAY_MODULE)
+        fake_authorization.doctype_has_capability = lambda *args, **kwargs: False
+        fake_authorization.document_has_capability = lambda *args, **kwargs: False
+        fake_authorization.require_any_document_capability = lambda *args, **kwargs: None
+        fake_authorization.require_doctype_capability = lambda *args, **kwargs: None
+        fake_authorization.require_document_capability = lambda *args, **kwargs: None
+
         previous_frappe = sys.modules.get("frappe")
         previous_utils = sys.modules.get("frappe.utils")
+        previous_authorization = sys.modules.get(_AUTHORIZATION_GATEWAY_MODULE)
         sys.modules["frappe"] = fake_frappe
         sys.modules["frappe.utils"] = fake_utils
+        sys.modules[_AUTHORIZATION_GATEWAY_MODULE] = fake_authorization
         try:
             spec = importlib.util.spec_from_file_location(
                 "_almdina_text_board_preview_regression",
@@ -162,6 +200,10 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
                 sys.modules.pop("frappe.utils", None)
             else:
                 sys.modules["frappe.utils"] = previous_utils
+            if previous_authorization is None:
+                sys.modules.pop(_AUTHORIZATION_GATEWAY_MODULE, None)
+            else:
+                sys.modules[_AUTHORIZATION_GATEWAY_MODULE] = previous_authorization
 
     def test_opening_an_existing_text_board_order_never_calls_item_loader(self) -> None:
         piece = SimpleNamespace(
@@ -216,7 +258,10 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
             approved_plan_source="System",
             approved_plan=None,
         )
-        stored = SimpleNamespace(check_permission=lambda permission: None)
+        stored = SimpleNamespace(
+            status="Draft",
+            check_permission=lambda permission: None,
+        )
         item_loader_called = False
 
         def forbidden_item_loader():
@@ -263,6 +308,7 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         self.assertEqual(result["full_board_length_mm"], 2440)
         self.assertEqual(result["full_board_width_mm"], 1220)
         self.assertEqual(result["required_boards"], 1)
+        self.assertNotIn("total_cost_usd", result)
 
     def test_preview_source_cannot_regress_to_hidden_item_validation(self) -> None:
         source = API_PATH.read_text(encoding="utf-8")

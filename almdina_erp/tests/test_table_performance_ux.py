@@ -2,9 +2,24 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PERFORMANCE_UX = ROOT / "public" / "js" / "door_cutting_order_table_performance_ux.js"
-OPERATOR_UX = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-HOOKS = ROOT / "hooks.py"
+PERFORMANCE_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_table_performance_ux.js"
+)
+OPERATOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source() -> str:
@@ -50,13 +65,13 @@ def test_expensive_class_mutation_observer_is_replaced_by_direct_child_list_obse
 
 def test_table_performance_layer_loads_after_all_table_enhancement_layers():
     hooks = HOOKS.read_text(encoding="utf-8")
-    performance = '"public/js/door_cutting_order_table_performance_ux.js"'
+    performance = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"'
     for dependency in (
-        '"public/js/door_cutting_order_bulk_rows_ux.js"',
-        '"public/js/door_cutting_order_keyboard_columns_ux.js"',
-        '"public/js/door_cutting_order_compact_measurements_ux.js"',
-        '"public/js/door_cutting_order_special_shape_ux.js"',
-        '"public/js/door_cutting_order_measurement_resilience_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js"',
+        '"public/js/door_cutting_order/drawing/special_shape_facade.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_resilience_ux.js"',
     ):
         assert dependency in hooks
         assert hooks.index(dependency) < hooks.index(performance)

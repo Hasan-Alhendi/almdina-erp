@@ -22,8 +22,11 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
 )
-from almdina_erp.almdina_erp.services.special_shape_service import (
+from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service import (
     validate_special_shape_drawing,
+)
+from almdina_erp.almdina_erp.services.special_shape_service import (
+    validate_special_shape_geometry,
 )
 
 from .document_access import FrappeOrderDocumentAccess
@@ -127,6 +130,19 @@ class FrappeOrderPiecePolicyAdapter:
         row.clipped_corner_width_cm = round_value(result.width_cm, 3)
         row.clipped_corner_length_cm = round_value(result.length_cm, 3)
 
+    @staticmethod
+    def _validated_special_geometry(row: Any | None) -> dict[str, Any] | None:
+        if not row or str(getattr(row, "piece_type", None) or "Regular") != "Special":
+            return None
+        raw_geometry = getattr(row, "special_shape_geometry_json", "") or ""
+        if not raw_geometry:
+            return None
+        return validate_special_shape_geometry(
+            raw_geometry,
+            getattr(row, "width_cm", 0),
+            getattr(row, "length_cm", 0),
+        )
+
     def validate_rows(self) -> None:
         old_rows = self.access.old_piece_map()
         old_header = self.access.old_header()
@@ -167,6 +183,17 @@ class FrappeOrderPiecePolicyAdapter:
             else:
                 drawing_has_elements = False
 
+            special_geometry = self._validated_special_geometry(row)
+            old_special_geometry = self._validated_special_geometry(old_row)
+            geometry_payload_changed = bool(
+                old_row and old_special_geometry != special_geometry
+            )
+            documentation_changed = bool(
+                drawing_changed
+                or geometry_payload_changed
+                or (not old_row and special_geometry)
+            )
+
             decision = evaluate_special_shape(
                 old_geometry=self._geometry_snapshot(old_row),
                 current_geometry=(
@@ -174,8 +201,10 @@ class FrappeOrderPiecePolicyAdapter:
                 ),
                 old_price=self._price_snapshot(old_row),
                 current_price=self._price_snapshot(row) or SpecialPrice(),
-                drawing_changed=drawing_changed,
-                drawing_has_elements=drawing_has_elements,
+                drawing_changed=bool(drawing_changed or geometry_payload_changed),
+                drawing_has_elements=bool(
+                    special_geometry or drawing_has_elements
+                ),
                 default_edge_changed=default_edge_changed,
                 approval_action=approval_action,
             )
@@ -196,7 +225,7 @@ class FrappeOrderPiecePolicyAdapter:
                         frappe.PermissionError,
                     )
 
-            if drawing_changed:
+            if documentation_changed:
                 row.special_shape_drawing_updated_by = frappe.session.user
                 row.special_shape_drawing_updated_on = now_datetime()
 

@@ -14,6 +14,11 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
     build_plan_input_payload,
     build_plan_metadata_payload,
 )
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    is_financial_plan_key,
+    sanitize_plan_snapshot,
+    sanitize_plan_snapshot_json,
+)
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import (
     canonical_json,
     fingerprint_payload,
@@ -23,20 +28,42 @@ from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import (
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN_PATH = ROOT / "almdina_erp" / "domain" / "orders" / "plan_fingerprint.py"
 APPLICATION_PATH = ROOT / "almdina_erp" / "application" / "orders" / "plan_payloads.py"
-FAST_CONTROLLER_PATH = (
+SNAPSHOT_SECURITY_PATH = (
+    ROOT / "almdina_erp" / "application" / "orders" / "plan_snapshot_security.py"
+)
+PLAN_ADAPTER_PATH = (
     ROOT
     / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_fast.py"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "plan_adapter.py"
 )
-TEXT_BOARD_PATH = (
+SAVE_GATEWAY_PATH = (
     ROOT
     / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order_text_board.py"
+    / "infrastructure"
+    / "frappe"
+    / "orders"
+    / "save_gateway.py"
 )
+ORDER_SAVE_PATH = ROOT / "almdina_erp" / "application" / "orders" / "process_order_save.py"
+SNAPSHOT_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
+API_PATH = ROOT / "almdina_erp" / "api.py"
+COST_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "cost_service.py"
+PATCHES_PATH = ROOT / "patches.txt"
+
+
+def _nested_keys(value: object) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            keys.add(str(key))
+            keys.update(_nested_keys(item))
+    elif isinstance(value, list):
+        for item in value:
+            keys.update(_nested_keys(item))
+    return keys
 
 
 class TestPlanFingerprintDomain(unittest.TestCase):
@@ -175,10 +202,70 @@ class TestPlanPayloadApplication(unittest.TestCase):
         ).hexdigest()
         self.assertEqual(fingerprint_payload(payload), legacy)
 
+    def test_plan_snapshot_sanitizer_removes_nested_financial_data(self) -> None:
+        source = {
+            "engine_version": "v3",
+            "validation": {"is_valid": True},
+            "approved_cost": {
+                "board_rate_usd": 24.0,
+                "total_cost_usd": 52.0,
+            },
+            "customer_quote_status": "Approved",
+            "sheets": [
+                {
+                    "sheet_no": 1,
+                    "pieces": [
+                        {
+                            "id": "1-1",
+                            "x": 5,
+                            "y": 7,
+                            "edge_rate_usd": 0.5,
+                            "edge_cost_usd": 1.4,
+                            "special_shape_final_unit_price_usd": 12.0,
+                            "special_shape_price_note": "private price note",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        sanitized = sanitize_plan_snapshot(source)
+        keys = _nested_keys(sanitized)
+
+        self.assertEqual(sanitized["engine_version"], "v3")
+        self.assertTrue(sanitized["validation"]["is_valid"])
+        self.assertEqual(sanitized["sheets"][0]["pieces"][0]["x"], 5)
+        self.assertNotIn("approved_cost", keys)
+        self.assertNotIn("customer_quote_status", keys)
+        self.assertFalse([key for key in keys if is_financial_plan_key(key)])
+        # The sanitizer is non-destructive to its input object.
+        self.assertIn("approved_cost", source)
+        self.assertIn("edge_cost_usd", source["sheets"][0]["pieces"][0])
+
+    def test_plan_snapshot_json_preserves_safe_payload_and_cleans_legacy_payload(self) -> None:
+        safe = '{"validation":{"is_valid":true},"sheets":[]}'
+        self.assertEqual(sanitize_plan_snapshot_json(safe), safe)
+
+        legacy = json.dumps(
+            {
+                "validation": {"is_valid": True},
+                "total_cost_usd": 99,
+                "sheets": [{"pieces": [{"edge_rate_usd": 0.5, "x": 1}]}],
+            },
+            ensure_ascii=False,
+        )
+        cleaned = json.loads(sanitize_plan_snapshot_json(legacy))
+        self.assertEqual(cleaned["sheets"][0]["pieces"][0], {"x": 1})
+        self.assertNotIn("total_cost_usd", cleaned)
+
+    def test_malformed_snapshot_fails_closed(self) -> None:
+        raw = '{"approved_cost":{"total_cost_usd":99},invalid}'
+        self.assertEqual(sanitize_plan_snapshot_json(raw), "{}")
+
 
 class TestPlanPayloadArchitecture(unittest.TestCase):
     def test_domain_and_application_are_framework_independent(self) -> None:
-        for path in (DOMAIN_PATH, APPLICATION_PATH):
+        for path in (DOMAIN_PATH, APPLICATION_PATH, SNAPSHOT_SECURITY_PATH):
             source = path.read_text(encoding="utf-8")
             with self.subTest(path=path):
                 self.assertNotIn("import frappe", source)
@@ -186,8 +273,8 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
                 self.assertNotIn("import erpnext", source)
                 self.assertNotIn(".services", source)
 
-    def test_fast_controller_delegates_payloads_and_hashes(self) -> None:
-        source = FAST_CONTROLLER_PATH.read_text(encoding="utf-8")
+    def test_active_plan_adapter_delegates_payloads_and_hashes(self) -> None:
+        source = PLAN_ADAPTER_PATH.read_text(encoding="utf-8")
         self.assertIn("application.orders.plan_payloads", source)
         self.assertIn("domain.orders.plan_fingerprint", source)
         self.assertIn("build_plan_input_payload", source)
@@ -196,10 +283,46 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
         self.assertNotIn("import hashlib", source)
         self.assertNotIn("hashlib.sha256", source)
 
-    def test_text_board_description_overlay_remains_compatible(self) -> None:
-        source = TEXT_BOARD_PATH.read_text(encoding="utf-8")
-        self.assertIn('payload.setdefault("board", {})["item"] = description', source)
+    def test_free_text_board_description_is_owned_by_active_plan_adapter(self) -> None:
+        source = PLAN_ADAPTER_PATH.read_text(encoding="utf-8")
+        self.assertIn("description = str(", source)
+        self.assertIn("item=description", source)
         self.assertIn('payload["board"]["description"] = description', source)
+
+    def test_non_financial_snapshot_contract_is_wired_across_persistence_and_api(self) -> None:
+        order_save = ORDER_SAVE_PATH.read_text(encoding="utf-8")
+        save_gateway = SAVE_GATEWAY_PATH.read_text(encoding="utf-8")
+        snapshot_service = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
+        cost_service = COST_SERVICE_PATH.read_text(encoding="utf-8")
+        api = API_PATH.read_text(encoding="utf-8")
+        patches = PATCHES_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("gateway.sanitize_plan_snapshots()", order_save)
+        self.assertIn("sanitize_plan_snapshot_json", save_gateway)
+        self.assertIn('"cutting_plan_json"', save_gateway)
+        self.assertIn('"system_plan_json"', save_gateway)
+        self.assertIn('"custom_plan_json"', save_gateway)
+
+        self.assertIn("sanitize_plan_snapshot", snapshot_service)
+        self.assertNotIn('snapshot["approved_cost"]', snapshot_service)
+        self.assertIn("plan.board_rate_usd", snapshot_service)
+        self.assertIn("plan.total_cost_usd", snapshot_service)
+
+        self.assertIn("_sanitize_cutting_plan_snapshot(doc)", cost_service)
+        self.assertIn("sanitize_plan_snapshot_json", cost_service)
+        self.assertIn("update_modified=False", cost_service)
+
+        self.assertIn("Capability.VIEW_COSTS", api)
+        self.assertIn("include_financial", api)
+        self.assertIn("document_has_capability", api)
+        self.assertIn("doctype_has_capability", api)
+        self.assertIn("sanitize_plan_snapshot_json", api)
+        self.assertNotIn('"approved_cost":', api)
+
+        self.assertIn(
+            "almdina_erp.patches.v1_0.sanitize_historical_plan_snapshots",
+            patches,
+        )
 
 
 if __name__ == "__main__":

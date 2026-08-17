@@ -81,10 +81,15 @@ def can_recalculate_drawing_system_plan(
     status: str | None,
     current_stage_type: str | None,
 ) -> bool:
-    """Evaluate the exceptional drawing-stage recalculation policy."""
+    """Evaluate the exceptional drawing-stage recalculation policy.
+
+    An existing approved snapshot remains immutable and production-authoritative
+    while Drawing prepares a replacement. Approval history therefore does not
+    block recalculation at Drawing; explicit re-approval is what activates the
+    newly calculated plan. Outside Drawing the exception stays closed.
+    """
+    del approved_plan
     if not has_recalculate_permission:
-        return False
-    if approved_plan:
         return False
     return is_drawing_stage(
         production_path=production_path,

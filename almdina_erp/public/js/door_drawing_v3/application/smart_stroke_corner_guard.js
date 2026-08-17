@@ -5,7 +5,17 @@
     const Base = root.SmartStrokeIntelligence;
     const G = root.Geometry;
     const F = root.SmartFreehandPolicy;
-    if (!Base || !G || !F) throw new Error("Door Drawing V3 stroke intelligence must load before corner guard");
+    if (!Base || !G || !F) throw new Error("Door Drawing V3 stroke intelligence must load before fidelity guard");
+
+    // These helpers stay available only for explicit future commands such as
+    // "convert to precise line". The freehand pen itself never invokes them.
+    const PRIMITIVE_CONFIDENCE = Object.freeze({
+        line: 0.9,
+        rectangle: 0.9,
+        circle: 0.92,
+        arc: 0.94,
+    });
+    const SAMPLE_FIDELITY_FACTOR = 0.35;
 
     function windowTurn(points, index, radius = 2) {
         const left = Math.max(0, index - radius);
@@ -66,17 +76,93 @@
         });
     }
 
-    function interpret(points, options = {}) {
-        const deliberateCorner = sharpLineCorner(points, options);
-        return deliberateCorner || Base.interpret(points, options);
+    function faithfulPoints(points, closed = false) {
+        let output = F.dedupe(points);
+        if (closed && output.length > 2 && G.distance(output[0], output[output.length - 1]) <= G.EPSILON_MM) {
+            output = output.slice(0, -1);
+        }
+        return output.map(point => G.point(point.x, point.y));
     }
 
+    function faithfulPath(points, options = {}) {
+        const raw = F.dedupe(points);
+        const closed = Boolean(options.closed);
+        return Object.freeze({
+            type: "path",
+            points: Object.freeze(faithfulPoints(raw, closed)),
+            closed,
+            confidence: 1,
+            rawPoints: Object.freeze(raw.map(point => G.point(point.x, point.y))),
+            fidelity: true,
+        });
+    }
+
+    function primitiveIsUnambiguous(result, points, options = {}) {
+        if (!result || !Object.prototype.hasOwnProperty.call(PRIMITIVE_CONFIDENCE, result.type)) return false;
+        const confidence = Number(result.confidence) || 0;
+        if (confidence + 1e-9 < PRIMITIVE_CONFIDENCE[result.type]) return false;
+        if (result.type !== "line") return true;
+        const quality = F.lineQuality(F.dedupe(points));
+        if (!quality.eligible) return false;
+        const tolerance = Math.max(G.EPSILON_MM, Number(options.straightToleranceMm) || F.DEFAULTS.straightToleranceMm);
+        const ratioLimit = Math.max(1.005, Math.min(1.025, Number(options.straightRatio) || F.DEFAULTS.straightRatio));
+        return quality.maxDeviationMm <= tolerance * 0.5 && quality.ratio <= ratioLimit;
+    }
+
+    function interpret(points, options = {}) {
+        const raw = F.dedupe(points);
+        if (raw.length < 2) return Object.freeze({ type: "none", points: raw, confidence: 0 });
+
+        // Fundamental UX contract for order-entry staff:
+        // the freehand pen NEVER redraws, straightens, smooths, simplifies,
+        // orthogonalizes, segments, or converts the user's stroke.
+        return faithfulPath(raw, options);
+    }
+
+    function pushFaithful(state, rawPoint) {
+        const point = G.point(rawPoint && rawPoint.x, rawPoint && rawPoint.y);
+        if (state && typeof state === "object") state.point = point;
+        return point;
+    }
+
+    function stabilizeFaithfully(points) {
+        return F.dedupe(points).map(point => G.point(point.x, point.y));
+    }
+
+    function appendFaithfulSample(points, point, minSampleMm = F.DEFAULTS.minSampleMm) {
+        const requested = Math.max(G.EPSILON_MM, Number(minSampleMm) || F.DEFAULTS.minSampleMm);
+        return F.appendSample(points, point, Math.max(G.EPSILON_MM, requested * SAMPLE_FIDELITY_FACTOR));
+    }
+
+    // SmartPen is loaded after this module. It therefore receives denser raw samples
+    // and an identity live stabilizer, so the preview and the committed path match.
+    root.SmartFreehandPolicy = Object.freeze({
+        ...F,
+        appendSample: appendFaithfulSample,
+    });
     root.SmartStrokeIntelligence = Object.freeze({
         ...Base,
         windowTurn,
         strongestCorner,
         sharpLineCorner,
+        faithfulPoints,
+        faithfulPath,
+        primitiveIsUnambiguous,
+        pushStabilized: pushFaithful,
+        stabilizeSeries: stabilizeFaithfully,
         interpret,
     });
-    root.SmartStrokeCornerGuard = Object.freeze({ windowTurn, strongestCorner, sharpLineCorner });
+    root.SmartStrokeCornerGuard = Object.freeze({
+        PRIMITIVE_CONFIDENCE,
+        SAMPLE_FIDELITY_FACTOR,
+        windowTurn,
+        strongestCorner,
+        sharpLineCorner,
+        faithfulPoints,
+        faithfulPath,
+        primitiveIsUnambiguous,
+        pushFaithful,
+        stabilizeFaithfully,
+        appendFaithfulSample,
+    });
 })();

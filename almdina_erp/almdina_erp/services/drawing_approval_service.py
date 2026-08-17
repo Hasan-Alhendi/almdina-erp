@@ -23,6 +23,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
     require_stage_operational_access,
 )
+from almdina_erp.almdina_erp.services.cutting_plan_snapshot_service import (
+    lock_order_for_production,
+)
 
 
 _POLICY_MESSAGES = {
@@ -124,11 +127,7 @@ def approve_production_dxf(
     if validated_source == "System":
         _assert_reviewed_system_plan(order)
 
-    from almdina_erp.almdina_erp.services.cutting_plan_service import (
-        _lock_order_for_production,
-    )
-
-    result = _lock_order_for_production(
+    result = lock_order_for_production(
         order,
         preserve_status=True,
         plan_source=validated_source,

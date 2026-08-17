@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_ROOT = ROOT / "almdina_erp"
 CUTTING_DOMAIN = ROOT / "almdina_erp" / "domain" / "cutting"
 CUTTING_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_engine.py"
 OPTIMIZER_SERVICE = (
@@ -15,6 +16,11 @@ ENGINE_ADAPTER = (
 )
 LEGACY_ENGINE_ADAPTER = (
     ROOT / "almdina_erp" / "infrastructure" / "cutting" / "legacy_engine.py"
+)
+LEGACY_IMPORTS = (
+    "almdina_erp.almdina_erp.services.cutting_engine",
+    "almdina_erp.almdina_erp.services.advanced_cutting_optimizer",
+    "almdina_erp.almdina_erp.infrastructure.cutting.legacy_engine",
 )
 
 
@@ -58,6 +64,17 @@ class TestCuttingDomainArchitecture(unittest.TestCase):
         self.assertIn("domain.cutting.optimizer", optimizer_source)
         self.assertNotIn("def pack_maxrects", cutting_source)
         self.assertNotIn("def optimize_plan", optimizer_source)
+
+    def test_runtime_has_no_legacy_cutting_imports(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(RUNTIME_ROOT.rglob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            for import_path in LEGACY_IMPORTS:
+                if import_path in source:
+                    offenders.append(
+                        f"{path.relative_to(ROOT)} imports {import_path}"
+                    )
+        self.assertEqual(offenders, [], "\n".join(offenders))
 
     def test_application_engine_adapter_uses_domain_not_services(self) -> None:
         source = ENGINE_ADAPTER.read_text(encoding="utf-8")

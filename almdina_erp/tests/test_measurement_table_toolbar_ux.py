@@ -4,7 +4,15 @@ from pathlib import Path
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-SOURCE = APP_ROOT / "public" / "js" / "door_cutting_order_compact_measurements_ux.js"
+SOURCE = (
+    APP_ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_compact_measurements_ux.js"
+)
 
 
 def _source() -> str:

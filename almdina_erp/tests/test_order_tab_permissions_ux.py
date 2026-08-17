@@ -5,11 +5,25 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TAB_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_tab_permissions_ux.js"
-COST_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order_cost_permissions_ux.js"
+TAB_PERMISSIONS = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_tab_permissions_ux.js"
+COST_PERMISSIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_cost_permissions_ux.js"
+)
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
-PLAN_BOOTSTRAP = ROOT / "public" / "js" / "door_cutting_order_plan_surface_bootstrap.js"
-HOOKS = ROOT / "hooks.py"
+PLAN_BOOTSTRAP = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_surface_bootstrap.js"
+)
+MANIFEST = ROOT / "frontend_assets.py"
 
 
 class TestOrderTabPermissionsUX(unittest.TestCase):
@@ -47,12 +61,12 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
 
     def test_compatibility_modules_still_wait_for_source_registered_globals(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
 
         self.assertIn('global: "AlmdinaOrderTabPermissionsUX"', source)
         self.assertIn("function waitForGlobal", source)
         self.assertIn("return waitForGlobal(module.global)", source)
-        self.assertIn('"public/js/door_cutting_order_tab_permissions_ux.js"', hooks)
+        self.assertIn('"public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js"', manifest)
 
     def test_cutting_plan_surface_loads_independently_from_cost_chain(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
@@ -60,7 +74,7 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
 
         self.assertIn('global: "AlmdinaCuttingPlanSurfaceBootstrap"', source)
         self.assertIn(
-            'asset: "/assets/almdina_erp/js/door_cutting_order_plan_surface_bootstrap.js"',
+            'asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"',
             source,
         )
         self.assertIn("loadPlanSurfaceModule();", source)

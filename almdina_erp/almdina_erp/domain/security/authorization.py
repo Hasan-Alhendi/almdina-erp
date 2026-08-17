@@ -10,6 +10,7 @@ class Capability:
 
     # Order lifecycle
     VIEW_ORDERS = "view_orders"
+    VIEW_ALL_ORDERS = "view_all_orders"
     CREATE_ORDER = "create_order"
     EDIT_ORDER = "edit_order"
     CREATE_ORDER_REVISION = "create_order_revision"
@@ -124,6 +125,12 @@ _EDGE_DOCTYPE = "Edge Banding Type"
 
 _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_ORDERS, "read", _ORDER_DOCTYPE, "order", False),
+    CapabilityDefinition(
+        Capability.VIEW_ALL_ORDERS,
+        Capability.VIEW_ALL_ORDERS,
+        _ORDER_DOCTYPE,
+        "order",
+    ),
     CapabilityDefinition(Capability.CREATE_ORDER, "create", _ORDER_DOCTYPE, "order", False),
     CapabilityDefinition(Capability.EDIT_ORDER, "write", _ORDER_DOCTYPE, "order", False),
     CapabilityDefinition(Capability.CREATE_ORDER_REVISION, Capability.CREATE_ORDER_REVISION, _ORDER_DOCTYPE, "order"),

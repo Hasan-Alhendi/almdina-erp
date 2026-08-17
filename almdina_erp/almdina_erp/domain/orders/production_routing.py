@@ -59,12 +59,6 @@ class ProductionRoute:
     def starts_with_planning(self) -> bool:
         return self.first_stage.is_planning_stage
 
-    @property
-    def requires_approved_plan_before_dispatch(self) -> bool:
-        """Physical routes require an approved plan before the first assignment."""
-
-        return not self.starts_with_planning
-
     def stage(self, stage_type: str) -> RoutingStage:
         resolved = str(stage_type or "").strip()
         for stage in self.stages:

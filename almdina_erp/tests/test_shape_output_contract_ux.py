@@ -3,19 +3,42 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
-CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
-SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
-EDITOR = ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
+HOOKS = ROOT / "frontend_assets.py"
+CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
+SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
+EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
-PLAN_RENDERER = ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
-WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
-SECURE_DXF = ROOT / "public" / "js" / "secure_dxf_export.js"
-OPERATOR = ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-TABLE = ROOT / "public" / "js" / "door_cutting_order_table_performance_ux.js"
-MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
+SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
+OPERATOR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+TABLE = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_table_performance_ux.js"
+)
+MEASUREMENT_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 
 
 def _source(path: Path) -> str:
@@ -36,19 +59,19 @@ def test_shape_output_contract_is_pure_immutable_and_version_aware():
 
 def test_contract_loads_before_active_shape_output_consumers():
     hooks = _source(HOOKS)
-    geometry = '"/assets/almdina_erp/js/door_cutting_order_special_shape_geometry.js"'
-    contract = '"/assets/almdina_erp/js/door_cutting_order_shape_output_contract.js"'
-    secure_dxf = '"/assets/almdina_erp/js/secure_dxf_export.js"'
+    geometry = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"'
+    contract = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"'
+    secure_dxf = '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js"'
     assert hooks.index(geometry) < hooks.index(contract) < hooks.index(secure_dxf)
 
     consumers = (
-        '"public/js/door_cutting_order_cutting_plan_renderer.js"',
-        '"public/js/door_cutting_order_shape_print.js"',
-        '"public/js/door_cutting_order_operator_ux.js"',
-        '"public/js/door_cutting_order_special_shape_ux.js"',
-        '"public/js/door_cutting_order_table_performance_ux.js"',
-        '"public/js/door_cutting_order_measurement_actions_ux.js"',
-        '"public/js/door_cutting_order_document_print_presenter.js"',
+        '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"',
+        '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"',
+        '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"',
+        '"public/js/door_cutting_order/drawing/special_shape_facade.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"',
+        '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"',
+        '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
     )
     for consumer in consumers:
         assert consumer in hooks
@@ -57,34 +80,41 @@ def test_contract_loads_before_active_shape_output_consumers():
     assert '"public/js/door_cutting_order_cost_invoice_ux.js"' not in hooks
 
 
-def test_order_form_boots_shape_dependencies_before_active_consumers():
+def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
     hooks = runpy.run_path(str(HOOKS))
-    scripts = hooks["doctype_js"]["Door Cutting Order"]
-    geometry = "public/js/door_cutting_order_special_shape_geometry.js"
-    contract = "public/js/door_cutting_order_shape_output_contract.js"
+    global_scripts = hooks["app_include_js"]
+    form_scripts = hooks["doctype_js"]["Door Cutting Order"]
+    geometry_global = "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
+    contract_global = "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
+    geometry_form = "public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
+    contract_form = "public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
     consumers = (
-        "public/js/door_cutting_order_cutting_plan_renderer.js",
-        "public/js/door_cutting_order_shape_print.js",
-        "public/js/door_cutting_order_operator_ux.js",
-        "public/js/door_cutting_order_special_shape_ux.js",
-        "public/js/door_cutting_order_table_performance_ux.js",
-        "public/js/door_cutting_order_measurement_actions_ux.js",
-        "public/js/door_cutting_order_document_print_presenter.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
+        "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
+        "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
+        "public/js/door_cutting_order/drawing/special_shape_facade.js",
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js",
+        "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js",
+        "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
     )
-    assert geometry in scripts
-    assert contract in scripts
-    assert scripts.index(geometry) < scripts.index(contract)
-    assert scripts.index(contract) < min(scripts.index(item) for item in consumers)
+    assert geometry_global in global_scripts
+    assert contract_global in global_scripts
+    assert global_scripts.index(geometry_global) < global_scripts.index(contract_global)
+    assert geometry_form not in form_scripts
+    assert contract_form not in form_scripts
+    for consumer in consumers:
+        assert consumer in form_scripts
 
 
-def test_special_shape_button_resolves_v3_editor_at_click_time():
+def test_special_shape_button_resolves_v4_editor_at_click_time():
     operator = _source(OPERATOR)
     editor = _source(EDITOR)
     assert 'event.target.closest(".dco-special-sketch-button")' in operator
     assert "row && window.AlmdinaSpecialShapeEditor" in operator
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = Object.freeze(facade);" in editor
-    assert "__doorDrawingV3: true" in editor
+    assert "__doorDrawingV4: true" in editor
+    assert "door_drawing_v4/domain/geometry.js" in editor
     assert "function open(frm, row" in editor
 
 
@@ -100,23 +130,24 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     shape_print = _source(SHAPE_PRINT)
     measurement_actions = _source(MEASUREMENT_ACTIONS)
     presenter = _source(PRINT_PRESENTER)
-    invoice = _source(INVOICE)
+    financial = _source(FINANCIAL_DOCUMENTS)
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in shape_print
     assert "const selected = shapeOutput.visual(piece);" in shape_print
     assert 'selected.kind === "drawing"' in shape_print
     assert "renderer.notesCell(row, row.notes" in presenter
     assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
-    assert "renderer.notesCell(row, row.notes" in invoice
+    assert '${measurementDocumentBody(frm)}' in presenter
+    assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
 
 
-def test_plan_dxf_and_status_surfaces_do_not_reimplement_exact_shape_policy():
-    consumers = (PLAN_RENDERER, WORKFLOW, SECURE_DXF, OPERATOR, TABLE)
+def test_plan_dxf_and_browser_surfaces_do_not_reimplement_exact_shape_policy():
+    consumers = (PLAN_RENDERER, SECURE_DXF, OPERATOR, TABLE)
     for path in consumers:
         source = _source(path)
         assert "AlmdinaShapeOutputContract" in source, path
         assert "AlmdinaSpecialShapeGeometry" not in source, path
         assert ".isExact(" not in source, path
     assert "shapeOutput.pointsAttribute(piece, 100, 100)" in _source(PLAN_RENDERER)
-    assert "shapeOutput.pointsAttribute(piece, 100, 100)" in _source(WORKFLOW)
-    assert "shapeOutput.dxfPoints(piece" in _source(WORKFLOW)
     assert "shapeOutput.dxfPoints(piece" in _source(SECURE_DXF)
+    assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

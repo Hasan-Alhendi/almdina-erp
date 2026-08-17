@@ -21,11 +21,49 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 )
 
 
+_ORDER_DOCTYPE = "Door Cutting Order"
+_ORDER_DOCUMENT_CACHE_KEY = "almdina_shop_floor_order_documents"
 _SUPERVISOR_CAPABILITIES = (
     Capability.REASSIGN_WORKER,
     Capability.REVERT_DEPARTMENT,
     Capability.MARK_DELIVERED,
 )
+
+
+def _order_name(order: Any) -> str:
+    if isinstance(order, dict):
+        return str(order.get("name") or "").strip()
+    return str(getattr(order, "name", "") or "").strip()
+
+
+def _order_document(order: Any) -> Any | None:
+    """Resolve list projections to the real transactional document.
+
+    Shop-floor list queries intentionally use lightweight ``frappe.get_all``
+    projections. Document-scoped capability checks, however, must receive a
+    real Door Cutting Order so the authorization gateway can enforce both the
+    canonical capability matrix and Frappe's native document scope. Keep the
+    resolved document request-local to avoid repeated loads without caching
+    authorization-sensitive state across requests.
+    """
+
+    if getattr(order, "doctype", None) == _ORDER_DOCTYPE:
+        return order
+
+    name = _order_name(order)
+    if not name:
+        return None
+
+    cache = getattr(frappe.local, _ORDER_DOCUMENT_CACHE_KEY, None)
+    if cache is None:
+        cache = {}
+        setattr(frappe.local, _ORDER_DOCUMENT_CACHE_KEY, cache)
+
+    document = cache.get(name)
+    if document is None:
+        document = frappe.get_doc(_ORDER_DOCTYPE, name)
+        cache[name] = document
+    return document
 
 
 class FrappeShopFloorQueryRepository:
@@ -67,10 +105,13 @@ class FrappeShopFloorQueryRepository:
         )
 
     def capabilities_for_order(self, order: Any) -> frozenset[str]:
+        document = _order_document(order)
+        if document is None:
+            return frozenset()
         return frozenset(
             capability
             for capability in SHOP_FLOOR_DETAIL_CAPABILITIES
-            if document_has_capability(order, capability)
+            if document_has_capability(document, capability)
         )
 
     def list_active_routes(self):
@@ -97,10 +138,12 @@ class FrappeShopFloorQueryRepository:
                 "operational_role",
                 "status",
                 "assigned_to",
+                "assignment_time",
                 "sequence",
+                "creation",
                 "modified",
             ],
-            order_by="modified desc",
+            order_by="assignment_time asc, creation asc",
         )
 
     def list_archive_stages(self, *, user: str, is_admin: bool) -> list[Any]:
@@ -125,9 +168,48 @@ class FrappeShopFloorQueryRepository:
                 "finish_time",
                 "modified",
             ],
-            order_by="modified desc",
+            order_by="finish_time desc, modified desc",
             limit_page_length=100,
         )
+
+    def personal_order_stage_timings(
+        self,
+        order_names: Sequence[str],
+        *,
+        user: str,
+    ) -> dict[str, Any]:
+        names = [str(name) for name in order_names if str(name or "").strip()]
+        if not names:
+            return {}
+        placeholders = ", ".join(["%s"] * len(names))
+        rows = frappe.db.sql(
+            f"""
+            select ps.door_cutting_order,
+                   max(
+                       case
+                           when ps.name = dco.current_production_stage
+                            and ps.status in ('Pending', 'In Progress', 'Paused')
+                           then coalesce(ps.assignment_time, ps.creation)
+                       end
+                   ) as assignment_time,
+                   max(
+                       case
+                           when ps.status = 'Completed'
+                           then coalesce(ps.finish_time, ps.modified)
+                       end
+                   ) as completion_time
+              from `tabProduction Stage` ps
+              inner join `tabDoor Cutting Order` dco
+                      on dco.name = ps.door_cutting_order
+             where ps.assigned_to = %s
+               and ifnull(ps.piece_label, '') = ''
+               and ps.door_cutting_order in ({placeholders})
+             group by ps.door_cutting_order
+            """,
+            [user, *names],
+            as_dict=True,
+        )
+        return {str(row.door_cutting_order): row for row in rows}
 
     def current_stage_names(
         self,
@@ -138,7 +220,7 @@ class FrappeShopFloorQueryRepository:
         return {
             row.name: row.current_production_stage
             for row in frappe.get_all(
-                "Door Cutting Order",
+                _ORDER_DOCTYPE,
                 filters={"name": ["in", list(order_names)]},
                 fields=["name", "current_production_stage"],
             )
@@ -150,7 +232,7 @@ class FrappeShopFloorQueryRepository:
         return {
             row.name: row
             for row in frappe.get_all(
-                "Door Cutting Order",
+                _ORDER_DOCTYPE,
                 filters={"name": ["in", list(order_names)]},
                 fields=[
                     "name",
@@ -164,6 +246,8 @@ class FrappeShopFloorQueryRepository:
                     "department_status",
                     "current_production_stage",
                     "approved_plan",
+                    "cutting_plan_json",
+                    "plan_needs_recalculation",
                     "production_dxf",
                     "drawing_dxf_status",
                     "revision",
@@ -172,7 +256,7 @@ class FrappeShopFloorQueryRepository:
         }
 
     def get_order(self, order_name: str) -> Any:
-        return frappe.get_doc("Door Cutting Order", order_name)
+        return frappe.get_doc(_ORDER_DOCTYPE, order_name)
 
     def can_view_order(self, order: Any) -> bool:
         if self.is_admin():
@@ -180,9 +264,18 @@ class FrappeShopFloorQueryRepository:
         user = self.current_user()
         if user == "Administrator":
             return True
-        if not permissions._requires_assigned_scope(user):
-            return frappe.has_permission(order, "read")
-        return permissions.worker_can_view_order(user, order.name)
+
+        name = _order_name(order)
+        if not name:
+            return False
+        if permissions._requires_assigned_scope(user):
+            return permissions.worker_can_view_order(user, name)
+
+        document = _order_document(order)
+        return bool(
+            document
+            and frappe.has_permission(document, "read", user=user)
+        )
 
     def list_order_stages(self, order_name: str) -> list[Any]:
         return frappe.get_all(
@@ -265,7 +358,7 @@ class FrappeShopFloorQueryRepository:
         )
 
     def get_order_status(self, order_name: str) -> str | None:
-        return frappe.db.get_value("Door Cutting Order", order_name, "status")
+        return frappe.db.get_value(_ORDER_DOCTYPE, order_name, "status")
 
     def list_revert_stages(self, order_name: str) -> list[Any]:
         return frappe.get_all(

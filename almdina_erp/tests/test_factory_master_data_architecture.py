@@ -19,6 +19,10 @@ EDGE_CONTROLLER = EDGE_JSON.with_suffix(".py")
 SETTINGS_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.py"
 AUDIT_JSON = ROOT / "almdina_erp" / "doctype" / "almdina_master_data_audit" / "almdina_master_data_audit.json"
 SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
+SETTINGS_FRONTEND_STATE = ROOT / "public" / "js" / "factory_production_settings" / "state.js"
+SETTINGS_FRONTEND_RENDERER = ROOT / "public" / "js" / "factory_production_settings" / "renderer.js"
+SETTINGS_FRONTEND_CONTROLLER = ROOT / "public" / "js" / "factory_production_settings" / "controller.js"
+SETTINGS_CSS = ROOT / "public" / "css" / "factory_production_settings.css"
 MASTER_PAGE = ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js"
 MASTER_PAGE_JSON = MASTER_PAGE.with_suffix(".json")
 ROUTING_WORKFLOW_CSS = ROOT / "public" / "css" / "factory_routing_workflow.css"
@@ -88,13 +92,27 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
     def test_pages_are_arabic_responsive_and_do_not_read_roles(self) -> None:
         master_metadata = json.loads(MASTER_PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(master_metadata["roles"], [])
-        settings_source = SETTINGS_PAGE.read_text(encoding="utf-8")
-        self.assertIn("@media", settings_source)
-        for page in (SETTINGS_PAGE, MASTER_PAGE):
-            source = page.read_text(encoding="utf-8")
-            self.assertIn("requestId", source)
-            self.assertNotIn("frappe.user_roles", source)
+
+        settings_page = SETTINGS_PAGE.read_text(encoding="utf-8")
+        settings_state = SETTINGS_FRONTEND_STATE.read_text(encoding="utf-8")
+        settings_renderer = SETTINGS_FRONTEND_RENDERER.read_text(encoding="utf-8")
+        settings_controller = SETTINGS_FRONTEND_CONTROLLER.read_text(encoding="utf-8")
+        settings_css = SETTINGS_CSS.read_text(encoding="utf-8")
+        settings_surface = "\n".join(
+            (settings_page, settings_state, settings_renderer, settings_controller)
+        )
+
+        self.assertIn("factory_production_settings/controller.js", settings_page)
+        self.assertIn("createLatestRequestGate", settings_state)
+        self.assertIn("requests.settings.begin", settings_controller)
+        self.assertIn("الإعدادات الافتراضية للمعمل", settings_renderer)
+        self.assertIn("@media", settings_css)
+        self.assertNotIn("requestId", settings_surface)
+        self.assertNotIn("frappe.user_roles", settings_surface)
+
         master = MASTER_PAGE.read_text(encoding="utf-8")
+        self.assertIn("requestId", master)
+        self.assertNotIn("frappe.user_roles", master)
         css = ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
         self.assertIn("get_production_routing_console", master)
         self.assertIn("save_production_routing", master)

@@ -18,7 +18,14 @@ DISPATCH_SERVICE = ROOT / "almdina_erp" / "services" / "order_dispatch_service.p
 COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
 QUERY_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
 WORKER_SERVICE = ROOT / "almdina_erp" / "services" / "production_worker_service.py"
-ORDER_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+ORDER_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
 
 
 class TestConfigurableProductionPermissions(unittest.TestCase):
@@ -47,7 +54,6 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertIn("capabilities_for_order", source)
         self.assertIn("Capability.REASSIGN_WORKER", source)
         self.assertIn("route_stage.is_planning_stage", source)
-        self.assertIn("route.requires_approved_plan_before_dispatch", source)
 
     def test_mutating_use_cases_request_locks_through_the_application_port(self) -> None:
         source = APPLICATION_COMMANDS.read_text(encoding="utf-8")
@@ -123,12 +129,18 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
         self.assertIn("frappe.PermissionError", worker_source)
 
     def test_query_service_publishes_server_action_context(self) -> None:
-        source = QUERY_SERVICE.read_text(encoding="utf-8")
-        self.assertIn('"production_actions"', source)
-        self.assertIn('"can_reassign_worker"', source)
-        self.assertIn('"active_stage_assigned_to"', source)
-        self.assertNotIn("DISPATCH_ROLES", source)
-        self.assertNotIn("ADMIN_ROLES", source)
+        service = QUERY_SERVICE.read_text(encoding="utf-8")
+        application = APPLICATION_COMMANDS.parent.joinpath("queries.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("get_order_operational_role_flags", service)
+        self.assertIn('"production_actions"', application)
+        self.assertIn('"can_reassign_worker"', application)
+        self.assertIn('"active_stage_assigned_to"', application)
+        self.assertIn('"can_start_stage"', application)
+        self.assertIn('"can_handoff_stage"', application)
+        self.assertNotIn("DISPATCH_ROLES", service + application)
+        self.assertNotIn("ADMIN_ROLES", service + application)
 
     def test_ui_never_uses_reassignment_as_a_stage_override(self) -> None:
         source = ORDER_UX.read_text(encoding="utf-8")

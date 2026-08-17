@@ -266,13 +266,6 @@ def _assert_action_allowed(
     raise ShopFloorCommandError(decision.reason)
 
 
-def _assert_route_dispatch_gate(route: ProductionRoute, order: OrderState) -> None:
-    if route.requires_approved_plan_before_dispatch and not order.has_approved_plan:
-        raise ShopFloorCommandError(
-            "يجب اعتماد خطة القص قبل إرسال الطلب إلى مسار يبدأ بالتنفيذ الفعلي."
-        )
-
-
 def _assert_planning_handoff_gate(
     route: ProductionRoute,
     stage: StageState,
@@ -295,11 +288,7 @@ def _assert_planning_handoff_gate(
 
 
 def assert_order_ready_for_dispatch(order: OrderState) -> None:
-    """Compatibility validator that evaluates generic state only.
-
-    Route-specific approval requirements are enforced by ``dispatch_order`` after
-    loading the selected configurable route.
-    """
+    """Compatibility validator that evaluates generic dispatch state only."""
 
     decision = decide_production_action(
         Capability.DISPATCH_ORDER,
@@ -393,7 +382,6 @@ def dispatch_order(
     repository.validate_special_shapes(order_name)
 
     route = _production_route(repository, path)
-    _assert_route_dispatch_gate(route, order)
     first = route.first_stage
     repository.assert_worker_for_role(assignee, first.operational_role)
     repository.cancel_active_order_stages(order_name)

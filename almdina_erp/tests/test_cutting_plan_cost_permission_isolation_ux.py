@@ -32,6 +32,7 @@ PLAN_LEVEL_ZERO_FIELDS = {
     "optimizer_section",
     "packing_mode",
     "optimization_time_limit_sec",
+    "plan_actions_section",
     "plan_control_actions",
     "plan_section",
     "cutting_plan_html",
@@ -95,6 +96,28 @@ def test_migrate_repairs_site_local_plan_permlevel_drift() -> None:
     assert "set permlevel = 0" in repair
     assert "frappe.clear_cache(doctype=DOCTYPE)" in repair
     assert "sync_cutting_plan_surface_metadata()" in lifecycle
+
+
+def test_migrate_repairs_hidden_plan_command_containers() -> None:
+    repair = METADATA_SYNC.read_text(encoding="utf-8")
+
+    assert "VISIBLE_PLAN_SURFACE_FIELDS" in repair
+    assert '"plan_actions_section"' in repair
+    assert '("hidden", VISIBLE_PLAN_SURFACE_FIELDS)' in repair
+    assert '("depends_on", VISIBLE_PLAN_SURFACE_FIELDS)' in repair
+    assert "set hidden = 0" in repair
+    assert "depends_on = null" in repair
+
+
+def test_plan_commands_use_a_native_full_width_section() -> None:
+    schema = json.loads(ORDER_SCHEMA.read_text(encoding="utf-8"))
+    fields = {row["fieldname"]: row for row in schema["fields"]}
+    order = schema["field_order"]
+
+    assert fields["plan_actions_section"]["fieldtype"] == "Section Break"
+    assert fields["plan_control_actions"]["fieldtype"] == "HTML"
+    assert order.index("plan_actions_section") + 1 == order.index("plan_control_actions")
+    assert fields["cut_geometry_section"]["label"] == "إعدادات تنفيذ القص"
 
 
 def test_plan_metadata_repair_does_not_touch_cost_fields() -> None:

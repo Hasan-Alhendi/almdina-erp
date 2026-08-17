@@ -46,6 +46,12 @@ jobs:
       - name: Validate Python syntax
         run: python -m compileall -q almdina_erp
 
+      - name: Enforce frontend architecture contract
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_frontend_architecture_contract \
+            almdina_erp.tests.test_frontend_foundation_contract
+
       - name: Run existing refactor and CI contract tests
         run: |
           python -m unittest -v \
@@ -83,6 +89,8 @@ jobs:
             almdina_erp.tests.test_final_security_architecture \
             almdina_erp.tests.test_workforce_authorization \
             almdina_erp.tests.test_workforce_management_architecture \
+            almdina_erp.tests.test_factory_workforce_frontend_architecture \
+            almdina_erp.tests.test_factory_workforce_frontend_security \
             almdina_erp.tests.test_factory_master_data_authorization \
             almdina_erp.tests.test_factory_master_data_architecture \
             almdina_erp.tests.test_production_routing_management_application \
@@ -109,11 +117,14 @@ jobs:
       - name: Run shop-floor query application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_application
 
-      - name: Run shop-floor presenter tests
-        run: python -m unittest -v almdina_erp.tests.test_shop_floor_presenters
-
       - name: Run shop-floor query architecture tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_query_architecture
+
+      - name: Run Shop Floor Inbox frontend architecture tests
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_shop_floor_inbox_frontend_architecture \
+            almdina_erp.tests.test_shop_floor_inbox_frontend_security
 
       - name: Run door-piece policy tests
         run: |
@@ -163,13 +174,14 @@ jobs:
             almdina_erp.tests.test_product_scope_contract \
             almdina_erp.tests.test_replacement_planning
 
-      - name: Run revision, board input, and typing stability regression tests
+      - name: Run revision, board input, typing stability, and page revisit regression tests
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_revision_board_input_ux_contract \
             almdina_erp.tests.test_document_context_ux_contract \
             almdina_erp.tests.test_frontend_consolidation_contract \
-            almdina_erp.tests.test_input_stability_ux_contract
+            almdina_erp.tests.test_input_stability_ux_contract \
+            almdina_erp.tests.test_page_revisit_refresh_contract
 
       - name: Run UI, DXF, invoice, and optimizer function contracts
         run: |
@@ -198,6 +210,7 @@ jobs:
 
       - name: Run active frontend browser simulations
         run: |
+          node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/permission_context.test.js
           node almdina_erp/tests/js/order_lifecycle_permissions.test.js
           node almdina_erp/tests/js/financial_documents.test.js
@@ -212,15 +225,19 @@ jobs:
           node almdina_erp/tests/js/mobile_piece_cards.test.js
           node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/shop_floor_quick_actions.test.js
+          node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
           node almdina_erp/tests/js/order_tab_visibility.test.js
+          node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/test_shape_print.js
 
       - name: Run Door Drawing V3 geometry and architecture regressions
+        shell: bash
         run: |
-          node almdina_erp/tests/js/door_drawing_v3_geometry.test.js
-          node almdina_erp/tests/js/door_drawing_v3_snapping.test.js
-          node almdina_erp/tests/js/door_drawing_v3_handles.test.js
-          node almdina_erp/tests/js/door_drawing_v3_precision_input.test.js
-          node almdina_erp/tests/js/door_drawing_v3_freehand.test.js
-          node almdina_erp/tests/js/door_drawing_v3_stroke_intelligence.test.js
-          node almdina_erp/tests/js/door_drawing_v3_architecture_contract.test.js
+          set -euo pipefail
+          count=0
+          for test_file in almdina_erp/tests/js/door_drawing_v3_*.test.js; do
+            echo "Running ${test_file}"
+            node "${test_file}"
+            count=$((count + 1))
+          done
+          echo "Executed ${count} Door Drawing V3 regression tests"

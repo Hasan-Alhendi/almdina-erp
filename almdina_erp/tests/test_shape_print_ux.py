@@ -2,13 +2,29 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "hooks.py"
-RENDERER = ROOT / "public" / "js" / "door_cutting_order_shape_print.js"
-CONTRACT = ROOT / "public" / "js" / "door_cutting_order_shape_output_contract.js"
-MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-INVOICE = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
-EDGE_COLOR = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
+HOOKS = ROOT / "frontend_assets.py"
+RENDERER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
+CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
+MEASUREMENT_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
+PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+FINANCIAL = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
+EDGE_COLOR = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_color_ux.js"
+)
 
 
 def text(path: Path) -> str:
@@ -17,11 +33,11 @@ def text(path: Path) -> str:
 
 def test_shared_shape_print_renderer_loads_before_every_active_print_surface():
     hooks = text(HOOKS)
-    renderer = '"public/js/door_cutting_order_shape_print.js"'
-    measurements = '"public/js/door_cutting_order_measurement_actions_ux.js"'
-    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
-    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
-    edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
+    renderer = '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"'
+    measurements = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"'
+    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
+    edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
     for script in (renderer, measurements, presenter, financial, edge_color):
         assert script in hooks
     assert hooks.index(renderer) < hooks.index(measurements)
@@ -58,15 +74,18 @@ def test_measurement_print_places_drawing_inside_notes_without_adding_a_column()
     assert "<th>الرسم</th>" not in source
 
 
-def test_customer_invoice_print_includes_drawing_in_the_legacy_reference_renderer():
-    invoice = text(INVOICE)
+def test_customer_invoice_reuses_the_canonical_measurement_and_shape_renderer():
+    presenter = text(PRINT_PRESENTER)
+    financial = text(FINANCIAL)
     edge_color = text(EDGE_COLOR)
-    assert "renderer.notesCell(row, row.notes" in invoice
-    assert "${printNotesCell(row)}" in invoice
-    assert "${shapePrintCss()}" in invoice
-    assert "dco-row-with-sketch" in invoice
-    assert "function buildPrintHtml(frm)" in invoice
-    assert "frame.srcdoc = buildPrintHtml(frm)" in invoice
+
+    assert "renderer.notesCell(row, row.notes" in presenter
+    assert '${measurementDocumentBody(frm)}' in presenter
+    assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
+    assert "shapePrintCss()" in presenter
+    assert "async function printAuthorizedInvoice(frm, payload)" in presenter
+    assert "frame.srcdoc = html" in presenter
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
 
     # Edge color remains presentation-only and never forks print HTML.
     assert "patchMeasurementDrawings" not in edge_color

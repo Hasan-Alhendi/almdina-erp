@@ -118,6 +118,9 @@
         default_cutting_machine_type: machineOptions,
     };
 
+    const pendingRoots = new Set();
+    let scheduledFrame = null;
+
     function translateText(text) {
         let value = text;
         for (const [source, arabic] of replacements) {
@@ -132,6 +135,12 @@
         return ["SCRIPT", "STYLE", "CODE", "PRE", "TEXTAREA", "OPTION"].includes(parent.tagName);
     }
 
+    function translateTextNode(node) {
+        if (!node || shouldSkip(node) || !node.nodeValue || !node.nodeValue.trim()) return;
+        const translated = translateText(node.nodeValue);
+        if (translated !== node.nodeValue) node.nodeValue = translated;
+    }
+
     function translateOption(option, directTranslations = null) {
         const storedValue = option.value;
         const sourceText = option.textContent.trim();
@@ -143,38 +152,79 @@
         option.value = storedValue || sourceValue;
     }
 
-    function localizeSelectOptions(root) {
-        const scope = root && root.querySelectorAll ? root : document;
-        const generalOptions = [];
-        if (scope.matches && scope.matches("option")) generalOptions.push(scope);
-        generalOptions.push(...scope.querySelectorAll("option"));
-        generalOptions.forEach(option => translateOption(option));
+    function queryWithin(root, selector) {
+        if (!root || root.nodeType !== Node.ELEMENT_NODE) return [];
+        const results = [];
+        if (typeof root.matches === "function" && root.matches(selector)) results.push(root);
+        if (typeof root.querySelectorAll === "function") results.push(...root.querySelectorAll(selector));
+        return results;
+    }
 
+    function localizeSelectOptions(root) {
+        queryWithin(root, "option").forEach(option => translateOption(option));
         for (const [fieldname, translations] of Object.entries(fieldOptionTranslations)) {
-            const controls = [];
-            if (scope.matches && scope.matches(`[data-fieldname="${fieldname}"]`)) controls.push(scope);
-            controls.push(...scope.querySelectorAll(`[data-fieldname="${fieldname}"]`));
-            for (const control of controls) {
+            queryWithin(root, `[data-fieldname="${fieldname}"]`).forEach(control => {
                 control.querySelectorAll("option").forEach(option => translateOption(option, translations));
-            }
+            });
         }
     }
 
-    function process(root) {
-        if (!root) return;
+    function processElement(root) {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        const nodes = [];
-        while (walker.nextNode()) nodes.push(walker.currentNode);
-        for (const node of nodes) {
-            if (shouldSkip(node) || !node.nodeValue || !node.nodeValue.trim()) continue;
-            const translated = translateText(node.nodeValue);
-            if (translated !== node.nodeValue) node.nodeValue = translated;
-        }
+        while (walker.nextNode()) translateTextNode(walker.currentNode);
         localizeSelectOptions(root);
     }
 
+    function processNode(node) {
+        if (!node) return;
+        if (node.nodeType === Node.TEXT_NODE) {
+            translateTextNode(node);
+            return;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) processElement(node);
+    }
+
+    function compactPendingRoots() {
+        const roots = Array.from(pendingRoots);
+        return roots.filter((candidate, index) => {
+            if (!candidate || candidate.nodeType !== Node.ELEMENT_NODE) return true;
+            return !roots.some((other, otherIndex) => (
+                otherIndex !== index
+                && other
+                && other.nodeType === Node.ELEMENT_NODE
+                && typeof other.contains === "function"
+                && other.contains(candidate)
+            ));
+        });
+    }
+
+    function flushPendingRoots() {
+        scheduledFrame = null;
+        const roots = compactPendingRoots();
+        pendingRoots.clear();
+        roots.forEach(processNode);
+    }
+
+    function scheduleFlush() {
+        if (scheduledFrame !== null) return;
+        const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+        scheduledFrame = schedule(flushPendingRoots);
+    }
+
+    function queueNode(node) {
+        if (!node || (node.nodeType !== Node.TEXT_NODE && node.nodeType !== Node.ELEMENT_NODE)) return;
+        pendingRoots.add(node);
+        scheduleFlush();
+    }
+
     function run() {
-        process(document.body);
+        if (!document.body) return;
+        processElement(document.body);
+
+        const observer = new MutationObserver(mutations => {
+            for (const mutation of mutations) mutation.addedNodes.forEach(queueNode);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     if (document.readyState === "loading") {
@@ -182,21 +232,4 @@
     } else {
         run();
     }
-
-    const observer = new MutationObserver(mutations => {
-        for (const mutation of mutations) {
-            mutation.addedNodes.forEach(node => {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    if (!shouldSkip(node) && node.nodeValue) {
-                        const translated = translateText(node.nodeValue);
-                        if (translated !== node.nodeValue) node.nodeValue = translated;
-                    }
-                } else if (node.nodeType === Node.ELEMENT_NODE) {
-                    process(node);
-                }
-            });
-        }
-    });
-
-    observer.observe(document.documentElement, { childList: true, subtree: true });
 })();

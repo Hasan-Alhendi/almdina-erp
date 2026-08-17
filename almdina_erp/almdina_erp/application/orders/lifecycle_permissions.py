@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from almdina_erp.almdina_erp.domain.orders.lifecycle import (
-    can_return_to_draft,
-    normalize_order_status,
-)
+from almdina_erp.almdina_erp.domain.orders.lifecycle import normalize_order_status
 from almdina_erp.almdina_erp.domain.orders.revisions import can_create_revision
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
@@ -79,8 +76,8 @@ def _state_reason(action: str, status: str, revision_state: str) -> str:
         return ""
 
     if action == OrderLifecycleAction.RETURN_TO_DRAFT:
-        if not can_return_to_draft(status):
-            return "This order cannot be returned to draft from its current state."
+        # Capability alone authorizes return-to-draft at every order status.
+        # Superseded revisions are already blocked above.
         return ""
 
     if action == OrderLifecycleAction.CANCEL:

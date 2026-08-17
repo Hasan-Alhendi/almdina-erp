@@ -3,7 +3,7 @@
   "autoname": "naming_series:",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["naming_series","door_cutting_order","sequence","stage_type","department_label","operational_role","status","piece_label","assignment_section","assigned_to","started_by","start_time","finished_by","finish_time","timing_column","paused_seconds","actual_working_seconds","completed_qty","pauses_section","pauses","notes"],
+  "field_order": ["naming_series","door_cutting_order","sequence","stage_type","department_label","operational_role","status","piece_label","assignment_section","assigned_to","assignment_time","started_by","start_time","finished_by","finish_time","timing_column","paused_seconds","actual_working_seconds","completed_qty","pauses_section","pauses","notes"],
   "fields": [
     {"default":"PST-.YYYY.-.#####","fieldname":"naming_series","fieldtype":"Select","label":"Naming Series","options":"PST-.YYYY.-.#####","reqd":1},
     {"fieldname":"door_cutting_order","fieldtype":"Link","in_list_view":1,"label":"Door Cutting Order","options":"Door Cutting Order","reqd":1},
@@ -15,6 +15,7 @@
     {"fieldname":"piece_label","fieldtype":"Data","label":"Exceptional Piece Label"},
     {"fieldname":"assignment_section","fieldtype":"Section Break","label":"Assignment & Timing"},
     {"fieldname":"assigned_to","fieldtype":"Link","label":"Assigned To","options":"User"},
+    {"fieldname":"assignment_time","fieldtype":"Datetime","label":"Assignment Time","read_only":1},
     {"fieldname":"started_by","fieldtype":"Link","label":"Started By","options":"User","read_only":1},
     {"fieldname":"start_time","fieldtype":"Datetime","label":"Start Time","read_only":1},
     {"fieldname":"finished_by","fieldtype":"Link","label":"Finished By","options":"User","read_only":1},

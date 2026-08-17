@@ -7,14 +7,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 DETAIL_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
-HOOKS = ROOT / "hooks.py"
-PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_plan_ux.js"
-CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_controls_ux.js"
-TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
-FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-PLAN_TABS_UX = ROOT / "public" / "js" / "door_cutting_order_plan_tabs_ux.js"
-ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order_action_permission_guard.js"
+HOOKS = ROOT / "frontend_assets.py"
+CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
+CONTROLS_UX = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
+TEXT_BOARD_PLAN_UX = CUTTING_PLAN / "door_cutting_order_text_board_plan_ux.js"
+FAST_SAVE_UX = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
+PLAN_TABS_UX = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
+ACTION_GUARD_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_action_permission_guard.js"
 REMOVED_PALETTE = ROOT / "public" / "js" / "door_cutting_order_algorithm_palette_ux.js"
+PLAN_PERMISSION_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
+)
 
 
 def source(path: Path) -> str:
@@ -30,10 +34,10 @@ def test_advanced_algorithms_remain_in_the_primary_packing_mode_select():
 
 def test_duplicate_algorithm_palette_is_removed_and_simple_controls_load_last():
     hooks = source(HOOKS)
-    plan = '"public/js/door_cutting_order_plan_ux.js"'
-    text_board = '"public/js/door_cutting_order_text_board_plan_ux.js"'
-    fast_save = '"public/js/door_cutting_order_fast_save_ux.js"'
-    controls = '"public/js/door_cutting_order_plan_controls_ux.js"'
+    plan = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
+    text_board = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js"'
+    fast_save = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js"'
+    controls = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"'
 
     assert not REMOVED_PALETTE.exists()
     assert "door_cutting_order_algorithm_palette_ux.js" not in hooks
@@ -105,6 +109,46 @@ def test_cutting_plan_browser_authority_never_depends_on_cost_visibility():
     assert '"view_approved_cutting_plan"' in tabs
     assert '"recalculate_plan"' in controls
     assert '"edit_optimizer_settings"' in controls
+
+
+def test_kerf_and_trim_are_optimizer_fields_in_the_frontend_permission_owner():
+    controls = source(CONTROLS_UX)
+    plan = source(PLAN_UX)
+
+    optimizer_block = controls.split("const OPTIMIZER_FIELDS = [", 1)[1].split("];", 1)[0]
+    for fieldname in (
+        "packing_mode",
+        "cutting_machine_type",
+        "kerf_mm",
+        "trim_margin_mm",
+        "optimization_time_limit_sec",
+    ):
+        assert f'"{fieldname}"' in optimizer_block
+
+    assert 'can(frm, "edit_optimizer_settings")' in controls
+    assert "kerf_mm: frm.doc.kerf_mm" in controls
+    assert "trim_margin_mm: frm.doc.trim_margin_mm" in controls
+
+    # The presenter delegates read-only ownership to PlanControlsUX instead of
+    # independently unlocking kerf/trim through a second permission source.
+    read_only_body = plan.split("function applyReadOnlyState(frm)", 1)[1].split(
+        "function refreshPlanUX(frm)", 1
+    )[0]
+    assert '"kerf_mm"' not in read_only_body
+    assert '"trim_margin_mm"' not in read_only_body
+    assert '"packing_mode"' in read_only_body
+
+
+def test_server_treats_kerf_and_trim_as_optimizer_settings():
+    service = source(PLAN_PERMISSION_SERVICE)
+    optimizer_block = service.split("_OPTIMIZER_FIELDS = (", 1)[1].split(")", 1)[0]
+
+    assert '"kerf_mm"' in optimizer_block
+    assert '"trim_margin_mm"' in optimizer_block
+    assert '"kerf_mm": "default_kerf_mm"' in service
+    assert '"trim_margin_mm": "default_trim_margin_mm"' in service
+    assert "_CUT_GEOMETRY_FIELDS" not in service
+    assert "Capability.EDIT_OPTIMIZER_SETTINGS" in service
 
 
 def test_piece_financial_fields_are_protected_at_cost_permission_level():

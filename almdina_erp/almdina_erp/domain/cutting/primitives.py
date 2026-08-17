@@ -203,6 +203,28 @@ def rect_intersects(a: dict[str, float], b: dict[str, float]) -> bool:
     )
 
 
+def rects_have_clearance(
+    a: dict[str, float],
+    b: dict[str, float],
+    clearance: float,
+    tolerance: float = 1e-7,
+) -> bool:
+    """Return whether two rectangular cut paths preserve the required spacing.
+
+    The rule is unit-agnostic: callers may use centimetres or millimetres as
+    long as rectangles and ``clearance`` use the same unit. A single kerf gap
+    on either separating axis is sufficient; kerf is not doubled.
+    """
+
+    gap = max(0.0, num(clearance))
+    return (
+        a["x"] + a["w"] + gap <= b["x"] + tolerance
+        or b["x"] + b["w"] + gap <= a["x"] + tolerance
+        or a["y"] + a["h"] + gap <= b["y"] + tolerance
+        or b["y"] + b["h"] + gap <= a["y"] + tolerance
+    )
+
+
 def is_contained(a: dict[str, float], b: dict[str, float]) -> bool:
     return (
         a["x"] >= b["x"]
@@ -286,6 +308,7 @@ __all__ = [
     "orientations_for",
     "prune_free_rects",
     "rect_intersects",
+    "rects_have_clearance",
     "round_value",
     "sort_pieces",
     "split_free_rect",

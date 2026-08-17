@@ -112,8 +112,8 @@ async function verifyCostSnapshotIsolation() {
         },
         __: value => value,
     });
-    vm.runInContext(source("door_cutting_order_document_context.js"), context);
-    vm.runInContext(source("door_cutting_order_cost_permissions_ux.js"), context);
+    vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
+    vm.runInContext(source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"), context);
 
     const makeDoc = (name, total) => ({
         doctype: "Door Cutting Order",
@@ -177,7 +177,6 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     const timers = [];
     const calls = [];
     const capabilities = new Set();
-    const permissionRefresh = deferred();
     let permissionRefreshCalls = 0;
     let generation = 1;
 
@@ -195,7 +194,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
             },
             refresh() {
                 permissionRefreshCalls += 1;
-                return jqueryThenable(permissionRefresh.promise);
+                return jqueryThenable(Promise.resolve({ version: 2 }));
             },
         },
         AlmdinaDocumentContext: {
@@ -255,7 +254,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         Array,
         __: value => value,
     });
-    vm.runInContext(source("shop_floor_order_ux.js"), context);
+    vm.runInContext(source("door_cutting_order/production/shop_floor_order_ux.js"), context);
 
     const added = [];
     const frm = {
@@ -269,11 +268,21 @@ async function verifyProductionActionsRecoverAfterPermissions() {
         },
         fields_dict: {},
         meta: { fields: [] },
+        page: {
+            wrapper: {
+                nodeType: 1,
+                querySelectorAll() {
+                    return added.map(button => ({ textContent: button.label }));
+                },
+            },
+        },
         is_new() {
             return false;
         },
         add_custom_button(label, _handler, group) {
             added.push({ label, group });
+            this.custom_buttons = this.custom_buttons || {};
+            this.custom_buttons[label] = { group };
         },
         remove_custom_button(label, group) {
             for (let index = added.length - 1; index >= 0; index -= 1) {
@@ -281,6 +290,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
                     added.splice(index, 1);
                 }
             }
+            if (this.custom_buttons) delete this.custom_buttons[label];
         },
         set_df_property() {},
         enable_save() {},
@@ -291,16 +301,30 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     assert.equal(added.some(button => button.group === "صالة الإنتاج"), false);
 
     await flushPromises();
-    assert.equal(permissionRefreshCalls, 1);
+    assert.equal(
+        permissionRefreshCalls,
+        0,
+        "production action recovery must not start a second permission request"
+    );
     capabilities.add("dispatch_order");
-    permissionRefresh.resolve({ version: 2 });
+    assert.equal(typeof listeners["almdina:permissions-updated"], "function");
+    listeners["almdina:permissions-updated"]();
     await flushPromises();
     assert.equal(
         added.some(button => button.label === "إرسال للإنتاج" && !button.group),
         true,
         "production actions must be rebuilt when the jqXHR-like permission refresh completes"
     );
-    assert.equal(typeof listeners["almdina:permissions-updated"], "function");
+    assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), true);
+
+    // Frappe can rebuild the toolbar while revisiting the same order.  The
+    // document/status key remains unchanged, so readiness must also verify that
+    // the expected DOM/custom-button surface still exists.
+    added.length = 0;
+    assert.ok(frm.custom_buttons["إرسال للإنتاج"], "the stale Frappe button cache remains");
+    assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), false);
+    fakeWindow.AlmdinaShopFloorOrderUX.reconcileProductionActions(frm);
+    assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), true);
 
     capabilities.clear();
     capabilities.add("start_assigned_stage");

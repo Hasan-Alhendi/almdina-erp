@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting import PACKING_OPTIONS
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.factory_settings import (
     FactorySettingsSection,
@@ -21,7 +22,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     document_snapshot,
     record_master_data_audit,
 )
-from almdina_erp.almdina_erp.services.cutting_engine import PACKING_OPTIONS
 
 
 MACHINE_OPTIONS = ("Auto", "CNC Router", "Panel Saw")

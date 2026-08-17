@@ -215,10 +215,10 @@ class TestShopFloorInfrastructureGateway(unittest.TestCase):
             ORDER_TRACKING_PATH,
             STAGE_REPOSITORY_PATH,
             EVENT_REPOSITORY_PATH,
-            STOCK_GATEWAY_PATH,
-            REMNANT_GATEWAY_PATH,
         ):
             self.assertTrue(path.exists(), path)
+        self.assertFalse(STOCK_GATEWAY_PATH.exists(), STOCK_GATEWAY_PATH)
+        self.assertFalse(REMNANT_GATEWAY_PATH.exists(), REMNANT_GATEWAY_PATH)
 
     def test_legacy_gateway_preserves_created_event_only_for_legacy_callers(self) -> None:
         gateway_source = GATEWAY_PATH.read_text(encoding="utf-8")

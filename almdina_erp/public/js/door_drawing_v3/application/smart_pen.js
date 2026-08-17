@@ -11,7 +11,8 @@
     const Editor = root.Editor;
     if (!G || !D || !S || !V || !F || !I || !Editor || !G.path) throw new Error("Door Drawing V3 intelligent freehand stack must load before smart pen");
 
-    const CLOSE_CAPTURE_PX = 18;
+    const CLOSE_CAPTURE_PX = 8;
+    const FREEHAND_ENDPOINT_SNAP_PX = 8;
     const INPUT_PROFILES = Object.freeze({
         mouse: Object.freeze({
             sampleSpacingPx: 2.6,
@@ -115,6 +116,7 @@
     function resolveEndpoint(c, raw, stickyTarget = null) {
         return S.resolvePoint(c.history.current(), raw, {
             viewportScale: c.viewport.scale,
+            snapPx: FREEHAND_ENDPOINT_SNAP_PX,
             stickyTarget,
         });
     }
@@ -139,7 +141,7 @@
             pointer: pointer || previewPoints[previewPoints.length - 1] || stroke.startPoint,
             closeReady: Boolean(closeReady),
             freehand: true,
-            stabilized: true,
+            stabilized: false,
             inputKind: stroke.pointerType,
         };
     }
@@ -543,5 +545,5 @@
         open(frm, row, options = {}) { return install(originalOpen(frm, row, options)); },
         view(frm, row) { return install(originalView(frm, row)); },
     });
-    root.SmartPen = Object.freeze({ INPUT_PROFILES, inputProfile, activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, objectsFromRecognition, install });
+    root.SmartPen = Object.freeze({ CLOSE_CAPTURE_PX, FREEHAND_ENDPOINT_SNAP_PX, INPUT_PROFILES, inputProfile, activatePen, beginFreehand, moveFreehand, finishFreehand, cancelFreehandGesture, enterNodeEdit, insertNodeAtEvent, objectsFromRecognition, install });
 })();

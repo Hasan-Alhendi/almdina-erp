@@ -6,10 +6,33 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 FORM_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-UX_JS = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-KEYBOARD_COLUMNS_JS = APP_ROOT / "public" / "js" / "door_cutting_order_keyboard_columns_ux.js"
-COMPACT_MEASUREMENTS_JS = APP_ROOT / "public" / "js" / "door_cutting_order_compact_measurements_ux.js"
-HOOKS = APP_ROOT / "hooks.py"
+UX_JS = (
+    APP_ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
+)
+KEYBOARD_COLUMNS_JS = (
+    APP_ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_keyboard_columns_ux.js"
+)
+COMPACT_MEASUREMENTS_JS = (
+    APP_ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_compact_measurements_ux.js"
+)
+HOOKS = APP_ROOT / "frontend_assets.py"
 
 
 def test_order_form_uses_operator_first_tabs_and_dedicated_fast_measurements_surface():
@@ -101,10 +124,10 @@ def test_rotation_and_each_edge_side_have_independent_select_all_controls():
     source = KEYBOARD_COLUMNS_JS.read_text(encoding="utf-8")
     for fieldname in (
         "allow_rotation",
-        "edge_long_right",
-        "edge_long_left",
         "edge_width_top",
         "edge_width_bottom",
+        "edge_long_right",
+        "edge_long_left",
     ):
         assert f'field: "{fieldname}"' in source
         assert f'headerCheckbox("{fieldname}")' in source or fieldname in source
@@ -121,6 +144,28 @@ def test_rotation_and_each_edge_side_have_independent_select_all_controls():
     assert not missing, f"Missing select-all fragments: {missing}"
 
 
+def test_piece_row_shows_width_edge_toggles_before_length_edges():
+    operator = UX_JS.read_text(encoding="utf-8")
+    keyboard = KEYBOARD_COLUMNS_JS.read_text(encoding="utf-8")
+    edge_block = operator.split('class="dco-edge-buttons"', 1)[1].split("</div>", 1)[0]
+    width_top = edge_block.index('toggle("edge_width_top"')
+    width_bottom = edge_block.index('toggle("edge_width_bottom"')
+    long_right = edge_block.index('toggle("edge_long_right"')
+    long_left = edge_block.index('toggle("edge_long_left"')
+    assert width_top < width_bottom < long_right < long_left
+
+    columns_block = keyboard.split("const CHECK_COLUMNS = [", 1)[1].split("];", 1)[0]
+    assert columns_block.index('field: "edge_width_top"') < columns_block.index(
+        'field: "edge_width_bottom"'
+    )
+    assert columns_block.index('field: "edge_width_bottom"') < columns_block.index(
+        'field: "edge_long_right"'
+    )
+    assert columns_block.index('field: "edge_long_right"') < columns_block.index(
+        'field: "edge_long_left"'
+    )
+
+
 def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logic():
     compact = COMPACT_MEASUREMENTS_JS.read_text(encoding="utf-8")
     operator = UX_JS.read_text(encoding="utf-8")
@@ -130,7 +175,7 @@ def test_fast_entry_hides_area_and_edge_meter_columns_but_keeps_calculation_logi
     assert ".dco-fast-table td.dco-col-calc" in compact
     assert "display:none !important" in compact or "display: none !important" in compact
     assert "aria-hidden" in compact
-    assert '"public/js/door_cutting_order_compact_measurements_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js"' in hooks
 
     # Calculations remain in the model and in other views/invoices; only the two
     # calculated columns are removed from the data-entry surface.
@@ -254,8 +299,8 @@ def test_fast_editor_keeps_background_recalculation_separate_from_input_focus():
 
 def test_operator_ux_is_server_injected_via_doctype_js_not_static_asset_dependency():
     hooks = HOOKS.read_text(encoding="utf-8")
-    assert '"public/js/door_cutting_order_operator_ux.js"' in hooks
-    assert '"public/js/door_cutting_order_keyboard_columns_ux.js"' in hooks
-    assert '"public/js/door_cutting_order_compact_measurements_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_keyboard_columns_ux.js"' in hooks
+    assert '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_compact_measurements_ux.js"' in hooks
     assert '"Door Cutting Order": [' in hooks
     assert '"/assets/almdina_erp/js/door_cutting_order_operator_ux.js"' not in hooks

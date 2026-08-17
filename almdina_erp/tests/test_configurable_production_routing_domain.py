@@ -27,7 +27,6 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertEqual(route.next_stage("PVC").department_label, "تغليف")
         self.assertIsNone(route.next_stage("Packing"))
         self.assertTrue(route.contains("PVC"))
-        self.assertTrue(route.requires_approved_plan_before_dispatch)
 
     def test_planning_stage_is_explicit_and_must_be_first(self) -> None:
         route = ProductionRoute(
@@ -39,7 +38,6 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
             ),
         )
         self.assertTrue(route.starts_with_planning)
-        self.assertFalse(route.requires_approved_plan_before_dispatch)
 
         with self.assertRaisesRegex(ValueError, "مرحلة التخطيط يجب أن تكون أول"):
             ProductionRoute(
@@ -118,9 +116,14 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         queries = (
             root / "almdina_erp" / "application" / "shop_floor" / "queries.py"
         ).read_text(encoding="utf-8")
-        order_ux = (root / "public" / "js" / "shop_floor_order_ux.js").read_text(
-            encoding="utf-8"
-        )
+        order_ux = (
+            root
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "production"
+            / "shop_floor_order_ux.js"
+        ).read_text(encoding="utf-8")
         routing_ux = (root / "public" / "js" / "production_routing_ux.js").read_text(
             encoding="utf-8"
         )

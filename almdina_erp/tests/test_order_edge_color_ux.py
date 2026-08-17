@@ -4,12 +4,51 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
-EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
-EDGE_CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
-EDGE_DOUBLE_CLICK_GUARD = ROOT / "public" / "js" / "door_cutting_order_edge_profile_double_click_guard.js"
-MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-HOOKS = ROOT / "hooks.py"
+DEFAULTS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_defaults.js"
+)
+EDGE_COLOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_color_ux.js"
+)
+EDGE_CONTROLS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_controls_ux.js"
+)
+EDGE_DOUBLE_CLICK_GUARD = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_double_click_guard.js"
+)
+MEASUREMENT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source(path: Path) -> str:
@@ -45,8 +84,8 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
 
 
 def test_financial_documents_use_server_payload_and_shared_customer_presenter():
-    financial = _source(ROOT / "public" / "js" / "door_cutting_order_financial_documents_ux.js")
-    presenter = _source(ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js")
+    financial = _source(ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js")
+    presenter = _source(ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js")
     edge = _source(EDGE_COLOR_UX)
     assert "get_customer_invoice_document" in financial
     assert "get_internal_cost_report_document" in financial
@@ -96,9 +135,9 @@ def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
     assert "toggle.click()" in guard
     assert "controls.openSidePopover" in guard
 
-    controls_script = '"public/js/door_cutting_order_edge_profile_controls_ux.js"'
-    guard_script = '"public/js/door_cutting_order_edge_profile_double_click_guard.js"'
-    cut_script = '"public/js/door_cutting_order_cut_dimensions_ux.js"'
+    controls_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js"'
+    guard_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_double_click_guard.js"'
+    cut_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js"'
     assert controls_script in hooks
     assert guard_script in hooks
     assert cut_script in hooks
@@ -123,9 +162,9 @@ def test_edge_profile_lists_are_custom_and_scrollable():
 def test_edge_color_layer_loads_after_secure_financial_presenters():
     hooks = HOOKS.read_text(encoding="utf-8")
     legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    presenter = '"public/js/door_cutting_order_document_print_presenter.js"'
-    financial = '"public/js/door_cutting_order_financial_documents_ux.js"'
-    edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
+    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
+    edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
     assert legacy not in hooks
     for script in (presenter, financial, edge_color):
         assert script in hooks

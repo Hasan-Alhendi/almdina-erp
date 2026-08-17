@@ -23,11 +23,10 @@
 
     if (window.AlmdinaPermissions) {
         registerProtectedModuleSurface(window.AlmdinaPermissions);
-        window.setTimeout(() => {
-            window.AlmdinaPermissions.refresh()
-                .then(() => window.AlmdinaPermissions.loadOrderModules())
-                .catch(error => console.error("Failed to refresh Almdina permissions", error));
-        }, 0);
+        // This source is present in both the Desk bundle and the DocType bundle.
+        // The form-level permission owner refreshes the matrix exactly once.
+        // Re-running it here used to emit a second update event and repaint the
+        // complete order page after it was already visible.
         return;
     }
 
@@ -79,7 +78,7 @@
     // must never leave an authorized cutting-plan surface empty.
     const PLAN_SURFACE_MODULE = Object.freeze({
         global: "AlmdinaCuttingPlanSurfaceBootstrap",
-        asset: "/assets/almdina_erp/js/door_cutting_order_plan_surface_bootstrap.js",
+        asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
     });
 
     function normalizeNavigation(raw) {
@@ -401,9 +400,10 @@
 
     registerProtectedModuleSurface(permissions);
 
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-        attempts += 1;
-        if (ensureOrderModules() || attempts >= 100) window.clearInterval(timer);
-    }, 100);
+    // One boot-time attempt is enough. Future order visits are owned by the
+    // router hook above, while an order whose DocType bundle is already loading
+    // registers the DocumentContext recovery surface at the top of this file.
+    // The previous 100ms interval woke the Desk up for as long as ten seconds
+    // when no order was open.
+    window.setTimeout(ensureOrderModules, 0);
 })();

@@ -7,6 +7,7 @@ from ..primitives import (
     make_placed_piece,
     orientations_for,
     prune_free_rects,
+    rects_have_clearance,
     round_value,
     split_free_rect,
 )
@@ -76,22 +77,39 @@ def maxrects_score(
     return short_side * 100000 + long_side * 100 + leftover_area
 
 
+def _candidate_preserves_kerf(
+    sheet: dict[str, Any],
+    candidate: dict[str, float],
+    kerf_cm: float,
+) -> bool:
+    return all(
+        rects_have_clearance(candidate, placed, kerf_cm)
+        for placed in sheet["pieces"]
+    )
+
+
 def find_best_position_maxrects(
     sheet: dict[str, Any],
     piece: dict[str, Any],
     heuristic: str,
+    kerf_cm: float = 0.0,
 ) -> dict[str, Any] | None:
     best = None
     for free_index, free in enumerate(sheet["free_rects"]):
         for orientation in orientations_for(piece):
             if orientation["w"] <= free["w"] and orientation["h"] <= free["h"]:
+                candidate = {
+                    "x": free["x"],
+                    "y": free["y"],
+                    "w": orientation["w"],
+                    "h": orientation["h"],
+                }
+                if not _candidate_preserves_kerf(sheet, candidate, kerf_cm):
+                    continue
                 score = maxrects_score(sheet, free, orientation, heuristic)
                 if best is None or score < best["score"]:
                     best = {
-                        "x": free["x"],
-                        "y": free["y"],
-                        "w": orientation["w"],
-                        "h": orientation["h"],
+                        **candidate,
                         "rotated": orientation["rotated"],
                         "free_index": free_index,
                         "score": score,
@@ -139,14 +157,14 @@ def pack_maxrects(
     for piece in pieces:
         placed = False
         for sheet in sheets:
-            position = find_best_position_maxrects(sheet, piece, heuristic)
+            position = find_best_position_maxrects(sheet, piece, heuristic, kerf_cm)
             if position:
                 place_piece_maxrects(sheet, piece, position, kerf_cm)
                 placed = True
                 break
         if not placed:
             sheet = create_sheet(len(sheets) + 1, board_w_cm, board_h_cm)
-            position = find_best_position_maxrects(sheet, piece, heuristic)
+            position = find_best_position_maxrects(sheet, piece, heuristic, kerf_cm)
             if position:
                 place_piece_maxrects(sheet, piece, position, kerf_cm)
                 sheets.append(sheet)

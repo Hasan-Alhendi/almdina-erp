@@ -7,9 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INPUT_STABILITY = ROOT / "public" / "js" / "input_stability.js"
 SAVE_RENDER_GUARD = (
-    ROOT / "public" / "js" / "door_cutting_order_save_render_performance_ux.js"
+    ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_save_render_performance_ux.js"
 )
-HOOKS = ROOT / "hooks.py"
+MANIFEST = ROOT / "frontend_assets.py"
 CANONICAL_ORDER_FORM = (
     ROOT
     / "almdina_erp"
@@ -21,15 +21,15 @@ CANONICAL_ORDER_FORM = (
 
 class TestInputStabilityUxContract(unittest.TestCase):
     def test_guard_is_loaded_app_wide_and_last_for_order_form(self) -> None:
-        hooks = HOOKS.read_text(encoding="utf-8")
+        manifest = MANIFEST.read_text(encoding="utf-8")
         global_token = '"/assets/almdina_erp/js/input_stability.js"'
         doctype_token = '"public/js/input_stability.js"'
 
-        self.assertIn(global_token, hooks)
-        self.assertIn(doctype_token, hooks)
+        self.assertIn(global_token, manifest)
+        self.assertIn(doctype_token, manifest)
         self.assertGreater(
-            hooks.index(doctype_token),
-            hooks.index('"public/js/door_cutting_order_revision_ux.js"'),
+            manifest.index(doctype_token),
+            manifest.index('"public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"'),
         )
 
     def test_every_active_control_is_protected_from_async_refresh(self) -> None:

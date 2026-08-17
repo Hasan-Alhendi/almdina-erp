@@ -9,6 +9,7 @@ from frappe.utils import now_datetime
 from almdina_erp.almdina_erp.application.orders.lifecycle_permissions import (
     OrderLifecycleAction,
 )
+from almdina_erp.almdina_erp.domain.orders.lifecycle import normalize_order_status
 from almdina_erp.almdina_erp.services.order_lifecycle_permission_service import (
     require_lifecycle_action,
 )
@@ -28,7 +29,9 @@ def _cutting_stage(order_name: str) -> Any | None:
 
 
 def _cancel_stages(order_name: str, reason: str) -> list[str]:
-    from almdina_erp.almdina_erp.services.production_service import _log_event
+    from almdina_erp.almdina_erp.infrastructure.frappe.production_event_repository import (
+        log_event as _log_event,
+    )
 
     stages = frappe.get_all(
         "Production Stage",
@@ -191,14 +194,18 @@ def return_order_to_draft(
         "Returned to draft for editing by {0}."
     ).format(frappe.session.user)
 
-    cutting = _cutting_stage(order.name)
-    if cutting and cutting.status == "Completed":
-        frappe.throw(
-            _(
-                "Cutting is already completed. This order cannot be returned "
-                "to draft automatically."
-            )
-        )
+    # Already draft: capability was checked; nothing else to reset.
+    if normalize_order_status(order.status) == "Draft" and not (
+        order.production_path or order.current_production_stage
+    ):
+        return {
+            "name": order.name,
+            "status": order.status,
+            "cancelled_stages": 0,
+            "cancelled_replacements": 0,
+            "in_place": True,
+            "noop": True,
+        }
 
     cancelled_replacements = _cancel_unstarted_replacements(order.name, reason)
     cancelled_stages = _cancel_stages(order.name, reason)

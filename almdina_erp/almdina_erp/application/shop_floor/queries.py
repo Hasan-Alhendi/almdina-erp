@@ -35,6 +35,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 SHOP_FLOOR_DETAIL_CAPABILITIES = frozenset(
     PLANNING_CAPABILITIES | DRAWING_CAPABILITIES | PRODUCTION_CAPABILITIES
 )
+_HANDOFF_READINESS_BLOCK_CODES = frozenset(
+    {"plan_not_approved", "approved_plan_stale"}
+)
 
 
 class ShopFloorQueryError(ValueError):
@@ -72,6 +75,13 @@ class ShopFloorQueryPort(Protocol):
     ) -> Mapping[str, str | None]: ...
 
     def order_summaries(self, order_names: Sequence[str]) -> Mapping[str, Any]: ...
+
+    def personal_order_stage_timings(
+        self,
+        order_names: Sequence[str],
+        *,
+        user: str,
+    ) -> Mapping[str, Any]: ...
 
     def get_order(self, order_name: str) -> Any: ...
 
@@ -219,6 +229,30 @@ def _planning_handoff_block(
     return None, ""
 
 
+def _handoff_visibility(
+    actions: Mapping[str, Mapping[str, Any]],
+    handoff_code: str | None,
+) -> bool:
+    """Return whether the authorized worker should see the handoff action.
+
+    Planning readiness is intentionally separate from authorization: an assigned
+    worker who owns the handoff capability must still see «إنهاء العمل» while
+    the plan needs approval/recalculation. The command layer remains the final
+    gate and reports that readiness reason when the worker tries to finish.
+    Structural route corruption still hides the action because it cannot be
+    completed until the route itself is repaired.
+    """
+
+    authorized = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
+    return bool(
+        authorized
+        and (
+            not handoff_code
+            or handoff_code in _HANDOFF_READINESS_BLOCK_CODES
+        )
+    )
+
+
 def _enrich_stage_rows(
     repository: ShopFloorQueryPort,
     stages: list[Any],
@@ -265,15 +299,7 @@ def _enrich_stage_rows(
             order,
             stage_type,
         )
-        generic_handoff = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
-        can_handoff = generic_handoff and not handoff_code
-        if generic_handoff and handoff_code:
-            actions[Capability.HANDOFF_ASSIGNED_STAGE] = {
-                **actions[Capability.HANDOFF_ASSIGNED_STAGE],
-                "allowed": False,
-                "code": handoff_code,
-                "reason": handoff_reason,
-            }
+        can_handoff = _handoff_visibility(actions, handoff_code)
         current_stage_name = str(_value(order, "current_production_stage") or "").strip()
         current_stage = current_stages.get(current_stage_name)
         current_role = (
@@ -387,10 +413,11 @@ def get_order_operational_role_flags(
     repository: ShopFloorQueryPort,
     order_names: Any = None,
 ) -> dict[str, Any]:
-    """Return whether each listed order is on a stage matching the actor's roles.
+    """Return role classification and server-authorized quick actions per order.
 
-    Used by the Door Cutting Order list so workers can see their own-stage rows
-    normally and push every other visible order to a green trailer section.
+    Used by the shared Door Cutting Order list to put a worker's current
+    assignments first, then their completed work in a green trailer section,
+    while rendering only actions currently allowed by the domain policy.
     Supervisors keep an unmarked list.
     """
 
@@ -398,18 +425,26 @@ def get_order_operational_role_flags(
     if not actor or actor == "Guest":
         return {"personal_view": False, "orders": {}}
 
-    personal_view = actor != "Administrator" and not repository.is_admin()
     names = _normalize_order_names(order_names)
-    if not personal_view or not names:
+    personal_view = actor != "Administrator" and not repository.is_admin()
+    if not names:
         return {"personal_view": personal_view, "orders": {}}
 
     orders = repository.order_summaries(names)
+    timing_loader = getattr(repository, "personal_order_stage_timings", None)
+    personal_timings = (
+        timing_loader(names, user=actor)
+        if personal_view and callable(timing_loader)
+        else {}
+    )
     actor_roles = repository.actor_roles(actor)
     flags: dict[str, dict[str, Any]] = {}
     current_stages: dict[str, Any] = {}
     for name in names:
         order = orders.get(name)
         if not order:
+            continue
+        if not repository.can_view_order(order):
             continue
         stage_name = str(_value(order, "current_production_stage") or "").strip()
         current_stage = None
@@ -422,15 +457,35 @@ def get_order_operational_role_flags(
             if current_stage
             else None
         )
+        stage_snapshot = _active_stage_snapshot(
+            repository,
+            order,
+            repository.capabilities_for_order(order),
+        )
+        actor_holds_current_role = actor_holds_operational_role(
+            actor_roles,
+            role,
+            is_admin=False,
+        )
+        is_current_assignee = bool(
+            actor_holds_current_role
+            and stage_snapshot.get("active_stage_assigned_to") == actor
+        )
+        timing = personal_timings.get(name) or {}
         flags[name] = {
-            "actor_holds_current_stage_role": actor_holds_operational_role(
-                actor_roles,
-                role,
-                is_admin=False,
-            ),
+            "actor_holds_current_stage_role": actor_holds_current_role,
+            "is_current_assignee": is_current_assignee,
+            "assignment_state": "assigned" if is_current_assignee else "completed",
+            "assignment_time": _value(timing, "assignment_time"),
+            "completion_time": _value(timing, "completion_time"),
             "current_stage_operational_role": role,
+            # List actions are presentation hints from the same server policy
+            # used by the command endpoints. The commands still authorize again.
+            "active_stage_name": stage_snapshot.get("active_stage_name"),
+            "can_start_stage": stage_snapshot.get("can_start_stage") is True,
+            "can_handoff_stage": stage_snapshot.get("can_handoff_stage") is True,
         }
-    return {"personal_view": True, "orders": flags}
+    return {"personal_view": personal_view, "orders": flags}
 
 
 def _resolve_operational_role(
@@ -507,12 +562,10 @@ def get_dispatch_options(
         raise ShopFloorQueryError(
             "أنشئ مسار إنتاج وفعّله قبل إرسال الطلبات إلى الإنتاج."
         )
-    approved_plan = bool(_value(order, "approved_plan"))
     available_names = {route.name for route in routes}
     configured_default = repository.default_production_route()
     path_rows = []
     for route in routes:
-        blocked = route.requires_approved_plan_before_dispatch and not approved_plan
         path_rows.append(
             {
                 "value": route.name,
@@ -522,12 +575,8 @@ def get_dispatch_options(
                 "operational_role": route.first_stage.operational_role,
                 "stage_count": len(route.stages),
                 "starts_with_planning": route.starts_with_planning,
-                "can_dispatch": not blocked,
-                "dispatch_block_reason": (
-                    "يجب اعتماد خطة القص قبل اختيار مسار يبدأ بالتنفيذ الفعلي."
-                    if blocked
-                    else ""
-                ),
+                "can_dispatch": True,
+                "dispatch_block_reason": "",
                 "stages": [
                     {
                         "sequence": stage.sequence,
@@ -640,15 +689,7 @@ def _active_stage_snapshot(
         except ValueError:
             can_handoff_to = None
     handoff_code, handoff_reason = _planning_handoff_block(route, order, stage_type)
-    generic_handoff = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
-    can_handoff = generic_handoff and not handoff_code
-    if generic_handoff and handoff_code:
-        actions[Capability.HANDOFF_ASSIGNED_STAGE] = {
-            **actions[Capability.HANDOFF_ASSIGNED_STAGE],
-            "allowed": False,
-            "code": handoff_code,
-            "reason": handoff_reason,
-        }
+    can_handoff = _handoff_visibility(actions, handoff_code)
     return {
         "active_stage_name": _value(stage, "name"),
         "active_stage_status": stage_status,

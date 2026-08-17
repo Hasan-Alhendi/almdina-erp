@@ -2,8 +2,16 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
-PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
+SHOP_FLOOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
+LIFECYCLE_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
+PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
 DRAWING_APPROVAL_SERVICE = (
     ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
 )
@@ -17,7 +25,12 @@ PRODUCTION_POLICY = (
     ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
 )
 DRAWING_APPROVAL_UX = (
-    ROOT / "public" / "js" / "door_cutting_order_drawing_approval_ux.js"
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_approval_ux.js"
 )
 
 
@@ -25,14 +38,22 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_order_creator_dispatches_without_locking_cutting_plan():
-    workflow = _source(WORKFLOW)
-    assert 'frm.add_custom_button(__("إرسال للإنتاج")' in workflow
-    assert "open_dispatch_dialog" in workflow
-    assert "approve_order" not in workflow
-    assert "دون تثبيت خطة القص" in workflow
-    assert "return_order_to_draft" in workflow
-    assert "frappe.almdina.orderCanEdit" in workflow
+def test_order_creator_dispatches_directly_without_approval_or_plan_lock():
+    shop_floor = _source(SHOP_FLOOR_UX)
+    lifecycle = _source(LIFECYCLE_UX)
+
+    assert "function openDispatchDialog(frm)" in shop_floor
+    assert 'can(frm, "dispatch_order")' in shop_floor
+    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in shop_floor
+    assert "get_dispatch_options" in shop_floor
+    assert "dispatch_order" in shop_floor
+    assert "approve_order" not in shop_floor
+    assert "lock_cutting_plan" not in shop_floor
+
+    # Returning to Draft remains a separate lifecycle action and is not coupled
+    # to the production dispatch presenter.
+    assert "return_to_draft" in lifecycle
+    assert "return_order_to_draft" in lifecycle
 
 
 def test_dispatch_uses_capability_and_calculated_plan_policy():
@@ -51,8 +72,8 @@ def test_dispatch_uses_capability_and_calculated_plan_policy():
 
 
 def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
-    lifecycle_ux = _source(ROOT / "public" / "js" / "order_lifecycle.js")
-    shop_floor_ux = _source(ROOT / "public" / "js" / "shop_floor_order_ux.js")
+    lifecycle_ux = _source(LIFECYCLE_UX)
+    shop_floor_ux = _source(SHOP_FLOOR_UX)
     permissions = _source(
         ROOT / "almdina_erp" / "application" / "orders" / "lifecycle_permissions.py"
     )
@@ -77,7 +98,7 @@ def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
     assert 'status !== "Approved"' not in shop_floor_ux
     # Direct toolbar button — never nested under «صالة الإنتاج».
     dispatch_btn = shop_floor_ux.split("function addDispatchButton", 1)[1].split(
-        "function addDeliveryButtons", 1
+        "function revertTargetsKey", 1
     )[0]
     assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in dispatch_btn
     assert "PRODUCTION_ACTION_GROUP" not in dispatch_btn
@@ -90,8 +111,8 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     plan_service = _source(PLAN_SERVICE)
     approval_service = _source(DRAWING_APPROVAL_SERVICE)
     policy = _source(DRAWING_APPROVAL_POLICY)
-    lock_impl = plan_service.split("def _lock_order_for_production", 1)[1].split(
-        "@frappe.whitelist()\ndef reject_order", 1
+    lock_impl = plan_service.split("def lock_order_for_production", 1)[1].split(
+        "\n\n__all__", 1
     )[0]
 
     assert "Capability.APPROVE_DXF" in approval_service

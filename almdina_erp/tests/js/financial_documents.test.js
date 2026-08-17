@@ -8,14 +8,14 @@ const vm = require("node:vm");
 const themeSource = fs.readFileSync(
     path.resolve(
         __dirname,
-        "../../public/js/door_cutting_order_document_print_theme.js"
+        "../../public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js"
     ),
     "utf8"
 );
 const source = fs.readFileSync(
     path.resolve(
         __dirname,
-        "../../public/js/door_cutting_order_financial_documents_ux.js"
+        "../../public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"
     ),
     "utf8"
 );

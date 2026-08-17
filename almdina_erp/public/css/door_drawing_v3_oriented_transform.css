@@ -1,0 +1,119 @@
+.ddv3-has-oriented-transform .ddv3-transform-overlay,
+.ddv3-has-oriented-transform .ddv3-transform-contextbar,
+.ddv3-has-oriented-transform .ddv3-transform-inspector {
+    display: none !important;
+}
+
+.ddv3-oriented-transform-overlay { pointer-events: none; }
+.ddv3-oriented-transform-outline { fill: none; stroke: #2563eb; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.ddv3-oriented-transform-handle,
+.ddv3-oriented-rotation-handle,
+.ddv3-oriented-pivot { pointer-events: all; }
+.ddv3-oriented-transform-handle-hit,
+.ddv3-oriented-rotation-hit,
+.ddv3-oriented-pivot-hit { fill: transparent; stroke: none; }
+.ddv3-oriented-transform-handle-dot { fill: #fff; stroke: #2563eb; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.ddv3-oriented-transform-handle.is-nw,
+.ddv3-oriented-transform-handle.is-se { cursor: nwse-resize; }
+.ddv3-oriented-transform-handle.is-ne,
+.ddv3-oriented-transform-handle.is-sw { cursor: nesw-resize; }
+.ddv3-oriented-transform-handle.is-n,
+.ddv3-oriented-transform-handle.is-s { cursor: ns-resize; }
+.ddv3-oriented-transform-handle.is-e,
+.ddv3-oriented-transform-handle.is-w { cursor: ew-resize; }
+.ddv3-oriented-rotation-stem { stroke: #2563eb; stroke-width: 1.1; vector-effect: non-scaling-stroke; }
+.ddv3-oriented-rotation-handle { cursor: grab; }
+.ddv3-oriented-rotation-handle:active { cursor: grabbing; }
+.ddv3-oriented-rotation-dot { fill: #fff; stroke: #2563eb; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.ddv3-oriented-pivot { cursor: move; }
+.ddv3-oriented-pivot-ring,
+.ddv3-oriented-pivot-cross { fill: none; stroke: #ef4444; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+
+/* Compact Transform rail on the upper-right. It intentionally does not move the bottom drawing toolbar. */
+.ddv3-oriented-transform-contextbar {
+    position: absolute;
+    z-index: 15;
+    top: 14px;
+    right: 14px;
+    left: auto;
+    transform: translateX(8px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 44px;
+    padding: 5px;
+    border: 1px solid rgba(15, 23, 42, .10);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+    backdrop-filter: blur(8px);
+}
+
+.ddv3-oriented-transform-contextbar.is-visible {
+    display: flex;
+    transform: translateX(0);
+}
+
+.ddv3-oriented-transform-summary {
+    display: none;
+}
+
+.ddv3-oriented-transform-contextbar button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #252525;
+    font-size: 0;
+    cursor: pointer;
+}
+
+.ddv3-oriented-transform-contextbar button::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    background: currentColor;
+    -webkit-mask: var(--ddv3-transform-icon) center / contain no-repeat;
+    mask: var(--ddv3-transform-icon) center / contain no-repeat;
+}
+
+.ddv3-oriented-transform-contextbar button:hover,
+.ddv3-oriented-transform-contextbar button:focus-visible {
+    background: #f0f0f0;
+    color: #0d99ff;
+    outline: none;
+}
+
+.ddv3-oriented-transform-contextbar [data-ddv3-oriented-action="flip-horizontal"] {
+    --ddv3-transform-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 2v16M7 5L3 10l4 5M13 5l4 5-4 5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.ddv3-oriented-transform-contextbar [data-ddv3-oriented-action="flip-vertical"] {
+    --ddv3-transform-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M2 10h16M5 7l5-4 5 4M5 13l5 4 5-4' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.ddv3-oriented-transform-contextbar [data-ddv3-oriented-action="reset-pivot"] {
+    --ddv3-transform-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='6' fill='none' stroke='black' stroke-width='1.5'/%3E%3Ccircle cx='10' cy='10' r='2' fill='black'/%3E%3Cpath d='M10 1v3M10 16v3M1 10h3M16 10h3' stroke='black' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.ddv3-oriented-pivot-title { margin-top: 12px; }
+.ddv3-oriented-transform-inspector .ddv3-transform-hint { margin-top: 10px; }
+.ddv3-app.is-readonly .ddv3-oriented-transform-overlay,
+.ddv3-app.is-readonly .ddv3-oriented-transform-contextbar { display: none !important; }
+
+@media (max-width: 900px) {
+    .ddv3-oriented-transform-contextbar {
+        top: 8px;
+        right: 8px;
+        width: 42px;
+    }
+    .ddv3-oriented-transform-handle-hit,
+    .ddv3-oriented-rotation-hit,
+    .ddv3-oriented-pivot-hit { r: 15; }
+}

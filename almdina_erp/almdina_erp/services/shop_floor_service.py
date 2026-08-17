@@ -29,7 +29,7 @@ _COMMANDS = "almdina_erp.almdina_erp.services.shop_floor_commands"
 _QUERIES = "almdina_erp.almdina_erp.services.shop_floor_query_service"
 _DXF = "almdina_erp.almdina_erp.services.shop_floor_dxf_service"
 _DISPATCH = "almdina_erp.almdina_erp.services.order_dispatch_service"
-_PRODUCTION = "almdina_erp.almdina_erp.services.production_service"
+_STATUS_SYNC = "almdina_erp.almdina_erp.services.order_status_sync_service"
 
 
 def _delegate(module_path: str, function_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -51,7 +51,6 @@ get_dispatch_options = _public_delegate(_QUERIES, "get_dispatch_options")
 get_revert_targets = _public_delegate(_QUERIES, "get_revert_targets")
 get_my_inbox = _public_delegate(_QUERIES, "get_my_inbox")
 get_my_archive = _public_delegate(_QUERIES, "get_my_archive")
-get_order_shop_floor_detail = _public_delegate(_QUERIES, "get_order_shop_floor_detail")
 mark_dxf_exported = _public_delegate(_DXF, "mark_dxf_exported")
 upload_production_dxf = _public_delegate(_DXF, "upload_production_dxf")
 recalculate_drawing_plan = _public_delegate(_DXF, "recalculate_drawing_plan")
@@ -71,7 +70,7 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 
 
 def sync_order_status(order_name: str) -> str:
-    return _delegate(_PRODUCTION, "sync_order_status", order_name)
+    return _delegate(_STATUS_SYNC, "sync_order_status", order_name)
 
 
 # Read-only lifecycle aliases remain for older Python callers. Operational role
@@ -108,7 +107,6 @@ __all__ = [
     "get_handoff_workers",
     "get_my_archive",
     "get_my_inbox",
-    "get_order_shop_floor_detail",
     "get_revert_targets",
     "get_shop_floor_context",
     "handoff_to_next",

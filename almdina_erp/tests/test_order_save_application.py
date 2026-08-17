@@ -58,6 +58,9 @@ class FakeOrderSaveGateway:
     def invalidate_current_plan(self) -> None:
         self.calls.append("invalidate_current_plan")
 
+    def sanitize_plan_snapshots(self) -> None:
+        self.calls.append("sanitize_plan_snapshots")
+
 
 class TestOrderSaveApplication(unittest.TestCase):
     def test_forced_recalculation_skips_reuse_probe(self) -> None:
@@ -69,6 +72,7 @@ class TestOrderSaveApplication(unittest.TestCase):
         self.assertNotIn("can_reuse_current_plan:fingerprint", gateway.calls)
         self.assertNotIn("refresh_current_plan:fingerprint", gateway.calls)
         self.assertNotIn("invalidate_current_plan", gateway.calls)
+        self.assertEqual(gateway.calls[-1], "sanitize_plan_snapshots")
 
     def test_reusable_plan_refreshes_without_optimization(self) -> None:
         gateway = FakeOrderSaveGateway(reuse=True)
@@ -79,6 +83,7 @@ class TestOrderSaveApplication(unittest.TestCase):
         self.assertIn("refresh_current_plan:fingerprint", gateway.calls)
         self.assertNotIn("calculate_cutting_plan:fingerprint", gateway.calls)
         self.assertNotIn("invalidate_current_plan", gateway.calls)
+        self.assertEqual(gateway.calls[-1], "sanitize_plan_snapshots")
 
     def test_stale_plan_is_invalidated(self) -> None:
         gateway = FakeOrderSaveGateway()
@@ -88,6 +93,7 @@ class TestOrderSaveApplication(unittest.TestCase):
         self.assertIn("invalidate_current_plan", gateway.calls)
         self.assertNotIn("calculate_cutting_plan:fingerprint", gateway.calls)
         self.assertNotIn("refresh_current_plan:fingerprint", gateway.calls)
+        self.assertEqual(gateway.calls[-1], "sanitize_plan_snapshots")
 
     def test_validation_and_piece_calculation_order_is_stable(self) -> None:
         gateway = FakeOrderSaveGateway()
@@ -107,6 +113,7 @@ class TestOrderSaveApplication(unittest.TestCase):
                 "plan_input_fingerprint",
             ],
         )
+        self.assertEqual(gateway.calls[-1], "sanitize_plan_snapshots")
 
 
 if __name__ == "__main__":

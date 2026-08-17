@@ -66,6 +66,7 @@ def create_stage(
     stage.operational_role = operational_role or ""
     stage.status = "Pending"
     stage.assigned_to = assignee
+    stage.assignment_time = now_datetime()
     stage.insert(ignore_permissions=True)
     return stage
 
@@ -74,6 +75,7 @@ def reassign_stage(stage_name: str, *, assignee: str) -> Any:
     lock_stage(stage_name)
     stage = get_stage(stage_name)
     stage.assigned_to = assignee
+    stage.assignment_time = now_datetime()
     stage.save(ignore_permissions=True)
     return stage
 
@@ -121,6 +123,9 @@ def start_stage(
     stage.status = target_status
     if not stage.assigned_to:
         stage.assigned_to = actor
+        stage.assignment_time = now_datetime()
+    elif not getattr(stage, "assignment_time", None):
+        stage.assignment_time = getattr(stage, "creation", None) or now_datetime()
     stage.save(ignore_permissions=True)
     return stage
 
@@ -188,6 +193,7 @@ def reopen_stage(stage_name: str, *, target_status: str) -> Any:
     stage.start_time = None
     stage.finished_by = None
     stage.finish_time = None
+    stage.assignment_time = now_datetime()
     stage.actual_working_seconds = 0
     stage.paused_seconds = 0
     stage.completed_qty = 0

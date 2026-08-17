@@ -14,13 +14,13 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 BOOT_PATH = PACKAGE_ROOT / "boot.py"
 HOOKS_PATH = PACKAGE_ROOT / "hooks.py"
+MANIFEST_PATH = PACKAGE_ROOT / "frontend_assets.py"
 INSTALL_PATH = PACKAGE_ROOT / "install.py"
 PROVISION_PATH = (
     PACKAGE_ROOT
     / "almdina_erp"
-    / "application"
-    / "security"
-    / "provision_user.py"
+    / "services"
+    / "workforce_provisioning_service.py"
 )
 
 
@@ -94,12 +94,13 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertIn("build_permission_context", source)
 
     def test_hooks_use_read_only_boot_adapter_and_shared_shell(self) -> None:
-        source = HOOKS_PATH.read_text(encoding="utf-8")
-        self.assertIn('boot_session = "almdina_erp.boot.boot_session"', source)
-        self.assertIn('"/assets/almdina_erp/js/shared_shell.js"', source)
-        self.assertNotIn("ensure_operator_account", source)
-        self.assertNotIn('"/assets/almdina_erp/js/shop_floor_desk.js"', source)
-        self.assertNotIn('"/assets/almdina_erp/js/order_entry_desk.js"', source)
+        hooks = HOOKS_PATH.read_text(encoding="utf-8")
+        manifest = MANIFEST_PATH.read_text(encoding="utf-8")
+        self.assertIn('boot_session = "almdina_erp.boot.boot_session"', hooks)
+        self.assertIn('"/assets/almdina_erp/js/shared_shell.js"', manifest)
+        self.assertNotIn("ensure_operator_account", hooks)
+        self.assertNotIn('"/assets/almdina_erp/js/shop_floor_desk.js"', manifest)
+        self.assertNotIn('"/assets/almdina_erp/js/order_entry_desk.js"', manifest)
 
     def test_order_entry_capabilities_keep_main_shared_shell(self) -> None:
         boot = BootHarness(
@@ -143,7 +144,7 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertNotIn("almdina_shop_floor_only", bootinfo)
         self.assertNotIn("almdina_order_entry_only", bootinfo)
 
-    def test_operator_capabilities_use_shop_floor_home_without_hiding_desk(self) -> None:
+    def test_operator_capabilities_use_shared_order_list_without_hiding_desk(self) -> None:
         boot = BootHarness(
             {
                 Capability.VIEW_ORDERS,
@@ -175,11 +176,11 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         boot.boot_session(bootinfo)
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "shop_floor")
-        self.assertEqual(bootinfo["home_page"], "shop-floor-inbox")
-        self.assertEqual(bootinfo["default_route"], "/app/shop-floor-inbox")
+        self.assertEqual(bootinfo["home_page"], "door-cutting-order")
+        self.assertEqual(bootinfo["default_route"], "/desk/door-cutting-order")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
-            ["Shop Floor"],
+            ["Almdina ERP"],
         )
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
         self.assertTrue(context["navigation"]["shared_shell"])

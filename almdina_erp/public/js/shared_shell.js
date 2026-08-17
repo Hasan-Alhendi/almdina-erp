@@ -5,6 +5,7 @@
     const PERMISSION_CONTEXT_VERSION = 6;
     const FACTORY_SETTINGS_CONSOLE_ROUTE = "factory-production-settings";
     const LEGACY_FACTORY_SETTINGS_ROUTE = "almdina-erp-settings";
+    const NAVIGATION_SETTLE_MS = 2500;
     const SURFACE_ROUTE_RULES = Object.freeze([
         { surface: "orders", routes: ["door-cutting-order"] },
         { surface: "customer_admin", routes: ["customer"] },
@@ -12,6 +13,8 @@
         { surface: "production_stages", routes: ["production-stage"] },
         { surface: "production_incidents", routes: ["production-incident"] },
         { surface: "replacements", routes: ["replacement-piece"] },
+        { surface: "approval_queue", routes: ["factory-approval-queue"] },
+        { surface: "plan_archive", routes: ["factory-plan-archive"] },
         { surface: "factory_master_data", routes: ["factory-master-data"] },
         { surface: "production_routings", routes: ["production-routing"] },
         { surface: "edge_banding_types", routes: ["edge-banding-type"] },
@@ -70,9 +73,11 @@
         ])
     );
 
+    const pendingShortcutRoots = new Set();
     let initialized = false;
-    let observer = null;
-    let observerTimer = null;
+    let navigationObserver = null;
+    let navigationObserverStopTimer = null;
+    let scheduledShortcutFrame = null;
     let redirecting = false;
     let lastDeniedRoute = "";
 
@@ -157,6 +162,9 @@
 
     function resolveHomeRoute(nav) {
         const requested = routeSlug(nav && nav.home_page);
+        if (requested === "door-cutting-order" && surfaceAllowed("orders")) {
+            return requested;
+        }
         if (registeredWorkspace(requested) || registeredPage(requested)) {
             return requested;
         }
@@ -264,6 +272,16 @@
         }
     }
 
+    function queryWithin(root, selector) {
+        if (!root) return [];
+        const results = [];
+        if (root.nodeType === Node.ELEMENT_NODE && typeof root.matches === "function" && root.matches(selector)) {
+            results.push(root);
+        }
+        if (typeof root.querySelectorAll === "function") results.push(...root.querySelectorAll(selector));
+        return results;
+    }
+
     function syncAppDefaultRoute() {
         const nav = navigation();
         if (!nav || !nav.app_only || !frappe.boot || !nav.default_route) return;
@@ -294,11 +312,10 @@
             });
     }
 
-    function hideUnauthorizedShortcuts() {
+    function hideUnauthorizedShortcuts(root = document) {
         const nav = navigation();
         if (!nav || !nav.shared_shell) return;
-        document
-            .querySelectorAll("[data-link-to], [data-route], [data-name], a[href*='/app/'], a[href*='/desk/']")
+        queryWithin(root, "[data-link-to], [data-route], [data-name], a[href*='/app/'], a[href*='/desk/']")
             .forEach(element => {
                 const routes = normalizedRoutes(element);
                 if (!routes.length) return;
@@ -415,26 +432,60 @@
         document.body.dataset.almdinaProfile = String(nav.profile || "shared");
         syncAppDefaultRoute();
         hideOtherAppCards();
-        hideUnauthorizedShortcuts();
+        hideUnauthorizedShortcuts(document);
         injectStyles();
     }
 
-    function schedulePermissionScan() {
-        if (observerTimer) window.clearTimeout(observerTimer);
-        observerTimer = window.setTimeout(() => {
-            observerTimer = null;
-            hideUnauthorizedShortcuts();
-        }, 40);
+    function compactPendingShortcutRoots() {
+        const roots = Array.from(pendingShortcutRoots);
+        return roots.filter((candidate, index) => {
+            if (!candidate || candidate.nodeType !== Node.ELEMENT_NODE) return false;
+            return !roots.some((other, otherIndex) => (
+                otherIndex !== index
+                && other
+                && other.nodeType === Node.ELEMENT_NODE
+                && typeof other.contains === "function"
+                && other.contains(candidate)
+            ));
+        });
     }
 
-    function observeDeskMutations() {
-        if (observer || !document.body) return;
-        observer = new MutationObserver(mutations => {
-            if (mutations.some(mutation => mutation.addedNodes && mutation.addedNodes.length)) {
-                schedulePermissionScan();
+    function flushPendingShortcutRoots() {
+        scheduledShortcutFrame = null;
+        const roots = compactPendingShortcutRoots();
+        pendingShortcutRoots.clear();
+        roots.forEach(hideUnauthorizedShortcuts);
+    }
+
+    function scheduleShortcutRoot(root) {
+        if (!root || root.nodeType !== Node.ELEMENT_NODE) return;
+        pendingShortcutRoots.add(root);
+        if (scheduledShortcutFrame !== null) return;
+        const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+        scheduledShortcutFrame = schedule(flushPendingShortcutRoots);
+    }
+
+    function stopNavigationSettleWindow() {
+        if (navigationObserver) navigationObserver.disconnect();
+        navigationObserver = null;
+        if (navigationObserverStopTimer) window.clearTimeout(navigationObserverStopTimer);
+        navigationObserverStopTimer = null;
+        pendingShortcutRoots.clear();
+    }
+
+    function startNavigationSettleWindow() {
+        stopNavigationSettleWindow();
+        if (!document.body) return;
+        navigationObserver = new MutationObserver(mutations => {
+            for (const mutation of mutations) {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) scheduleShortcutRoot(node);
+                    else if (node.parentElement) scheduleShortcutRoot(node.parentElement);
+                });
             }
         });
-        observer.observe(document.body, { childList: true, subtree: true });
+        navigationObserver.observe(document.body, { childList: true, subtree: true });
+        navigationObserverStopTimer = window.setTimeout(stopNavigationSettleWindow, NAVIGATION_SETTLE_MS);
     }
 
     function retryConfiguredHome(attempt = 0) {
@@ -444,7 +495,7 @@
 
     function startShell() {
         applyShell();
-        observeDeskMutations();
+        startNavigationSettleWindow();
         if (!redirectLegacyFactorySettingsRoute()) {
             retryConfiguredHome();
             window.setTimeout(guardCurrentRoute, 0);
@@ -454,22 +505,22 @@
             frappe.router.__almdinaSharedShell = true;
             frappe.router.on("change", () => {
                 applyShell();
+                startNavigationSettleWindow();
                 window.setTimeout(() => {
                     if (redirectLegacyFactorySettingsRoute()) return;
                     retryConfiguredHome();
                     guardCurrentRoute();
                 }, 0);
-                [100, 300, 800].forEach(delay => setTimeout(hideUnauthorizedShortcuts, delay));
             });
         }
         if (!window.__almdinaPermissionUpdateListener) {
             window.__almdinaPermissionUpdateListener = true;
             window.addEventListener("almdina:permissions-updated", () => {
                 applyShell();
+                startNavigationSettleWindow();
                 if (!redirectLegacyFactorySettingsRoute()) guardCurrentRoute();
             });
         }
-        [100, 300, 900, 1800].forEach(delay => setTimeout(applyShell, delay));
     }
 
     function init() {

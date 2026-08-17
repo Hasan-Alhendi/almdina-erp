@@ -293,16 +293,15 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             repository.calls,
         )
 
-    def test_physical_first_route_requires_approved_plan_before_dispatch(self) -> None:
+    def test_physical_first_route_dispatches_without_approved_plan(self) -> None:
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = self._approved_order(plan_approved=False)
 
-        with self.assertRaisesRegex(commands.ShopFloorCommandError, "اعتماد خطة القص"):
-            commands.dispatch_order(
-                repository, "DCO-1", "Sharyoun", "cutting@example.com"
-            )
-
-        self.assertFalse(any(call[0] == "create_stage" for call in repository.calls))
+        result = commands.dispatch_order(
+            repository, "DCO-1", "Sharyoun", "cutting@example.com"
+        )
+        self.assertEqual(result["department"], "شريون")
+        self.assertTrue(any(call[0] == "create_stage" for call in repository.calls))
 
         repository.calls.clear()
         repository.orders["DCO-1"] = self._approved_order(plan_approved=True)

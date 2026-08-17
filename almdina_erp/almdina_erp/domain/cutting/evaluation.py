@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .primitives import num, rect_intersects
+from .primitives import num, rect_intersects, rects_have_clearance
 
 
 def evaluate_plan(
@@ -42,12 +42,15 @@ def validate_plan(
     board_w_cm: float,
     board_h_cm: float,
     tolerance: float = 1e-7,
+    *,
+    kerf_cm: float = 0.0,
 ) -> list[str]:
     """Independent geometry validator required before a plan can be approved."""
 
     errors: list[str] = []
     expected = {int(piece["id"]): piece for piece in requested_pieces}
     seen: dict[int, int] = {}
+    required_kerf_cm = max(0.0, num(kerf_cm))
 
     for sheet in plan.get("sheets", []):
         pieces = sheet.get("pieces", [])
@@ -123,6 +126,17 @@ def validate_plan(
                     errors.append(
                         f"Pieces {first.get('label')} and {second.get('label')} overlap "
                         f"on sheet {sheet.get('sheet_no')}."
+                    )
+                elif required_kerf_cm and not rects_have_clearance(
+                    first_rect,
+                    second_rect,
+                    required_kerf_cm,
+                    tolerance,
+                ):
+                    errors.append(
+                        f"Pieces {first.get('label')} and {second.get('label')} do not preserve "
+                        f"the required {required_kerf_cm:g} cm kerf clearance on sheet "
+                        f"{sheet.get('sheet_no')}."
                     )
 
     for piece_id, piece in expected.items():

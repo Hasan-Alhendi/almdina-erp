@@ -8,10 +8,11 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 FORM_PATH = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 HOOKS_PATH = APP_ROOT / "hooks.py"
+MANIFEST_PATH = APP_ROOT / "frontend_assets.py"
 EDIT_POLICY_PATH = APP_ROOT / "almdina_erp" / "services" / "order_edit_policy.py"
 REVISION_SERVICE_PATH = APP_ROOT / "almdina_erp" / "services" / "order_revision_service.py"
-REVISION_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
-LIFECYCLE_UX_PATH = APP_ROOT / "public" / "js" / "order_lifecycle.js"
+REVISION_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_revision_ux.js"
+LIFECYCLE_UX_PATH = APP_ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
 
 
 class TestOrderRevisionContract(unittest.TestCase):
@@ -32,10 +33,11 @@ class TestOrderRevisionContract(unittest.TestCase):
 
     def test_legacy_return_to_draft_routes_to_in_place_lifecycle_reset(self) -> None:
         hooks = HOOKS_PATH.read_text(encoding="utf-8")
+        manifest = MANIFEST_PATH.read_text(encoding="utf-8")
         target = "almdina_erp.almdina_erp.services.order_revision_service.return_order_to_draft"
         self.assertGreaterEqual(hooks.count(target), 2)
-        self.assertIn('"public/js/door_cutting_order_revision_ux.js"', hooks)
-        self.assertIn('"public/js/order_lifecycle.js"', hooks)
+        self.assertIn('"public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"', manifest)
+        self.assertIn('"public/js/door_cutting_order/core/order_lifecycle.js"', manifest)
 
         revision = REVISION_SERVICE_PATH.read_text(encoding="utf-8")
         return_fn = revision.split("def return_order_to_draft", 1)[1]
@@ -84,12 +86,27 @@ class TestOrderRevisionContract(unittest.TestCase):
         self.assertIn("__almdina_edit_session", revision_source)
         self.assertIn("syncPrimaryAction", revision_source)
         self.assertIn("schedulePrimaryActionSync", revision_source)
-        self.assertIn("set_primary_action(EDIT_LABEL", revision_source)
-        self.assertIn("set_primary_action(SAVE_LABEL", revision_source)
+        self.assertIn("setPrimaryActionMode", revision_source)
+        self.assertIn('"edit", EDIT_LABEL', revision_source)
+        self.assertIn('"save", SAVE_LABEL', revision_source)
         self.assertIn("editSessionRecalculated", revision_source)
         self.assertIn("markEditSessionRecalculated", revision_source)
-        self.assertIn("markEditSessionRecalculated", revision_source)
         self.assertIn('=== "Draft"', revision_source)
+        self.assertIn('(frm.doc.status || "Draft") !== "Draft"', revision_source)
+        self.assertIn("installEditSessionAbandonGuard", revision_source)
+        self.assertIn("form-unload", revision_source)
+        self.assertIn("page-change", revision_source)
+        self.assertIn("abandonStoredEditSession", revision_source)
+        self.assertIn("hydrateEditSession", revision_source)
+        self.assertIn("__almdina_edit_session_abandoned", revision_source)
+        self.assertIn("markEditSessionSticky", revision_source)
+        self.assertIn("restorePrimaryAfterPlanEngine", revision_source)
+        self.assertIn("ensureLockedPrimaryAction", revision_source)
+        self.assertIn("activateEditSessionQuietly", revision_source)
+        self.assertIn("flushPendingCostPriceEdits", revision_source)
+        self.assertIn("Price-only edits are persisted by the pricing APIs", revision_source)
+        self.assertIn("disable_save()", revision_source)
+        self.assertIn("No changes in document", revision_source)
         self.assertIn("order_revision_service.create_order_revision", revision_source)
         self.assertIn('LABELS.return_to_draft', lifecycle_source)
         self.assertIn("order_revision_service.return_order_to_draft", lifecycle_source)

@@ -1,0 +1,72 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const path = require("node:path");
+
+global.window = {};
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/geometry.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/document.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/smart_path_domain.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/bezier_path_domain.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/domain/vector_selection.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snapping.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_path_snapping.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/smart_guides.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/unified_snap_engine.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/snap_candidate_engine.js"));
+require(path.resolve(__dirname, "../../public/js/door_drawing_v3/application/professional_move_policy.js"));
+
+const V3 = global.window.AlmdinaDoorDrawingV3;
+const G = V3.Geometry;
+const D = V3.DocumentModel;
+const P = V3.ProfessionalMovePolicy;
+
+function doc(objects) {
+    return { blank: { widthMm: 1000, heightMm: 1000 }, objects };
+}
+
+const moving = G.rectangle("moving", G.point(100, 100), 50, 50);
+const aligned = G.rectangle("aligned", G.point(300, 260), 70, 60);
+let result = P.resolve(doc([moving, aligned]), [moving], 198, 158, { viewportScale: 1 });
+assert.equal(result.dx, 200, "Corner capture should settle the moving left edge onto the target left edge");
+assert.equal(result.dy, 160, "Corner capture should settle the moving bottom edge onto the target bottom edge");
+assert.equal(result.geometryCandidate && result.geometryCandidate.kind, "endpoint", "A near-exact corner relation should outrank generic box alignment");
+assert.ok(result.guides.some(guide => guide.type === "geometry-point"), "Corner capture should render one precise geometry-point marker");
+
+const alignedX = G.rectangle("aligned-x", G.point(300, 500), 70, 60);
+result = P.resolve(doc([moving, alignedX]), [moving], 198, 0, { viewportScale: 1 });
+assert.equal(result.dx, 200, "Single-axis X alignment should remain available when no point candidate is near");
+assert.equal(result.dy, 0);
+assert.equal(result.geometryCandidate, null);
+assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "x"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "نفس المحاذاة"), "A clerk should get a plain Arabic alignment hint instead of a technical constraint name");
+
+const alignedY = G.rectangle("aligned-y", G.point(600, 260), 70, 60);
+result = P.resolve(doc([moving, alignedY]), [moving], 0, 158, { viewportScale: 1 });
+assert.equal(result.dx, 0);
+assert.equal(result.dy, 160, "Single-axis Y alignment should remain available when no point candidate is near");
+assert.equal(result.geometryCandidate, null);
+assert.ok(result.guides.some(guide => guide.type === "alignment" && guide.axis === "y"));
+assert.ok(result.guides.some(guide => guide.type === "assist-label" && guide.text === "نفس المحاذاة"));
+
+const left = G.rectangle("left", G.point(0, 100), 50, 50);
+const right = G.rectangle("right", G.point(150, 100), 50, 50);
+const middle = G.rectangle("middle", G.point(300, 100), 50, 50);
+result = P.resolve(doc([left, right, middle]), [middle], -223, 0, { viewportScale: 1 });
+assert.equal(result.dx, -225, "Move should settle exactly between two neighbors when the gaps become equal");
+assert.ok(result.guides.filter(guide => guide.type === "spacing").length >= 2, "Equal spacing should show both distances");
+
+const a = G.rectangle("a", G.point(0, 0), 50, 50);
+const b = G.rectangle("b", G.point(100, 0), 50, 50); // 50 mm reference gap
+const c = G.rectangle("c", G.point(260, 0), 50, 50);
+result = P.resolve(doc([a, b, c]), [c], -58, 0, { viewportScale: 1 });
+assert.equal(result.dx, -60, "Move should match an existing 50 mm neighbor gap");
+assert.ok(result.guides.some(guide => guide.type === "spacing-reference" && Math.abs(guide.distanceMm - 50) < 0.01));
+
+result = P.resolve(doc([moving, aligned]), [moving], 205, 90, { viewportScale: 1, lockedAxis: "x" });
+assert.equal(result.dy, 0, "Shift-style X lock must block vertical movement even when vertical snapping exists");
+assert.equal(result.lockedAxis, "x");
+assert.ok(result.guides.some(guide => guide.type === "axis-lock" && guide.axis === "x"));
+
+assert.doesNotThrow(() => D.replaceObject(doc([moving]), G.translateObject(moving, 20, 0)));
+console.log("Door Drawing V3 professional move policy tests passed");

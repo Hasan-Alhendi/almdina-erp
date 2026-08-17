@@ -10,6 +10,11 @@ APP = ROOT / "almdina_erp"
 TEMPLATE_MODULE = APP / "application" / "security" / "permission_templates.py"
 SERVICE = APP / "services" / "permission_management_service.py"
 PAGE = APP / "page" / "factory_permissions" / "factory_permissions.js"
+PERMISSION_API = ROOT / "public" / "js" / "factory_permissions" / "api.js"
+PERMISSION_VIEW_MODEL = ROOT / "public" / "js" / "factory_permissions" / "view_model.js"
+PERMISSION_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
+PERMISSION_INTERACTIONS = ROOT / "public" / "js" / "factory_permissions" / "interactions.js"
+PERMISSION_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 DOCTYPE_ROOT = APP / "doctype"
 
 
@@ -18,12 +23,20 @@ class TestPermissionTemplatesRetired(unittest.TestCase):
         self.assertFalse(TEMPLATE_MODULE.exists())
         service = SERVICE.read_text(encoding="utf-8")
         page = PAGE.read_text(encoding="utf-8")
+        api = PERMISSION_API.read_text(encoding="utf-8")
+        view_model = PERMISSION_VIEW_MODEL.read_text(encoding="utf-8")
+        renderer = PERMISSION_RENDERER.read_text(encoding="utf-8")
+        interactions = PERMISSION_INTERACTIONS.read_text(encoding="utf-8")
+        controller = PERMISSION_CONTROLLER.read_text(encoding="utf-8")
+        browser_surface = "\n".join((page, api, view_model, renderer, interactions, controller))
+
         self.assertNotIn("preview_permission_template", service)
         self.assertNotIn("permission_template_catalog", service)
         self.assertNotIn("template_state", service)
-        self.assertNotIn("preview_permission_template", page)
-        self.assertNotIn("apc-template", page)
-        self.assertIn("preview_permission_import", page)
+        self.assertNotIn("preview_permission_template", browser_surface)
+        self.assertNotIn("apc-template", browser_surface)
+        self.assertIn("preview_permission_import", api)
+        self.assertIn("previewImport", controller)
 
     def test_business_doctype_metadata_never_seeds_fixed_role_policy(self) -> None:
         offenders: list[str] = []

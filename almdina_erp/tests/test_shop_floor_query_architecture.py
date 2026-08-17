@@ -7,6 +7,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APPLICATION_PATH = ROOT / "almdina_erp" / "application" / "shop_floor" / "queries.py"
+ORDER_LIST_APPLICATION_PATH = (
+    ROOT / "almdina_erp" / "application" / "shop_floor" / "order_list_query.py"
+)
 DRAWING_POLICY_PATH = (
     ROOT
     / "almdina_erp"
@@ -21,19 +24,19 @@ APPROVAL_POLICY_PATH = (
     / "security"
     / "drawing_approval_policy.py"
 )
-PRESENTER_PATH = (
-    ROOT
-    / "almdina_erp"
-    / "presentation"
-    / "shop_floor"
-    / "presenters.py"
-)
 REPOSITORY_PATH = (
     ROOT
     / "almdina_erp"
     / "infrastructure"
     / "frappe"
     / "shop_floor_query_repository.py"
+)
+ORDER_LIST_REPOSITORY_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "order_list_query_repository.py"
 )
 QUERY_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
 DXF_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "shop_floor_dxf_service.py"
@@ -43,12 +46,12 @@ HOOKS_PATH = ROOT / "hooks.py"
 
 
 class TestShopFloorQueryArchitecture(unittest.TestCase):
-    def test_application_and_presenters_do_not_import_frappe(self) -> None:
+    def test_application_and_policies_do_not_import_frappe(self) -> None:
         for path in (
             APPLICATION_PATH,
+            ORDER_LIST_APPLICATION_PATH,
             DRAWING_POLICY_PATH,
             APPROVAL_POLICY_PATH,
-            PRESENTER_PATH,
         ):
             source = path.read_text(encoding="utf-8")
             with self.subTest(path=path):
@@ -58,18 +61,27 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
 
     def test_frappe_reads_live_only_in_infrastructure_adapter(self) -> None:
         repository_source = REPOSITORY_PATH.read_text(encoding="utf-8")
+        order_list_repository_source = ORDER_LIST_REPOSITORY_PATH.read_text(encoding="utf-8")
         application_source = APPLICATION_PATH.read_text(encoding="utf-8")
+        order_list_application_source = ORDER_LIST_APPLICATION_PATH.read_text(encoding="utf-8")
         self.assertIn("import frappe", repository_source)
         self.assertIn("class FrappeShopFloorQueryRepository", repository_source)
+        self.assertIn("import frappe", order_list_repository_source)
+        self.assertIn("class FrappeOrderListQueryRepository", order_list_repository_source)
         self.assertIn("class ShopFloorQueryPort", application_source)
+        self.assertIn("class OrderListQueryPort", order_list_application_source)
         self.assertIn("def session_identity", application_source)
         self.assertIn("def global_capabilities", application_source)
 
-    def test_query_service_composes_application_repository_and_presenter(self) -> None:
+    def test_query_service_composes_application_and_repositories(self) -> None:
         source = QUERY_SERVICE_PATH.read_text(encoding="utf-8")
         self.assertIn("application.shop_floor import queries", source)
+        self.assertIn("application.shop_floor import order_list_query", source)
         self.assertIn("FrappeShopFloorQueryRepository", source)
-        self.assertIn("present_order_detail", source)
+        self.assertIn("FrappeOrderListQueryRepository", source)
+        self.assertIn("order_list_query.get_order_operational_role_flags", source)
+        self.assertNotIn("present_order_detail", source)
+        self.assertNotIn("get_order_shop_floor_detail", source)
         self.assertIn("def get_shop_floor_context", source)
         self.assertNotIn("frappe.get_roles", source)
 
@@ -98,7 +110,6 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
             "get_revert_targets",
             "get_my_inbox",
             "get_my_archive",
-            "get_order_shop_floor_detail",
         )
         for method in query_methods:
             old = f"almdina_erp.almdina_erp.services.shop_floor_service.{method}"

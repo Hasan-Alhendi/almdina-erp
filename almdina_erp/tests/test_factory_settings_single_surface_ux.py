@@ -7,6 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_JSON = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
 SETTINGS_PAGE = ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
+SETTINGS_VIEW_MODEL = ROOT / "public" / "js" / "factory_production_settings" / "view_model.js"
+SETTINGS_RENDERER = ROOT / "public" / "js" / "factory_production_settings" / "renderer.js"
+SETTINGS_DIALOGS = ROOT / "public" / "js" / "factory_production_settings" / "dialogs.js"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 MAIN_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_erp" / "almdina_erp.json"
@@ -30,8 +33,21 @@ def _settings_fields() -> list[dict[str, object]]:
     return list(payload["fields"])
 
 
+def _active_console_surface() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            SETTINGS_PAGE,
+            SETTINGS_VIEW_MODEL,
+            SETTINGS_RENDERER,
+            SETTINGS_DIALOGS,
+        )
+    )
+
+
 def test_every_active_factory_setting_is_present_in_the_unified_console() -> None:
     page_source = SETTINGS_PAGE.read_text(encoding="utf-8")
+    console_source = _active_console_surface()
     active_fields = {
         str(field["fieldname"])
         for field in _settings_fields()
@@ -40,12 +56,16 @@ def test_every_active_factory_setting_is_present_in_the_unified_console() -> Non
         and not int(field.get("hidden") or 0)
     }
 
-    missing = sorted(fieldname for fieldname in active_fields if fieldname not in page_source)
+    for module in ("view_model.js", "renderer.js", "dialogs.js"):
+        assert f"factory_production_settings/{module}" in page_source
+
+    missing = sorted(fieldname for fieldname in active_fields if fieldname not in console_source)
     assert not missing, f"Active factory settings missing from unified console: {missing}"
 
 
 def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
-    page_source = SETTINGS_PAGE.read_text(encoding="utf-8")
+    view_model_source = SETTINGS_VIEW_MODEL.read_text(encoding="utf-8")
+    renderer_source = SETTINGS_RENDERER.read_text(encoding="utf-8")
     service_source = SETTINGS_SERVICE.read_text(encoding="utf-8")
     hidden_fields = {
         str(field["fieldname"])
@@ -58,11 +78,13 @@ def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
     assert hidden_fields == LEGACY_PRESERVED_FIELDS
     assert "legacy_values" in service_source
     assert "LEGACY_PRESERVED_FIELDS" in service_source
-    assert "بيانات إعدادات قديمة محفوظة" in page_source
-    assert "للقراءة فقط" in page_source
+    assert "بيانات إعدادات قديمة محفوظة" in renderer_source
+    assert "للقراءة فقط" in renderer_source
+    assert "aps-legacy" in renderer_source
+    assert 'data-section="legacy"' not in renderer_source
     for fieldname in LEGACY_PRESERVED_FIELDS:
         assert fieldname in service_source
-        assert fieldname in page_source
+        assert fieldname in view_model_source
 
 
 def test_old_native_settings_route_redirects_to_the_unified_console() -> None:

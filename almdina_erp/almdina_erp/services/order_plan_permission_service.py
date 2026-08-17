@@ -6,6 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot_json,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
@@ -35,7 +38,7 @@ _OPTIMIZER_DEFAULTS = {
     "trim_margin_mm": "default_trim_margin_mm",
     "optimization_time_limit_sec": "default_optimization_time_limit_sec",
 }
-_NUMERIC_OPTIMIZER_FIELDS = frozenset(
+_NUMERIC_PLAN_INPUT_FIELDS = frozenset(
     {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
 )
 
@@ -47,7 +50,7 @@ def _capability_allowed(doc: Any, capability: str) -> bool:
 
 
 def _same_value(fieldname: str, left: Any, right: Any) -> bool:
-    if fieldname in _NUMERIC_OPTIMIZER_FIELDS:
+    if fieldname in _NUMERIC_PLAN_INPUT_FIELDS:
         return abs(flt(left) - flt(right)) < 0.000001
     return str(left or "").strip() == str(right or "").strip()
 
@@ -185,24 +188,34 @@ def _apply_optimizer_updates(doc: Any, updates: dict[str, Any]) -> list[str]:
     if not changed:
         return []
 
-    require_document_capability(
-        doc,
-        Capability.EDIT_OPTIMIZER_SETTINGS,
-        message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
-    )
-    if getattr(doc, "current_production_stage", None) or getattr(
-        doc, "production_path", None
-    ):
-        require_stage_operational_access(doc)
+    optimizer_changed = [
+        fieldname for fieldname in changed if fieldname in _OPTIMIZER_FIELDS
+    ]
+    if optimizer_changed:
+        require_document_capability(
+            doc,
+            Capability.EDIT_OPTIMIZER_SETTINGS,
+            message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
+        )
+        if getattr(doc, "current_production_stage", None) or getattr(
+            doc, "production_path", None
+        ):
+            require_stage_operational_access(doc)
+
     for fieldname in changed:
         doc.set(fieldname, updates[fieldname])
-    return changed
+    return optimizer_changed
 
 
 def _assert_recalculation_state(doc: Any) -> None:
-    if getattr(doc, "approved_plan", None):
+    drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(doc)
+
+    # Approval freezes the production snapshot, not Drawing's ability to prepare
+    # an explicit replacement. Only the Drawing-stage exception may recalculate
+    # while an approved plan exists; later production stages remain hard-locked.
+    if getattr(doc, "approved_plan", None) and not drawing_recalculation_allowed:
         frappe.throw(
-            _("لا يمكن إعادة حساب خطة قص تم اعتمادها. ألغِ الاعتماد أو أنشئ مسار تعديل معتمد أولًا."),
+            _("خطة القص المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم."),
             frappe.ValidationError,
         )
 
@@ -216,7 +229,7 @@ def _assert_recalculation_state(doc: Any) -> None:
 
     # Drawing-stage planners are intentionally allowed to recalculate through
     # the focused capability without receiving full EDIT_ORDER authority.
-    if user_can_recalculate_drawing_system_plan(doc):
+    if drawing_recalculation_allowed:
         return
 
     # Before production, keep the existing lifecycle boundary. This checks state,
@@ -228,7 +241,8 @@ def _assert_recalculation_state(doc: Any) -> None:
 def _recalculation_result(doc: Any) -> dict[str, Any]:
     """Return production-plan data only; financial data never crosses this API."""
 
-    system_plan = getattr(doc, "system_plan_json", None) or doc.cutting_plan_json
+    cutting_plan = getattr(doc, "cutting_plan_json", None) or ""
+    system_plan = getattr(doc, "system_plan_json", None) or cutting_plan
     return {
         "name": doc.name,
         "required_boards": doc.required_boards,
@@ -244,8 +258,8 @@ def _recalculation_result(doc: Any) -> dict[str, Any]:
         "trim_margin_mm": doc.trim_margin_mm,
         "optimization_time_limit_sec": doc.optimization_time_limit_sec,
         "plan_needs_recalculation": doc.plan_needs_recalculation,
-        "cutting_plan_json": doc.cutting_plan_json,
-        "system_plan_json": system_plan,
+        "cutting_plan_json": sanitize_plan_snapshot_json(cutting_plan),
+        "system_plan_json": sanitize_plan_snapshot_json(system_plan),
         "approved_plan": doc.approved_plan,
         "approved_plan_source": doc.approved_plan_source,
     }
@@ -262,9 +276,10 @@ def recalculate_order(
 ) -> dict[str, Any]:
     """Recalculate one plan through granular plan capabilities only.
 
-    ``RECALCULATE_PLAN`` authorizes running the engine. Changing any optimizer
-    input additionally requires ``EDIT_OPTIMIZER_SETTINGS``. Neither operation
-    requires cost visibility or cost editing authority.
+    ``RECALCULATE_PLAN`` authorizes running the engine. Changing packing mode,
+    machine type, kerf, trim margin, or time limit additionally requires
+    ``EDIT_OPTIMIZER_SETTINGS``. Neither operation requires cost visibility or
+    cost editing authority.
     """
 
     name = str(order_name or "").strip()
