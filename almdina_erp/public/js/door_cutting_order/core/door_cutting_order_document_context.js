@@ -306,6 +306,7 @@
         frm.__almdina_invoice_cost_reconcile_promise = null;
         frm.__almdina_pending_order_input_persistence = null;
         frm.__almdinaShopFloorHiddenState = null;
+        frm.__almdinaSurfaceSettleRun = null;
         frm._dcoToolbarObservedHead = null;
         frm._dcoMeasurementToolbarObservedRoot = null;
         frm._dco_fixed_tabs = null;
@@ -447,31 +448,80 @@
         return pending;
     }
 
+    function notifySurfacesSettled(frm) {
+        if (typeof window.dispatchEvent !== "function") return;
+        window.dispatchEvent(new CustomEvent("almdina:surfaces-settled", {
+            detail: { frm },
+        }));
+    }
+
     function settleSurfaces(frm, attempt) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
-        if (!isCurrent(frm, capture(frm))) return false;
+        const token = capture(frm);
+        if (isCurrent(frm, token) === false) return false;
 
+        const activeRun = frm.__almdinaSurfaceSettleRun;
+        if (activeRun && isSameDocument(frm, activeRun.token)) {
+            // A recovery may itself finish by asking the owner to settle again.
+            // Never recurse into another recovery pass while the current one is
+            // still in flight; that feedback loop previously generated thousands
+            // of permission/stage requests for restricted roles.
+            return false;
+        }
+        if (activeRun) frm.__almdinaSurfaceSettleRun = null;
+
+        const step = Math.min(
+            Math.max(Number(attempt) || 0, 0),
+            SETTLE_DELAYS.length - 1
+        );
         const pending = pendingSurfaces(frm);
         if (!pending.length) {
-            if (typeof window.dispatchEvent === "function") {
-                window.dispatchEvent(new CustomEvent("almdina:surfaces-settled", {
-                    detail: { frm },
-                }));
-            }
+            notifySurfacesSettled(frm);
             return true;
         }
 
-        pending.forEach(({ name, probe }) => {
+        const run = { token, step };
+        frm.__almdinaSurfaceSettleRun = run;
+        const recoveries = pending.map(({ name, probe }) => {
             try {
-                Promise.resolve(probe.recover(frm)).catch((error) => {
+                return Promise.resolve(probe.recover(frm)).catch((error) => {
                     console.debug(`Almdina surface recovery failed: ${name}`, error);
+                    return false;
                 });
             } catch (error) {
                 console.debug(`Almdina surface recovery failed: ${name}`, error);
+                return Promise.resolve(false);
             }
         });
 
-        if (attempt < SETTLE_DELAYS.length - 1) scheduleSettle(frm, attempt + 1);
+        Promise.all(recoveries)
+            .then(() => {
+                if (
+                    frm.__almdinaSurfaceSettleRun !== run
+                    || !isCurrent(frm, token)
+                ) {
+                    return;
+                }
+                const remaining = pendingSurfaces(frm);
+                if (!remaining.length) {
+                    notifySurfacesSettled(frm);
+                    return;
+                }
+                if (step < SETTLE_DELAYS.length - 1) {
+                    scheduleSettle(frm, step + 1);
+                }
+            })
+            .catch((error) => {
+                if (isCurrent(frm, token)) {
+                    console.debug("Almdina surface settle pass failed", error);
+                }
+            })
+            .finally(() => {
+                if (frm.__almdinaSurfaceSettleRun === run) {
+                    frm.__almdinaSurfaceSettleRun = null;
+                }
+            });
+
         return false;
     }
 
