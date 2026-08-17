@@ -5,24 +5,81 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, now_datetime
 
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    APPROVED,
+    CANCELLED,
+    DRAFT,
+    SUPERSEDED,
+    CuttingPlanLifecycleError,
+    normalize_source_type,
+)
+
 
 # Float fields are stored as decimal(21,9); engine scores must stay inside it.
 MAX_STORED_SCORE = 10**12 - 1
+IMMUTABLE_STATUSES = {APPROVED, SUPERSEDED, CANCELLED}
 
 
 class CuttingPlan(Document):
+    """Canonical cutting-plan aggregate.
+
+    Draft plans own editable optimizer settings and working geometry. Approved
+    plans are immutable production snapshots. Any later change is represented by
+    a new Draft revision linked through ``based_on_plan``.
+    """
+
     def validate(self) -> None:
         if self.revision and self.revision < 1:
             frappe.throw(_("Cutting Plan revision must be at least 1."))
         if self.plan_kind == "Replacement" and not self.replacement_piece:
             frappe.throw(_("A Replacement cutting plan must reference its Replacement Piece."))
+        self._validate_source_type()
+        self._validate_revision_parent()
+        self._validate_working_settings()
         self.score = max(-MAX_STORED_SCORE, min(MAX_STORED_SCORE, flt(self.score)))
         self._populate_source_identity_snapshots()
         if self.plan_kind == "Replacement":
             self._validate_replacement_plan()
         if self.validation_status in {"Valid", "Invalid"} and not self.validated_on:
             self.validated_on = now_datetime()
-        self._enforce_approved_immutability()
+        self._enforce_snapshot_immutability()
+
+    def _validate_source_type(self) -> None:
+        if self.plan_kind == "Replacement":
+            return
+        try:
+            self.source_type = normalize_source_type(self.source_type)
+        except CuttingPlanLifecycleError:
+            frappe.throw(_("Unsupported Cutting Plan source type."))
+
+    def _validate_revision_parent(self) -> None:
+        parent_name = str(getattr(self, "based_on_plan", None) or "").strip()
+        if not parent_name:
+            return
+        parent = frappe.db.get_value(
+            "Cutting Plan",
+            parent_name,
+            ["door_cutting_order", "revision", "status"],
+            as_dict=True,
+        )
+        if not parent:
+            frappe.throw(_("The source Cutting Plan revision does not exist."))
+        if str(parent.door_cutting_order or "") != str(self.door_cutting_order or ""):
+            frappe.throw(_("The source Cutting Plan revision belongs to another order."))
+        if parent.status != APPROVED:
+            frappe.throw(_("A new Cutting Plan revision must be based on an approved plan."))
+        if cint(self.revision) <= cint(parent.revision):
+            frappe.throw(_("The new Cutting Plan revision must be newer than its source revision."))
+
+    def _validate_working_settings(self) -> None:
+        for fieldname, label in (
+            ("kerf_mm", _("Kerf MM")),
+            ("trim_margin_mm", _("Trim Margin MM")),
+            ("optimization_time_limit_sec", _("Optimization Time Limit Sec")),
+        ):
+            value = flt(getattr(self, fieldname, 0))
+            if value < 0:
+                frappe.throw(_("{0} cannot be negative.").format(label))
 
     def _populate_source_identity_snapshots(self) -> None:
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)
@@ -90,7 +147,7 @@ class CuttingPlan(Document):
         if errors:
             frappe.throw(_("Invalid Replacement Mini Cutting Plan:\n{0}").format("\n".join(errors)))
 
-    def _enforce_approved_immutability(self) -> None:
+    def _enforce_snapshot_immutability(self) -> None:
         if self.is_new() or self.flags.get("allow_status_transition"):
             return
 
@@ -98,9 +155,12 @@ class CuttingPlan(Document):
         if not old:
             return
 
-        if old.status == "Approved":
+        if old.status in IMMUTABLE_STATUSES:
             frappe.throw(
                 _(
-                    "Approved Cutting Plan {0} is immutable. Create a new revision instead of editing it."
+                    "Cutting Plan {0} is immutable. Create a new Draft revision instead of editing it."
                 ).format(self.name)
             )
+
+        if old.status != DRAFT:
+            frappe.throw(_("Only Draft Cutting Plans can be edited."))
