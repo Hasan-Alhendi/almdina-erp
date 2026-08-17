@@ -22,15 +22,34 @@ jobs:
         test:
           - door_drawing_v3_architecture_contract.test.js
           - door_drawing_v3_bezier_contract.test.js
+          - door_drawing_v3_bezier_domain.test.js
           - door_drawing_v3_boolean_contract.test.js
+          - door_drawing_v3_boolean_geometry.test.js
+          - door_drawing_v3_editor_shortcuts.test.js
+          - door_drawing_v3_faithful_smart_pen.test.js
+          - door_drawing_v3_freehand.test.js
+          - door_drawing_v3_geometry.test.js
+          - door_drawing_v3_handles.test.js
+          - door_drawing_v3_keyboard_layout_shortcuts.test.js
+          - door_drawing_v3_oriented_transform.test.js
+          - door_drawing_v3_path_topology.test.js
+          - door_drawing_v3_precision_input.test.js
           - door_drawing_v3_professional_interactions_contract.test.js
+          - door_drawing_v3_professional_move.test.js
           - door_drawing_v3_shape_preserving_cleaner.test.js
           - door_drawing_v3_shortcuts_contract.test.js
+          - door_drawing_v3_smart_guides.test.js
           - door_drawing_v3_smart_stroke_reconstruction.test.js
           - door_drawing_v3_smart_suggestions.test.js
+          - door_drawing_v3_snap_candidate_engine.test.js
+          - door_drawing_v3_snapping.test.js
+          - door_drawing_v3_stroke_intelligence.test.js
+          - door_drawing_v3_text_annotation.test.js
           - door_drawing_v3_transform_contract.test.js
+          - door_drawing_v3_transform_domain.test.js
           - door_drawing_v3_unified_snap_engine.test.js
           - door_drawing_v3_vector_editing_contract.test.js
+          - door_drawing_v3_vector_selection.test.js
     steps:
       - name: Checkout
         uses: actions/checkout@v4
