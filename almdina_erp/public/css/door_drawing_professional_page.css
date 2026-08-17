@@ -1,0 +1,36 @@
+body.ald-professional-drawing-active {
+    overflow: hidden;
+}
+
+body.ald-professional-drawing-active > .navbar,
+body.ald-professional-drawing-active .navbar.navbar-expand {
+    display: none !important;
+}
+
+body.ald-professional-drawing-active .main-section,
+body.ald-professional-drawing-active .page-container,
+body.ald-professional-drawing-active .layout-main,
+body.ald-professional-drawing-active .layout-main-section-wrapper,
+body.ald-professional-drawing-active .layout-main-section {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+}
+
+body.ald-professional-drawing-active .ald-prof-page .page-head,
+body.ald-professional-drawing-active .ald-prof-page .page-title,
+body.ald-professional-drawing-active .ald-prof-page .layout-side-section {
+    display: none !important;
+}
+
+body.ald-professional-drawing-active .ald-prof-workspace {
+    height: 100vh;
+    min-height: 0;
+}
+
+@media (max-width: 650px) {
+    body.ald-professional-drawing-active .ald-prof-workspace {
+        height: 100vh;
+        min-height: 0;
+    }
+}
