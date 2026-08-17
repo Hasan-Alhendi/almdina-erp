@@ -35,20 +35,24 @@
         return new Promise(resolve => frappe.confirm(message, () => resolve(true), () => resolve(false)));
     }
 
-    function openPanel(piece, options = {}) {
+    function openPanel(reference = {}, options = {}) {
         return new Promise(resolve => {
             const overlay = document.createElement("div");
             overlay.className = "ald-ref-panel-overlay";
-            const imageUrl = String(piece && piece.special_shape_reference_image || "");
+            const imageUrl = String(reference.file_url || "");
+            const readOnly = Boolean(options.readOnly);
+            const editActions = readOnly
+                ? '<span class="ald-ref-readonly-note">عرض فقط</span>'
+                : `<button type="button" class="ald-ref-primary-button" data-upload>${imageUrl ? "استبدال الصورة" : "رفع صورة"}</button>`;
             overlay.innerHTML = `
                 <section class="ald-ref-panel" dir="rtl" role="dialog" aria-modal="true" aria-label="الصورة المرجعية للدرفة">
                     <header><div><strong>الصورة المرجعية</strong><span>صورة الورقة أو الرسم الذي استلمته من الزبون</span></div><button type="button" data-close aria-label="إغلاق">×</button></header>
                     <div class="ald-ref-panel-body">
-                        ${imageUrl ? `<div class="ald-ref-preview"><img src="${frappe.utils.escape_html(imageUrl)}" alt="الصورة المرجعية الحالية"></div>` : `<div class="ald-ref-empty-state"><span class="ald-ref-empty-icon">▧</span><strong>لا توجد صورة مرجعية بعد</strong><p>ارفع صورة من الكمبيوتر، ثم قص الجزء المهم قبل الحفظ.</p></div>`}
+                        ${imageUrl ? `<div class="ald-ref-preview"><img src="${frappe.utils.escape_html(imageUrl)}" alt="الصورة المرجعية الحالية"></div>` : `<div class="ald-ref-empty-state"><span class="ald-ref-empty-icon">▧</span><strong>لا توجد صورة مرجعية بعد</strong><p>${readOnly ? "لم تُرفق صورة مرجعية بهذه الدرفة." : "ارفع صورة من الكمبيوتر، ثم قص الجزء المهم قبل الحفظ."}</p></div>`}
                     </div>
                     <footer>
-                        <div><button type="button" class="ald-ref-secondary-button" data-close>إغلاق</button>${imageUrl ? '<button type="button" class="ald-ref-danger-button" data-remove>حذف الصورة</button>' : ""}</div>
-                        <div><button type="button" class="ald-ref-primary-button" data-upload>${imageUrl ? "استبدال الصورة" : "رفع صورة"}</button></div>
+                        <div><button type="button" class="ald-ref-secondary-button" data-close>إغلاق</button>${imageUrl && !readOnly ? '<button type="button" class="ald-ref-danger-button" data-remove>حذف الصورة</button>' : ""}</div>
+                        <div>${editActions}</div>
                     </footer>
                 </section>`;
             let settled = false;
@@ -60,8 +64,8 @@
             }
             overlay.addEventListener("click", event => {
                 if (event.target === overlay || event.target.closest("[data-close]")) finish("close");
-                else if (event.target.closest("[data-upload]")) finish("upload");
-                else if (event.target.closest("[data-remove]")) finish("remove");
+                else if (!readOnly && event.target.closest("[data-upload]")) finish("upload");
+                else if (!readOnly && event.target.closest("[data-remove]")) finish("remove");
             });
             document.body.appendChild(overlay);
         });
@@ -99,7 +103,7 @@
                     cropped.metadata
                 );
                 frappe.show_alert({ message: "تم حفظ الصورة المرجعية.", indicator: "green" }, 3);
-                return { ...context, piece: result.piece };
+                return { ...context, reference: result.reference };
             } catch (error) {
                 console.error("Reference image save failed", error);
                 frappe.msgprint("تعذر حفظ الصورة المرجعية. تحقق من الصلاحيات وحجم الصورة ثم حاول مرة أخرى.");
@@ -117,7 +121,7 @@
             try {
                 const result = await options.api.removeReferenceImage(context.order.name, context.piece.name);
                 frappe.show_alert({ message: "تم حذف الصورة المرجعية.", indicator: "green" }, 3);
-                return { ...context, piece: result.piece };
+                return { ...context, reference: result.reference };
             } catch (error) {
                 console.error("Reference image removal failed", error);
                 frappe.msgprint("تعذر حذف الصورة المرجعية.");
@@ -129,7 +133,7 @@
 
         async function open(context) {
             if (!context) return context;
-            const action = await openPanel(context.piece, { readOnly: !context.permissions.can_edit });
+            const action = await openPanel(context.reference || {}, { readOnly: !context.permissions.can_edit });
             if (action === "upload") return upload(context);
             if (action === "remove") return remove(context);
             return context;
