@@ -5,7 +5,7 @@ from typing import Any
 from frappe import _
 from frappe.utils import flt
 
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import UPLOADED_DXF
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import SYSTEM
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
@@ -59,7 +59,7 @@ def update_plan_cost_settings(
     return {
         "order_name": order.name,
         "cutting_plan": plan.name,
-        "plan_source_type": str(plan.source_type or UPLOADED_DXF),
+        "plan_source_type": str(plan.source_type or SYSTEM),
         "cost_snapshot_version": int(plan.cost_snapshot_version or 0),
         **{
             fieldname: flt(getattr(plan, fieldname, 0))
