@@ -107,6 +107,7 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertIn("initial_plan_cost_values", workspace)
         self.assertIn("initialize_draft_plan_cost_snapshot", workspace)
         self.assertIn("project_plan_costs_to_order", workspace)
+        self.assertIn("refresh_order_commercial_totals", workspace)
         self.assertIn("FrappeCuttingPlanCommandRepository", command)
         self.assertIn("Capability.EDIT_COST_SETTINGS", command)
         self.assertIn("apply_plan_costs(plan)", command)
@@ -123,9 +124,11 @@ class TestOrderCostingArchitecture(unittest.TestCase):
             "\n\n@frappe.whitelist()\ndef approve_special_piece_price", 1
         )[0]
 
+        self.assertIn("for update", focused)
         self.assertIn("update_plan_cost_settings", focused)
         self.assertIn("Capability.EDIT_COST_SETTINGS", focused)
         self.assertIn("_require_cost_visibility(order)", focused)
+        self.assertLess(focused.index("for update"), focused.index("_authorized_order("))
         self.assertNotIn("force_cutting_plan_recalculation", focused)
         self.assertNotIn("order.save(", focused)
         self.assertNotIn("ignore_permissions", focused)
