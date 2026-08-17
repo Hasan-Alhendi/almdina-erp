@@ -142,10 +142,9 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("ensureStageContext(frm).then", controls)
         self.assertIn("isStageContextPending", controls)
         self.assertIn("canMutateCurrentStage(frm)", controls)
-        self.assertIn(
-            "Only the packing-algorithm fields open here",
-            controls,
-        )
+        self.assertIn('"kerf_mm"', controls)
+        self.assertIn('"trim_margin_mm"', controls)
+        self.assertIn('can(frm, "edit_optimizer_settings")', controls)
         self.assertIn("function applyOptimizerFieldAccess(frm)", controls)
         self.assertNotIn("function canEditOptimizerSettings(frm)", plan)
 
