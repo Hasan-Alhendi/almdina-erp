@@ -77,29 +77,42 @@
             : typeof permissions.can === "function" && Boolean(permissions.can(capability));
     }
 
-    function editor() {
-        const instance = window.AlmdinaDoorDrawingV4 && window.AlmdinaDoorDrawingV4.Editor;
-        if (!instance) throw new Error("Door Drawing V4 editor is not ready");
-        return instance;
+    async function persistedRow(frm, row, readOnly) {
+        if (!frm || !row) return null;
+        const isLocal = Boolean(frm.is_new && frm.is_new()) || Boolean(row.__islocal);
+        const isDirty = Boolean(frm.is_dirty && frm.is_dirty());
+        if ((isLocal || isDirty) && !readOnly) {
+            const idx = Number(row.idx || row.piece_no || 0);
+            await frm.save();
+            return (frm.doc.pieces || []).find(candidate => Number(candidate.idx || candidate.piece_no || 0) === idx) || row;
+        }
+        if (isLocal) {
+            if (window.frappe) frappe.msgprint("احفظ الطلب أولًا قبل فتح الرسم بوضع العرض فقط.");
+            return null;
+        }
+        return row;
     }
 
-    function open(frm, row, options = {}) {
-        let resolvedOptions = options || {};
-        const readOnly = Boolean(resolvedOptions.readOnly);
+    async function open(frm, row, options = {}) {
+        let readOnly = Boolean(options && options.readOnly);
         if (!readOnly && !can(frm, "edit_special_drawing")) {
-            if (can(frm, "view_drawing_workspace")) resolvedOptions = { ...resolvedOptions, readOnly: true };
+            if (can(frm, "view_drawing_workspace")) readOnly = true;
             else {
                 if (window.frappe) frappe.msgprint("ليس لديك صلاحية فتح مساحة رسم الدرفة الخاصة.");
-                return Promise.resolve(null);
+                return null;
             }
         }
-        return boot()
-            .then(() => editor().open(frm, row, resolvedOptions))
-            .catch(error => {
-                console.error(error);
-                if (window.frappe) frappe.msgprint("تعذر تحميل محرر رسم الدرفة. أعد تحميل الصفحة ثم حاول مرة أخرى.");
-                return null;
-            });
+        try {
+            const savedRow = await persistedRow(frm, row, readOnly);
+            if (!savedRow) return null;
+            if (!frm.doc.name || !savedRow.name) throw new Error("Saved order and piece identifiers are required");
+            frappe.set_route("door-drawing", frm.doc.name, savedRow.name);
+            return Object.freeze({ orderName: frm.doc.name, pieceName: savedRow.name, readOnly });
+        } catch (error) {
+            console.error("Failed to open professional door drawing workspace", error);
+            if (window.frappe) frappe.msgprint("تعذر فتح مساحة الرسم. احفظ الطلب ثم حاول مرة أخرى.");
+            return null;
+        }
     }
 
     function view(frm, row) { return open(frm, row, { readOnly: true }); }
@@ -142,6 +155,7 @@
         __constraintFoundation: true,
         __transactionalConstraintSolver: true,
         __drivingDimensions: true,
+        __standaloneProfessionalWorkspace: true,
     };
 
     window.AlmdinaSpecialShapeEditor = Object.freeze(facade);
