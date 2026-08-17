@@ -218,7 +218,7 @@
             return Promise.resolve(frappe.require(module.asset))
                 .then(() => {
                     if (!globalExists(module.global)) {
-                        throw new Error(`Module did not initialize: ${module.global}`);
+                        throw new Error(`Module did not initialize: ${module.global}`));
                     }
                     return window[module.global];
                 });
@@ -400,9 +400,10 @@
 
     registerProtectedModuleSurface(permissions);
 
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-        attempts += 1;
-        if (ensureOrderModules() || attempts >= 100) window.clearInterval(timer);
-    }, 100);
+    // One boot-time attempt is enough. Future order visits are owned by the
+    // router hook above, while an order whose DocType bundle is already loading
+    // registers the DocumentContext recovery surface at the top of this file.
+    // The previous 100ms interval woke the Desk up for as long as ten seconds
+    // when no order was open.
+    window.setTimeout(ensureOrderModules, 0);
 })();
