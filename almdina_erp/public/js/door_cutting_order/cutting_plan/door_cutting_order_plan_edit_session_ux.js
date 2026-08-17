@@ -71,12 +71,29 @@
         return ACTIVE_ROUTED_STATUSES.has(status);
     }
 
+    function isDrawingStage(frm) {
+        if (!frm || !frm.doc) return false;
+        const status = String(frm.doc.status || "").trim();
+        const stageType = String(
+            frm.__almdina_stage_type
+            || (frm.__almdina_stage_context && frm.__almdina_stage_context.active_stage_type)
+            || ""
+        ).trim();
+        return status === "At Drawing" || stageType === "Drawing";
+    }
+
     function lifecycleAllowsEdit(frm) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
         if (frm.is_new && frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
-        if (String(frm.doc.approved_plan || "").trim()) return false;
         if ((frm.doc.revision_state || "Current") === "Superseded") return false;
+
+        // An approved snapshot remains the production authority while Drawing
+        // prepares its replacement. It locks later stages, but does not remove
+        // the focused optimizer-edit capability while the order is still at Drawing.
+        if (String(frm.doc.approved_plan || "").trim() && !isDrawingStage(frm)) {
+            return false;
+        }
 
         // The focused plan-settings capability owns this edit surface. A routed
         // order is still active when its authoritative order status is one of the

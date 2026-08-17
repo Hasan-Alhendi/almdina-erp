@@ -286,8 +286,9 @@ function makePlanEditForm(overrides = {}) {
 
     // Regression for DCO-2026-00005 from the real designer surface: an order at
     // `At Drawing` remains in an active routed lifecycle even when the form
-    // snapshot does not expose current_production_stage. The focused capability
-    // must therefore surface the plan-settings edit action.
+    // snapshot does not expose current_production_stage. A previous approved
+    // snapshot remains immutable, but it does not permanently lock preparation
+    // of its replacement while the order is still at Drawing.
     const authorizedPlanEdit = loadPlanEditSession({ allowed: true });
     assert.equal(
         authorizedPlanEdit.canEditPlanSettings(makePlanEditForm()),
@@ -303,8 +304,19 @@ function makePlanEditForm(overrides = {}) {
         authorizedPlanEdit.canEditPlanSettings(
             makePlanEditForm({ approved_plan: "CP-APPROVED-001" })
         ),
+        true,
+        "an approved snapshot must not permanently lock plan settings while the order is still at Drawing"
+    );
+    assert.equal(
+        authorizedPlanEdit.canEditPlanSettings(
+            makePlanEditForm({
+                approved_plan: "CP-APPROVED-001",
+                status: "At CNC",
+                current_production_stage: "STAGE-CNC",
+            })
+        ),
         false,
-        "approved cutting plans must remain locked"
+        "approved cutting plans must be locked after the order leaves Drawing"
     );
 
     const deniedPlanEdit = loadPlanEditSession({ allowed: false });
@@ -312,6 +324,13 @@ function makePlanEditForm(overrides = {}) {
         deniedPlanEdit.canEditPlanSettings(makePlanEditForm()),
         false,
         "At Drawing must never bypass edit_optimizer_settings"
+    );
+    assert.equal(
+        deniedPlanEdit.canEditPlanSettings(
+            makePlanEditForm({ approved_plan: "CP-APPROVED-001" })
+        ),
+        false,
+        "an approved plan at Drawing must still require edit_optimizer_settings"
     );
 
     console.log("Order lifecycle permission simulation passed");

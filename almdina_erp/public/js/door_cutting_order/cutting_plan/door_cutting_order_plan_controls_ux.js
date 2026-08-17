@@ -187,12 +187,34 @@
         return holdsStageOperationalRole(frm);
     }
 
+    function isDrawingStage(frm) {
+        if (!frm || !frm.doc) return false;
+        const status = String(frm.doc.status || "").trim();
+        const stageType = String(
+            frm.__almdina_stage_type
+            || (frm.__almdina_stage_context && frm.__almdina_stage_context.active_stage_type)
+            || ""
+        ).trim();
+        return status === "At Drawing" || stageType === "Drawing";
+    }
+
     function canTuneCuttingAlgorithm(frm) {
+        if (!frm || frm.is_new()) return false;
+        if (Number(frm.doc.docstatus || 0) !== 0) return false;
+        if (String(frm.doc.revision_state || "Current") === "Superseded") return false;
+
+        // The shared context intentionally treats an approved plan as immutable.
+        // Drawing may nevertheless prepare a replacement, but running the engine
+        // remains stage-scoped: the actor must still hold the active stage role.
+        if (frm.doc.approved_plan && isDrawingStage(frm)) {
+            return canMutateCurrentStage(frm);
+        }
+
         const context = documentContext();
         if (context && typeof context.canTuneCuttingAlgorithm === "function") {
             return context.canTuneCuttingAlgorithm(frm);
         }
-        if (!frm || frm.is_new() || frm.doc.approved_plan) return false;
+        if (frm.doc.approved_plan) return false;
         if (!canMutateCurrentStage(frm)) return false;
         if (frm.doc.current_production_stage) return true;
         return EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft");
@@ -220,7 +242,9 @@
 
     function recalculationDisabledReason(frm) {
         if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
-        if (frm.doc.approved_plan) return __("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
+        if (frm.doc.approved_plan && !isDrawingStage(frm)) {
+            return __("الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم.");
+        }
         if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");
         const stageReason = stageMutationBlockReason(frm);
         if (stageReason) return __(stageReason);

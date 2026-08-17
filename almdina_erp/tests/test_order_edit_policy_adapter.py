@@ -89,26 +89,30 @@ class TestOrderEditPolicyAdapter(unittest.TestCase):
         self.assertFalse(allowed_policy.user_can_edit_order("At CNC", "editor@example.com"))
         self.assertFalse(allowed_policy.user_can_edit_order("Draft", revision_state="Superseded"))
 
-    def test_drawing_recalculation_short_circuits_before_database_lookup(self) -> None:
+    def test_drawing_recalculation_permission_still_short_circuits_before_stage_lookup(self) -> None:
         denied = AdapterHarness(can_recalculate=False)
         denied_policy = denied.load()
         order = {
             "status": "Production In Progress",
             "production_path": "Drawing",
             "current_production_stage": "STAGE-DRAWING",
-            "approved_plan": None,
+            "approved_plan": "PLAN-0001",
         }
         self.assertFalse(denied_policy.user_can_recalculate_drawing_system_plan(order))
         self.assertEqual(denied.db.calls, [])
 
-        approved = AdapterHarness(can_recalculate=True)
-        approved_policy = approved.load()
-        self.assertFalse(
-            approved_policy.user_can_recalculate_drawing_system_plan(
-                {**order, "approved_plan": "PLAN-0001"}
-            )
-        )
-        self.assertEqual(approved.db.calls, [])
+    def test_approved_plan_can_prepare_replacement_at_explicit_drawing_status(self) -> None:
+        harness = AdapterHarness(can_recalculate=True)
+        policy = harness.load()
+        order = {
+            "status": "At Drawing",
+            "production_path": "Drawing",
+            "current_production_stage": "STAGE-DRAWING",
+            "approved_plan": "PLAN-0001",
+        }
+
+        self.assertTrue(policy.user_can_recalculate_drawing_system_plan(order))
+        self.assertEqual(harness.db.calls, [])
 
     def test_drawing_stage_fallback_reads_only_the_current_stage_type(self) -> None:
         harness = AdapterHarness(can_recalculate=True)
@@ -118,13 +122,30 @@ class TestOrderEditPolicyAdapter(unittest.TestCase):
             "status": "Production In Progress",
             "production_path": "Drawing",
             "current_production_stage": "STAGE-DRAWING",
-            "approved_plan": None,
+            "approved_plan": "PLAN-0001",
         }
 
         self.assertTrue(policy.user_can_recalculate_drawing_system_plan(order))
         self.assertEqual(
             harness.db.calls,
             [("Production Stage", "STAGE-DRAWING", "stage_type")],
+        )
+
+    def test_non_drawing_stage_keeps_approved_plan_recalculation_closed(self) -> None:
+        harness = AdapterHarness(can_recalculate=True)
+        harness.db.stage_types["STAGE-CNC"] = "CNC"
+        policy = harness.load()
+        order = {
+            "status": "At CNC",
+            "production_path": "Production Route",
+            "current_production_stage": "STAGE-CNC",
+            "approved_plan": "PLAN-0001",
+        }
+
+        self.assertFalse(policy.user_can_recalculate_drawing_system_plan(order))
+        self.assertEqual(
+            harness.db.calls,
+            [("Production Stage", "STAGE-CNC", "stage_type")],
         )
 
     def test_explicit_at_drawing_status_avoids_database_lookup(self) -> None:
