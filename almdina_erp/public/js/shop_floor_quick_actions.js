@@ -14,22 +14,24 @@
 
     let workerDropdownSequence = 0;
 
-    function ensureStylesheet(id, href) {
+    function ensureShopFloorStylesheet() {
         if (typeof document === "undefined" || !document.head) return;
-        if (document.getElementById(id)) return;
+        if (document.getElementById(SHOP_FLOOR_STYLESHEET_ID)) return;
         const link = document.createElement("link");
-        link.id = id;
+        link.id = SHOP_FLOOR_STYLESHEET_ID;
         link.rel = "stylesheet";
-        link.href = href;
+        link.href = SHOP_FLOOR_STYLESHEET_HREF;
         document.head.appendChild(link);
     }
 
-    function ensureShopFloorStylesheet() {
-        ensureStylesheet(SHOP_FLOOR_STYLESHEET_ID, SHOP_FLOOR_STYLESHEET_HREF);
-    }
-
     function ensureWorkerDropdownStylesheet() {
-        ensureStylesheet(WORKER_DROPDOWN_STYLESHEET_ID, WORKER_DROPDOWN_STYLESHEET_HREF);
+        if (typeof document === "undefined" || !document.head) return;
+        if (document.getElementById(WORKER_DROPDOWN_STYLESHEET_ID)) return;
+        const link = document.createElement("link");
+        link.id = WORKER_DROPDOWN_STYLESHEET_ID;
+        link.rel = "stylesheet";
+        link.href = WORKER_DROPDOWN_STYLESHEET_HREF;
+        document.head.appendChild(link);
     }
 
     function actionFor(context) {
