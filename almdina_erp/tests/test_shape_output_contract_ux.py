@@ -48,14 +48,31 @@ def _source(path: Path) -> str:
 
 def test_shape_output_contract_is_pure_immutable_and_version_aware():
     source = _source(CONTRACT)
-    for dependency in ("frappe", "document", "querySelector", "addEventListener"):
+    for dependency in ("frappe", "document.", "querySelector", "addEventListener"):
         assert dependency not in source
     assert "const DRAWING_VERSION = 1;" in source
     assert "window.AlmdinaShapeOutputContract = Object.freeze({" in source
     assert "drawingFromPiece" in source
     assert "geometryFromPiece" in source
+    assert "referenceImageFromPiece" in source
+    assert "hasDocumentation" in source
     assert "hasExactCutPath" in source
     assert "dxfPoints" in source
+
+
+def test_reference_image_is_documentation_but_not_exact_cut_geometry():
+    source = _source(CONTRACT)
+    documentation = source[
+        source.index("function hasDocumentation(piece)"):
+        source.index("function hasExactCutPath(piece)")
+    ]
+    exact = source[
+        source.index("function hasExactCutPath(piece)"):
+        source.index("function pointsAttribute(piece")
+    ]
+    assert "referenceImageFromPiece(piece)" in documentation
+    assert "referenceImageFromPiece(piece)" not in exact
+    assert "module.isExact" in exact
 
 
 def test_contract_loads_before_active_shape_output_consumers():
