@@ -173,9 +173,12 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
 
     def test_workforce_create_action_flash_is_guarded(self) -> None:
         source = (PUBLIC / "permission_action_visibility_guard.js").read_text(encoding="utf-8")
-        self.assertIn('currentRoute() !== "factory-workforce"', source)
+        self.assertIn('state.route === "factory-workforce"', source)
+        self.assertIn('if (mode === "workforce") guardWorkforceActions(root);', source)
         self.assertIn('can("create_users")', source)
         self.assertIn("MutationObserver", source)
+        self.assertIn("startTransientObserver", source)
+        self.assertIn('window.addEventListener("almdina:permissions-updated", refreshSurface)', source)
         manifest = MANIFEST.read_text(encoding="utf-8")
         self.assertIn("permission_action_visibility_guard.js", manifest)
 
