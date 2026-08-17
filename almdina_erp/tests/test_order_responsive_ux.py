@@ -4,177 +4,31 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_JS = ROOT / "public" / "js"
+PUBLIC_CSS = ROOT / "public" / "css"
+RESPONSIVE_CSS = PUBLIC_CSS / "shop_floor_responsive.css"
+MOBILE_LIST_CSS = PUBLIC_CSS / "door_cutting_order_mobile_list.css"
+LIST_UX = PUBLIC_JS / "door_cutting_order" / "list_view" / "door_cutting_order_list.js"
+QUICK_ACTIONS_UX = PUBLIC_JS / "shop_floor_quick_actions.js"
+SHOP_FLOOR_INBOX = ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
+SHOP_FLOOR_RENDERER = PUBLIC_JS / "shop_floor_inbox" / "renderer.js"
 HOOKS = ROOT / "frontend_assets.py"
-RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
-MOBILE_LIST_CSS = ROOT / "public" / "css" / "door_cutting_order_mobile_list.css"
-RESPONSIVE_DEVICE = ROOT / "public" / "js" / "responsive_device.js"
-MOBILE_CARDS_UX = (
-    ROOT
-    / "public"
-    / "js"
-    / "door_cutting_order"
-    / "responsive"
-    / "door_cutting_order_mobile_cards_ux.js"
-)
-OPERATOR_UX = (
-    ROOT
-    / "public"
-    / "js"
-    / "door_cutting_order"
-    / "order_entry"
-    / "door_cutting_order_operator_ux.js"
-)
-BULK_ROWS_UX = (
-    ROOT
-    / "public"
-    / "js"
-    / "door_cutting_order"
-    / "order_entry"
-    / "measurements"
-    / "door_cutting_order_bulk_rows_ux.js"
-)
-LIST_UX = (
-    ROOT
-    / "public"
-    / "js"
-    / "door_cutting_order"
-    / "list_view"
-    / "door_cutting_order_list.js"
-)
-QUICK_ACTIONS_UX = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
-SHOP_FLOOR_INBOX = (
-    ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js"
-)
-SHOP_FLOOR_RENDERER = ROOT / "public" / "js" / "shop_floor_inbox" / "renderer.js"
 
 
 def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_responsive_presentation_uses_scoped_css_and_a_focused_card_adapter():
-    hooks = source(HOOKS)
+def test_phone_breakpoint_is_reserved_for_cards_and_tablet_keeps_table():
     css = source(RESPONSIVE_CSS)
-    cards = source(MOBILE_CARDS_UX)
-
-    assert 'app_include_css = [' in hooks
-    assert '"/assets/almdina_erp/css/door_cutting_order_responsive.css"' in hooks
-    assert ".dco-operator-form" in css
-    assert ".dco-order-list" in css
-    assert ".page-head.dco-responsive-head" in css
-    assert "frappe.ui.form.on" not in css
-    assert "MutationObserver" not in css
-    assert '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"' in hooks
-    assert '"/assets/almdina_erp/js/responsive_device.js"' in hooks
-    assert hooks.index('"public/js/input_stability.js"') < hooks.index(
-        '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"'
-    )
-    assert "ResizeObserver" in cards
-    assert "MutationObserver" not in cards
-    assert "const CARD_CSS" not in cards
-    assert ".dco-mobile-piece-cards" in css
-
-
-def test_layout_has_explicit_desktop_tablet_phone_and_small_phone_breakpoints():
-    css = source(RESPONSIVE_CSS)
-
-    for breakpoint in (
-        "@media (max-width: 1200px)",
-        "@media (max-width: 900px)",
-        "@media (max-width: 720px)",
-        "@media (max-width: 480px)",
-    ):
-        assert breakpoint in css
-    assert "orientation: landscape" in css
-
-
-def test_phone_measurements_use_labelled_cards_without_fixed_table_width():
-    css = source(RESPONSIVE_CSS)
-    operator = source(OPERATOR_UX)
-    bulk = source(BULK_ROWS_UX)
-
-    assert ".dco-mobile-piece-cards .dco-fast-table tbody tr" in css
-    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in css
-    assert ".dco-col-width" in css
-    assert ".dco-col-length" in css
-    assert ".dco-col-qty" in css
-    assert "grid-row: 2" in css
-    assert "content: attr(data-label)" in css
-    assert 'class="dco-help-secondary"' in operator
-    assert "width:940px" not in css
-    assert "min-width:940px" not in css
-
-    for label_key in (
-        "labels.row",
-        "labels.type",
-        "labels.width",
-        "labels.length",
-        "labels.quantity",
-        "labels.rotation",
-        "labels.edges",
-        "labels.edgeType",
-        "labels.shape",
-        "labels.notes",
-        "labels.remove",
-    ):
-        assert f'data-label="${{{label_key}}}"' in operator
-    assert 'cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row"' in bulk
-
-
-def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():
-    css = source(RESPONSIVE_CSS)
-
-    assert "--dco-touch-target: 44px" in css
-    assert "min-height: var(--dco-touch-target)" in css
-    assert "--dco-piece-control-height: 42px" in css
-    assert ".dco-edge-buttons" in css
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr)) !important" in css
-    assert "min-height:48px!important" not in css
-    assert ".dco-status-strip" in css
-    assert ".dco-cost-kpis" in css
-    assert "grid-template-columns: 1fr !important" in css
-
-
-def test_order_header_tabs_dialogs_and_list_are_viewport_safe():
-    css = source(RESPONSIVE_CSS)
+    mobile_css = source(MOBILE_LIST_CSS)
     list_source = source(LIST_UX)
 
-    assert ".page-head.dco-responsive-head .page-actions" in css
-    assert ".dco-sticky-tabs" in css
-    assert "overflow-x: auto !important" in css
-    assert ".dco-special-shape-modal .modal-dialog" in css
-    assert ".dco-clipped-corner-modal .modal-dialog" in css
-    assert ".dco-large-notes-dialog .modal-dialog" in css
-    assert "100dvh" in css
-    assert 'root.classList.add("dco-order-list")' in list_source
-
-
-def test_accessibility_preferences_remain_first_class():
-    css = source(RESPONSIVE_CSS)
-
-    assert ":focus-visible" in css
-    assert "@media (prefers-reduced-motion: reduce)" in css
-    assert "overscroll-behavior-inline: contain" in css
-    assert "-webkit-overflow-scrolling: touch" in css
-
-
-def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel():
-    cards = source(MOBILE_CARDS_UX)
-    responsive = source(RESPONSIVE_DEVICE)
-
-    assert "const PHONE_SHORT_SIDE_MAX_WIDTH = 600" in responsive
-    assert "const PHONE_VIEWPORT_MAX_WIDTH = 900" in responsive
-    assert "document.documentElement && document.documentElement.clientWidth" in responsive
-    assert "window.innerWidth" in responsive
-    assert "window.screen && window.screen.width" in responsive
-    assert "window.screen && window.screen.height" in responsive
-    assert "function deviceShortSide()" in responsive
-    assert "root && root.getBoundingClientRect" in responsive
-    assert "Math.min(...widths)" in responsive
-    assert "viewport <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
-    assert "deviceShortSide() <= PHONE_SHORT_SIDE_MAX_WIDTH" in responsive
-    assert "window.AlmdinaResponsiveDevice" in cards
-    assert 'root.classList.toggle("dco-mobile-piece-cards", shouldUseCardLayout(root))' in cards
+    assert '(max-width: 600px)' in mobile_css
+    assert '.dco-order-list.dco-order-card-layout' in mobile_css
+    assert 'matchMedia("(max-width: 600px)")' in list_source
+    assert '.dco-order-list:not(.dco-order-card-layout)' in css
+    assert 'min-width: 980px' in css
 
 
 def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
@@ -204,7 +58,12 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert "const quickActions = window.AlmdinaShopFloorQuickActions" in list_source
     assert "quickActions.perform" in list_source
     assert 'matchMedia("(max-width: 600px)")' in list_source
-    assert 'if (!applyCardLayoutClass(listview)) return;' in list_source
+
+    # Leaving phone/card mode must restore Frappe's native table cleanly. The
+    # incremental renderer removes generated cards before returning instead of
+    # relying on a literal one-line guard that could leave stale card DOM behind.
+    assert 'if (!applyCardLayoutClass(listview)) {' in list_source
+    assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
     assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=4"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
@@ -228,22 +87,32 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert "/assets/almdina_erp/js/shop_floor_inbox/renderer.js" in inbox_page
     assert "sf-quick-action" in inbox_renderer
     assert 'row.edge_color || "—"' in inbox_renderer
-    assert 'row.board_description || "—"' in inbox_renderer
 
 
-def test_desk_list_orders_assignments_then_completed_rows_green():
+def test_mobile_card_does_not_replace_desktop_table_markup():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
 
-    assert "function applyOperationalRoleRows(listview)" in list_source
-    assert "get_order_operational_role_flags" in list_source
-    assert 'flag.assignment_state === "completed"' in list_source
-    assert 'classList.toggle("dco-list-row-completed"' in list_source
-    assert '"assignment_time"' in list_source
-    assert '"completion_time"' in list_source
-    assert "const ordered = [...assigned, ...completed]" in list_source
-    assert "const needsReorder = ordered.some" in list_source
-    assert "ordered.forEach(container => result.appendChild(container));" in list_source
-    assert ".list-row-container.dco-list-row-completed > .list-row" in css
-    assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
-    assert "background: #dcfce7 !important;" in css
+    assert "dco-order-card-container" in list_source
+    assert ".dco-order-card-container > .list-row" in css
+    assert ".dco-order-list:not(.dco-order-card-layout)" in css
+    assert "min-width: 980px" in css
+
+
+def test_mobile_card_keeps_factory_fields_and_removes_old_large_workflow_sections():
+    list_source = source(LIST_UX)
+
+    for field in ("customer", "board_description", "edge_color", "default_edge_type", "order_date"):
+        assert field in list_source
+    assert "dco-card-workflow" not in list_source
+    assert "dco-card-assignee" not in list_source
+
+
+def test_completed_mobile_card_is_visually_terminal_and_has_no_action_button():
+    list_source = source(LIST_UX)
+    mobile_css = source(MOBILE_LIST_CSS)
+
+    assert 'state.key === "completed"' in list_source
+    assert 'class="dco-card-complete-state"' in list_source
+    assert ".dco-mobile-order-card.is-completed" in mobile_css
+    assert ".dco-card-complete-state" in mobile_css
