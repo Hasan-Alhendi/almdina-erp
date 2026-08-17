@@ -107,24 +107,6 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
     return values
 
 
-def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
-    """Maintain legacy DCO financial fields as a one-way compatibility projection."""
-
-    values = {fieldname: flt(getattr(plan, fieldname, 0)) for fieldname in PLAN_COST_FIELDS}
-    meta = frappe.get_meta("Door Cutting Order")
-    values = {key: value for key, value in values.items() if meta.has_field(key)}
-    if values:
-        frappe.db.set_value(
-            "Door Cutting Order",
-            order.name,
-            values,
-            update_modified=False,
-        )
-        for fieldname, value in values.items():
-            setattr(order, fieldname, value)
-    return values
-
-
 def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
     """Refresh only quote totals that depend on the plan-owned board/cutting cost.
 
@@ -181,6 +163,25 @@ def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
     )
     for fieldname, value in values.items():
         setattr(order, fieldname, value)
+    return values
+
+
+def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
+    """Project Plan financials to legacy DCO fields and dependent quote totals."""
+
+    values = {fieldname: flt(getattr(plan, fieldname, 0)) for fieldname in PLAN_COST_FIELDS}
+    meta = frappe.get_meta("Door Cutting Order")
+    values = {key: value for key, value in values.items() if meta.has_field(key)}
+    if values:
+        frappe.db.set_value(
+            "Door Cutting Order",
+            order.name,
+            values,
+            update_modified=False,
+        )
+        for fieldname, value in values.items():
+            setattr(order, fieldname, value)
+    refresh_order_commercial_totals(order, plan)
     return values
 
 
