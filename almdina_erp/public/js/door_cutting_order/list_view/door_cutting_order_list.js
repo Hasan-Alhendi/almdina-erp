@@ -4,6 +4,8 @@
     const METHODS = Object.freeze({
         doctype: "Door Cutting Order",
     });
+    const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -33,6 +35,16 @@
     function rootNode(listview) {
         const wrapper = listview && listview.page && listview.page.wrapper;
         return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
+    }
+
+    function ensureMobileCardStylesheet() {
+        if (typeof document === "undefined" || !document.head) return;
+        if (document.getElementById(MOBILE_CARD_STYLESHEET_ID)) return;
+        const link = document.createElement("link");
+        link.id = MOBILE_CARD_STYLESHEET_ID;
+        link.rel = "stylesheet";
+        link.href = MOBILE_CARD_STYLESHEET_HREF;
+        document.head.appendChild(link);
     }
 
     function escapeHtml(value) {
@@ -214,7 +226,29 @@
             stageType: STAGE_BY_DEPARTMENT[doc.current_department] || doc.current_department,
             canStart: authorized.canStart === true,
             canHandoff: authorized.canHandoff === true,
+            assignmentState: authorized.assignmentState || "",
         };
+    }
+
+    function mobileActionLabel(action) {
+        if (!action) return "";
+        if (action.kind === "start") return __("بدء العمل");
+        if (action.kind === "handoff") return __("إنهاء العمل");
+        return action.label || "";
+    }
+
+    function mobileActionClass(action) {
+        if (!action) return "";
+        if (action.kind === "handoff") return "is-finish";
+        return "is-start";
+    }
+
+    function mobileActionConfirmation(action, doc) {
+        const orderName = displayValue(doc && doc.name);
+        if (action && action.kind === "handoff") {
+            return `${__("هل تريد تأكيد إنهاء العمل على الطلب؟")} ${orderName}`;
+        }
+        return `${__("هل تريد بدء العمل على الطلب؟")} ${orderName}`;
     }
 
     function field(label, value, className = "") {
@@ -231,18 +265,43 @@
         const context = quickActionContext(doc);
         const quickActions = window.AlmdinaShopFloorQuickActions;
         const action = quickActions && quickActions.actionFor(context);
-        const actionClass = action && action.indicator === "success" ? "btn-success" : "btn-primary";
+        const isCompleted = context.assignmentState === "completed";
+        const completedClass = isCompleted ? " dco-list-row-completed" : "";
         const department = String(doc.current_department || "").trim() || __("لم يبدأ الإنتاج");
         const departmentStatus = String(doc.department_status || "").trim() || __("غير مسند");
         const assignee = String(doc.current_assignee || "").trim();
+        const workflowFooter = action
+            ? `
+                <footer class="dco-card-actions">
+                    <button
+                        type="button"
+                        class="btn dco-card-production-action ${mobileActionClass(action)}"
+                        data-action-kind="${escapeHtml(action.kind)}"
+                    >${escapeHtml(mobileActionLabel(action))}</button>
+                </footer>
+            `
+            : isCompleted
+                ? `
+                    <div class="dco-card-complete-state" role="status">
+                        <span class="dco-card-complete-icon" aria-hidden="true">✓</span>
+                        <span>${escapeHtml(__("تم الإنجاز"))}</span>
+                    </div>
+                `
+                : "";
         return `
-            <article class="dco-mobile-order-card" data-order-name="${escapeHtml(doc.name)}">
+            <article class="dco-mobile-order-card${completedClass}" data-order-name="${escapeHtml(doc.name)}">
                 <header class="dco-card-header">
                     <div class="dco-card-leading">
                         ${hasSelection ? `<input type="checkbox" class="dco-card-select" aria-label="${escapeHtml(__("تحديد الطلب"))} ${escapeHtml(doc.name)}">` : ""}
                         <div class="dco-card-identity">
-                            <button type="button" class="dco-card-order-link" aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(doc.name)}">
-                                ${escapeHtml(doc.name)}
+                            <button
+                                type="button"
+                                class="dco-card-order-link"
+                                aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(doc.name)}"
+                                title="${escapeHtml(__("فتح الطلب"))}"
+                            >
+                                <span>${escapeHtml(doc.name)}</span>
+                                <span class="dco-card-order-link-arrow" aria-hidden="true">‹</span>
                             </button>
                             <span class="dco-card-customer">${escapeHtml(displayValue(doc.customer))}</span>
                         </div>
@@ -270,10 +329,7 @@
                     ${field("تاريخ الطلب", dateLabel(doc.order_date))}
                     ${field("مسار الإنتاج", productionPathLabel(doc.production_path), "dco-card-wide-field")}
                 </div>
-                <footer class="dco-card-actions">
-                    ${action ? `<button type="button" class="btn ${actionClass} dco-card-production-action">${escapeHtml(action.label)}</button>` : ""}
-                    <button type="button" class="btn btn-default dco-card-open">${escapeHtml(__("فتح الطلب"))}</button>
-                </footer>
+                ${workflowFooter}
             </article>
         `;
     }
@@ -284,8 +340,8 @@
             event.stopPropagation();
             frappe.set_route("Form", METHODS.doctype, doc.name);
         };
-        card.querySelector(".dco-card-order-link").addEventListener("click", open);
-        card.querySelector(".dco-card-open").addEventListener("click", open);
+        const orderLink = card.querySelector(".dco-card-order-link");
+        if (orderLink) orderLink.addEventListener("click", open);
 
         const mobileCheckbox = card.querySelector(".dco-card-select");
         if (mobileCheckbox && originalCheckbox) {
@@ -301,14 +357,24 @@
         }
 
         const actionButton = card.querySelector(".dco-card-production-action");
-        if (actionButton && window.AlmdinaShopFloorQuickActions) {
+        const quickActions = window.AlmdinaShopFloorQuickActions;
+        if (actionButton && quickActions) {
             actionButton.addEventListener("click", event => {
                 event.preventDefault();
                 event.stopPropagation();
-                window.AlmdinaShopFloorQuickActions.perform(quickActionContext(doc), {
-                    button: actionButton,
-                    onSuccess: () => listview.refresh(),
-                });
+                const context = quickActionContext(doc);
+                const action = quickActions.actionFor(context);
+                if (!action) return;
+                frappe.confirm(
+                    mobileActionConfirmation(action, doc),
+                    () => quickActions.perform(context, {
+                        button: actionButton,
+                        onSuccess: () => listview.refresh(),
+                        // The mobile card already asked for confirmation. Avoid a
+                        // second confirmation when this happens to be the final stage.
+                        skipFinalConfirmation: action.kind === "handoff",
+                    })
+                );
             });
         }
         container.classList.add("dco-order-card-container");
@@ -331,6 +397,7 @@
             .map(container => ({ container, name: rowDocumentName(container) }))
             .filter(item => item.name && docs.has(item.name));
         if (!applyCardLayoutClass(listview)) return;
+        ensureMobileCardStylesheet();
 
         containers.forEach(({ container, name }) => {
             const doc = docs.get(name);
@@ -444,6 +511,7 @@
                 stage: flag.active_stage_name || doc.current_production_stage || "",
                 canStart: flag.can_start_stage === true,
                 canHandoff: flag.can_handoff_stage === true,
+                assignmentState: flag.assignment_state || "",
             };
         });
         // The first paint intentionally has no guessed action. Rebuild phone

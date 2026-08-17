@@ -14,6 +14,7 @@ assert(source.includes("get_handoff_context"), "handoff decisions must come from
 
 const calls = [];
 const alerts = [];
+let confirmationCount = 0;
 let handoffContext = {
     final_stage: false,
     next_stage_type: "CNC",
@@ -48,7 +49,10 @@ const context = {
             }
             return Promise.resolve({ message: { ok: true } });
         },
-        confirm(message, yes) { yes(); },
+        confirm(message, yes) {
+            confirmationCount += 1;
+            yes();
+        },
         prompt(fields, submit) { submit({ next_assignee: "cnc@example.com" }); },
         show_alert(message) { alerts.push(message); },
         msgprint(message) { throw new Error(message); },
@@ -103,13 +107,34 @@ vm.runInContext(source, context);
         canHandoff: true,
     }, { button });
     await new Promise(resolve => setImmediate(resolve));
+    assert.strictEqual(confirmationCount, 1, "the shared final-stage flow must keep its confirmation by default");
     assert(calls.some(call => (
         call.method.endsWith("handoff_to_next")
         && call.args.stage_name === "PST-FINAL"
         && !Object.prototype.hasOwnProperty.call(call.args, "next_assignee")
     )));
 
-    assert(alerts.length >= 3);
+    // A caller that already confirmed the worker action (the mobile order card)
+    // can suppress only the duplicate final-stage confirmation.
+    const confirmationsBeforeMobileFinal = confirmationCount;
+    await api.perform({
+        order: "DCO-MOBILE-FINAL",
+        stage: "PST-MOBILE-FINAL",
+        stageType: "Packing",
+        canHandoff: true,
+    }, { button, skipFinalConfirmation: true });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.strictEqual(
+        confirmationCount,
+        confirmationsBeforeMobileFinal,
+        "an already-confirmed mobile handoff must not show a second confirmation"
+    );
+    assert(calls.some(call => (
+        call.method.endsWith("handoff_to_next")
+        && call.args.stage_name === "PST-MOBILE-FINAL"
+    )));
+
+    assert(alerts.length >= 4);
     assert.strictEqual(button.disabled, false);
 
     console.log("Shop-floor route-aware quick-action simulation passed");

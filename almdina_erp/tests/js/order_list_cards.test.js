@@ -38,9 +38,13 @@ const context = {
         },
         AlmdinaShopFloorQuickActions: {
             actionFor(actionContext) {
-                return actionContext.canStart
-                    ? { kind: "start", label: "بدء العمل", indicator: "primary" }
-                    : null;
+                if (actionContext.canStart) {
+                    return { kind: "start", label: "بدء العمل", indicator: "primary" };
+                }
+                if (actionContext.canHandoff) {
+                    return { kind: "handoff", label: "إنهاء وإرسال", indicator: "success" };
+                }
+                return null;
             },
         },
     },
@@ -69,6 +73,7 @@ const doc = {
         stage: "PST-10",
         canStart: true,
         canHandoff: false,
+        assignmentState: "assigned",
     },
 };
 
@@ -77,9 +82,62 @@ assert(html.includes('class="dco-mobile-order-card"'), "the compact row must be 
 assert(html.includes('class="dco-card-workflow"'), "production state must have a dedicated visual group");
 assert(html.includes("أسود"), "the card must show edge color");
 assert(html.includes("MDF أبيض 18 مم"), "the card must show the board description");
-assert(html.includes("بدء العمل"), "the assigned worker must get the valid quick action");
-assert(html.includes("فتح الطلب"), "the card must retain a clear detail action");
+assert(html.includes("بدء العمل"), "the assigned worker must get the start action");
+assert(html.includes('data-action-kind="start"'), "the start state must be explicit in the mobile card");
+assert(html.includes('class="dco-card-order-link"'), "the order ID must be the detail-navigation affordance");
+assert(!html.includes("dco-card-open"), "the redundant open-order footer button must be removed");
 assert(!html.includes("<select"), "the card must not expose an arbitrary status selector");
+
+const inProgress = {
+    ...doc,
+    department_status: "قيد العمل",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: true,
+        assignmentState: "assigned",
+    },
+};
+const inProgressHtml = api.buildCard(inProgress, false);
+assert(inProgressHtml.includes("إنهاء العمل"), "an active mobile assignment must expose a clear finish action");
+assert(inProgressHtml.includes('data-action-kind="handoff"'));
+assert(!inProgressHtml.includes("إنهاء وإرسال"), "the compact mobile label should describe the worker action, not routing internals");
+
+// Permission denial is represented by the server-authorized action flags being
+// false even while the stage is still assigned to this worker. In that case no
+// production action may be rendered at all.
+const permissionDenied = {
+    ...doc,
+    department_status: "بحاجة للعمل",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        assignmentState: "assigned",
+    },
+};
+const permissionDeniedHtml = api.buildCard(permissionDenied, false);
+assert(
+    !permissionDeniedHtml.includes("dco-card-production-action"),
+    "an assigned worker without the server-granted production capability must not see a workflow button"
+);
+assert(!permissionDeniedHtml.includes("بدء العمل"));
+assert(!permissionDeniedHtml.includes("إنهاء العمل"));
+
+const completed = {
+    ...doc,
+    department_status: "منتهٍ",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        assignmentState: "completed",
+    },
+};
+const completedHtml = api.buildCard(completed, false);
+assert(completedHtml.includes("تم الإنجاز"), "completed mobile work must show a non-interactive completion state");
+assert(completedHtml.includes("dco-list-row-completed"), "completed cards must retain their green completion presentation");
+assert(!completedHtml.includes("dco-card-production-action"), "the workflow button must disappear after completion");
 
 const phoneRoot = { getBoundingClientRect: () => ({ width: 340 }) };
 assert.strictEqual(api.isPhoneLayout(phoneRoot), true, "a real phone must use order cards");

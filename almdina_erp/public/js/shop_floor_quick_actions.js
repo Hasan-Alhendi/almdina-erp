@@ -85,16 +85,23 @@
     }
 
     function finishFinalStage(context, options) {
+        const finish = () => runCommand({
+            method: METHODS.handoff,
+            args: { stage_name: context.stage },
+            button: options.button,
+            successMessage: __("الطلب جاهز للتسليم."),
+            onSuccess: options.onSuccess,
+        });
+
+        if (options.skipFinalConfirmation === true) {
+            return finish();
+        }
+
         frappe.confirm(
             __("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"),
-            () => runCommand({
-                method: METHODS.handoff,
-                args: { stage_name: context.stage },
-                button: options.button,
-                successMessage: __("الطلب جاهز للتسليم."),
-                onSuccess: options.onSuccess,
-            })
+            finish
         );
+        return null;
     }
 
     function promptNextWorker(context, options, handoffContext) {
@@ -145,8 +152,7 @@
             setBusy(options.button, false);
             const handoffContext = response.message || {};
             if (handoffContext.final_stage === true) {
-                finishFinalStage(context, options);
-                return handoffContext;
+                return finishFinalStage(context, options);
             }
             promptNextWorker(context, options, handoffContext);
             return handoffContext;

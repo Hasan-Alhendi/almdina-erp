@@ -1,0 +1,231 @@
+/* Mobile-only Door Cutting Order list-card polish.
+ * The desktop Frappe list remains untouched because every rule is scoped to
+ * the runtime dco-order-card-layout class applied by the shared device detector.
+ */
+
+.dco-order-list.dco-order-card-layout .result {
+    padding-inline: 4px;
+}
+
+.dco-order-list.dco-order-card-layout .list-row-container.dco-order-card-container {
+    margin-block: 10px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card {
+    border-color: rgba(15, 23, 42, .09);
+    border-radius: 18px;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 7px 24px rgba(15, 23, 42, .08);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-header {
+    gap: 12px;
+    padding: 14px 14px 12px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-leading {
+    gap: 10px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-order-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid rgba(37, 99, 235, .18);
+    border-radius: 10px;
+    background: rgba(37, 99, 235, .075);
+    color: #1d4ed8;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-order-link:hover {
+    border-color: rgba(37, 99, 235, .32);
+    background: rgba(37, 99, 235, .12);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-order-link:active {
+    transform: translateY(1px);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-order-link-arrow {
+    font-size: 17px;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-customer {
+    margin-top: 6px;
+    padding-inline: 2px;
+    color: var(--text-muted, #64748b);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-status {
+    min-height: 28px;
+    padding: 4px 9px;
+    border: 1px solid rgba(15, 23, 42, .05);
+    font-size: 10.5px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-workflow {
+    gap: 7px 10px;
+    margin-inline: 14px;
+    padding: 11px 12px;
+    border-color: rgba(37, 99, 235, .14);
+    border-radius: 12px;
+    background: rgba(37, 99, 235, .045);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-workflow-label,
+.dco-order-list.dco-order-card-layout .dco-card-assignee-label {
+    font-size: 10px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-workflow-value {
+    margin-top: 3px;
+    font-size: 13.5px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-stage-status {
+    min-height: 27px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .82);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-fields {
+    gap: 8px;
+    padding: 11px 14px 13px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-field {
+    padding: 8px 9px;
+    border-color: rgba(15, 23, 42, .065);
+    border-radius: 10px;
+    background: rgba(248, 250, 252, .86);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-field > span {
+    margin-bottom: 3px;
+    color: #64748b;
+    font-size: 9.5px;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-field > b {
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-actions {
+    display: block;
+    padding: 11px 14px 14px;
+    border-top: 1px solid rgba(15, 23, 42, .065);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-actions .dco-card-production-action {
+    width: 100%;
+    min-height: 46px;
+    border: 0;
+    border-radius: 11px;
+    font-size: 13px;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .08);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-start {
+    background: #2563eb;
+    color: #fff;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-start:hover,
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-start:focus {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-finish {
+    background: #d97706;
+    color: #fff;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-finish:hover,
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-finish:focus {
+    background: #b45309;
+    color: #fff;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-loading {
+    opacity: .68;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-complete-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 46px;
+    margin: 0 14px 14px;
+    padding: 10px 14px;
+    border: 1px solid rgba(22, 163, 74, .2);
+    border-radius: 11px;
+    background: rgba(22, 163, 74, .09);
+    color: #15803d;
+    font-size: 12.5px;
+    font-weight: 800;
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-complete-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 21px;
+    height: 21px;
+    border-radius: 999px;
+    background: #16a34a;
+    color: #fff;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.dco-list-row-completed {
+    border-color: rgba(22, 163, 74, .25) !important;
+    background: #f0fdf4 !important;
+    box-shadow: 0 7px 24px rgba(22, 101, 52, .08);
+}
+
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.dco-list-row-completed .dco-card-workflow,
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.dco-list-row-completed .dco-card-field {
+    background: rgba(255, 255, 255, .72);
+}
+
+@media (max-width: 480px) {
+    .dco-order-list.dco-order-card-layout .dco-card-header {
+        padding-inline: 12px;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-workflow {
+        margin-inline: 12px;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-fields,
+    .dco-order-list.dco-order-card-layout .dco-card-actions {
+        padding-inline: 12px;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-complete-state {
+        margin-inline: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dco-order-list.dco-order-card-layout .dco-card-order-link {
+        transition: none;
+    }
+}

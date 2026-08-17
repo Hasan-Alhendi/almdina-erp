@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
 RESPONSIVE_CSS = ROOT / "public" / "css" / "door_cutting_order_responsive.css"
+MOBILE_LIST_CSS = ROOT / "public" / "css" / "door_cutting_order_mobile_list.css"
 RESPONSIVE_DEVICE = ROOT / "public" / "js" / "responsive_device.js"
 MOBILE_CARDS_UX = (
     ROOT
@@ -178,6 +179,7 @@ def test_measurement_cards_activate_only_for_a_phone_not_a_narrow_laptop_panel()
 
 def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions():
     css = source(RESPONSIVE_CSS)
+    mobile_css = source(MOBILE_LIST_CSS)
     list_source = source(LIST_UX)
     quick_actions = source(QUICK_ACTIONS_UX)
     inbox_page = source(SHOP_FLOOR_INBOX)
@@ -188,13 +190,21 @@ def test_mobile_order_list_uses_real_cards_with_operational_fields_and_actions()
     assert "usesCardLayout" in list_source
     assert 'root.classList.toggle("dco-order-card-layout"' in list_source
     assert 'node.matches(".list-row-container")' in list_source
-    assert 'class="dco-mobile-order-card"' in list_source
+    assert 'class="dco-mobile-order-card' in list_source
     assert 'field("لون القشاط", doc.edge_color' in list_source
     assert 'field("صنف اللوح", doc.board_description, "dco-card-wide-field")' in list_source
     assert 'class="dco-card-workflow"' in list_source
     assert 'class="dco-card-assignee"' in list_source
-    assert "AlmdinaShopFloorQuickActions.perform" in list_source
+    assert "const quickActions = window.AlmdinaShopFloorQuickActions" in list_source
+    assert "quickActions.perform" in list_source
     assert 'matchMedia("(max-width: 600px)")' in list_source
+    assert 'if (!applyCardLayoutClass(listview)) return;' in list_source
+    assert "ensureMobileCardStylesheet();" in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css"' in list_source
+    assert ".dco-order-list.dco-order-card-layout" in mobile_css
+    assert ".dco-card-production-action.is-start" in mobile_css
+    assert ".dco-card-production-action.is-finish" in mobile_css
+    assert ".dco-card-complete-state" in mobile_css
     assert ".dco-order-card-container > .list-row" in css
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
