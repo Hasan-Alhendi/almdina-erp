@@ -63,7 +63,7 @@
 
         return Object.freeze({
             workspace, stage, canvas, numeric, layers, properties, hint,
-            setActiveTool(tool) { workspace.dataset.tool = tool; workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === tool)); },
+            setActiveTool(tool) { workspace.dataset.activeTool = tool; workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === tool)); },
             setSaveState(text, state = "saved") { saveState.textContent = text; saveState.dataset.state = state; },
             setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = Boolean(saving); button.textContent = saving ? "يتم الحفظ…" : "حفظ"; },
             setHint(text = "") { hint.textContent = text; hint.classList.toggle("is-visible", Boolean(text)); },
