@@ -44,6 +44,26 @@ class TestDoorDrawingProfessionalWorkspaceContract(unittest.TestCase):
             self.assertNotIn("frappe.ui.Dialog", source, path)
             self.assertNotIn("frappe.ui.dialog", source, path)
 
+    def test_page_creates_frappe_scaffold_before_workspace_mount(self) -> None:
+        page = PAGE.read_text(encoding="utf-8")
+        self.assertIn("function ensurePageScaffold(wrapper)", page)
+        self.assertIn("frappe.ui.make_app_page({", page)
+        self.assertIn('wrapper.querySelector(".layout-main-section")', page)
+        load_source = page.split("frappe.pages[PAGE_ROUTE].on_page_load", 1)[1].split(
+            "frappe.pages[PAGE_ROUTE].on_page_show",
+            1,
+        )[0]
+        self.assertLess(
+            load_source.index("ensurePageScaffold(wrapper)"),
+            load_source.index("ensureController(wrapper)"),
+            "Frappe Page scaffold must exist before the professional workspace mounts",
+        )
+        controller_source = page.split("function ensureController", 1)[1].split(
+            "function enterFullscreenMode",
+            1,
+        )[0]
+        self.assertIn("ensurePageScaffold(wrapper)", controller_source)
+
     def test_page_owns_real_hide_lifecycle_and_professional_layout(self) -> None:
         page = PAGE.read_text(encoding="utf-8")
         self.assertIn('"hide.aldProfessionalDoorDrawing"', page)
