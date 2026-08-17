@@ -7,6 +7,7 @@ HOOKS = ROOT / "frontend_assets.py"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
 SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
+V4_BOOTSTRAP = ROOT / "public" / "js" / "door_drawing_v4" / "bootstrap.js"
 V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
@@ -109,12 +110,15 @@ def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
 def test_special_shape_button_resolves_v4_editor_at_click_time():
     operator = _source(OPERATOR)
     editor = _source(EDITOR)
+    bootstrap = _source(V4_BOOTSTRAP)
     assert 'event.target.closest(".dco-special-sketch-button")' in operator
     assert "row && window.AlmdinaSpecialShapeEditor" in operator
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = Object.freeze(facade);" in editor
     assert "__doorDrawingV4: true" in editor
-    assert "door_drawing_v4/domain/geometry.js" in editor
+    assert 'const BOOTSTRAP_SRC = "/assets/almdina_erp/js/door_drawing_v4/bootstrap.js"' in editor
+    assert "door_drawing_v4/domain/geometry.js" in bootstrap
+    assert "door_drawing_v4/presentation/editor_controller.js" in bootstrap
     assert "function open(frm, row" in editor
 
 
