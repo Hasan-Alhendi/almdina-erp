@@ -292,6 +292,12 @@ _CONTRACTS = {
         "approve_special_piece_price",
     ),
     **_contracts(
+        "almdina_erp.almdina_erp.services.special_shape_workspace_service",
+        EndpointAuthorizationContract.CAPABILITY,
+        "get_drawing_workspace",
+        "save_drawing_workspace",
+    ),
+    **_contracts(
         "almdina_erp.almdina_erp.services.workforce_service",
         EndpointAuthorizationContract.CAPABILITY,
         "adopt_workforce_user",
