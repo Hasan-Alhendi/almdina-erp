@@ -18,7 +18,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     apply_plan_costs,
     initialize_draft_plan_cost_snapshot,
     project_plan_costs_to_order,
-    refresh_order_commercial_totals,
 )
 
 
@@ -56,7 +55,6 @@ def update_plan_cost_settings(
     apply_plan_costs(plan)
     repository.save_document(plan)
     project_plan_costs_to_order(order, plan)
-    refresh_order_commercial_totals(order, plan)
 
     return {
         "order_name": order.name,
