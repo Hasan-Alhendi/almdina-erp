@@ -43,6 +43,8 @@ const scanner = read("public/js/door_drawing_v4/reference/scanner_bridge.js");
 assert.ok(scanner.includes("http://127.0.0.1:17654"), "scanner bridge must default to loopback only");
 assert.ok(scanner.includes('"/health"'), "scanner bridge must expose a health handshake");
 assert.ok(scanner.includes('"/scan"'), "scanner bridge must expose a scan command");
+assert.ok(scanner.includes("deviceCount"), "browser adapter must expose detected scanner count");
+assert.ok(scanner.includes("ready:"), "browser adapter must expose readiness separately from bridge reachability");
 assert.ok(scanner.includes("X-Almdina-Scanner-Bridge"), "scanner bridge calls must carry the dedicated request header");
 assert.ok(!scanner.includes("0.0.0.0"), "browser adapter must not target a network-wide scanner listener");
 
@@ -77,6 +79,10 @@ assert.ok(session.includes("سيتم مسح هندسة الرسم الحالية
 assert.ok(session.includes("referenceController.scanFromScanner()"));
 assert.ok(session.includes("referenceController.uploadFromDevice()"));
 
+const referenceController = read("public/js/door_drawing_v4/workspace/reference_controller.js");
+assert.ok(referenceController.includes("health.deviceCount < 1"), "workspace must distinguish a reachable bridge from an available scanner");
+assert.ok(referenceController.includes("Windows لا يرى أي Scanner عبر WIA"), "operator must receive an actionable Arabic scanner-driver message");
+
 const backend = read("almdina_erp/services/special_shape_workspace_service.py");
 assert.ok(backend.includes('is_private=1'), "reference images must be stored as private Frappe files");
 assert.ok(backend.includes('piece.special_shape_drawing_json = ""'), "image mode must clear stale manual drawing data");
@@ -86,8 +92,21 @@ assert.ok(backend.includes('piece.special_shape_documentation_mode = "Image"'));
 const bridge = read("../tools/scanner_bridge/windows/AlmdinaScannerBridge.ps1");
 assert.ok(bridge.includes('http://127.0.0.1:'));
 assert.ok(bridge.includes("WIA.CommonDialog"));
+assert.ok(bridge.includes("WIA.DeviceManager"), "local bridge must detect WIA scanners before acquisition");
+assert.ok(bridge.includes("Get-WiaScannerCount"));
+assert.ok(bridge.includes("device_count = $scannerCount"));
+assert.ok(bridge.includes("ready = ($scannerCount -gt 0)"));
 assert.ok(bridge.includes("ShowAcquireImage"));
 assert.ok(bridge.includes("AllowedOrigins"));
 assert.ok(!bridge.includes('http://+:'));
+
+const installer = read("../tools/scanner_bridge/windows/install.ps1");
+const uninstaller = read("../tools/scanner_bridge/windows/uninstall.ps1");
+for (const script of [installer, uninstaller]) {
+    assert.ok(script.includes("config.json"));
+    assert.ok(script.includes("$config.port"), "install and uninstall must derive URL reservation from the configured port");
+    assert.ok(script.includes('http://127.0.0.1:$port/'));
+}
+assert.ok(installer.includes("$health.device_count"), "installer must report whether Windows sees a WIA scanner");
 
 console.log("Door Drawing V4 reference image and scanner tests passed");
