@@ -5,6 +5,7 @@
 
     const VERSION = 1;
     const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
+    const MAX_SOURCE_PIXELS = 50 * 1000 * 1000;
     const ACCEPTED_MIME_TYPES = Object.freeze(["image/png", "image/jpeg"]);
     const ACCEPTED_EXTENSIONS = Object.freeze([".png", ".jpg", ".jpeg"]);
     const SOURCES = Object.freeze({ UPLOAD: "upload", SCANNER: "scanner", RECROP: "recrop" });
@@ -24,6 +25,18 @@
         const size = Number(file.size);
         if (!Number.isFinite(size) || size <= 0) return Object.freeze({ ok: false, code: "empty-file", message: "ملف الصورة فارغ أو غير صالح." });
         if (size > MAX_SOURCE_BYTES) return Object.freeze({ ok: false, code: "file-too-large", message: "حجم الصورة قبل القص يجب ألا يتجاوز 16 MB." });
+        return Object.freeze({ ok: true });
+    }
+
+    function validateDecodedDimensions(width, height) {
+        const w = Number(width);
+        const h = Number(height);
+        if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+            return Object.freeze({ ok: false, code: "invalid-image-dimensions", message: "أبعاد الصورة غير صالحة." });
+        }
+        if (w * h > MAX_SOURCE_PIXELS) {
+            return Object.freeze({ ok: false, code: "image-too-large-to-decode", message: "دقة الصورة كبيرة جدًا للمعالجة. استخدم صورة بدقة أقل من 50 مليون بكسل." });
+        }
         return Object.freeze({ ok: true });
     }
 
@@ -68,5 +81,15 @@
         return Object.freeze(metadata);
     }
 
-    root.Domain = Object.freeze({ VERSION, MAX_SOURCE_BYTES, ACCEPTED_MIME_TYPES, ACCEPTED_EXTENSIONS, SOURCES, validateFile, buildMetadata });
+    root.Domain = Object.freeze({
+        VERSION,
+        MAX_SOURCE_BYTES,
+        MAX_SOURCE_PIXELS,
+        ACCEPTED_MIME_TYPES,
+        ACCEPTED_EXTENSIONS,
+        SOURCES,
+        validateFile,
+        validateDecodedDimensions,
+        buildMetadata,
+    });
 })();
