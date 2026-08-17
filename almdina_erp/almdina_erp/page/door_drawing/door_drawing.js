@@ -47,19 +47,26 @@
         });
     }
 
+    function ensureBootstrap() {
+        if (window.AlmdinaDoorDrawingV4Bootstrap && typeof window.AlmdinaDoorDrawingV4Bootstrap.boot === "function") {
+            return Promise.resolve(window.AlmdinaDoorDrawingV4Bootstrap);
+        }
+        return loadScript(BOOTSTRAP_SRC).then(() => {
+            const bootstrap = window.AlmdinaDoorDrawingV4Bootstrap;
+            if (!bootstrap || typeof bootstrap.boot !== "function") {
+                throw new Error("Door Drawing V4 bootstrap is unavailable");
+            }
+            return bootstrap;
+        });
+    }
+
     function bootRuntime() {
         if (window.__almdinaStandaloneDrawingWorkspaceBoot) {
             return window.__almdinaStandaloneDrawingWorkspaceBoot;
         }
         ensureStyle();
-        window.__almdinaStandaloneDrawingWorkspaceBoot = loadScript(BOOTSTRAP_SRC)
-            .then(() => {
-                const bootstrap = window.AlmdinaDoorDrawingV4Bootstrap;
-                if (!bootstrap || typeof bootstrap.boot !== "function") {
-                    throw new Error("Door Drawing V4 bootstrap is unavailable");
-                }
-                return bootstrap.boot();
-            })
+        window.__almdinaStandaloneDrawingWorkspaceBoot = ensureBootstrap()
+            .then(bootstrap => bootstrap.boot())
             .then(() => WORKSPACE_SCRIPTS.reduce(
                 (promise, src) => promise.then(() => loadScript(src)),
                 Promise.resolve()
@@ -81,12 +88,11 @@
     }
 
     function createPageController(wrapper) {
-        const page = frappe.ui.make_app_page({
+        frappe.ui.make_app_page({
             parent: wrapper,
             title: __("Special Door Drawing"),
             single_column: true,
         });
-        void page;
         wrapper.classList.add("ald-door-drawing-page");
         const body = $(wrapper).find(".layout-main-section").get(0);
         if (!body) throw new Error("Standalone door drawing page body is unavailable");
@@ -136,11 +142,20 @@
         }
         window.addEventListener("beforeunload", beforeUnload);
 
+        // Frappe v16's page container emits a jQuery `hide` event when switching
+        // away from a Desk Page; custom Page objects only dispatch on_page_show.
+        // Bind directly to the real lifecycle event so canvas observers/listeners
+        // cannot survive after navigating back to the order or to another page.
+        $(wrapper)
+            .off("hide.aldDoorDrawingWorkspace")
+            .on("hide.aldDoorDrawingWorkspace", hide);
+
         return Object.freeze({
             loadRoute,
             hide,
             destroy() {
                 hide();
+                $(wrapper).off("hide.aldDoorDrawingWorkspace");
                 window.removeEventListener("beforeunload", beforeUnload);
             },
         });
@@ -154,10 +169,5 @@
     frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
         const controller = wrapper._almdinaDoorDrawingPageController;
         if (controller) controller.loadRoute();
-    };
-
-    frappe.pages[PAGE_ROUTE].on_page_hide = function (wrapper) {
-        const controller = wrapper._almdinaDoorDrawingPageController;
-        if (controller) controller.hide();
     };
 })();
