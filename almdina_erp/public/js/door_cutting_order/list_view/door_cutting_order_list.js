@@ -3,6 +3,7 @@
 
     const METHODS = Object.freeze({
         doctype: "Door Cutting Order",
+        roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
     const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=4";
@@ -169,6 +170,7 @@
         const enabled = isPhoneLayout(root);
         root.classList.add("dco-order-list");
         root.classList.toggle("dco-order-card-layout", enabled);
+        listview._dcoLastCardLayout = enabled;
         return enabled;
     }
 
@@ -396,31 +398,51 @@
         return "";
     }
 
-    function buildCard(doc, hasSelection) {
-        const model = cardViewModel(doc);
-        const completedClass = model.completed ? " dco-list-row-completed" : "";
+    function buildCard(doc, hasSelection, model = null) {
+        const prepared = model || cardViewModel(doc);
+        const completedClass = prepared.completed ? " dco-list-row-completed" : "";
         return `
             <article
-                class="dco-mobile-order-card ${model.state.cardClass}${completedClass}"
+                class="dco-mobile-order-card ${prepared.state.cardClass}${completedClass}"
                 data-order-name="${escapeHtml(doc.name)}"
-                data-card-state="${escapeHtml(model.state.key)}"
+                data-card-state="${escapeHtml(prepared.state.key)}"
                 data-selectable="${hasSelection ? "1" : "0"}"
                 dir="rtl"
             >
                 <header class="dco-card-header">
-                    ${renderCustomer(model)}
-                    ${renderStatusPill(model.state)}
+                    ${renderCustomer(prepared)}
+                    ${renderStatusPill(prepared.state)}
                 </header>
-                ${renderOrderLink(model)}
+                ${renderOrderLink(prepared)}
                 <section class="dco-card-info-grid" aria-label="${escapeHtml(__("بيانات الطلب"))}">
-                    ${renderInfoTile("لون اللوح", model.boardColor, "board", "is-board")}
-                    ${renderInfoTile("لون القشاط", model.edgeColor, "droplet", "is-edge-color")}
-                    ${renderInfoTile("نوع القشاط", model.edgeType, "layers", "is-edge-type")}
+                    ${renderInfoTile("لون اللوح", prepared.boardColor, "board", "is-board")}
+                    ${renderInfoTile("لون القشاط", prepared.edgeColor, "droplet", "is-edge-color")}
+                    ${renderInfoTile("نوع القشاط", prepared.edgeType, "layers", "is-edge-type")}
                 </section>
-                ${renderDate(model)}
-                ${renderAction(model)}
+                ${renderDate(prepared)}
+                ${renderAction(prepared)}
             </article>
         `;
+    }
+
+    function cardRenderSignature(doc, hasSelection, model) {
+        const action = model.action || {};
+        return JSON.stringify([
+            model.orderId,
+            model.customer,
+            model.boardColor,
+            model.edgeColor,
+            model.edgeType,
+            model.date,
+            model.state.key,
+            model.state.label,
+            action.kind || "",
+            mobileActionLabel(model.action),
+            model.context.stage || "",
+            model.context.assignmentState || "",
+            hasSelection ? 1 : 0,
+            String(doc.department_status || ""),
+        ]);
     }
 
     function bindCard(listview, container, card, doc) {
@@ -454,32 +476,50 @@
         container.classList.add("dco-order-card-container");
     }
 
+    function removeMobileCard(container) {
+        container.classList.remove("dco-order-card-container");
+        const card = [...container.children]
+            .find(child => child.classList.contains("dco-mobile-order-card"));
+        if (card) card.remove();
+    }
+
     function renderMobileCards(listview) {
         const root = rootNode(listview);
         if (!root) return;
-        const docs = orderDocuments(listview);
-        const allContainers = [...root.querySelectorAll(".list-row-container")];
-        allContainers.forEach(container => {
-            container.classList.remove("dco-order-card-container");
-            const previous = [...container.children]
-                .find(child => child.classList.contains("dco-mobile-order-card"));
-            if (previous) previous.remove();
-        });
 
-        const containers = allContainers
-            .map(container => ({ container, name: rowDocumentName(container) }))
-            .filter(item => item.name && docs.has(item.name));
-        if (!applyCardLayoutClass(listview)) return;
+        const docs = orderDocuments(listview);
+        const containers = [...root.querySelectorAll(".list-row-container")];
+        if (!applyCardLayoutClass(listview)) {
+            containers.forEach(removeMobileCard);
+            return;
+        }
         ensureMobileCardStylesheet();
 
-        containers.forEach(({ container, name }) => {
-            const doc = docs.get(name);
-            if (!doc) return;
+        containers.forEach(container => {
+            const name = rowDocumentName(container);
+            const doc = name && docs.get(name);
+            if (!doc) {
+                removeMobileCard(container);
+                return;
+            }
+
             const originalCheckbox = container.querySelector("input.list-row-checkbox, input[type='checkbox']");
+            const hasSelection = Boolean(originalCheckbox);
+            const model = cardViewModel(doc);
+            const signature = cardRenderSignature(doc, hasSelection, model);
+            const previous = [...container.children]
+                .find(child => child.classList.contains("dco-mobile-order-card"));
+            if (previous && previous.dataset.dcoRenderSignature === signature) {
+                container.classList.add("dco-order-card-container");
+                return;
+            }
+            if (previous) previous.remove();
+
             const holder = document.createElement("div");
-            holder.innerHTML = buildCard(doc, Boolean(originalCheckbox)).trim();
+            holder.innerHTML = buildCard(doc, hasSelection, model).trim();
             const card = holder.firstElementChild;
             if (!card) return;
+            card.dataset.dcoRenderSignature = signature;
             container.appendChild(card);
             bindCard(listview, container, card, doc);
         });
@@ -488,14 +528,13 @@
     function installResponsiveObserver(listview) {
         const root = rootNode(listview);
         if (!root || listview._dcoResponsiveObserverInstalled) return;
+
+        listview._dcoLastCardLayout = isPhoneLayout(root);
         const refreshLayout = () => {
-            const wasPhoneLayout = root.classList.contains("dco-order-card-layout");
-            const needsPhoneLayout = isPhoneLayout(root);
-            if (wasPhoneLayout !== needsPhoneLayout) {
-                renderMobileCards(listview);
-                return;
-            }
-            if (needsPhoneLayout) renderMobileCards(listview);
+            const next = isPhoneLayout(root);
+            if (next === listview._dcoLastCardLayout) return;
+            listview._dcoLastCardLayout = next;
+            renderMobileCards(listview);
         };
         if (typeof ResizeObserver === "function") {
             listview._dcoResponsiveObserver = new ResizeObserver(refreshLayout);
@@ -518,34 +557,6 @@
             }
         }
         listview._dcoResponsiveObserverInstalled = true;
-    }
-
-    function installRowsObserver(listview) {
-        if (listview._dcoRowsObserverInstalled || typeof MutationObserver !== "function") return;
-        const root = rootNode(listview);
-        const result = root && root.querySelector(".result");
-        if (!result) return;
-
-        let scheduled = false;
-        const observer = new MutationObserver(mutations => {
-            if (listview._dcoApplyingRolePresentation) return;
-            const frappeRowsAdded = mutations.some(mutation =>
-                [...mutation.addedNodes].some(node =>
-                    node.nodeType === 1
-                    && (node.matches(".list-row-container") || node.querySelector(".list-row-container"))
-                )
-            );
-            if (!frappeRowsAdded || scheduled) return;
-            scheduled = true;
-            requestAnimationFrame(() => {
-                scheduled = false;
-                renderMobileCards(listview);
-                applyOperationalRoleRows(listview);
-            });
-        });
-        observer.observe(result, { childList: true, subtree: true });
-        listview._dcoRowsObserver = observer;
-        listview._dcoRowsObserverInstalled = true;
     }
 
     function clearOperationalRoleRows(listview) {
@@ -634,54 +645,121 @@
         }
     }
 
-    function applyOperationalRoleRows(listview) {
-        if (!listview || !window.frappe || typeof frappe.call !== "function") return;
-        const names = (listview.data || [])
+    function roleFlagNames(listview) {
+        return (listview.data || [])
             .map(doc => String(doc && doc.name || "").trim())
             .filter(Boolean);
-        if (!names.length) {
-            clearOperationalRoleRows(listview);
-            return;
-        }
-
-        const requestId = Number(listview._dcoRoleFlagRequestId || 0) + 1;
-        listview._dcoRoleFlagRequestId = requestId;
-        frappe.call({
-            method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
-            args: { order_names: names },
-            freeze: false,
-        }).then(response => {
-            if (listview._dcoRoleFlagRequestId !== requestId) return;
-            applyOperationalRolePresentation(listview, response && response.message);
-        }).catch(error => {
-            if (listview._dcoRoleFlagRequestId !== requestId) return;
-            console.debug("Could not classify Door Cutting Order list rows by operational role", error);
-        });
     }
 
-    function schedule(listview) {
-        const root = rootNode(listview);
-        if (root) root.classList.add("dco-order-list");
+    function invalidateRoleFlags(listview) {
+        listview._dcoRoleFlagGeneration = Number(listview._dcoRoleFlagGeneration || 0) + 1;
+        listview._dcoRoleFlagsPayload = null;
+        listview._dcoRoleFlagsPayloadGeneration = null;
         (listview.data || []).forEach(doc => {
             if (doc) doc.__almdinaProductionActionContext = null;
         });
+    }
+
+    function requestOperationalRoleFlags(listview) {
+        if (!listview || !window.frappe || typeof frappe.call !== "function") return Promise.resolve(null);
+        const names = roleFlagNames(listview);
+        if (!names.length) {
+            clearOperationalRoleRows(listview);
+            return Promise.resolve(null);
+        }
+
+        const generation = Number(listview._dcoRoleFlagGeneration || 0);
+        const key = `${generation}:${names.join("\u001f")}`;
+        if (listview._dcoRoleFlagsPendingKey === key && listview._dcoRoleFlagsPendingPromise) {
+            return listview._dcoRoleFlagsPendingPromise;
+        }
+
+        const request = frappe.call({
+            method: METHODS.roleFlags,
+            args: { order_names: names },
+            freeze: false,
+        }).then(response => {
+            if (Number(listview._dcoRoleFlagGeneration || 0) !== generation) return null;
+            const payload = response && response.message;
+            listview._dcoRoleFlagsPayload = payload || { personal_view: false, orders: {} };
+            listview._dcoRoleFlagsPayloadGeneration = generation;
+            applyOperationalRolePresentation(listview, listview._dcoRoleFlagsPayload);
+            return listview._dcoRoleFlagsPayload;
+        }).catch(error => {
+            if (Number(listview._dcoRoleFlagGeneration || 0) === generation) {
+                console.debug("Could not classify Door Cutting Order list rows by operational role", error);
+            }
+            return null;
+        }).finally(() => {
+            if (listview._dcoRoleFlagsPendingKey === key) {
+                listview._dcoRoleFlagsPendingKey = null;
+                listview._dcoRoleFlagsPendingPromise = null;
+            }
+        });
+        listview._dcoRoleFlagsPendingKey = key;
+        listview._dcoRoleFlagsPendingPromise = request;
+        return request;
+    }
+
+    function runScheduledPresentation(listview) {
+        listview._dcoPresentationFrame = null;
+        const refreshRoleFlags = listview._dcoPresentationNeedsRoleRefresh === true;
+        listview._dcoPresentationNeedsRoleRefresh = false;
+
+        applySearchHint(listview);
+        if (refreshRoleFlags) {
+            invalidateRoleFlags(listview);
+            renderMobileCards(listview);
+            requestOperationalRoleFlags(listview);
+            return;
+        }
+
+        const generation = Number(listview._dcoRoleFlagGeneration || 0);
+        if (
+            listview._dcoRoleFlagsPayload
+            && listview._dcoRoleFlagsPayloadGeneration === generation
+        ) {
+            applyOperationalRolePresentation(listview, listview._dcoRoleFlagsPayload);
+            return;
+        }
+        renderMobileCards(listview);
+    }
+
+    function schedulePresentation(listview, { refreshRoleFlags = false } = {}) {
+        if (!listview) return;
+        if (refreshRoleFlags) listview._dcoPresentationNeedsRoleRefresh = true;
+        if (listview._dcoPresentationFrame != null) return;
+        const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 16));
+        listview._dcoPresentationFrame = schedule(() => runScheduledPresentation(listview));
+    }
+
+    function installRowsObserver(listview) {
+        if (listview._dcoRowsObserverInstalled || typeof MutationObserver !== "function") return;
+        const root = rootNode(listview);
+        const result = root && root.querySelector(".result");
+        if (!result) return;
+
+        const observer = new MutationObserver(mutations => {
+            if (listview._dcoApplyingRolePresentation) return;
+            const frappeRowsAdded = mutations.some(mutation =>
+                [...mutation.addedNodes].some(node =>
+                    node.nodeType === 1
+                    && (node.matches(".list-row-container") || node.querySelector(".list-row-container"))
+                )
+            );
+            if (frappeRowsAdded) schedulePresentation(listview);
+        });
+        observer.observe(result, { childList: true, subtree: true });
+        listview._dcoRowsObserver = observer;
+        listview._dcoRowsObserverInstalled = true;
+    }
+
+    function installListRuntime(listview) {
+        const root = rootNode(listview);
+        if (root) root.classList.add("dco-order-list");
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
-        applySearchHint(listview);
-        renderMobileCards(listview);
-        applyOperationalRoleRows(listview);
-        requestAnimationFrame(() => {
-            applySearchHint(listview);
-            renderMobileCards(listview);
-        });
-        setTimeout(() => {
-            renderMobileCards(listview);
-        }, 100);
-        setTimeout(() => {
-            applySearchHint(listview);
-            renderMobileCards(listview);
-        }, 350);
     }
 
     frappe.listview_settings[METHODS.doctype] = Object.assign({}, existing, {
@@ -708,11 +786,13 @@
         }),
         onload(listview) {
             if (typeof originalOnload === "function") originalOnload(listview);
-            schedule(listview);
+            installListRuntime(listview);
+            schedulePresentation(listview);
         },
         refresh(listview) {
             if (typeof originalRefresh === "function") originalRefresh(listview);
-            schedule(listview);
+            installListRuntime(listview);
+            schedulePresentation(listview, { refreshRoleFlags: true });
         },
     });
 
