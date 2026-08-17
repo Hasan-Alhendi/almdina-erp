@@ -117,7 +117,7 @@
     {"default":"Unpriced","fieldname":"clipped_corner_edge_price_status","fieldtype":"Select","hidden":1,"label":"Clipped Corner Edge Price Status","options":"Unpriced\nPriced","permlevel":1,"read_only":1},
     {"fieldname":"clipped_corner_edge_price_note","fieldtype":"Small Text","hidden":1,"label":"Clipped Corner Edge Price Note","permlevel":1,"read_only":1},
     {"fieldname":"clipped_corner_edge_price_set_by","fieldtype":"Link","hidden":1,"label":"Clipped Corner Edge Price Set By","options":"User","permlevel":1,"read_only":1},
-    {"fieldname":"clipped_corner_edge_price_set_on","fieldtype":"Datetime","hidden":1,"label":"Clipped Corner Edge Price Set On","read_only":1}
+    {"fieldname":"clipped_corner_edge_price_set_on","fieldtype":"Datetime","hidden":1,"label":"Clipped Corner Edge Price Set On","permlevel":1,"read_only":1}
   ],
   "istable": 1,
   "links": [],
