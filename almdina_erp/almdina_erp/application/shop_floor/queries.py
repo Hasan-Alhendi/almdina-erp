@@ -35,6 +35,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 SHOP_FLOOR_DETAIL_CAPABILITIES = frozenset(
     PLANNING_CAPABILITIES | DRAWING_CAPABILITIES | PRODUCTION_CAPABILITIES
 )
+_HANDOFF_READINESS_BLOCK_CODES = frozenset(
+    {"plan_not_approved", "approved_plan_stale"}
+)
 
 
 class ShopFloorQueryError(ValueError):
@@ -226,6 +229,30 @@ def _planning_handoff_block(
     return None, ""
 
 
+def _handoff_visibility(
+    actions: Mapping[str, Mapping[str, Any]],
+    handoff_code: str | None,
+) -> bool:
+    """Return whether the authorized worker should see the handoff action.
+
+    Planning readiness is intentionally separate from authorization: an assigned
+    worker who owns the handoff capability must still see «إنهاء العمل» while
+    the plan needs approval/recalculation. The command layer remains the final
+    gate and reports that readiness reason when the worker tries to finish.
+    Structural route corruption still hides the action because it cannot be
+    completed until the route itself is repaired.
+    """
+
+    authorized = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
+    return bool(
+        authorized
+        and (
+            not handoff_code
+            or handoff_code in _HANDOFF_READINESS_BLOCK_CODES
+        )
+    )
+
+
 def _enrich_stage_rows(
     repository: ShopFloorQueryPort,
     stages: list[Any],
@@ -272,15 +299,7 @@ def _enrich_stage_rows(
             order,
             stage_type,
         )
-        generic_handoff = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
-        can_handoff = generic_handoff and not handoff_code
-        if generic_handoff and handoff_code:
-            actions[Capability.HANDOFF_ASSIGNED_STAGE] = {
-                **actions[Capability.HANDOFF_ASSIGNED_STAGE],
-                "allowed": False,
-                "code": handoff_code,
-                "reason": handoff_reason,
-            }
+        can_handoff = _handoff_visibility(actions, handoff_code)
         current_stage_name = str(_value(order, "current_production_stage") or "").strip()
         current_stage = current_stages.get(current_stage_name)
         current_role = (
@@ -670,15 +689,7 @@ def _active_stage_snapshot(
         except ValueError:
             can_handoff_to = None
     handoff_code, handoff_reason = _planning_handoff_block(route, order, stage_type)
-    generic_handoff = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
-    can_handoff = generic_handoff and not handoff_code
-    if generic_handoff and handoff_code:
-        actions[Capability.HANDOFF_ASSIGNED_STAGE] = {
-            **actions[Capability.HANDOFF_ASSIGNED_STAGE],
-            "allowed": False,
-            "code": handoff_code,
-            "reason": handoff_reason,
-        }
+    can_handoff = _handoff_visibility(actions, handoff_code)
     return {
         "active_stage_name": _value(stage, "name"),
         "active_stage_status": stage_status,
