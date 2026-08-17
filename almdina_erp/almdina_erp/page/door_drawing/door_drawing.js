@@ -2,6 +2,10 @@
     "use strict";
 
     const PAGE_ROUTE = "door-drawing";
+    const STYLESHEETS = Object.freeze([
+        Object.freeze({ id: "almdina-door-drawing-professional-css", href: "/assets/almdina_erp/css/door_drawing_professional.css" }),
+        Object.freeze({ id: "almdina-door-drawing-professional-page-css", href: "/assets/almdina_erp/css/door_drawing_professional_page.css" }),
+    ]);
     const CORE_MODULES = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v4/domain/geometry.js",
         "/assets/almdina_erp/js/door_drawing_v4/domain/document.js",
@@ -30,20 +34,23 @@
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_api.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_controller.js",
     ]);
-    const STYLESHEET = "/assets/almdina_erp/css/door_drawing_professional.css";
+
+    function ensureStyles() {
+        const frontend = window.AlmdinaFrontend;
+        if (frontend && typeof frontend.ensureStylesheet === "function") {
+            return Promise.all(STYLESHEETS.map(item => frontend.ensureStylesheet(item.href, { id: item.id })));
+        }
+        return Promise.all(STYLESHEETS.map(item => Promise.resolve(frappe.require(item.href))));
+    }
 
     function bootstrap(wrapper) {
         if (wrapper.__almdinaDoorDrawingProfessionalPromise) return wrapper.__almdinaDoorDrawingProfessionalPromise;
         wrapper.classList.add("ald-prof-page");
-        const frontend = window.AlmdinaFrontend;
-        const stylePromise = frontend && typeof frontend.ensureStylesheet === "function"
-            ? frontend.ensureStylesheet(STYLESHEET, { id: "almdina-door-drawing-professional-css" })
-            : Promise.resolve(frappe.require(STYLESHEET));
         const modulePromise = CORE_MODULES.reduce(
             (promise, asset) => promise.then(() => Promise.resolve(frappe.require(asset))),
             Promise.resolve()
         );
-        wrapper.__almdinaDoorDrawingProfessionalPromise = Promise.all([stylePromise, modulePromise]).catch(error => {
+        wrapper.__almdinaDoorDrawingProfessionalPromise = Promise.all([ensureStyles(), modulePromise]).catch(error => {
             wrapper.__almdinaDoorDrawingProfessionalPromise = null;
             throw error;
         });
@@ -74,12 +81,21 @@
         });
     }
 
+    function enterFullscreenMode() {
+        document.body.classList.add("ald-professional-drawing-active");
+    }
+
+    function leaveFullscreenMode() {
+        document.body.classList.remove("ald-professional-drawing-active");
+    }
+
     function bindLifecycle(wrapper) {
         if (wrapper.__almdinaDoorDrawingLifecycleBound) return;
         wrapper.__almdinaDoorDrawingLifecycleBound = true;
         $(wrapper)
             .off("hide.aldProfessionalDoorDrawing")
             .on("hide.aldProfessionalDoorDrawing", () => {
+                leaveFullscreenMode();
                 const controller = wrapper.__almdinaDoorDrawingController;
                 if (controller && typeof controller.suspend === "function") controller.suspend();
             });
@@ -91,6 +107,7 @@
     };
 
     frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+        enterFullscreenMode();
         bindLifecycle(wrapper);
         ensureController(wrapper).then(controller => {
             const context = routeContext();
@@ -99,6 +116,9 @@
                 return;
             }
             controller.open(context);
-        }).catch(error => showBootstrapError(wrapper, error));
+        }).catch(error => {
+            leaveFullscreenMode();
+            showBootstrapError(wrapper, error);
+        });
     };
 })();
