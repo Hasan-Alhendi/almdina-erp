@@ -231,17 +231,22 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'row.board_description || "—"' in inbox_renderer
 
 
-def test_desk_list_orders_assignments_then_completed_rows_green():
+def test_desk_list_prioritizes_active_then_ready_then_completed_rows_green():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
 
     assert "function applyOperationalRoleRows(listview)" in list_source
     assert "get_order_operational_role_flags" in list_source
-    assert 'flag.assignment_state === "completed"' in list_source
-    assert 'classList.toggle("dco-list-row-completed"' in list_source
+    assert "function personalQueueState(doc, flag = {})" in list_source
+    assert 'if (flag.assignment_state === "completed") return "completed";' in list_source
+    assert 'return "in_progress";' in list_source
+    assert 'return "ready";' in list_source
+    assert "function sortPersonalQueueItems(items)" in list_source
     assert '"assignment_time"' in list_source
     assert '"completion_time"' in list_source
-    assert "const ordered = [...assigned, ...completed]" in list_source
+    assert "return [...inProgress, ...ready, ...completed];" in list_source
+    assert "const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);" in list_source
+    assert 'classList.toggle("dco-list-row-completed"' in list_source
     assert "const needsReorder = ordered.some" in list_source
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
     assert ".list-row-container.dco-list-row-completed > .list-row" in css
