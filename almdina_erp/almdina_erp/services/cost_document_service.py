@@ -17,6 +17,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    overlay_authoritative_costs,
+)
 
 
 ORDER_DOCUMENT_FIELDS = (
@@ -97,8 +100,12 @@ def _authorized_order(
 
 
 def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    return (
+    order_snapshot = overlay_authoritative_costs(
+        order,
         _snapshot(order, ORDER_DOCUMENT_FIELDS),
+    )
+    return (
+        order_snapshot,
         [
             _snapshot(piece, PIECE_DOCUMENT_FIELDS)
             for piece in (order.pieces or [])
