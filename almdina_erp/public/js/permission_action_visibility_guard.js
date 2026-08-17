@@ -149,7 +149,7 @@
     function surfaceMode() {
         const state = routeState();
         if (state.route === "factory-workforce") return "workforce";
-        if (state.kind === "workspace" || ALMDINA_WORKSPACE_ROUTES.has(state.route)) return "workspace";
+        if (ALMDINA_WORKSPACE_ROUTES.has(state.route)) return "workspace";
         return "none";
     }
 
