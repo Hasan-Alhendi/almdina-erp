@@ -31,6 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_document_context.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js
@@ -47,6 +48,7 @@ jobs:
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
+          node --check almdina_erp/tests/js/surface_settle_guard.test.js
 
       - name: Enforce targeted DCO architecture and UX contracts
         shell: bash
@@ -83,6 +85,9 @@ jobs:
 
       - name: Simulate measurement lifecycle cancellation and freshness
         run: node almdina_erp/tests/js/measurement_lifecycle.test.js
+
+      - name: Validate bounded DCO surface recovery
+        run: node almdina_erp/tests/js/surface_settle_guard.test.js
 
       - name: Validate cutting plan board layout policy
         run: node almdina_erp/tests/js/plan_board_presenter.test.js
