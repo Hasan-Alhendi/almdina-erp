@@ -11,9 +11,6 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
-    require_stage_operational_access,
-)
 
 
 PLAN_SETTING_FIELDS = (
@@ -29,15 +26,19 @@ _NUMERIC_FIELDS = frozenset(
 _SELECT_FIELDS = frozenset({"packing_mode", "cutting_machine_type"})
 
 
+def _has_active_production_stage(doc: Any) -> bool:
+    return bool(str(getattr(doc, "current_production_stage", None) or "").strip())
+
+
 def _has_production_route(doc: Any) -> bool:
     return bool(
-        str(getattr(doc, "current_production_stage", None) or "").strip()
+        _has_active_production_stage(doc)
         or str(getattr(doc, "production_path", None) or "").strip()
     )
 
 
 def _assert_edit_lifecycle(doc: Any) -> None:
-    """Keep focused plan editing inside the same lifecycle boundary as the UI."""
+    """Keep focused plan editing inside the plan-settings lifecycle boundary."""
 
     if int(getattr(doc, "docstatus", 0) or 0) != 0:
         frappe.throw(
@@ -55,9 +56,17 @@ def _assert_edit_lifecycle(doc: Any) -> None:
             frappe.ValidationError,
         )
 
+    # Editing these five focused settings is authorized by
+    # EDIT_OPTIMIZER_SETTINGS itself. The current production stage remains a
+    # lifecycle signal, not a second role-based authorization gate. Separate
+    # stage-scoped commands (recalculate, handoff, etc.) keep their own policy.
     if _has_production_route(doc):
-        require_stage_operational_access(doc)
-        return
+        if _has_active_production_stage(doc):
+            return
+        frappe.throw(
+            _("انتهى المسار الإنتاجي الحالي ولا يمكن تعديل إعدادات خطة القص."),
+            frappe.PermissionError,
+        )
 
     status = str(getattr(doc, "status", None) or "Draft").strip()
     if status not in DRAFT_LIKE_STATUSES:
@@ -155,9 +164,9 @@ def save_plan_settings(
 ) -> dict[str, Any]:
     """Persist only cutting-plan settings through their focused capability.
 
-    Authorization and lifecycle/stage ownership are re-evaluated under a row
-    lock immediately before the five whitelisted settings are persisted. This
-    command deliberately performs no broad Door Cutting Order save.
+    Authorization and lifecycle are re-evaluated under a row lock immediately
+    before the five whitelisted settings are persisted. This command deliberately
+    performs no broad Door Cutting Order save.
     """
 
     name = str(order_name or "").strip()
