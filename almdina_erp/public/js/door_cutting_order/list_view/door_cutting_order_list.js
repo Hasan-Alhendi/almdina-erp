@@ -208,6 +208,7 @@
             canStart: authorized.canStart === true,
             canHandoff: authorized.canHandoff === true,
             assignmentState: authorized.assignmentState || "",
+            queueState: authorized.queueState || "",
         };
     }
 
@@ -236,7 +237,8 @@
     }
 
     function cardState(doc, context, action) {
-        const completed = context.assignmentState === "completed"
+        const completed = context.queueState === "completed"
+            || context.assignmentState === "completed"
             || COMPLETED_ORDER_STATUSES.has(String(doc.status || ""));
         if (completed) {
             return Object.freeze({
@@ -246,7 +248,8 @@
             });
         }
 
-        const inProgress = String(doc.department_status || "").trim() === "قيد العمل"
+        const inProgress = context.queueState === "in_progress"
+            || String(doc.department_status || "").trim() === "قيد العمل"
             || (action && action.kind === "handoff");
         if (inProgress) {
             return Object.freeze({
@@ -257,7 +260,8 @@
         }
 
         const hasProductionContext = Boolean(
-            String(doc.current_production_stage || "").trim()
+            context.queueState === "ready"
+            || String(doc.current_production_stage || "").trim()
             || String(doc.current_department || "").trim()
             || String(doc.current_assignee || "").trim()
             || context.assignmentState === "assigned"
@@ -398,29 +402,29 @@
         return "";
     }
 
-    function buildCard(doc, hasSelection, model = null) {
-        const prepared = model || cardViewModel(doc);
-        const completedClass = prepared.completed ? " dco-list-row-completed" : "";
+    function buildCard(doc, hasSelection, preparedModel = null) {
+        const model = preparedModel || cardViewModel(doc);
+        const completedClass = model.completed ? " dco-list-row-completed" : "";
         return `
             <article
-                class="dco-mobile-order-card ${prepared.state.cardClass}${completedClass}"
+                class="dco-mobile-order-card ${model.state.cardClass}${completedClass}"
                 data-order-name="${escapeHtml(doc.name)}"
-                data-card-state="${escapeHtml(prepared.state.key)}"
+                data-card-state="${escapeHtml(model.state.key)}"
                 data-selectable="${hasSelection ? "1" : "0"}"
                 dir="rtl"
             >
                 <header class="dco-card-header">
-                    ${renderCustomer(prepared)}
-                    ${renderStatusPill(prepared.state)}
+                    ${renderCustomer(model)}
+                    ${renderStatusPill(model.state)}
                 </header>
-                ${renderOrderLink(prepared)}
+                ${renderOrderLink(model)}
                 <section class="dco-card-info-grid" aria-label="${escapeHtml(__("بيانات الطلب"))}">
-                    ${renderInfoTile("لون اللوح", prepared.boardColor, "board", "is-board")}
-                    ${renderInfoTile("لون القشاط", prepared.edgeColor, "droplet", "is-edge-color")}
-                    ${renderInfoTile("نوع القشاط", prepared.edgeType, "layers", "is-edge-type")}
+                    ${renderInfoTile("لون اللوح", model.boardColor, "board", "is-board")}
+                    ${renderInfoTile("لون القشاط", model.edgeColor, "droplet", "is-edge-color")}
+                    ${renderInfoTile("نوع القشاط", model.edgeType, "layers", "is-edge-type")}
                 </section>
-                ${renderDate(prepared)}
-                ${renderAction(prepared)}
+                ${renderDate(model)}
+                ${renderAction(model)}
             </article>
         `;
     }
@@ -440,6 +444,7 @@
             mobileActionLabel(model.action),
             model.context.stage || "",
             model.context.assignmentState || "",
+            model.context.queueState || "",
             hasSelection ? 1 : 0,
             String(doc.department_status || ""),
         ]);
@@ -578,6 +583,52 @@
         return compared ? compared * direction : left.name.localeCompare(right.name);
     }
 
+    function personalQueueState(doc, flag = {}) {
+        if (flag.assignment_state === "completed") return "completed";
+        if (String(doc && doc.department_status || "").trim() === "قيد العمل") {
+            return "in_progress";
+        }
+        return "ready";
+    }
+
+    function sortPersonalQueueItems(items) {
+        const inProgress = [];
+        const ready = [];
+        const completed = [];
+
+        items.forEach(item => {
+            const state = personalQueueState(item.doc, item.flag);
+            if (state === "completed") {
+                completed.push(item);
+            } else if (state === "in_progress") {
+                inProgress.push(item);
+            } else {
+                ready.push(item);
+            }
+        });
+
+        inProgress.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "assignment_time",
+            1
+        ));
+        ready.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "assignment_time",
+            1
+        ));
+        completed.sort((left, right) => compareServerTimes(
+            left,
+            right,
+            "completion_time",
+            -1
+        ));
+
+        return [...inProgress, ...ready, ...completed];
+    }
+
     function applyOperationalRolePresentation(listview, payload) {
         const root = rootNode(listview);
         const result = root && root.querySelector(".result");
@@ -595,6 +646,7 @@
                 canStart: flag.can_start_stage === true,
                 canHandoff: flag.can_handoff_stage === true,
                 assignmentState: flag.assignment_state || "",
+                queueState: personalQueueState(doc, flag),
             };
         });
         renderMobileCards(listview);
@@ -603,13 +655,13 @@
             return;
         }
 
-        const assigned = [];
-        const completed = [];
+        const queueItems = [];
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
             if (!name) return;
             const flag = flags[name] || {};
-            const isCompleted = flag.assignment_state === "completed";
+            const doc = docs.get(name) || {};
+            const isCompleted = personalQueueState(doc, flag) === "completed";
             container.classList.remove("dco-list-row-other-role");
             container.classList.toggle("dco-list-row-completed", isCompleted);
             const card = container.querySelector(".dco-mobile-order-card");
@@ -617,22 +669,10 @@
                 card.classList.remove("dco-list-row-other-role");
                 card.classList.toggle("dco-list-row-completed", isCompleted);
             }
-            (isCompleted ? completed : assigned).push({ container, flag, name });
+            queueItems.push({ container, flag, name, doc });
         });
 
-        assigned.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "assignment_time",
-            1
-        ));
-        completed.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "completion_time",
-            -1
-        ));
-        const ordered = [...assigned, ...completed].map(item => item.container);
+        const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);
         const current = [...result.querySelectorAll(".list-row-container")]
             .filter(container => Boolean(rowDocumentName(container)));
         const needsReorder = ordered.some((container, index) => current[index] !== container);
@@ -701,6 +741,10 @@
         return request;
     }
 
+    function applyOperationalRoleRows(listview) {
+        return requestOperationalRoleFlags(listview);
+    }
+
     function runScheduledPresentation(listview) {
         listview._dcoPresentationFrame = null;
         const refreshRoleFlags = listview._dcoPresentationNeedsRoleRefresh === true;
@@ -710,7 +754,7 @@
         if (refreshRoleFlags) {
             invalidateRoleFlags(listview);
             renderMobileCards(listview);
-            requestOperationalRoleFlags(listview);
+            applyOperationalRoleRows(listview);
             return;
         }
 
@@ -800,7 +844,9 @@
         buildCard,
         cardViewModel,
         isPhoneLayout,
+        personalQueueState,
         quickActionContext,
         renderMobileCards,
+        sortPersonalQueueItems,
     });
 })();
