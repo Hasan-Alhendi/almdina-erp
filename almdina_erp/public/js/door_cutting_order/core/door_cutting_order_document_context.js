@@ -455,10 +455,10 @@
         }));
     }
 
-    function settleSurfaces(frm, attempt = 0) {
+    function settleSurfaces(frm, attempt) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
         const token = capture(frm);
-        if (!isCurrent(frm, token)) return false;
+        if (isCurrent(frm, token) === false) return false;
 
         const activeRun = frm.__almdinaSurfaceSettleRun;
         if (activeRun && isSameDocument(frm, activeRun.token)) {
