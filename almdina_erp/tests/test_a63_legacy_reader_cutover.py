@@ -103,16 +103,46 @@ def test_shop_floor_plan_reads_are_canonical_only() -> None:
     assert "dxf_plan" in summaries
 
 
+def test_shop_floor_command_state_is_built_from_canonical_plan_facts() -> None:
+    repository = (
+        APP / "infrastructure" / "frappe" / "shop_floor_command_repository.py"
+    ).read_text(encoding="utf-8")
+    commands = (APP / "application" / "shop_floor" / "commands.py").read_text(
+        encoding="utf-8"
+    )
+
+    state = repository.split("def get_order_state", 1)[1].split(
+        "\n    def get_stage_state", 1
+    )[0]
+    assert "plan = production_plan_facts(order)" in state
+    assert "has_cutting_plan=plan.has_cutting_plan" in state
+    assert "plan_needs_recalculation=plan.plan_needs_recalculation" in state
+    assert "has_approved_plan=plan.has_approved_plan" in state
+    assert "order.plan_needs_recalculation" not in repository
+
+    # These tokens are reads from the pure application OrderState DTO, not from
+    # a Frappe Door Cutting Order document. The repository above proves their
+    # source is canonical Cutting Plan facts.
+    assert "class OrderState:" in commands
+    assert "plan_needs_recalculation: bool" in commands
+    assert "order.plan_needs_recalculation" in commands
+    assert "import frappe" not in commands
+    assert "from frappe" not in commands
+
+
 def test_direct_legacy_dco_plan_reads_are_confined_to_named_migration_bridges() -> None:
     # Direct persisted-order reads are exceptional in A6.3. API fallback keeps
     # historical locked orders readable; upload fallback distinguishes a legacy
-    # pre-A2 DXF. All other runtime decisions must use canonical Cutting Plan.
+    # pre-A2 DXF. The application shop-floor command hit is a canonical DTO read
+    # and is separately proved above rather than treated as persisted DCO state.
     allowed: dict[str, set[str]] = {
         "order.cutting_plan_json": {"almdina_erp/api.py"},
         "order.system_plan_json": set(),
         "order.custom_plan_json": set(),
         "order.approved_plan_source": set(),
-        "order.plan_needs_recalculation": set(),
+        "order.plan_needs_recalculation": {
+            "almdina_erp/application/shop_floor/commands.py",
+        },
         "order.production_dxf": {
             "almdina_erp/services/shop_floor_dxf_service.py",
         },
