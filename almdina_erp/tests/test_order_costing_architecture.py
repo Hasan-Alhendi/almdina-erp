@@ -112,6 +112,8 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertIn("Capability.EDIT_COST_SETTINGS", command)
         self.assertIn("apply_plan_costs(plan)", command)
         self.assertIn("repository.save_document(plan)", command)
+        self.assertIn("refresh_order_commercial_totals(order, plan)", command)
+        self.assertNotIn("project_plan_costs_to_order", command)
         self.assertNotIn("order.save(", command)
         self.assertNotIn("ignore_permissions", command)
         self.assertNotIn("plan_needs_recalculation =", command)
@@ -140,7 +142,7 @@ class TestOrderCostingArchitecture(unittest.TestCase):
             "\n\n@frappe.whitelist()\ndef recalculate_order_plan", 1
         )[0]
         dxf = source.split("def save_uploaded_dxf_plan", 1)[1].split(
-            "\n\ndef mirror_uploaded_dxf_projection", 1
+            "\n\ndef finalize_uploaded_dxf_order_state", 1
         )[0]
 
         for segment in (system, dxf):
@@ -148,7 +150,7 @@ class TestOrderCostingArchitecture(unittest.TestCase):
             self.assertIn("apply_plan_costs(plan", segment)
             self.assertLess(segment.index("apply_plan_costs(plan"), segment.index("repository.save_document(plan)"))
 
-    def test_approval_never_pulls_cost_back_from_dco(self) -> None:
+    def test_approval_never_pulls_or_projects_plan_cost_through_dco(self) -> None:
         source = PLAN_COMMAND_PATH.read_text(encoding="utf-8")
         approval = source.split("def approve_order_plan", 1)[1].split(
             "\n\ndef save_system_plan_settings", 1
@@ -160,7 +162,9 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertNotIn("apply_plan_costs", approval)
         self.assertNotIn("board_rate_usd =", approval)
         self.assertNotIn("cutting_cost_per_board_usd =", approval)
-        self.assertIn("project_plan_costs_to_order(order, plan)", approval)
+        self.assertNotIn("project_plan_costs_to_order", approval)
+        self.assertIn("_set_approved_plan_relation(order, plan)", approval)
+        self.assertIn("refresh_order_commercial_totals(order, plan)", approval)
 
     def test_cost_reads_and_financial_documents_prefer_plan_snapshot(self) -> None:
         cost_service = COST_PERMISSION_PATH.read_text(encoding="utf-8")
