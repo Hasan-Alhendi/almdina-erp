@@ -233,7 +233,7 @@ def _require_live_preview_access(order: Any | None) -> None:
 
 @frappe.whitelist()
 def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
-    """Preview authorized Draft edits; non-Draft orders render stored plan only."""
+    """Preview authorized Draft edits; non-Draft orders render canonical approved plan only."""
 
     payload = frappe.parse_json(doc) if isinstance(doc, str) else dict(doc or {})
     payload["doctype"] = "Door Cutting Order"
@@ -245,7 +245,7 @@ def preview_door_cutting_order(doc: str | dict[str, Any]) -> dict[str, Any]:
         approved_snapshot = _approved_snapshot_for_order(stored.name)
         return _serialize_order_preview(
             stored,
-            cutting_plan_json=approved_snapshot or stored.cutting_plan_json,
+            cutting_plan_json=approved_snapshot or "",
             include_financial=_can_view_preview_costs(stored),
         )
 
@@ -314,7 +314,7 @@ def get_approved_cutting_plan_snapshot(order_name: str) -> dict[str, Any]:
     if not plan_name:
         return {
             "cutting_plan": None,
-            "snapshot_json": sanitize_plan_snapshot_json(order.cutting_plan_json or ""),
+            "snapshot_json": "",
         }
     plan = frappe.get_doc("Cutting Plan", plan_name)
     return {
