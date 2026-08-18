@@ -36,6 +36,23 @@ def _field(label: str, options: str = "") -> SimpleNamespace:
     return SimpleNamespace(label=label, options=options)
 
 
+def _cutting_plan_meta() -> SimpleNamespace:
+    fields = {
+        "optimization_mode": _field(
+            "Optimization Mode",
+            "Auto\nAuto Pro\nDeep Search\nOptimal Search\nMaxRects Best Short Side\nMaxRects Best Area\nMaxRects Bottom Left\nMaxRects Contact Point\nMaxRects Width\nMaxRects Length\nShelf Horizontal\nShelf Vertical\nShelf First Fit\nShelf Next Fit\nGuillotine Short Axis\nGuillotine Long Axis\nGuillotine Best Area Fit\nGuillotine Best Short Side Fit\nGuillotine Best Long Side Fit\nSkyline Bottom Left\nSkyline Best Fit",
+        ),
+        "machine_type": _field(
+            "Cutting Machine Type",
+            "Auto\nCNC Router\nPanel Saw",
+        ),
+        "kerf_mm": _field("Kerf MM"),
+        "trim_margin_mm": _field("Trim Margin MM"),
+        "optimization_time_limit_sec": _field("Optimization Time Limit Sec"),
+    }
+    return SimpleNamespace(get_field=lambda fieldname: fields.get(fieldname))
+
+
 class FakeOrder:
     def __init__(self, **overrides):
         values = {
@@ -186,6 +203,7 @@ class TestPlanSettingsEditService(TestCase):
         with (
             patch.object(service.frappe.db, "sql") as lock_row,
             patch.object(service.frappe, "get_doc", return_value=doc),
+            patch.object(service.frappe, "get_meta", return_value=_cutting_plan_meta()),
             patch.object(service, "require_cutting_plan_capability") as capability_gate,
             patch.object(
                 command_service,
@@ -231,6 +249,7 @@ class TestPlanSettingsEditService(TestCase):
         with (
             patch.object(service.frappe.db, "sql"),
             patch.object(service.frappe, "get_doc", return_value=doc),
+            patch.object(service.frappe, "get_meta", return_value=_cutting_plan_meta()),
             patch.object(service, "require_cutting_plan_capability") as capability_gate,
             patch.object(
                 command_service,
@@ -248,7 +267,8 @@ class TestPlanSettingsEditService(TestCase):
         self.assertEqual(result, expected)
 
     def test_negative_plan_setting_is_rejected_before_persistence(self) -> None:
-        doc = FakeOrder()
-
-        with self.assertRaises(frappe.ValidationError):
-            service._normalize_updates(doc, {"kerf_mm": -1})
+        with (
+            patch.object(service.frappe, "get_meta", return_value=_cutting_plan_meta()),
+            self.assertRaises(frappe.ValidationError),
+        ):
+            service._normalize_updates({"kerf_mm": -1})
