@@ -43,6 +43,7 @@ function wrapper(node) {
 }
 
 const root = makeNode();
+const pageRoot = makeNode();
 const planActions = makeNode();
 const planHtml = makeNode();
 const planIntro = makeNode();
@@ -67,6 +68,7 @@ const fields = {
 const frm = {
     doctype: "Door Cutting Order",
     wrapper: root,
+    page: { wrapper: pageRoot },
     fields_dict: fields,
 };
 
@@ -146,6 +148,7 @@ assert.ok(visual);
 assert.equal(visual.refresh(frm), true);
 assert.equal(appendedStyles.length, 1);
 assert.equal(root.classList.contains("dco-a53-workspace-polish"), true);
+assert.equal(pageRoot.classList.contains("dco-a53-workspace-polish"), true);
 
 assert.equal(planActions.getAttribute("data-almdina-workspace-status"), "loading");
 assert.equal(planActions.getAttribute("aria-busy"), "true");
