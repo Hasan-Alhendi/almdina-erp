@@ -13,10 +13,9 @@ from .door_cutting_order import DoorCuttingOrder
 class DoorCuttingOrderController(DoorCuttingOrder):
     """Thin Frappe override controller for Door Cutting Order.
 
-    Frappe requires every ``override_doctype_class`` implementation to subclass
-    the canonical DocType controller. Framework lifecycle entry points stay here,
-    while save orchestration belongs to Application and Frappe adaptation stays
-    in focused Infrastructure adapters.
+    Frappe lifecycle entry points stay here. Ordinary validation owns customer
+    requirements only; the post-persistence hook notifies the Cutting Plan
+    boundary that existing Draft revisions may have become stale.
     """
 
     def _gateway(self) -> FrappeDoorCuttingOrderSaveGateway:
@@ -28,6 +27,13 @@ class DoorCuttingOrderController(DoorCuttingOrder):
 
     def validate(self) -> None:
         process_order_save(self._gateway())
+
+    def on_update(self) -> None:
+        from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import (
+            invalidate_stale_draft_plans,
+        )
+
+        invalidate_stale_draft_plans(self)
 
     def ensure_special_shapes_documented(self) -> None:
         self._gateway().ensure_special_shapes_documented()
