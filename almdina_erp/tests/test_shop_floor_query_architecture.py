@@ -142,7 +142,7 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertNotIn("get_order_shop_floor_detail", dxf_source)
         self.assertNotIn("dco-cutting-plan", dxf_source)
         self.assertIn("validate_assigned_drawing_action", dxf_source)
-        self.assertIn("require_document_capability", dxf_source)
+        self.assertIn("require_cutting_plan_capability", dxf_source)
         self.assertIn("def validate_assigned_drawing_action", action_policy_source)
         self.assertIn("not_assigned_designer", action_policy_source)
 
