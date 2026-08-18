@@ -30,9 +30,6 @@ _ORDER_AUTHORING_CAPABILITIES = frozenset(
         Capability.SUBMIT_ORDER,
     }
 )
-# Global order visibility is independent from every operational action grant.
-# Supervising, dispatching, reassigning, reporting, or editing must never widen
-# an operator's data scope unless this dedicated capability is explicitly set.
 _SCOPE_OVERRIDING_CAPABILITIES = frozenset({Capability.VIEW_ALL_ORDERS})
 _FLOOR_WORKER_CAPABILITIES = frozenset(
     {
@@ -69,6 +66,11 @@ _REPLACEMENT_PERMISSION_CAPABILITIES = {
     for capability, definition in CAPABILITY_CATALOG.items()
     if definition.applies_to == "Replacement Piece"
 }
+_KNOWN_CUSTOM_PERMISSION_TYPES = frozenset(
+    definition.permission_type
+    for definition in CAPABILITY_CATALOG.values()
+    if definition.custom
+)
 
 
 def _resolved_permission_type(
@@ -138,19 +140,12 @@ def _assigned_order_subquery(user: str) -> str:
 
 
 def _worker_operational_roles(user: str) -> tuple[str, ...]:
-    """Resolve operational roles through the shop-floor authorization gateway."""
-
-    from almdina_erp.almdina_erp.infrastructure.frappe import (
-        shop_floor_authorization,
-    )
+    from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
 
     return shop_floor_authorization.roles_of(user)
 
 
-def _resolve_stage_operational_role(
-    order_name: str,
-    stage: Any,
-) -> str | None:
+def _resolve_stage_operational_role(order_name: str, stage: Any) -> str | None:
     role = str(_row_value(stage, "operational_role") or "").strip()
     if role:
         return role
@@ -164,9 +159,7 @@ def _resolve_stage_operational_role(
     )
     if not production_path:
         return None
-    from almdina_erp.almdina_erp.infrastructure.frappe import (
-        production_routing_repository,
-    )
+    from almdina_erp.almdina_erp.infrastructure.frappe import production_routing_repository
 
     try:
         route = production_routing_repository.get_route(str(production_path))
@@ -209,16 +202,10 @@ def _worker_completed_orders_subquery(user: str) -> str:
 
 
 def _worker_visible_orders_subquery(user: str) -> str:
-    return (
-        _worker_actionable_orders_subquery(user)
-        + " union "
-        + _worker_completed_orders_subquery(user)
-    )
+    return _worker_actionable_orders_subquery(user) + " union " + _worker_completed_orders_subquery(user)
 
 
 def worker_can_view_order(user: str, order_name: str | None) -> bool:
-    """Workers may read only orders that need their stage work or they finished."""
-
     if not order_name:
         return False
     if not _requires_assigned_scope(user):
@@ -239,9 +226,7 @@ def worker_can_view_order(user: str, order_name: str | None) -> bool:
     ):
         return True
 
-    current_stage_name = str(
-        _row_value(order, "current_production_stage") or ""
-    ).strip()
+    current_stage_name = str(_row_value(order, "current_production_stage") or "").strip()
     if not current_stage_name:
         return False
 
@@ -287,11 +272,7 @@ def door_cutting_order_query(user: str | None = None) -> str:
         return "1=0"
     if not _requires_assigned_scope(user):
         return ""
-    return (
-        "`tabDoor Cutting Order`.name in ("
-        + _assigned_order_subquery(user)
-        + ")"
-    )
+    return "`tabDoor Cutting Order`.name in (" + _assigned_order_subquery(user) + ")"
 
 
 def production_stage_query(user: str | None = None) -> str:
@@ -320,11 +301,7 @@ def cutting_plan_query(user: str | None = None) -> str:
         return "1=0"
     if not _requires_assigned_scope(user):
         return ""
-    return (
-        "`tabCutting Plan`.door_cutting_order in ("
-        + _assigned_order_subquery(user)
-        + ")"
-    )
+    return "`tabCutting Plan`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
 
 
 def replacement_piece_query(user: str | None = None) -> str:
@@ -335,11 +312,12 @@ def replacement_piece_query(user: str | None = None) -> str:
         return "1=0"
     if not _requires_assigned_scope(user):
         return ""
-    return (
-        "`tabReplacement Piece`.door_cutting_order in ("
-        + _assigned_order_subquery(user)
-        + ")"
-    )
+    return "`tabReplacement Piece`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
+
+
+def _known_custom_type_owned_elsewhere(resolved_type: str | None, local_map: dict[str, str]) -> bool:
+    value = str(resolved_type or "")
+    return value in _KNOWN_CUSTOM_PERMISSION_TYPES and value not in local_map
 
 
 def door_cutting_order_has_permission(
@@ -365,6 +343,8 @@ def door_cutting_order_has_permission(
     required = _DCO_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
     if required:
         return _has(resolved_user, required)
+    if _known_custom_type_owned_elsewhere(resolved_type, _DCO_PERMISSION_CAPABILITIES):
+        return False
     return resolved_type not in _MUTATING_PERMISSION_TYPES
 
 
@@ -385,7 +365,7 @@ def production_stage_has_permission(
         if not _requires_assigned_scope(resolved_user):
             return True
         return bool(getattr(doc, "assigned_to", None) == resolved_user)
-    if resolved_type in _MUTATING_PERMISSION_TYPES:
+    if resolved_type in _MUTATING_PERMISSION_TYPES or str(resolved_type or "") in _KNOWN_CUSTOM_PERMISSION_TYPES:
         return False
     return True
 
@@ -403,7 +383,7 @@ def production_incident_has_permission(
         return True
     if resolved_type in _READ_PERMISSION_TYPES:
         return _has(resolved_user, Capability.VIEW_PRODUCTION_INCIDENTS)
-    if resolved_type in _MUTATING_PERMISSION_TYPES:
+    if resolved_type in _MUTATING_PERMISSION_TYPES or str(resolved_type or "") in _KNOWN_CUSTOM_PERMISSION_TYPES:
         return False
     return True
 
@@ -462,6 +442,8 @@ def replacement_piece_has_permission(
     required = _REPLACEMENT_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
     if required:
         return _has(resolved_user, required)
+    if _known_custom_type_owned_elsewhere(resolved_type, _REPLACEMENT_PERMISSION_CAPABILITIES):
+        return False
     return True
 
 
