@@ -28,13 +28,13 @@ def test_retired_snapshot_service_has_no_runtime_callers() -> None:
     assert _matches("cutting_plan_snapshot_service") == []
 
 
-def test_dual_plan_helper_is_confined_to_retiring_export_validation_surface() -> None:
-    # The saved-order DXF owner has already cut over. The remaining reference is
-    # confined to export_validation_service until its compatibility endpoint is
-    # collapsed onto dxf_export_service later in A6.4.
-    assert _matches("dual_plan_fields") == [
-        "almdina_erp/services/export_validation_service.py"
-    ]
+def test_retired_plan_projection_facades_are_absent() -> None:
+    assert _matches("dual_plan_fields") == []
+    assert _matches("legacy_plan_projection_reader") == []
+    assert not (APP / "services" / "dual_plan_fields.py").exists()
+    assert not (
+        APP / "infrastructure" / "frappe" / "legacy_plan_projection_reader.py"
+    ).exists()
 
 
 def test_retired_snapshot_surface_contains_no_old_aggregate_logic_or_bypass() -> None:
@@ -182,12 +182,11 @@ def test_replacement_plans_inherit_from_the_exact_approved_cutting_plan() -> Non
     assert "Capability.APPROVE_REPLACEMENT" not in command_context
 
 
-def test_direct_legacy_dco_plan_reads_are_confined_to_nonpersisted_or_retiring_paths() -> None:
-    # API's locked-order fallback and export_validation's old endpoint are the
-    # final retiring compatibility surfaces. The DXF geometry parser consumes a
-    # transient PlanSettings proxy and shop-floor no longer reads production_dxf.
+def test_direct_persisted_dco_plan_reads_are_fully_retired() -> None:
+    # dxf_import_service receives a transient PlanSettings proxy and the
+    # application OrderState dataclass is not a Frappe Door Cutting Order.
     allowed: dict[str, set[str]] = {
-        "order.cutting_plan_json": {"almdina_erp/api.py"},
+        "order.cutting_plan_json": set(),
         "order.system_plan_json": set(),
         "order.custom_plan_json": set(),
         "order.approved_plan_source": set(),
@@ -230,6 +229,9 @@ def test_preview_adapter_is_explicitly_transient_and_schema_independent() -> Non
 
 def test_saved_dxf_paths_require_canonical_cutting_plan() -> None:
     export = (APP / "services" / "dxf_export_service.py").read_text(encoding="utf-8")
+    compatibility = (APP / "services" / "export_validation_service.py").read_text(
+        encoding="utf-8"
+    )
     upload = (APP / "services" / "shop_floor_dxf_service.py").read_text(encoding="utf-8")
 
     assert "_required_saved_plan(order)" in export
@@ -237,42 +239,23 @@ def test_saved_dxf_paths_require_canonical_cutting_plan() -> None:
     assert 'getattr(order, "kerf_mm"' not in export
     assert "Read-only migration bridge for orders predating canonical Cutting Plan." not in export
 
+    endpoint = compatibility.split("def get_validated_dxf_plan", 1)[1]
+    assert "canonical_get_validated_dxf_plan" in endpoint
+    assert "dxf_export_service" in endpoint
+    assert "_stored_order_export_snapshot" not in compatibility
+    assert "dual_plan_fields" not in compatibility
+
     assert "existing_file = current_uploaded_dxf_file(order.name)" in upload
     assert "order.production_dxf" not in upload
     assert "One-time migration fallback for a legacy pre-A2 custom DXF" not in upload
 
 
-def test_historical_projection_boundary_is_read_only_until_final_endpoint_cutover() -> None:
-    boundary = (
-        APP
-        / "infrastructure"
-        / "frappe"
-        / "legacy_plan_projection_reader.py"
-    ).read_text(encoding="utf-8")
-    dual = (APP / "services" / "dual_plan_fields.py").read_text(encoding="utf-8")
-
-    for fieldname in (
-        "cutting_plan_json",
-        "system_plan_json",
-        "custom_plan_json",
-        "approved_plan_source",
-        "production_dxf",
-        "kerf_mm",
-    ):
-        assert fieldname in boundary
-    for forbidden in (
-        "frappe.db.set_value",
-        "frappe.new_doc",
-        ".insert(",
-        ".save(",
-        "ignore_permissions",
-    ):
-        assert forbidden not in boundary
-    assert "legacy_system_plan_json" in dual
-    assert "legacy_custom_plan_json" in dual
-    assert "_retired_writer" in dual
-    assert "frappe.db" not in dual
-    assert "ignore_permissions" not in dual
+def test_saved_order_api_has_no_retired_plan_snapshot_fallback() -> None:
+    api = (APP / "api.py").read_text(encoding="utf-8")
+    assert "approved_snapshot or stored.cutting_plan_json" not in api
+    assert "order.cutting_plan_json" not in api
+    assert 'cutting_plan_json=approved_snapshot or ""' in api
+    assert '"snapshot_json": ""' in api
 
 
 def test_a64_first_schema_batch_removes_plan_ownership_fields() -> None:
