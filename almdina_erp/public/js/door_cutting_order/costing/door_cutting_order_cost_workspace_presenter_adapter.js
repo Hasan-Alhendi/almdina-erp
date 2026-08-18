@@ -17,6 +17,22 @@
         return state && state.status === "ready" ? state.data : null;
     }
 
+    function canView(frm) {
+        const owner = stateOwner();
+        return Boolean(owner && typeof owner.canView === "function" && owner.canView(frm));
+    }
+
+    function ensureLoad(frm) {
+        const owner = stateOwner();
+        if (!owner || typeof owner.load !== "function") return Promise.resolve(null);
+        return Promise.resolve(owner.load(frm)).catch(() => null);
+    }
+
+    function ready(frm) {
+        const state = snapshot(frm);
+        return Boolean(state && state.status === "ready" && state.data);
+    }
+
     function projectOrder(frm, orderSnapshot) {
         if (!frm || !frm.doc || !orderSnapshot) return;
         Object.entries(orderSnapshot).forEach(([fieldname, value]) => {
@@ -58,11 +74,25 @@
         return true;
     }
 
-    function wrapCall(legacy, method) {
-        return function workspaceOwnedCostPresenter(frm, ...args) {
-            project(frm);
-            return legacy[method](frm, ...args);
-        };
+    function pendingMessage(frm) {
+        const state = snapshot(frm);
+        if (state && state.status === "error") {
+            return __("تعذر تحميل بيانات التكلفة. أعد المحاولة.");
+        }
+        return __("جاري تحميل بيانات التكلفة...");
+    }
+
+    function renderPending(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
+        const wrapper = field && field.$wrapper;
+        if (!wrapper || !wrapper.length) return false;
+        wrapper.html(`
+            <div class="dco-cost-shell">
+                <div class="dco-cost-empty">${frappe.utils.escape_html(pendingMessage(frm))}</div>
+            </div>
+        `);
+        ensureLoad(frm);
+        return true;
     }
 
     function install() {
@@ -71,16 +101,41 @@
         const wrapped = {
             ...legacy,
             __a52WorkspaceOwned: true,
+            render(frm) {
+                if (canView(frm) && !ready(frm)) return renderPending(frm);
+                if (ready(frm)) project(frm);
+                return legacy.render(frm);
+            },
+            refreshInvoiceSection(frm) {
+                if (canView(frm) && !ready(frm)) return renderPending(frm);
+                if (ready(frm)) project(frm);
+                return legacy.refreshInvoiceSection(frm);
+            },
+            invoiceLines(frm) {
+                if (canView(frm) && !ready(frm)) {
+                    ensureLoad(frm);
+                    return [];
+                }
+                if (ready(frm)) project(frm);
+                return legacy.invoiceLines(frm);
+            },
+            invoiceTotal(frm) {
+                if (canView(frm) && !ready(frm)) {
+                    ensureLoad(frm);
+                    return 0;
+                }
+                if (ready(frm)) project(frm);
+                return legacy.invoiceTotal(frm);
+            },
+            quoteTotal(frm) {
+                if (canView(frm) && !ready(frm)) {
+                    ensureLoad(frm);
+                    return 0;
+                }
+                if (ready(frm)) project(frm);
+                return legacy.quoteTotal(frm);
+            },
         };
-        [
-            "render",
-            "refreshInvoiceSection",
-            "invoiceLines",
-            "invoiceTotal",
-            "quoteTotal",
-        ].forEach((method) => {
-            if (typeof legacy[method] === "function") wrapped[method] = wrapCall(legacy, method);
-        });
         window.AlmdinaOrderCostUX = Object.freeze(wrapped);
         return true;
     }
@@ -88,7 +143,6 @@
     function refreshCurrent() {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        project(frm);
         const presenter = window.AlmdinaOrderCostUX;
         if (presenter && typeof presenter.render === "function") presenter.render(frm);
     }
@@ -98,6 +152,7 @@
     window.AlmdinaCostWorkspacePresenterAdapter = Object.freeze({
         install,
         project,
+        ready,
     });
 
     install();
