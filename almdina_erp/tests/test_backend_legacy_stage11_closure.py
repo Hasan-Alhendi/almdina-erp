@@ -131,11 +131,16 @@ class TestBackendLegacyStage11Closure(unittest.TestCase):
             APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
         ).read_text(encoding="utf-8")
         self.assertIn("Backward-compatible Cutting Plan lifecycle facade", source)
-        self.assertIn("_snapshot.create_plan_from_order", source)
+        self.assertIn("_retired_snapshot_api", source)
+        self.assertNotIn("cutting_plan_snapshot_service", source)
+        self.assertNotIn("_snapshot.", source)
         self.assertIn("order_lifecycle_permission_service", source)
         self.assertIn("order_approval_service", source)
+        self.assertIn("drawing_approval_service", source)
+        self.assertIn("order_dispatch_service", source)
         self.assertNotIn("frappe.new_doc", source)
         self.assertNotIn("frappe.db", source)
+        self.assertNotIn("ignore_permissions", source)
 
     def test_retained_production_boundary_is_only_a_compatibility_facade(self) -> None:
         source = (

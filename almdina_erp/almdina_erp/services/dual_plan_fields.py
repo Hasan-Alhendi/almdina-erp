@@ -1,53 +1,55 @@
+"""Retired dual-plan field facade kept only for historical read compatibility.
+
+Canonical runtime reads come from ``Cutting Plan``. The remaining export bridge
+may call the read helpers below for pre-canonical records until data migration.
+Legacy setters deliberately fail closed so this module can never revive DCO plan
+projections.
+"""
+
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
-import frappe
-
-
-def has_dual_plan_field(fieldname: str) -> bool:
-    try:
-        return bool(frappe.get_meta("Door Cutting Order").has_field(fieldname))
-    except Exception:
-        return False
-
-
-def get_order_field(order: Any, fieldname: str, default: Any = None) -> Any:
-    value = getattr(order, fieldname, None)
-    if value not in (None, ""):
-        return value
-    if isinstance(order, dict):
-        value = order.get(fieldname)
-        if value not in (None, ""):
-            return value
-    name = getattr(order, "name", None) if not isinstance(order, dict) else order.get("name")
-    if name and has_dual_plan_field(fieldname):
-        try:
-            value = frappe.db.get_value("Door Cutting Order", name, fieldname)
-            if value not in (None, ""):
-                return value
-        except Exception:
-            pass
-    return default
+from almdina_erp.almdina_erp.infrastructure.frappe.legacy_plan_projection_reader import (
+    legacy_approved_plan_source,
+    legacy_custom_plan_json,
+    legacy_system_plan_json,
+)
 
 
 def get_system_plan_json(order: Any) -> str:
-    return get_order_field(order, "system_plan_json") or get_order_field(order, "cutting_plan_json") or ""
+    return legacy_system_plan_json(order)
 
 
 def get_custom_plan_json(order: Any) -> str:
-    return get_order_field(order, "custom_plan_json") or ""
+    return legacy_custom_plan_json(order)
 
 
 def get_approved_plan_source(order: Any, default: str = "System") -> str:
-    return get_order_field(order, "approved_plan_source", default) or default
+    return legacy_approved_plan_source(order, default)
 
 
-def set_system_plan_json_if_available(order: Any, payload: str) -> None:
-    if has_dual_plan_field("system_plan_json"):
-        order.system_plan_json = payload
+def _retired_writer() -> NoReturn:
+    raise RuntimeError(
+        "Door Cutting Order plan projections are read-only migration data; "
+        "persist canonical state through Cutting Plan commands."
+    )
 
 
-def set_custom_plan_json_if_available(order: Any, payload: str) -> None:
-    if has_dual_plan_field("custom_plan_json"):
-        order.custom_plan_json = payload
+def set_system_plan_json_if_available(order: Any, payload: str) -> NoReturn:
+    del order, payload
+    _retired_writer()
+
+
+def set_custom_plan_json_if_available(order: Any, payload: str) -> NoReturn:
+    del order, payload
+    _retired_writer()
+
+
+__all__ = [
+    "get_approved_plan_source",
+    "get_custom_plan_json",
+    "get_system_plan_json",
+    "set_custom_plan_json_if_available",
+    "set_system_plan_json_if_available",
+]

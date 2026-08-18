@@ -17,6 +17,9 @@ from almdina_erp.almdina_erp.domain.cutting import (
     place_piece_maxrects,
     sort_pieces,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    seed_plan_settings,
+)
 
 
 def _piece_rows(order: Any) -> list[dict[str, Any]]:
@@ -120,7 +123,11 @@ def _pack_one_remnant(
     return sheet, [piece for piece in remaining if int(piece["id"]) not in placed_ids]
 
 
-def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[str, Any]], order: Any) -> list[str]:
+def _validate_variable_plan(
+    plan: dict[str, Any],
+    requested_pieces: list[dict[str, Any]],
+    order: Any,
+) -> list[str]:
     errors: list[str] = []
     expected = {int(piece["id"]): piece for piece in requested_pieces}
     seen: dict[int, int] = {}
@@ -134,27 +141,58 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
 
         sheet_board_item = str(sheet.get("board_item") or "").strip()
         if expected_board_item and sheet_board_item and sheet_board_item != expected_board_item:
-            errors.append(_("Source sheet {0} uses a different Board Item.").format(sheet.get("sheet_no")))
+            errors.append(
+                _("Source sheet {0} uses a different Board Item.").format(
+                    sheet.get("sheet_no")
+                )
+            )
 
         for placed in pieces:
             piece_id = int(placed["id"])
             seen[piece_id] = seen.get(piece_id, 0) + 1
-            x, y, w, h = map(flt, (placed.get("x"), placed.get("y"), placed.get("w"), placed.get("h")))
-            if x < -tolerance or y < -tolerance or x + w > board_w + tolerance or y + h > board_h + tolerance:
-                errors.append(_("Piece {0} exceeds source bounds on sheet {1}.").format(placed.get("label"), sheet.get("sheet_no")))
+            x, y, w, h = map(
+                flt,
+                (
+                    placed.get("x"),
+                    placed.get("y"),
+                    placed.get("w"),
+                    placed.get("h"),
+                ),
+            )
+            if (
+                x < -tolerance
+                or y < -tolerance
+                or x + w > board_w + tolerance
+                or y + h > board_h + tolerance
+            ):
+                errors.append(
+                    _("Piece {0} exceeds source bounds on sheet {1}.").format(
+                        placed.get("label"),
+                        sheet.get("sheet_no"),
+                    )
+                )
 
             source = expected.get(piece_id)
             if source:
-                normal = abs(w - flt(source["width_cm"])) <= tolerance and abs(h - flt(source["length_cm"])) <= tolerance
+                normal = (
+                    abs(w - flt(source["width_cm"])) <= tolerance
+                    and abs(h - flt(source["length_cm"])) <= tolerance
+                )
                 rotated = (
                     bool(source.get("allow_rotation"))
                     and abs(w - flt(source["length_cm"])) <= tolerance
                     and abs(h - flt(source["width_cm"])) <= tolerance
                 )
                 if not (normal or rotated):
-                    errors.append(_("Piece {0} has an invalid orientation/dimension.").format(placed.get("label")))
+                    errors.append(
+                        _("Piece {0} has an invalid orientation/dimension.").format(
+                            placed.get("label")
+                        )
+                    )
             else:
-                errors.append(_("Unknown piece id {0} exists in plan.").format(piece_id))
+                errors.append(
+                    _("Unknown piece id {0} exists in plan.").format(piece_id)
+                )
 
         for i, a in enumerate(pieces):
             ax1, ay1 = flt(a.get("x")), flt(a.get("y"))
@@ -165,14 +203,24 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
                 overlap_w = min(ax2, bx2) - max(ax1, bx1)
                 overlap_h = min(ay2, by2) - max(ay1, by1)
                 if overlap_w > tolerance and overlap_h > tolerance:
-                    errors.append(_("Pieces {0} and {1} overlap on sheet {2}.").format(a.get("label"), b.get("label"), sheet.get("sheet_no")))
+                    errors.append(
+                        _("Pieces {0} and {1} overlap on sheet {2}.").format(
+                            a.get("label"),
+                            b.get("label"),
+                            sheet.get("sheet_no"),
+                        )
+                    )
 
     for piece_id, piece in expected.items():
         count = seen.get(piece_id, 0)
         if count == 0:
             errors.append(_("Piece {0} is missing from the plan.").format(piece.get("label")))
         elif count > 1:
-            errors.append(_("Piece {0} appears more than once in the plan.").format(piece.get("label")))
+            errors.append(
+                _("Piece {0} appears more than once in the plan.").format(
+                    piece.get("label")
+                )
+            )
 
     if plan.get("unplaced"):
         errors.append(_("The plan still contains unplaced pieces."))
@@ -180,18 +228,23 @@ def _validate_variable_plan(plan: dict[str, Any], requested_pieces: list[dict[st
 
 
 def build_approval_plan(order: Any) -> dict[str, Any]:
-    """Build an approval plan and use remnants only with an exact stock Item mapping."""
+    """Build a remnant-aware plan from canonical Cutting Plan settings."""
 
     pieces = expand_piece_groups(_piece_rows(order))
     full_board_w_cm = flt(order.full_board_width_mm) / 10
     full_board_h_cm = flt(order.full_board_length_mm) / 10
-    kerf_cm = flt(order.kerf_mm) / 10
-    trim_cm = flt(order.trim_margin_mm) / 10
+
+    plan_settings = seed_plan_settings(str(order.name))
+    kerf_cm = flt(plan_settings.kerf_mm) / 10
+    trim_cm = flt(plan_settings.trim_margin_mm) / 10
+    optimization_mode = str(plan_settings.optimization_mode or "Auto Pro")
+    machine_type = str(plan_settings.machine_type or "Auto")
+    optimization_time_limit_sec = flt(plan_settings.optimization_time_limit_sec) or 10
+
     usable_full_w = full_board_w_cm - (trim_cm * 2)
     usable_full_h = full_board_h_cm - (trim_cm * 2)
 
     settings = frappe.get_single("Almdina ERP Settings")
-    machine_type = order.cutting_machine_type or settings.default_cutting_machine_type or "Auto"
     remaining = list(pieces)
     sheets: list[dict[str, Any]] = []
     used_remnants: list[str] = []
@@ -202,7 +255,13 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         for remnant in _lock_available_remnants(order):
             if not remaining:
                 break
-            sheet, remaining = _pack_one_remnant(remaining, remnant, kerf_cm, trim_cm, machine_type)
+            sheet, remaining = _pack_one_remnant(
+                remaining,
+                remnant,
+                kerf_cm,
+                trim_cm,
+                machine_type,
+            )
             if not sheet:
                 continue
             sheet["sheet_no"] = len(sheets) + 1
@@ -210,28 +269,32 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
             sheets.append(sheet)
             used_remnants.append(remnant["name"])
 
-    full_plan = optimize_plan(
-        remaining,
-        usable_full_w,
-        usable_full_h,
-        kerf_cm,
-        selected_mode=order.packing_mode or "Auto Pro",
-        machine_type=machine_type,
-        time_limit_sec=flt(order.optimization_time_limit_sec) or flt(settings.default_optimization_time_limit_sec) or 10,
-        exact_piece_limit=cint(settings.optimal_search_piece_limit) or 40,
-        min_remnant_width_cm=flt(settings.min_remnant_width_mm) / 10,
-        min_remnant_length_cm=flt(settings.min_remnant_length_mm) / 10,
-        min_remnant_area_m2=flt(settings.min_remnant_area_m2),
-    ) if remaining else {
-        "method_key": order.packing_mode or "Auto Pro",
-        "method_label": "No full board required",
-        "optimization_mode": order.packing_mode or "Auto Pro",
-        "sheets": [],
-        "unplaced": [],
-        "score": 0,
-        "attempts": 0,
-        "industrial_metrics": {},
-    }
+    full_plan = (
+        optimize_plan(
+            remaining,
+            usable_full_w,
+            usable_full_h,
+            kerf_cm,
+            selected_mode=optimization_mode,
+            machine_type=machine_type,
+            time_limit_sec=optimization_time_limit_sec,
+            exact_piece_limit=cint(settings.optimal_search_piece_limit) or 40,
+            min_remnant_width_cm=flt(settings.min_remnant_width_mm) / 10,
+            min_remnant_length_cm=flt(settings.min_remnant_length_mm) / 10,
+            min_remnant_area_m2=flt(settings.min_remnant_area_m2),
+        )
+        if remaining
+        else {
+            "method_key": optimization_mode,
+            "method_label": "No full board required",
+            "optimization_mode": optimization_mode,
+            "sheets": [],
+            "unplaced": [],
+            "score": 0,
+            "attempts": 0,
+            "industrial_metrics": {},
+        }
+    )
 
     for full_sheet in full_plan.get("sheets") or []:
         full_sheet["sheet_no"] = len(sheets) + 1
@@ -250,17 +313,26 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         sheets.append(full_sheet)
 
     total_source_area = sum(flt(sheet.get("source_area_m2")) for sheet in sheets)
-    used_area = sum(flt(piece.get("area_m2")) for sheet in sheets for piece in (sheet.get("pieces") or []))
+    used_area = sum(
+        flt(piece.get("area_m2"))
+        for sheet in sheets
+        for piece in (sheet.get("pieces") or [])
+    )
     waste_area = max(0.0, total_source_area - used_area)
-    full_board_count = sum(1 for sheet in sheets if sheet.get("source_type") == "Full Board")
+    full_board_count = sum(
+        1 for sheet in sheets if sheet.get("source_type") == "Full Board"
+    )
     unplaced = full_plan.get("unplaced") or []
 
     plan = {
-        "engine_version": order.engine_version or "2.0.0-advanced",
-        "optimization_mode": full_plan.get("optimization_mode") or order.packing_mode or "Auto Pro",
+        "engine_version": full_plan.get("engine_version") or "2.0.0-advanced",
+        "optimization_mode": full_plan.get("optimization_mode") or optimization_mode,
         "machine_type": machine_type,
-        "method_key": full_plan.get("method_key") or order.packing_mode or "Auto Pro",
-        "method_label": (("Remnant First + " if used_remnants else "") + (full_plan.get("method_label") or "No full board required")),
+        "method_key": full_plan.get("method_key") or optimization_mode,
+        "method_label": (
+            ("Remnant First + " if used_remnants else "")
+            + (full_plan.get("method_label") or "No full board required")
+        ),
         "score": full_plan.get("score") or 0,
         "ordering_strategy": full_plan.get("ordering_strategy") or "",
         "attempts": cint(full_plan.get("attempts")),
@@ -280,15 +352,22 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         "waste_area_m2": waste_area,
         "required_full_boards": full_board_count,
         "used_remnants": used_remnants,
-        "special_shape_raw_summary": order._special_shape_raw_summary(pieces, {
-            "sheets": sheets,
-            "unplaced": unplaced,
-        }),
+        "special_shape_raw_summary": order._special_shape_raw_summary(
+            pieces,
+            {
+                "sheets": sheets,
+                "unplaced": unplaced,
+            },
+        ),
         "sheets": sheets,
         "unplaced": unplaced,
     }
 
-    metric_method = plan["method_key"] if plan["method_key"] != "Auto Pro" else "MaxRects Best Short Side"
+    metric_method = (
+        plan["method_key"]
+        if plan["method_key"] != "Auto Pro"
+        else "MaxRects Best Short Side"
+    )
     plan = enrich_plan_metrics(
         plan,
         metric_method,
@@ -298,16 +377,29 @@ def build_approval_plan(order: Any) -> dict[str, Any]:
         min_remnant_area_m2=flt(settings.min_remnant_area_m2),
     )
     validation_errors = _validate_variable_plan(plan, pieces, order)
-    plan["validation"] = {"is_valid": not validation_errors, "errors": validation_errors}
+    plan["validation"] = {
+        "is_valid": not validation_errors,
+        "errors": validation_errors,
+    }
     return plan
 
 
 def reserve_plan_remnants(order_name: str, plan: dict[str, Any]) -> None:
     """Reserve remnants already locked by build_approval_plan within this transaction."""
+
     for remnant_name in plan.get("used_remnants") or []:
-        current = frappe.db.get_value("Board Remnant", remnant_name, ["status", "reserved_for_order"], as_dict=True)
+        current = frappe.db.get_value(
+            "Board Remnant",
+            remnant_name,
+            ["status", "reserved_for_order"],
+            as_dict=True,
+        )
         if not current or current.status != "Available":
-            frappe.throw(_("Remnant {0} was taken by another order; recalculate approval.").format(remnant_name))
+            frappe.throw(
+                _("Remnant {0} was taken by another order; recalculate approval.").format(
+                    remnant_name
+                )
+            )
         frappe.db.set_value(
             "Board Remnant",
             remnant_name,

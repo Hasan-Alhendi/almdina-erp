@@ -3,10 +3,19 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import cint, flt, now_datetime
 
 from almdina_erp.almdina_erp.domain.replacements.planning import (
     calculate_edge_meters,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    approved_plan_for_order,
+    plan_settings,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.replacements.plan_persistence import (
+    approve_replacement_plan,
+    insert_replacement_plan,
 )
 
 
@@ -22,6 +31,13 @@ def _edge_rate(edge_type: str | None) -> float:
     )
 
 
+def _approved_source_plan(order: Any) -> Any:
+    plan = approved_plan_for_order(order)
+    if plan:
+        return plan
+    frappe.throw(_("يجب وجود خطة قص معتمدة وصالحة قبل اعتماد قطعة التعويض."))
+
+
 def create_mini_plan(
     order: Any,
     replacement: Any,
@@ -35,6 +51,9 @@ def create_mini_plan(
     if existing:
         return frappe.get_doc("Cutting Plan", existing)
 
+    source_plan = _approved_source_plan(order)
+    settings = plan_settings(source_plan)
+
     edge_meters = calculate_edge_meters(
         width_cm=flt(replacement.width_cm),
         length_cm=flt(replacement.length_cm),
@@ -44,9 +63,9 @@ def create_mini_plan(
         edge_width_bottom=bool(cint(replacement.edge_width_bottom)),
     )
     edge_cost = edge_meters * _edge_rate(replacement.edge_type)
-    material_cost = flt(order.board_rate_usd)
+    material_cost = flt(source_plan.board_rate_usd)
     # Zero is a valid explicit approved cost. Never coerce it back to baseline 1.
-    cutting_cost = flt(order.cutting_cost_per_board_usd)
+    cutting_cost = flt(source_plan.cutting_cost_per_board_usd)
     planned_total = material_cost + cutting_cost + edge_cost
 
     source = snapshot["sheets"][0]
@@ -66,12 +85,15 @@ def create_mini_plan(
     plan.board_description = str(
         replacement.board_description or order.board_description or ""
     ).strip()
+    plan.optimization_mode = settings.optimization_mode
+    plan.machine_type = settings.machine_type
+    plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
+    plan.kerf_mm = settings.kerf_mm
+    plan.trim_margin_mm = settings.trim_margin_mm
     plan.full_board_width_mm = flt(source["full_width_cm"]) * 10
     plan.full_board_length_mm = flt(source["full_length_cm"]) * 10
     plan.usable_board_width_mm = flt(source["usable_width_cm"]) * 10
     plan.usable_board_length_mm = flt(source["usable_length_cm"]) * 10
-    plan.kerf_mm = flt(order.kerf_mm)
-    plan.trim_margin_mm = flt(order.trim_margin_mm)
     plan.required_boards = 1
     plan.used_area_m2 = flt(snapshot["used_area_m2"])
     plan.total_source_area_m2 = flt(snapshot["total_board_area_m2"])
@@ -81,8 +103,8 @@ def create_mini_plan(
         if flt(plan.total_source_area_m2)
         else 0
     )
-    plan.board_rate_usd = flt(order.board_rate_usd)
-    plan.cutting_cost_per_board_usd = flt(order.cutting_cost_per_board_usd)
+    plan.board_rate_usd = flt(source_plan.board_rate_usd)
+    plan.cutting_cost_per_board_usd = flt(source_plan.cutting_cost_per_board_usd)
     plan.mdf_cost_usd = material_cost
     plan.cutting_cost_usd = cutting_cost
     plan.edge_cost_usd = edge_cost
@@ -132,13 +154,12 @@ def create_mini_plan(
         },
     )
 
-    plan.insert(ignore_permissions=True)
+    insert_replacement_plan(plan)
     if plan.validation_status != "Valid":
-        frappe.throw("Replacement Mini Cutting Plan did not pass independent validation.")
+        frappe.throw(_("Replacement Mini Cutting Plan did not pass independent validation."))
 
-    plan.flags.allow_status_transition = True
     plan.status = "Approved"
     plan.approved_by = frappe.session.user
     plan.approved_on = now_datetime()
-    plan.save(ignore_permissions=True)
+    approve_replacement_plan(plan)
     return plan

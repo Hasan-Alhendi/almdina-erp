@@ -78,7 +78,9 @@ class TestProductScopeContract(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("services.stock_service", approval_source)
         self.assertNotIn("services.remnant_planning", approval_source)
-        self.assertIn("frappe.parse_json(order.cutting_plan_json", approval_source)
+        self.assertNotIn("order.cutting_plan_json", approval_source)
+        self.assertNotIn("ignore_permissions", approval_source)
+        self.assertIn("_retired_snapshot_api", approval_source)
 
         order_scripts = hooks["doctype_js"]["Door Cutting Order"]
         retired_workflow = ROOT / "public" / "js" / "door_cutting_order_workflow.js"

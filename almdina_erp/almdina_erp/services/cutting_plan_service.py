@@ -1,17 +1,28 @@
 """Backward-compatible Cutting Plan lifecycle facade.
 
-Snapshot persistence and production-plan freezing live in
-``cutting_plan_snapshot_service``. Historical whitelisted method paths and
-Python-callable names remain available here as thin delegates.
+Historical whitelisted endpoint paths remain available here as thin delegates to
+the focused canonical services. The pre-A6 Python snapshot persistence helpers
+are retained only as fail-closed migration stubs; they must never recreate Plan
+state from ``Door Cutting Order``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
 import frappe
+from frappe import _
 
-from almdina_erp.almdina_erp.services import cutting_plan_snapshot_service as _snapshot
+
+_RETIRED_SNAPSHOT_MESSAGE = _(
+    "The legacy Door Cutting Order snapshot API has been retired. "
+    "Use the canonical Cutting Plan command services."
+)
+
+
+def _retired_snapshot_api() -> NoReturn:
+    frappe.throw(_RETIRED_SNAPSHOT_MESSAGE, frappe.ValidationError)
+    raise AssertionError("frappe.throw must interrupt execution")
 
 
 def create_plan_from_order(
@@ -19,20 +30,18 @@ def create_plan_from_order(
     snapshot_override: dict[str, Any] | None = None,
     *,
     plan_kind: str = "Order",
-) -> Any:
-    """Compatibility delegate to the focused snapshot persistence owner."""
+) -> NoReturn:
+    """Reject the former DCO-to-Cutting-Plan snapshot constructor."""
 
-    return _snapshot.create_plan_from_order(
-        order,
-        snapshot_override,
-        plan_kind=plan_kind,
-    )
+    del order, snapshot_override, plan_kind
+    _retired_snapshot_api()
 
 
-def approve_plan(plan: Any) -> Any:
-    """Compatibility delegate to the focused snapshot persistence owner."""
+def approve_plan(plan: Any) -> NoReturn:
+    """Reject the former direct Plan approval bypass."""
 
-    return _snapshot.approve_plan(plan)
+    del plan
+    _retired_snapshot_api()
 
 
 def _lock_order_for_production(
@@ -40,14 +49,11 @@ def _lock_order_for_production(
     *,
     preserve_status: bool = False,
     plan_source: str = "System",
-) -> dict[str, Any]:
-    """Compatibility delegate for historical Python callers."""
+) -> NoReturn:
+    """Reject the retired Python production-plan lock path."""
 
-    return _snapshot.lock_order_for_production(
-        order,
-        preserve_status=preserve_status,
-        plan_source=plan_source,
-    )
+    del order, preserve_status, plan_source
+    _retired_snapshot_api()
 
 
 @frappe.whitelist()

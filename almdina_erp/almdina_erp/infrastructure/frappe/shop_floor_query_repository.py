@@ -9,6 +9,7 @@ from almdina_erp import permissions
 from almdina_erp.almdina_erp.application.shop_floor.queries import (
     SHOP_FLOOR_DETAIL_CAPABILITIES,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import SYSTEM, UPLOADED_DXF
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
 from almdina_erp.almdina_erp.infrastructure.frappe import (
@@ -18,6 +19,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     doctype_has_capability,
     document_has_capability,
     granted_capabilities,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    current_working_plan,
+    latest_plan,
+    production_plan_facts,
 )
 
 
@@ -229,31 +235,40 @@ class FrappeShopFloorQueryRepository:
     def order_summaries(self, order_names: Sequence[str]) -> dict[str, Any]:
         if not order_names:
             return {}
-        return {
-            row.name: row
-            for row in frappe.get_all(
-                _ORDER_DOCTYPE,
-                filters={"name": ["in", list(order_names)]},
-                fields=[
-                    "name",
-                    "customer",
-                    "order_date",
-                    "board_description",
-                    "edge_color",
-                    "status",
-                    "production_path",
-                    "current_department",
-                    "department_status",
-                    "current_production_stage",
-                    "approved_plan",
-                    "cutting_plan_json",
-                    "plan_needs_recalculation",
-                    "production_dxf",
-                    "drawing_dxf_status",
-                    "revision",
-                ],
+        rows = frappe.get_all(
+            _ORDER_DOCTYPE,
+            filters={"name": ["in", list(order_names)]},
+            fields=[
+                "name",
+                "customer",
+                "order_date",
+                "board_description",
+                "edge_color",
+                "status",
+                "production_path",
+                "current_department",
+                "department_status",
+                "current_production_stage",
+                "approved_plan",
+                "drawing_dxf_status",
+                "revision",
+            ],
+        )
+        for row in rows:
+            document = _order_document(row)
+            facts = production_plan_facts(document) if document is not None else None
+            # These three attributes preserve the application query shape while
+            # deriving every operational value from canonical Cutting Plan state.
+            # They are in-memory projections only; no DCO compatibility field is read.
+            row.cutting_plan_json = (
+                "canonical" if facts is not None and facts.has_cutting_plan else ""
             )
-        }
+            row.plan_needs_recalculation = int(
+                facts.plan_needs_recalculation if facts is not None else True
+            )
+            dxf_plan = latest_plan(str(row.name), source_type=UPLOADED_DXF)
+            row.production_dxf = str(getattr(dxf_plan, "dxf_file", None) or "")
+        return {row.name: row for row in rows}
 
     def get_order(self, order_name: str) -> Any:
         return frappe.get_doc(_ORDER_DOCTYPE, order_name)
@@ -318,33 +333,25 @@ class FrappeShopFloorQueryRepository:
         order: Any,
         plan_source: str | None = None,
     ) -> dict[str, Any]:
+        name = _order_name(order)
+        if not name:
+            return {}
+
         if plan_source == "System":
-            from almdina_erp.almdina_erp.services.dual_plan_fields import (
-                get_system_plan_json,
-            )
+            plan = latest_plan(name, source_type=SYSTEM)
+        elif plan_source == "Custom":
+            plan = latest_plan(name, source_type=UPLOADED_DXF)
+        else:
+            plan = None
+            approved_name = str(getattr(order, "approved_plan", None) or "").strip()
+            if approved_name and frappe.db.exists("Cutting Plan", approved_name):
+                candidate = frappe.get_doc("Cutting Plan", approved_name)
+                if str(candidate.door_cutting_order or "") == name:
+                    plan = candidate
+            if plan is None:
+                plan = current_working_plan(name)
 
-            raw = getattr(order, "system_plan_json", None) or get_system_plan_json(order)
-            return self._parse_snapshot(raw)
-
-        if plan_source == "Custom":
-            from almdina_erp.almdina_erp.services.dual_plan_fields import (
-                get_custom_plan_json,
-            )
-
-            raw = getattr(order, "custom_plan_json", None) or get_custom_plan_json(order)
-            return self._parse_snapshot(raw)
-
-        snapshot: dict[str, Any] = {}
-        approved_plan = getattr(order, "approved_plan", None)
-        if approved_plan:
-            snapshot = self._parse_snapshot(
-                frappe.db.get_value("Cutting Plan", approved_plan, "snapshot_json")
-            )
-        if not snapshot:
-            snapshot = self._parse_snapshot(
-                getattr(order, "cutting_plan_json", None)
-            )
-        return snapshot
+        return self._parse_snapshot(getattr(plan, "snapshot_json", None) if plan else None)
 
     def user_can_view_dual_plans(self) -> bool:
         return any(
