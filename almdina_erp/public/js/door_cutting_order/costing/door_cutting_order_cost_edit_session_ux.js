@@ -214,13 +214,17 @@
             const store = storeFor(frm);
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
+            applyFieldAccess(frm);
             signalEditChanged(frm);
-        } else if (isEditing(frm)) {
-            mountDraftControls(frm);
-        } else {
-            unmountDraftControls(frm);
-            projectCurrent(frm);
+            return;
         }
+        if (isEditing(frm)) {
+            applyFieldAccess(frm);
+            mountDraftControls(frm);
+            return;
+        }
+        unmountDraftControls(frm);
+        projectCurrent(frm);
         applyFieldAccess(frm);
     }
 
