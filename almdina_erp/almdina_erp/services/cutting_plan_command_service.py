@@ -32,7 +32,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     COST_SNAPSHOT_VERSION,
     apply_plan_costs,
     initialize_draft_plan_cost_snapshot,
-    project_plan_costs_to_order,
+    refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     apply_validated_dxf_snapshot,
@@ -163,79 +163,35 @@ def _assert_recalculation_state(order: Any) -> None:
     assert_order_editable(order)
 
 
-def _set_order_projection(order: Any, plan: Any, *, include_snapshot: bool) -> None:
-    """Maintain the legacy DCO UI as a read projection until A6.2."""
-
-    values: dict[str, Any] = {
-        "packing_mode": plan.optimization_mode,
-        "cutting_machine_type": plan.machine_type,
-        "optimization_time_limit_sec": plan.optimization_time_limit_sec,
-        "kerf_mm": plan.kerf_mm,
-        "trim_margin_mm": plan.trim_margin_mm,
-        "plan_needs_recalculation": int(plan.plan_needs_recalculation or 0),
-    }
-    if include_snapshot:
-        snapshot_json = str(plan.snapshot_json or "")
-        values.update(
-            {
-                "required_boards": plan.required_boards,
-                "waste_area_m2": plan.waste_area_m2,
-                "waste_percent": plan.waste_percent,
-                "packing_method": plan.method_label,
-                "packing_score": (
-                    f"ألواح: {int(plan.required_boards or 0)} | "
-                    f"هدر: {flt(plan.waste_percent):.2f}% | "
-                    f"الخوارزمية: {plan.method_label or plan.optimization_mode or ''}"
-                ),
-                "engine_version": plan.engine_version,
-                "calculated_plan_input_hash": plan.input_fingerprint,
-                "calculated_plan_metadata_hash": plan.metadata_fingerprint or "",
-                "cutting_plan_json": snapshot_json,
-                "system_plan_json": snapshot_json,
-            }
-        )
+def _set_drawing_dxf_status(order: Any, status: str) -> None:
+    """Persist only the DCO-owned drawing workflow signal, never Plan data."""
 
     meta = frappe.get_meta("Door Cutting Order")
-    values = {key: value for key, value in values.items() if meta.has_field(key)}
-    if values:
-        frappe.db.set_value(
-            "Door Cutting Order",
-            order.name,
-            values,
-            update_modified=False,
-        )
-        for fieldname, value in values.items():
-            setattr(order, fieldname, value)
+    if not meta.has_field("drawing_dxf_status"):
+        return
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        "drawing_dxf_status",
+        status,
+        update_modified=False,
+    )
+    order.drawing_dxf_status = status
 
 
-def _set_dxf_order_projection(order: Any, plan: Any) -> None:
-    """Project canonical Uploaded DXF state to the legacy order form only."""
+def _set_approved_plan_relation(order: Any, plan: Any) -> None:
+    """Persist the real aggregate relation without mirroring Plan snapshot state."""
 
-    snapshot_json = str(plan.snapshot_json or "")
-    values: dict[str, Any] = {
-        "cutting_plan_source": "Custom",
-        "production_dxf": plan.dxf_file,
-        "drawing_dxf_status": "Uploaded",
-        "custom_plan_json": snapshot_json,
-        "cutting_plan_json": snapshot_json,
-        "required_boards": plan.required_boards,
-        "waste_area_m2": plan.waste_area_m2,
-        "waste_percent": plan.waste_percent,
-        "packing_method": plan.method_label,
-        "plan_needs_recalculation": int(plan.plan_needs_recalculation or 0),
-        "calculated_plan_input_hash": plan.input_fingerprint,
-    }
-    meta = frappe.get_meta("Door Cutting Order")
-    values = {key: value for key, value in values.items() if meta.has_field(key)}
-    if values:
-        frappe.db.set_value(
-            "Door Cutting Order",
-            order.name,
-            values,
-            update_modified=False,
-        )
-        for fieldname, value in values.items():
-            setattr(order, fieldname, value)
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        "approved_plan",
+        plan.name,
+        update_modified=False,
+    )
+    order.approved_plan = plan.name
+    if str(plan.source_type or SYSTEM) == UPLOADED_DXF:
+        _set_drawing_dxf_status(order, "Approved by Drawing")
 
 
 def _legacy_plan_source(source_type: str) -> str:
@@ -295,48 +251,6 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
             )
 
 
-def _set_approved_order_projection(order: Any, plan: Any) -> None:
-    source_label = _legacy_plan_source(str(plan.source_type or SYSTEM))
-    snapshot_json = str(plan.snapshot_json or "")
-    values: dict[str, Any] = {
-        "approved_plan": plan.name,
-        "approved_plan_source": source_label,
-        "cutting_plan_source": source_label,
-        "required_boards": plan.required_boards,
-        "waste_area_m2": plan.waste_area_m2,
-        "waste_percent": plan.waste_percent,
-        "packing_method": plan.method_label,
-        "packing_score": (
-            f"ألواح: {int(plan.required_boards or 0)} | "
-            f"هدر: {flt(plan.waste_percent):.2f}% | "
-            f"الخوارزمية: {plan.method_label or plan.optimization_mode or ''}"
-        ),
-        "cutting_plan_json": snapshot_json,
-        "plan_needs_recalculation": 0,
-    }
-    if source_label == "System":
-        values["system_plan_json"] = snapshot_json
-    else:
-        values.update(
-            {
-                "custom_plan_json": snapshot_json,
-                "production_dxf": plan.dxf_file,
-                "drawing_dxf_status": "Approved by Drawing",
-            }
-        )
-
-    meta = frappe.get_meta("Door Cutting Order")
-    values = {key: value for key, value in values.items() if meta.has_field(key)}
-    frappe.db.set_value(
-        "Door Cutting Order",
-        order.name,
-        values,
-        update_modified=False,
-    )
-    for fieldname, value in values.items():
-        setattr(order, fieldname, value)
-
-
 def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
     snapshot_json = str(plan.snapshot_json or "")
     payload = {
@@ -366,8 +280,13 @@ def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
     if order is not None:
         payload["total_area_m2"] = getattr(order, "total_area_m2", 0)
         payload["total_edge_meters"] = getattr(order, "total_edge_meters", 0)
-        payload["approved_plan"] = getattr(order, "approved_plan", None)
-        payload["approved_plan_source"] = getattr(order, "approved_plan_source", None)
+        approved_plan = getattr(order, "approved_plan", None)
+        payload["approved_plan"] = approved_plan
+        payload["approved_plan_source"] = (
+            _legacy_plan_source(str(plan.source_type or SYSTEM))
+            if approved_plan == plan.name
+            else getattr(order, "approved_plan_source", None)
+        )
     return payload
 
 
@@ -412,9 +331,11 @@ def save_uploaded_dxf_plan(
     return plan
 
 
-def mirror_uploaded_dxf_projection(order: Any, plan: Any) -> None:
-    _set_dxf_order_projection(order, plan)
-    project_plan_costs_to_order(order, plan)
+def finalize_uploaded_dxf_order_state(order: Any, plan: Any) -> None:
+    """Refresh only order-owned state after canonical DXF Plan persistence."""
+
+    _set_drawing_dxf_status(order, "Uploaded")
+    refresh_order_commercial_totals(order, plan)
 
 
 def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
@@ -452,8 +373,8 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     plan.approved_by = frappe.session.user
     plan.approved_on = now_datetime()
     repository.save_document(plan, allow_status_transition=True)
-    _set_approved_order_projection(order, plan)
-    project_plan_costs_to_order(order, plan)
+    _set_approved_plan_relation(order, plan)
+    refresh_order_commercial_totals(order, plan)
 
     return {
         "name": order.name,
@@ -485,7 +406,6 @@ def save_system_plan_settings(
             repository,
         )
         plan = repository.get_document(plan.name)
-    _set_order_projection(order, plan, include_snapshot=False)
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
     return result
@@ -526,8 +446,7 @@ def recalculate_system_plan(
     calculate_system_plan(order, plan)
     apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     repository.save_document(plan)
-    _set_order_projection(order, plan, include_snapshot=True)
-    project_plan_costs_to_order(order, plan)
+    refresh_order_commercial_totals(order, plan)
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
     return result
@@ -584,7 +503,7 @@ def recalculate_order_plan(
 __all__ = [
     "approve_order_plan",
     "current_uploaded_dxf_file",
-    "mirror_uploaded_dxf_projection",
+    "finalize_uploaded_dxf_order_state",
     "plan_payload",
     "recalculate_order_plan",
     "recalculate_system_plan",
