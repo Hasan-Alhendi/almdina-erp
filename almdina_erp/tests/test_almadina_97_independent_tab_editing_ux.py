@@ -123,6 +123,9 @@ def test_board_dimensions_are_explicitly_deferred_and_remain_order_owned():
     assert DEFERRED_BOARD_FIELDS <= dco_fields
     assert DEFERRED_BOARD_FIELDS <= order_fields
     assert DEFERRED_BOARD_FIELDS.isdisjoint(plan_fields)
+    assert order_fields.isdisjoint(PLAN_FIELDS)
+    assert order_fields.isdisjoint(COST_FIELDS)
+    assert "ORDER_CUT_GEOMETRY_FIELDS" not in order_source
 
 
 def test_retired_plan_settings_are_not_restored_to_dco_schema():
