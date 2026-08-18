@@ -96,7 +96,12 @@ def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages(
     assert "Number(frm.doc.docstatus || 0) !== 0" in session
     assert '(frm.doc.revision_state || "Current") === "Superseded"' in session
     assert "function isDrawingStage(frm)" in session
-    assert 'String(frm.doc.approved_plan || "").trim() && !isDrawingStage(frm)' in session
+    assert "function approvedPlanName(frm)" in session
+    assert 'state.status !== "ready" || !state.data' in session
+    assert 'String(state.data.approved_plan || "").trim()' in session
+    assert "if (approved === null) return false;" in session
+    assert "if (approved && !isDrawingStage(frm)) return false;" in session
+    assert 'String(frm.doc.approved_plan || "").trim()' not in session
     assert 'DRAFT_LIKE.has(frm.doc.status || "Draft")' in session
 
     assert 'getattr(doc, "docstatus", 0)' in service
