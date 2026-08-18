@@ -31,7 +31,8 @@ V4_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v4" / "domain" / "geome
 V4_CSS = APP_ROOT / "public" / "css" / "door_drawing_v4.css"
 COST_PRESENTER = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
 COST_PERMISSIONS = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_permissions_ux.js"
-CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
+CUTTING_PLAN_COMMAND_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
+CUTTING_PLAN_WORKSPACE = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_workspace.py"
 REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
 CUTTING_PLAN_PIECE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "cutting_plan_piece" / "cutting_plan_piece.json"
 HOOKS = APP_ROOT / "frontend_assets.py"
@@ -194,14 +195,15 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
 
 def test_review_and_production_approval_gate_special_documentation_and_price():
     order = ORDER_PY.read_text(encoding="utf-8")
-    service = CUTTING_PLAN_SERVICE.read_text(encoding="utf-8")
+    command_service = CUTTING_PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
+    workspace = CUTTING_PLAN_WORKSPACE.read_text(encoding="utf-8")
     placed_piece_fields = _fields(CUTTING_PLAN_PIECE_JSON)
     assert "def ensure_special_shapes_documented" in order
     assert "def ensure_special_prices_approved" in order
-    assert "order.ensure_special_shapes_documented()" in service
-    assert "order.ensure_special_prices_approved()" in service
+    assert "order.ensure_special_shapes_documented()" in command_service
+    assert "order.ensure_special_prices_approved()" in command_service
     assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial"
-    assert '"piece_type": piece.get("piece_type") or "Regular"' in service
+    assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 
 
 def test_cutting_plan_visually_audits_every_special_raw_piece():
