@@ -214,9 +214,9 @@
             return false;
         }
         store.beginEdit(seed);
+        refreshFieldAccess(frm);
         mountDraftControls(frm);
         setPlanActionsSuspended(frm, true);
-        refreshFieldAccess(frm);
         signalEditChanged(frm);
         const fieldEditor = editor();
         if (fieldEditor && typeof fieldEditor.focus === "function") {
@@ -279,15 +279,19 @@
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
             setPlanActionsSuspended(frm, false);
+            refreshFieldAccess(frm);
             signalEditChanged(frm);
-        } else if (isEditing(frm)) {
+            return;
+        }
+        if (isEditing(frm)) {
+            refreshFieldAccess(frm);
             mountDraftControls(frm);
             setPlanActionsSuspended(frm, true);
-        } else {
-            unmountDraftControls(frm);
-            setPlanActionsSuspended(frm, false);
-            projectCurrent(frm);
+            return;
         }
+        unmountDraftControls(frm);
+        setPlanActionsSuspended(frm, false);
+        projectCurrent(frm);
         refreshFieldAccess(frm);
     }
 
