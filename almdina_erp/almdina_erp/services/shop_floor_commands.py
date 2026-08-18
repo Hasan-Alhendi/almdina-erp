@@ -26,23 +26,14 @@ def _execute(function: Callable[..., _Result], *args: Any, **kwargs: Any) -> _Re
 
 
 def _production_plan_facts(order: Any) -> Any:
-    """Resolve canonical Plan facts lazily behind this compatibility adapter."""
-
     from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
         production_plan_facts,
     )
-
     return production_plan_facts(order)
 
 
 def assert_order_ready_for_dispatch(order: Any) -> None:
-    """Compatibility facade using canonical Cutting Plan runtime facts.
-
-    The resolver remains a tiny injectable seam so the adapter can be tested
-    without importing Frappe persistence. Production always uses the canonical
-    Cutting Plan runtime repository through ``_production_plan_facts``.
-    """
-
+    """Compatibility facade over canonical Cutting Plan runtime facts."""
     plan = _production_plan_facts(order)
     state = commands.OrderState(
         name=str(order.name),
@@ -116,15 +107,12 @@ def revert_department(
 @frappe.whitelist()
 def return_order_to_draft(order_name: str, reason: str | None = None) -> dict[str, Any]:
     """Compatibility endpoint for the in-place lifecycle return-to-draft action."""
-
     from almdina_erp.almdina_erp.services.order_revision_service import (
         return_order_to_draft as reset_same_order,
     )
-
     return reset_same_order(order_name, reason=reason)
 
 
-# Private compatibility aliases retained for older Python callers and tests.
 _transition = commands._transition
 _next_stage = commands._next_stage
 _validate_path = commands._validate_path
