@@ -60,6 +60,15 @@
         return snapshot;
     }
 
+    function rejectIdentityTransition(frm, store, expectedIdentity) {
+        const liveIdentity = identity(frm);
+        if (liveIdentity === expectedIdentity) return false;
+        frm[LOADED_IDENTITY_KEY] = null;
+        store.reset(liveIdentity);
+        dispatch(frm, store.snapshot());
+        return true;
+    }
+
     async function load(frm, options = {}) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return null;
         const store = storeFor(frm);
@@ -89,6 +98,9 @@
 
         const promise = api.load(orderName)
             .then((payload) => {
+                if (rejectIdentityTransition(frm, store, currentIdentity)) {
+                    return store.snapshot();
+                }
                 const accepted = store.resolveLoad(currentIdentity, requestId, payload);
                 if (!accepted) return store.snapshot();
                 frm[LOADED_IDENTITY_KEY] = currentIdentity;
@@ -97,6 +109,9 @@
                 return snapshot;
             })
             .catch((error) => {
+                if (rejectIdentityTransition(frm, store, currentIdentity)) {
+                    return store.snapshot();
+                }
                 store.rejectLoad(currentIdentity, requestId, error);
                 const snapshot = store.snapshot();
                 dispatch(frm, snapshot);
