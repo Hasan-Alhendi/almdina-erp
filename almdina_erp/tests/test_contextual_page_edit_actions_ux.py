@@ -87,6 +87,11 @@ def test_active_top_level_tab_selects_one_edit_command_family() -> None:
     assert "api.startEditing(frm)" in coordinator
     assert "api.saveEditing(frm)" in coordinator
 
+    # Plan edit eligibility is fail-closed until PlanWorkspaceState is ready, so
+    # the page action must be reevaluated as soon as that authoritative snapshot
+    # arrives instead of waiting for a full form refresh or an unrelated event.
+    assert '"almdina:plan-workspace-updated"' in coordinator
+
 
 def test_switching_tabs_is_blocked_while_any_page_edit_session_is_open() -> None:
     coordinator = source(COORDINATOR)
