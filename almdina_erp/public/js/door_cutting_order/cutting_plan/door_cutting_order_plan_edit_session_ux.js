@@ -13,29 +13,29 @@
     const PLAN_SETTING_SPECS = Object.freeze([
         Object.freeze({
             fieldname: "kerf_mm",
-            label: __("سماكة شفرة القص (Kerf)"),
+            label: "سماكة شفرة القص (Kerf)",
             fieldtype: "Float",
             min: 0,
             step: "0.1",
-            suffix: __("مم"),
+            suffix: "مم",
         }),
         Object.freeze({
             fieldname: "trim_margin_mm",
-            label: __("هامش تشذيب اللوح"),
+            label: "هامش تشذيب اللوح",
             fieldtype: "Float",
             min: 0,
             step: "0.1",
-            suffix: __("مم"),
+            suffix: "مم",
         }),
         Object.freeze({
             fieldname: "packing_mode",
-            label: __("خوارزمية توزيع القطع"),
+            label: "خوارزمية توزيع القطع",
             fieldtype: "Select",
             options: Object.freeze([
-                Object.freeze({ value: "Auto", label: __("تلقائي") }),
-                Object.freeze({ value: "Auto Pro", label: __("تلقائي متقدم (موصى به)") }),
-                Object.freeze({ value: "Deep Search", label: __("بحث معمق") }),
-                Object.freeze({ value: "Optimal Search", label: __("بحث أمثل") }),
+                Object.freeze({ value: "Auto", label: "تلقائي" }),
+                Object.freeze({ value: "Auto Pro", label: "تلقائي متقدم (موصى به)" }),
+                Object.freeze({ value: "Deep Search", label: "بحث معمق" }),
+                Object.freeze({ value: "Optimal Search", label: "بحث أمثل" }),
                 Object.freeze({ value: "MaxRects Best Short Side", label: "MaxRects Best Short Side" }),
                 Object.freeze({ value: "MaxRects Best Area", label: "MaxRects Best Area" }),
                 Object.freeze({ value: "MaxRects Bottom Left", label: "MaxRects Bottom Left" }),
@@ -57,21 +57,21 @@
         }),
         Object.freeze({
             fieldname: "cutting_machine_type",
-            label: __("نوع آلة القص"),
+            label: "نوع آلة القص",
             fieldtype: "Select",
             options: Object.freeze([
-                Object.freeze({ value: "Auto", label: __("تلقائي") }),
+                Object.freeze({ value: "Auto", label: "تلقائي" }),
                 Object.freeze({ value: "CNC Router", label: "CNC Router" }),
-                Object.freeze({ value: "Panel Saw", label: __("منشار ألواح") }),
+                Object.freeze({ value: "Panel Saw", label: "منشار ألواح" }),
             ]),
         }),
         Object.freeze({
             fieldname: "optimization_time_limit_sec",
-            label: __("مهلة التحسين"),
+            label: "مهلة التحسين",
             fieldtype: "Float",
             min: 0,
             step: "1",
-            suffix: __("ثانية"),
+            suffix: "ثانية",
         }),
     ]);
     const DRAFT_LIKE = new Set(["Draft", "Pending Review", "Rejected"]);
@@ -237,6 +237,11 @@
         });
     }
 
+    function translate(value) {
+        const text = String(value ?? "");
+        return typeof __ === "function" ? __(text) : text;
+    }
+
     function escapeHtml(value) {
         if (frappe.utils && typeof frappe.utils.escape_html === "function") {
             return frappe.utils.escape_html(String(value ?? ""));
@@ -353,13 +358,13 @@
     function selectOptions(spec, value) {
         return (spec.options || []).map((option) => {
             const selected = String(option.value) === String(value ?? "") ? " selected" : "";
-            return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+            return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(translate(option.label))}</option>`;
         }).join("");
     }
 
     function fieldMarkup(spec, value) {
         const fieldname = escapeHtml(spec.fieldname);
-        const label = escapeHtml(spec.label);
+        const label = escapeHtml(translate(spec.label));
         if (spec.fieldtype === "Select") {
             return `
                 <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
@@ -372,7 +377,7 @@
                 </div>
             `;
         }
-        const suffix = spec.suffix ? escapeHtml(spec.suffix) : "";
+        const suffix = spec.suffix ? escapeHtml(translate(spec.suffix)) : "";
         const inputClass = suffix ? "dco-plan-settings-editor__input-wrap has-suffix" : "dco-plan-settings-editor__input-wrap";
         return `
             <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
@@ -431,13 +436,13 @@
             .map((spec) => fieldMarkup(spec, (state.draft || {})[spec.fieldname]))
             .join("");
         host.prepend(`
-            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" aria-label="${escapeHtml(__("إعدادات خطة القص"))}">
+            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" aria-label="${escapeHtml(translate("إعدادات خطة القص"))}">
                 <div class="dco-plan-settings-editor__header">
                     <div>
-                        <h4 class="dco-plan-settings-editor__title">${escapeHtml(__("إعدادات خطة القص"))}</h4>
-                        <p class="dco-plan-settings-editor__help">${escapeHtml(__("هذه التعديلات مستقلة عن معلومات الطلب والتكلفة، ولا تُحفظ إلا عند الضغط على حفظ خطة القص."))}</p>
+                        <h4 class="dco-plan-settings-editor__title">${escapeHtml(translate("إعدادات خطة القص"))}</h4>
+                        <p class="dco-plan-settings-editor__help">${escapeHtml(translate("هذه التعديلات مستقلة عن معلومات الطلب والتكلفة، ولا تُحفظ إلا عند الضغط على حفظ خطة القص."))}</p>
                     </div>
-                    <span class="dco-plan-settings-editor__badge">${escapeHtml(__("تغييرات غير محفوظة"))}</span>
+                    <span class="dco-plan-settings-editor__badge">${escapeHtml(translate("تغييرات غير محفوظة"))}</span>
                 </div>
                 <div class="dco-plan-settings-editor__grid">${fields}</div>
             </section>
@@ -478,15 +483,15 @@
                 const normalized = String(value ?? "").trim();
                 const allowed = (spec.options || []).some((option) => option.value === normalized);
                 if (!normalized || !allowed) {
-                    return __("يجب تحديد قيمة صالحة للحقل «{0}».").replace("{0}", spec.label);
+                    return translate("يجب تحديد قيمة صالحة للحقل «{0}».").replace("{0}", translate(spec.label));
                 }
                 continue;
             }
             if (value === null || value === undefined || value === "" || !Number.isFinite(Number(value))) {
-                return __("القيمة المدخلة في «{0}» غير صالحة.").replace("{0}", spec.label);
+                return translate("القيمة المدخلة في «{0}» غير صالحة.").replace("{0}", translate(spec.label));
             }
             if (Number(value) < Number(spec.min || 0)) {
-                return __("لا يمكن أن تكون قيمة «{0}» سالبة.").replace("{0}", spec.label);
+                return translate("لا يمكن أن تكون قيمة «{0}» سالبة.").replace("{0}", translate(spec.label));
             }
         }
         return "";
@@ -507,24 +512,24 @@
 
     async function startEditing(frm) {
         if (!can(frm, "edit_optimizer_settings")) {
-            frappe.msgprint(__("لا تملك صلاحية تعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("لا تملك صلاحية تعديل إعدادات خطة القص."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
-            frappe.msgprint(__("احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل إعدادات خطة القص."));
             return false;
         }
 
         await ensureLoaded(frm);
         if (!lifecycleAllowsEdit(frm)) {
-            frappe.msgprint(__("حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص."));
             return false;
         }
 
         const store = storeFor(frm);
         const seed = activeSettings(frm);
         if (!store || !seed) {
-            frappe.msgprint(__("لا توجد خطة قص قابلة لتعديل الإعدادات حاليًا."));
+            frappe.msgprint(translate("لا توجد خطة قص قابلة لتعديل الإعدادات حاليًا."));
             return false;
         }
         store.beginEdit(seed);
@@ -552,7 +557,7 @@
         if (!isEditing(frm)) return false;
         if (!canEditPlanSettings(frm)) {
             await cancelEditing(frm);
-            frappe.msgprint(__("لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص."));
+            frappe.msgprint(translate("لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص."));
             return false;
         }
 
@@ -594,7 +599,7 @@
         refreshFieldAccess(frm);
         signalEditChanged(frm);
         frappe.show_alert({
-            message: __("تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة."),
+            message: translate("تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة."),
             indicator: "green",
         }, 5);
         return true;
