@@ -105,9 +105,15 @@ def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages(
     assert 'getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc)' in service
     assert "خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم" in service
 
-    assert "function isDrawingStage(frm)" in controls
-    assert "frm.doc.approved_plan && isDrawingStage(frm)" in controls
-    assert "frm.doc.approved_plan && !isDrawingStage(frm)" in controls
+    # Browser plan lifecycle reads the approved-plan identity from the Plan
+    # workspace snapshot. DCO lifecycle facts (stage/status/docstatus) remain
+    # intentionally document-owned.
+    assert "function approvedPlanName(frm)" in controls
+    assert "const approved = approvedPlanName(frm);" in controls
+    assert "if (approved && isDrawingStage(frm))" in controls
+    assert "if (approved) return false;" in controls
+    assert "frm.doc.approved_plan && isDrawingStage(frm)" not in controls
+    assert "frm.doc.approved_plan && !isDrawingStage(frm)" not in controls
 
     # A2 moves recalculation policy into the canonical Cutting Plan command owner.
     assert "drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(order)" in recalculation
