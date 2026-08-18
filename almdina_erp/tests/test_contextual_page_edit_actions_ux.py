@@ -43,8 +43,9 @@ def test_contextual_edit_action_preserves_final_plan_field_owner() -> None:
     assert assets.index(cost_session) < assets.index(plan_session)
     assert assets.index(plan_session) < assets.index(coordinator)
     assert assets.index(coordinator) < assets.index(plan_access)
-    # The toolbar coordinator does not own field status. Preserve the established
-    # final PlanFieldAccessAdapter contract so no later layer can reopen inputs.
+    # The tab-local coordinator owns visible edit affordances only. Preserve the
+    # established final PlanFieldAccessAdapter contract so no later layer can
+    # reopen retired/native Plan inputs.
     assert assets.rstrip().endswith(plan_access + ",")
 
 
@@ -65,20 +66,26 @@ def test_financial_presenter_keeps_its_existing_owner_chain() -> None:
     assert assets.index(permissions) < assets.index(financial) < assets.index(cost_session)
 
 
-def test_active_top_level_tab_selects_one_edit_command_family() -> None:
+def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     coordinator = source(COORDINATOR)
 
     assert 'order_tab: "order"' in coordinator
     assert 'results_tab: "plan"' in coordinator
     assert 'cost_tab: "cost"' in coordinator
-    assert 'order: "تعديل الطلب"' in coordinator
-    assert 'plan: "تعديل خطة القص"' in coordinator
-    assert 'cost: "تعديل التكلفة"' in coordinator
+    assert 'anchor: "order_details_section"' in coordinator
+    assert 'anchor: "plan_actions_section"' in coordinator
+    assert 'anchor: "cost_settings_section"' in coordinator
+    assert 'const EDIT_LABEL = "تعديل"' in coordinator
     assert 'const SAVE_LABEL = "حفظ"' in coordinator
     assert 'const CANCEL_LABEL = "إلغاء"' in coordinator
+    assert 'data-almdina-tab-edit-kind' in coordinator
+    assert 'dco-tab-edit-start' in coordinator
+    assert 'dco-tab-edit-save' in coordinator
+    assert 'dco-tab-edit-cancel' in coordinator
+    assert '["order", "plan", "cost"].forEach((kind) => renderToolbar(frm, kind))' in coordinator
 
-    # Existing domain/session owners remain authoritative; the page action only
-    # delegates to them instead of re-implementing capability rules.
+    # Existing domain/session owners remain authoritative; the local toolbar only
+    # delegates to them instead of re-implementing capability or persistence rules.
     assert "api.canOfferEditSession(frm)" in coordinator
     assert "api.canEditPlanSettings(frm)" in coordinator
     assert "api.canEditCostSettings(frm)" in coordinator
@@ -88,9 +95,21 @@ def test_active_top_level_tab_selects_one_edit_command_family() -> None:
     assert "api.saveEditing(frm)" in coordinator
 
     # Plan edit eligibility is fail-closed until PlanWorkspaceState is ready, so
-    # the page action must be reevaluated as soon as that authoritative snapshot
-    # arrives instead of waiting for a full form refresh or an unrelated event.
+    # the local action must be reevaluated as soon as that authoritative snapshot
+    # arrives instead of waiting for a full form refresh or unrelated event.
     assert '"almdina:plan-workspace-updated"' in coordinator
+    assert '"almdina:cost-workspace-updated"' in coordinator
+
+
+def test_persisted_order_does_not_expose_competing_global_edit_action() -> None:
+    coordinator = source(COORDINATOR)
+
+    assert ".page-actions .primary-action" in coordinator
+    assert "display:none !important" in coordinator
+    assert "Synchronous sync prevents the legacy global primary action" in coordinator
+    assert "set_primary_action" not in coordinator
+    assert "clear_primary_action" not in coordinator
+    assert "data-almdina-context-edit-mode" not in coordinator
 
 
 def test_switching_tabs_is_blocked_while_any_page_edit_session_is_open() -> None:
@@ -103,13 +122,15 @@ def test_switching_tabs_is_blocked_while_any_page_edit_session_is_open() -> None
     assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in coordinator
 
 
-def test_plan_card_edit_toolbar_is_hidden_when_page_toolbar_owns_editing() -> None:
+def test_plan_tab_keeps_local_edit_affordance_and_plan_session_ownership() -> None:
     coordinator = source(COORDINATOR)
     plan_session = source(PLAN_SESSION)
 
-    # Plan session keeps its state/save API for backwards compatibility, while
-    # the page-level coordinator is now the only visible edit affordance.
-    assert ".dco-plan-settings-edit-toolbar { display:none !important; }" in coordinator
+    # The regression requested by the product owner is explicit: Plan editing
+    # must be visible inside the Plan tab, not hidden in favor of a global toolbar.
+    assert ".dco-plan-settings-edit-toolbar { display:none !important; }" not in coordinator
+    assert 'anchor: "plan_actions_section"' in coordinator
+    assert 'data-almdina-tab-edit-kind' in coordinator
     assert "window.AlmdinaPlanEditSessionUX" in plan_session
     assert "startEditing," in plan_session
     assert "saveEditing," in plan_session

@@ -13,6 +13,7 @@ PLAN_EDIT = DCO_JS / "cutting_plan" / "door_cutting_order_plan_edit_session_ux.j
 PLAN_API = DCO_JS / "cutting_plan" / "door_cutting_order_plan_workspace_api.js"
 COST_EDIT = DCO_JS / "costing" / "door_cutting_order_cost_edit_session_ux.js"
 ORDER_EDIT = DCO_JS / "core" / "door_cutting_order_revision_ux.js"
+PAGE_EDIT = DCO_JS / "core" / "door_cutting_order_page_edit_action_ux.js"
 PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
 
 PLAN_FIELDS = {
@@ -134,3 +135,96 @@ def test_retired_plan_settings_are_not_restored_to_dco_schema():
 
     assert PLAN_FIELDS.isdisjoint(dco_fields)
     assert {"optimization_mode", "machine_type", "kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"} <= plan_fields
+
+
+def test_each_tab_has_its_own_local_edit_save_cancel_toolbar():
+    source = PAGE_EDIT.read_text(encoding="utf-8")
+
+    assert 'order_tab: "order"' in source
+    assert 'results_tab: "plan"' in source
+    assert 'cost_tab: "cost"' in source
+    assert 'anchor: "order_details_section"' in source
+    assert 'anchor: "plan_actions_section"' in source
+    assert 'anchor: "cost_settings_section"' in source
+    assert 'const EDIT_LABEL = "تعديل"' in source
+    assert 'const SAVE_LABEL = "حفظ"' in source
+    assert 'const CANCEL_LABEL = "إلغاء"' in source
+    assert 'data-almdina-tab-edit-kind' in source
+    assert 'dco-tab-edit-start' in source
+    assert 'dco-tab-edit-save' in source
+    assert 'dco-tab-edit-cancel' in source
+    assert '["order", "plan", "cost"].forEach((kind) => renderToolbar(frm, kind))' in source
+
+
+def test_persisted_dco_no_longer_uses_global_primary_action_for_tab_editing():
+    source = PAGE_EDIT.read_text(encoding="utf-8")
+
+    assert ".page-actions .primary-action" in source
+    assert "display:none !important" in source
+    assert "sync(frm);" in source
+    assert "Synchronous sync prevents the legacy global primary action" in source
+    assert "set_primary_action" not in source
+    assert "clear_primary_action" not in source
+    assert "data-almdina-context-edit-mode" not in source
+    assert "dco-plan-settings-edit-toolbar { display:none" not in source
+
+
+def test_tab_local_actions_delegate_to_existing_independent_session_owners():
+    source = PAGE_EDIT.read_text(encoding="utf-8")
+
+    assert "window.AlmdinaOrderRevisionUX" in source
+    assert "window.AlmdinaPlanEditSessionUX" in source
+    assert "window.AlmdinaCostEditSessionUX" in source
+    assert "api.enterEditSession(frm)" in source
+    assert "api.startEditing(frm)" in source
+    assert "api.commitEditSession(frm)" in source
+    assert "api.saveEditing(frm)" in source
+    assert "api.cancelEditing(frm)" in source
+    assert "cancelOrder(frm)" in source
+    assert "activeEditingKind(frm)" in source
+    assert "احفظ أو ألغِ التعديل المفتوح في القسم الآخر أولًا" in source
+    assert "frappe.call" not in source
+
+
+def test_tab_local_edit_buttons_fail_closed_against_each_session_permission_policy():
+    page_source = PAGE_EDIT.read_text(encoding="utf-8")
+    plan_source = PLAN_EDIT.read_text(encoding="utf-8")
+    cost_source = COST_EDIT.read_text(encoding="utf-8")
+    order_source = ORDER_EDIT.read_text(encoding="utf-8")
+
+    assert "permissionsResolved() && canEdit(frm, kind)" in page_source
+    assert 'can(frm, "edit_optimizer_settings")' in plan_source
+    assert 'can(frm, "view_costs") && can(frm, "edit_cost_settings")' in cost_source
+    assert 'can(frm, "edit_order")' in order_source
+    assert "لا تملك صلاحية تعديل إعدادات خطة القص" in page_source
+    assert "لا تملك صلاحية تعديل إعدادات التكلفة" in page_source
+
+
+def test_plan_read_mode_restores_canonical_settings_without_restoring_dco_fields():
+    source = PAGE_EDIT.read_text(encoding="utf-8")
+
+    assert "dco-plan-settings-readonly" in source
+    assert "data-almdina-plan-settings-readonly" in source
+    assert "window.AlmdinaPlanWorkspaceState" in source
+    assert 'owner.activePlan(frm, "System")' in source
+    assert "const settings = row.settings || {}" in source
+    for label in (
+        "الخوارزمية",
+        "آلة القص",
+        "سماكة القص Kerf",
+        "هامش التشذيب",
+        "مهلة التحسين",
+    ):
+        assert label in source
+    assert "board_length_cm" not in source
+    assert "board_width_cm" not in source
+
+
+def test_plan_result_summary_is_reexposed_without_schema_resurrection():
+    source = PAGE_EDIT.read_text(encoding="utf-8")
+
+    assert '"plan_result_section", "plan_controls_intro"' in source
+    assert 'frm.set_df_property(fieldname, "hidden", 0)' in source
+    assert "AlmdinaDoorCuttingPlanUX" in source
+    assert "planUx.refresh(frm)" in source
+    assert "frappe.get_meta" not in source
