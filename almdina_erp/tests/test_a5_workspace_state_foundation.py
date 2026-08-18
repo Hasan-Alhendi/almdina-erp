@@ -108,24 +108,26 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertLess(manifest.index(cost_state), manifest.index(cost_presenter))
 
     def test_api_adapters_are_transport_only(self) -> None:
-        sources = [
-            (
-                PUBLIC
-                / "cutting_plan"
-                / "door_cutting_order_plan_workspace_api.js"
-            ).read_text(encoding="utf-8"),
-            (
-                PUBLIC
-                / "costing"
-                / "door_cutting_order_cost_workspace_api.js"
-            ).read_text(encoding="utf-8"),
-        ]
-        for source in sources:
+        plan_api = (
+            PUBLIC
+            / "cutting_plan"
+            / "door_cutting_order_plan_workspace_api.js"
+        ).read_text(encoding="utf-8")
+        cost_api = (
+            PUBLIC
+            / "costing"
+            / "door_cutting_order_cost_workspace_api.js"
+        ).read_text(encoding="utf-8")
+        for source in (plan_api, cost_api):
             self.assertIn("frappe.call", source)
             self.assertNotIn("querySelector", source)
             self.assertNotIn("MutationObserver", source)
             self.assertNotIn("fields_dict", source)
             self.assertNotIn("frm.doc", source)
+        self.assertIn("RECALCULATE_METHOD", plan_api)
+        self.assertIn("APPROVE_METHOD", plan_api)
+        self.assertIn("recalculate,", plan_api)
+        self.assertIn("approve,", plan_api)
 
     def test_a52_edit_sessions_save_workspace_drafts_not_dco_fields(self) -> None:
         plan = (
@@ -160,6 +162,24 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         ):
             self.assertNotIn(legacy_read, plan + cost)
 
+    def test_a52_plan_commands_use_workspace_state_and_transport_adapter(self) -> None:
+        source = (
+            PUBLIC
+            / "cutting_plan"
+            / "door_cutting_order_plan_controls_ux.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("AlmdinaPlanWorkspaceState", source)
+        self.assertIn("AlmdinaPlanWorkspaceAPI", source)
+        self.assertIn("activeSettings", source)
+        self.assertIn("transport.recalculate(frm.doc.name, settings)", source)
+        self.assertIn("transport.approve(frm.doc.name, source)", source)
+        self.assertIn("refreshWorkspaceOwners", source)
+        self.assertNotIn("frappe.call", source)
+        self.assertNotIn("frm.reload_doc", source)
+        self.assertNotIn('frm.set_value("packing_mode"', source)
+        self.assertNotIn("RECALCULATE_METHOD", source)
+        self.assertNotIn("APPROVE_METHOD", source)
+
     def test_a52_presenter_adapters_are_store_first_and_transport_free(self) -> None:
         plan = (
             PUBLIC
@@ -176,6 +196,8 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertIn("AlmdinaCostWorkspaceState", cost)
         self.assertIn("getPlanForTab", plan)
         self.assertIn("payload.order", cost)
+        self.assertIn("legacySummaryProjection", plan)
+        self.assertIn("production_dxf", plan)
         self.assertNotIn("frappe.call", plan + cost)
         self.assertNotIn("get_approved_cutting_plan_snapshot", plan)
         self.assertNotIn("ignore_permissions", plan + cost)
