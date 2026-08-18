@@ -130,6 +130,22 @@ function loadPlanEditSession({ allowed = true } = {}) {
                 return allowed && capability === "edit_optimizer_settings";
             },
         },
+        AlmdinaPlanWorkspaceState: {
+            storeFor(frm) {
+                return {
+                    snapshot() {
+                        return {
+                            status: "ready",
+                            data: {
+                                approved_plan: String(
+                                    (frm && frm.doc && frm.doc.approved_plan) || ""
+                                ),
+                            },
+                        };
+                    },
+                };
+            },
+        },
         addEventListener() {},
         requestAnimationFrame() {},
     };
@@ -288,7 +304,8 @@ function makePlanEditForm(overrides = {}) {
     // `At Drawing` remains in an active routed lifecycle even when the form
     // snapshot does not expose current_production_stage. A previous approved
     // snapshot remains immutable, but it does not permanently lock preparation
-    // of its replacement while the order is still at Drawing.
+    // of its replacement while the order is still at Drawing. Approved-plan
+    // identity is supplied through PlanWorkspaceState, matching the A5.2 owner.
     const authorizedPlanEdit = loadPlanEditSession({ allowed: true });
     assert.equal(
         authorizedPlanEdit.canEditPlanSettings(makePlanEditForm()),
