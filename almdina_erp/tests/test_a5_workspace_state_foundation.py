@@ -180,6 +180,19 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertNotIn("get_approved_cutting_plan_snapshot", plan)
         self.assertNotIn("ignore_permissions", plan + cost)
 
+    def test_a52_legacy_plan_tabs_are_visual_only(self) -> None:
+        source = (
+            PUBLIC
+            / "cutting_plan"
+            / "door_cutting_order_plan_tabs_ux.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("window.AlmdinaPlanTabsUX", source)
+        self.assertIn("renderDualTabs", source)
+        self.assertNotIn("frappe.call", source)
+        self.assertNotIn("get_approved_cutting_plan_snapshot", source)
+        self.assertNotIn('frappe.ui.form.on("Door Cutting Order"', source)
+        self.assertIn("pure visual owner", source)
+
     def test_a52_presenter_adapter_order_preserves_existing_visual_owners(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
         cost_presenter = "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"
