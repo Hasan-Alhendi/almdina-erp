@@ -116,6 +116,7 @@ class CapabilityDefinition:
 
 
 _ORDER_DOCTYPE = "Door Cutting Order"
+CUTTING_PLAN_DOCTYPE = "Cutting Plan"
 _REPLACEMENT_DOCTYPE = "Replacement Piece"
 _INCIDENT_DOCTYPE = "Production Incident"
 _SETTINGS_DOCTYPE = "Almdina ERP Settings"
@@ -138,42 +139,46 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.APPROVE_ORDER, Capability.APPROVE_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.REJECT_ORDER, Capability.REJECT_ORDER, _ORDER_DOCTYPE, "order"),
     CapabilityDefinition(Capability.CANCEL_ORDER, Capability.CANCEL_ORDER, _ORDER_DOCTYPE, "order"),
-    CapabilityDefinition(Capability.VIEW_COSTS, Capability.VIEW_COSTS, _ORDER_DOCTYPE, "costing"),
-    CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, _ORDER_DOCTYPE, "costing"),
+    # The reviewed board/cutting financial snapshot belongs to Cutting Plan.
+    # Special-piece prices and customer-document authority remain order-owned.
+    CapabilityDefinition(Capability.VIEW_COSTS, Capability.VIEW_COSTS, CUTTING_PLAN_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, CUTTING_PLAN_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.APPROVE_SPECIAL_PRICE, Capability.APPROVE_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_REPLACEMENT_COST, Capability.EDIT_REPLACEMENT_COST, _REPLACEMENT_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.PRINT_MEASUREMENTS, Capability.PRINT_MEASUREMENTS, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_CUSTOMER_INVOICE, Capability.PRINT_CUSTOMER_INVOICE, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_INTERNAL_COST_REPORT, Capability.PRINT_INTERNAL_COST_REPORT, _ORDER_DOCTYPE, "documents"),
-    CapabilityDefinition(Capability.VIEW_CUTTING_PLAN, Capability.VIEW_CUTTING_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.VIEW_CUTTING_PLAN, Capability.VIEW_CUTTING_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(
         Capability.VIEW_SYSTEM_CUTTING_PLAN,
         Capability.VIEW_SYSTEM_CUTTING_PLAN,
-        _ORDER_DOCTYPE,
+        CUTTING_PLAN_DOCTYPE,
         "cutting_plan",
     ),
     CapabilityDefinition(
         Capability.VIEW_UPLOADED_CUTTING_PLAN,
         Capability.VIEW_UPLOADED_CUTTING_PLAN,
-        _ORDER_DOCTYPE,
+        CUTTING_PLAN_DOCTYPE,
         "cutting_plan",
     ),
     CapabilityDefinition(
         Capability.VIEW_APPROVED_CUTTING_PLAN,
         Capability.VIEW_APPROVED_CUTTING_PLAN,
-        _ORDER_DOCTYPE,
+        CUTTING_PLAN_DOCTYPE,
         "cutting_plan",
     ),
-    CapabilityDefinition(Capability.RECALCULATE_PLAN, Capability.RECALCULATE_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
-    CapabilityDefinition(Capability.EDIT_OPTIMIZER_SETTINGS, Capability.EDIT_OPTIMIZER_SETTINGS, _ORDER_DOCTYPE, "cutting_plan"),
-    CapabilityDefinition(Capability.PRINT_CUTTING_PLAN, Capability.PRINT_CUTTING_PLAN, _ORDER_DOCTYPE, "cutting_plan"),
-    CapabilityDefinition(Capability.APPROVE_DXF, Capability.APPROVE_DXF, _ORDER_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.RECALCULATE_PLAN, Capability.RECALCULATE_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.EDIT_OPTIMIZER_SETTINGS, Capability.EDIT_OPTIMIZER_SETTINGS, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.PRINT_CUTTING_PLAN, Capability.PRINT_CUTTING_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.APPROVE_DXF, Capability.APPROVE_DXF, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
+    # The special-door drawing edits order-piece input. DXF file actions mutate
+    # canonical Cutting Plan revisions and therefore belong to that aggregate.
     CapabilityDefinition(Capability.VIEW_DRAWING_WORKSPACE, Capability.VIEW_DRAWING_WORKSPACE, _ORDER_DOCTYPE, "drawing"),
     CapabilityDefinition(Capability.EDIT_SPECIAL_DRAWING, Capability.EDIT_SPECIAL_DRAWING, _ORDER_DOCTYPE, "drawing"),
-    CapabilityDefinition(Capability.EXPORT_DXF, Capability.EXPORT_DXF, _ORDER_DOCTYPE, "drawing"),
-    CapabilityDefinition(Capability.UPLOAD_DXF, Capability.UPLOAD_DXF, _ORDER_DOCTYPE, "drawing"),
-    CapabilityDefinition(Capability.REPLACE_DXF, Capability.REPLACE_DXF, _ORDER_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.EXPORT_DXF, Capability.EXPORT_DXF, CUTTING_PLAN_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.UPLOAD_DXF, Capability.UPLOAD_DXF, CUTTING_PLAN_DOCTYPE, "drawing"),
+    CapabilityDefinition(Capability.REPLACE_DXF, Capability.REPLACE_DXF, CUTTING_PLAN_DOCTYPE, "drawing"),
     CapabilityDefinition(Capability.DISPATCH_ORDER, Capability.DISPATCH_ORDER, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.START_ASSIGNED_STAGE, Capability.START_ASSIGNED_STAGE, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.HANDOFF_ASSIGNED_STAGE, Capability.HANDOFF_ASSIGNED_STAGE, _ORDER_DOCTYPE, "production"),
@@ -181,7 +186,7 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.RETURN_ORDER_TO_DRAFT, Capability.RETURN_ORDER_TO_DRAFT, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.MARK_DELIVERED, Capability.MARK_DELIVERED, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.REASSIGN_WORKER, Capability.REASSIGN_WORKER, _ORDER_DOCTYPE, "production"),
-    CapabilityDefinition(Capability.ARCHIVE_APPROVED_PLAN, Capability.ARCHIVE_APPROVED_PLAN, _ORDER_DOCTYPE, "control_center"),
+    CapabilityDefinition(Capability.ARCHIVE_APPROVED_PLAN, Capability.ARCHIVE_APPROVED_PLAN, CUTTING_PLAN_DOCTYPE, "control_center"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_INCIDENTS, "read", _INCIDENT_DOCTYPE, "control_center", False),
     CapabilityDefinition(Capability.RECORD_INCIDENT, Capability.RECORD_INCIDENT, _ORDER_DOCTYPE, "control_center"),
     CapabilityDefinition(Capability.CREATE_REPLACEMENT, Capability.CREATE_REPLACEMENT, _ORDER_DOCTYPE, "control_center"),
@@ -328,6 +333,7 @@ __all__ = [
     "CONTROL_CENTER_CAPABILITIES",
     "COSTING_CAPABILITIES",
     "CUSTOM_PERMISSION_DEFINITIONS",
+    "CUTTING_PLAN_DOCTYPE",
     "DRAWING_CAPABILITIES",
     "FACTORY_SETTINGS_CAPABILITIES",
     "MASTER_DATA_CAPABILITIES",

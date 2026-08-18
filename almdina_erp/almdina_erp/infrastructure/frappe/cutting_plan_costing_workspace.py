@@ -6,17 +6,16 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
-    DRAFT,
-    SYSTEM,
-    UPLOADED_DXF,
-)
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT
 from almdina_erp.almdina_erp.domain.orders.costing import (
     CostingError,
     SpecialPricingPieceInput,
     SpecialPricingSettings,
     calculate_order_costs,
     calculate_special_pricing,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    current_working_plan,
 )
 
 
@@ -29,11 +28,6 @@ PLAN_COST_FIELDS = (
     "edge_cost_usd",
     "total_cost_usd",
 )
-
-
-def _source_type(order: Any) -> str:
-    source = str(getattr(order, "cutting_plan_source", None) or "System").strip().lower()
-    return UPLOADED_DXF if source in {"custom", "uploaded dxf", "uploaded_dxf", "dxf"} else SYSTEM
 
 
 def initial_plan_cost_values(
@@ -186,36 +180,9 @@ def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
 
 
 def current_cost_plan(order: Any) -> Any | None:
-    """Resolve the plan used for financial reads without creating or mutating data."""
+    """Resolve financial reads from canonical Cutting Plan lineage only."""
 
-    source_type = _source_type(order)
-    drafts = frappe.get_all(
-        "Cutting Plan",
-        filters={
-            "door_cutting_order": order.name,
-            "plan_kind": "Order",
-            "source_type": source_type,
-            "status": DRAFT,
-        },
-        pluck="name",
-        order_by="revision desc, creation desc",
-        limit_page_length=1,
-    )
-    if drafts:
-        return frappe.get_doc("Cutting Plan", drafts[0])
-
-    approved_plan = str(getattr(order, "approved_plan", None) or "").strip()
-    if approved_plan and frappe.db.exists("Cutting Plan", approved_plan):
-        return frappe.get_doc("Cutting Plan", approved_plan)
-
-    latest = frappe.get_all(
-        "Cutting Plan",
-        filters={"door_cutting_order": order.name, "plan_kind": "Order"},
-        pluck="name",
-        order_by="revision desc, creation desc",
-        limit_page_length=1,
-    )
-    return frappe.get_doc("Cutting Plan", latest[0]) if latest else None
+    return current_working_plan(str(order.name))
 
 
 def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[str, float]:
@@ -232,7 +199,6 @@ def authoritative_cost_values(order: Any, *, plan: Any | None = None) -> dict[st
         # A3 command adopts that Draft, the legacy DCO remains the safe read bridge.
         source = order
     else:
-        # Historical Approved plans already stored the reviewed cost snapshot in A2.
         source = resolved_plan
     return {fieldname: flt(getattr(source, fieldname, 0)) for fieldname in PLAN_COST_FIELDS}
 

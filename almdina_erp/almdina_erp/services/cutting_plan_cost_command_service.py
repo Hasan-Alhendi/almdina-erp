@@ -5,10 +5,10 @@ from typing import Any
 from frappe import _
 from frappe.utils import flt
 
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import SYSTEM
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import SYSTEM, UPLOADED_DXF
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    require_document_capability,
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
@@ -19,11 +19,15 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     initialize_draft_plan_cost_snapshot,
     project_plan_costs_to_order,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    current_working_plan,
+)
 
 
-def _uses_uploaded_dxf(order: Any) -> bool:
-    source = str(getattr(order, "cutting_plan_source", None) or "System").strip().lower()
-    return source in {"custom", "uploaded dxf", "uploaded_dxf", "dxf"}
+def _current_source_type(order: Any) -> str:
+    plan = current_working_plan(str(order.name))
+    source_type = str(getattr(plan, "source_type", None) or SYSTEM) if plan else SYSTEM
+    return UPLOADED_DXF if source_type == UPLOADED_DXF else SYSTEM
 
 
 def update_plan_cost_settings(
@@ -35,10 +39,10 @@ def update_plan_cost_settings(
     """Update only plan-owned cost inputs and their derived financial result.
 
     Geometry, fingerprints, validation status, and recalculation state are not
-    touched. DCO writes are focused one-way compatibility projections only.
+    touched. DCO writes remain one-way compatibility projections until A6.2.
     """
 
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.EDIT_COST_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات تكلفة خطة القص لهذا الطلب."),
@@ -46,7 +50,7 @@ def update_plan_cost_settings(
     repository = FrappeCuttingPlanCommandRepository(Capability.EDIT_COST_SETTINGS)
     plan = (
         repository.ensure_uploaded_dxf_draft(order)
-        if _uses_uploaded_dxf(order)
+        if _current_source_type(order) == UPLOADED_DXF
         else repository.ensure_system_draft(order)
     )
     initialize_draft_plan_cost_snapshot(order, plan)

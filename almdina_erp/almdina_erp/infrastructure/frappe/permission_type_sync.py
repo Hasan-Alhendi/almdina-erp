@@ -9,6 +9,7 @@ from frappe.core.doctype.permission_type.permission_type import (
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
+    CUTTING_PLAN_DOCTYPE,
     FACTORY_SETTINGS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
     Capability,
@@ -26,9 +27,24 @@ from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
 )
 
 
+_LEGACY_PLAN_PERMISSION_PARENT = "Door Cutting Order"
+
+
 def _managed_doctypes() -> tuple[str, ...]:
     return tuple(
         sorted({definition.applies_to for definition in CAPABILITY_CATALOG.values()})
+    )
+
+
+def _relocated_plan_permission_types() -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                definition.permission_type
+                for definition in CUSTOM_PERMISSION_DEFINITIONS
+                if definition.applies_to == CUTTING_PLAN_DOCTYPE
+            }
+        )
     )
 
 
@@ -139,6 +155,48 @@ def _ensure_permission_type_schema(permission_type_name: str) -> None:
         document.create_custom_field(target)
 
 
+def _clear_relocated_cutting_plan_projections() -> None:
+    """Remove stale DCO projections after Plan capability ownership moves.
+
+    Canonical Role -> Capability state is preserved verbatim. Only generated
+    Frappe projections are cleaned so a Plan permission cannot appear active on
+    both aggregates after migration.
+    """
+
+    permission_types = _relocated_plan_permission_types()
+    if not permission_types:
+        return
+
+    if frappe.db.exists("DocType", "Custom DocPerm"):
+        meta = frappe.get_meta("Custom DocPerm")
+        stale_fields = [value for value in permission_types if meta.has_field(value)]
+        if stale_fields:
+            updates = {fieldname: 0 for fieldname in stale_fields}
+            for row_name in frappe.get_all(
+                "Custom DocPerm",
+                filters={"parent": _LEGACY_PLAN_PERMISSION_PARENT},
+                pluck="name",
+            ):
+                frappe.db.set_value(
+                    "Custom DocPerm",
+                    row_name,
+                    updates,
+                    update_modified=False,
+                )
+
+    if frappe.db.exists("DocType", "Permission Type"):
+        stale_names = frappe.get_all(
+            "Permission Type",
+            filters={
+                "doc_type": _LEGACY_PLAN_PERMISSION_PARENT,
+                "perm_type": ["in", list(permission_types)],
+            },
+            pluck="name",
+        )
+        if stale_names:
+            frappe.db.delete("Permission Type", {"name": ["in", stale_names]})
+
+
 def sync_permission_types() -> None:
     """Install capability columns and rebuild projections from canonical state."""
 
@@ -165,6 +223,8 @@ def sync_permission_types() -> None:
                 "doc_type": definition.applies_to,
             }
         ).insert(ignore_permissions=True)
+
+    _clear_relocated_cutting_plan_projections()
 
     # Platform roles are never Almdina business authority.
     revoke_automatic_role_business_grants()

@@ -68,15 +68,16 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                 saved.append(saved_plan)
                 return saved_plan
 
-        with patch.object(cost_commands, "require_document_capability"):
-            with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
-                with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
-                    with patch.object(cost_commands, "project_plan_costs_to_order"):
-                        result = cost_commands.update_plan_cost_settings(
-                            order,
-                            board_rate_usd=8,
-                            cutting_cost_per_board_usd=2,
-                        )
+        with patch.object(cost_commands, "require_cutting_plan_capability"):
+            with patch.object(cost_commands, "current_working_plan", return_value=plan):
+                with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
+                    with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
+                        with patch.object(cost_commands, "project_plan_costs_to_order"):
+                            result = cost_commands.update_plan_cost_settings(
+                                order,
+                                board_rate_usd=8,
+                                cutting_cost_per_board_usd=2,
+                            )
 
         self.assertEqual(len(saved), 1)
         self.assertEqual(plan.board_rate_usd, 8)

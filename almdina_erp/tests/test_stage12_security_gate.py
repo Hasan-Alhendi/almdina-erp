@@ -93,7 +93,7 @@ class TestStage12SecurityGate(unittest.TestCase):
             '"attached_to_field": "dxf_file"',
             'require_stage_operational_access(order)',
             'order.check_permission("read")',
-            'require_document_capability(order, capability)',
+            'require_cutting_plan_capability(order, capability)',
         ):
             self.assertIn(marker, source)
 

@@ -73,16 +73,17 @@ def test_cutting_plan_surface_never_inherits_cost_permlevel() -> None:
         assert int(fields[fieldname].get("permlevel", 0) or 0) == 1, fieldname
 
 
-def test_cost_capability_projects_only_to_field_level_one() -> None:
+def test_cost_capability_projects_read_only_field_level_one_on_plan_and_legacy_order() -> None:
     source = PERMISSION_MATRIX.read_text(encoding="utf-8")
+    projection = source.split("def field_permission_projection", 1)[1].split(
+        "def enabled_capabilities", 1
+    )[0]
 
-    assert "def field_permission_projection" in source
-    assert 'if doctype != "Door Cutting Order"' in source
-    assert '"read": normalized[Capability.VIEW_COSTS]' in source
-    assert '"write": normalized[Capability.EDIT_COST_SETTINGS]' in source
-    assert "Capability.VIEW_CUTTING_PLAN" not in source.split(
-        "def field_permission_projection", 1
-    )[1].split("def enabled_capabilities", 1)[0]
+    assert 'if doctype not in {"Door Cutting Order", CUTTING_PLAN_DOCTYPE}' in projection
+    assert '"read": normalized[Capability.VIEW_COSTS]' in projection
+    assert '"write": False' in projection
+    assert "Capability.EDIT_COST_SETTINGS" not in projection
+    assert "Capability.VIEW_CUTTING_PLAN" not in projection
 
 
 def test_migrate_repairs_site_local_plan_permlevel_drift() -> None:

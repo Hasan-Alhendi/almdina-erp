@@ -9,8 +9,8 @@ from frappe.utils import flt
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
 from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    require_document_capability,
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import is_order_at_drawing_stage
 
@@ -148,13 +148,7 @@ def save_plan_settings(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
-    """Persist optimizer settings on the canonical Draft Cutting Plan.
-
-    Door Cutting Order is authorized and row-locked because it owns customer and
-    production lifecycle state. The five optimizer fields themselves are written
-    to Cutting Plan. DCO receives only a temporary read projection for the legacy
-    form until the A4/A5 UI cutover removes those duplicated fields.
-    """
+    """Persist optimizer settings on the canonical Draft Cutting Plan."""
 
     name = str(order_name or "").strip()
     if not name:
@@ -166,7 +160,7 @@ def save_plan_settings(
     )
     doc = frappe.get_doc("Door Cutting Order", name)
     doc.check_permission("read")
-    require_document_capability(
+    require_cutting_plan_capability(
         doc,
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات خطة القص لهذا الطلب."),

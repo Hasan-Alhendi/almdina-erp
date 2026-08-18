@@ -123,11 +123,25 @@ class TestRolePermissionRuntimeIntegration(FrappeTestCase):
         self.assertTrue(frappe.has_permission("Door Cutting Order", "read", user=USER))
         self.assertTrue(frappe.has_permission("Door Cutting Order", "create", user=USER))
         self.assertTrue(frappe.has_permission("Door Cutting Order", "write", user=USER))
-        self.assertTrue(frappe.has_permission("Door Cutting Order", Capability.UPLOAD_DXF, user=USER))
+        self.assertFalse(
+            frappe.has_permission(
+                "Door Cutting Order",
+                Capability.UPLOAD_DXF,
+                user=USER,
+            )
+        )
         self.assertFalse(frappe.has_permission("Door Cutting Order", "delete", user=USER))
 
         self.assertTrue(frappe.has_permission("Cutting Plan", "read", user=USER))
         self.assertTrue(frappe.has_permission("Production Stage", "read", user=USER))
+        plan_permission = frappe.db.get_value(
+            "Custom DocPerm",
+            {"parent": "Cutting Plan", "role": ROLE, "permlevel": 0},
+            ["read", Capability.UPLOAD_DXF],
+            as_dict=True,
+        )
+        self.assertEqual(int(plan_permission.read), 1)
+        self.assertEqual(int(plan_permission.get(Capability.UPLOAD_DXF)), 1)
         self.assertEqual(
             frappe.db.get_value(
                 "Custom DocPerm",

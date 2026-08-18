@@ -8,7 +8,9 @@ from frappe import _
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_doctype_capability,
-    require_document_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
 )
 
 
@@ -65,13 +67,13 @@ def _existing_archive(order: Any, plan: Any, filename: str) -> Any | None:
 
 
 def _authorized_order(order_name: str) -> Any:
-    require_doctype_capability(
-        Capability.ARCHIVE_APPROVED_PLAN,
-        message=_("You do not have permission to archive approved plans."),
-    )
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
-    require_document_capability(order, Capability.ARCHIVE_APPROVED_PLAN)
+    require_cutting_plan_capability(
+        order,
+        Capability.ARCHIVE_APPROVED_PLAN,
+        message=_("You do not have permission to archive this approved plan."),
+    )
     return order
 
 

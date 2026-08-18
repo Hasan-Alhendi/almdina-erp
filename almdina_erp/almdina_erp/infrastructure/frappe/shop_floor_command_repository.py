@@ -20,6 +20,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe import (
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    production_plan_facts,
+)
 
 
 def _as_int(value: Any) -> int:
@@ -73,14 +76,15 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
 
     def get_order_state(self, order_name: str) -> OrderState:
         order = order_tracking_repository.get_order(order_name)
+        plan = production_plan_facts(order)
         return OrderState(
             name=str(order.name),
             status=str(order.status or ""),
             production_path=order.production_path or None,
             current_stage=order.current_production_stage or None,
-            has_cutting_plan=bool(order.cutting_plan_json),
-            plan_needs_recalculation=bool(_as_int(order.plan_needs_recalculation)),
-            has_approved_plan=bool(order.approved_plan),
+            has_cutting_plan=plan.has_cutting_plan,
+            plan_needs_recalculation=plan.plan_needs_recalculation,
+            has_approved_plan=plan.has_approved_plan,
             drawing_dxf_status=order.drawing_dxf_status or None,
         )
 

@@ -13,7 +13,10 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     doctype_has_capability,
     document_has_capability,
-    require_document_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    cutting_plan_capability_allowed,
+    require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
     require_stage_operational_access,
@@ -40,6 +43,12 @@ _NUMERIC_PLAN_INPUT_FIELDS = frozenset(
 
 
 def _capability_allowed(doc: Any, capability: str) -> bool:
+    if capability == Capability.EDIT_OPTIMIZER_SETTINGS:
+        return cutting_plan_capability_allowed(
+            doc,
+            capability,
+            allow_new_order=True,
+        )
     if getattr(doc, "is_new", lambda: False)():
         return doctype_has_capability(capability)
     return document_has_capability(doc, capability)
@@ -75,8 +84,6 @@ def _piece_key(row: Any, index: int) -> str:
 
 
 def _drawing_snapshot(row: Any | None) -> tuple[str, str, str]:
-    """Return only meaningful drawing state, not normal-row default statuses."""
-
     if not row:
         return ("", "", "")
     drawing = str(row.get("special_shape_drawing_json") or "")
@@ -110,13 +117,7 @@ def _drawing_changed(doc: Any, old: Any | None) -> bool:
 
 
 def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) -> None:
-    """Protect capability-bound legacy DCO fields before an ordinary order save.
-
-    During A2 these duplicated plan fields are compatibility projections only.
-    Native Door Cutting Order writes still cannot use them to acquire optimizer
-    or drawing authority. Focused plan commands authorize the related order and
-    persist the canonical Cutting Plan through its scoped command repository.
-    """
+    """Protect legacy DCO projections without making them Plan authority."""
 
     del method
     old = None if doc.is_new() else doc.get_doc_before_save()
@@ -174,7 +175,7 @@ def _requested_optimizer_updates(
 
 
 def _recalculation_result(doc: Any) -> dict[str, Any]:
-    """Return production-plan data only; financial data never crosses this API."""
+    """Legacy preview response; active Plan workspace reads canonical snapshots."""
 
     cutting_plan = getattr(doc, "cutting_plan_json", None) or ""
     system_plan = getattr(doc, "system_plan_json", None) or cutting_plan
@@ -209,14 +210,6 @@ def recalculate_order(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
-    """Compatibility endpoint delegating to the canonical Cutting Plan command.
-
-    The existing DCO frontend keeps this stable method path during A2, while the
-    actual authorization, lifecycle checks, engine execution, and persistence are
-    owned by ``cutting_plan_command_service.recalculate_order_plan``. No broad
-    Door Cutting Order save occurs on this path.
-    """
-
     from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
         recalculate_order_plan,
     )
@@ -240,16 +233,12 @@ def simulate_optimizer_plan(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
-    """Run the engine on a throwaway copy and return the result without saving.
-
-    Comparing algorithms is an inspection, not an edit, so this answers to
-    ``EDIT_OPTIMIZER_SETTINGS`` alone. Nothing is persisted.
-    """
+    """Legacy, non-persisting optimizer comparison endpoint."""
 
     name = str(order_name or "").strip()
     stored = frappe.get_doc("Door Cutting Order", name)
     stored.check_permission("read")
-    require_document_capability(
+    require_cutting_plan_capability(
         stored,
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تجربة خوارزمية القص على هذا الطلب."),

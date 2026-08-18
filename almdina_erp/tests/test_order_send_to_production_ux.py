@@ -119,7 +119,7 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     )[1].split("\n\ndef plan_payload", 1)[0]
 
     assert "Capability.APPROVE_DXF" in approval_service
-    assert "require_document_capability" in approval_service
+    assert "require_cutting_plan_capability" in approval_service
     assert "require_stage_operational_access" in approval_service
     assert "current_assignee" not in policy
     assert "session_user" not in policy
@@ -128,7 +128,7 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     # A2.2 preserves the shop-floor status by not mutating Door Cutting Order
     # lifecycle state at all. Only the Cutting Plan transitions to Approved.
     assert "approve_order_plan" in approval_service
-    assert "lock_order_for_production" not in approval_service
+    assert "lock_cutting_plan" not in approval_service
     assert "order.save(" not in approval_service
     assert "frappe.db.set_value" not in approval_service
     assert "plan.status = APPROVED" in approval_command

@@ -95,7 +95,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
 
         self.assertIn("Capability.RECALCULATE_PLAN", service)
         self.assertIn("Capability.EDIT_OPTIMIZER_SETTINGS", service)
-        self.assertIn("require_document_capability", service)
+        self.assertIn("require_cutting_plan_capability", service)
         self.assertIn("for update", service)
         self.assertIn("assert_order_editable", service)
         self.assertIn("FrappeCuttingPlanCommandRepository", service)

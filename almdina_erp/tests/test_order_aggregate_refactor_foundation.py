@@ -199,9 +199,21 @@ def test_cutting_plan_schema_owns_working_optimizer_settings() -> None:
         "kerf_mm",
         "trim_margin_mm",
     ):
-        assert not fields[fieldname].get("read_only"), fieldname
+        # A5 detached workspace editors own user intent; the native DocType form
+        # is deliberately read-only so Plan settings cannot bypass scoped commands.
+        assert fields[fieldname].get("read_only") == 1, fieldname
     assert fields["plan_needs_recalculation"]["read_only"] == 1
     assert fields["dxf_file"]["fieldtype"] == "Attach"
+
+    command_source = (
+        APP_ROOT / "services" / "cutting_plan_command_service.py"
+    ).read_text(encoding="utf-8")
+    repository_source = (
+        APP_ROOT / "infrastructure" / "frappe" / "cutting_plan_command_repository.py"
+    ).read_text(encoding="utf-8")
+    assert "save_system_plan_settings" in command_source
+    assert "EDIT_OPTIMIZER_SETTINGS" in command_source
+    assert "save_settings" in repository_source
 
 
 def test_costing_schema_is_separate_from_order_and_plan_geometry() -> None:

@@ -141,8 +141,6 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertFalse(business[Capability.EDIT_ORDER])
 
     def test_editing_the_cutting_algorithm_always_shows_its_result(self) -> None:
-        # Tuning the algorithm is pointless without reading the plan it produces,
-        # so the system-plan tab stays granted even when tabs are configured off.
         state = normalize_capability_state(
             {
                 Capability.EDIT_OPTIMIZER_SETTINGS: True,
@@ -262,17 +260,19 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         self.assertTrue(customer["select"])
 
     def test_cost_capabilities_project_to_field_permission_level_one(self) -> None:
-        read_only = field_permission_projection(
+        order_read = field_permission_projection(
             "Door Cutting Order",
             {Capability.VIEW_COSTS: True},
         )
-        editable = field_permission_projection(
-            "Door Cutting Order",
+        plan_edit = field_permission_projection(
+            "Cutting Plan",
             {Capability.EDIT_COST_SETTINGS: True},
         )
 
-        self.assertEqual(read_only, {1: {"read": True, "write": False}})
-        self.assertEqual(editable, {1: {"read": True, "write": True}})
+        self.assertEqual(order_read, {1: {"read": True, "write": False}})
+        # Native field write stays closed even for cost editors. The scoped Cost
+        # command is the sole mutation owner for the Plan financial snapshot.
+        self.assertEqual(plan_edit, {1: {"read": True, "write": False}})
         self.assertEqual(
             field_permission_projection(
                 "Production Routing",

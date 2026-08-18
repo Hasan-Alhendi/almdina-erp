@@ -22,8 +22,8 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     UPLOADED_DXF,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    require_document_capability,
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
@@ -121,14 +121,23 @@ def _requested_updates(
             try:
                 normalized = float(value)
             except (TypeError, ValueError):
-                frappe.throw(_("إحدى قيم إعدادات خطة القص غير صالحة."), frappe.ValidationError)
+                frappe.throw(
+                    _("إحدى قيم إعدادات خطة القص غير صالحة."),
+                    frappe.ValidationError,
+                )
             if normalized < 0:
-                frappe.throw(_("لا يمكن أن تكون إعدادات خطة القص الرقمية سالبة."), frappe.ValidationError)
+                frappe.throw(
+                    _("لا يمكن أن تكون إعدادات خطة القص الرقمية سالبة."),
+                    frappe.ValidationError,
+                )
             updates[fieldname] = flt(normalized)
         else:
             normalized = str(value or "").strip()
             if not normalized:
-                frappe.throw(_("يجب تحديد قيمة صالحة لإعدادات خطة القص."), frappe.ValidationError)
+                frappe.throw(
+                    _("يجب تحديد قيمة صالحة لإعدادات خطة القص."),
+                    frappe.ValidationError,
+                )
             updates[fieldname] = normalized
     return updates
 
@@ -155,7 +164,7 @@ def _assert_recalculation_state(order: Any) -> None:
 
 
 def _set_order_projection(order: Any, plan: Any, *, include_snapshot: bool) -> None:
-    """Maintain the legacy DCO UI as a read projection during migration."""
+    """Maintain the legacy DCO UI as a read projection until A6.2."""
 
     values: dict[str, Any] = {
         "packing_mode": plan.optimization_mode,
@@ -247,7 +256,10 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if str(plan.status or "") != DRAFT:
         frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
     if str(plan.validation_status or "") != "Valid" or not str(plan.snapshot_json or "").strip():
-        frappe.throw(_("خطة القص غير موجودة أو لم تنجح في التحقق الهندسي."), frappe.ValidationError)
+        frappe.throw(
+            _("خطة القص غير موجودة أو لم تنجح في التحقق الهندسي."),
+            frappe.ValidationError,
+        )
     if cint(plan.plan_needs_recalculation):
         frappe.throw(
             _("خطة القص قديمة. أعد حسابها أو ارفع DXF جديدًا ثم راجع النتيجة قبل الاعتماد."),
@@ -377,8 +389,11 @@ def save_uploaded_dxf_plan(
     capability: str,
 ) -> Any:
     if capability not in _DXF_COMMAND_CAPABILITIES:
-        frappe.throw(_("صلاحية رفع DXF غير صالحة لهذا الأمر."), frappe.PermissionError)
-    require_document_capability(
+        frappe.throw(
+            _("صلاحية رفع DXF غير صالحة لهذا الأمر."),
+            frappe.PermissionError,
+        )
+    require_cutting_plan_capability(
         order,
         capability,
         message=_("لا تملك صلاحية رفع أو استبدال DXF لهذا الطلب."),
@@ -405,7 +420,7 @@ def mirror_uploaded_dxf_projection(order: Any, plan: Any) -> None:
 def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     """Approve the reviewed Draft Cutting Plan without recalculation or DCO save."""
 
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.APPROVE_DXF,
         message=_("لا تملك صلاحية اعتماد خطة القص لهذا الطلب."),
@@ -453,7 +468,7 @@ def save_system_plan_settings(
     order: Any,
     updates: dict[str, Any],
 ) -> dict[str, Any]:
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات خطة القص لهذا الطلب."),
@@ -480,7 +495,7 @@ def recalculate_system_plan(
     order: Any,
     updates: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.RECALCULATE_PLAN,
         message=_("لا تملك صلاحية إعادة حساب خطة القص لهذا الطلب."),
@@ -490,7 +505,7 @@ def recalculate_system_plan(
     initialize_draft_plan_cost_snapshot(order, plan)
     changed = _changed_settings(plan, updates or {})
     if changed:
-        require_document_capability(
+        require_cutting_plan_capability(
             order,
             Capability.EDIT_OPTIMIZER_SETTINGS,
             message=_("لا تملك صلاحية تغيير خوارزمية أو إعدادات محسن خطة القص."),
@@ -539,7 +554,7 @@ def recalculate_order_plan(
     )
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.RECALCULATE_PLAN,
         message=_("لا تملك صلاحية إعادة حساب خطة القص لهذا الطلب."),

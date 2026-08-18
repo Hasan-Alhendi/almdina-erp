@@ -4,7 +4,10 @@ import unittest
 
 import frappe
 
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    CAPABILITY_CATALOG,
+    Capability,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -41,16 +44,17 @@ class TestPermissionTypeIntegration(unittest.TestCase):
     def _assert_arbitrary_role_grant(self, permission_type: str, suffix: str) -> None:
         role_name = f"Almdina Dynamic Permission {suffix}"
         user_email = f"almdina.dynamic.{suffix.lower()}@example.com"
+        target_doctype = CAPABILITY_CATALOG[permission_type].applies_to
         self._ensure_user(role_name, user_email)
 
         frappe.db.delete(
             "Custom DocPerm",
-            {"parent": "Door Cutting Order", "role": role_name},
+            {"parent": target_doctype, "role": role_name},
         )
         frappe.get_doc(
             {
                 "doctype": "Custom DocPerm",
-                "parent": "Door Cutting Order",
+                "parent": target_doctype,
                 "parenttype": "DocType",
                 "parentfield": "permissions",
                 "role": role_name,
@@ -60,12 +64,12 @@ class TestPermissionTypeIntegration(unittest.TestCase):
             }
         ).insert(ignore_permissions=True)
         frappe.clear_cache(user=user_email)
-        frappe.clear_cache(doctype="Door Cutting Order")
+        frappe.clear_cache(doctype=target_doctype)
 
         try:
             self.assertTrue(
                 frappe.has_permission(
-                    "Door Cutting Order",
+                    target_doctype,
                     ptype=permission_type,
                     user=user_email,
                 )
@@ -73,10 +77,10 @@ class TestPermissionTypeIntegration(unittest.TestCase):
         finally:
             frappe.db.delete(
                 "Custom DocPerm",
-                {"parent": "Door Cutting Order", "role": role_name},
+                {"parent": target_doctype, "role": role_name},
             )
             frappe.clear_cache(user=user_email)
-            frappe.clear_cache(doctype="Door Cutting Order")
+            frappe.clear_cache(doctype=target_doctype)
 
     def test_business_permission_types_are_installed_without_role_grants(self) -> None:
         capabilities = (
@@ -105,12 +109,13 @@ class TestPermissionTypeIntegration(unittest.TestCase):
         )
         for permission_type in capabilities:
             with self.subTest(permission_type=permission_type):
+                target_doctype = CAPABILITY_CATALOG[permission_type].applies_to
                 self.assertTrue(
                     frappe.db.exists(
                         "Permission Type",
                         {
                             "perm_type": permission_type,
-                            "doc_type": "Door Cutting Order",
+                            "doc_type": target_doctype,
                         },
                     )
                 )
@@ -122,7 +127,7 @@ class TestPermissionTypeIntegration(unittest.TestCase):
                     frappe.db.count(
                         "Custom DocPerm",
                         filters={
-                            "parent": "Door Cutting Order",
+                            "parent": target_doctype,
                             permission_type: 1,
                         },
                     ),
@@ -187,7 +192,8 @@ class TestPermissionTypeIntegration(unittest.TestCase):
                 "depends_on",
             )
             self.assertNotEqual(repaired, "eval:false")
-            self.assertIn("Door Cutting Order", repaired or "")
+            self.assertIn("Cutting Plan", repaired or "")
+            self.assertNotIn("Door Cutting Order", repaired or "")
         finally:
             frappe.db.set_value(
                 "Custom Field",

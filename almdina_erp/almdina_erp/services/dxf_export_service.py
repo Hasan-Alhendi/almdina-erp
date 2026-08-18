@@ -7,20 +7,25 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.primitives import rects_have_clearance
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_doctype_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    current_working_plan,
+)
+from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
     order_board_thickness_mm,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    require_doctype_capability,
-    require_document_capability,
-)
-from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
 
 
-DXF_KERF_NUMERIC_TOLERANCE_CM = 0.01  # 0.1 mm, matching DXF import tolerance.
+DXF_KERF_NUMERIC_TOLERANCE_CM = 0.01
 
 
 def _require_export_access(
@@ -32,7 +37,8 @@ def _require_export_access(
 
     if order_name:
         order = frappe.get_doc("Door Cutting Order", order_name)
-        require_document_capability(
+        order.check_permission("read")
+        require_cutting_plan_capability(
             order,
             Capability.EXPORT_DXF,
             message=_("You do not have permission to export this order as DXF."),
@@ -42,7 +48,8 @@ def _require_export_access(
     name = str((payload or {}).get("name") or "").strip()
     if name and frappe.db.exists("Door Cutting Order", name):
         order = frappe.get_doc("Door Cutting Order", name)
-        require_document_capability(
+        order.check_permission("read")
+        require_cutting_plan_capability(
             order,
             Capability.EXPORT_DXF,
             message=_("You do not have permission to export this order as DXF."),
@@ -57,12 +64,6 @@ def _require_export_access(
 
 
 def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> list[str]:
-    """Validate exported rectangular cut paths against the same Kerf invariant.
-
-    Snapshot coordinates are centimetres. The small numeric tolerance mirrors
-    the strict DXF importer tolerance and is only for floating-point noise.
-    """
-
     required_kerf_cm = max(
         0.0,
         flt(snapshot.get("kerf_cm")) or (max(0.0, flt(fallback_kerf_mm)) / 10.0),
@@ -120,7 +121,7 @@ def _assert_export_kerf(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0
     )
 
 
-def _approved_plan_manifest(order: Any, plan: Any) -> dict[str, Any]:
+def _plan_manifest(order: Any, plan: Any) -> dict[str, Any]:
     return {
         "order": order.name,
         "customer": order.customer,
@@ -184,6 +185,15 @@ def _draft_manifest(order: Any, snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _canonical_saved_plan(order: Any) -> Any | None:
+    approved_name = str(getattr(order, "approved_plan", None) or "").strip()
+    if approved_name and frappe.db.exists("Cutting Plan", approved_name):
+        approved = frappe.get_doc("Cutting Plan", approved_name)
+        if str(approved.door_cutting_order or "") == str(order.name):
+            return approved
+    return current_working_plan(str(order.name))
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -200,8 +210,8 @@ def get_validated_dxf_plan(
     order = _require_export_access(order_name=order_name, payload=payload)
 
     if order_name and order:
-        if order.approved_plan:
-            plan = frappe.get_doc("Cutting Plan", order.approved_plan)
+        plan = _canonical_saved_plan(order)
+        if plan and str(getattr(plan, "snapshot_json", None) or "").strip():
             errors = legacy_export.validate_cutting_plan_document(plan)
             if errors:
                 frappe.throw(
@@ -210,15 +220,13 @@ def get_validated_dxf_plan(
                     )
                 )
             snapshot = legacy_export._plan_to_export_snapshot(plan)
-            _assert_export_kerf(
-                snapshot,
-                fallback_kerf_mm=flt(getattr(order, "kerf_mm", 0)),
-            )
+            _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
             return {
                 "plan": snapshot,
-                "manifest": _approved_plan_manifest(order, plan),
+                "manifest": _plan_manifest(order, plan),
             }
 
+        # Read-only migration bridge for orders predating canonical Cutting Plan.
         snapshot = legacy_export._stored_order_export_snapshot(order)
         _assert_export_kerf(
             snapshot,
@@ -229,7 +237,7 @@ def get_validated_dxf_plan(
             "manifest": legacy_export._manifest_from_order_snapshot(
                 order,
                 snapshot,
-                plan_kind="System Plan",
+                plan_kind="Legacy System Plan",
             ),
         }
 

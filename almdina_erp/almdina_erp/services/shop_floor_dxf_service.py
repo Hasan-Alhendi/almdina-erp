@@ -15,8 +15,11 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    require_document_capability,
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    seed_plan_settings,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
     require_stage_operational_access,
@@ -64,7 +67,7 @@ def _authorize_order(
     require_stage_role: bool = False,
 ) -> Any:
     order.check_permission("read")
-    require_document_capability(order, capability)
+    require_cutting_plan_capability(order, capability)
     if require_stage_role:
         require_stage_operational_access(order)
     if require_assigned_designer:
@@ -253,7 +256,11 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     )
 
     try:
-        custom_snapshot = parse_production_dxf(normalized_url, order)
+        custom_snapshot = parse_production_dxf(
+            normalized_url,
+            order,
+            settings=seed_plan_settings(order.name),
+        )
     except DxfImportError as error:
         _throw_dxf_validation_errors(error.errors)
 

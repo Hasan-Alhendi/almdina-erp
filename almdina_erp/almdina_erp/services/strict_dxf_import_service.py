@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
+from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     CutDimensionError,
     dimensions_match_exact,
@@ -43,7 +44,11 @@ def _format_spec(spec: OrderPieceCutSpec) -> str:
     )
 
 
-def _proxy_order(order: Any, specs: list[OrderPieceCutSpec]) -> Any:
+def _proxy_order(
+    order: Any,
+    specs: list[OrderPieceCutSpec],
+    settings: PlanSettings,
+) -> Any:
     pieces = [
         SimpleNamespace(
             qty=spec.qty,
@@ -56,12 +61,12 @@ def _proxy_order(order: Any, specs: list[OrderPieceCutSpec]) -> Any:
     ]
     return SimpleNamespace(
         pieces=pieces,
-        trim_margin_mm=getattr(order, "trim_margin_mm", 0),
+        trim_margin_mm=settings.trim_margin_mm,
         board_width_cm=getattr(order, "board_width_cm", 0),
         board_length_cm=getattr(order, "board_length_cm", 0),
         full_board_width_mm=getattr(order, "full_board_width_mm", 0),
         full_board_length_mm=getattr(order, "full_board_length_mm", 0),
-        kerf_mm=getattr(order, "kerf_mm", 0),
+        kerf_mm=settings.kerf_mm,
     )
 
 
@@ -236,12 +241,17 @@ def _apply_strict_dimension_contract(
     return errors
 
 
-def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
-    """Validate DXF and normalize accepted pieces to the canonical plan contract.
+def parse_production_dxf(
+    file_url: str,
+    order: Any,
+    *,
+    settings: PlanSettings,
+) -> dict[str, Any]:
+    """Validate DXF against order pieces and canonical Cutting Plan settings.
 
     Topology/layers/board bounds/kerf remain owned by the geometry importer.
-    Final acceptance is exact at 0.001 cm, then each matched DXF piece inherits
-    the source order's semantic edge-banding metadata for the shared renderer.
+    Final acceptance is exact at 0.001 cm. Kerf and trim are supplied explicitly
+    from Cutting Plan lineage instead of being read from DCO compatibility fields.
     """
     try:
         specs = build_order_piece_cut_specs(order)
@@ -249,7 +259,10 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         raise DxfImportError(exc.errors) from exc
 
     try:
-        snapshot = _legacy_parse_production_dxf(file_url, _proxy_order(order, specs))
+        snapshot = _legacy_parse_production_dxf(
+            file_url,
+            _proxy_order(order, specs, settings),
+        )
     except DxfImportError as exc:
         text = str(exc)
         if "سماحية" in text or "لا تطابق أي قطعة" in text or "بعد تدويرها" in text:
