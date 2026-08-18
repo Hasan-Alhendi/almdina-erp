@@ -28,4 +28,5 @@ jobs:
         run: |
           python -m pytest -q \
             almdina_erp/tests/test_order_aggregate_refactor_foundation.py \
-            almdina_erp/tests/test_a4_dco_plan_ownership.py
+            almdina_erp/tests/test_a4_dco_plan_ownership.py \
+            almdina_erp/tests/test_a63_legacy_reader_cutover.py
