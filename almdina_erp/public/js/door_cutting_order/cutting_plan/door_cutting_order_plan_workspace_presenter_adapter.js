@@ -115,6 +115,7 @@
         frm.doc.system_plan_json = systemPlan;
         frm.doc.cutting_plan_json = systemPlan || parseSnapshot(currentRow);
         frm.doc.custom_plan_json = customPlan;
+        frm.doc.production_dxf = customRow && customRow.dxf ? customRow.dxf.file || null : null;
         frm.doc.approved_plan = payload.approved_plan || (approvedRow && approvedRow.name) || null;
         frm.doc.approved_plan_source = sourceLabel(approvedRow);
         frm.__almdina_approved_plan_snapshot = approvedPlan;
