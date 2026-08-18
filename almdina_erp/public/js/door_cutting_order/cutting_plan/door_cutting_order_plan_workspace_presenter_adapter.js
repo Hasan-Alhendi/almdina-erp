@@ -214,7 +214,11 @@
                 return legacy.afterRender(frm);
             },
         };
-        window.AlmdinaPlanTabsUX = Object.freeze(wrapped);
+        // This compatibility facade is intentionally decoratable. The later
+        // action-permission guard wraps printActivePlan with the print capability
+        // check. Freezing this object here caused a strict-mode TypeError on every
+        // permission/DOM refresh and could interrupt the rest of the DCO UI cycle.
+        window.AlmdinaPlanTabsUX = wrapped;
         return true;
     }
 
