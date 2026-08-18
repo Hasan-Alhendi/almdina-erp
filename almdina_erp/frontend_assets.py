@@ -31,6 +31,14 @@ doctype_js = {
         # evaluated before any module that registers a probe with it.
         "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
         "public/js/permission_context.js",
+        # A5 aggregate workspace state must exist before Plan/Cost presenters.
+        # These stores are document-scoped but never use frm.doc as Plan/Cost
+        # persistence state; later A5 slices migrate presenters onto them.
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js",
+        "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
+        "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js",
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
