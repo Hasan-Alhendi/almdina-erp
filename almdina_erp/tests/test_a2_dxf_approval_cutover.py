@@ -58,12 +58,13 @@ class TestA2DxfApprovalArchitecture(unittest.TestCase):
         validated = upload.index("parse_production_dxf(")
         persisted = upload.index("save_uploaded_dxf_plan(")
         attached = upload.index("_attach_validated_dxf_file(")
-        projected = upload.index("mirror_uploaded_dxf_projection(")
+        finalized = upload.index("finalize_uploaded_dxf_order_state(")
         self.assertLess(staged, authorized)
         self.assertLess(authorized, validated)
         self.assertLess(validated, persisted)
         self.assertLess(persisted, attached)
-        self.assertLess(attached, projected)
+        self.assertLess(attached, finalized)
+        self.assertNotIn("mirror_uploaded_dxf_projection", upload)
 
     def test_approval_boundary_delegates_to_plan_command_without_snapshot_service(self) -> None:
         approval = source(APPROVAL_SERVICE)
@@ -85,6 +86,7 @@ class TestA2DxfApprovalArchitecture(unittest.TestCase):
         self.assertIn("_assert_plan_ready_for_approval(order, plan)", approval)
         self.assertIn("plan.status = APPROVED", approval)
         self.assertIn("repository.save_document(plan, allow_status_transition=True)", approval)
+        self.assertIn("_set_approved_plan_relation(order, plan)", approval)
         self.assertNotIn("recalculate_system_plan", approval)
         self.assertNotIn("calculate_system_plan", approval)
         self.assertNotIn("create_plan_from_order", approval)
