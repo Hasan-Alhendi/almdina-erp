@@ -127,7 +127,7 @@
 
     function ensureAdvancedModes(frm) {
         const field = frm.fields_dict && frm.fields_dict.packing_mode;
-        if (!field) return;
+        if (!field || !field.df) return;
         const options = String(field.df.options || "")
             .split("\n")
             .map((value) => value.trim())
