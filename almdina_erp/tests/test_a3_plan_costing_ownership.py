@@ -72,7 +72,7 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
             with patch.object(cost_commands, "current_working_plan", return_value=plan):
                 with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
                     with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
-                        with patch.object(cost_commands, "project_plan_costs_to_order"):
+                        with patch.object(cost_commands, "refresh_order_commercial_totals"):
                             result = cost_commands.update_plan_cost_settings(
                                 order,
                                 board_rate_usd=8,
