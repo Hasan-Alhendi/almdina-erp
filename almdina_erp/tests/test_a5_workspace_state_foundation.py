@@ -202,6 +202,8 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("AlmdinaWorkspaceFieldEditor", source)
         self.assertIn("onPatch", source)
+        self.assertIn('.control-input-wrapper', source)
+        self.assertIn('.control-input, .control-value', source)
         self.assertNotIn("frappe.model.set_value", source)
         self.assertNotIn("frm.set_value", source)
         self.assertNotIn("frm.save", source)
