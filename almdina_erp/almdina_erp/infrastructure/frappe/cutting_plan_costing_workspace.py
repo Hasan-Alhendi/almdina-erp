@@ -102,11 +102,11 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
 
 
 def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
-    """Refresh only quote totals that depend on the plan-owned board/cutting cost.
+    """Refresh only DCO-owned quote totals that depend on Plan financials.
 
-    Special-piece approval remains DCO-owned in this phase. This focused
-    projection recalculates order-level aggregates without saving the full order
-    or touching cutting geometry.
+    Cutting Plan remains the sole owner of board/cutting/edge financial fields.
+    The order stores only customer-facing commercial aggregates that belong to
+    the order lifecycle itself.
     """
 
     settings = frappe.get_cached_doc("Almdina ERP Settings")
@@ -161,22 +161,17 @@ def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
 
 
 def project_plan_costs_to_order(order: Any, plan: Any) -> dict[str, float]:
-    """Project Plan financials to legacy DCO fields and dependent quote totals."""
+    """A6.2 compatibility facade: refresh order-owned quote totals only.
 
-    values = {fieldname: flt(getattr(plan, fieldname, 0)) for fieldname in PLAN_COST_FIELDS}
-    meta = frappe.get_meta("Door Cutting Order")
-    values = {key: value for key, value in values.items() if meta.has_field(key)}
-    if values:
-        frappe.db.set_value(
-            "Door Cutting Order",
-            order.name,
-            values,
-            update_modified=False,
-        )
-        for fieldname, value in values.items():
-            setattr(order, fieldname, value)
+    The historical implementation copied every Plan financial field back onto
+    Door Cutting Order. Runtime no longer needs that projection, so the function
+    remains temporarily for older callers while deliberately performing no Plan
+    financial mirror. It can be removed with the legacy surface after callers
+    migrate to ``refresh_order_commercial_totals``.
+    """
+
     refresh_order_commercial_totals(order, plan)
-    return values
+    return {}
 
 
 def current_cost_plan(order: Any) -> Any | None:
@@ -207,7 +202,7 @@ def overlay_authoritative_costs(
     order: Any,
     snapshot: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Overlay the current plan cost projection onto a DCO-shaped read model."""
+    """Overlay canonical Plan financials onto a DCO-shaped read model."""
 
     result = dict(snapshot)
     plan = current_cost_plan(order)
