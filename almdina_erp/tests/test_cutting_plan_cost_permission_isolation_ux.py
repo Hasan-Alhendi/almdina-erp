@@ -12,6 +12,7 @@ ORDER_SCHEMA = (
     / "door_cutting_order"
     / "door_cutting_order.json"
 )
+PLAN_SCHEMA = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.json"
 METADATA_SYNC = (
     ROOT
     / "almdina_erp"
@@ -24,14 +25,8 @@ PERMISSION_MATRIX = (
     ROOT / "almdina_erp" / "application" / "security" / "permission_matrix.py"
 )
 
-PLAN_LEVEL_ZERO_FIELDS = {
+DCO_PLAN_PRESENTATION_LEVEL_ZERO_FIELDS = {
     "results_tab",
-    "cut_geometry_section",
-    "kerf_mm",
-    "trim_margin_mm",
-    "optimizer_section",
-    "packing_mode",
-    "optimization_time_limit_sec",
     "plan_actions_section",
     "plan_control_actions",
     "plan_section",
@@ -41,10 +36,34 @@ PLAN_LEVEL_ZERO_FIELDS = {
     "required_boards",
     "waste_area_m2",
     "waste_percent",
+}
+
+RETIRED_DCO_PLAN_FIELDS = {
+    "cut_geometry_section",
+    "kerf_mm",
+    "trim_margin_mm",
+    "optimizer_section",
+    "packing_mode",
+    "cutting_machine_type",
+    "optimization_time_limit_sec",
     "cutting_plan_json",
     "system_plan_json",
     "custom_plan_json",
     "approved_plan_source",
+    "production_dxf",
+}
+
+CANONICAL_PLAN_FIELDS = {
+    "optimization_mode",
+    "machine_type",
+    "optimization_time_limit_sec",
+    "kerf_mm",
+    "trim_margin_mm",
+    "plan_needs_recalculation",
+    "input_fingerprint",
+    "metadata_fingerprint",
+    "dxf_file",
+    "snapshot_json",
 }
 
 COST_LEVEL_ONE_FIELDS = {
@@ -61,16 +80,25 @@ COST_LEVEL_ONE_FIELDS = {
 
 
 def test_cutting_plan_surface_never_inherits_cost_permlevel() -> None:
-    schema = json.loads(ORDER_SCHEMA.read_text(encoding="utf-8"))
-    fields = {row["fieldname"]: row for row in schema["fields"]}
+    order_schema = json.loads(ORDER_SCHEMA.read_text(encoding="utf-8"))
+    order_fields = {row["fieldname"]: row for row in order_schema["fields"]}
+    plan_schema = json.loads(PLAN_SCHEMA.read_text(encoding="utf-8"))
+    plan_fields = {row["fieldname"]: row for row in plan_schema["fields"]}
 
-    for fieldname in PLAN_LEVEL_ZERO_FIELDS:
-        assert fieldname in fields
-        assert int(fields[fieldname].get("permlevel", 0) or 0) == 0, fieldname
+    for fieldname in DCO_PLAN_PRESENTATION_LEVEL_ZERO_FIELDS:
+        assert fieldname in order_fields
+        assert int(order_fields[fieldname].get("permlevel", 0) or 0) == 0, fieldname
+
+    for fieldname in RETIRED_DCO_PLAN_FIELDS:
+        assert fieldname not in order_fields, fieldname
+
+    for fieldname in CANONICAL_PLAN_FIELDS:
+        assert fieldname in plan_fields, fieldname
+        assert int(plan_fields[fieldname].get("permlevel", 0) or 0) == 0, fieldname
 
     for fieldname in COST_LEVEL_ONE_FIELDS:
-        assert fieldname in fields
-        assert int(fields[fieldname].get("permlevel", 0) or 0) == 1, fieldname
+        assert fieldname in order_fields
+        assert int(order_fields[fieldname].get("permlevel", 0) or 0) == 1, fieldname
 
 
 def test_cost_capability_projects_read_only_field_level_one_on_plan_and_legacy_order() -> None:
@@ -110,7 +138,7 @@ def test_migrate_repairs_hidden_plan_command_containers() -> None:
     assert "depends_on = null" in repair
 
 
-def test_plan_commands_use_a_native_full_width_section() -> None:
+def test_plan_commands_use_a_native_full_width_section_without_native_settings_fields() -> None:
     schema = json.loads(ORDER_SCHEMA.read_text(encoding="utf-8"))
     fields = {row["fieldname"]: row for row in schema["fields"]}
     order = schema["field_order"]
@@ -118,7 +146,8 @@ def test_plan_commands_use_a_native_full_width_section() -> None:
     assert fields["plan_actions_section"]["fieldtype"] == "Section Break"
     assert fields["plan_control_actions"]["fieldtype"] == "HTML"
     assert order.index("plan_actions_section") + 1 == order.index("plan_control_actions")
-    assert fields["cut_geometry_section"]["label"] == "إعدادات تنفيذ القص"
+    for retired in ("cut_geometry_section", "optimizer_section", "kerf_mm", "trim_margin_mm", "packing_mode"):
+        assert retired not in fields
 
 
 def test_plan_metadata_repair_does_not_touch_cost_fields() -> None:

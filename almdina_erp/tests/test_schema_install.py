@@ -106,16 +106,26 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
         )
 
     def test_order_meta_has_no_stale_factory_defaults(self):
-        meta = frappe.get_meta("Door Cutting Order")
-        for fieldname in (
-            "kerf_mm",
-            "trim_margin_mm",
-            "cutting_cost_per_board_usd",
-            "packing_mode",
-        ):
-            field = meta.get_field(fieldname)
-            self.assertIsNotNone(field)
-            self.assertIn(field.default, (None, ""), f"{fieldname} still has stale static default {field.default!r}")
+        order_meta = frappe.get_meta("Door Cutting Order")
+        for fieldname in ("kerf_mm", "trim_margin_mm", "packing_mode"):
+            self.assertIsNone(
+                order_meta.get_field(fieldname),
+                f"{fieldname} must no longer be owned by Door Cutting Order",
+            )
+
+        cutting_cost = order_meta.get_field("cutting_cost_per_board_usd")
+        self.assertIsNotNone(cutting_cost)
+        self.assertIn(
+            cutting_cost.default,
+            (None, ""),
+            f"cutting_cost_per_board_usd still has stale static default {cutting_cost.default!r}",
+        )
+
+        plan_meta = frappe.get_meta("Cutting Plan")
+        for fieldname in ("optimization_mode", "kerf_mm", "trim_margin_mm"):
+            field = plan_meta.get_field(fieldname)
+            self.assertIsNotNone(field, f"Cutting Plan must own {fieldname}")
+            self.assertTrue(field.read_only, f"{fieldname} must remain command-owned/read-only")
 
     def test_unplaced_approval_flag_is_off_in_v1(self):
         settings = frappe.get_single("Almdina ERP Settings")

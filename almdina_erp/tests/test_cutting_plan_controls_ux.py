@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
+PLAN_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.json"
 DETAIL_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
 HOOKS = ROOT / "frontend_assets.py"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
@@ -26,11 +27,18 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_advanced_algorithms_remain_in_the_primary_packing_mode_select():
-    payload = json.loads(source(DOCTYPE))
-    packing_mode = next(field for field in payload["fields"] if field.get("fieldname") == "packing_mode")
-    options = set(packing_mode["options"].splitlines())
+def test_advanced_algorithms_remain_in_the_canonical_plan_optimization_select():
+    order_payload = json.loads(source(DOCTYPE))
+    order_fields = {field.get("fieldname") for field in order_payload["fields"]}
+    assert "packing_mode" not in order_fields
+
+    payload = json.loads(source(PLAN_DOCTYPE))
+    optimization_mode = next(
+        field for field in payload["fields"] if field.get("fieldname") == "optimization_mode"
+    )
+    options = set(optimization_mode["options"].splitlines())
     assert {"Auto Pro", "Deep Search", "Optimal Search"}.issubset(options)
+    assert optimization_mode.get("read_only") == 1
 
 
 def test_duplicate_algorithm_palette_is_removed_and_simple_controls_load_last():
@@ -138,8 +146,6 @@ def test_kerf_and_trim_are_optimizer_fields_in_the_frontend_permission_owner():
     assert "kerf_mm: frm.doc.kerf_mm" not in controls
     assert "trim_margin_mm: frm.doc.trim_margin_mm" not in controls
 
-    # The presenter delegates read-only ownership to PlanControlsUX instead of
-    # independently unlocking kerf/trim through a second permission source.
     read_only_body = plan.split("function applyReadOnlyState(frm)", 1)[1].split(
         "function refreshPlanUX(frm)", 1
     )[0]

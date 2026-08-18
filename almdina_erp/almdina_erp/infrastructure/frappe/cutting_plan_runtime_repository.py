@@ -48,7 +48,9 @@ def current_working_plan(order_name: str) -> Any | None:
     return latest_plan(order_name, status=APPROVED) or latest_plan(order_name)
 
 
-def _factory_default_settings() -> PlanSettings:
+def factory_default_plan_settings() -> PlanSettings:
+    """Return the canonical defaults for a plan that has no revision lineage yet."""
+
     settings = frappe.get_cached_doc("Almdina ERP Settings")
     return PlanSettings(
         optimization_mode=str(settings.default_packing_mode or "Auto Pro"),
@@ -73,7 +75,7 @@ def seed_plan_settings(order_name: str) -> PlanSettings:
     """Seed a new revision from canonical plan lineage, then factory defaults."""
 
     existing = latest_plan(order_name)
-    return plan_settings(existing) if existing else _factory_default_settings()
+    return plan_settings(existing) if existing else factory_default_plan_settings()
 
 
 def _plan_is_stale(order: Any, plan: Any) -> bool:
@@ -133,6 +135,7 @@ __all__ = [
     "ProductionPlanFacts",
     "approved_plan_for_order",
     "current_working_plan",
+    "factory_default_plan_settings",
     "latest_plan",
     "plan_settings",
     "production_plan_facts",

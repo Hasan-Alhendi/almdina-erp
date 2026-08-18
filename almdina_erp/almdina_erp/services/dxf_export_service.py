@@ -194,6 +194,18 @@ def _canonical_saved_plan(order: Any) -> Any | None:
     return current_working_plan(str(order.name))
 
 
+def _required_saved_plan(order: Any) -> Any:
+    plan = _canonical_saved_plan(order)
+    if not plan or not str(getattr(plan, "snapshot_json", None) or "").strip():
+        frappe.throw(
+            _(
+                "لا توجد خطة قص Canonical صالحة لهذا الطلب. "
+                "أعد حساب خطة القص قبل تصدير DXF."
+            )
+        )
+    return plan
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -210,35 +222,19 @@ def get_validated_dxf_plan(
     order = _require_export_access(order_name=order_name, payload=payload)
 
     if order_name and order:
-        plan = _canonical_saved_plan(order)
-        if plan and str(getattr(plan, "snapshot_json", None) or "").strip():
-            errors = legacy_export.validate_cutting_plan_document(plan)
-            if errors:
-                frappe.throw(
-                    _("DXF export blocked by geometry validation:\n{0}").format(
-                        "\n".join(errors)
-                    )
+        plan = _required_saved_plan(order)
+        errors = legacy_export.validate_cutting_plan_document(plan)
+        if errors:
+            frappe.throw(
+                _("DXF export blocked by geometry validation:\n{0}").format(
+                    "\n".join(errors)
                 )
-            snapshot = legacy_export._plan_to_export_snapshot(plan)
-            _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
-            return {
-                "plan": snapshot,
-                "manifest": _plan_manifest(order, plan),
-            }
-
-        # Read-only migration bridge for orders predating canonical Cutting Plan.
-        snapshot = legacy_export._stored_order_export_snapshot(order)
-        _assert_export_kerf(
-            snapshot,
-            fallback_kerf_mm=flt(getattr(order, "kerf_mm", 0)),
-        )
+            )
+        snapshot = legacy_export._plan_to_export_snapshot(plan)
+        _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {
             "plan": snapshot,
-            "manifest": legacy_export._manifest_from_order_snapshot(
-                order,
-                snapshot,
-                plan_kind="Legacy System Plan",
-            ),
+            "manifest": _plan_manifest(order, plan),
         }
 
     if payload is None:

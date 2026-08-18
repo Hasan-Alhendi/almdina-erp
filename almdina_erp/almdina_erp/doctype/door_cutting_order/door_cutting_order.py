@@ -5,17 +5,13 @@ from typing import Any
 import frappe
 from frappe.model.document import Document
 
-from almdina_erp.almdina_erp.application.orders.process_order_save import (
-    process_order_save,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders import (
-    FrappeDoorCuttingOrderSaveGateway,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders.document_access import (
-    FrappeOrderDocumentAccess,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders.plan_adapter import (
-    FrappeOrderPlanAdapter,
+from almdina_erp.almdina_erp.application.orders.process_order_save import process_order_save
+from almdina_erp.almdina_erp.infrastructure.frappe.orders import FrappeDoorCuttingOrderSaveGateway
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.document_access import FrappeOrderDocumentAccess
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.plan_adapter import FrappeOrderPlanAdapter
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.preview_plan_context import (
+    apply_preview_plan_settings,
+    clear_transient_plan_results,
 )
 
 
@@ -39,15 +35,10 @@ class DoorCuttingOrder(Document):
     def _legacy_plan_adapter(self) -> FrappeOrderPlanAdapter:
         adapter = self.flags.get("_legacy_order_plan_adapter")
         if adapter is None:
+            apply_preview_plan_settings(self, order_name=self.name)
+            clear_transient_plan_results(self)
             gateway = self._gateway()
-            # Historical preview/simulation helpers planned from the entered
-            # dimensions. Keep that compatibility contract while delegating the
-            # actual plan work to the canonical focused adapter.
-            adapter = FrappeOrderPlanAdapter(
-                self,
-                gateway.access,
-                gateway.costing,
-            )
+            adapter = FrappeOrderPlanAdapter(self, gateway.access, gateway.costing)
             self.flags._legacy_order_plan_adapter = adapter
         return adapter
 
@@ -72,7 +63,8 @@ class DoorCuttingOrder(Document):
         self._gateway().set_piece_numbers()
 
     def _validate_numeric_inputs(self) -> None:
-        self._gateway().validate_numeric_inputs()
+        self._legacy_plan_adapter()
+        self._gateway().access.validate_numeric_inputs()
 
     def _validate_piece_inputs(self) -> None:
         self._gateway().validate_piece_inputs()
@@ -101,6 +93,8 @@ class DoorCuttingOrder(Document):
         del settings
         if source is not None and source is not self:
             source_gateway = FrappeDoorCuttingOrderSaveGateway(source)
+            apply_preview_plan_settings(source, order_name=getattr(source, "name", None))
+            clear_transient_plan_results(source)
             return FrappeOrderPlanAdapter(
                 source,
                 source_gateway.access,
@@ -109,6 +103,7 @@ class DoorCuttingOrder(Document):
         return self._legacy_plan_adapter().plan_input_fingerprint()
 
     def _parse_plan_snapshot(self) -> dict[str, Any]:
+        self._legacy_plan_adapter()
         return self._gateway().access.parse_plan_snapshot()
 
     def _can_reuse_current_plan(
@@ -117,11 +112,10 @@ class DoorCuttingOrder(Document):
         settings: Any | None = None,
     ) -> bool:
         del settings
-        return self._legacy_plan_adapter().can_reuse_current_plan(
-            input_fingerprint
-        )
+        return self._legacy_plan_adapter().can_reuse_current_plan(input_fingerprint)
 
     def _set_cutting_plan_json(self, snapshot: dict[str, Any] | str) -> None:
+        self._legacy_plan_adapter()
         self._gateway().access.set_plan_snapshot(snapshot)
 
     def _refresh_costs_from_plan(
@@ -130,6 +124,7 @@ class DoorCuttingOrder(Document):
         snapshot: dict[str, Any],
     ) -> None:
         del settings
+        self._legacy_plan_adapter()
         self._gateway().costing.refresh_from_plan(snapshot)
 
     def _refresh_current_plan_without_optimization(
