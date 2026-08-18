@@ -87,6 +87,11 @@ def test_active_top_level_tab_selects_one_edit_command_family() -> None:
     assert "api.startEditing(frm)" in coordinator
     assert "api.saveEditing(frm)" in coordinator
 
+    # Plan edit eligibility is fail-closed until PlanWorkspaceState is ready, so
+    # the page action must be reevaluated as soon as that authoritative snapshot
+    # arrives instead of waiting for a full form refresh or an unrelated event.
+    assert '"almdina:plan-workspace-updated"' in coordinator
+
 
 def test_switching_tabs_is_blocked_while_any_page_edit_session_is_open() -> None:
     coordinator = source(COORDINATOR)
@@ -111,22 +116,29 @@ def test_plan_card_edit_toolbar_is_hidden_when_page_toolbar_owns_editing() -> No
     assert "cancelEditing," in plan_session
 
 
-def test_cost_page_is_read_only_until_explicit_cost_edit_session() -> None:
+def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     cost = source(COST_SESSION)
 
     assert '"board_rate_usd"' in cost
     assert '"cutting_cost_per_board_usd"' in cost
     assert 'can(frm, "view_costs")' in cost
     assert 'can(frm, "edit_cost_settings")' in cost
-    assert "costSettingsMayWrite(frm)" in cost
+    assert "function costSettingsMayWrite()" in cost
+    assert "return false;" in cost
     assert 'df.get_status = function almdinaFocusedCostFieldStatus' in cost
-    assert 'field.df[STATUS_KEY] = mayWrite ? "Write" : "Read"' in cost
+    assert 'field.df[STATUS_KEY] = "Read"' in cost
 
-    assert (
-        "almdina_erp.almdina_erp.services.cost_permission_service."
-        "update_order_cost_settings"
-    ) in cost
-    assert "frm.reload_doc()" in cost
+    # A5.2 moves the editable baseline/draft to CostWorkspaceState and routes the
+    # focused save through its API adapter. The DCO form is no longer reloaded or
+    # used as financial persistence state after a cost-only save.
+    assert "AlmdinaCostWorkspaceState" in cost
+    assert "AlmdinaCostWorkspaceAPI" in cost
+    assert "store.beginEdit(seed)" in cost
+    assert "store.patchDraft(patch)" in cost
+    assert "state.draft" in cost
+    assert "api.saveSettings(frm.doc.name, state.draft || {})" in cost
+    assert "frm.reload_doc()" not in cost
+    assert "frappe.call" not in cost
     assert "ignore_permissions" not in cost
     assert "frm.save(" not in cost
     assert "order.save(" not in cost

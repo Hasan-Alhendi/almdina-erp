@@ -11,6 +11,7 @@ HOOKS = ROOT / "frontend_assets.py"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
 CONTROLS_UX = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
+PLAN_WORKSPACE_API = CUTTING_PLAN / "door_cutting_order_plan_workspace_api.js"
 TEXT_BOARD_PLAN_UX = CUTTING_PLAN / "door_cutting_order_text_board_plan_ux.js"
 FAST_SAVE_UX = CUTTING_PLAN / "door_cutting_order_fast_save_ux.js"
 PLAN_TABS_UX = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
@@ -59,16 +60,22 @@ def test_simple_controls_keep_only_current_settings_recalculation_action():
 
 def test_recalculation_button_uses_focused_command_without_full_document_save():
     controls = source(CONTROLS_UX)
+    plan_api = source(PLAN_WORKSPACE_API)
 
     assert (
         '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"'
-        in controls
+        in plan_api
     )
+    assert "RECALCULATE_METHOD" in plan_api
+    assert "AlmdinaPlanWorkspaceAPI" in controls
+    assert "transport.recalculate(frm.doc.name, settings)" in controls
+    assert "frappe.call" not in controls
+    assert "frm.reload_doc" not in controls
+    assert "frm.save" not in controls
     assert (
         '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"'
         not in controls
     )
-    assert "frm.save" not in controls
     assert "__almdinaPlanCommandBound" in controls
     assert "scheduleSimplify" in controls
     assert "setTextIfChanged" in controls
@@ -126,8 +133,10 @@ def test_kerf_and_trim_are_optimizer_fields_in_the_frontend_permission_owner():
         assert f'"{fieldname}"' in optimizer_block
 
     assert 'can(frm, "edit_optimizer_settings")' in controls
-    assert "kerf_mm: frm.doc.kerf_mm" in controls
-    assert "trim_margin_mm: frm.doc.trim_margin_mm" in controls
+    assert "function activeSettings(frm)" in controls
+    assert "row && row.settings" in controls
+    assert "kerf_mm: frm.doc.kerf_mm" not in controls
+    assert "trim_margin_mm: frm.doc.trim_margin_mm" not in controls
 
     # The presenter delegates read-only ownership to PlanControlsUX instead of
     # independently unlocking kerf/trim through a second permission source.
@@ -177,5 +186,6 @@ def test_advanced_algorithm_labels_are_applied_inside_the_primary_select():
         ("Optimal Search", "بحث أمثل"),
     ):
         assert f'{{ value: "{value}", label: "{label}" }}' in controls
+    assert 'if (!field || !field.df) return;' in controls
     assert 'field.$input' in controls
     assert 'option.text(label)' in controls

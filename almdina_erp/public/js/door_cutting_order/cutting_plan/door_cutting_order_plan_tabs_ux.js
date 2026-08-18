@@ -23,33 +23,6 @@
 		return window.AlmdinaPermissions || null;
 	}
 
-	function capture(frm) {
-		const context = window.AlmdinaDocumentContext;
-		if (context && typeof context.capture === "function") {
-			return context.capture(frm);
-		}
-		return `${frm.doctype || ""}::${frm.doc && frm.doc.name || "__new__"}`;
-	}
-
-	function isCurrent(frm, identity) {
-		const context = window.AlmdinaDocumentContext;
-		if (context && typeof context.isCurrent === "function") {
-			return context.isCurrent(frm, identity);
-		}
-		return Boolean(window.cur_frm === frm && capture(frm) === identity);
-	}
-
-	function schedule(frm, key, callback, delay = 0) {
-		const context = window.AlmdinaDocumentContext;
-		if (context && typeof context.schedule === "function") {
-			return context.schedule(frm, key, callback, delay);
-		}
-		const identity = capture(frm);
-		return window.setTimeout(() => {
-			if (isCurrent(frm, identity)) callback(frm, identity);
-		}, delay);
-	}
-
 	function canCapability(frm, capability) {
 		const context = permissions();
 		return Boolean(
@@ -203,9 +176,6 @@
 			if (!hasApprovedPlan(frm)) {
 				return emptyState("لا توجد خطة معتمدة للإنتاج.");
 			}
-			if (frm.__almdina_approved_plan_loading) {
-				return emptyState("جاري تحميل الخطة المعتمدة...");
-			}
 			const plan = getPlanForTab(frm, "Approved");
 			return (
 				renderPlanHtml(frm, plan) ||
@@ -218,63 +188,12 @@
 	}
 
 	function ensureApprovedPlanLoaded(frm) {
-		if (!hasApprovedPlan(frm)) {
-			frm.__almdina_approved_plan_snapshot = null;
-			frm.__almdina_approved_plan_order = null;
-			return Promise.resolve(null);
-		}
-		const identity = capture(frm);
-		const orderName = frm.doc.name;
-		const approvedPlan = frm.doc.approved_plan;
-		const cached = getCachedApprovedPlan(frm);
-		if (cached) return Promise.resolve(cached);
-		if (
-			frm.__almdina_approved_plan_loading
-			&& isCurrent(frm, frm.__almdina_approved_plan_context)
-		) {
-			return frm.__almdina_approved_plan_loading;
-		}
-
-		const loading = Promise.resolve(
-			frappe.call({
-				method: "almdina_erp.almdina_erp.api.get_approved_cutting_plan_snapshot",
-				args: { order_name: orderName },
-			})
-		)
-			.then((response) => {
-				if (
-					!isCurrent(frm, identity)
-					|| frm.doc.name !== orderName
-					|| frm.doc.approved_plan !== approvedPlan
-				) return null;
-				const payload = (response && response.message) || {};
-				const snapshot = parseJsonField(payload.snapshot_json);
-				frm.__almdina_approved_plan_snapshot = snapshot;
-				frm.__almdina_approved_plan_order = orderName;
-				return snapshot;
-			})
-			.catch(() => {
-				if (isCurrent(frm, identity)) {
-					frm.__almdina_approved_plan_snapshot = null;
-					frm.__almdina_approved_plan_order = null;
-				}
-				return null;
-			})
-			.finally(() => {
-				if (frm.__almdina_approved_plan_loading === loading) {
-					frm.__almdina_approved_plan_loading = null;
-					frm.__almdina_approved_plan_context = null;
-				}
-			});
-
-		frm.__almdina_approved_plan_context = identity;
-		frm.__almdina_approved_plan_loading = loading;
-		return loading;
+		// A5.2 makes this module a pure visual owner. The workspace adapter owns
+		// loading/authorization and replaces this compatibility method at runtime.
+		return Promise.resolve(getCachedApprovedPlan(frm));
 	}
 
 	function renderDualTabs(frm) {
-		const identity = capture(frm);
-		if (!isCurrent(frm, identity)) return false;
 		const wrapper = frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper;
 		const tabs = visibleTabs(frm);
 		if (!wrapper || !tabs.length) return false;
@@ -291,15 +210,6 @@
 			frm.__almdina_active_plan_tab = $(this).attr("data-plan-tab");
 			renderDualTabs(frm);
 		});
-
-		if (activeTab === "Approved" && hasApprovedPlan(frm) && !getCachedApprovedPlan(frm)) {
-			const identity = capture(frm);
-			ensureApprovedPlanLoaded(frm).then(() => {
-				if (isCurrent(frm, identity) && frm.__almdina_active_plan_tab === "Approved") {
-					renderDualTabs(frm);
-				}
-			});
-		}
 		return true;
 	}
 
@@ -344,13 +254,7 @@
 		},
 	};
 
-	frappe.ui.form.on("Door Cutting Order", {
-		refresh(frm) {
-			frm.__almdina_approved_plan_snapshot = null;
-			frm.__almdina_approved_plan_order = null;
-			if (shouldShowPlanTabs(frm)) {
-				schedule(frm, "plan-tabs-refresh", () => renderDualTabs(frm), 0);
-			}
-		},
-	});
+	// No Form refresh hook lives here in A5.2. The workspace presenter adapter
+	// and the cutting-plan surface bootstrap own refresh/loading so this visual
+	// module cannot render stale DCO compatibility values before store readiness.
 })();

@@ -1,6 +1,8 @@
 (() => {
     "use strict";
 
+    if (window.AlmdinaDoorCuttingPlanUX) return;
+
     const EDITABLE_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
 
     function can(frm, capability) {
@@ -17,6 +19,49 @@
 
     function documentContext() {
         return window.AlmdinaDocumentContext;
+    }
+
+    function planWorkspaceState() {
+        return window.AlmdinaPlanWorkspaceState || null;
+    }
+
+    function workspaceSnapshot(frm) {
+        const owner = planWorkspaceState();
+        return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+    }
+
+    function workspaceData(frm) {
+        const state = workspaceSnapshot(frm);
+        return state && state.status === "ready" ? state.data : null;
+    }
+
+    function activePlanRow(frm) {
+        const owner = planWorkspaceState();
+        return owner && typeof owner.activePlan === "function"
+            ? owner.activePlan(frm, "System")
+            : null;
+    }
+
+    function activeSettings(frm) {
+        const state = workspaceSnapshot(frm);
+        if (state && state.editing && state.draft) return state.draft;
+        const row = activePlanRow(frm);
+        return row && row.settings ? row.settings : {};
+    }
+
+    function approvedPlanName(frm) {
+        const data = workspaceData(frm);
+        return String((data && data.approved_plan) || "").trim();
+    }
+
+    function uploadedDxfFile(frm) {
+        const data = workspaceData(frm);
+        const uploaded = data && data.plans && data.plans.uploaded_draft;
+        return String((uploaded && uploaded.dxf && uploaded.dxf.file) || "").trim();
+    }
+
+    function workspaceReady(frm) {
+        return Boolean(workspaceData(frm));
     }
 
     function holdsStageOperationalRole(frm) {
@@ -52,8 +97,8 @@
     }
 
     function hasUploadCapability(frm) {
-        if (!frm || frm.is_new()) return false;
-        return Boolean(frm.doc.production_dxf)
+        if (!frm || frm.is_new() || !workspaceReady(frm)) return false;
+        return uploadedDxfFile(frm)
             ? can(frm, "replace_dxf")
             : can(frm, "upload_dxf");
     }
@@ -84,11 +129,11 @@
     }
 
     function canTuneCuttingAlgorithm(frm) {
+        if (!frm || frm.is_new() || approvedPlanName(frm)) return false;
         const context = documentContext();
         if (context && typeof context.canTuneCuttingAlgorithm === "function") {
             return context.canTuneCuttingAlgorithm(frm);
         }
-        if (!frm || frm.is_new() || frm.doc.approved_plan) return false;
         if (!canMutateCurrentStage(frm)) return false;
         if (frm.doc.current_production_stage) return true;
         return EDITABLE_STATUSES.has(frm.doc.status || "Draft");
@@ -97,7 +142,9 @@
     function canOperatePlanEngine(frm) {
         // The plan engine answers to its own capability plus where the order
         // stands. It never waits for an order edit session.
-        return canTuneCuttingAlgorithm(frm) && can(frm, "recalculate_plan");
+        return workspaceReady(frm)
+            && canTuneCuttingAlgorithm(frm)
+            && can(frm, "recalculate_plan");
     }
 
     function canRecalculatePlan(frm) {
@@ -113,14 +160,18 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
-    function parsePlan(frm) {
+    function parsePlanRow(row) {
+        if (!row || !row.snapshot_json) return {};
+        if (typeof row.snapshot_json === "object") return row.snapshot_json || {};
         try {
-            return typeof frm.doc.cutting_plan_json === "object"
-                ? (frm.doc.cutting_plan_json || {})
-                : JSON.parse(frm.doc.cutting_plan_json || "{}");
+            return JSON.parse(row.snapshot_json || "{}");
         } catch (error) {
             return {};
         }
+    }
+
+    function parsePlan(frm) {
+        return parsePlanRow(activePlanRow(frm));
     }
 
     function modeDescription(mode) {
@@ -146,12 +197,8 @@
                     overflow:hidden;
                 }
                 .dco-plan-section-card > .section-head,
-                .dco-plan-section-card .section-head {
-                    padding-top:14px !important;
-                }
-                .dco-plan-section-card .section-body {
-                    padding-bottom:12px !important;
-                }
+                .dco-plan-section-card .section-head { padding-top:14px !important; }
+                .dco-plan-section-card .section-body { padding-bottom:12px !important; }
                 .dco-cut-settings-card {
                     border-inline-start:4px solid #64748b !important;
                     background:linear-gradient(180deg,rgba(100,116,139,.035),transparent 42%) !important;
@@ -160,12 +207,8 @@
                     border-inline-start:4px solid var(--primary,#2490ef) !important;
                     background:linear-gradient(180deg,rgba(36,144,239,.045),transparent 46%) !important;
                 }
-                .dco-result-card {
-                    border-inline-start:4px solid #10b981 !important;
-                }
-                .dco-layout-card {
-                    border-inline-start:4px solid #0f172a !important;
-                }
+                .dco-result-card { border-inline-start:4px solid #10b981 !important; }
+                .dco-layout-card { border-inline-start:4px solid #0f172a !important; }
                 .dco-plan-section-card .control-label {
                     font-weight:750;
                     color:var(--text-color,#1f2937);
@@ -371,19 +414,28 @@
             field.$wrapper.empty();
             return;
         }
+        if (!workspaceReady(frm)) {
+            field.$wrapper.empty();
+            return;
+        }
 
+        const row = activePlanRow(frm) || {};
         const plan = parsePlan(frm);
-        const metrics = plan.industrial_metrics || {};
-        const applied = frm.doc.packing_method || "لم يتم الحساب بعد";
-        const boards = Number(frm.doc.required_boards || 0);
-        const waste = Number(frm.doc.waste_percent || 0);
+        const metrics = row.quality || plan.industrial_metrics || {};
+        const totals = row.totals || {};
+        const engine = row.engine || {};
+        const applied = engine.method_label || engine.method_key || "لم يتم الحساب بعد";
+        const boards = Number(totals.required_boards || 0);
+        const waste = Number(totals.waste_percent || 0);
         const reusable = Number(metrics.largest_reusable_free_area_m2 || 0);
         const cuts = Number(metrics.estimated_cut_count || 0);
-        const cutLengthM = Number(metrics.estimated_cut_length_cm || 0) / 100;
+        const cutLengthM = metrics.estimated_cut_length_m !== undefined
+            ? Number(metrics.estimated_cut_length_m || 0)
+            : Number(metrics.estimated_cut_length_cm || 0) / 100;
         const rotations = Number(metrics.rotation_count || 0);
-        const attempts = Number(plan.attempts || 0);
-        const elapsed = Number(plan.search_elapsed_sec || plan.solver_wall_time_sec || 0);
-        const solver = plan.solver_status || "";
+        const attempts = Number(engine.attempts || plan.attempts || 0);
+        const elapsed = Number(engine.elapsed_sec || plan.search_elapsed_sec || plan.solver_wall_time_sec || 0);
+        const solver = engine.solver_status || plan.solver_status || "";
 
         field.$wrapper.html(`
             <div class="dco-plan-intro">
@@ -414,35 +466,26 @@
     function printCuttingPlan(frm) {
         if (!canPrintCuttingPlan(frm)) {
             frappe.msgprint("ليست لديك صلاحية طباعة خطة القص.");
-            return;
+            return false;
         }
         if (window.AlmdinaPlanTabsUX && typeof window.AlmdinaPlanTabsUX.printActivePlan === "function") {
             window.AlmdinaPlanTabsUX.printActivePlan(frm);
-            return;
+            return true;
         }
-        if (window.AlmdinaCuttingPlanRender && typeof window.AlmdinaCuttingPlanRender.print === "function") {
-            window.AlmdinaCuttingPlanRender.print(frm);
-            return;
-        }
-        if (window.AlmdinaDrawingPlanUX && typeof window.AlmdinaDrawingPlanUX.printActivePlan === "function") {
-            window.AlmdinaDrawingPlanUX.printActivePlan(frm);
-            return;
-        }
-        frappe.msgprint("تعذر تجهيز طباعة خطة القص.");
+        frappe.msgprint("تعذر تجهيز طباعة خطة القص. أعد تحميل الصفحة.");
+        return false;
     }
 
     function exportCuttingPlanDxf(frm) {
         if (!canExportDxf(frm)) {
-            frappe.msgprint(__(
-                stageMutationBlockReason(frm) || "ليست لديك صلاحية تصدير DXF."
-            ));
-            return;
+            frappe.msgprint(__(stageMutationBlockReason(frm) || "ليست لديك صلاحية تصدير DXF."));
+            return false;
         }
         if (frappe.almdina && typeof frappe.almdina.export_order_dxf === "function") {
             return frappe.almdina.export_order_dxf(frm.doc.name);
         }
-        frappe.msgprint("تعذر تشغيل مصدر DXF الآمن.");
-        return null;
+        frappe.msgprint("تعذر تشغيل مصدر DXF الآمن. أعد تحميل الصفحة.");
+        return false;
     }
 
     function uploadCuttingPlanDxf(frm) {
@@ -451,40 +494,16 @@
                 stageMutationBlockReason(frm)
                 || "ليست لديك صلاحية رفع خطة القص كملف DXF."
             ));
-            return;
+            return false;
         }
         if (frappe.almdina && typeof frappe.almdina.upload_production_dxf === "function") {
-            frappe.almdina.upload_production_dxf(frm);
-            return;
+            return frappe.almdina.upload_production_dxf(frm);
         }
-        if (frm.is_new()) {
-            frappe.msgprint(__("احفظ الطلب قبل رفع ملف DXF."));
-            return;
-        }
-        const replacing = Boolean(frm.doc.production_dxf);
-        new frappe.ui.FileUploader({
-            doctype: "Door Cutting Order",
-            docname: frm.doc.name,
-            folder: "Home/Attachments",
-            is_private: 1,
-            restrictions: { allowed_file_types: [".dxf"], max_file_size: 10 * 1024 * 1024 },
-            on_success(file) {
-                frappe.call({
-                    method: "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf",
-                    args: { order_name: frm.doc.name, file_url: file.file_url },
-                    freeze: true,
-                    freeze_message: __("جاري التحقق من ملف DXF وتطبيق الخطة..."),
-                }).then(() => {
-                    frappe.show_alert({
-                        message: replacing
-                            ? __("تم استبدال ملف DXF والتحقق منه.")
-                            : __("تم رفع ملف DXF والتحقق منه."),
-                        indicator: "green",
-                    }, 5);
-                    return frm.reload_doc();
-                });
-            },
-        });
+        // Fail closed: A2.2 requires DXF to be Private + Unattached before
+        // authorization and geometry validation. Never fall back to a DCO-bound
+        // FileUploader or attach first and validate later.
+        frappe.msgprint(__("تعذر تحميل خدمة رفع DXF الآمنة. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+        return false;
     }
 
     function documentActionsHtml(frm) {
@@ -502,7 +521,7 @@
                     ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf">تصدير DXF لأوتوكاد</button>`
                     : ""}
                 ${uploadAllowed
-                    ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${Boolean(frm.doc.production_dxf) ? "استبدال خطة القص DXF" : "رفع خطة قص كملف DXF"}</button>`
+                    ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan">${uploadedDxfFile(frm) ? "استبدال خطة القص DXF" : "رفع خطة قص كملف DXF"}</button>`
                     : ""}
             </div>
             ${blockReason
@@ -514,30 +533,15 @@
     function renderActions(frm) {
         const field = frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
-        const mayMutate = canRecalculatePlan(frm);
-        const mode = frm.doc.packing_mode || "Auto Pro";
-        const blockReason = stageMutationBlockReason(frm);
-
-        if (!mayMutate) {
-            field.$wrapper.html(`
-                <div class="dco-plan-actions-shell">
-                    <div class="dco-plan-actions-title">
-                        <strong>أوامر خطة القص</strong>
-                        <span class="dco-plan-mode-hint">${esc(modeDescription(mode))}</span>
-                    </div>
-                    ${documentActionsHtml(frm)}
-                    <div class="dco-plan-note">
-                        ${blockReason
-                            ? esc(__(blockReason))
-                            : "الحقول مقفلة. اضغط «تعديل» قبل إعادة الحساب. بعد بدء القص تبقى الخطة التاريخية ثابتة."}
-                    </div>
-                </div>
-            `);
-            field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
-            field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
-            field.$wrapper.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
+        if (!workspaceReady(frm)) {
+            field.$wrapper.empty();
             return;
         }
+
+        const mayMutate = canRecalculatePlan(frm);
+        const settings = activeSettings(frm);
+        const mode = String(settings.packing_mode || "Auto Pro");
+        const blockReason = stageMutationBlockReason(frm);
 
         field.$wrapper.html(`
             <div class="dco-plan-actions-shell">
@@ -546,43 +550,25 @@
                     <strong>أوامر خطة القص</strong>
                     <span class="dco-plan-mode-hint">${esc(modeDescription(mode))}</span>
                 </div>
-                <div class="dco-plan-actions">
-                    <button type="button" class="btn btn-primary btn-sm dco-recalculate-plan">
-                        إعادة الحساب بالإعدادات الحالية
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm dco-auto-pro-plan">
-                        أفضل توزيع متقدم
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm dco-deep-plan">
-                        بحث معمق
-                    </button>
-                    <button type="button" class="btn btn-default btn-sm dco-optimal-plan">
-                        بحث أمثل
-                    </button>
-                </div>
+                ${mayMutate ? `
+                    <div class="dco-plan-actions">
+                        <button type="button" class="btn btn-primary btn-sm dco-recalculate-plan">
+                            إعادة الحساب بالإعدادات الحالية
+                        </button>
+                    </div>
+                ` : ""}
                 ${documentActionsHtml(frm)}
                 <div class="dco-plan-note">
-                    غيّر طريقة ترتيب القطع من نفس المجموعة، ثم نفّذ الحساب مباشرة. إعادة الحساب تحدّث النتائج فقط ولا تعتمد الطلب.
+                    ${blockReason
+                        ? esc(__(blockReason))
+                        : mayMutate
+                            ? "عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب."
+                            : "إعدادات الخطة للعرض فقط في الحالة الحالية."}
                 </div>
             </div>
         `);
 
         field.$wrapper.find(".dco-recalculate-plan").on("click", () => recalculate(frm));
-        field.$wrapper.find(".dco-auto-pro-plan").on("click", async () => {
-            if (!mayMutate) return;
-            await frm.set_value("packing_mode", "Auto Pro");
-            await recalculate(frm);
-        });
-        field.$wrapper.find(".dco-deep-plan").on("click", async () => {
-            if (!mayMutate) return;
-            await frm.set_value("packing_mode", "Deep Search");
-            await recalculate(frm);
-        });
-        field.$wrapper.find(".dco-optimal-plan").on("click", async () => {
-            if (!mayMutate) return;
-            await frm.set_value("packing_mode", "Optimal Search");
-            await recalculate(frm);
-        });
         field.$wrapper.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
         field.$wrapper.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
         field.$wrapper.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
@@ -591,50 +577,18 @@
     async function recalculate(frm) {
         if (!canRecalculatePlan(frm)) {
             const reason = stageMutationBlockReason(frm);
-            frappe.msgprint(reason || "فعّل وضع «تعديل» أولًا لإعادة حساب الخطة. إعادة الحساب لا تعتمد الطلب.");
-            return;
+            frappe.msgprint(reason || "إعادة حساب الخطة غير متاحة في الحالة الحالية.");
+            return false;
         }
 
-        const revisionUx = window.AlmdinaOrderRevisionUX;
-        const wasEditing = Boolean(
-            revisionUx && typeof revisionUx.captureEditSessionPresence === "function"
-                ? revisionUx.captureEditSessionPresence(frm)
-                : frm.__almdina_edit_session
-        );
-
-        const buttons = $(frm.wrapper).find(".dco-recalculate-plan,.dco-auto-pro-plan,.dco-deep-plan,.dco-optimal-plan");
-        buttons.prop("disabled", true);
-        const mode = frm.doc.packing_mode || "Auto Pro";
-        const message = mode === "Optimal Search"
-            ? "جاري البحث الأمثل عن أقل عدد ألواح..."
-            : mode === "Deep Search"
-                ? "جاري البحث المعمق عن أفضل توزيع..."
-                : "جاري إعادة حساب أفضل توزيع للقطع...";
-        frappe.dom.freeze(message);
-        try {
-            const controls = window.AlmdinaPlanControlsUX;
-            if (controls && typeof controls.runRecalculation === "function") {
-                await controls.runRecalculation(frm);
-            } else if (!window.AlmdinaBoardTextUX || !window.AlmdinaBoardTextUX.canCalculatePlan(frm)) {
-                frappe.msgprint("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
-            } else {
-                if (frm.is_dirty && frm.is_dirty()) {
-                    await frm.save();
-                }
-                frappe.show_alert({ message: "تم تحديث خطة القص والنتائج", indicator: "green" }, 3);
-            }
-            renderSummary(frm);
-            renderActions(frm);
-            if (revisionUx && typeof revisionUx.restorePrimaryAfterPlanEngine === "function") {
-                revisionUx.restorePrimaryAfterPlanEngine(frm, wasEditing);
-            }
-        } catch (error) {
-            console.error("Failed to recalculate cutting plan", error);
-            throw error;
-        } finally {
-            frappe.dom.unfreeze();
-            buttons.prop("disabled", !canRecalculatePlan(frm));
+        const controls = window.AlmdinaPlanControlsUX;
+        if (!controls || typeof controls.runRecalculation !== "function") {
+            // Fail closed instead of falling back to frm.save()/frm.call(). Plan
+            // commands are owned by PlanControls + PlanWorkspaceAPI in A5.2.
+            frappe.msgprint(__("تعذر تحميل أمر إعادة حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            return false;
         }
+        return controls.runRecalculation(frm);
     }
 
     function markPending(frm) {
@@ -654,10 +608,26 @@
         }
     }
 
+    function renderWorkspacePending(frm) {
+        const adapter = window.AlmdinaPlanWorkspacePresenterAdapter;
+        if (adapter && typeof adapter.renderPending === "function") {
+            adapter.renderPending(frm);
+        } else {
+            const summary = frm.fields_dict.plan_controls_intro;
+            const actions = frm.fields_dict.plan_control_actions;
+            if (summary && summary.$wrapper) summary.$wrapper.empty();
+            if (actions && actions.$wrapper) actions.$wrapper.empty();
+        }
+    }
+
     function refreshPlanUX(frm) {
         installStyles();
         applyReadOnlyState(frm);
         decorateSections(frm);
+        if (!workspaceReady(frm)) {
+            renderWorkspacePending(frm);
+            return false;
+        }
         renderSummary(frm);
         renderActions(frm);
         return true;
@@ -703,8 +673,13 @@
         if (frm && frm === window.cur_frm) schedulePlanUX(frm);
     });
 
-    window.AlmdinaDoorCuttingPlanUX = Object.assign(
-        window.AlmdinaDoorCuttingPlanUX || {},
-        { refresh: schedulePlanUX }
-    );
+    window.addEventListener("almdina:plan-workspace-updated", () => {
+        const frm = window.cur_frm;
+        if (frm && frm.doctype === "Door Cutting Order") schedulePlanUX(frm);
+    });
+
+    window.AlmdinaDoorCuttingPlanUX = Object.freeze({
+        renderActions,
+        refresh: schedulePlanUX,
+    });
 })();
