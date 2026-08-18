@@ -85,12 +85,21 @@ def _plan_is_stale(order: Any, plan: Any) -> bool:
     return stored != plan_input_fingerprint(order, plan)
 
 
-def _valid_linked_approved_plan(order: Any) -> Any | None:
+def approved_plan_for_order(order: Any) -> Any | None:
+    """Resolve the real DCO→Cutting Plan approval relation fail-closed.
+
+    Replacement and production flows must inherit plan-owned settings/costs from
+    this exact approved revision, never from compatibility projections on DCO or
+    from an unrelated newer draft.
+    """
+
     name = str(getattr(order, "approved_plan", None) or "").strip()
     if not name or not frappe.db.exists("Cutting Plan", name):
         return None
     plan = frappe.get_doc("Cutting Plan", name)
     if str(getattr(plan, "door_cutting_order", None) or "") != str(order.name):
+        return None
+    if str(getattr(plan, "plan_kind", None) or "Order") != "Order":
         return None
     if str(getattr(plan, "status", None) or "") != APPROVED:
         return None
@@ -100,7 +109,7 @@ def _valid_linked_approved_plan(order: Any) -> Any | None:
 def production_plan_facts(order: Any) -> ProductionPlanFacts:
     """Build shop-floor plan facts exclusively from canonical Cutting Plan state."""
 
-    approved = _valid_linked_approved_plan(order)
+    approved = approved_plan_for_order(order)
     candidate = approved or current_working_plan(str(order.name))
     if not candidate:
         return ProductionPlanFacts(
@@ -122,6 +131,7 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
 
 __all__ = [
     "ProductionPlanFacts",
+    "approved_plan_for_order",
     "current_working_plan",
     "latest_plan",
     "plan_settings",
