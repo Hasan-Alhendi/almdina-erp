@@ -43,11 +43,7 @@ def _drawing_state(order: Any, *, production_dxf: str | None = None) -> DrawingA
         current_assignee=str(order.current_assignee or ""),
         session_user=str(frappe.session.user or ""),
         approved_plan=str(order.approved_plan or ""),
-        production_dxf=(
-            str(production_dxf)
-            if production_dxf is not None
-            else str(order.production_dxf or "")
-        ),
+        production_dxf=str(production_dxf or ""),
     )
 
 
@@ -235,10 +231,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
         save_uploaded_dxf_plan,
     )
 
-    canonical_existing_file = current_uploaded_dxf_file(order.name)
-    # One-time migration fallback for a legacy pre-A2 custom DXF that has not yet
-    # been represented by a Cutting Plan revision.
-    existing_file = canonical_existing_file or str(order.production_dxf or "")
+    existing_file = current_uploaded_dxf_file(order.name)
     upload_capability = required_upload_capability(
         _drawing_state(order, production_dxf=existing_file)
     )
