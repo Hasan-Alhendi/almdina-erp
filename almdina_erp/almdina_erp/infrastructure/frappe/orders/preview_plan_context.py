@@ -9,15 +9,6 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
 )
 
 
-_TRANSIENT_FIELDS = (
-    "packing_mode",
-    "cutting_machine_type",
-    "optimization_time_limit_sec",
-    "kerf_mm",
-    "trim_margin_mm",
-)
-
-
 def preview_plan_settings(order_name: str | None = None) -> PlanSettings:
     """Resolve preview settings from Cutting Plan lineage, never DCO columns."""
 
@@ -52,6 +43,7 @@ def apply_preview_plan_settings(
 def clear_transient_plan_results(document: Any) -> None:
     """Initialize volatile preview outputs independently from DocType metadata."""
 
+    document.flags._transient_plan_preview = True
     for fieldname, value in (
         ("cutting_plan_json", ""),
         ("system_plan_json", ""),
