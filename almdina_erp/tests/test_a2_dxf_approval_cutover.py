@@ -33,6 +33,7 @@ def valid_plan(*, source_type: str = SYSTEM) -> SimpleNamespace:
         validation_status="Valid",
         snapshot_json='{"validation":{"is_valid":true},"sheets":[{"sheet_no":1}]}',
         plan_needs_recalculation=0,
+        cost_snapshot_version=commands.COST_SNAPSHOT_VERSION,
         input_fingerprint="fresh-fingerprint",
         source_type=source_type,
         dxf_file="/private/files/plan.dxf" if source_type == UPLOADED_DXF else "",

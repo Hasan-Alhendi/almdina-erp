@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    overlay_authoritative_costs,
+)
 from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
 
 
@@ -91,12 +94,13 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
 
 
 def _cost_snapshot(order: Any) -> dict[str, Any]:
+    order_snapshot = {
+        fieldname: getattr(order, fieldname, None)
+        for fieldname in ORDER_COST_FIELDS
+    }
     return {
         "order_name": order.name,
-        "order": {
-            fieldname: getattr(order, fieldname, None)
-            for fieldname in ORDER_COST_FIELDS
-        },
+        "order": overlay_authoritative_costs(order, order_snapshot),
         "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
     }
 
@@ -115,20 +119,37 @@ def update_order_cost_settings(
     board_rate_usd: float,
     cutting_cost_per_board_usd: float,
 ) -> dict[str, Any]:
-    """Update editable costing inputs without granting full document write access."""
+    """Update plan-owned cost inputs without granting full document write access."""
 
-    order = _authorized_order(order_name, Capability.EDIT_COST_SETTINGS)
+    name = str(order_name or "").strip()
+    if not name:
+        frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
+
+    # Serialize cost edits with recalculation and approval, which already lock
+    # the same order row before selecting or mutating its current Cutting Plan.
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (name,),
+    )
+    order = _authorized_order(name, Capability.EDIT_COST_SETTINGS)
     _require_cost_visibility(order)
     if order.status not in EDITABLE_ORDER_STATUSES:
         frappe.throw(_("Cost settings can only be changed while the order is editable."))
 
-    order.board_rate_usd = _finite_non_negative(board_rate_usd, _("Board Rate USD"))
-    order.cutting_cost_per_board_usd = _finite_non_negative(
+    board_rate = _finite_non_negative(board_rate_usd, _("Board Rate USD"))
+    cutting_rate = _finite_non_negative(
         cutting_cost_per_board_usd,
         _("Cutting Cost / Board USD"),
     )
-    order.flags.force_cutting_plan_recalculation = True
-    order.save(ignore_permissions=True)
+    from almdina_erp.almdina_erp.services.cutting_plan_cost_command_service import (
+        update_plan_cost_settings,
+    )
+
+    update_plan_cost_settings(
+        order,
+        board_rate_usd=board_rate,
+        cutting_cost_per_board_usd=cutting_rate,
+    )
     return _cost_snapshot(order)
 
 

@@ -20,6 +20,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context import (
     PLAN_COMMAND_FLAG,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    initial_plan_cost_values,
+)
 
 
 class FrappeCuttingPlanCommandRepository:
@@ -117,6 +120,11 @@ class FrappeCuttingPlanCommandRepository:
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
         plan.kerf_mm = settings.kerf_mm
         plan.trim_margin_mm = settings.trim_margin_mm
+        for fieldname, value in initial_plan_cost_values(
+            order_name,
+            based_on_plan=based_on_plan,
+        ).items():
+            setattr(plan, fieldname, value)
         plan.plan_needs_recalculation = 1
         self._run_persist(plan, "insert")
         return self._record(plan)
