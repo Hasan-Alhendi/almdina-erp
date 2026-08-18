@@ -31,10 +31,9 @@ doctype_js = {
         # evaluated before any module that registers a probe with it.
         "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
         "public/js/permission_context.js",
-        # A5 aggregate workspace state must exist before Plan/Cost presenters.
-        # These stores are document-scoped but never use frm.doc as Plan/Cost
-        # persistence state; later A5 slices migrate presenters onto them.
+        # A5 aggregate workspace state exists before any Plan/Cost consumer.
         "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
@@ -72,13 +71,16 @@ doctype_js = {
         "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_document_compactness_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js",
+        # A5.2 keeps the existing visual presenter but feeds it exclusively from
+        # Cost workspace state through a read-only compatibility projection.
+        "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_presenter_adapter.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
         # Preserve the established secure-document ownership chain: the financial
         # documents presenter must remain immediately after cost permissions.
         "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
         "public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js",
-        # Explicit cost-edit intent is layered after the existing cost presenters;
-        # it owns only the focused native input status for editable cost settings.
+        # Cost edit intent owns only the Cost workspace draft. Native DCO fields
+        # remain read-only and detached controls occupy the same visual surface.
         "public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js",
         "public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_board_text_ux.js",
@@ -97,6 +99,9 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
+        # A5.2 replaces DCO plan JSON reads and the approved-plan side RPC with the
+        # capability-scoped Plan workspace snapshot while preserving the same UI.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
         "public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js",
@@ -116,7 +121,8 @@ doctype_js = {
         # Order / Cutting Plan / Cost editing to their established session owners.
         "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js",
         # Final field-status owner on purpose: no later compatibility layer may
-        # re-open or re-lock focused plan inputs after the plan-session decision.
+        # re-open native plan inputs. Workspace-owned detached controls remain the
+        # only writable Plan settings surface during a Plan edit session.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js",
     ],
     "Edge Banding Type": "public/js/edge_banding_type_ux.js",
