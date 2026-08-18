@@ -6,9 +6,6 @@ import frappe
 from frappe import _
 
 from almdina_erp.almdina_erp.application.shop_floor import commands
-from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-    production_plan_facts,
-)
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_command_repository import (
     FrappeShopFloorCommandRepository,
 )
@@ -29,7 +26,17 @@ def _execute(function: Callable[..., _Result], *args: Any, **kwargs: Any) -> _Re
 
 
 def assert_order_ready_for_dispatch(order: Any) -> None:
-    """Compatibility facade using canonical Cutting Plan runtime facts."""
+    """Compatibility facade using canonical Cutting Plan runtime facts.
+
+    The runtime repository is intentionally imported lazily. This adapter remains
+    importable by lightweight command-contract tests and by tooling that stubs the
+    Frappe module, while the actual dispatch path still resolves Plan facts from
+    the canonical persistence boundary at execution time.
+    """
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+        production_plan_facts,
+    )
 
     plan = production_plan_facts(order)
     state = commands.OrderState(
