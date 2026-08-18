@@ -36,6 +36,7 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
 
 def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
     plan_controls = source("door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js")
+    plan_api = source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js")
     fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
     revision = source("door_cutting_order/core/door_cutting_order_revision_ux.js")
 
@@ -50,10 +51,12 @@ def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -
     assert "piece_type(frm) { markOrderInputPlanStale(frm); }" in fast_save
     assert "fastSave.persistPendingOrderInputs(frm)" in plan_controls
     assert "frm.save" not in plan_controls
+    assert "RECALCULATE_METHOD" in plan_api
+    assert "frappe.call" not in plan_controls
 
     run_body = plan_controls.split("async function runRecalculation(frm)", 1)[1]
     persist_pos = run_body.index("await persistPendingOrderInputs(frm)")
-    recalc_pos = run_body.index("method: RECALCULATE_METHOD")
+    recalc_pos = run_body.index("await transport.recalculate(frm.doc.name, settings)")
     assert persist_pos < recalc_pos
 
 
