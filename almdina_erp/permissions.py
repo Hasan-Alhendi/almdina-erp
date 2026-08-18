@@ -6,6 +6,7 @@ import frappe
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
+    CUTTING_PLAN_DOCTYPE,
     DRAWING_CAPABILITIES,
     PLANNING_CAPABILITIES,
     PRODUCTION_CAPABILITIES,
@@ -57,6 +58,11 @@ _DCO_PERMISSION_CAPABILITIES = {
     definition.permission_type: capability
     for capability, definition in CAPABILITY_CATALOG.items()
     if definition.applies_to == "Door Cutting Order"
+}
+_CUTTING_PLAN_PERMISSION_CAPABILITIES = {
+    definition.permission_type: capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.applies_to == CUTTING_PLAN_DOCTYPE
 }
 _REPLACEMENT_PERMISSION_CAPABILITIES = {
     definition.permission_type: capability
@@ -398,8 +404,6 @@ def production_incident_has_permission(
     if resolved_type in _READ_PERMISSION_TYPES:
         return _has(resolved_user, Capability.VIEW_PRODUCTION_INCIDENTS)
     if resolved_type in _MUTATING_PERMISSION_TYPES:
-        # Production incidents are created/updated through protected commands,
-        # never through unrestricted Desk CRUD.
         return False
     return True
 
@@ -412,6 +416,7 @@ def cutting_plan_has_permission(
 ) -> bool:
     resolved_user = user or frappe.session.user
     resolved_type = _resolved_permission_type(ptype, permission_type)
+    order_name = getattr(doc, "door_cutting_order", None)
 
     if resolved_user == "Administrator":
         return True
@@ -419,11 +424,19 @@ def cutting_plan_has_permission(
         return _scoped_read_decision(
             user=resolved_user,
             required_capability=Capability.VIEW_CUTTING_PLAN,
-            order_name=getattr(doc, "door_cutting_order", None),
+            order_name=order_name,
         )
     if resolved_type in _MUTATING_PERMISSION_TYPES:
         return False
-    return True
+
+    required = _CUTTING_PLAN_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
+    if required:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=required,
+            order_name=order_name,
+        )
+    return False
 
 
 def replacement_piece_has_permission(
