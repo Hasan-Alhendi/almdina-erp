@@ -27,6 +27,9 @@ function jqueryThenable(promise) {
         catch(onRejected) {
             return jqueryThenable(promise.catch(onRejected));
         },
+        finally(onFinally) {
+            return jqueryThenable(promise.finally(onFinally));
+        },
     };
 }
 
@@ -36,14 +39,61 @@ async function flushPromises() {
     await Promise.resolve();
 }
 
+function planPayload(orderName, approvedPlan) {
+    return {
+        order_name: orderName,
+        approved_plan: approvedPlan,
+        plans: {
+            system_draft: {
+                name: `${orderName}-SYSTEM`,
+                source_type: "System",
+                snapshot_json: '{"sheets":[{"source":"System"}]}',
+                settings: {
+                    packing_mode: "Auto Pro",
+                    cutting_machine_type: "Panel Saw",
+                    kerf_mm: 4,
+                    trim_margin_mm: 5,
+                    optimization_time_limit_sec: 20,
+                },
+                validation: { needs_recalculation: false },
+            },
+            uploaded_draft: null,
+            approved: approvedPlan
+                ? {
+                    name: approvedPlan,
+                    source_type: "System",
+                    snapshot_json: '{"sheets":[{"source":"Approved"}]}',
+                    settings: {
+                        packing_mode: "Auto Pro",
+                        cutting_machine_type: "Panel Saw",
+                        kerf_mm: 4,
+                        trim_margin_mm: 5,
+                        optimization_time_limit_sec: 20,
+                    },
+                    validation: { needs_recalculation: false },
+                }
+                : null,
+        },
+    };
+}
+
 (async () => {
     const handlers = {};
     const calls = [];
+    const listeners = new Map();
     const fakeWindow = {
         cur_frm: null,
         clearTimeout() {},
         requestAnimationFrame() { return 1; },
-        addEventListener() {},
+        addEventListener(name, listener) {
+            const current = listeners.get(name) || [];
+            current.push(listener);
+            listeners.set(name, current);
+        },
+        dispatchEvent(event) {
+            for (const listener of listeners.get(event.type) || []) listener(event);
+            return true;
+        },
         AlmdinaPermissions: {
             canDocument() {
                 return true;
@@ -68,7 +118,15 @@ async function flushPromises() {
             return jqueryThenable(pending.promise);
         },
         utils: { escape_html: value => String(value) },
+        msgprint() {},
+        show_alert() {},
     };
+    class FakeCustomEvent {
+        constructor(type, init = {}) {
+            this.type = type;
+            this.detail = init.detail;
+        }
+    }
     const context = vm.createContext({
         window: fakeWindow,
         frappe: fakeFrappe,
@@ -81,13 +139,20 @@ async function flushPromises() {
         Boolean,
         Set,
         Map,
+        CustomEvent: FakeCustomEvent,
         __: value => value,
         setTimeout() {
             return 1;
         },
+        requestAnimationFrame() {
+            return 1;
+        },
     });
+
     vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
-    vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"), context);
+    vm.runInContext(source("door_cutting_order/core/door_cutting_order_workspace_store.js"), context);
+    vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"), context);
+    vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"), context);
     vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"), context);
     vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js"), context);
 
@@ -99,11 +164,13 @@ async function flushPromises() {
             approved_plan: "PLAN-A",
         },
         fields_dict: {},
+        is_new() { return false; },
     };
     fakeWindow.cur_frm = frm;
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
 
-    const stale = fakeWindow.AlmdinaPlanTabsUX.ensureApprovedPlanLoaded(frm);
+    // A late response for order A must never populate order B's Plan workspace.
+    const stale = fakeWindow.AlmdinaPlanWorkspaceState.load(frm);
     assert.equal(calls[0].options.args.order_name, "DCO-A");
     frm.doc = {
         doctype: "Door Cutting Order",
@@ -111,20 +178,26 @@ async function flushPromises() {
         approved_plan: "PLAN-B",
     };
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    calls[0].pending.resolve({ message: { snapshot_json: '{"sheets":[{"source":"A"}]}' } });
-    assert.equal(await stale, null);
-    assert.equal(frm.__almdina_approved_plan_snapshot, null);
+    calls[0].pending.resolve({ message: planPayload("DCO-A", "PLAN-A") });
+    await stale;
+    await flushPromises();
 
-    const current = fakeWindow.AlmdinaPlanTabsUX.ensureApprovedPlanLoaded(frm);
+    let snapshot = fakeWindow.AlmdinaPlanWorkspaceState.snapshot(frm);
+    assert.equal(snapshot.identity, "Door Cutting Order::DCO-B");
+    assert.equal(snapshot.data, null);
+
+    const current = fakeWindow.AlmdinaPlanWorkspaceState.load(frm);
     assert.equal(calls[1].options.args.order_name, "DCO-B");
-    calls[1].pending.resolve({ message: { snapshot_json: '{"sheets":[{"source":"B"}]}' } });
+    calls[1].pending.resolve({ message: planPayload("DCO-B", "PLAN-B") });
     await current;
     await flushPromises();
-    assert.equal(frm.__almdina_approved_plan_order, "DCO-B");
-    assert.equal(frm.__almdina_approved_plan_snapshot.sheets[0].source, "B");
+    snapshot = fakeWindow.AlmdinaPlanWorkspaceState.snapshot(frm);
+    assert.equal(snapshot.data.order_name, "DCO-B");
+    assert.equal(snapshot.data.approved_plan, "PLAN-B");
+    assert.equal(snapshot.data.plans.approved.name, "PLAN-B");
 
     // Regression for the real production state: an immutable approved snapshot
-    // does not permanently lock the optimizer while the order is still at Drawing.
+    // may be revised while the order remains at Drawing, but locks after leaving it.
     const approvedDrawing = {
         doctype: "Door Cutting Order",
         doc: {
@@ -144,6 +217,14 @@ async function flushPromises() {
         __almdina_stage_type: "Drawing",
         __almdina_actor_holds_stage_role: true,
     };
+    fakeWindow.cur_frm = approvedDrawing;
+    fakeWindow.AlmdinaDocumentContext.synchronize(approvedDrawing);
+
+    const drawingLoad = fakeWindow.AlmdinaPlanWorkspaceState.load(approvedDrawing);
+    assert.equal(calls[2].options.args.order_name, "DCO-DRAWING");
+    calls[2].pending.resolve({ message: planPayload("DCO-DRAWING", "PLAN-APPROVED") });
+    await drawingLoad;
+    await flushPromises();
 
     assert.equal(
         fakeWindow.AlmdinaPlanEditSessionUX.canEditPlanSettings(approvedDrawing),
@@ -171,7 +252,7 @@ async function flushPromises() {
         "approved plan recalculation must remain locked at CNC"
     );
 
-    console.log("Approved cutting-plan navigation and Drawing revision simulation passed");
+    console.log("Approved plan workspace navigation and Drawing revision simulation passed");
 })().catch(error => {
     console.error(error);
     process.exitCode = 1;
