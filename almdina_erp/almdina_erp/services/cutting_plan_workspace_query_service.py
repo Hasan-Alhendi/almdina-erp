@@ -16,9 +16,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     UPLOADED_DXF,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    document_has_capability,
-    require_document_capability,
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    cutting_plan_capability_allowed,
+    require_cutting_plan_capability,
 )
 
 
@@ -76,7 +76,7 @@ def _authorized_order(order_name: str) -> Any:
         frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.VIEW_CUTTING_PLAN,
         message=_("لا تملك صلاحية عرض خطة القص لهذا الطلب."),
@@ -86,16 +86,16 @@ def _authorized_order(order_name: str) -> Any:
 
 def _capabilities(order: Any) -> dict[str, bool]:
     return {
-        "view_system": document_has_capability(order, Capability.VIEW_SYSTEM_CUTTING_PLAN),
-        "view_uploaded": document_has_capability(order, Capability.VIEW_UPLOADED_CUTTING_PLAN),
-        "view_approved": document_has_capability(order, Capability.VIEW_APPROVED_CUTTING_PLAN),
-        "edit_settings": document_has_capability(order, Capability.EDIT_OPTIMIZER_SETTINGS),
-        "recalculate": document_has_capability(order, Capability.RECALCULATE_PLAN),
-        "upload_dxf": document_has_capability(order, Capability.UPLOAD_DXF),
-        "replace_dxf": document_has_capability(order, Capability.REPLACE_DXF),
-        "approve": document_has_capability(order, Capability.APPROVE_DXF),
-        "print": document_has_capability(order, Capability.PRINT_CUTTING_PLAN),
-        "export_dxf": document_has_capability(order, Capability.EXPORT_DXF),
+        "view_system": cutting_plan_capability_allowed(order, Capability.VIEW_SYSTEM_CUTTING_PLAN),
+        "view_uploaded": cutting_plan_capability_allowed(order, Capability.VIEW_UPLOADED_CUTTING_PLAN),
+        "view_approved": cutting_plan_capability_allowed(order, Capability.VIEW_APPROVED_CUTTING_PLAN),
+        "edit_settings": cutting_plan_capability_allowed(order, Capability.EDIT_OPTIMIZER_SETTINGS),
+        "recalculate": cutting_plan_capability_allowed(order, Capability.RECALCULATE_PLAN),
+        "upload_dxf": cutting_plan_capability_allowed(order, Capability.UPLOAD_DXF),
+        "replace_dxf": cutting_plan_capability_allowed(order, Capability.REPLACE_DXF),
+        "approve": cutting_plan_capability_allowed(order, Capability.APPROVE_DXF),
+        "print": cutting_plan_capability_allowed(order, Capability.PRINT_CUTTING_PLAN),
+        "export_dxf": cutting_plan_capability_allowed(order, Capability.EXPORT_DXF),
     }
 
 
