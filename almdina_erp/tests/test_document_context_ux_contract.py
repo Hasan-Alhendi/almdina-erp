@@ -139,8 +139,12 @@ class TestDocumentContextUxContract(unittest.TestCase):
             plan,
         )
         self.assertIn("frm.doc.current_production_stage) return true;", plan)
-        self.assertIn("ensureStageContext(frm).then", controls)
-        self.assertIn("isStageContextPending", controls)
+        # A5.2 no longer needs a separate pending-stage flag in PlanControls.
+        # The control surface itself is deferred until the central stage-context
+        # promise resolves, which is the stronger ownership boundary.
+        self.assertIn('typeof context.ensureStageContext === "function"', controls)
+        self.assertIn("context.ensureStageContext(frm).then(run)", controls)
+        self.assertIn("almdina:stage-context-ready", controls)
         self.assertIn("canMutateCurrentStage(frm)", controls)
         self.assertIn('"kerf_mm"', controls)
         self.assertIn('"trim_margin_mm"', controls)
