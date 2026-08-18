@@ -7,6 +7,7 @@ from almdina_erp.almdina_erp.application.security.navigation_context import buil
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
+    CUTTING_PLAN_DOCTYPE,
     FACTORY_SETTINGS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
     Capability,
@@ -51,32 +52,13 @@ def _presentation(label: str, description: str, risk: str = "normal") -> dict[st
 
 CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.VIEW_ORDERS: _presentation("عرض الطلبات", "عرض الطلبات المسموح بها وفتح تفاصيلها الأساسية."),
-    Capability.VIEW_ALL_ORDERS: _presentation(
-        "عرض جميع الطلبات",
-        "تجاوز نطاق الإسناد وعرض طلبات جميع العاملين. تُمنح للإدارة المخولة فقط.",
-        "critical",
-    ),
+    Capability.VIEW_ALL_ORDERS: _presentation("عرض جميع الطلبات", "تجاوز نطاق الإسناد وعرض طلبات جميع العاملين. تُمنح للإدارة المخولة فقط.", "critical"),
     Capability.CREATE_ORDER: _presentation("إنشاء طلب", "إنشاء طلبات قص جديدة."),
-    Capability.EDIT_ORDER: _presentation(
-        "تعديل الطلب",
-        "تفعيل وضع التعديل على الطلب وهو في حالة المسودة فقط. بعد الإرسال للإنتاج استخدم إعادة للمسودة أو نسخة تعديل.",
-        "sensitive",
-    ),
+    Capability.EDIT_ORDER: _presentation("تعديل الطلب", "تفعيل وضع التعديل على الطلب وهو في حالة المسودة فقط. بعد الإرسال للإنتاج استخدم إعادة للمسودة أو نسخة تعديل.", "sensitive"),
     Capability.CREATE_ORDER_REVISION: _presentation("إنشاء نسخة تعديل", "إنشاء Revision جديد مع إبقاء الطلب التاريخي دون تغيير.", "sensitive"),
-    Capability.SUBMIT_ORDER: _presentation(
-        "إرسال للمراجعة (ملغاة)",
-        "أُلغيت. الطلب يُرسل مباشرة إلى الإنتاج دون مرور بالمراجعة.",
-    ),
-    Capability.APPROVE_ORDER: _presentation(
-        "اعتماد الطلب (ملغاة)",
-        "أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.",
-        "critical",
-    ),
-    Capability.REJECT_ORDER: _presentation(
-        "رفض الطلب",
-        "رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.",
-        "critical",
-    ),
+    Capability.SUBMIT_ORDER: _presentation("إرسال للمراجعة (ملغاة)", "أُلغيت. الطلب يُرسل مباشرة إلى الإنتاج دون مرور بالمراجعة."),
+    Capability.APPROVE_ORDER: _presentation("اعتماد الطلب (ملغاة)", "أُلغيت. استخدم «إرسال للإنتاج» مباشرة. اعتماد خطة القص يبقى صلاحية منفصلة.", "critical"),
+    Capability.REJECT_ORDER: _presentation("رفض الطلب", "رفض طلب عالق في قائمة المراجعة القديمة وإعادته للتعديل.", "critical"),
     Capability.CANCEL_ORDER: _presentation("إلغاء الطلب", "إلغاء الطلب وفق ضوابط دورة الحياة.", "critical"),
     Capability.VIEW_COSTS: _presentation("عرض التكلفة", "عرض بيانات التكلفة والأسعار والربحية المحمية.", "sensitive"),
     Capability.EDIT_COST_SETTINGS: _presentation("تعديل إعدادات التكلفة", "تعديل سعر اللوح وأجرة القص وإعادة حساب التكلفة.", "critical"),
@@ -86,28 +68,14 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.PRINT_MEASUREMENTS: _presentation("طباعة القياسات", "طباعة مستند القياسات دون أي أسعار."),
     Capability.PRINT_CUSTOMER_INVOICE: _presentation("طباعة فاتورة الزبون", "طباعة مستند الزبون المالي دون البيانات الداخلية.", "sensitive"),
     Capability.PRINT_INTERNAL_COST_REPORT: _presentation("طباعة تقرير التكلفة الداخلي", "طباعة التقرير السري الذي يتضمن التكلفة والخسائر والربحية.", "critical"),
-    Capability.VIEW_CUTTING_PLAN: _presentation(
-        "عرض قسم خطة القص",
-        "إظهار تبويب نتائج القص. امنح صلاحيات التبويبات أدناه لتحديد أي خطط يمكن مشاهدتها.",
-    ),
-    Capability.VIEW_SYSTEM_CUTTING_PLAN: _presentation(
-        "عرض خطة النظام",
-        "مشاهدة تبويب خطة القص المحسوبة بواسطة النظام.",
-    ),
-    Capability.VIEW_UPLOADED_CUTTING_PLAN: _presentation(
-        "عرض الخطة المرفوعة",
-        "مشاهدة تبويب خطة القص المرفوعة (DXF/مخصصة).",
-    ),
-    Capability.VIEW_APPROVED_CUTTING_PLAN: _presentation(
-        "عرض الخطة المعتمدة",
-        "مشاهدة تبويب الخطة المعتمدة للإنتاج.",
-    ),
+    Capability.VIEW_CUTTING_PLAN: _presentation("عرض قسم خطة القص", "إظهار تبويب نتائج القص. امنح صلاحيات التبويبات أدناه لتحديد أي خطط يمكن مشاهدتها."),
+    Capability.VIEW_SYSTEM_CUTTING_PLAN: _presentation("عرض خطة النظام", "مشاهدة تبويب خطة القص المحسوبة بواسطة النظام."),
+    Capability.VIEW_UPLOADED_CUTTING_PLAN: _presentation("عرض الخطة المرفوعة", "مشاهدة تبويب خطة القص المرفوعة (DXF/مخصصة)."),
+    Capability.VIEW_APPROVED_CUTTING_PLAN: _presentation("عرض الخطة المعتمدة", "مشاهدة تبويب الخطة المعتمدة للإنتاج."),
     Capability.RECALCULATE_PLAN: _presentation("إعادة حساب الخطة", "إعادة تشغيل محرك توزيع القطع على الألواح.", "sensitive"),
     Capability.EDIT_OPTIMIZER_SETTINGS: _presentation(
         "تعديل خوارزمية القص",
-        "تغيير خوارزمية القص التي يقدمها النظام والهوامش وKerf وإعدادات البحث،"
-        " ثم إعادة الحساب ومشاهدة النتيجة في «خطة النظام». صلاحية مستقلة تمامًا"
-        " عن «تعديل الطلب»: من يملك تعديل الطلب لا يستطيع تغيير الخوارزمية بدونها.",
+        "تغيير خوارزمية القص التي يقدمها النظام والهوامش وKerf وإعدادات البحث، ثم إعادة الحساب ومشاهدة النتيجة في «خطة النظام». صلاحية مستقلة تمامًا عن «تعديل الطلب»: من يملك تعديل الطلب لا يستطيع تغيير الخوارزمية بدونها.",
         "sensitive",
     ),
     Capability.PRINT_CUTTING_PLAN: _presentation("طباعة خطة القص", "طباعة الخطة المصرح بعرضها."),
@@ -121,11 +89,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.START_ASSIGNED_STAGE: _presentation("بدء المرحلة المسندة", "بدء المرحلة الحالية عندما تكون مسندة للمستخدم نفسه."),
     Capability.HANDOFF_ASSIGNED_STAGE: _presentation("تسليم المرحلة المسندة", "إنهاء المرحلة وإرسال الطلب إلى العامل التالي."),
     Capability.REVERT_DEPARTMENT: _presentation("إرجاع الطلب لقسم سابق", "إعادة الطلب إلى مرحلة أو قسم سابق مع سجل تدقيق.", "critical"),
-    Capability.RETURN_ORDER_TO_DRAFT: _presentation(
-        "إعادة الطلب للمسودة",
-        "إعادة نفس الطلب إلى المسودة بعد إلغاء مراحل الإنتاج النشطة، دون إنشاء نسخة جديدة.",
-        "critical",
-    ),
+    Capability.RETURN_ORDER_TO_DRAFT: _presentation("إعادة الطلب للمسودة", "إعادة نفس الطلب إلى المسودة بعد إلغاء مراحل الإنتاج النشطة، دون إنشاء نسخة جديدة.", "critical"),
     Capability.MARK_DELIVERED: _presentation("تأكيد التسليم", "تغيير حالة الطلب إلى تم التسليم.", "critical"),
     Capability.REASSIGN_WORKER: _presentation("تغيير العامل", "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.", "sensitive"),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),
@@ -232,22 +196,19 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         capability: supplied.get(capability) is True
         for capability in sorted(ALL_CAPABILITIES)
     }
-    # Optimizer editing is not useful without running the engine and reading the
-    # plan it produces. This dependency stays strictly inside the cutting-plan
-    # boundary and never grants order edit or financial authority.
     if state[Capability.EDIT_OPTIMIZER_SETTINGS]:
         state[Capability.RECALCULATE_PLAN] = True
     if state[Capability.RECALCULATE_PLAN]:
         state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
 
-    order_actions = {
+    transactional_actions = {
         capability
         for capability, enabled in state.items()
         if enabled
-        and CAPABILITY_CATALOG[capability].applies_to == "Door Cutting Order"
-        and capability != Capability.VIEW_ORDERS
+        and CAPABILITY_CATALOG[capability].applies_to in {"Door Cutting Order", CUTTING_PLAN_DOCTYPE}
+        and capability not in {Capability.VIEW_ORDERS}
     }
-    if order_actions:
+    if transactional_actions:
         state[Capability.VIEW_ORDERS] = True
     if any(state[capability] for capability in _COST_VIEW_ACTIONS):
         state[Capability.VIEW_COSTS] = True
@@ -263,11 +224,6 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.VIEW_CUTTING_PLAN] = True
         state[Capability.VIEW_APPROVED_CUTTING_PLAN] = True
         state[Capability.PRINT_CUTTING_PLAN] = True
-    # Legacy umbrella: roles that only stored view_cutting_plan keep all three tabs
-    # until an admin explicitly configures the granular tab grants. A newly saved
-    # matrix may explicitly contain all three tab keys as false; that state is
-    # contradictory (visible plan section with no visible plan), so keep the
-    # System tab as the safe minimum instead of rendering a second, empty UI.
     if state[Capability.VIEW_CUTTING_PLAN]:
         granular_supplied = any(key in supplied for key in _PLAN_TAB_VIEW_ACTIONS)
         if not granular_supplied:
@@ -312,18 +268,21 @@ def standard_permission_projection(
             "write": normalized[Capability.EDIT_ORDER],
             "delete": False,
         }
+    if doctype == CUTTING_PLAN_DOCTYPE:
+        can_read = normalized[Capability.VIEW_CUTTING_PLAN]
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
     if doctype == "Almdina ERP Settings":
         can_read_settings = (
             normalized[Capability.VIEW_FACTORY_SETTINGS]
             or any(normalized[value] for value in _FACTORY_SECTION_EDITS)
         )
-        return {
-            "read": can_read_settings,
-            "select": can_read_settings,
-            "create": False,
-            "write": False,
-            "delete": False,
-        }
+        return {"read": can_read_settings, "select": can_read_settings, "create": False, "write": False, "delete": False}
     if doctype == "Replacement Piece":
         enabled = any(
             normalized[capability]
@@ -336,31 +295,13 @@ def standard_permission_projection(
         return {"read": can_read, "select": can_read, "create": False, "write": False, "delete": False}
     if doctype == "Production Routing":
         can_read = normalized[Capability.VIEW_PRODUCTION_ROUTINGS]
-        return {
-            "read": can_read,
-            "select": can_read,
-            "create": normalized[Capability.CREATE_PRODUCTION_ROUTINGS],
-            "write": normalized[Capability.EDIT_PRODUCTION_ROUTINGS],
-            "delete": normalized[Capability.DELETE_PRODUCTION_ROUTINGS],
-        }
+        return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_PRODUCTION_ROUTINGS], "write": normalized[Capability.EDIT_PRODUCTION_ROUTINGS], "delete": normalized[Capability.DELETE_PRODUCTION_ROUTINGS]}
     if doctype == "Customer":
         can_read = normalized[Capability.VIEW_CUSTOMERS]
-        return {
-            "read": can_read,
-            "select": can_read,
-            "create": normalized[Capability.CREATE_CUSTOMERS],
-            "write": normalized[Capability.EDIT_CUSTOMERS],
-            "delete": normalized[Capability.DELETE_CUSTOMERS],
-        }
+        return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_CUSTOMERS], "write": normalized[Capability.EDIT_CUSTOMERS], "delete": normalized[Capability.DELETE_CUSTOMERS]}
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
-        return {
-            "read": can_read,
-            "select": can_read,
-            "create": normalized[Capability.CREATE_EDGE_BANDING_TYPES],
-            "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES],
-            "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES],
-        }
+        return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_EDGE_BANDING_TYPES], "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES], "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES]}
     enabled = any(
         normalized[capability]
         for capability, definition in CAPABILITY_CATALOG.items()
@@ -373,15 +314,15 @@ def field_permission_projection(
     doctype: str,
     state: Mapping[str, Any] | None,
 ) -> dict[int, dict[str, bool]]:
-    """Project business capabilities onto Frappe field permission levels."""
+    """Project sensitive cost visibility while keeping all edits command-owned."""
 
     normalized = normalize_capability_state(state)
-    if doctype != "Door Cutting Order":
+    if doctype not in {"Door Cutting Order", CUTTING_PLAN_DOCTYPE}:
         return {}
     return {
         1: {
             "read": normalized[Capability.VIEW_COSTS],
-            "write": normalized[Capability.EDIT_COST_SETTINGS],
+            "write": False,
         }
     }
 
