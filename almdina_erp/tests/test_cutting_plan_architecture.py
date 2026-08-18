@@ -83,18 +83,26 @@ class TestCuttingPlanArchitecture(unittest.TestCase):
         repository = COMMAND_REPOSITORY_PATH.read_text(encoding="utf-8")
         workspace = WORKSPACE_PATH.read_text(encoding="utf-8")
 
-        # Historical lifecycle functions remain reachable only through the frozen
-        # compatibility facade while A2 cuts active runtime ownership over.
+        # A6.3 keeps historical Python names importable only as fail-closed stubs;
+        # neither legacy surface may own persistence or recreate Plan state from DCO.
         for symbol in (
             "def create_plan_from_order",
             "def approve_plan",
             "def lock_order_for_production",
         ):
             self.assertIn(symbol, legacy_snapshot)
+        self.assertIn("_retired_snapshot_api", legacy_snapshot)
+        self.assertNotIn("frappe.new_doc", legacy_snapshot)
+        self.assertNotIn("frappe.db.set_value", legacy_snapshot)
+        self.assertNotIn("ignore_permissions", legacy_snapshot)
+
         self.assertIn("Backward-compatible Cutting Plan lifecycle facade", facade)
-        self.assertIn("cutting_plan_snapshot_service as _snapshot", facade)
+        self.assertIn("_retired_snapshot_api", facade)
+        self.assertNotIn("cutting_plan_snapshot_service", facade)
+        self.assertNotIn("_snapshot.", facade)
         self.assertNotIn('frappe.new_doc("Cutting Plan")', facade)
         self.assertNotIn("frappe.db.set_value", facade)
+        self.assertNotIn("ignore_permissions", facade)
 
         # Active approval no longer creates a second snapshot or calls the legacy
         # snapshot service. The plan command + repository own the mutation.
