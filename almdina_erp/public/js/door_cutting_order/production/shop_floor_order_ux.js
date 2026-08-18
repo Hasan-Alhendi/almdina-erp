@@ -774,7 +774,7 @@
 			frm.__almdinaProductionActionsPromise
 			&& isCurrent(frm, frm.__almdinaProductionActionsContext)
 		) {
-			// The caller already cleared the toolbar group, so the in-flight pass
+			// The caller already cleared the action surface, so the in-flight pass
 			// would leave it empty. Reconcile again once it settles instead of
 			// dropping this request.
 			const inFlight = frm.__almdinaProductionActionsPromise;
@@ -831,18 +831,22 @@
 
 			if (!assignedToMe) return;
 			if (stage.can_start_stage && stageStatus === "Pending" && can(frm, "start_assigned_stage")) {
+				// The worker's current stage action is intentionally top-level: it is
+				// the primary next step, not a category that needs another tap.
 				frm.add_custom_button(__("بدء العمل"), () =>
 					callAction(
 						"almdina_erp.almdina_erp.services.shop_floor_service.start_my_stage",
 						{ stage_name: stageName },
 						__("تم بدء العمل."),
 						frm
-					), PRODUCTION_ACTION_GROUP);
+					));
 			}
 			if (!stage.can_handoff_stage || !["In Progress", "Paused"].includes(stageStatus) || !can(frm, "handoff_assigned_stage")) return;
+			// Keep the handoff dialog and server authorization unchanged; only the
+			// toolbar placement is direct so the worker reaches it in one tap.
 			frm.add_custom_button(__("إنهاء وإرسال"), () => {
 				openHandoffDialog(frm, stageName);
-			}, PRODUCTION_ACTION_GROUP);
+			});
 		}).catch((error) => {
 			if (isCurrent(frm, identity)) {
 				console.error("Failed to load production actions", error);
@@ -868,9 +872,12 @@
 			"إنهاء وإرسال",
 			"تغيير العامل",
 		].forEach((label) => frm.remove_custom_button(__(label), PRODUCTION_ACTION_GROUP));
-		// Standalone toolbar buttons (no group).
+		// Standalone toolbar buttons (no group). Removing both direct and legacy
+		// grouped variants prevents a stale stage action after a state refresh.
 		frm.remove_custom_button(__("إرسال للإنتاج"));
 		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"));
+		frm.remove_custom_button(__("بدء العمل"));
+		frm.remove_custom_button(__("إنهاء وإرسال"));
 		frm.remove_custom_button(__("إرجاع لمرحلة سابقة"), PRODUCTION_ACTION_GROUP);
 	}
 
