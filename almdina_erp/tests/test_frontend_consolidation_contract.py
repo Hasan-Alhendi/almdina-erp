@@ -64,6 +64,14 @@ PLAN_CONTROLS = (
     / "cutting_plan"
     / "door_cutting_order_plan_controls_ux.js"
 )
+PLAN_WORKSPACE_API = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_workspace_api.js"
+)
 PLAN_UX = (
     ROOT
     / "public"
@@ -250,17 +258,27 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         fast_save = FAST_SAVE.read_text(encoding="utf-8")
         text_board = TEXT_BOARD_PLAN.read_text(encoding="utf-8")
         plan_controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        plan_api = PLAN_WORKSPACE_API.read_text(encoding="utf-8")
         measurements = MEASUREMENT_ACTIONS.read_text(encoding="utf-8")
         document_print = DOCUMENT_PRINT.read_text(encoding="utf-8")
         secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
 
+        # A5.2 makes the Plan workspace API the single transport owner. Controls
+        # keep command policy and intent, but endpoint names must not leak back
+        # into UI modules.
         self.assertIn(
             "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
-            plan_controls,
+            plan_api,
         )
+        self.assertIn("RECALCULATE_METHOD", plan_api)
+        self.assertIn("AlmdinaPlanWorkspaceAPI", plan_controls)
+        self.assertIn("transport.recalculate(frm.doc.name, settings)", plan_controls)
+        self.assertNotIn("order_plan_permission_service.recalculate_order", plan_controls)
+        self.assertNotIn("frappe.call", plan_controls)
         self.assertIn('can(frm, "recalculate_plan")', plan_controls)
         self.assertIn('can(frm, "edit_optimizer_settings")', plan_controls)
         self.assertNotIn("frm.save", plan_controls)
+        self.assertNotIn("frm.reload_doc", plan_controls)
 
         # These modules may validate inputs or mark a plan stale, but they must
         # never intercept or execute cutting-plan commands themselves.
