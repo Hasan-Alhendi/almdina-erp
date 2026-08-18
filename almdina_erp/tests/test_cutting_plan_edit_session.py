@@ -128,7 +128,7 @@ def test_focused_save_contract_delegates_persistence_to_plan_command_owner() -> 
     frontend = source(EDIT_SESSION)
 
     assert "plan_settings_edit_service.save_plan_settings" in frontend
-    assert "require_document_capability(" in backend
+    assert "require_cutting_plan_capability(" in backend
     assert "Capability.EDIT_OPTIMIZER_SETTINGS" in backend
     assert "require_stage_operational_access" not in backend
     assert "SHOP_FLOOR_ORDER_STATUSES" in backend
@@ -139,7 +139,7 @@ def test_focused_save_contract_delegates_persistence_to_plan_command_owner() -> 
     assert "order.save(" not in backend
 
     assert "FrappeCuttingPlanCommandRepository" in command_backend
-    assert "require_document_capability(" in command_backend
+    assert "require_cutting_plan_capability(" in command_backend
     assert '"plan_needs_recalculation"' in command_backend
     assert "ignore_permissions" not in command_backend
     assert "order.save(" not in command_backend
@@ -186,7 +186,7 @@ class TestPlanSettingsEditService(TestCase):
         with (
             patch.object(service.frappe.db, "sql") as lock_row,
             patch.object(service.frappe, "get_doc", return_value=doc),
-            patch.object(service, "require_document_capability") as capability_gate,
+            patch.object(service, "require_cutting_plan_capability") as capability_gate,
             patch.object(
                 command_service,
                 "save_system_plan_settings",
@@ -231,7 +231,7 @@ class TestPlanSettingsEditService(TestCase):
         with (
             patch.object(service.frappe.db, "sql"),
             patch.object(service.frappe, "get_doc", return_value=doc),
-            patch.object(service, "require_document_capability") as capability_gate,
+            patch.object(service, "require_cutting_plan_capability") as capability_gate,
             patch.object(
                 command_service,
                 "save_system_plan_settings",
