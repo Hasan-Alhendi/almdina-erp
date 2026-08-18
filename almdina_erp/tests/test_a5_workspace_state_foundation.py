@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
-PUBLIC = APP / "public" / "js" / "door_cutting_order"
+PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
 
 
 class TestA5WorkspaceStateFoundation(unittest.TestCase):
@@ -88,7 +88,7 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
             self.assertNotIn(financial_field, source)
 
     def test_workspace_assets_load_before_existing_plan_and_cost_presenters(self) -> None:
-        manifest = (APP.parent / "frontend_assets.py").read_text(encoding="utf-8")
+        manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
         store = "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js"
         plan_api = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"
         plan_state = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"
