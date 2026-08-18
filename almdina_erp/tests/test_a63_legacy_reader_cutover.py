@@ -130,11 +130,69 @@ def test_shop_floor_command_state_is_built_from_canonical_plan_facts() -> None:
     assert "from frappe" not in commands
 
 
+def test_dxf_geometry_adapter_receives_plan_settings_through_a_transient_proxy() -> None:
+    strict = (APP / "services" / "strict_dxf_import_service.py").read_text(
+        encoding="utf-8"
+    )
+    legacy = (APP / "services" / "dxf_import_service.py").read_text(
+        encoding="utf-8"
+    )
+
+    # The large geometry parser keeps its historical object-shaped interface,
+    # but the modern runtime never passes a persisted DCO into that interface.
+    assert "trim_margin_mm=settings.trim_margin_mm" in strict
+    assert "kerf_mm=settings.kerf_mm" in strict
+    assert "_legacy_parse_production_dxf" in strict
+    assert "_proxy_order(order, specs, settings)" in strict
+    assert "from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings" in strict
+    assert "order.kerf_mm" in legacy
+    assert "order.trim_margin_mm" in legacy
+
+
+def test_replacement_plans_inherit_from_the_exact_approved_cutting_plan() -> None:
+    snapshot = (
+        APP / "infrastructure" / "frappe" / "replacements" / "snapshot_adapter.py"
+    ).read_text(encoding="utf-8")
+    service = (APP / "services" / "replacement_plan_service.py").read_text(
+        encoding="utf-8"
+    )
+    persistence = (
+        APP / "infrastructure" / "frappe" / "replacements" / "plan_persistence.py"
+    ).read_text(encoding="utf-8")
+    command_context = (
+        APP / "infrastructure" / "frappe" / "cutting_plan_command_context.py"
+    ).read_text(encoding="utf-8")
+
+    for source in (snapshot, service):
+        assert "approved_plan_for_order" in source
+        assert "order.kerf_mm" not in source
+        assert "order.trim_margin_mm" not in source
+    for forbidden in (
+        "order.board_rate_usd",
+        "order.cutting_cost_per_board_usd",
+        "ignore_permissions",
+    ):
+        assert forbidden not in service
+    assert "source_plan.board_rate_usd" in service
+    assert "source_plan.cutting_cost_per_board_usd" in service
+    assert "settings.kerf_mm" in service
+    assert "settings.trim_margin_mm" in service
+    assert "insert_replacement_plan(plan)" in service
+    assert "approve_replacement_plan(plan)" in service
+
+    assert "REPLACEMENT_PLAN_COMMAND_FLAG" in persistence
+    assert "plan.insert()" in persistence
+    assert "plan.save()" in persistence
+    assert "ignore_permissions" not in persistence
+    assert "REPLACEMENT_PLAN_COMMAND_FLAG" in command_context
+    assert "Capability.APPROVE_REPLACEMENT" not in command_context
+
+
 def test_direct_legacy_dco_plan_reads_are_confined_to_named_migration_bridges() -> None:
     # Direct persisted-order reads are exceptional in A6.3. API fallback keeps
     # historical locked orders readable; upload fallback distinguishes a legacy
-    # pre-A2 DXF. The application shop-floor command hit is a canonical DTO read
-    # and is separately proved above rather than treated as persisted DCO state.
+    # pre-A2 DXF. dxf_import_service is not a persisted-order reader in modern
+    # runtime: the strict wrapper above feeds it a transient PlanSettings proxy.
     allowed: dict[str, set[str]] = {
         "order.cutting_plan_json": {"almdina_erp/api.py"},
         "order.system_plan_json": set(),
@@ -148,8 +206,8 @@ def test_direct_legacy_dco_plan_reads_are_confined_to_named_migration_bridges() 
         },
         "order.packing_mode": set(),
         "order.cutting_machine_type": set(),
-        "order.kerf_mm": set(),
-        "order.trim_margin_mm": set(),
+        "order.kerf_mm": {"almdina_erp/services/dxf_import_service.py"},
+        "order.trim_margin_mm": {"almdina_erp/services/dxf_import_service.py"},
     }
 
     for token, expected_paths in allowed.items():
