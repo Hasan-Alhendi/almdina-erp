@@ -18,6 +18,22 @@ business-logic rewrites.
 - `drawing/`: facade/integration for special-shape drawing and clipped-corner behavior.
 - `list_view/`: Door Cutting Order list presentation, search, status/stage presentation and list quick actions.
 
+### A5 aggregate workspace state
+
+The unified order workspace has three state owners even while it remains mounted on
+the native Door Cutting Order form:
+
+1. **Order** continues to use the Frappe Door Cutting Order document for customer requirements and lifecycle state.
+2. **Cutting Plan** reads through `door_cutting_order_plan_workspace_api.js` and keeps its document-scoped state in `door_cutting_order_plan_workspace_state.js` using the framework-neutral `door_cutting_order_workspace_store.js`.
+3. **Costing** reads through `door_cutting_order_cost_workspace_api.js` and keeps its document-scoped state in `door_cutting_order_cost_workspace_state.js` using the same store primitive.
+
+Plan and Cost state must not use `frm.doc` business fields as mutable persistence
+state. They may use the current form only for order identity, lifecycle integration,
+and compatibility rendering while A5 migrates the existing presenters. Every async
+load is bound to the document identity and a request token so a late response from a
+previous order cannot repaint the current order. The server remains authoritative for
+capabilities and all mutations.
+
 The active special-shape editor is separately layered under `door_drawing_v4/`
 (`domain`, `application`, `infrastructure`, `presentation`). The V4 document is the
 editable canonical drawing model and uses millimetres with shared node topology.
