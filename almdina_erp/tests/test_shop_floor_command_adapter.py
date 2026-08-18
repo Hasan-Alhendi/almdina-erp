@@ -107,14 +107,19 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
     def test_dispatch_compatibility_validator_preserves_behavior(self) -> None:
         adapter = AdapterHarness().load()
         calls: list[str] = []
+
+        # The adapter owns no persistence. Tests inject canonical Plan facts at
+        # its seam rather than recreating the retired DCO plan projections.
+        adapter._production_plan_facts = lambda _order: SimpleNamespace(
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
+            has_approved_plan=True,
+        )
         valid = SimpleNamespace(
             name="DCO-VALID",
             production_path=None,
             current_production_stage=None,
             status="Approved",
-            cutting_plan_json="{}",
-            plan_needs_recalculation=0,
-            approved_plan=None,
             drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: calls.append("validated"),
         )
@@ -126,9 +131,6 @@ class TestShopFloorCommandAdapter(unittest.TestCase):
             production_path=None,
             current_production_stage=None,
             status="On Hold",
-            cutting_plan_json="{}",
-            plan_needs_recalculation=0,
-            approved_plan=None,
             drawing_dxf_status=None,
             ensure_special_shapes_documented=lambda: None,
         )
