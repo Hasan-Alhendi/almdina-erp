@@ -17,6 +17,12 @@
         return state && state.status === "ready" ? state.data : null;
     }
 
+    function ensureLoad(frm) {
+        const owner = stateOwner();
+        if (!owner || typeof owner.load !== "function") return Promise.resolve(null);
+        return Promise.resolve(owner.load(frm)).catch(() => null);
+    }
+
     function planRow(frm, tab) {
         const payload = data(frm);
         const plans = payload && payload.plans;
@@ -102,6 +108,32 @@
         return true;
     }
 
+    function pendingMessage(frm) {
+        const state = snapshot(frm);
+        if (state && state.status === "error") {
+            return __("تعذر تحميل خطة القص. أعد المحاولة.");
+        }
+        return __("جاري تحميل خطة القص...");
+    }
+
+    function renderPending(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const wrapper = field && field.$wrapper;
+        if (!wrapper || !wrapper.length) return false;
+        wrapper.html(`
+            <div class="dco-plan-workspace-state" style="padding:18px;text-align:center;color:var(--text-muted,#687481);border:1px dashed var(--border-color,#ccd3da);border-radius:12px;background:var(--subtle-fg,#fafafa);">
+                ${frappe.utils.escape_html(pendingMessage(frm))}
+            </div>
+        `);
+        ensureLoad(frm);
+        return true;
+    }
+
+    function ready(frm) {
+        const state = snapshot(frm);
+        return Boolean(state && state.status === "ready" && state.data);
+    }
+
     function install() {
         const legacy = window.AlmdinaPlanTabsUX;
         if (!legacy || legacy.__a52WorkspaceOwned) return false;
@@ -115,21 +147,24 @@
             hasApprovedPlan,
             getPlanForTab,
             ensureApprovedPlanLoaded(frm) {
-                const owner = stateOwner();
-                const load = owner && typeof owner.load === "function"
-                    ? owner.load(frm)
-                    : Promise.resolve(null);
-                return Promise.resolve(load).then(() => getPlanForTab(frm, "Approved"));
+                return ensureLoad(frm).then(() => getPlanForTab(frm, "Approved"));
             },
             renderDualTabs(frm) {
+                if (!ready(frm)) return renderPending(frm);
                 project(frm);
                 return legacy.renderDualTabs(frm);
             },
             printActivePlan(frm) {
+                if (!ready(frm)) {
+                    ensureLoad(frm);
+                    frappe.msgprint(__("انتظر حتى يكتمل تحميل خطة القص ثم أعد الطباعة."));
+                    return false;
+                }
                 project(frm);
                 return legacy.printActivePlan(frm);
             },
             afterRender(frm) {
+                if (!ready(frm)) return renderPending(frm);
                 project(frm);
                 return legacy.afterRender(frm);
             },
@@ -141,7 +176,6 @@
     function refreshCurrent() {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        project(frm);
         const tabs = window.AlmdinaPlanTabsUX;
         if (tabs && typeof tabs.renderDualTabs === "function" && tabs.shouldShowPlanTabs(frm)) {
             tabs.renderDualTabs(frm);
@@ -156,6 +190,7 @@
         getPlanForTab,
         hasApprovedPlan,
         activeSettings,
+        ready,
     });
 
     install();
