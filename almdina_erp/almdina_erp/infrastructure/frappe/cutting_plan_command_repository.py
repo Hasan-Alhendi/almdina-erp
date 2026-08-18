@@ -23,6 +23,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context 
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     initial_plan_cost_values,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    seed_plan_settings,
+)
 
 
 class FrappeCuttingPlanCommandRepository:
@@ -44,19 +47,6 @@ class FrappeCuttingPlanCommandRepository:
             optimization_time_limit_sec=flt(plan.optimization_time_limit_sec),
             kerf_mm=flt(plan.kerf_mm),
             trim_margin_mm=flt(plan.trim_margin_mm),
-        )
-
-    @staticmethod
-    def _settings_from_order(order: Any) -> PlanSettings:
-        return PlanSettings(
-            optimization_mode=str(getattr(order, "packing_mode", None) or "Auto Pro"),
-            machine_type=str(getattr(order, "cutting_machine_type", None) or "Auto"),
-            optimization_time_limit_sec=flt(
-                getattr(order, "optimization_time_limit_sec", 0)
-            )
-            or 10,
-            kerf_mm=flt(getattr(order, "kerf_mm", 0)) or 3,
-            trim_margin_mm=flt(getattr(order, "trim_margin_mm", 0)) or 5,
         )
 
     @classmethod
@@ -230,7 +220,7 @@ class FrappeCuttingPlanCommandRepository:
             status=DRAFT,
             source_type=SYSTEM,
             based_on_plan=None,
-            settings=self._settings_from_order(order),
+            settings=seed_plan_settings(order.name),
         )
         return self.get_document(created.name)
 
@@ -238,8 +228,8 @@ class FrappeCuttingPlanCommandRepository:
         """Return the editable Uploaded DXF revision for the current order.
 
         Switching plan source never mutates an approved revision. A new Draft is
-        based on the latest approved plan for lineage, while its working settings
-        come from the current DCO compatibility projection used by the DXF parser.
+        based on the latest approved plan for lineage, while working optimizer
+        settings come from canonical Cutting Plan lineage or factory defaults.
         """
 
         current = self._latest_plan_row(
@@ -265,7 +255,7 @@ class FrappeCuttingPlanCommandRepository:
             status=DRAFT,
             source_type=UPLOADED_DXF,
             based_on_plan=based_on,
-            settings=self._settings_from_order(order),
+            settings=seed_plan_settings(order.name),
         )
         return self.get_document(created.name)
 
