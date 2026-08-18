@@ -8,6 +8,7 @@ from frappe import _
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
+    CUTTING_PLAN_DOCTYPE,
     capability_definition,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
@@ -16,7 +17,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
 
 
 _TRANSACTIONAL_SCOPE_DOCTYPES = frozenset(
-    {"Door Cutting Order", "Replacement Piece"}
+    {"Door Cutting Order", CUTTING_PLAN_DOCTYPE, "Replacement Piece"}
 )
 _DEFAULT_PERMISSION_MESSAGE = "لا تملك الصلاحية المطلوبة لتنفيذ هذا الإجراء."
 
@@ -134,7 +135,9 @@ def document_has_capability(
     """Require explicit capability first, then preserve native document scope.
 
     The matrix is the authority. Native Frappe permissions are used only as a
-    second, narrowing check for concrete transactional documents.
+    second, narrowing check for concrete transactional documents. Cutting Plan is
+    intentionally included: its native read hook narrows access through the
+    related Door Cutting Order scope before a plan document can authorize action.
     """
 
     definition = capability_definition(capability)
