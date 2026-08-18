@@ -11,8 +11,8 @@ from almdina_erp.almdina_erp.application.security.drawing_approval_policy import
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    require_document_capability,
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
     require_stage_operational_access,
@@ -29,7 +29,7 @@ def _state(order: Any) -> DrawingApprovalState:
 
 
 def _authorized_order(order_name: str) -> Any:
-    """Lock and authorize one order before any approval decision is made."""
+    """Lock and authorize one parent order before any Plan approval decision."""
 
     name = str(order_name or "").strip()
     frappe.db.sql(
@@ -38,11 +38,7 @@ def _authorized_order(order_name: str) -> Any:
     )
     order = shop_floor_gateway.get_order(name)
     order.check_permission("read")
-
-    # ``approve_dxf`` is the historical capability key. It authorizes approval
-    # of the selected production cutting plan (System or Uploaded DXF) and is
-    # intentionally independent from cost visibility/editing capabilities.
-    require_document_capability(
+    require_cutting_plan_capability(
         order,
         Capability.APPROVE_DXF,
         message=_("لا تملك صلاحية اعتماد خطة القص لهذا الطلب."),
