@@ -18,15 +18,6 @@
         "board_width_cm",
         "default_edge_type",
         "edge_color",
-        "cutting_cost_per_board_usd",
-        "board_rate_usd",
-        "kerf_mm",
-        "trim_margin_mm",
-    ];
-    // Cut geometry follows the order edit session only — never optimizer tuning.
-    const ORDER_CUT_GEOMETRY_FIELDS = [
-        "kerf_mm",
-        "trim_margin_mm",
     ];
 
     function can(frm, capability) {
@@ -467,16 +458,6 @@
     function applyEditableFields(frm) {
         const editable = orderCanEdit(frm);
         frm.toggle_enable(ORDER_INPUT_FIELDS, editable);
-        // Explicit read_only so kerf/trim never stay open after leaving optimizer
-        // field control; they unlock only inside an active edit session.
-        const desiredReadOnly = editable ? 0 : 1;
-        ORDER_CUT_GEOMETRY_FIELDS.forEach((fieldname) => {
-            const field = frm.fields_dict && frm.fields_dict[fieldname];
-            if (!field || !field.df) return;
-            if (Number(field.df.read_only || 0) !== desiredReadOnly) {
-                frm.set_df_property(fieldname, "read_only", desiredReadOnly);
-            }
-        });
         syncPrimaryAction(frm);
     }
 

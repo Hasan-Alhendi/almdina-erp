@@ -22,6 +22,13 @@ PLAN_SETTING_FIELDS = (
     "trim_margin_mm",
     "optimization_time_limit_sec",
 )
+_PLAN_META_FIELDS = {
+    "packing_mode": "optimization_mode",
+    "cutting_machine_type": "machine_type",
+    "kerf_mm": "kerf_mm",
+    "trim_margin_mm": "trim_margin_mm",
+    "optimization_time_limit_sec": "optimization_time_limit_sec",
+}
 _NUMERIC_FIELDS = frozenset(
     {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
 )
@@ -99,8 +106,13 @@ def _number(value: Any, field_label: str) -> float:
     return flt(normalized)
 
 
-def _allowed_select_values(doc: Any, fieldname: str) -> set[str]:
-    field = doc.meta.get_field(fieldname) if getattr(doc, "meta", None) else None
+def _canonical_field(meta: Any, workspace_fieldname: str) -> Any:
+    canonical = _PLAN_META_FIELDS[workspace_fieldname]
+    return meta.get_field(canonical) if meta else None
+
+
+def _allowed_select_values(meta: Any, workspace_fieldname: str) -> set[str]:
+    field = _canonical_field(meta, workspace_fieldname)
     return {
         line.strip()
         for line in str(getattr(field, "options", "") or "").splitlines()
@@ -108,13 +120,16 @@ def _allowed_select_values(doc: Any, fieldname: str) -> set[str]:
     }
 
 
-def _normalize_updates(doc: Any, values: dict[str, Any]) -> dict[str, Any]:
+def _normalize_updates(values: dict[str, Any]) -> dict[str, Any]:
+    """Validate workspace aliases against the canonical Cutting Plan schema."""
+
+    plan_meta = frappe.get_meta("Cutting Plan")
     updates: dict[str, Any] = {}
     for fieldname in PLAN_SETTING_FIELDS:
         if fieldname not in values or values[fieldname] is None:
             continue
 
-        field = doc.meta.get_field(fieldname) if getattr(doc, "meta", None) else None
+        field = _canonical_field(plan_meta, fieldname)
         label = str(getattr(field, "label", None) or fieldname)
         value = values[fieldname]
 
@@ -129,8 +144,8 @@ def _normalize_updates(doc: Any, values: dict[str, Any]) -> dict[str, Any]:
                 frappe.ValidationError,
             )
         if fieldname in _SELECT_FIELDS:
-            allowed = _allowed_select_values(doc, fieldname)
-            if allowed and normalized not in allowed:
+            allowed = _allowed_select_values(plan_meta, fieldname)
+            if not allowed or normalized not in allowed:
                 frappe.throw(
                     _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
                     frappe.ValidationError,
@@ -168,7 +183,6 @@ def save_plan_settings(
     _assert_edit_lifecycle(doc)
 
     updates = _normalize_updates(
-        doc,
         {
             "packing_mode": packing_mode,
             "cutting_machine_type": cutting_machine_type,
