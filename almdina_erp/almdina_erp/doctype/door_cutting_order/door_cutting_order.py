@@ -5,18 +5,10 @@ from typing import Any
 import frappe
 from frappe.model.document import Document
 
-from almdina_erp.almdina_erp.application.orders.process_order_save import (
-    process_order_save,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders import (
-    FrappeDoorCuttingOrderSaveGateway,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders.document_access import (
-    FrappeOrderDocumentAccess,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders.plan_adapter import (
-    FrappeOrderPlanAdapter,
-)
+from almdina_erp.almdina_erp.application.orders.process_order_save import process_order_save
+from almdina_erp.almdina_erp.infrastructure.frappe.orders import FrappeDoorCuttingOrderSaveGateway
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.document_access import FrappeOrderDocumentAccess
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.plan_adapter import FrappeOrderPlanAdapter
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.preview_plan_context import (
     apply_preview_plan_settings,
     clear_transient_plan_results,
@@ -43,18 +35,10 @@ class DoorCuttingOrder(Document):
     def _legacy_plan_adapter(self) -> FrappeOrderPlanAdapter:
         adapter = self.flags.get("_legacy_order_plan_adapter")
         if adapter is None:
-            # Preview/simulation is deliberately transient. Plan settings come
-            # from canonical Cutting Plan lineage (or factory defaults) and the
-            # output slots are attached in memory, so this compatibility adapter
-            # no longer requires any legacy Plan fields in DCO metadata.
             apply_preview_plan_settings(self, order_name=self.name)
             clear_transient_plan_results(self)
             gateway = self._gateway()
-            adapter = FrappeOrderPlanAdapter(
-                self,
-                gateway.access,
-                gateway.costing,
-            )
+            adapter = FrappeOrderPlanAdapter(self, gateway.access, gateway.costing)
             self.flags._legacy_order_plan_adapter = adapter
         return adapter
 
@@ -128,9 +112,7 @@ class DoorCuttingOrder(Document):
         settings: Any | None = None,
     ) -> bool:
         del settings
-        return self._legacy_plan_adapter().can_reuse_current_plan(
-            input_fingerprint
-        )
+        return self._legacy_plan_adapter().can_reuse_current_plan(input_fingerprint)
 
     def _set_cutting_plan_json(self, snapshot: dict[str, Any] | str) -> None:
         self._legacy_plan_adapter()
