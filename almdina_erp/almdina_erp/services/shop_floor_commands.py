@@ -25,20 +25,25 @@ def _execute(function: Callable[..., _Result], *args: Any, **kwargs: Any) -> _Re
     raise AssertionError("frappe.throw must interrupt execution")
 
 
-def assert_order_ready_for_dispatch(order: Any) -> None:
-    """Compatibility facade using canonical Cutting Plan runtime facts.
-
-    The runtime repository is intentionally imported lazily. This adapter remains
-    importable by lightweight command-contract tests and by tooling that stubs the
-    Frappe module, while the actual dispatch path still resolves Plan facts from
-    the canonical persistence boundary at execution time.
-    """
+def _production_plan_facts(order: Any) -> Any:
+    """Resolve canonical Plan facts lazily behind this compatibility adapter."""
 
     from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
         production_plan_facts,
     )
 
-    plan = production_plan_facts(order)
+    return production_plan_facts(order)
+
+
+def assert_order_ready_for_dispatch(order: Any) -> None:
+    """Compatibility facade using canonical Cutting Plan runtime facts.
+
+    The resolver remains a tiny injectable seam so the adapter can be tested
+    without importing Frappe persistence. Production always uses the canonical
+    Cutting Plan runtime repository through ``_production_plan_facts``.
+    """
+
+    plan = _production_plan_facts(order)
     state = commands.OrderState(
         name=str(order.name),
         status=str(getattr(order, "status", None) or ""),
