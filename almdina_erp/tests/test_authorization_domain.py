@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     ALL_CAPABILITIES,
     CAPABILITY_CATALOG,
     CUSTOM_PERMISSION_DEFINITIONS,
+    CUTTING_PLAN_DOCTYPE,
     PRODUCTION_OPERATOR_CAPABILITIES,
     Capability,
     capability_definition,
@@ -46,7 +47,7 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertFalse(create.custom)
         self.assertFalse(edit.custom)
 
-    def test_drawing_capabilities_are_custom_and_order_scoped(self) -> None:
+    def test_plan_and_dxf_capabilities_are_custom_and_plan_owned(self) -> None:
         for capability in (
             Capability.RECALCULATE_PLAN,
             Capability.EXPORT_DXF,
@@ -57,7 +58,11 @@ class TestAuthorizationDomain(unittest.TestCase):
             with self.subTest(capability=capability):
                 definition = capability_definition(capability)
                 self.assertTrue(definition.custom)
-                self.assertEqual(definition.applies_to, "Door Cutting Order")
+                self.assertEqual(definition.applies_to, CUTTING_PLAN_DOCTYPE)
+
+        drawing = capability_definition(Capability.EDIT_SPECIAL_DRAWING)
+        self.assertTrue(drawing.custom)
+        self.assertEqual(drawing.applies_to, "Door Cutting Order")
 
     def test_capability_flags_are_complete_and_fail_closed(self) -> None:
         flags = capability_flags({Capability.UPLOAD_DXF, Capability.APPROVE_DXF})
