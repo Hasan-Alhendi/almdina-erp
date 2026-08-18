@@ -76,8 +76,7 @@ def _nested_keys(value: object) -> set[str]:
 class TestPlanFingerprintDomain(unittest.TestCase):
     def test_canonical_json_and_hash_are_order_independent(self) -> None:
         first = {"b": 2, "a": {"z": 1, "x": "أ"}}
-        second = {"a": {"x": "أ", "z": 1, "b": None}, "b": 2}
-        second["a"].pop("b")
+        second = {"a": {"x": "أ", "z": 1}, "b": 2}
         expected_json = '{"a":{"x":"\\u0623","z":1},"b":2}'
         expected_hash = "ce22c50e62ba1bbb70a3a09dfe38aec1c47b7d6c33c251076334d690f5e9c61d"
 
