@@ -130,6 +130,11 @@ function planPayload(orderName, approvedPlan) {
     const context = vm.createContext({
         window: fakeWindow,
         frappe: fakeFrappe,
+        document: {
+            // PlanControls only needs to know that its stylesheet already exists;
+            // the simulation exercises state/capability behavior, not DOM styling.
+            getElementById() { return {}; },
+        },
         console,
         Promise,
         Object,
