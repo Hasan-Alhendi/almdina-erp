@@ -114,9 +114,9 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     approval_command = command_service.split("def approve_order_plan", 1)[1].split(
         "\n\ndef save_system_plan_settings", 1
     )[0]
-    order_projection = command_service.split(
-        "def _set_approved_order_projection", 1
-    )[1].split("\n\ndef plan_payload", 1)[0]
+    approved_relation = command_service.split(
+        "def _set_approved_plan_relation", 1
+    )[1].split("\n\ndef _legacy_plan_source", 1)[0]
 
     assert "Capability.APPROVE_DXF" in approval_service
     assert "require_cutting_plan_capability" in approval_service
@@ -125,16 +125,19 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
     assert "session_user" not in policy
     assert "approval_warning" in policy
 
-    # A2.2 preserves the shop-floor status by not mutating Door Cutting Order
-    # lifecycle state at all. Only the Cutting Plan transitions to Approved.
+    # A6.2 preserves shop-floor lifecycle state: approval transitions only the
+    # canonical Cutting Plan and stores the real approved_plan relation on DCO.
     assert "approve_order_plan" in approval_service
     assert "lock_cutting_plan" not in approval_service
     assert "order.save(" not in approval_service
     assert "frappe.db.set_value" not in approval_service
     assert "plan.status = APPROVED" in approval_command
     assert "order.status" not in approval_command
-    assert '"status"' not in order_projection
-    assert '"approved_plan": plan.name' in order_projection
+    assert '"approved_plan"' in approved_relation
+    assert "plan.name" in approved_relation
+    assert '"status"' not in approved_relation
+    assert "current_production_stage" not in approved_relation
+    assert "production_path" not in approved_relation
     assert "was_previously_approved" in approval_service
     assert "require_any_role" not in approval_service
 
