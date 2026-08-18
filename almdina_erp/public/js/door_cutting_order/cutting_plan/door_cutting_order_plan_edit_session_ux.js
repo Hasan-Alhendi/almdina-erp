@@ -17,8 +17,6 @@
         "At CNC",
         "At Sanding",
     ]);
-    const SAVE_METHOD =
-        "almdina_erp.almdina_erp.services.plan_settings_edit_service.save_plan_settings";
     const BLOCKED_PLAN_ACTIONS = [
         ".dco-recalculate-plan",
         ".dco-approve-cutting-plan",
@@ -26,21 +24,27 @@
         ".dco-export-dxf",
         ".dco-upload-dxf-plan",
     ].join(",");
-    const EDITING_KEY = "__almdina_plan_settings_editing";
-    const IDENTITY_KEY = "__almdina_plan_settings_edit_identity";
     const ORIGINAL_DISABLED_ATTR = "data-almdina-plan-edit-original-disabled";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
     }
 
-    function formIdentity(frm) {
-        const context = documentContext();
-        if (context && typeof context.formIdentity === "function") {
-            return context.formIdentity(frm);
-        }
-        if (!frm || !frm.doc) return "";
-        return `${frm.doctype || frm.doc.doctype || ""}::${frm.doc.name || "__new__"}`;
+    function stateOwner() {
+        return window.AlmdinaPlanWorkspaceState || null;
+    }
+
+    function storeFor(frm) {
+        const owner = stateOwner();
+        return owner && typeof owner.storeFor === "function" ? owner.storeFor(frm) : null;
+    }
+
+    function editor() {
+        return window.AlmdinaWorkspaceFieldEditor || null;
+    }
+
+    function presenterAdapter() {
+        return window.AlmdinaPlanWorkspacePresenterAdapter || null;
     }
 
     function can(frm, capability) {
@@ -87,132 +91,63 @@
         if (frm.is_new && frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if ((frm.doc.revision_state || "Current") === "Superseded") return false;
-
-        // An approved snapshot remains the production authority while Drawing
-        // prepares its replacement. It locks later stages, but does not remove
-        // the focused optimizer-edit capability while the order is still at Drawing.
-        if (String(frm.doc.approved_plan || "").trim() && !isDrawingStage(frm)) {
-            return false;
-        }
-
-        // The focused plan-settings capability owns this edit surface. A routed
-        // order is still active when its authoritative order status is one of the
-        // shop-floor `At ...` states, even if current_production_stage is absent
-        // from the form snapshot. This mirrors the order lifecycle domain.
-        if (hasProductionRoute(frm)) {
-            return hasActiveRoutedLifecycle(frm);
-        }
+        if (String(frm.doc.approved_plan || "").trim() && !isDrawingStage(frm)) return false;
+        if (hasProductionRoute(frm)) return hasActiveRoutedLifecycle(frm);
         return DRAFT_LIKE.has(frm.doc.status || "Draft");
     }
 
     function canEditPlanSettings(frm) {
-        return Boolean(
-            can(frm, "edit_optimizer_settings")
-            && lifecycleAllowsEdit(frm)
-        );
+        return Boolean(can(frm, "edit_optimizer_settings") && lifecycleAllowsEdit(frm));
+    }
+
+    function workspaceSnapshot(frm) {
+        const store = storeFor(frm);
+        return store ? store.snapshot() : null;
     }
 
     function isEditing(frm) {
-        if (!frm || !frm.doc || frm[EDITING_KEY] !== true) return false;
-        return frm[IDENTITY_KEY] === formIdentity(frm);
+        const state = workspaceSnapshot(frm);
+        return Boolean(state && state.editing);
     }
 
     function planSettingsMayWrite(frm) {
-        return Boolean(isEditing(frm) && canEditPlanSettings(frm));
+        // Native Frappe controls remain read-only. A5.2 mounts detached controls
+        // backed by the Plan workspace draft, so DCO never owns mutable plan state.
+        return false;
     }
 
-    function setEditing(frm, enabled) {
-        if (!frm) return;
-        frm[EDITING_KEY] = Boolean(enabled);
-        frm[IDENTITY_KEY] = enabled ? formIdentity(frm) : null;
+    function activeSettings(frm) {
+        const adapter = presenterAdapter();
+        if (adapter && typeof adapter.activeSettings === "function") {
+            return adapter.activeSettings(frm);
+        }
+        const owner = stateOwner();
+        const active = owner && typeof owner.activePlan === "function"
+            ? owner.activePlan(frm, "System")
+            : null;
+        return active && active.settings ? { ...active.settings } : null;
+    }
+
+    function signalEditChanged(frm) {
+        if (frm && typeof frm.trigger === "function") {
+            frm.trigger("almdina_edit_session_changed");
+        }
     }
 
     function refreshFieldAccess(frm) {
         const adapter = window.AlmdinaPlanFieldAccessAdapter;
-        if (adapter && typeof adapter.apply === "function") {
-            adapter.apply(frm);
-        }
-    }
-
-    function settingsArgs(frm) {
-        return {
-            order_name: frm.doc.name,
-            packing_mode: frm.doc.packing_mode,
-            cutting_machine_type: frm.doc.cutting_machine_type,
-            kerf_mm: frm.doc.kerf_mm,
-            trim_margin_mm: frm.doc.trim_margin_mm,
-            optimization_time_limit_sec: frm.doc.optimization_time_limit_sec,
-        };
-    }
-
-    function installStyles() {
-        if (document.getElementById("dco-plan-edit-session-css")) return;
-        $("head").append(`
-            <style id="dco-plan-edit-session-css">
-                .dco-plan-settings-edit-toolbar {
-                    display:flex;
-                    align-items:center;
-                    justify-content:space-between;
-                    gap:10px;
-                    flex-wrap:wrap;
-                    padding:0 0 11px;
-                    margin:0 0 11px;
-                    border-bottom:1px solid var(--border-color,#e5e7eb);
-                }
-                .dco-plan-settings-edit-toolbar .dco-plan-settings-edit-label {
-                    display:flex;
-                    align-items:center;
-                    gap:8px;
-                    min-width:0;
-                    font-size:12px;
-                    font-weight:800;
-                    color:var(--text-color,#1f2937);
-                }
-                .dco-plan-settings-edit-toolbar .dco-plan-settings-edit-state {
-                    display:inline-flex;
-                    align-items:center;
-                    border-radius:999px;
-                    padding:3px 8px;
-                    background:rgba(36,144,239,.10);
-                    color:var(--primary,#2490ef);
-                    font-size:10px;
-                    font-weight:800;
-                }
-                .dco-plan-settings-edit-toolbar .dco-plan-settings-edit-actions {
-                    display:flex;
-                    align-items:center;
-                    gap:7px;
-                    flex-wrap:wrap;
-                }
-                .dco-plan-settings-edit-toolbar .btn {
-                    min-height:34px;
-                    border-radius:9px;
-                    font-weight:800;
-                    padding-inline:16px;
-                }
-                @media (max-width:560px) {
-                    .dco-plan-settings-edit-toolbar,
-                    .dco-plan-settings-edit-toolbar .dco-plan-settings-edit-actions {
-                        width:100%;
-                    }
-                    .dco-plan-settings-edit-toolbar .dco-plan-settings-edit-actions .btn {
-                        flex:1 1 0;
-                    }
-                }
-            </style>
-        `);
+        if (adapter && typeof adapter.apply === "function") adapter.apply(frm);
     }
 
     function actionSurface(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.plan_control_actions;
         const wrapper = field && field.$wrapper;
-        if (!wrapper || !wrapper.length) return null;
-        const shell = wrapper.find(".dco-plan-actions-shell").first();
-        if (!shell.length) return null;
-        return { field, wrapper, shell };
+        return wrapper && wrapper.length ? wrapper : null;
     }
 
-    function setPlanActionsSuspended(wrapper, suspended) {
+    function setPlanActionsSuspended(frm, suspended) {
+        const wrapper = actionSurface(frm);
+        if (!wrapper) return;
         wrapper.find(BLOCKED_PLAN_ACTIONS).each((_, element) => {
             const button = $(element);
             if (suspended) {
@@ -222,7 +157,6 @@
                 button.prop("disabled", true).attr("aria-disabled", "true");
                 return;
             }
-
             const original = button.attr(ORIGINAL_DISABLED_ATTR);
             if (original === undefined) return;
             button.prop("disabled", original === "1");
@@ -231,205 +165,159 @@
         });
     }
 
-    function installActionGuard(frm, wrapper) {
-        const node = wrapper && wrapper[0];
-        if (!node || node.__almdinaPlanEditActionGuardInstalled) return;
-
-        node.addEventListener("click", (event) => {
-            if (!isEditing(frm)) return;
-            const target = event.target && event.target.closest
-                ? event.target.closest(BLOCKED_PLAN_ACTIONS)
-                : null;
-            if (!target || !node.contains(target)) return;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            frappe.msgprint(__("احفظ أو ألغِ تعديل إعدادات خطة القص أولًا."));
-        }, true);
-        node.__almdinaPlanEditActionGuardInstalled = true;
-    }
-
-    function render(frm) {
-        if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
-        installStyles();
-
-        if (isEditing(frm) && !canEditPlanSettings(frm)) {
-            setEditing(frm, false);
-            refreshFieldAccess(frm);
-        }
-
-        const surface = actionSurface(frm);
-        if (!surface) return false;
-        const { wrapper, shell } = surface;
-        installActionGuard(frm, wrapper);
-
-        const editable = canEditPlanSettings(frm);
-        const editing = planSettingsMayWrite(frm);
-        setPlanActionsSuspended(wrapper, editing);
-
-        let toolbar = shell.children(".dco-plan-settings-edit-toolbar").first();
-        if (!editable) {
-            if (toolbar.length) toolbar.remove();
-            return true;
-        }
-
-        const state = editing ? "editing" : "readonly";
-        if (toolbar.length && toolbar.attr("data-state") === state) return true;
-        if (!toolbar.length) {
-            toolbar = $('<div class="dco-plan-settings-edit-toolbar"></div>');
-            shell.prepend(toolbar);
-        }
-        toolbar.attr("data-state", state);
-
-        if (!editing) {
-            toolbar.html(`
-                <div class="dco-plan-settings-edit-label">
-                    <span>${__("إعدادات خطة القص")}</span>
-                    <span class="dco-plan-settings-edit-state">${__("للقراءة فقط")}</span>
-                </div>
-                <div class="dco-plan-settings-edit-actions">
-                    <button type="button" class="btn btn-default dco-plan-settings-edit">${__("تعديل")}</button>
-                </div>
-            `);
-            toolbar.find(".dco-plan-settings-edit").on("click", () => startEditing(frm));
-            return true;
-        }
-
-        toolbar.html(`
-            <div class="dco-plan-settings-edit-label">
-                <span>${__("إعدادات خطة القص")}</span>
-                <span class="dco-plan-settings-edit-state">${__("وضع التعديل")}</span>
-            </div>
-            <div class="dco-plan-settings-edit-actions">
-                <button type="button" class="btn btn-default dco-plan-settings-cancel">${__("إلغاء")}</button>
-                <button type="button" class="btn btn-primary dco-plan-settings-save">${__("حفظ")}</button>
-            </div>
-        `);
-        toolbar.find(".dco-plan-settings-cancel").on("click", () => cancelEditing(frm));
-        toolbar.find(".dco-plan-settings-save").on("click", () => saveEditing(frm));
+    function mountDraftControls(frm) {
+        const store = storeFor(frm);
+        const fieldEditor = editor();
+        const state = store && store.snapshot();
+        if (!store || !fieldEditor || !state || !state.editing) return false;
+        fieldEditor.mount(frm, PLAN_SETTING_FIELDS, state.draft || {}, (patch) => {
+            store.patchDraft(patch);
+        });
         return true;
     }
 
-    function schedule(frm) {
-        if (!frm || frm.doctype !== "Door Cutting Order") return;
-        const context = documentContext();
-        if (context && typeof context.scheduleFrame === "function") {
-            context.scheduleFrame(frm, "plan-settings-edit-session", () => render(frm));
-            return;
-        }
-        window.requestAnimationFrame(() => {
-            if (window.cur_frm === frm) render(frm);
-        });
-    }
-
-    function observeActions(frm) {
-        const field = frm && frm.fields_dict && frm.fields_dict.plan_control_actions;
-        const node = field && field.$wrapper && field.$wrapper[0];
-        if (!node || frm.__almdinaPlanEditSessionObserver) return;
-
-        const observer = new MutationObserver(() => schedule(frm));
-        observer.observe(node, { childList: true, subtree: true });
-        frm.__almdinaPlanEditSessionObserver = observer;
-
-        const context = documentContext();
-        if (context && typeof context.registerObserver === "function") {
-            context.registerObserver(frm, "plan-settings-edit-session-observer", observer);
+    function unmountDraftControls(frm) {
+        const fieldEditor = editor();
+        if (fieldEditor && typeof fieldEditor.unmount === "function") {
+            fieldEditor.unmount(frm, PLAN_SETTING_FIELDS);
         }
     }
 
-    function refresh(frm) {
-        const context = documentContext();
-        const run = () => {
-            if (!frm || window.cur_frm !== frm) return;
-            render(frm);
-            observeActions(frm);
-        };
-        if (context && typeof context.ensureStageContext === "function") {
-            context.ensureStageContext(frm).then(run);
-            return;
-        }
-        run();
+    function projectCurrent(frm) {
+        const adapter = presenterAdapter();
+        if (adapter && typeof adapter.project === "function") adapter.project(frm);
     }
 
-    function startEditing(frm) {
+    async function ensureLoaded(frm) {
+        const owner = stateOwner();
+        const state = workspaceSnapshot(frm);
+        if (state && state.status === "ready") return state;
+        if (!owner || typeof owner.load !== "function") return state;
+        return owner.load(frm);
+    }
+
+    async function startEditing(frm) {
         if (!canEditPlanSettings(frm)) {
             frappe.msgprint(__("لا تملك صلاحية تعديل إعدادات خطة القص أو أن حالة الطلب الحالية لا تسمح بذلك."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
-            frappe.msgprint(__("احفظ أو ألغِ التعديلات الحالية على الطلب قبل فتح تعديل إعدادات خطة القص."));
+            frappe.msgprint(__("احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل إعدادات خطة القص."));
             return false;
         }
 
-        setEditing(frm, true);
+        await ensureLoaded(frm);
+        const store = storeFor(frm);
+        const seed = activeSettings(frm);
+        if (!store || !seed) {
+            frappe.msgprint(__("لا توجد خطة قص قابلة لتعديل الإعدادات حاليًا."));
+            return false;
+        }
+        store.beginEdit(seed);
+        mountDraftControls(frm);
+        setPlanActionsSuspended(frm, true);
         refreshFieldAccess(frm);
-        render(frm);
-        const first = frm.fields_dict && frm.fields_dict.kerf_mm;
-        if (first && first.$input && first.$input.length) first.$input.trigger("focus");
+        signalEditChanged(frm);
+        const fieldEditor = editor();
+        if (fieldEditor && typeof fieldEditor.focus === "function") {
+            fieldEditor.focus(frm, "kerf_mm");
+        }
         return true;
     }
 
     async function cancelEditing(frm) {
         if (!isEditing(frm)) return false;
-        setEditing(frm, false);
+        const store = storeFor(frm);
+        if (store) store.cancelEdit();
+        unmountDraftControls(frm);
+        setPlanActionsSuspended(frm, false);
+        projectCurrent(frm);
         refreshFieldAccess(frm);
-        await frm.reload_doc();
+        signalEditChanged(frm);
         return true;
     }
 
     async function saveEditing(frm) {
         if (!isEditing(frm)) return false;
         if (!canEditPlanSettings(frm)) {
-            setEditing(frm, false);
-            refreshFieldAccess(frm);
+            await cancelEditing(frm);
             frappe.msgprint(__("لم تعد حالة الطلب الحالية تسمح لك بتعديل إعدادات خطة القص."));
             return false;
         }
 
-        const surface = actionSurface(frm);
-        const saveButton = surface && surface.wrapper.find(".dco-plan-settings-save").first();
-        if (saveButton && saveButton.length) saveButton.prop("disabled", true);
+        const store = storeFor(frm);
+        const state = store && store.snapshot();
+        const api = window.AlmdinaPlanWorkspaceAPI;
+        if (!store || !state || !api || typeof api.saveSettings !== "function") return false;
 
-        try {
-            await frappe.call({
-                method: SAVE_METHOD,
-                args: settingsArgs(frm),
-                freeze: true,
-                freeze_message: __("جاري حفظ إعدادات خطة القص..."),
-            });
-            setEditing(frm, false);
-            await frm.reload_doc();
-            frappe.show_alert({
-                message: __("تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة."),
-                indicator: "green",
-            }, 5);
-            return true;
-        } catch (error) {
-            refreshFieldAccess(frm);
-            render(frm);
-            throw error;
-        } finally {
-            if (saveButton && saveButton.length) saveButton.prop("disabled", false);
+        if (state.dirty) {
+            await api.saveSettings(frm.doc.name, state.draft || {});
         }
+
+        unmountDraftControls(frm);
+        setPlanActionsSuspended(frm, false);
+        const owner = stateOwner();
+        if (owner && typeof owner.load === "function") {
+            await owner.load(frm, { force: true });
+        } else {
+            store.cancelEdit();
+        }
+        projectCurrent(frm);
+        refreshFieldAccess(frm);
+        signalEditChanged(frm);
+        frappe.show_alert({
+            message: __("تم حفظ إعدادات خطة القص. أعد الحساب لتحديث النتيجة."),
+            indicator: "green",
+        }, 5);
+        return true;
+    }
+
+    function sync(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        if (isEditing(frm) && !canEditPlanSettings(frm)) {
+            const store = storeFor(frm);
+            if (store) store.cancelEdit();
+            unmountDraftControls(frm);
+            setPlanActionsSuspended(frm, false);
+            signalEditChanged(frm);
+        } else if (isEditing(frm)) {
+            mountDraftControls(frm);
+            setPlanActionsSuspended(frm, true);
+        } else {
+            unmountDraftControls(frm);
+            setPlanActionsSuspended(frm, false);
+            projectCurrent(frm);
+        }
+        refreshFieldAccess(frm);
+    }
+
+    function schedule(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return;
+        const context = documentContext();
+        if (context && typeof context.scheduleFrame === "function") {
+            context.scheduleFrame(frm, "plan-settings-edit-session", () => sync(frm));
+            return;
+        }
+        window.requestAnimationFrame(() => {
+            if (window.cur_frm === frm) sync(frm);
+        });
     }
 
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { refresh(frm); },
-        refresh(frm) { refresh(frm); },
+        onload_post_render(frm) { schedule(frm); },
+        refresh(frm) { schedule(frm); },
     });
 
-    window.addEventListener("almdina:permissions-updated", () => {
-        const frm = window.cur_frm;
-        if (frm && frm.doctype === "Door Cutting Order") refresh(frm);
-    });
-
-    window.addEventListener("almdina:stage-context-ready", (event) => {
-        const frm = event.detail && event.detail.frm;
-        if (frm && frm === window.cur_frm) refresh(frm);
-    });
-
-    window.addEventListener("almdina:surfaces-settled", (event) => {
-        const frm = event.detail && event.detail.frm;
-        if (frm && frm === window.cur_frm) schedule(frm);
+    [
+        "almdina:permissions-updated",
+        "almdina:stage-context-ready",
+        "almdina:surfaces-settled",
+        "almdina:plan-workspace-updated",
+    ].forEach((eventName) => {
+        window.addEventListener(eventName, () => {
+            const frm = window.cur_frm;
+            if (frm && frm.doctype === "Door Cutting Order") schedule(frm);
+        });
     });
 
     window.AlmdinaPlanEditSessionUX = Object.freeze({
@@ -440,7 +328,6 @@
         startEditing,
         cancelEditing,
         saveEditing,
-        render,
         schedule,
     });
 })();
