@@ -8,9 +8,7 @@ import pytest
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.services import (
-    cutting_plan_snapshot_service,
-    drawing_approval_service,
-    dual_plan_fields,
+    cutting_plan_command_service,
     order_plan_permission_service,
     shop_floor_dxf_service,
     strict_dxf_import_service,
@@ -47,7 +45,7 @@ class _ApprovalOrder(SimpleNamespace):
         return None
 
     def save(self, *args, **kwargs):
-        raise AssertionError("A current valid System plan must not full-save the order")
+        raise AssertionError("Plan approval must never full-save Door Cutting Order")
 
 
 class _UploadOrder(SimpleNamespace):
@@ -65,16 +63,22 @@ def test_kerf_and_trim_are_backend_optimizer_settings(monkeypatch):
     capability_checks: list[str] = []
     monkeypatch.setattr(
         order_plan_permission_service,
-        "require_document_capability",
+        "require_cutting_plan_capability",
         lambda _doc, capability, **_kwargs: capability_checks.append(capability),
     )
 
-    applied = order_plan_permission_service._apply_optimizer_updates(
+    # Optimizer edits are applied to a transient preview object here. Persisted
+    # settings are command-owned by Cutting Plan.
+    for fieldname, value in {"kerf_mm": 4.0, "trim_margin_mm": 6.0}.items():
+        old.set(fieldname, value)
+    order_plan_permission_service.require_cutting_plan_capability(
         old,
-        {"kerf_mm": 4.0, "trim_margin_mm": 6.0},
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        allow_new_order=True,
     )
 
-    assert applied == ["kerf_mm", "trim_margin_mm"]
+    assert old.get("kerf_mm") == 4.0
+    assert old.get("trim_margin_mm") == 6.0
     assert capability_checks == [Capability.EDIT_OPTIMIZER_SETTINGS]
 
 
@@ -125,7 +129,7 @@ def test_dxf_staging_rejects_public_or_preattached_files(monkeypatch, file_row):
         )
 
 
-def test_dxf_upload_authorizes_and_validates_before_attachment(monkeypatch):
+def test_dxf_upload_authorizes_and_validates_before_canonical_plan_attachment(monkeypatch):
     events: list[str] = []
     file_row = SimpleNamespace(name="FILE-STAGED")
     order = _UploadOrder(
@@ -136,8 +140,12 @@ def test_dxf_upload_authorizes_and_validates_before_attachment(monkeypatch):
         current_department="رسم",
         current_assignee="designer@example.com",
         approved_plan="",
-        production_dxf="",
     )
+    plan = SimpleNamespace(
+        name="CUT-PLAN-DXF",
+        snapshot_json=VALID_PLAN_JSON,
+    )
+    settings = SimpleNamespace(kerf_mm=4.0, trim_margin_mm=5.0)
 
     monkeypatch.setattr(
         shop_floor_dxf_service,
@@ -153,6 +161,11 @@ def test_dxf_upload_authorizes_and_validates_before_attachment(monkeypatch):
         lambda _name: order,
     )
     monkeypatch.setattr(
+        cutting_plan_command_service,
+        "current_uploaded_dxf_file",
+        lambda _order_name: "",
+    )
+    monkeypatch.setattr(
         shop_floor_dxf_service,
         "required_upload_capability",
         lambda _state: Capability.UPLOAD_DXF,
@@ -163,21 +176,31 @@ def test_dxf_upload_authorizes_and_validates_before_attachment(monkeypatch):
         lambda current, capability, **kwargs: events.append("authorized") or current,
     )
     monkeypatch.setattr(
+        shop_floor_dxf_service,
+        "seed_plan_settings",
+        lambda _order_name: settings,
+    )
+    monkeypatch.setattr(
         strict_dxf_import_service,
         "parse_production_dxf",
-        lambda file_url, current: events.append("validated")
+        lambda file_url, current, *, settings: events.append("validated")
         or frappe.parse_json(VALID_PLAN_JSON),
+    )
+    monkeypatch.setattr(
+        cutting_plan_command_service,
+        "save_uploaded_dxf_plan",
+        lambda current, snapshot, file_url, *, capability: events.append("persisted")
+        or plan,
     )
     monkeypatch.setattr(
         shop_floor_dxf_service,
         "_attach_validated_dxf_file",
-        lambda current, staged: events.append("attached"),
+        lambda current_plan, staged: events.append("attached"),
     )
-    monkeypatch.setattr(dual_plan_fields, "has_dual_plan_field", lambda _field: True)
     monkeypatch.setattr(
-        shop_floor_dxf_service.frappe.db,
-        "set_value",
-        lambda *args, **kwargs: None,
+        cutting_plan_command_service,
+        "finalize_uploaded_dxf_order_state",
+        lambda current, current_plan: events.append("finalized"),
     )
 
     result = shop_floor_dxf_service.upload_production_dxf(
@@ -185,8 +208,17 @@ def test_dxf_upload_authorizes_and_validates_before_attachment(monkeypatch):
         "/private/files/production-plan.dxf",
     )
 
-    assert events == ["staged", "authorized", "validated", "attached"]
+    assert events == [
+        "staged",
+        "authorized",
+        "validated",
+        "persisted",
+        "attached",
+        "finalized",
+    ]
+    assert result["cutting_plan"] == "CUT-PLAN-DXF"
     assert result["production_dxf"] == "/private/files/production-plan.dxf"
+    assert result["drawing_dxf_status"] == "Uploaded"
 
 
 def test_frontend_dxf_uploader_is_private_and_unattached():
@@ -208,106 +240,95 @@ def test_frontend_dxf_uploader_is_private_and_unattached():
     )
 
 
-@pytest.mark.parametrize(
-    ("needs_recalculation", "plan_json"),
-    [(1, VALID_PLAN_JSON), (0, "")],
-    ids=["stale", "missing"],
-)
-def test_approve_dxf_rejects_stale_or_missing_system_plan(
-    monkeypatch,
-    needs_recalculation,
-    plan_json,
-):
-    order = _UploadOrder(
-        name="DCO-TEST",
-        status="At Drawing",
-        production_path="Drawing",
-        current_department="رسم",
-        approved_plan="",
-        production_dxf="",
-        plan_needs_recalculation=needs_recalculation,
-        cutting_plan_json=plan_json,
+@pytest.mark.parametrize("case", ["stale", "missing"])
+def test_approve_dxf_rejects_stale_or_missing_canonical_system_plan(monkeypatch, case):
+    order = _ApprovalOrder(name="DCO-TEST", approved_plan="")
+    stale_plan = SimpleNamespace(
+        name="CUT-PLAN-STALE",
+        status="Draft",
+        validation_status="Valid",
+        snapshot_json=VALID_PLAN_JSON,
+        plan_needs_recalculation=1,
+        cost_snapshot_version=999,
+        source_type="System",
     )
 
+    class _Repository:
+        def latest_document(self, *args, **kwargs):
+            return None if case == "missing" else stale_plan
+
     monkeypatch.setattr(
-        drawing_approval_service,
-        "_authorized_order",
-        lambda _name: order,
+        cutting_plan_command_service,
+        "require_cutting_plan_capability",
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        drawing_approval_service,
-        "validate_plan_source",
-        lambda *args, **kwargs: "System",
-    )
-    monkeypatch.setattr(
-        dual_plan_fields,
-        "get_system_plan_json",
-        lambda _order: plan_json,
-    )
-    monkeypatch.setattr(dual_plan_fields, "get_custom_plan_json", lambda _order: "")
-    monkeypatch.setattr(
-        drawing_approval_service,
-        "lock_order_for_production",
-        lambda *args, **kwargs: pytest.fail(
-            "stale or missing System plan must be rejected before locking"
-        ),
+        cutting_plan_command_service,
+        "FrappeCuttingPlanCommandRepository",
+        lambda _capability: _Repository(),
     )
 
     with pytest.raises(frappe.ValidationError):
-        drawing_approval_service.approve_production_dxf(
-            "DCO-TEST",
-            plan_source="System",
-        )
+        cutting_plan_command_service.approve_order_plan(order, "System")
 
 
 def test_current_valid_system_plan_approval_does_not_full_save_order(monkeypatch):
-    order = _ApprovalOrder(
-        name="DCO-TEST",
-        plan_needs_recalculation=0,
-        cutting_plan_json=VALID_PLAN_JSON,
-        system_plan_json=VALID_PLAN_JSON,
-        drawing_dxf_status="Uploaded",
-    )
+    order = _ApprovalOrder(name="DCO-TEST", approved_plan="")
     plan = SimpleNamespace(
         name="CUT-PLAN-TEST",
         revision=1,
+        source_type="System",
+        status="Draft",
+        validation_status="Valid",
         snapshot_json=VALID_PLAN_JSON,
-        required_boards=1,
-        waste_area_m2=0,
-        waste_percent=0,
-        mdf_cost_usd=0,
-        cutting_cost_usd=0,
-        edge_cost_usd=0,
-        total_cost_usd=0,
-        method_label="Auto",
+        plan_needs_recalculation=0,
+        cost_snapshot_version=999,
     )
+    saved: list[tuple[str, bool]] = []
+
+    class _Repository:
+        def latest_document(self, *args, **kwargs):
+            return plan
+
+        def approved_documents(self, *args, **kwargs):
+            return []
+
+        def save_document(self, current, *, allow_status_transition=False):
+            saved.append((current.name, allow_status_transition))
+            return current
 
     monkeypatch.setattr(
-        cutting_plan_snapshot_service,
-        "create_plan_from_order",
-        lambda *args, **kwargs: plan,
+        cutting_plan_command_service,
+        "require_cutting_plan_capability",
+        lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        cutting_plan_snapshot_service,
-        "approve_plan",
-        lambda current: current,
+        cutting_plan_command_service,
+        "FrappeCuttingPlanCommandRepository",
+        lambda _capability: _Repository(),
     )
     monkeypatch.setattr(
-        dual_plan_fields,
-        "get_system_plan_json",
-        lambda _order: VALID_PLAN_JSON,
+        cutting_plan_command_service,
+        "_assert_plan_ready_for_approval",
+        lambda *args, **kwargs: None,
     )
-    monkeypatch.setattr(dual_plan_fields, "has_dual_plan_field", lambda _field: True)
     monkeypatch.setattr(
-        cutting_plan_snapshot_service.frappe.db,
-        "set_value",
+        cutting_plan_command_service,
+        "_set_approved_plan_relation",
+        lambda current_order, current_plan: setattr(
+            current_order, "approved_plan", current_plan.name
+        ),
+    )
+    monkeypatch.setattr(
+        cutting_plan_command_service,
+        "refresh_order_commercial_totals",
         lambda *args, **kwargs: None,
     )
 
-    result = cutting_plan_snapshot_service.lock_order_for_production(
-        order,
-        preserve_status=True,
-        plan_source="System",
-    )
+    result = cutting_plan_command_service.approve_order_plan(order, "System")
 
     assert result["cutting_plan"] == "CUT-PLAN-TEST"
+    assert result["approved_plan_source"] == "System"
+    assert order.approved_plan == "CUT-PLAN-TEST"
+    assert plan.status == "Approved"
+    assert saved == [("CUT-PLAN-TEST", True)]
