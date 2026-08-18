@@ -5,20 +5,11 @@ import frappe
 
 DOCTYPE = "Door Cutting Order"
 
-# These fields form the non-financial Cutting Plan surface. They must always
-# remain on Frappe permission level 0. Cost visibility is projected separately
-# to permission level 1 and must never control whether the plan UI exists.
+# A6.4 retires optimizer/settings/plan snapshot fields from DCO. This boundary
+# now protects only the surviving non-financial presentation surface. Canonical
+# plan settings, geometry, DXF, freshness, and snapshots live on Cutting Plan.
 CUTTING_PLAN_SURFACE_FIELDS = (
     "results_tab",
-    "cut_geometry_section",
-    "kerf_mm",
-    "cut_geometry_column",
-    "trim_margin_mm",
-    "optimizer_section",
-    "packing_mode",
-    "cutting_machine_type",
-    "optimizer_column",
-    "optimization_time_limit_sec",
     "plan_actions_section",
     "plan_control_actions",
     "plan_result_section",
@@ -35,10 +26,6 @@ CUTTING_PLAN_SURFACE_FIELDS = (
     "packing_method",
     "packing_score",
     "engine_version",
-    "cutting_plan_json",
-    "system_plan_json",
-    "custom_plan_json",
-    "approved_plan_source",
 )
 
 # These structural controls are always present for a user who can open the
@@ -46,8 +33,6 @@ CUTTING_PLAN_SURFACE_FIELDS = (
 # them; site-local metadata must not hide the containers themselves.
 VISIBLE_PLAN_SURFACE_FIELDS = (
     "results_tab",
-    "cut_geometry_section",
-    "optimizer_section",
     "plan_actions_section",
     "plan_control_actions",
     "plan_section",
@@ -208,16 +193,16 @@ def _assert_cutting_plan_surface_metadata() -> None:
 
 
 def sync_cutting_plan_surface_metadata() -> None:
-    """Enforce the plan/cost metadata boundary after model synchronization.
+    """Enforce the surviving DCO plan-presentation metadata boundary.
 
-    ``view_costs`` intentionally controls Frappe permission level 1. The
-    Cutting Plan surface is controlled by Almdina's ``view_cutting_plan``
-    capability instead, so its fields must stay at permission level 0.
+    ``view_costs`` intentionally controls Frappe permission level 1. The DCO
+    keeps only presentation containers at level 0; canonical Cutting Plan state
+    and settings are no longer DCO DocFields after A6.4.
 
     A site-local Property Setter or stale DocField value can otherwise make
     Frappe omit ``plan_control_actions`` and ``cutting_plan_html`` whenever the
     role has no level-1 cost read permission. That produces an apparently empty
-    Board Layout while the ordinary level-0 plan fields remain visible.
+    Board Layout while the ordinary level-0 plan presentation remains visible.
     """
 
     if not frappe.db.exists("DocType", DOCTYPE):
