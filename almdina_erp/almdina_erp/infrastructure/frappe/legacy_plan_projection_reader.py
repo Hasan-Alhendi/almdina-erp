@@ -32,6 +32,10 @@ def legacy_custom_plan_json(order: Any) -> str:
     return str(getattr(order, "custom_plan_json", None) or "")
 
 
+def legacy_approved_plan_source(order: Any, default: str = "System") -> str:
+    return str(getattr(order, "approved_plan_source", None) or default)
+
+
 def legacy_production_dxf(order: Any) -> str:
     return str(getattr(order, "production_dxf", None) or "")
 
@@ -41,6 +45,7 @@ def legacy_kerf_mm(order: Any) -> float:
 
 
 __all__ = [
+    "legacy_approved_plan_source",
     "legacy_custom_plan_json",
     "legacy_kerf_mm",
     "legacy_production_dxf",
