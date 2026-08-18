@@ -6,6 +6,9 @@ import frappe
 from frappe import _
 
 from almdina_erp.almdina_erp.application.shop_floor import commands
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    production_plan_facts,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.shop_floor_command_repository import (
     FrappeShopFloorCommandRepository,
 )
@@ -26,18 +29,17 @@ def _execute(function: Callable[..., _Result], *args: Any, **kwargs: Any) -> _Re
 
 
 def assert_order_ready_for_dispatch(order: Any) -> None:
-    """Compatibility validator used by the revision-aware dispatch endpoint."""
+    """Compatibility facade using canonical Cutting Plan runtime facts."""
 
+    plan = production_plan_facts(order)
     state = commands.OrderState(
         name=str(order.name),
         status=str(getattr(order, "status", None) or ""),
         production_path=getattr(order, "production_path", None) or None,
         current_stage=getattr(order, "current_production_stage", None) or None,
-        has_cutting_plan=bool(getattr(order, "cutting_plan_json", None)),
-        plan_needs_recalculation=bool(
-            int(getattr(order, "plan_needs_recalculation", None) or 0)
-        ),
-        has_approved_plan=bool(getattr(order, "approved_plan", None)),
+        has_cutting_plan=plan.has_cutting_plan,
+        plan_needs_recalculation=plan.plan_needs_recalculation,
+        has_approved_plan=plan.has_approved_plan,
         drawing_dxf_status=getattr(order, "drawing_dxf_status", None) or None,
     )
     try:
