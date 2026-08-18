@@ -15,8 +15,6 @@ class OrderSaveGateway(Protocol):
 
     def set_piece_numbers(self) -> None: ...
 
-    def validate_numeric_inputs(self) -> None: ...
-
     def validate_piece_inputs(self) -> None: ...
 
     def validate_piece_policies(self) -> None: ...
@@ -33,7 +31,6 @@ def process_order_save(gateway: OrderSaveGateway) -> None:
 
     gateway.enforce_immutability()
     gateway.set_piece_numbers()
-    gateway.validate_numeric_inputs()
     gateway.validate_piece_inputs()
     gateway.validate_piece_policies()
     gateway.load_board_snapshot()
