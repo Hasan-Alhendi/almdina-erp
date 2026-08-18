@@ -11,6 +11,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    require_cutting_plan_capability,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     overlay_authoritative_costs,
 )
@@ -71,12 +74,12 @@ def _finite_non_negative(value: Any, label: str) -> float:
 def _authorized_order(order_name: str, capability: str) -> Any:
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
-    require_document_capability(order, capability)
+    require_cutting_plan_capability(order, capability)
     return order
 
 
 def _require_cost_visibility(order: Any) -> None:
-    require_document_capability(order, Capability.VIEW_COSTS)
+    require_cutting_plan_capability(order, Capability.VIEW_COSTS)
 
 
 def _special_piece(order: Any, piece_name: str) -> Any:
@@ -125,8 +128,6 @@ def update_order_cost_settings(
     if not name:
         frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
 
-    # Serialize cost edits with recalculation and approval, which already lock
-    # the same order row before selecting or mutating its current Cutting Plan.
     frappe.db.sql(
         "select name from `tabDoor Cutting Order` where name = %s for update",
         (name,),
