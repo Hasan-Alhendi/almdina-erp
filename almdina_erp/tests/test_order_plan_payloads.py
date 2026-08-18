@@ -47,6 +47,13 @@ SAVE_GATEWAY_PATH = (
     / "orders"
     / "save_gateway.py"
 )
+CUTTING_PLAN_WORKSPACE_PATH = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "cutting_plan_workspace.py"
+)
 ORDER_SAVE_PATH = ROOT / "almdina_erp" / "application" / "orders" / "process_order_save.py"
 SNAPSHOT_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "cutting_plan_snapshot_service.py"
 API_PATH = ROOT / "almdina_erp" / "api.py"
@@ -238,7 +245,6 @@ class TestPlanPayloadApplication(unittest.TestCase):
         self.assertNotIn("approved_cost", keys)
         self.assertNotIn("customer_quote_status", keys)
         self.assertFalse([key for key in keys if is_financial_plan_key(key)])
-        # The sanitizer is non-destructive to its input object.
         self.assertIn("approved_cost", source)
         self.assertIn("edge_cost_usd", source["sheets"][0]["pieces"][0])
 
@@ -292,17 +298,27 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
     def test_non_financial_snapshot_contract_is_wired_across_persistence_and_api(self) -> None:
         order_save = ORDER_SAVE_PATH.read_text(encoding="utf-8")
         save_gateway = SAVE_GATEWAY_PATH.read_text(encoding="utf-8")
+        workspace = CUTTING_PLAN_WORKSPACE_PATH.read_text(encoding="utf-8")
         snapshot_service = SNAPSHOT_SERVICE_PATH.read_text(encoding="utf-8")
         cost_service = COST_SERVICE_PATH.read_text(encoding="utf-8")
         api = API_PATH.read_text(encoding="utf-8")
         patches = PATCHES_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("gateway.sanitize_plan_snapshots()", order_save)
-        self.assertIn("sanitize_plan_snapshot_json", save_gateway)
-        self.assertIn('"cutting_plan_json"', save_gateway)
-        self.assertIn('"system_plan_json"', save_gateway)
-        self.assertIn('"custom_plan_json"', save_gateway)
+        # A4: ordinary DCO persistence no longer owns Cutting Plan snapshots.
+        self.assertNotIn("sanitize_plan_snapshots", order_save)
+        self.assertNotIn("sanitize_plan_snapshot_json", order_save)
+        self.assertNotIn("sanitize_plan_snapshot_json", save_gateway)
+        self.assertNotIn('"cutting_plan_json"', save_gateway)
+        self.assertNotIn('"system_plan_json"', save_gateway)
+        self.assertNotIn('"custom_plan_json"', save_gateway)
 
+        # Canonical Cutting Plan calculation/import owns sanitizing geometry.
+        self.assertIn("sanitize_plan_snapshot", workspace)
+        self.assertIn("snapshot = sanitize_plan_snapshot(outcome.snapshot)", workspace)
+        self.assertIn("snapshot = sanitize_plan_snapshot(raw_snapshot)", workspace)
+        self.assertIn("plan.snapshot_json = frappe.as_json(snapshot)", workspace)
+
+        # Legacy snapshot and cost boundaries remain non-financial during cutover.
         self.assertIn("sanitize_plan_snapshot", snapshot_service)
         self.assertNotIn('snapshot["approved_cost"]', snapshot_service)
         self.assertIn("plan.board_rate_usd", snapshot_service)
