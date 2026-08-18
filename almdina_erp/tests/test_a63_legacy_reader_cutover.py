@@ -30,10 +30,12 @@ def test_retired_snapshot_service_has_no_runtime_callers() -> None:
     assert _matches("cutting_plan_snapshot_service") == []
 
 
-def test_dual_plan_helper_has_no_runtime_callers_before_retirement() -> None:
-    # A6.3 proves whether the old DCO dual-plan helper can be removed safely.
-    # Its own source does not contain the module name, so every hit is a caller.
-    assert _matches("dual_plan_fields") == []
+def test_dual_plan_helper_is_confined_to_historical_export_bridge() -> None:
+    # Shop-floor runtime was migrated in A6.3. The only remaining caller is the
+    # saved-order export fallback for records predating canonical Cutting Plan.
+    assert _matches("dual_plan_fields") == [
+        "almdina_erp/services/export_validation_service.py"
+    ]
 
 
 def test_retired_snapshot_surface_contains_no_old_aggregate_logic_or_bypass() -> None:
@@ -73,13 +75,40 @@ def test_cutting_plan_compatibility_facade_does_not_import_snapshot_owner() -> N
     assert "validate_order_for_dispatch" in facade
 
 
+def test_shop_floor_plan_reads_are_canonical_only() -> None:
+    repository = (
+        APP / "infrastructure" / "frappe" / "shop_floor_query_repository.py"
+    ).read_text(encoding="utf-8")
+
+    assert "production_plan_facts" in repository
+    assert "current_working_plan" in repository
+    assert "latest_plan" in repository
+    assert "source_type=UPLOADED_DXF" in repository
+    assert "source_type=SYSTEM" in repository
+    assert "dual_plan_fields" not in repository
+
+    summaries = repository.split("def order_summaries", 1)[1].split(
+        "\n    def get_order", 1
+    )[0]
+    for legacy_db_field in (
+        '"cutting_plan_json",',
+        '"plan_needs_recalculation",',
+        '"production_dxf",',
+        '"system_plan_json",',
+        '"custom_plan_json",',
+    ):
+        assert legacy_db_field not in summaries
+    assert "facts.has_cutting_plan" in summaries
+    assert "facts.plan_needs_recalculation" in summaries
+    assert "dxf_plan" in summaries
+
+
 def test_direct_legacy_dco_plan_reads_are_confined_to_named_migration_bridges() -> None:
-    # Exact attribute reads distinguish DCO reads from response keys, schema
-    # field names, and canonical Cutting Plan attributes with the same labels.
+    # Direct persisted-order reads are exceptional in A6.3. API fallback keeps
+    # historical locked orders readable; upload fallback distinguishes a legacy
+    # pre-A2 DXF. All other runtime decisions must use canonical Cutting Plan.
     allowed: dict[str, set[str]] = {
-        "order.cutting_plan_json": {
-            "almdina_erp/services/dxf_export_service.py",
-        },
+        "order.cutting_plan_json": {"almdina_erp/api.py"},
         "order.system_plan_json": set(),
         "order.custom_plan_json": set(),
         "order.approved_plan_source": set(),
@@ -87,26 +116,50 @@ def test_direct_legacy_dco_plan_reads_are_confined_to_named_migration_bridges() 
         "order.production_dxf": {
             "almdina_erp/services/shop_floor_dxf_service.py",
         },
-        "order.packing_mode": {
-            "almdina_erp/infrastructure/frappe/orders/plan_adapter.py",
-        },
-        "order.cutting_machine_type": {
-            "almdina_erp/infrastructure/frappe/orders/plan_adapter.py",
-        },
-        "order.kerf_mm": {
-            "almdina_erp/infrastructure/frappe/orders/plan_adapter.py",
-            "almdina_erp/services/dxf_export_service.py",
-        },
-        "order.trim_margin_mm": {
-            "almdina_erp/infrastructure/frappe/orders/plan_adapter.py",
-        },
+        "order.packing_mode": set(),
+        "order.cutting_machine_type": set(),
+        "order.kerf_mm": set(),
+        "order.trim_margin_mm": set(),
     }
 
     for token, expected_paths in allowed.items():
         assert set(_matches(token)) == expected_paths, token
 
 
-def test_allowed_legacy_reads_are_documented_read_only_bridges() -> None:
+def test_historical_projection_boundary_is_read_only() -> None:
+    boundary = (
+        APP
+        / "infrastructure"
+        / "frappe"
+        / "legacy_plan_projection_reader.py"
+    ).read_text(encoding="utf-8")
+    dual = (APP / "services" / "dual_plan_fields.py").read_text(encoding="utf-8")
+
+    for fieldname in (
+        "cutting_plan_json",
+        "system_plan_json",
+        "custom_plan_json",
+        "approved_plan_source",
+        "production_dxf",
+        "kerf_mm",
+    ):
+        assert fieldname in boundary
+    for forbidden in (
+        "frappe.db.set_value",
+        "frappe.new_doc",
+        ".insert(",
+        ".save(",
+        "ignore_permissions",
+    ):
+        assert forbidden not in boundary
+    assert "legacy_system_plan_json" in dual
+    assert "legacy_custom_plan_json" in dual
+    assert "_retired_writer" in dual
+    assert "frappe.db" not in dual
+    assert "ignore_permissions" not in dual
+
+
+def test_allowed_noncanonical_paths_are_documented_and_nonpersistent() -> None:
     export = (APP / "services" / "dxf_export_service.py").read_text(encoding="utf-8")
     upload = (APP / "services" / "shop_floor_dxf_service.py").read_text(encoding="utf-8")
     preview = (
@@ -115,14 +168,17 @@ def test_allowed_legacy_reads_are_documented_read_only_bridges() -> None:
 
     assert "Read-only migration bridge for orders predating canonical Cutting Plan." in export
     assert "One-time migration fallback for a legacy pre-A2 custom DXF" in upload
-    assert "def persist" in preview
-    # Preview adapter may mutate only the in-memory copied order supplied by the
-    # experiment flow; it must never bypass permissions or persist directly.
+    # The DCO plan adapter survives only for transient preview/experiment paths.
+    # It may mutate its in-memory document but may not persist or bypass security.
+    assert "class FrappeOrderPlanAdapter" in preview
+    assert "optimize_order_plan" in preview
     assert "frappe.db.set_value" not in preview
+    assert ".save(" not in preview
+    assert ".insert(" not in preview
     assert "ignore_permissions" not in preview
 
 
-def test_a63_keeps_schema_until_zero_read_data_migration_is_complete() -> None:
+def test_a63_keeps_schema_until_historical_data_migration_is_complete() -> None:
     dco = json.loads(
         (APP / "doctype" / "door_cutting_order" / "door_cutting_order.json").read_text(
             encoding="utf-8"
