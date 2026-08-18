@@ -130,11 +130,18 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
 
     def test_document_capability_keeps_native_read_as_narrowing_scope(self) -> None:
         gateway = self._load_gateway()
-        order = types.SimpleNamespace(doctype="Door Cutting Order")
+        plan = types.SimpleNamespace(doctype="Cutting Plan")
 
         self.assertTrue(
             gateway.document_has_capability(
-                order,
+                plan,
+                Capability.VIEW_COSTS,
+                user="role.user@example.com",
+            )
+        )
+        self.assertFalse(
+            gateway.document_has_capability(
+                types.SimpleNamespace(doctype="Door Cutting Order"),
                 Capability.VIEW_COSTS,
                 user="role.user@example.com",
             )
@@ -164,7 +171,7 @@ class TestAuthorizationGatewayMatrixFallback(unittest.TestCase):
         )
         self.assertFalse(
             gateway.document_has_capability(
-                types.SimpleNamespace(doctype="Door Cutting Order"),
+                types.SimpleNamespace(doctype="Cutting Plan"),
                 Capability.VIEW_COSTS,
                 user="empty@example.com",
             )
