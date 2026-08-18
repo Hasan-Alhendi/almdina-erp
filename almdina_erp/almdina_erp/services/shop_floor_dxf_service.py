@@ -225,13 +225,13 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     # Security order is intentional and regression-tested:
     # private+unattached staging -> authorization -> geometry validation ->
-    # Cutting Plan persistence -> File attachment -> compatibility projection.
+    # Cutting Plan persistence -> File attachment -> order-owned workflow state.
     normalized_url, file_row = _validate_dxf_file_metadata(file_url)
 
     order = shop_floor_gateway.get_order(order_name)
     from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
         current_uploaded_dxf_file,
-        mirror_uploaded_dxf_projection,
+        finalize_uploaded_dxf_order_state,
         save_uploaded_dxf_plan,
     )
 
@@ -278,7 +278,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     # The file is linked only after all business authorization, geometry checks,
     # and canonical plan persistence have succeeded.
     _attach_validated_dxf_file(plan, file_row)
-    mirror_uploaded_dxf_projection(order, plan)
+    finalize_uploaded_dxf_order_state(order, plan)
 
     order.add_comment(
         "Info",
