@@ -17,7 +17,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     PLAN_COST_FIELDS,
     apply_plan_costs,
     initialize_draft_plan_cost_snapshot,
-    project_plan_costs_to_order,
+    refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     current_working_plan,
@@ -39,7 +39,8 @@ def update_plan_cost_settings(
     """Update only plan-owned cost inputs and their derived financial result.
 
     Geometry, fingerprints, validation status, and recalculation state are not
-    touched. DCO writes remain one-way compatibility projections until A6.2.
+    touched. A6.2 keeps Plan financials exclusively on Cutting Plan and refreshes
+    only the customer-facing commercial aggregates that are owned by the order.
     """
 
     require_cutting_plan_capability(
@@ -58,7 +59,7 @@ def update_plan_cost_settings(
     plan.cutting_cost_per_board_usd = flt(cutting_cost_per_board_usd)
     apply_plan_costs(plan)
     repository.save_document(plan)
-    project_plan_costs_to_order(order, plan)
+    refresh_order_commercial_totals(order, plan)
 
     return {
         "order_name": order.name,

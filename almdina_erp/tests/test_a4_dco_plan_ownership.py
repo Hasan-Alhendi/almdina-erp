@@ -116,16 +116,17 @@ def test_invalidation_service_is_focused_and_never_runs_optimizer() -> None:
         assert forbidden not in text
 
 
-def test_approved_plan_mismatch_only_raises_order_stale_projection() -> None:
+def test_invalidation_never_projects_approved_freshness_back_to_order() -> None:
     text = source(INVALIDATION_SERVICE)
-    approved_block = text.split("approved_name =", 1)[1].split(
-        "if requires_recalculation:", 1
-    )[0]
-    assert 'frappe.db.exists("Cutting Plan", approved_name)' in approved_block
-    assert "_plan_matches_order(order, approved_plan)" in approved_block
-    assert "requires_recalculation = True" in approved_block
-    assert "frappe.db.set_value" not in approved_block
-    assert ".save(" not in approved_block
+
+    # A6.2 keeps invalidation scoped to mutable Draft Cutting Plans. Approved
+    # plan freshness is checked at runtime from the canonical fingerprint and is
+    # never mirrored into Door Cutting Order.plan_needs_recalculation.
+    assert '"status": DRAFT' in text
+    assert '"Cutting Plan"' in text
+    assert '"Door Cutting Order"' not in text
+    assert "approved_name =" not in text
+    assert "order.plan_needs_recalculation" not in text
 
 
 def test_fresh_draft_requires_no_write() -> None:
