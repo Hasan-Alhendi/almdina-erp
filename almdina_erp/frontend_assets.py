@@ -120,6 +120,9 @@ doctype_js = {
         # The page coordinator owns only the visible top action and delegates
         # Order / Cutting Plan / Cost editing to their established session owners.
         "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js",
+        # A5.3 is presentation-only. It reads Plan/Cost workspace snapshots after
+        # their edit/page coordinators and never becomes a state or command owner.
+        "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
         # Final field-status owner on purpose: no later compatibility layer may
         # re-open native plan inputs. Workspace-owned detached controls remain the
         # only writable Plan settings surface during a Plan edit session.

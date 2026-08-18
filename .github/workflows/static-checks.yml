@@ -213,6 +213,7 @@ jobs:
         run: |
           node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/workspace_store.test.js
+          node almdina_erp/tests/js/plan_cost_workspace_visual.test.js
           node almdina_erp/tests/js/permission_context.test.js
           node almdina_erp/tests/js/order_lifecycle_permissions.test.js
           node almdina_erp/tests/js/financial_documents.test.js
