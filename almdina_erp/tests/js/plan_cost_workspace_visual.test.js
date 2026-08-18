@@ -17,6 +17,7 @@ function makeNode() {
     const attributes = new Map();
     const classes = new Set();
     return {
+        nodeType: 1,
         attributes,
         classList: {
             add(value) {
