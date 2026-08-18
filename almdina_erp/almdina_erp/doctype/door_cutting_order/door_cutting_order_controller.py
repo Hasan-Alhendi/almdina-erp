@@ -1,23 +1,14 @@
 from __future__ import annotations
 
-from almdina_erp.almdina_erp.application.orders.process_order_save import (
-    process_order_save,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.orders import (
-    FrappeDoorCuttingOrderSaveGateway,
-)
+from almdina_erp.almdina_erp.application.orders.process_order_save import process_order_save
+from almdina_erp.almdina_erp.infrastructure.frappe.orders import FrappeDoorCuttingOrderSaveGateway
+from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import invalidate_stale_draft_plans
 
 from .door_cutting_order import DoorCuttingOrder
 
 
 class DoorCuttingOrderController(DoorCuttingOrder):
-    """Thin Frappe override controller for Door Cutting Order.
-
-    Frappe requires every ``override_doctype_class`` implementation to subclass
-    the canonical DocType controller. Framework lifecycle entry points stay here,
-    while save orchestration belongs to Application and Frappe adaptation stays
-    in focused Infrastructure adapters.
-    """
+    """Thin Frappe override controller for Door Cutting Order lifecycle."""
 
     def _gateway(self) -> FrappeDoorCuttingOrderSaveGateway:
         gateway = self.flags.get("_order_save_gateway")
@@ -28,6 +19,9 @@ class DoorCuttingOrderController(DoorCuttingOrder):
 
     def validate(self) -> None:
         process_order_save(self._gateway())
+
+    def on_update(self) -> None:
+        invalidate_stale_draft_plans(self)
 
     def ensure_special_shapes_documented(self) -> None:
         self._gateway().ensure_special_shapes_documented()
