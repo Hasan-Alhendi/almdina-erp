@@ -105,13 +105,15 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                             ptype=ptype,
                         )
                     )
-            self.assertFalse(
-                permissions.cutting_plan_has_permission(
-                    plan,
-                    user="empty@example.com",
-                    ptype="read",
-                )
-            )
+            for ptype in ("read", "recalculate_plan", "view_costs"):
+                with self.subTest(plan_ptype=ptype):
+                    self.assertFalse(
+                        permissions.cutting_plan_has_permission(
+                            plan,
+                            user="empty@example.com",
+                            ptype=ptype,
+                        )
+                    )
             self.assertFalse(
                 permissions.production_stage_has_permission(
                     stage,
@@ -170,24 +172,35 @@ class TestFrappeV16PermissionHookContract(unittest.TestCase):
                 False,
             )
 
-    def test_custom_actions_require_their_explicit_capability(self) -> None:
+    def test_custom_actions_require_their_owner_and_explicit_capability(self) -> None:
         order = SimpleNamespace(name="DCO-TEST")
+        plan = SimpleNamespace(door_cutting_order="DCO-TEST")
 
-        with patch.object(
-            permissions,
-            "_has",
-            side_effect=lambda _user, capability: capability == "recalculate_plan",
+        with (
+            patch.object(
+                permissions,
+                "_has",
+                side_effect=lambda _user, capability: capability == "recalculate_plan",
+            ),
+            patch.object(permissions, "_requires_assigned_scope", return_value=False),
         ):
-            self.assertTrue(
+            self.assertFalse(
                 permissions.door_cutting_order_has_permission(
                     order,
                     user="worker@example.com",
                     ptype="recalculate_plan",
                 )
             )
+            self.assertTrue(
+                permissions.cutting_plan_has_permission(
+                    plan,
+                    user="worker@example.com",
+                    ptype="recalculate_plan",
+                )
+            )
             self.assertFalse(
-                permissions.door_cutting_order_has_permission(
-                    order,
+                permissions.cutting_plan_has_permission(
+                    plan,
                     user="worker@example.com",
                     ptype="view_costs",
                 )
