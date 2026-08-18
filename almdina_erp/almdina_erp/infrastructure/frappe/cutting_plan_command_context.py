@@ -14,6 +14,7 @@ PLAN_COMMAND_CAPABILITIES = frozenset(
         Capability.UPLOAD_DXF,
         Capability.REPLACE_DXF,
         Capability.APPROVE_DXF,
+        Capability.APPROVE_REPLACEMENT,
     }
 )
 
@@ -31,8 +32,8 @@ def is_authorized_plan_command(doc: Any) -> bool:
     """Return True only for a server-created, scoped plan command context.
 
     The flag lives on ``Document.flags`` and is never persisted or accepted from
-    a browser payload. Command services set it only after the related order has
-    passed capability and lifecycle authorization.
+    a browser payload. Command services set it only after the related order or
+    replacement has passed capability and lifecycle authorization.
     """
 
     return command_capability(doc) in PLAN_COMMAND_CAPABILITIES
