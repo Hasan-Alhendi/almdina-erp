@@ -4,6 +4,7 @@ from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.version import ENGINE_VERSION
 
+from .board_input_adapter import FrappeOrderBoardInputAdapter
 from .costing_adapter import FrappeOrderCostingAdapter
 from .cut_dimension_adapter import FrappeOrderCutDimensionAdapter
 from .document_access import FrappeOrderDocumentAccess
@@ -22,6 +23,7 @@ class FrappeDoorCuttingOrderSaveGateway:
     def __init__(self, document: Any) -> None:
         self.document = document
         self.access = FrappeOrderDocumentAccess(document)
+        self.board = FrappeOrderBoardInputAdapter(document, self.access)
         self.edge_profiles = FrappeEdgeProfileRepository(document)
         self.piece_policy = FrappeOrderPiecePolicyAdapter(
             document,
@@ -44,9 +46,6 @@ class FrappeDoorCuttingOrderSaveGateway:
     def set_piece_numbers(self) -> None:
         self.access.set_piece_numbers()
 
-    def validate_numeric_inputs(self) -> None:
-        self.access.validate_numeric_inputs()
-
     def validate_piece_inputs(self) -> None:
         self.access.validate_piece_inputs()
 
@@ -54,7 +53,7 @@ class FrappeDoorCuttingOrderSaveGateway:
         self.piece_policy.validate_rows()
 
     def load_board_snapshot(self) -> None:
-        self.access.load_board_snapshot()
+        self.board.load_snapshot()
 
     def calculate_cut_dimensions(self) -> None:
         self.cut_dimensions.calculate_rows()
