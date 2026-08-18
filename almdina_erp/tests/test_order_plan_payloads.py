@@ -76,7 +76,8 @@ def _nested_keys(value: object) -> set[str]:
 class TestPlanFingerprintDomain(unittest.TestCase):
     def test_canonical_json_and_hash_are_order_independent(self) -> None:
         first = {"b": 2, "a": {"z": 1, "x": "أ"}}
-        second = {"a": {"x": "أ", "z": 1}, "b": 2}
+        second = {"a": {"x": "أ", "z": 1, "b": None}, "b": 2}
+        second["a"].pop("b")
         expected_json = '{"a":{"x":"\\u0623","z":1},"b":2}'
         expected_hash = "ce22c50e62ba1bbb70a3a09dfe38aec1c47b7d6c33c251076334d690f5e9c61d"
 
@@ -318,11 +319,15 @@ class TestPlanPayloadArchitecture(unittest.TestCase):
         self.assertIn("snapshot = sanitize_plan_snapshot(raw_snapshot)", workspace)
         self.assertIn("plan.snapshot_json = frappe.as_json(snapshot)", workspace)
 
-        # Legacy snapshot and cost boundaries remain non-financial during cutover.
-        self.assertIn("sanitize_plan_snapshot", snapshot_service)
-        self.assertNotIn('snapshot["approved_cost"]', snapshot_service)
-        self.assertIn("plan.board_rate_usd", snapshot_service)
-        self.assertIn("plan.total_cost_usd", snapshot_service)
+        # A6.3: the pre-cutover DCO snapshot persistence surface is retired and
+        # must never regain geometry sanitization, plan costs, or persistence.
+        self.assertIn("_retired_snapshot_api", snapshot_service)
+        self.assertNotIn("sanitize_plan_snapshot", snapshot_service)
+        self.assertNotIn("plan.board_rate_usd", snapshot_service)
+        self.assertNotIn("plan.total_cost_usd", snapshot_service)
+        self.assertNotIn("frappe.new_doc", snapshot_service)
+        self.assertNotIn("frappe.db.set_value", snapshot_service)
+        self.assertNotIn("ignore_permissions", snapshot_service)
 
         self.assertIn("_sanitize_cutting_plan_snapshot(doc)", cost_service)
         self.assertIn("sanitize_plan_snapshot_json", cost_service)
