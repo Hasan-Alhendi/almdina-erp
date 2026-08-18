@@ -39,6 +39,17 @@
         return owner && typeof owner.storeFor === "function" ? owner.storeFor(frm) : null;
     }
 
+    function workspaceSnapshot(frm) {
+        const store = storeFor(frm);
+        return store ? store.snapshot() : null;
+    }
+
+    function approvedPlanName(frm) {
+        const state = workspaceSnapshot(frm);
+        if (!state || state.status !== "ready" || !state.data) return null;
+        return String(state.data.approved_plan || "").trim();
+    }
+
     function editor() {
         return window.AlmdinaWorkspaceFieldEditor || null;
     }
@@ -91,18 +102,20 @@
         if (frm.is_new && frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if ((frm.doc.revision_state || "Current") === "Superseded") return false;
-        if (String(frm.doc.approved_plan || "").trim() && !isDrawingStage(frm)) return false;
+
+        // Approval belongs to Cutting Plan. Until its workspace snapshot is
+        // ready, fail closed instead of consulting the DCO compatibility field.
+        const approved = approvedPlanName(frm);
+        if (approved === null) return false;
+        if (approved && !isDrawingStage(frm)) return false;
+
+        // Route/status/stage are still order lifecycle facts and remain DCO-owned.
         if (hasProductionRoute(frm)) return hasActiveRoutedLifecycle(frm);
         return DRAFT_LIKE.has(frm.doc.status || "Draft");
     }
 
     function canEditPlanSettings(frm) {
         return Boolean(can(frm, "edit_optimizer_settings") && lifecycleAllowsEdit(frm));
-    }
-
-    function workspaceSnapshot(frm) {
-        const store = storeFor(frm);
-        return store ? store.snapshot() : null;
     }
 
     function isEditing(frm) {
@@ -197,8 +210,8 @@
     }
 
     async function startEditing(frm) {
-        if (!canEditPlanSettings(frm)) {
-            frappe.msgprint(__("لا تملك صلاحية تعديل إعدادات خطة القص أو أن حالة الطلب الحالية لا تسمح بذلك."));
+        if (!can(frm, "edit_optimizer_settings")) {
+            frappe.msgprint(__("لا تملك صلاحية تعديل إعدادات خطة القص."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
@@ -207,6 +220,11 @@
         }
 
         await ensureLoaded(frm);
+        if (!lifecycleAllowsEdit(frm)) {
+            frappe.msgprint(__("حالة الطلب الحالية لا تسمح بتعديل إعدادات خطة القص."));
+            return false;
+        }
+
         const store = storeFor(frm);
         const seed = activeSettings(frm);
         if (!store || !seed) {
