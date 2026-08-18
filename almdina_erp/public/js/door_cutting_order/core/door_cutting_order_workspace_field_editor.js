@@ -56,13 +56,15 @@
     }
 
     function nativeNodes(field) {
-        const result = [];
-        if (field && field.$input && field.$input.length) result.push(field.$input.get(0));
         const wrapper = field && field.$wrapper;
+        const nodes = [];
         if (wrapper && wrapper.length) {
-            wrapper.find(".select-icon").each((_, node) => result.push(node));
+            wrapper.find(".control-input, .control-value").each((_, node) => nodes.push(node));
         }
-        return result.filter(Boolean);
+        if (!nodes.length && field && field.$input && field.$input.length) {
+            nodes.push(field.$input.get(0));
+        }
+        return Array.from(new Set(nodes.filter(Boolean)));
     }
 
     function hideNative(field) {
@@ -91,8 +93,11 @@
     function hostFor(field) {
         const wrapper = field && field.$wrapper;
         if (!wrapper || !wrapper.length) return null;
-        const inputArea = wrapper.find(".control-input").first();
-        return inputArea.length ? inputArea.get(0) : wrapper.get(0);
+        // Frappe hides `.control-input` whenever the field status is Read. The
+        // detached editor must therefore be a sibling of both native Read/Write
+        // surfaces, not a child of the native input container.
+        const inputWrapper = wrapper.find(".control-input-wrapper").first();
+        return inputWrapper.length ? inputWrapper.get(0) : wrapper.get(0);
     }
 
     function mountField(frm, fieldname, value, onPatch) {
@@ -106,6 +111,7 @@
         const root = document.createElement("div");
         root.className = ROOT_CLASS;
         root.dataset.fieldname = fieldname;
+        root.style.width = "100%";
         const control = buildControl(field, value);
         root.appendChild(control);
         host.appendChild(root);
