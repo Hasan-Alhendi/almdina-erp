@@ -398,6 +398,7 @@
         "almdina:permissions-updated",
         "almdina:stage-context-ready",
         "almdina:surfaces-settled",
+        "almdina:plan-workspace-updated",
     ].forEach((eventName) => {
         window.addEventListener(eventName, () => {
             const frm = window.cur_frm;
