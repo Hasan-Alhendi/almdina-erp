@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import flt, now_datetime
 
 from almdina_erp.almdina_erp.application.cutting.plan_preview_session import (
     CuttingPlanPreviewSession,
@@ -40,8 +40,8 @@ from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
     plan_payload,
 )
 from almdina_erp.almdina_erp.services.plan_settings_edit_service import (
-    _assert_edit_lifecycle,
-    _normalize_updates,
+    assert_plan_settings_edit_lifecycle,
+    normalize_plan_settings_updates,
 )
 
 
@@ -68,7 +68,7 @@ def _require_preview_capabilities(order: Any) -> None:
 
 
 def _normalized_settings(values: dict[str, Any]) -> dict[str, Any]:
-    normalized = _normalize_updates(values)
+    normalized = normalize_plan_settings_updates(values)
     # A preview always represents a complete settings state. The frontend sends
     # all five fields, so fail closed if a malformed client omits one.
     missing = [name for name in _SETTING_TO_PLAN_FIELD if name not in normalized]
@@ -157,7 +157,7 @@ def preview_cutting_plan(
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
     _require_preview_capabilities(order)
-    _assert_edit_lifecycle(order)
+    assert_plan_settings_edit_lifecycle(order)
     _assert_recalculation_state(order)
 
     source_plan = _system_draft(order, Capability.RECALCULATE_PLAN)
@@ -224,7 +224,7 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
     _require_preview_capabilities(order)
-    _assert_edit_lifecycle(order)
+    assert_plan_settings_edit_lifecycle(order)
     _assert_recalculation_state(order)
 
     session = FrappeCuttingPlanPreviewStore().consume(token)
@@ -261,7 +261,7 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
         snapshot=session.snapshot,
         expected_input_fingerprint=session.input_fingerprint,
     )
-    apply_plan_costs(plan, edge_cost_usd=float(getattr(order, "edge_cost_usd", 0) or 0))
+    apply_plan_costs(plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
     order.add_comment(
