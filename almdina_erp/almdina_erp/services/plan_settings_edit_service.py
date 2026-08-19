@@ -54,7 +54,7 @@ def _has_active_routed_lifecycle(doc: Any) -> bool:
     return status in _ACTIVE_ROUTED_ORDER_STATUSES
 
 
-def _assert_edit_lifecycle(doc: Any) -> None:
+def assert_plan_settings_edit_lifecycle(doc: Any) -> None:
     """Keep focused plan editing inside the plan-settings lifecycle boundary."""
 
     if int(getattr(doc, "docstatus", 0) or 0) != 0:
@@ -120,7 +120,7 @@ def _allowed_select_values(meta: Any, workspace_fieldname: str) -> set[str]:
     }
 
 
-def _normalize_updates(values: dict[str, Any]) -> dict[str, Any]:
+def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
     """Validate workspace aliases against the canonical Cutting Plan schema."""
 
     plan_meta = frappe.get_meta("Cutting Plan")
@@ -180,9 +180,9 @@ def save_plan_settings(
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات خطة القص لهذا الطلب."),
     )
-    _assert_edit_lifecycle(doc)
+    assert_plan_settings_edit_lifecycle(doc)
 
-    updates = _normalize_updates(
+    updates = normalize_plan_settings_updates(
         {
             "packing_mode": packing_mode,
             "cutting_machine_type": cutting_machine_type,
@@ -199,4 +199,9 @@ def save_plan_settings(
     return save_system_plan_settings(doc, updates)
 
 
-__all__ = ["PLAN_SETTING_FIELDS", "save_plan_settings"]
+__all__ = [
+    "PLAN_SETTING_FIELDS",
+    "assert_plan_settings_edit_lifecycle",
+    "normalize_plan_settings_updates",
+    "save_plan_settings",
+]
