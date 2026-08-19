@@ -29,6 +29,14 @@ COST_EDIT_UX = (
     / "costing"
     / "door_cutting_order_cost_edit_session_ux.js"
 )
+COST_STATE = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_cost_workspace_state.js"
+)
 
 
 COST_FIELDS = ("board_rate_usd", "cutting_cost_per_board_usd")
@@ -75,8 +83,9 @@ def test_cost_workspace_save_keeps_both_values_mandatory() -> None:
     assert 'board_rate_usd: "سعر اللوح"' in ux
     assert 'cutting_cost_per_board_usd: "أجور القص / لوح"' in ux
     assert 'control.attr("required", "required")' in ux
-    assert "if (!validateRequiredCostSettings(frm, state.draft || {})) return false;" in ux
-    assert "api.saveSettings(frm.doc.name, state.draft || {})" in ux
+    assert "const captured = captureCostSettings(frm, state.draft || {});" in ux
+    assert "if (!validateRequiredCostSettings(frm, captured)) return false;" in ux
+    assert "api.saveSettings(frm.doc.name, payload)" in ux
 
 
 def test_cost_workspace_validation_does_not_make_whole_order_required() -> None:
@@ -88,3 +97,45 @@ def test_cost_workspace_validation_does_not_make_whole_order_required() -> None:
     assert "order.save(" not in service.split("def update_order_cost_settings", 1)[1].split(
         "def approve_special_piece_price", 1
     )[0]
+
+
+def test_cost_save_uses_one_visible_payload_for_validation_dirty_check_and_transport() -> None:
+    ux = _source(COST_EDIT_UX)
+
+    assert "function captureCostSettings" in ux
+    assert "function normalizeCostSettings" in ux
+    assert "const captured = captureCostSettings(frm, state.draft || {});" in ux
+    assert "const payload = normalizeCostSettings(captured);" in ux
+    assert "store.replaceDraft(payload);" in ux
+    assert "const pending = store.snapshot();" in ux
+    assert "if (pending.dirty)" in ux
+    assert "api.saveSettings(frm.doc.name, payload)" in ux
+    assert "api.saveSettings(frm.doc.name, state.draft || {})" not in ux
+
+
+def test_cost_save_commits_server_snapshot_without_post_save_reload_race() -> None:
+    ux = _source(COST_EDIT_UX)
+    state = _source(COST_STATE)
+
+    assert "function commit(frm, payload)" in state
+    assert "const snapshot = store.commit(payload);" in state
+    assert "dispatch(frm, snapshot);" in state
+    assert "commit," in state
+
+    assert "const saved = await api.saveSettings(frm.doc.name, payload);" in ux
+    assert "validSavedSnapshot(saved)" in ux
+    assert 'typeof owner.commit === "function"' in ux
+    assert "owner.commit(frm, saved);" in ux
+    save_body = ux.split("async function saveEditing", 1)[1].split("function sync", 1)[0]
+    assert "owner.load(" not in save_body
+    assert "force: true" not in save_body
+
+
+def test_cost_save_keeps_editor_open_when_server_does_not_return_authoritative_snapshot() -> None:
+    ux = _source(COST_EDIT_UX)
+    save_body = ux.split("async function saveEditing", 1)[1].split("function sync", 1)[0]
+
+    invalid_guard = save_body.index("if (!validSavedSnapshot(saved))")
+    unmount = save_body.index("unmountDraftControls(frm);")
+    assert invalid_guard < unmount
+    assert "لم يتم إغلاق وضع التعديل" in save_body
