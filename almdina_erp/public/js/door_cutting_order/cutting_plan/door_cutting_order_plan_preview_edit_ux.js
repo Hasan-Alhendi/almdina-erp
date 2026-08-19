@@ -16,16 +16,6 @@
         return window.AlmdinaPlanPreviewPresenter || null;
     }
 
-    function workspaceState(frm) {
-        const owner = window.AlmdinaPlanWorkspaceState;
-        return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
-    }
-
-    function draftSettings(frm) {
-        const state = workspaceState(frm);
-        return state && state.editing && state.draft ? { ...state.draft } : null;
-    }
-
     function planToolbar(frm) {
         const root = frm && frm.wrapper;
         const node = root && (root.nodeType ? root : root[0]);
@@ -87,49 +77,6 @@
             : saveBlockedReason(frm));
     }
 
-    function bindPreviewButton(frm) {
-        const wrapper = actionWrapper(frm);
-        if (!wrapper) return;
-        const button = wrapper.find(".dco-recalculate-plan").first();
-        if (!button.length) return;
-
-        const owner = previewOwner();
-        const active = editing(frm);
-        const busy = Boolean(owner && owner.isBusy(frm));
-        const allowed = active && !busy && Boolean(draftSettings(frm));
-        button.prop("disabled", !allowed).attr("aria-disabled", allowed ? "false" : "true");
-        button.attr(
-            "title",
-            allowed
-                ? __("معاينة مؤقتة فقط — لن يتم حفظ الخطة حتى تضغط «حفظ».")
-                : active
-                    ? __("انتظر حتى تكتمل العملية الحالية.")
-                    : __("اضغط «تعديل» لبدء تجربة إعدادات وخوارزميات مختلفة.")
-        );
-
-        button.off("click");
-        if (!allowed) return;
-        button.on("click.almdinaPlanPreview", async (event) => {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            const settings = draftSettings(frm);
-            if (!settings || !owner) return;
-            try {
-                const ok = await owner.preview(frm, settings);
-                if (ok) {
-                    frappe.show_alert({
-                        message: __("تم إنشاء معاينة جديدة. لم يتم حفظ أي تغيير بعد."),
-                        indicator: "blue",
-                    }, 4);
-                }
-            } catch (error) {
-                console.error("Cutting plan preview failed", error);
-            } finally {
-                schedule(frm);
-            }
-        });
-    }
-
     function bindDraftInvalidation(frm) {
         const wrapper = actionWrapper(frm);
         if (!wrapper) return;
@@ -176,7 +123,6 @@
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         bindDraftInvalidation(frm);
-        bindPreviewButton(frm);
         syncSaveButton(frm);
         syncPresentation(frm);
     }
