@@ -15,6 +15,8 @@
         "almdina_erp.almdina_erp.services.cutting_plan_preview_service.commit_cutting_plan_preview";
     const APPROVE_METHOD =
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf";
+    const CANCEL_APPROVAL_METHOD =
+        "almdina_erp.almdina_erp.services.drawing_approval_service.cancel_production_plan_approval";
 
     async function call(method, args, options = {}) {
         const response = await frappe.call({
@@ -106,6 +108,17 @@
         );
     }
 
+    function cancelApproval(orderName) {
+        return call(
+            CANCEL_APPROVAL_METHOD,
+            { order_name: orderName },
+            {
+                freeze: true,
+                freezeMessage: __("جاري إلغاء اعتماد خطة القص..."),
+            }
+        );
+    }
+
     window.AlmdinaPlanWorkspaceAPI = Object.freeze({
         READ_METHOD,
         SAVE_SETTINGS_METHOD,
@@ -113,11 +126,13 @@
         PREVIEW_METHOD,
         COMMIT_PREVIEW_METHOD,
         APPROVE_METHOD,
+        CANCEL_APPROVAL_METHOD,
         load,
         saveSettings,
         recalculate,
         preview,
         commitPreview,
         approve,
+        cancelApproval,
     });
 })();
