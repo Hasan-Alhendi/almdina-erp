@@ -136,39 +136,33 @@ async function verifyCostSnapshotIsolation() {
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
 
     fakeWindow.AlmdinaCostPermissionsUX.apply(frm);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].options.args.order_name, "DCO-A");
+    assert.equal(
+        calls.length,
+        0,
+        "CostPermissions must never start its own financial snapshot request"
+    );
+    assert.deepEqual(renders, [10]);
 
     frm.doc = makeDoc("DCO-B", 20);
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
     frm.doc = makeDoc("DCO-A", 42);
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
 
-    calls[0].pending.resolve({ message: { order: { total_cost_usd: 999 }, pieces: [] } });
-    await flushPromises();
+    fakeWindow.AlmdinaCostPermissionsUX.apply(frm);
+    assert.equal(calls.length, 0);
     assert.equal(frm.doc.total_cost_usd, 42);
-    assert.deepEqual(renders, []);
+    assert.deepEqual(
+        renders,
+        [10, 42],
+        "the permission surface must render only the current document projection"
+    );
 
-    fakeWindow.AlmdinaCostPermissionsUX.apply(frm);
-    assert.equal(calls.length, 2);
-    calls[1].pending.resolve({ message: { order: { total_cost_usd: 15 }, pieces: [] } });
-    await flushPromises();
-    assert.equal(frm.doc.total_cost_usd, 15);
-    assert.deepEqual(renders, [15]);
-
-    fakeWindow.AlmdinaCostPermissionsUX.apply(frm);
-    assert.equal(calls.length, 3);
     frm.doc = makeDoc("DCO-B", 30);
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    frm.doc = makeDoc("DCO-A", 55);
-    fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    calls[2].pending.reject(new Error("stale request failed"));
-    await flushPromises();
-    assert.equal(
-        frm.doc.total_cost_usd,
-        55,
-        "a stale request failure must not scrub the current order cost"
-    );
+    fakeWindow.AlmdinaCostPermissionsUX.apply(frm);
+    assert.equal(calls.length, 0);
+    assert.equal(frm.doc.total_cost_usd, 30);
+    assert.deepEqual(renders, [10, 42, 30]);
 }
 
 async function verifyProductionActionsRecoverAfterPermissions() {
