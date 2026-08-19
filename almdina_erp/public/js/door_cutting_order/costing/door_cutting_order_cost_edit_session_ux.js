@@ -7,6 +7,10 @@
         "board_rate_usd",
         "cutting_cost_per_board_usd",
     ]);
+    const REQUIRED_COST_LABELS = Object.freeze({
+        board_rate_usd: "سعر اللوح",
+        cutting_cost_per_board_usd: "أجور القص / لوح",
+    });
     const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const STATUS_KEY = "__almdinaFocusedCostStatus";
     const STATUS_OWNER_KEY = "__almdinaFocusedCostStatusOwnerInstalled";
@@ -112,6 +116,18 @@
         return owner.load(frm);
     }
 
+    function markRequiredDraftControls(frm) {
+        COST_SETTING_FIELDS.forEach((fieldname) => {
+            const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+            const wrapper = field && field.$wrapper;
+            if (!wrapper || !wrapper.length) return;
+            const control = wrapper.find(".almdina-workspace-field-editor .form-control").first();
+            if (!control || !control.length) return;
+            control.attr("required", "required");
+            control.attr("aria-required", "true");
+        });
+    }
+
     function mountDraftControls(frm) {
         const store = storeFor(frm);
         const fieldEditor = editor();
@@ -120,6 +136,7 @@
         fieldEditor.mount(frm, COST_SETTING_FIELDS, state.draft || {}, (patch) => {
             store.patchDraft(patch);
         });
+        markRequiredDraftControls(frm);
         return true;
     }
 
@@ -133,6 +150,37 @@
     function projectCurrent(frm) {
         const adapter = presenterAdapter();
         if (adapter && typeof adapter.project === "function") adapter.project(frm);
+    }
+
+    function draftControlValue(frm, fieldname, draft) {
+        const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+        const wrapper = field && field.$wrapper;
+        const control = wrapper && wrapper.length
+            ? wrapper.find(".almdina-workspace-field-editor .form-control").first()
+            : null;
+        if (control && control.length) return control.val();
+        return draft ? draft[fieldname] : null;
+    }
+
+    function validateRequiredCostSettings(frm, draft) {
+        const missing = COST_SETTING_FIELDS.filter((fieldname) => {
+            const value = draftControlValue(frm, fieldname, draft);
+            return value === null || value === undefined || String(value).trim() === "";
+        });
+        if (!missing.length) return true;
+
+        const labels = missing.map((fieldname) => __(REQUIRED_COST_LABELS[fieldname] || fieldname));
+        frappe.msgprint({
+            title: __("حقول مطلوبة"),
+            message: __("يجب إدخال القيم التالية من صفحة التكلفة قبل الحفظ: {0}")
+                .replace("{0}", labels.join("، ")),
+            indicator: "orange",
+        });
+        const fieldEditor = editor();
+        if (fieldEditor && typeof fieldEditor.focus === "function") {
+            fieldEditor.focus(frm, missing[0]);
+        }
+        return false;
     }
 
     async function startEditing(frm) {
@@ -186,6 +234,7 @@
         const state = store && store.snapshot();
         const api = window.AlmdinaCostWorkspaceAPI;
         if (!store || !state || !api || typeof api.saveSettings !== "function") return false;
+        if (!validateRequiredCostSettings(frm, state.draft || {})) return false;
 
         if (state.dirty) {
             await api.saveSettings(frm.doc.name, state.draft || {});
@@ -262,6 +311,7 @@
         cancelEditing,
         saveEditing,
         applyFieldAccess,
+        validateRequiredCostSettings,
         schedule,
     });
 })();
