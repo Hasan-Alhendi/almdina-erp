@@ -6,14 +6,12 @@ import frappe
 DOCTYPE = "Door Cutting Order"
 
 # A6.4 retires optimizer/settings/plan snapshot fields from DCO. This boundary
-# now protects only the surviving non-financial presentation surface. Canonical
-# plan settings, geometry, DXF, freshness, and snapshots live on Cutting Plan.
+# protects only the surviving non-financial presentation surface. Canonical plan
+# settings, geometry, DXF, freshness, and snapshots live on Cutting Plan.
 CUTTING_PLAN_SURFACE_FIELDS = (
     "results_tab",
     "plan_actions_section",
     "plan_control_actions",
-    "plan_result_section",
-    "plan_controls_intro",
     "plan_section",
     "cutting_plan_html",
     "totals_section",
@@ -26,6 +24,14 @@ CUTTING_PLAN_SURFACE_FIELDS = (
     "packing_method",
     "packing_score",
     "engine_version",
+)
+
+# The contextual-plan redesign removes these controls from the schema entirely.
+# Keep their names only for one-way cleanup of long-lived site Property Setters;
+# they are intentionally not part of the asserted metadata surface.
+RETIRED_PLAN_SURFACE_FIELDS = (
+    "plan_result_section",
+    "plan_controls_intro",
 )
 
 # These structural controls are always present for a user who can open the
@@ -41,16 +47,17 @@ VISIBLE_PLAN_SURFACE_FIELDS = (
 
 
 def _remove_stale_property_setters() -> None:
-    """Remove site-local overrides that can hide protected plan containers."""
+    """Remove site-local overrides on protected or newly retired plan controls."""
 
     if not frappe.db.exists("DocType", "Property Setter"):
         return
 
+    all_plan_fields = CUTTING_PLAN_SURFACE_FIELDS + RETIRED_PLAN_SURFACE_FIELDS
     names: list[str] = []
     for property_name, fieldnames in (
-        ("permlevel", CUTTING_PLAN_SURFACE_FIELDS),
-        ("hidden", VISIBLE_PLAN_SURFACE_FIELDS),
-        ("depends_on", VISIBLE_PLAN_SURFACE_FIELDS),
+        ("permlevel", all_plan_fields),
+        ("hidden", VISIBLE_PLAN_SURFACE_FIELDS + RETIRED_PLAN_SURFACE_FIELDS),
+        ("depends_on", VISIBLE_PLAN_SURFACE_FIELDS + RETIRED_PLAN_SURFACE_FIELDS),
     ):
         names.extend(
             frappe.get_all(
@@ -73,7 +80,7 @@ def _remove_stale_property_setters() -> None:
 
 
 def _repair_standard_docfields() -> None:
-    """Make the database metadata explicit even on long-lived migrated sites."""
+    """Make surviving database metadata explicit on long-lived migrated sites."""
 
     if not frappe.db.exists("DocType", DOCTYPE):
         return
@@ -108,7 +115,7 @@ def _repair_standard_docfields() -> None:
 
 
 def cutting_plan_surface_metadata_state() -> dict[str, object]:
-    """Return the effective field levels and any surviving local overrides."""
+    """Return effective metadata for the surviving Cutting Plan surface only."""
 
     if not frappe.db.exists("DocType", DOCTYPE):
         return {
@@ -216,6 +223,7 @@ def sync_cutting_plan_surface_metadata() -> None:
 
 __all__ = [
     "CUTTING_PLAN_SURFACE_FIELDS",
+    "RETIRED_PLAN_SURFACE_FIELDS",
     "VISIBLE_PLAN_SURFACE_FIELDS",
     "cutting_plan_surface_metadata_state",
     "sync_cutting_plan_surface_metadata",
