@@ -39,6 +39,14 @@
                     background:rgba(36,144,239,.065);
                     direction:rtl;
                 }
+                .dco-plan-preview-banner.is-stale {
+                    border-color:rgba(217,119,6,.30);
+                    background:rgba(245,158,11,.075);
+                }
+                .dco-plan-preview-banner.is-error {
+                    border-color:rgba(220,38,38,.26);
+                    background:rgba(239,68,68,.065);
+                }
                 .dco-plan-preview-banner strong { font-size:12px; }
                 .dco-plan-preview-banner span {
                     display:block;
@@ -56,6 +64,12 @@
                     font-size:10px;
                     font-weight:800;
                     white-space:nowrap;
+                }
+                .dco-plan-preview-banner.is-stale .dco-plan-preview-badge {
+                    background:#b45309;
+                }
+                .dco-plan-preview-banner.is-error .dco-plan-preview-badge {
+                    background:#b91c1c;
                 }
                 .dco-plan-preview-summary {
                     display:grid;
@@ -80,6 +94,25 @@
                     margin-top:4px;
                     font-size:13px;
                     font-weight:850;
+                }
+                .dco-plan-preview-status {
+                    padding:12px 14px;
+                    border:1px dashed var(--border-color,#ccd3da);
+                    border-radius:11px;
+                    background:var(--subtle-fg,#fafafa);
+                    direction:rtl;
+                }
+                .dco-plan-preview-status strong {
+                    display:block;
+                    font-size:12px;
+                    font-weight:850;
+                }
+                .dco-plan-preview-status span {
+                    display:block;
+                    margin-top:4px;
+                    color:var(--text-muted,#687481);
+                    font-size:10.5px;
+                    line-height:1.6;
                 }
                 @media (max-width:700px) {
                     .dco-plan-preview-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -198,8 +231,15 @@
                 "[data-almdina-plan-setting]",
                 () => {
                     const owner = previewOwner();
-                    if (owner) owner.invalidate(frm);
-                    schedule(frm);
+                    const changed = Boolean(owner && owner.invalidate(frm));
+                    if (changed) {
+                        schedule(frm);
+                        return;
+                    }
+                    // Once stale, later keystrokes do not require rebuilding the
+                    // persisted plan canvas. Keep only action guidance in sync.
+                    syncSaveButton(frm);
+                    syncMessage(frm);
                 }
             );
     }
@@ -225,11 +265,93 @@
         wrapper.html(`<div class="dco-plan-preview-summary">${items}</div>`);
     }
 
+    function previewStatusCopy(status) {
+        const copy = {
+            idle: [
+                "جاهز للتجربة",
+                "غيّر الإعدادات ثم اضغط «إعادة الحساب بالإعدادات الحالية». الخطة المحفوظة لم تتغير.",
+                "تجربة",
+            ],
+            stale: [
+                "المعاينة السابقة أصبحت قديمة",
+                "غيّرت أحد الإعدادات بعد آخر معاينة. الخطة المعروضة أدناه هي الخطة المحفوظة؛ أعد الحساب لرؤية النتيجة الجديدة.",
+                "أعد الحساب",
+            ],
+            previewing: [
+                "جاري حساب المعاينة",
+                "يتم تشغيل المحرك على الإعدادات الحالية دون حفظ أي تغيير.",
+                "جاري الحساب",
+            ],
+            error: [
+                "تعذرت المعاينة",
+                "لم يتم حفظ أي تغيير. راجع الإعدادات ثم أعد الحساب.",
+                "لم تُحفظ",
+            ],
+        };
+        return copy[status] || copy.idle;
+    }
+
+    function lockSourceTabs(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const wrapper = field && field.$wrapper;
+        if (!wrapper || !wrapper.length) return;
+        wrapper.find("[data-plan-tab]").each((_, element) => {
+            const tab = $(element);
+            const isSystem = tab.attr("data-plan-tab") === "System";
+            tab.prop("disabled", !isSystem);
+            if (!isSystem) {
+                tab.attr("title", __("احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة."));
+            } else {
+                tab.removeAttr("title");
+            }
+        });
+    }
+
+    function renderPersistedEditingState(frm, status) {
+        const tabs = window.AlmdinaPlanTabsUX;
+        frm.__almdina_active_plan_tab = "System";
+        if (tabs && typeof tabs.renderDualTabs === "function") tabs.renderDualTabs(frm);
+        lockSourceTabs(frm);
+
+        const field = frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const wrapper = field && field.$wrapper;
+        const content = wrapper && wrapper.find(".dco-plan-tab-content").first();
+        const [title, description, badge] = previewStatusCopy(status);
+        if (content && content.length) {
+            const stateClass = status === "stale"
+                ? " is-stale"
+                : status === "error"
+                    ? " is-error"
+                    : "";
+            content.prepend(`
+                <div class="dco-plan-preview-banner${stateClass}">
+                    <div>
+                        <strong>${frappe.utils.escape_html(__(title))}</strong>
+                        <span>${frappe.utils.escape_html(__(description))}</span>
+                    </div>
+                    <span class="dco-plan-preview-badge">${frappe.utils.escape_html(__(badge))}</span>
+                </div>
+            `);
+        }
+
+        const summaryField = frm.fields_dict && frm.fields_dict.plan_controls_intro;
+        const summaryWrapper = summaryField && summaryField.$wrapper;
+        if (summaryWrapper && summaryWrapper.length) {
+            summaryWrapper.html(`
+                <div class="dco-plan-preview-status">
+                    <strong>${frappe.utils.escape_html(__(title))}</strong>
+                    <span>${frappe.utils.escape_html(__(description))}</span>
+                </div>
+            `);
+        }
+        return true;
+    }
+
     function renderPreviewPlan(frm) {
         const owner = previewOwner();
-        if (!owner || !owner.isReady(frm)) return false;
-        const payload = owner.snapshot(frm).payload || {};
-        const plan = payload.plan;
+        const state = owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+        const payload = state && state.payload;
+        const plan = payload && payload.plan;
         const renderer = window.AlmdinaCuttingPlanRender;
         if (!plan || !Array.isArray(plan.sheets) || !plan.sheets.length || !renderer || !renderer.build) {
             return false;
@@ -244,22 +366,20 @@
         if (!wrapper || !wrapper.length) return false;
         const content = wrapper.find(".dco-plan-tab-content").first();
         if (!content.length) return false;
+        const saving = state.status === "saving";
         content.html(`
             <div class="dco-plan-preview-banner">
                 <div>
-                    <strong>${frappe.utils.escape_html(__("معاينة غير محفوظة"))}</strong>
-                    <span>${frappe.utils.escape_html(__("هذه هي الخطة التي سيتم حفظها حرفيًا عند الضغط على «حفظ». يمكنك تجربة خوارزمية أخرى قبل ذلك."))}</span>
+                    <strong>${frappe.utils.escape_html(__(saving ? "جاري حفظ المعاينة المختارة" : "معاينة غير محفوظة"))}</strong>
+                    <span>${frappe.utils.escape_html(__(saving
+                        ? "يتم الآن تثبيت نفس الخطة التي تراها دون إعادة تشغيل الخوارزمية."
+                        : "هذه هي الخطة التي سيتم حفظها حرفيًا عند الضغط على «حفظ». يمكنك تجربة خوارزمية أخرى قبل ذلك."))}</span>
                 </div>
-                <span class="dco-plan-preview-badge">${frappe.utils.escape_html(__("PREVIEW"))}</span>
+                <span class="dco-plan-preview-badge">${frappe.utils.escape_html(__(saving ? "حفظ" : "PREVIEW"))}</span>
             </div>
             ${renderer.build(frm, plan)}
         `);
-        wrapper.find("[data-plan-tab]").each((_, element) => {
-            const tab = $(element);
-            const isSystem = tab.attr("data-plan-tab") === "System";
-            tab.prop("disabled", !isSystem);
-            if (!isSystem) tab.attr("title", __("احفظ أو ألغِ تعديل خطة القص قبل تغيير مصدر الخطة."));
-        });
+        lockSourceTabs(frm);
         renderPreviewSummary(frm, payload.summary || {});
         return true;
     }
@@ -302,9 +422,13 @@
         syncMessage(frm);
 
         const owner = previewOwner();
-        if (editing(frm) && owner && owner.isReady(frm)) {
+        if (!editing(frm) || !owner) return;
+        const state = owner.snapshot(frm);
+        if ((state.status === "ready" || state.status === "saving") && state.payload && state.payload.plan) {
             renderPreviewPlan(frm);
+            return;
         }
+        renderPersistedEditingState(frm, state.status);
     }
 
     function schedule(frm) {
@@ -397,6 +521,7 @@
     window.AlmdinaPlanPreviewEditUX = Object.freeze({
         canSaveEditing,
         renderPreviewPlan,
+        renderPersistedEditingState,
         schedule,
         sync,
     });
