@@ -263,16 +263,19 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         document_print = DOCUMENT_PRINT.read_text(encoding="utf-8")
         secure_dxf = SECURE_DXF.read_text(encoding="utf-8")
 
-        # A5.2 makes the Plan workspace API the single transport owner. Controls
-        # keep command policy and intent, but endpoint names must not leak back
-        # into UI modules.
+        # The workspace API remains the single transport owner and keeps the
+        # legacy recalculation method for compatible callers. The active form UX
+        # is preview-first: controls delegate to the preview session and never
+        # persist or embed endpoint names themselves.
         self.assertIn(
             "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order",
             plan_api,
         )
         self.assertIn("RECALCULATE_METHOD", plan_api)
         self.assertIn("AlmdinaPlanWorkspaceAPI", plan_controls)
-        self.assertIn("transport.recalculate(frm.doc.name, settings)", plan_controls)
+        self.assertIn("AlmdinaPlanPreviewSession", plan_controls)
+        self.assertIn("await previews.preview(frm, settings)", plan_controls)
+        self.assertNotIn("transport.recalculate(frm.doc.name, settings)", plan_controls)
         self.assertNotIn("order_plan_permission_service.recalculate_order", plan_controls)
         self.assertNotIn("frappe.call", plan_controls)
         self.assertIn('can(frm, "recalculate_plan")', plan_controls)
