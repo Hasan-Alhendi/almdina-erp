@@ -55,7 +55,7 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("session.source_plan_modified", commit)
         self.assertIn("session.user != frappe.session.user", commit)
 
-    def test_exact_commit_recomputes_input_fingerprint_before_projection(self) -> None:
+    def test_exact_commit_recomputes_input_fingerprint_and_rejects_invalid_geometry(self) -> None:
         source = (
             APP
             / "infrastructure"
@@ -65,6 +65,7 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("plan_input_fingerprint(order, plan)", source)
         self.assertIn("live_fingerprint != expected_input_fingerprint", source)
         self.assertIn("apply_calculation_outcome", source)
+        self.assertIn('not validation.get("is_valid")', source)
         self.assertNotIn("_apply_snapshot", source)
         self.assertNotIn("calculate_system_plan", source)
 
@@ -87,30 +88,36 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("almdina:plan-preview-updated", source)
         self.assertIn("api.preview(frm.doc.name", source)
         self.assertIn("api.commitPreview(frm.doc.name, previewId)", source)
+        self.assertIn("function isCommittable(frm)", source)
+        self.assertIn('String(validation.status || "") === "Valid"', source)
         self.assertNotIn("AlmdinaWorkspaceStore", source)
         self.assertNotIn("refresh_plan_controls", source)
 
-    def test_edit_ux_requires_preview_before_save_and_invalidates_on_change(self) -> None:
+    def test_edit_controller_requires_valid_preview_and_invalidates_on_change(self) -> None:
         source = (PUBLIC / "door_cutting_order_plan_preview_edit_ux.js").read_text(
             encoding="utf-8"
         )
-        self.assertIn("owner.isReady(frm)", source)
+        self.assertIn("owner.isCommittable(frm)", source)
         self.assertIn("button.disabled = !allowed", source)
         self.assertIn("owner.invalidate(frm)", source)
         self.assertIn("await owner.commit(frm)", source)
         self.assertNotIn("legacy.saveEditing(frm)", source)
-        self.assertIn("اضغط «تعديل» لبدء تجربة", source)
-        self.assertIn("معاينة غير محفوظة", source)
+        self.assertIn("المعاينة الحالية لم تنجح في التحقق الهندسي", source)
+        self.assertNotIn("<style", source)
+        self.assertNotIn("renderer.build", source)
 
-    def test_stale_preview_never_remains_presented_as_the_current_result(self) -> None:
-        source = (PUBLIC / "door_cutting_order_plan_preview_edit_ux.js").read_text(
+    def test_presenter_owns_preview_and_stale_visuals_only(self) -> None:
+        source = (PUBLIC / "door_cutting_order_plan_preview_presenter.js").read_text(
             encoding="utf-8"
         )
         self.assertIn("function renderPersistedEditingState(frm, status)", source)
-        self.assertIn("renderPersistedEditingState(frm, state.status)", source)
+        self.assertIn("function renderPreviewPlan(frm, previewState, committable)", source)
         self.assertIn("المعاينة السابقة أصبحت قديمة", source)
         self.assertIn("الخطة المعروضة أدناه هي الخطة المحفوظة", source)
-        self.assertIn('state.status === "ready" || state.status === "saving"', source)
+        self.assertIn("معاينة غير صالحة للحفظ", source)
+        self.assertNotIn("frappe.call", source)
+        self.assertNotIn("api.preview", source)
+        self.assertNotIn("api.commitPreview", source)
 
     def test_preview_assets_load_at_the_correct_architecture_boundaries(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
@@ -118,14 +125,16 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         state = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"
         preview = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js"
         edit = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js"
+        presenter = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_presenter.js"
         preview_edit = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_edit_ux.js"
         page = "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js"
 
-        for asset in (preview, preview_edit):
+        for asset in (preview, presenter, preview_edit):
             self.assertEqual(manifest.count(asset), 1)
         self.assertLess(manifest.index(api), manifest.index(state))
         self.assertLess(manifest.index(state), manifest.index(preview))
-        self.assertLess(manifest.index(edit), manifest.index(preview_edit))
+        self.assertLess(manifest.index(edit), manifest.index(presenter))
+        self.assertLess(manifest.index(presenter), manifest.index(preview_edit))
         self.assertLess(manifest.index(preview_edit), manifest.index(page))
 
 
