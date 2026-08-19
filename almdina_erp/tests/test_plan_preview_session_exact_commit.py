@@ -119,6 +119,31 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertNotIn("api.preview", source)
         self.assertNotIn("api.commitPreview", source)
 
+    def test_plan_controls_are_the_single_preview_command_owner(self) -> None:
+        controls = (PUBLIC / "door_cutting_order_plan_controls_ux.js").read_text(
+            encoding="utf-8"
+        )
+        controller = (PUBLIC / "door_cutting_order_plan_preview_edit_ux.js").read_text(
+            encoding="utf-8"
+        )
+        edit_session = (PUBLIC / "door_cutting_order_plan_edit_session_ux.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("&& workspaceEditing(frm)", controls)
+        self.assertIn("await previews.preview(frm, settings)", controls)
+        self.assertIn('"almdina:plan-preview-updated"', controls)
+        self.assertNotIn("transport.recalculate(frm.doc.name, settings)", controls)
+        self.assertNotIn(".dco-recalculate-plan", controller)
+        self.assertNotIn("bindPreviewButton", controller)
+
+        blocked = edit_session[
+            edit_session.index("const BLOCKED_PLAN_ACTIONS"):
+            edit_session.index("const ORIGINAL_DISABLED_ATTR")
+        ]
+        self.assertNotIn(".dco-recalculate-plan", blocked)
+        self.assertIn(".dco-approve-cutting-plan", blocked)
+
     def test_preview_assets_load_at_the_correct_architecture_boundaries(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
         api = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"
