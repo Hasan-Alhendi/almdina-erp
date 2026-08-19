@@ -36,6 +36,10 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js",
+        # Plan previews are transient UI experiments layered over canonical Plan
+        # workspace state. They must exist before any renderer/action consumes a
+        # preview while the persisted workspace remains the source of truth.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js",
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
@@ -117,6 +121,10 @@ doctype_js = {
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
         # Explicit user intent remains separate from capability/stage policy.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js",
+        # Preview presentation is a pure renderer; the interaction controller
+        # owns Edit -> many previews -> exact Save/Cancel and delegates all visuals.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_presenter.js",
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_edit_ux.js",
         # The page coordinator owns only the visible top action and delegates
         # Order / Cutting Plan / Cost editing to their established session owners.
         "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js",

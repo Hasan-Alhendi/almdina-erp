@@ -86,7 +86,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             hooks,
         )
 
-        # The public legacy method remains stable for the current browser, but
+        # The public legacy method remains stable for compatibility, while
         # authorization and mutation ownership live in the canonical plan command.
         self.assertIn("cutting_plan_command_service import", facade)
         self.assertIn("recalculate_order_plan(", facade)
@@ -180,15 +180,19 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             "!locked && mayMutate && mayRecalculate && (!modeButton || mayEditOptimizer)",
             source,
         )
-        # A5.2 keeps endpoint ownership in the workspace transport adapter. UI
-        # controls express capability/policy only and never embed transport names.
+        # The workspace API retains the legacy recalculation route for compatible
+        # callers, while the active browser action is preview-first. Controls own
+        # policy and intent only; preview transport/state live behind the preview
+        # session and no endpoint names leak into the UI module.
         self.assertIn("RECALCULATE_METHOD", plan_api)
         self.assertIn(
             '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"',
             plan_api,
         )
         self.assertIn("AlmdinaPlanWorkspaceAPI", controls)
-        self.assertIn("transport.recalculate(frm.doc.name, settings)", controls)
+        self.assertIn("AlmdinaPlanPreviewSession", controls)
+        self.assertIn("await previews.preview(frm, settings)", controls)
+        self.assertNotIn("transport.recalculate(frm.doc.name, settings)", controls)
         self.assertNotIn("RECALCULATE_METHOD", controls)
         self.assertNotIn("order_plan_permission_service.recalculate_order", controls)
         self.assertNotIn(

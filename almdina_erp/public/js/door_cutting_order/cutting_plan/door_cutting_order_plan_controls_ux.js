@@ -45,6 +45,10 @@
         return window.AlmdinaPlanWorkspaceAPI || null;
     }
 
+    function previewOwner() {
+        return window.AlmdinaPlanPreviewSession || null;
+    }
+
     function workspaceSnapshot(frm) {
         const owner = stateOwner();
         return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
@@ -231,18 +235,28 @@
     }
 
     function canCalculate(frm) {
+        const previews = previewOwner();
         return Boolean(
             workspaceReady(frm)
-            && !workspaceEditing(frm)
+            && workspaceEditing(frm)
             && canTuneCuttingAlgorithm(frm)
             && can(frm, "recalculate_plan")
+            && previews
+            && typeof previews.preview === "function"
+            && !(typeof previews.isBusy === "function" && previews.isBusy(frm))
         );
     }
 
     function recalculationDisabledReason(frm) {
         if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
         if (!workspaceReady(frm)) return __("انتظر حتى يكتمل تحميل خطة القص.");
-        if (workspaceEditing(frm)) return __("احفظ أو ألغِ تعديل إعدادات الخطة قبل إعادة الحساب.");
+        if (!workspaceEditing(frm)) {
+            return __("اضغط «تعديل» لبدء تجربة إعدادات أو خوارزميات مختلفة.");
+        }
+        const previews = previewOwner();
+        if (previews && typeof previews.isBusy === "function" && previews.isBusy(frm)) {
+            return __("انتظر حتى تكتمل عملية المعاينة أو الحفظ الحالية.");
+        }
         if (approvedPlanName(frm) && !isDrawingStage(frm)) {
             return __("الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم.");
         }
@@ -301,38 +315,37 @@
     }
 
     async function runRecalculation(frm) {
+        // Preview-first contract: this historical action name remains for API
+        // compatibility, but it never persists a Cutting Plan. Order-owned inputs
+        // are synchronized first so the server preview uses exactly what the user
+        // currently sees. Saving the Cutting Plan is owned exclusively by the
+        // exact-preview commit command.
         await ensureWorkspaceLoaded(frm);
         if (!canCalculate(frm)) {
             frappe.msgprint(recalculationDisabledReason(frm));
             return false;
         }
-        if (!(await preparePlanInputs(frm))) return false;
 
-        const revisionUx = window.AlmdinaOrderRevisionUX;
-        const wasEditing = Boolean(
-            revisionUx && typeof revisionUx.captureEditSessionPresence === "function"
-                ? revisionUx.captureEditSessionPresence(frm)
-                : frm.__almdina_edit_session
-        );
-        if (!(await persistPendingOrderInputs(frm))) return false;
-
-        const transport = api();
         const settings = activeSettings(frm);
-        if (!transport || typeof transport.recalculate !== "function" || !settings) {
-            frappe.msgprint(__("تعذر تجهيز أمر إعادة حساب خطة القص."));
+        const previews = previewOwner();
+        if (!settings || !previews || typeof previews.preview !== "function") {
+            frappe.msgprint(__("تعذر تجهيز معاينة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
             return false;
         }
+        if (!(await preparePlanInputs(frm))) return false;
+        if (!(await persistPendingOrderInputs(frm))) return false;
 
         try {
-            await transport.recalculate(frm.doc.name, settings);
-            await refreshWorkspaceOwners(frm);
-            frappe.show_alert({ message: __("تم تحديث خطة القص والنتائج."), indicator: "green" }, 4);
-            if (revisionUx && typeof revisionUx.restorePrimaryAfterPlanEngine === "function") {
-                revisionUx.restorePrimaryAfterPlanEngine(frm, wasEditing);
+            const ok = await previews.preview(frm, settings);
+            if (ok) {
+                frappe.show_alert({
+                    message: __("تم إنشاء معاينة جديدة. لم يتم حفظ أي تغيير بعد."),
+                    indicator: "blue",
+                }, 4);
             }
-            return true;
+            return Boolean(ok);
         } catch (error) {
-            console.error("Cutting plan recalculation failed", error);
+            console.error("Cutting plan preview failed", error);
             throw error;
         }
     }
@@ -471,7 +484,7 @@
         button.attr(
             "title",
             recalculationDisabledReason(frm)
-            || __("إعادة حساب خطة القص باستخدام إعدادات Plan Workspace الحالية")
+            || __("معاينة خطة القص مؤقتًا باستخدام إعدادات التعديل الحالية")
         );
         const element = button.get(0);
         if (element && !element.__almdinaPlanCommandBound) {
@@ -508,9 +521,9 @@
         const note = field.$wrapper.find(".dco-plan-note").first();
         if (note.length) {
             const message = can(frm, "edit_optimizer_settings")
-                ? "عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب. لا تحتاج صلاحية التكلفة أو تعديل الطلب."
+                ? "اضغط «تعديل» لتجربة الخوارزميات والإعدادات كما تشاء. إعادة الحساب تنشئ معاينة فقط، ولا تُحفظ الخطة حتى تضغط «حفظ»."
                 : can(frm, "recalculate_plan")
-                    ? "يمكنك إعادة حساب الخطة بالإعدادات الحالية. تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص»."
+                    ? "يمكن تشغيل محرك الخطة فقط داخل جلسة تعديل الإعدادات. تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص»."
                     : "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
             setTextIfChanged(note, message);
         }
@@ -573,12 +586,15 @@
         board_description(frm) { refresh(frm); },
         board_length_cm(frm) { refresh(frm); },
         board_width_cm(frm) { refresh(frm); },
+        almdina_edit_session_changed(frm) { refresh(frm); },
+        refresh_plan_controls(frm) { refresh(frm); },
     });
 
     [
         "almdina:permissions-updated",
         "almdina:stage-context-ready",
         "almdina:plan-workspace-updated",
+        "almdina:plan-preview-updated",
     ].forEach((eventName) => {
         window.addEventListener(eventName, (event) => {
             const frm = eventName === "almdina:stage-context-ready"

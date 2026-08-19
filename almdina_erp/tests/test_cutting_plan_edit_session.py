@@ -172,7 +172,7 @@ class TestPlanSettingsEditService(TestCase):
 
         # The whitelist command has already required EDIT_OPTIMIZER_SETTINGS.
         # Lifecycle validation must not add a second current-worker role gate.
-        service._assert_edit_lifecycle(doc)
+        service.assert_plan_settings_edit_lifecycle(doc)
 
     def test_routed_order_at_drawing_allows_edit_without_stage_snapshot(self) -> None:
         doc = FakeOrder(
@@ -181,7 +181,7 @@ class TestPlanSettingsEditService(TestCase):
             production_path="ROUTE-DRAWING",
         )
 
-        service._assert_edit_lifecycle(doc)
+        service.assert_plan_settings_edit_lifecycle(doc)
 
     def test_finished_routed_order_without_active_stage_fails_closed(self) -> None:
         doc = FakeOrder(
@@ -191,7 +191,7 @@ class TestPlanSettingsEditService(TestCase):
         )
 
         with self.assertRaises(frappe.PermissionError):
-            service._assert_edit_lifecycle(doc)
+            service.assert_plan_settings_edit_lifecycle(doc)
 
     def test_save_delegates_normalized_settings_to_plan_command_owner(self) -> None:
         doc = FakeOrder()
@@ -271,4 +271,4 @@ class TestPlanSettingsEditService(TestCase):
             patch.object(service.frappe, "get_meta", return_value=_cutting_plan_meta()),
             self.assertRaises(frappe.ValidationError),
         ):
-            service._normalize_updates({"kerf_mm": -1})
+            service.normalize_plan_settings_updates({"kerf_mm": -1})

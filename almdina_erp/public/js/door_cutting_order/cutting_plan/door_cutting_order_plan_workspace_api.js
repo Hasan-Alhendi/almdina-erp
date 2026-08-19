@@ -9,6 +9,10 @@
         "almdina_erp.almdina_erp.services.plan_settings_edit_service.save_plan_settings";
     const RECALCULATE_METHOD =
         "almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order";
+    const PREVIEW_METHOD =
+        "almdina_erp.almdina_erp.services.cutting_plan_preview_service.preview_cutting_plan";
+    const COMMIT_PREVIEW_METHOD =
+        "almdina_erp.almdina_erp.services.cutting_plan_preview_service.commit_cutting_plan_preview";
     const APPROVE_METHOD =
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf";
 
@@ -38,6 +42,9 @@
         };
     }
 
+    // Kept for compatibility consumers outside the focused edit flow. The plan
+    // edit session itself uses preview() -> commitPreview() and never persists
+    // optimizer settings before the operator chooses a result.
     function saveSettings(orderName, settings) {
         return call(
             SAVE_SETTINGS_METHOD,
@@ -60,6 +67,31 @@
         );
     }
 
+    function preview(orderName, settings) {
+        return call(
+            PREVIEW_METHOD,
+            settingsArgs(orderName, settings),
+            {
+                freeze: true,
+                freezeMessage: __("جاري معاينة الخطة بهذه الإعدادات..."),
+            }
+        );
+    }
+
+    function commitPreview(orderName, previewId) {
+        return call(
+            COMMIT_PREVIEW_METHOD,
+            {
+                order_name: orderName,
+                preview_id: previewId,
+            },
+            {
+                freeze: true,
+                freezeMessage: __("جاري حفظ خطة القص المختارة..."),
+            }
+        );
+    }
+
     function approve(orderName, source) {
         return call(
             APPROVE_METHOD,
@@ -78,10 +110,14 @@
         READ_METHOD,
         SAVE_SETTINGS_METHOD,
         RECALCULATE_METHOD,
+        PREVIEW_METHOD,
+        COMMIT_PREVIEW_METHOD,
         APPROVE_METHOD,
         load,
         saveSettings,
         recalculate,
+        preview,
+        commitPreview,
         approve,
     });
 })();

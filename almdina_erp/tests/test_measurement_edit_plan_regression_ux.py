@@ -34,7 +34,7 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
     assert "def ensure_custom_edge_prices(self)" in adapter
 
 
-def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -> None:
+def test_preview_persists_pending_order_inputs_before_server_preview_call() -> None:
     plan_controls = source("door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js")
     plan_api = source("door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js")
     fast_save = source("door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js")
@@ -53,11 +53,14 @@ def test_recalculation_persists_pending_order_inputs_before_server_plan_call() -
     assert "frm.save" not in plan_controls
     assert "RECALCULATE_METHOD" in plan_api
     assert "frappe.call" not in plan_controls
+    assert "AlmdinaPlanPreviewSession" in plan_controls
 
     run_body = plan_controls.split("async function runRecalculation(frm)", 1)[1]
+    prepare_pos = run_body.index("await preparePlanInputs(frm)")
     persist_pos = run_body.index("await persistPendingOrderInputs(frm)")
-    recalc_pos = run_body.index("await transport.recalculate(frm.doc.name, settings)")
-    assert persist_pos < recalc_pos
+    preview_pos = run_body.index("await previews.preview(frm, settings)")
+    assert prepare_pos < persist_pos < preview_pos
+    assert "transport.recalculate(frm.doc.name, settings)" not in run_body
 
 
 def test_optimizer_only_recalculation_does_not_require_order_save() -> None:

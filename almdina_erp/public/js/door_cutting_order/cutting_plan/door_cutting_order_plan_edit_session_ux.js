@@ -82,7 +82,8 @@
         "At Sanding",
     ]);
     const BLOCKED_PLAN_ACTIONS = [
-        ".dco-recalculate-plan",
+        // Preview/recalculation remains active while editing; all operations that
+        // depend on a persisted plan stay suspended until Save/Cancel.
         ".dco-approve-cutting-plan",
         ".dco-print-cutting-plan",
         ".dco-export-dxf",
