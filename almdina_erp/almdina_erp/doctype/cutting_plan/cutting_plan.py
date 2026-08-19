@@ -72,8 +72,17 @@ class CuttingPlan(Document):
             frappe.throw(_("The source Cutting Plan revision does not exist."))
         if str(parent.door_cutting_order or "") != str(self.door_cutting_order or ""):
             frappe.throw(_("The source Cutting Plan revision belongs to another order."))
-        if parent.status != APPROVED:
+
+        # Creating a revision is allowed only from the currently Approved plan;
+        # that invariant is also enforced by the application create-revision use
+        # case. After the child exists, its immutable lineage remains valid when
+        # the parent later becomes Superseded or Cancelled as part of normal
+        # approval replacement/cancellation. Re-validating an existing child must
+        # therefore accept all immutable historical parent states.
+        if self.is_new() and parent.status != APPROVED:
             frappe.throw(_("A new Cutting Plan revision must be based on an approved plan."))
+        if not self.is_new() and parent.status not in IMMUTABLE_STATUSES:
+            frappe.throw(_("A Cutting Plan revision must reference an immutable historical plan."))
         if cint(self.revision) <= cint(parent.revision):
             frappe.throw(_("The new Cutting Plan revision must be newer than its source revision."))
 

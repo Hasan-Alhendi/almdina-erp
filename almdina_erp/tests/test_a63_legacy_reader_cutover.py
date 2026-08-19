@@ -234,7 +234,15 @@ def test_saved_dxf_paths_require_canonical_cutting_plan() -> None:
     )
     upload = (APP / "services" / "shop_floor_dxf_service.py").read_text(encoding="utf-8")
 
-    assert "_required_saved_plan(order)" in export
+    # Saved export remains canonical-only, but explicit UI plan selection now
+    # resolves the exact System / Uploaded / Approved Cutting Plan instead of
+    # silently falling back to a different current plan.
+    assert "def _saved_plan_for_source(order: Any, plan_source: str | None)" in export
+    assert "_required_saved_plan(order, plan_source)" in export
+    assert "current_working_plan" in export
+    assert "latest_plan(order.name, source_type=SYSTEM, status=DRAFT)" in export
+    assert "latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)" in export
+    assert "approved_plan_for_order(order)" in export
     assert "_stored_order_export_snapshot(order)" not in export
     assert 'getattr(order, "kerf_mm"' not in export
     assert "Read-only migration bridge for orders predating canonical Cutting Plan." not in export

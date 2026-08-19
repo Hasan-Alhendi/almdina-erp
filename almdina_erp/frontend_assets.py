@@ -102,6 +102,10 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js",
+        # Contextual actions are a presentation/controller layer over the already
+        # loaded Plan workspace + command APIs. Tabs own placement; this owner owns
+        # only the commands for whichever plan tab the operator is viewing.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_context_actions_ux.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js",
         # A5.2 replaces DCO plan JSON reads and the approved-plan side RPC with the
         # capability-scoped Plan workspace snapshot while preserving the same UI.

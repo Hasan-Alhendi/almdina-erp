@@ -254,7 +254,7 @@
 
     function fetchValidatedPlan(args) {
         return frappe.call({
-            method: "almdina_erp.almdina_erp.services.export_validation_service.get_validated_dxf_plan",
+            method: "almdina_erp.almdina_erp.services.dxf_export_service.get_validated_dxf_plan",
             args,
             freeze: true,
             freeze_message: isArabic() ? "جاري التحقق من هندسة ملف DXF قبل التصدير..." : "Validating DXF geometry on server...",
@@ -268,8 +268,10 @@
         return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name));
     }
 
-    function exportOrderDxf(orderName) {
-        return fetchValidatedPlan({ order_name: orderName }).then(r =>
+    function exportOrderDxf(orderName, planSource = null) {
+        const args = { order_name: orderName };
+        if (planSource) args.plan_source = planSource;
+        return fetchValidatedPlan(args).then(r =>
             downloadValidatedPlan(r.message, orderName)
         );
     }

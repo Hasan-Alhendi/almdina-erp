@@ -6,6 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    DRAFT,
+    SYSTEM,
+    UPLOADED_DXF,
+)
 from almdina_erp.almdina_erp.domain.cutting.primitives import rects_have_clearance
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -15,7 +20,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    approved_plan_for_order,
     current_working_plan,
+    latest_plan,
 )
 from almdina_erp.almdina_erp.services import export_validation_service as legacy_export
 from almdina_erp.almdina_erp.services.order_board_identity import (
@@ -194,14 +201,38 @@ def _canonical_saved_plan(order: Any) -> Any | None:
     return current_working_plan(str(order.name))
 
 
-def _required_saved_plan(order: Any) -> Any:
-    plan = _canonical_saved_plan(order)
+def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
+    """Resolve exactly the plan surface the operator chose in the UI.
+
+    Omitting ``plan_source`` keeps the historical export behavior for compatible
+    callers. Explicit sources are fail-closed so a System-tab export can never
+    silently export an unrelated Approved or Uploaded plan.
+    """
+
+    normalized = str(plan_source or "").strip().lower()
+    if not normalized:
+        return _canonical_saved_plan(order)
+    if normalized == "system":
+        return latest_plan(order.name, source_type=SYSTEM, status=DRAFT)
+    if normalized in {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
+        return latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
+    if normalized == "approved":
+        return approved_plan_for_order(order)
+    frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
+    raise AssertionError("unreachable")
+
+
+def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
+    plan = _saved_plan_for_source(order, plan_source)
     if not plan or not str(getattr(plan, "snapshot_json", None) or "").strip():
+        source_labels = {
+            "system": _("خطة النظام"),
+            "custom": _("الخطة المرفوعة"),
+            "approved": _("الخطة المعتمدة"),
+        }
+        selected = source_labels.get(str(plan_source or "").strip().lower(), _("الخطة الحالية"))
         frappe.throw(
-            _(
-                "لا توجد خطة قص Canonical صالحة لهذا الطلب. "
-                "أعد حساب خطة القص قبل تصدير DXF."
-            )
+            _("لا توجد {0} صالحة للتصدير. جهّز الخطة أولًا ثم حاول مرة أخرى.").format(selected)
         )
     return plan
 
@@ -210,6 +241,7 @@ def _required_saved_plan(order: Any) -> Any:
 def get_validated_dxf_plan(
     order_name: str | None = None,
     doc: str | dict[str, Any] | None = None,
+    plan_source: str | None = None,
 ) -> dict[str, Any]:
     """Return validated geometry only after configurable document authorization."""
 
@@ -222,7 +254,7 @@ def get_validated_dxf_plan(
     order = _require_export_access(order_name=order_name, payload=payload)
 
     if order_name and order:
-        plan = _required_saved_plan(order)
+        plan = _required_saved_plan(order, plan_source)
         errors = legacy_export.validate_cutting_plan_document(plan)
         if errors:
             frappe.throw(

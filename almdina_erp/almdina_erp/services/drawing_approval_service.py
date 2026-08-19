@@ -86,4 +86,28 @@ def approve_production_dxf(
     return result
 
 
-__all__ = ["approve_production_dxf"]
+@frappe.whitelist()
+def cancel_production_plan_approval(order_name: str) -> dict[str, Any]:
+    """Cancel the current production approval through the focused Plan command."""
+
+    order = _authorized_order(order_name)
+    state = _state(order)
+    if not state.approved_plan:
+        frappe.throw(_("لا توجد خطة قص معتمدة لإلغاء اعتمادها."), frappe.ValidationError)
+
+    from almdina_erp.almdina_erp.services.cutting_plan_approval_cancellation_service import (
+        cancel_approved_order_plan,
+    )
+
+    result = cancel_approved_order_plan(order)
+    order.add_comment(
+        "Info",
+        text=_("تم إلغاء اعتماد خطة القص {0} بواسطة {1}.").format(
+            state.approved_plan,
+            frappe.session.user,
+        ),
+    )
+    return result
+
+
+__all__ = ["approve_production_dxf", "cancel_production_plan_approval"]

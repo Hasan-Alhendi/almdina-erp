@@ -8,8 +8,9 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 PLAN_DOCTYPE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.json"
 CUTTING_PLAN = APP_ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
-PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
 CONTENT_UX = CUTTING_PLAN / "door_cutting_order_plan_content_ux.js"
+CONTEXT_UX = CUTTING_PLAN / "door_cutting_order_plan_context_actions_ux.js"
+TABS_UX = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
 
 
 def _schema(path: Path) -> dict:
@@ -47,15 +48,18 @@ def test_optimizer_settings_are_grouped_on_cutting_plan_and_actions_stay_on_dco_
     assert order["field_order"].index("plan_actions_section") + 1 == order["field_order"].index("plan_control_actions")
 
 
-def test_machine_type_is_canonical_read_only_and_legacy_result_container_stays_hidden():
-    order_fields = {row["fieldname"]: row for row in _schema(DOCTYPE_JSON)["fields"]}
+def test_machine_type_is_canonical_read_only_and_legacy_result_container_is_removed():
+    order = _schema(DOCTYPE_JSON)
+    order_fields = {row["fieldname"]: row for row in order["fields"]}
     plan_fields = {row["fieldname"]: row for row in _schema(PLAN_DOCTYPE_JSON)["fields"]}
 
     assert "cutting_machine_type" not in order_fields
     assert plan_fields["machine_type"].get("default") == "Auto"
     assert plan_fields["machine_type"].get("read_only") == 1
-    assert order_fields["plan_result_section"].get("hidden") == 1
-    assert order_fields["plan_controls_intro"].get("hidden") == 1
+    assert "plan_result_section" not in order_fields
+    assert "plan_controls_intro" not in order_fields
+    assert "plan_result_section" not in order["field_order"]
+    assert "plan_controls_intro" not in order["field_order"]
 
 
 def test_board_layout_is_not_prefaced_by_duplicate_measurement_summary_on_screen():
@@ -67,14 +71,16 @@ def test_board_layout_is_not_prefaced_by_duplicate_measurement_summary_on_screen
     assert ".remove()" in js
 
 
-def test_plan_workspace_uses_distinct_visual_groups():
-    js = PLAN_UX.read_text(encoding="utf-8")
-    for class_name in (
-        "dco-cut-settings-card",
-        "dco-optimizer-card",
-        "dco-result-card",
-        "dco-layout-card",
-    ):
-        assert class_name in js
-    assert "أوامر خطة القص" in js
-    assert "إعادة الحساب بالإعدادات الحالية" in js
+def test_plan_workspace_commands_are_contextual_to_the_active_plan():
+    context = CONTEXT_UX.read_text(encoding="utf-8")
+    tabs = TABS_UX.read_text(encoding="utf-8")
+
+    assert 'class="dco-plan-context-actions-host"' in tabs
+    assert "renderContextActions(frm, wrapper)" in tabs
+    assert "frm.__almdina_active_plan_tab" in context
+    assert "استبدال الخطة المعتمدة بخطة النظام" in context
+    assert "استبدال الخطة المعتمدة بالخطة المرفوعة" in context
+    assert "إلغاء اعتماد الخطة" in context
+    assert "export_order_dxf(frm.doc.name, activeTab(frm))" in context
+    assert "tabs.printActivePlan(frm)" in context
+    assert "frappe.call" not in context

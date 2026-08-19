@@ -74,6 +74,20 @@ def supersede_transition(status: str | None) -> tuple[str, str]:
     return APPROVED, SUPERSEDED
 
 
+def cancel_approval_transition(status: str | None) -> tuple[str, str]:
+    """Cancel one approved production revision without reviving it as editable.
+
+    Approval cancellation is historical: the immutable approved revision becomes
+    ``Cancelled`` and future work must happen in a new Draft revision. This keeps
+    audit history intact and avoids mutating production geometry back into a draft.
+    """
+
+    normalized = str(status or "").strip()
+    if normalized != APPROVED:
+        raise CuttingPlanLifecycleError("only_approved_plan_can_be_cancelled")
+    return APPROVED, CANCELLED
+
+
 __all__ = [
     "APPROVED",
     "CANCELLED",
@@ -87,6 +101,7 @@ __all__ = [
     "CuttingPlanLifecycleError",
     "CuttingPlanRevision",
     "approval_transition",
+    "cancel_approval_transition",
     "ensure_draft_editable",
     "next_revision",
     "normalize_source_type",
