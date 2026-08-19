@@ -109,7 +109,10 @@ def test_cost_edit_scope_remains_independent_from_plan_scope():
     assert fields == COST_FIELDS
     assert fields.isdisjoint(PLAN_FIELDS)
     assert "store.cancelEdit()" in source
-    assert "api.saveSettings(frm.doc.name, state.draft || {})" in source
+    assert "const captured = captureCostSettings(frm, state.draft || {});" in source
+    assert "store.replaceDraft(payload);" in source
+    assert "api.saveSettings(frm.doc.name, payload)" in source
+    assert "owner.commit(frm, saved);" in source
     assert 'field.df[STATUS_KEY] = "Read"' in source
     assert "frm.save(" not in source
 

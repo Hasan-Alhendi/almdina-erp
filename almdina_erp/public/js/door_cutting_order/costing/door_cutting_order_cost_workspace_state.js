@@ -60,6 +60,23 @@
         return snapshot;
     }
 
+    function commit(frm, payload) {
+        if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return null;
+        const store = storeFor(frm);
+        if (!store) return null;
+
+        const currentIdentity = identity(frm);
+        const current = store.snapshot();
+        if (current.identity && current.identity !== currentIdentity) return null;
+        if (!current.identity) store.reset(currentIdentity);
+
+        const snapshot = store.commit(payload);
+        frm[LOADED_IDENTITY_KEY] = currentIdentity;
+        frm[LOAD_PROMISE_KEY] = null;
+        dispatch(frm, snapshot);
+        return snapshot;
+    }
+
     function settleUnavailable(frm, store, currentIdentity) {
         const current = store.snapshot();
         if (
@@ -182,6 +199,7 @@
         canView,
         storeFor,
         reset,
+        commit,
         load,
         snapshot,
         settings,
