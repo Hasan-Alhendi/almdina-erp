@@ -74,6 +74,19 @@ def test_drawing_worker_can_choose_profile_without_editing_edge_position() -> No
     assert "usesDirectDrawingSave(frm)" in ux
 
 
+def test_edge_profile_controls_reconcile_after_authoritative_permission_update() -> None:
+    refresh = source(
+        "public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"
+    )
+    event_block = refresh.split(
+        'window.addEventListener("almdina:permissions-updated"', 1
+    )[1].split("window.AlmdinaOrderPermissionRefreshUX", 1)[0]
+
+    assert "window.AlmdinaMultiEdgeBanding" in event_block
+    assert 'typeof edgeBanding.schedule === "function"' in event_block
+    assert "edgeBanding.schedule(frm);" in event_block
+
+
 def test_drawing_profile_command_is_narrow_and_stage_authorized() -> None:
     service = source("almdina_erp/services/edge_banding_lookup_service.py")
     command = service.split("def save_order_edge_banding_override", 1)[1]
