@@ -6,6 +6,7 @@
     const SUMMARY_CLASS = "dco-plan-settings-readonly";
     const OWNER_ATTR = "data-almdina-plan-settings-summary-owner";
     const STYLE_ID = "dco-plan-settings-summary-owner-css";
+    const TIME_LIMIT_HELP = "أقصى مدة يمنحها النظام لمحرك التحسين للبحث عن توزيع أفضل. قد ينتهي البحث قبلها، وزيادتها قد تحسن بعض الخطط المعقدة لكنها تجعل المعاينة أبطأ.";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -65,6 +66,20 @@
             [data-fieldname="plan_control_actions"] .form-control > .${SUMMARY_CLASS} {
                 display:none !important;
             }
+            .dco-plan-settings-readonly__label-help {
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                width:16px;
+                height:16px;
+                margin-inline-start:4px;
+                border-radius:50%;
+                border:1px solid var(--border-color,#dfe3e8);
+                color:var(--text-muted,#667085);
+                font-size:10px;
+                cursor:help;
+                vertical-align:middle;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -90,18 +105,27 @@
 
     function summaryMarkup(settings) {
         const values = [
-            ["الخوارزمية", valueText(settings.packing_mode || "Auto Pro")],
-            ["آلة القص", valueText(settings.cutting_machine_type || "Auto")],
-            ["سماكة القص Kerf", valueText(settings.kerf_mm, " مم")],
-            ["هامش التشذيب", valueText(settings.trim_margin_mm, " مم")],
-            ["مهلة التحسين", valueText(settings.optimization_time_limit_sec, " ث")],
+            { label: "الخوارزمية", value: valueText(settings.packing_mode || "Auto Pro") },
+            { label: "آلة القص", value: valueText(settings.cutting_machine_type || "Auto") },
+            { label: "سماكة القص Kerf", value: valueText(settings.kerf_mm, " مم") },
+            { label: "هامش التشذيب", value: valueText(settings.trim_margin_mm, " مم") },
+            {
+                label: "مهلة التحسين",
+                value: valueText(settings.optimization_time_limit_sec, " ث"),
+                help: TIME_LIMIT_HELP,
+            },
         ];
-        const items = values.map(([label, value]) => `
-            <div class="dco-plan-settings-readonly__item">
-                <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(label))}</span>
-                <strong class="dco-plan-settings-readonly__value">${frappe.utils.escape_html(value)}</strong>
-            </div>
-        `).join("");
+        const items = values.map((item) => {
+            const help = item.help
+                ? `<span class="dco-plan-settings-readonly__label-help" title="${frappe.utils.escape_html(__(item.help))}" aria-label="${frappe.utils.escape_html(__(item.help))}">?</span>`
+                : "";
+            return `
+                <div class="dco-plan-settings-readonly__item"${item.help ? ` title="${frappe.utils.escape_html(__(item.help))}"` : ""}>
+                    <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(item.label))}${help}</span>
+                    <strong class="dco-plan-settings-readonly__value">${frappe.utils.escape_html(item.value)}</strong>
+                </div>
+            `;
+        }).join("");
         return `
             <div class="dco-plan-settings-readonly__header">
                 <div>
@@ -171,6 +195,7 @@
     });
 
     window.AlmdinaPlanSettingsSummaryUX = Object.freeze({
+        TIME_LIMIT_HELP,
         activeSettings,
         render,
         schedule,
