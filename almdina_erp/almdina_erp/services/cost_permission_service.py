@@ -128,8 +128,8 @@ def get_order_cost_snapshot(order_name: str) -> dict[str, Any]:
 @frappe.whitelist()
 def update_order_cost_settings(
     order_name: str,
-    board_rate_usd: float,
-    cutting_cost_per_board_usd: float,
+    board_rate_usd: float | None = None,
+    cutting_cost_per_board_usd: float | None = None,
 ) -> dict[str, Any]:
     """Update plan-owned cost inputs without granting full document write access."""
 
