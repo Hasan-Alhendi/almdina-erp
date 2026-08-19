@@ -92,6 +92,11 @@
         if (production && typeof production.reconcileProductionActions === "function") {
             production.reconcileProductionActions(frm);
         }
+
+        const edgeBanding = window.AlmdinaMultiEdgeBanding;
+        if (edgeBanding && typeof edgeBanding.schedule === "function") {
+            edgeBanding.schedule(frm);
+        }
     }
 
     function markFresh(frm, identity) {
@@ -187,6 +192,16 @@
         // refreshed from the server. Mark this document identity fresh so the
         // form hooks do not immediately issue the same request again.
         markFresh(frm, capture(frm));
+
+        // Edge-profile selection is capability-driven too. Reconcile it on every
+        // authoritative permission update even when the cost/plan surfaces are
+        // already healthy, otherwise drawing-only users could require a reload
+        // before their per-side profile affordance appears.
+        const edgeBanding = window.AlmdinaMultiEdgeBanding;
+        if (edgeBanding && typeof edgeBanding.schedule === "function") {
+            edgeBanding.schedule(frm);
+        }
+
         if (
             !frm.__almdinaPermissionRefreshPromise
             && surfaceNeedsRecovery(frm, window.AlmdinaPermissions)
