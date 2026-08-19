@@ -6,7 +6,7 @@ import unittest
 import frappe
 
 from almdina_erp.almdina_erp.services.plan_settings_edit_service import (
-    _assert_edit_lifecycle,
+    assert_plan_settings_edit_lifecycle,
 )
 
 
@@ -33,7 +33,7 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
 
         # The caller already passed the focused EDIT_OPTIMIZER_SETTINGS capability
         # check. Lifecycle validation must not add a second actor-role gate.
-        _assert_edit_lifecycle(order)
+        assert_plan_settings_edit_lifecycle(order)
 
     def test_finished_route_without_active_stage_is_locked(self):
         order = self.order(
@@ -43,10 +43,10 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
         )
 
         with self.assertRaises(frappe.PermissionError):
-            _assert_edit_lifecycle(order)
+            assert_plan_settings_edit_lifecycle(order)
 
     def test_preproduction_draft_remains_editable(self):
-        _assert_edit_lifecycle(self.order(status="Draft"))
+        assert_plan_settings_edit_lifecycle(self.order(status="Draft"))
 
     def test_hard_document_locks_still_fail_closed(self):
         locked_orders = (
@@ -58,7 +58,7 @@ class TestPlanSettingsEditLifecycle(unittest.TestCase):
         for order in locked_orders:
             with self.subTest(order=order):
                 with self.assertRaises(frappe.ValidationError):
-                    _assert_edit_lifecycle(order)
+                    assert_plan_settings_edit_lifecycle(order)
 
 
 if __name__ == "__main__":
