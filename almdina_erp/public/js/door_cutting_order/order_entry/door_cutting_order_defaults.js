@@ -16,11 +16,15 @@
     function translateOrderMaterialLabels(frm) {
         if (!isArabic()) return;
         const labels = {
-            board_section: "اللوح",
+            order_details_section: "بيانات الطلب",
+            customer: "العميل",
+            order_date: "تاريخ الطلب",
+            order_notes: "ملاحظات الطلب",
+            board_section: "المادة والقشاط",
             board_description: "صنف اللوح",
             board_length_cm: "طول اللوح (سم)",
             board_width_cm: "عرض اللوح (سم)",
-            cutting_settings_section: "إعدادات مواد وتكلفة الطلب",
+            default_edge_type: "نوع القشاط الافتراضي",
             edge_color: "لون القشاط",
         };
         Object.entries(labels).forEach(([fieldname, label]) => {
