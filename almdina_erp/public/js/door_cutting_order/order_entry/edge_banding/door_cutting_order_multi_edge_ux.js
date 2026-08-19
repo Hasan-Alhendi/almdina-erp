@@ -9,6 +9,12 @@
         width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", labelAr: "العرض العلوي", labelEn: "Top width edge", axis: "width" },
         width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", labelAr: "العرض السفلي", labelEn: "Bottom width edge", axis: "width" },
     };
+    const EDGE_PROFILE_LOOKUP_CAPABILITIES = Object.freeze([
+        "view_edge_banding_types",
+        "create_order",
+        "edit_order",
+        "create_order_revision",
+    ]);
 
     function isArabic() {
         const lang = String(
@@ -62,6 +68,45 @@
         return rowByName(frm, tr.dataset.rowName);
     }
 
+    function permissionApi() {
+        return window.AlmdinaPermissions || null;
+    }
+
+    function permissionResolved() {
+        const api = permissionApi();
+        return Boolean(
+            api
+            && typeof api.version === "function"
+            && api.version() > 0
+            && typeof api.can === "function"
+        );
+    }
+
+    function canLoadProfiles() {
+        if (frappe.session && frappe.session.user === "Administrator") return true;
+        const api = permissionApi();
+        if (!permissionResolved()) return false;
+        return EDGE_PROFILE_LOOKUP_CAPABILITIES.some(capability => api.can(capability));
+    }
+
+    function canMutateOrderPreview(frm) {
+        if (
+            window.frappe
+            && frappe.almdina
+            && typeof frappe.almdina.orderCanEdit === "function"
+        ) {
+            return Boolean(frappe.almdina.orderCanEdit(frm));
+        }
+        const api = permissionApi();
+        return Boolean(
+            permissionResolved()
+            && api.can("edit_order")
+            && frm
+            && frm.doc
+            && frm.doc.docstatus === 0
+        );
+    }
+
     function profiles(frm) {
         if (!(frm._dco_side_edge_profiles instanceof Map)) {
             frm._dco_side_edge_profiles = new Map();
@@ -70,6 +115,7 @@
     }
 
     function ensureProfiles(frm) {
+        if (!canLoadProfiles()) return Promise.resolve(profiles(frm));
         if (frm._dco_side_edge_profiles_loaded) return Promise.resolve(profiles(frm));
         if (frm._dco_side_edge_profiles_loading) return frm._dco_side_edge_profiles_loading;
 
@@ -269,6 +315,7 @@
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger:hover{opacity:1;transform:translateY(-1px);border-color:var(--primary,#2490ef)}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{opacity:1;background:#fff6db;border-color:#d7a514;color:#8b6400;box-shadow:0 2px 6px rgba(185,132,0,.2)}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-missing{background:#fff0f0;border-color:#df5a5a;color:#b72d2d;opacity:1}
+            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-readonly{display:none!important}
             .dco-side-edge-help{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:rgba(36,144,239,.08);font-weight:700}
             .dco-side-edge-help b{font-size:12px}
             .dco-side-profile-summary{padding:8px 10px;border:1px solid var(--border-color,#dfe3e8);border-radius:9px;background:var(--subtle-fg,#f7f9fb);line-height:1.7}
@@ -313,11 +360,14 @@
         const custom = Boolean(overrideType(row, side));
         const type = effectiveType(frm, row, side);
         const missing = selected && (!type || (frm._dco_side_edge_profiles_loaded && !profileFor(frm, row, side)));
+        const editable = canMutateOrderPreview(frm);
         indicator.textContent = custom ? "✦" : "⌄";
         indicator.classList.toggle("is-custom", custom);
         indicator.classList.toggle("is-missing", missing);
-        indicator.title = indicatorTitle(frm, row, side);
+        indicator.classList.toggle("is-readonly", !editable);
+        indicator.title = editable ? indicatorTitle(frm, row, side) : "";
         indicator.setAttribute("aria-pressed", custom ? "true" : "false");
+        indicator.setAttribute("aria-hidden", editable ? "false" : "true");
     }
 
     function renderRow(frm, tr) {
@@ -328,7 +378,9 @@
             edge_width_top: tr.querySelector("[data-check-field='edge_width_top']")?.classList.contains("is-checked") ? 1 : 0,
             edge_width_bottom: tr.querySelector("[data-check-field='edge_width_bottom']")?.classList.contains("is-checked") ? 1 : 0,
         };
-        syncPreviewFields(rowByName(frm, tr.dataset.rowName), calculate(frm, row));
+        if (canMutateOrderPreview(frm)) {
+            syncPreviewFields(rowByName(frm, tr.dataset.rowName), calculate(frm, row));
+        }
         tr.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => decorateToggle(frm, row, toggle));
         tr.querySelectorAll(":scope > td.dco-col-edge-type").forEach(cell => cell.setAttribute("aria-hidden", "true"));
     }
@@ -383,6 +435,7 @@
     }
 
     function openSideDialog(frm, tr, side) {
+        if (!canMutateOrderPreview(frm)) return;
         const row = materialize(frm, tr);
         if (!row) return;
         const config = SIDES[side];
@@ -439,6 +492,7 @@
     }
 
     function clearOverrideWhenDisabled(frm, row, side) {
+        if (!canMutateOrderPreview(frm)) return false;
         const config = SIDES[side];
         if (!sideSelected(row, side) && row[config.overrideField]) {
             row[config.overrideField] = "";
@@ -469,6 +523,7 @@
                 event.preventDefault();
                 event.stopPropagation();
                 event.stopImmediatePropagation();
+                if (!canMutateOrderPreview(frm)) return;
                 const tr = indicator.closest("tr[data-row-name]");
                 openSideDialog(frm, tr, indicator.dataset.edgeSide);
                 return;
@@ -505,9 +560,13 @@
         setTimeout(() => apply(frm), 120);
     }
 
+    function refresh(frm) {
+        ensureProfiles(frm).finally(() => schedule(frm));
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { ensureProfiles(frm).finally(() => schedule(frm)); },
-        refresh(frm) { ensureProfiles(frm).finally(() => schedule(frm)); },
+        onload_post_render(frm) { refresh(frm); },
+        refresh(frm) { refresh(frm); },
         default_edge_type(frm) { schedule(frm); },
     });
 
@@ -523,6 +582,11 @@
         width_cm(frm) { schedule(frm); },
         length_cm(frm) { schedule(frm); },
         qty(frm) { schedule(frm); },
+    });
+
+    window.addEventListener("almdina:permissions-updated", () => {
+        const frm = window.cur_frm;
+        if (frm && frm.doctype === "Door Cutting Order") refresh(frm);
     });
 
     window.AlmdinaMultiEdgeBanding = {
