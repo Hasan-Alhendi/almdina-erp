@@ -141,7 +141,7 @@
 			)
 			.join("");
 		return `
-			<div class="dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px 0;">
+			<div class="dco-plan-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px 0;">
 				${buttons}
 			</div>
 		`;
@@ -193,6 +193,12 @@
 		return Promise.resolve(getCachedApprovedPlan(frm));
 	}
 
+	function renderContextActions(frm, wrapper) {
+		const owner = window.AlmdinaPlanContextActionsUX;
+		if (!owner || typeof owner.render !== "function") return false;
+		return owner.render(frm, wrapper.find(".dco-plan-context-actions-host").first());
+	}
+
 	function renderDualTabs(frm) {
 		const wrapper = frm.fields_dict.cutting_plan_html && frm.fields_dict.cutting_plan_html.$wrapper;
 		const tabs = visibleTabs(frm);
@@ -205,7 +211,12 @@
 		const escapedOrderName = frappe.utils.escape_html(orderName);
 		wrapper
 			.attr("data-almdina-order", orderName)
-			.html(`${buildTabBar(frm, activeTab, tabs)}<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}">${content}</div>`);
+			.html(`
+				${buildTabBar(frm, activeTab, tabs)}
+				<div class="dco-plan-context-actions-host" data-almdina-order="${escapedOrderName}"></div>
+				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}">${content}</div>
+			`);
+		renderContextActions(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
 			frm.__almdina_active_plan_tab = $(this).attr("data-plan-tab");
 			renderDualTabs(frm);
