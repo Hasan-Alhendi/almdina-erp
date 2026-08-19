@@ -6,6 +6,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_surface_metadata
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.supporting_permission_reconciliation import (
+    reconcile_supporting_permission_projections,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.workforce_security_cleanup import (
     revoke_hidden_system_manager_from_almdina_workforce,
 )
@@ -16,14 +19,16 @@ from almdina_erp.install import (
 
 
 def _sync_security_foundation() -> None:
-    """Repair security metadata and legacy hidden workforce authority.
+    """Repair security metadata and native projections without seeding policy.
 
-    Role names never seed business policy here. The migration only removes
-    platform roles that must not act as Almdina authority sources.
+    Role names never seed business policy here. Canonical Almdina role state is
+    the sole authority; migrations only remove hidden platform authority and
+    refresh the technical Frappe grants required for its permission hooks.
     """
 
     sync_permission_types()
     revoke_hidden_system_manager_from_almdina_workforce()
+    reconcile_supporting_permission_projections()
 
 
 def _sync_form_metadata_invariants() -> None:

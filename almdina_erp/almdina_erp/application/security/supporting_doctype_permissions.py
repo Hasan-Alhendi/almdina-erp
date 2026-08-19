@@ -28,6 +28,26 @@ _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
     }
 )
 
+# Frappe checks native Role Permission before controller-level permission hooks.
+# These are technical baseline grants only: Cutting Plan's has_permission hook
+# still requires an authorized command flag plus the matching business
+# capability for every mutation.
+_CUTTING_PLAN_CREATE_COMMAND_CAPABILITIES = frozenset(
+    {
+        Capability.EDIT_COST_SETTINGS,
+        Capability.EDIT_OPTIMIZER_SETTINGS,
+        Capability.RECALCULATE_PLAN,
+        Capability.UPLOAD_DXF,
+        Capability.REPLACE_DXF,
+    }
+)
+_CUTTING_PLAN_WRITE_COMMAND_CAPABILITIES = frozenset(
+    _CUTTING_PLAN_CREATE_COMMAND_CAPABILITIES
+    | {
+        Capability.APPROVE_DXF,
+    }
+)
+
 
 def _any_enabled(state: Mapping[str, bool], capabilities: frozenset[str]) -> bool:
     return any(state.get(capability) is True for capability in capabilities)
@@ -57,8 +77,14 @@ def supporting_standard_permission_projection(
         return {
             "read": can_read,
             "select": can_read,
-            "create": False,
-            "write": False,
+            "create": _any_enabled(
+                normalized,
+                _CUTTING_PLAN_CREATE_COMMAND_CAPABILITIES,
+            ),
+            "write": _any_enabled(
+                normalized,
+                _CUTTING_PLAN_WRITE_COMMAND_CAPABILITIES,
+            ),
             "delete": False,
         }
     if doctype == "Production Stage":
