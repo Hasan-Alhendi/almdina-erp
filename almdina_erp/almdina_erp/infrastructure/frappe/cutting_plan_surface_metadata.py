@@ -46,31 +46,47 @@ VISIBLE_PLAN_SURFACE_FIELDS = (
 )
 
 
+def _property_setter_names(property_name: str, fieldnames: tuple[str, ...]) -> list[str]:
+    if not fieldnames:
+        return []
+    return frappe.get_all(
+        "Property Setter",
+        filters={
+            "doc_type": DOCTYPE,
+            "field_name": ["in", fieldnames],
+            "property": property_name,
+        },
+        pluck="name",
+    )
+
+
 def _remove_stale_property_setters() -> None:
-    """Remove site-local overrides on protected or newly retired plan controls."""
+    """Remove site-local overrides on protected and newly retired plan controls."""
 
     if not frappe.db.exists("DocType", "Property Setter"):
         return
 
-    all_plan_fields = CUTTING_PLAN_SURFACE_FIELDS + RETIRED_PLAN_SURFACE_FIELDS
     names: list[str] = []
+
+    # Preserve the established metadata-repair boundary for the live plan
+    # containers. Keeping these three concerns explicit makes the contract easy to
+    # audit and avoids widening visibility cleanup to unrelated presentation fields.
     for property_name, fieldnames in (
-        ("permlevel", all_plan_fields),
-        ("hidden", VISIBLE_PLAN_SURFACE_FIELDS + RETIRED_PLAN_SURFACE_FIELDS),
-        ("depends_on", VISIBLE_PLAN_SURFACE_FIELDS + RETIRED_PLAN_SURFACE_FIELDS),
+        ("permlevel", CUTTING_PLAN_SURFACE_FIELDS),
+        ("hidden", VISIBLE_PLAN_SURFACE_FIELDS),
+        ("depends_on", VISIBLE_PLAN_SURFACE_FIELDS),
     ):
+        names.extend(_property_setter_names(property_name, fieldnames))
+
+    # Removed schema fields need only one-way cleanup on long-lived sites. They
+    # are deliberately separate from CUTTING_PLAN_SURFACE_FIELDS so metadata
+    # assertions never require a retired DocField to exist after model sync.
+    for property_name in ("permlevel", "hidden", "depends_on"):
         names.extend(
-            frappe.get_all(
-                "Property Setter",
-                filters={
-                    "doc_type": DOCTYPE,
-                    "field_name": ["in", fieldnames],
-                    "property": property_name,
-                },
-                pluck="name",
-            )
+            _property_setter_names(property_name, RETIRED_PLAN_SURFACE_FIELDS)
         )
-    for name in names:
+
+    for name in dict.fromkeys(names):
         frappe.delete_doc(
             "Property Setter",
             name,
