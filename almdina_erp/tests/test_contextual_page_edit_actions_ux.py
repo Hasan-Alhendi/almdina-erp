@@ -149,15 +149,18 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert 'df.get_status = function almdinaFocusedCostFieldStatus' in cost
     assert 'field.df[STATUS_KEY] = "Read"' in cost
 
-    # A5.2 moves the editable baseline/draft to CostWorkspaceState and routes the
-    # focused save through its API adapter. The DCO form is no longer reloaded or
-    # used as financial persistence state after a cost-only save.
+    # A5.2 keeps the editable baseline/draft inside CostWorkspaceState. Save now
+    # captures the visible detached controls once, persists that exact payload,
+    # and commits the authoritative server snapshot without reloading the DCO.
     assert "AlmdinaCostWorkspaceState" in cost
     assert "AlmdinaCostWorkspaceAPI" in cost
     assert "store.beginEdit(seed)" in cost
     assert "store.patchDraft(patch)" in cost
     assert "state.draft" in cost
-    assert "api.saveSettings(frm.doc.name, state.draft || {})" in cost
+    assert "const captured = captureCostSettings(frm, state.draft || {});" in cost
+    assert "store.replaceDraft(payload);" in cost
+    assert "api.saveSettings(frm.doc.name, payload)" in cost
+    assert "owner.commit(frm, saved);" in cost
     assert "frm.reload_doc()" not in cost
     assert "frappe.call" not in cost
     assert "ignore_permissions" not in cost
