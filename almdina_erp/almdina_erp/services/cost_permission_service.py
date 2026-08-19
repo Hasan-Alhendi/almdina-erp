@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    authoritative_cost_values,
     overlay_authoritative_costs,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
@@ -105,14 +106,25 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
     }
 
 
-def _cost_snapshot(order: Any) -> dict[str, Any]:
+def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
     order_snapshot = {
         fieldname: getattr(order, fieldname, None)
         for fieldname in ORDER_COST_FIELDS
     }
+    if plan is None:
+        resolved_order = overlay_authoritative_costs(order, order_snapshot)
+    else:
+        # Read-after-write must use the exact plan revision that accepted the
+        # command. Re-resolving current_working_plan() here can select another
+        # Draft/lineage member and repaint stale financial values immediately
+        # after a successful save.
+        resolved_order = dict(order_snapshot)
+        resolved_order.update(authoritative_cost_values(order, plan=plan))
+        resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
     return {
         "order_name": order.name,
-        "order": overlay_authoritative_costs(order, order_snapshot),
+        "cutting_plan": str(getattr(plan, "name", None) or "") or None,
+        "order": resolved_order,
         "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
     }
 
@@ -155,12 +167,19 @@ def update_order_cost_settings(
         update_plan_cost_settings,
     )
 
-    update_plan_cost_settings(
+    saved = update_plan_cost_settings(
         order,
         board_rate_usd=board_rate,
         cutting_cost_per_board_usd=cutting_rate,
     )
-    return _cost_snapshot(order)
+    plan_name = str(saved.get("cutting_plan") or "").strip()
+    if not plan_name:
+        frappe.throw(
+            _("تعذر تحديد خطة القص التي حُفظت عليها التكلفة."),
+            frappe.ValidationError,
+        )
+    saved_plan = frappe.get_doc("Cutting Plan", plan_name)
+    return _cost_snapshot(order, plan=saved_plan)
 
 
 @frappe.whitelist()
