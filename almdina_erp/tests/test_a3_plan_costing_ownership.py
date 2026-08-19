@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 
 from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_costing_workspace as workspace
+from almdina_erp.almdina_erp.services import cost_permission_service as cost_service
 from almdina_erp.almdina_erp.services import cutting_plan_command_service as plan_commands
 from almdina_erp.almdina_erp.services import cutting_plan_cost_command_service as cost_commands
 
@@ -92,6 +93,46 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
         self.assertEqual(plan.metadata_fingerprint, "metadata-fingerprint")
         self.assertEqual(plan.validation_status, "Valid")
         self.assertEqual(plan.plan_needs_recalculation, 0)
+
+    def test_cost_save_response_uses_exact_saved_plan_revision(self) -> None:
+        order = SimpleNamespace(
+            name="DCO-A3-ROUNDTRIP",
+            pieces=[],
+            board_rate_usd=0,
+            cutting_cost_per_board_usd=0,
+            mdf_cost_usd=0,
+            cutting_cost_usd=0,
+            edge_cost_usd=0,
+            total_cost_usd=0,
+            special_shapes_baseline_cost_usd=0,
+            special_shapes_estimated_total_usd=0,
+            special_shapes_final_total_usd=0,
+            customer_quote_total_usd=0,
+            customer_quote_status="",
+            material_variance_cost_usd=0,
+            internal_loss_cost_usd=0,
+            actual_cost_usd=0,
+        )
+        saved_plan = SimpleNamespace(
+            name="CP-A3-SAVED",
+            status="Draft",
+            cost_snapshot_version=workspace.COST_SNAPSHOT_VERSION,
+            required_boards=2,
+            board_rate_usd=22,
+            cutting_cost_per_board_usd=2.5,
+            mdf_cost_usd=44,
+            cutting_cost_usd=5,
+            edge_cost_usd=3,
+            total_cost_usd=52,
+        )
+
+        payload = cost_service._cost_snapshot(order, plan=saved_plan)
+
+        self.assertEqual(payload["cutting_plan"], "CP-A3-SAVED")
+        self.assertEqual(payload["order"]["board_rate_usd"], 22)
+        self.assertEqual(payload["order"]["cutting_cost_per_board_usd"], 2.5)
+        self.assertEqual(payload["order"]["required_boards"], 2)
+        self.assertEqual(payload["order"]["total_cost_usd"], 52)
 
     def test_legacy_draft_read_falls_back_without_mutating_it(self) -> None:
         order = SimpleNamespace(
