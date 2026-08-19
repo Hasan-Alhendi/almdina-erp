@@ -3,6 +3,9 @@ from __future__ import annotations
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_surface_metadata import (
     sync_cutting_plan_surface_metadata,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.order_cost_surface_metadata import (
+    sync_order_cost_surface_metadata,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_type_sync import (
     sync_permission_types,
 )
@@ -32,9 +35,10 @@ def _sync_security_foundation() -> None:
 
 
 def _sync_form_metadata_invariants() -> None:
-    """Keep non-financial order surfaces independent from cost field levels."""
+    """Keep Order, Plan, and Cost workspace metadata boundaries explicit."""
 
     sync_cutting_plan_surface_metadata()
+    sync_order_cost_surface_metadata()
 
 
 def after_install() -> None:
