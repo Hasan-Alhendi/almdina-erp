@@ -316,8 +316,10 @@
 
     async function runRecalculation(frm) {
         // Preview-first contract: this historical action name remains for API
-        // compatibility, but it never persists a Cutting Plan. Saving is owned
-        // exclusively by the exact-preview commit command.
+        // compatibility, but it never persists a Cutting Plan. Order-owned inputs
+        // are synchronized first so the server preview uses exactly what the user
+        // currently sees. Saving the Cutting Plan is owned exclusively by the
+        // exact-preview commit command.
         await ensureWorkspaceLoaded(frm);
         if (!canCalculate(frm)) {
             frappe.msgprint(recalculationDisabledReason(frm));
@@ -330,6 +332,8 @@
             frappe.msgprint(__("تعذر تجهيز معاينة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
             return false;
         }
+        if (!(await preparePlanInputs(frm))) return false;
+        if (!(await persistPendingOrderInputs(frm))) return false;
 
         try {
             const ok = await previews.preview(frm, settings);
