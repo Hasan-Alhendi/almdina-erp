@@ -48,6 +48,10 @@ doctype_js = {
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
+        # Presentation-only owner for the native Order tab fields. It does not
+        # duplicate document state or save commands; it only arranges the existing
+        # Frappe controls into the compact intake/material/measurements hierarchy.
+        "public/js/door_cutting_order/order_entry/door_cutting_order_order_tab_layout_ux.js",
         # Qty+Enter is a focused keyboard behavior layered on the operator's
         # existing row materialization/model-sync contract; it owns no rendering.
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",
