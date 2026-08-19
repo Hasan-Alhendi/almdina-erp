@@ -74,6 +74,15 @@
         );
     }
 
+    function isCommittable(frm) {
+        const state = stateFor(frm);
+        return Boolean(
+            isReady(frm)
+            && state.payload
+            && state.payload.committable === true
+        );
+    }
+
     function previewPlan(frm) {
         return isReady(frm) ? stateFor(frm).payload.plan : null;
     }
@@ -131,7 +140,7 @@
     }
 
     async function commit(frm) {
-        if (!frm || !frm.doc || !isReady(frm) || isBusy(frm)) return false;
+        if (!frm || !frm.doc || !isCommittable(frm) || isBusy(frm)) return false;
         const api = window.AlmdinaPlanWorkspaceAPI;
         if (!api || typeof api.commitPreview !== "function") return false;
 
@@ -163,6 +172,7 @@
         invalidate,
         isBusy,
         isReady,
+        isCommittable,
         previewPlan,
         previewRow,
         preview,
