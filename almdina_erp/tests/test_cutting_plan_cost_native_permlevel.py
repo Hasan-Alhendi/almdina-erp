@@ -18,6 +18,7 @@ def test_edit_cost_settings_gets_only_the_native_permlevel_one_write_prerequisit
     technical = supporting_field_permission_projection("Cutting Plan", state)
     business = field_permission_projection(state)
 
+    # This native grant is a Frappe persistence prerequisite, not business edit authority.
     assert technical[1]["read"] is True
     assert technical[1]["write"] is True
 
