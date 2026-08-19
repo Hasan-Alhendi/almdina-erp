@@ -76,10 +76,12 @@
 
     function isCommittable(frm) {
         const state = stateFor(frm);
+        const validation = state.payload && state.payload.summary && state.payload.summary.validation;
         return Boolean(
             isReady(frm)
-            && state.payload
-            && state.payload.committable === true
+            && validation
+            && String(validation.status || "") === "Valid"
+            && !validation.needs_recalculation
         );
     }
 
