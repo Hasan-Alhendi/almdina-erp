@@ -31,15 +31,15 @@
     }
 
     function dispatch(frm) {
+        // Preview is a separate transient state boundary. Do not trigger the
+        // canonical Plan refresh hooks here: those would tear down the detached
+        // settings editor on every keystroke/preview transition.
         window.dispatchEvent(new CustomEvent("almdina:plan-preview-updated", {
             detail: {
                 orderName: frm && frm.doc ? frm.doc.name : null,
                 preview: snapshot(frm),
             },
         }));
-        if (frm && typeof frm.trigger === "function") {
-            frm.trigger("refresh_plan_controls");
-        }
     }
 
     function reset(frm) {
