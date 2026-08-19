@@ -1,6 +1,8 @@
 (() => {
     "use strict";
 
+    const EDGE_PROFILE_LOOKUP_METHOD = "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options";
+
     function isArabic() {
         const lang = String(
             (frappe.boot && frappe.boot.lang) ||
@@ -43,6 +45,93 @@
 
     function documentContext() {
         return window.AlmdinaDocumentContext;
+    }
+
+    function orderLookupName(frm) {
+        return frm && frm.doc && !frm.is_new()
+            ? String(frm.doc.name || "")
+            : "";
+    }
+
+    function safeEdgeOptions(frm) {
+        return (frm && frm._almdina_safe_edge_options_payload) || {
+            options: [],
+            include_financial: false,
+        };
+    }
+
+    function applySafeEdgeOptions(frm, payload) {
+        const resolved = payload || {};
+        const options = Array.isArray(resolved.options) ? resolved.options : [];
+        frm._almdina_safe_edge_options_payload = {
+            options,
+            include_financial: resolved.include_financial === true,
+        };
+        frm._almdina_safe_edge_options_loaded = true;
+
+        // The legacy fast-entry renderer still has a direct Edge Banding Type
+        // fallback. Mark its cache as resolved before it renders so non-master-data
+        // users never fall through to that protected DocType lookup.
+        frm._dco_edge_types = options.map(row => ({
+            name: String(row.name || row.edge_type_name || ""),
+            edge_type_name: String(row.edge_type_name || row.name || ""),
+        })).filter(row => row.name);
+        frm._dco_edge_types_loaded = true;
+
+        if (
+            window.AlmdinaDoorCuttingFastEntry
+            && typeof window.AlmdinaDoorCuttingFastEntry.render === "function"
+        ) {
+            window.AlmdinaDoorCuttingFastEntry.render(frm);
+        }
+        return frm._almdina_safe_edge_options_payload;
+    }
+
+    function loadSafeEdgeOptions(frm) {
+        if (!frm) return Promise.resolve({ options: [], include_financial: false });
+        if (frm._almdina_safe_edge_options_loaded) {
+            return Promise.resolve(safeEdgeOptions(frm));
+        }
+        if (frm._almdina_safe_edge_options_loading) {
+            return frm._almdina_safe_edge_options_loading;
+        }
+
+        // Suppress the legacy master-data call synchronously. If the safe request
+        // fails, this owner retries on the next form lifecycle event instead of
+        // allowing a protected get_list() fallback to raise a permission popup.
+        frm._dco_edge_types_loaded = true;
+        frm._dco_edge_types = frm._dco_edge_types || [];
+
+        const context = documentContext();
+        const identity = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
+        const isCurrent = () => (
+            !context
+            || !identity
+            || typeof context.isCurrent !== "function"
+            || context.isCurrent(frm, identity)
+        );
+
+        const request = frappe.call({
+            method: EDGE_PROFILE_LOOKUP_METHOD,
+            args: { order_name: orderLookupName(frm) },
+        }).then(response => {
+            if (!isCurrent()) return safeEdgeOptions(frm);
+            return applySafeEdgeOptions(frm, (response && response.message) || {});
+        }).catch(error => {
+            if (isCurrent()) {
+                frm._almdina_safe_edge_options_loaded = false;
+                console.error("Failed to load safe order edge options", error);
+            }
+            return safeEdgeOptions(frm);
+        }).finally(() => {
+            if (frm._almdina_safe_edge_options_loading === request) {
+                frm._almdina_safe_edge_options_loading = null;
+            }
+        });
+        frm._almdina_safe_edge_options_loading = request;
+        return request;
     }
 
     function apply_factory_defaults(frm) {
@@ -100,7 +189,7 @@
     }
 
     function apply_edge_color_default(frm, force = false) {
-        const requestedType = frm.doc.default_edge_type;
+        const requestedType = String(frm.doc.default_edge_type || "").trim();
         if (!requestedType) {
             if (force && frm.doc.edge_color) return frm.set_value("edge_color", "");
             return Promise.resolve();
@@ -109,27 +198,30 @@
         const context = documentContext();
         const identity = context.capture(frm);
 
-        return frappe.db.get_value("Edge Banding Type", requestedType, "edge_color")
-            .then(r => {
-                if (!context.isCurrent(frm, identity)) return;
-                if (frm.doc.default_edge_type !== requestedType) return;
-                const color = (r && r.message && r.message.edge_color) || "";
-                if (force || !String(frm.doc.edge_color || "").trim()) {
-                    return frm.set_value("edge_color", color);
-                }
-            })
-            .catch(error => console.error("Failed to load edge color default", error));
+        return loadSafeEdgeOptions(frm).then(payload => {
+            if (!context.isCurrent(frm, identity)) return;
+            if (frm.doc.default_edge_type !== requestedType) return;
+            const row = (payload.options || []).find(option => (
+                String(option.name || option.edge_type_name || "").trim() === requestedType
+            ));
+            const color = String((row && row.edge_color) || "");
+            if (force || !String(frm.doc.edge_color || "").trim()) {
+                return frm.set_value("edge_color", color);
+            }
+        }).catch(error => console.error("Failed to apply safe edge color default", error));
     }
 
     frappe.ui.form.on("Door Cutting Order", {
         onload(frm) {
             translateOrderMaterialLabels(frm);
+            loadSafeEdgeOptions(frm);
             apply_factory_defaults(frm);
             applyBoardTextDefaults(frm);
             if (frm.doc.default_edge_type && !frm.doc.edge_color) apply_edge_color_default(frm, false);
         },
         refresh(frm) {
             translateOrderMaterialLabels(frm);
+            loadSafeEdgeOptions(frm);
             applyBoardTextDefaults(frm);
         },
         board_description(frm) {
@@ -144,5 +236,10 @@
         default_edge_type(frm) {
             apply_edge_color_default(frm, true);
         },
+    });
+
+    window.AlmdinaOrderEdgeOptions = Object.freeze({
+        load: loadSafeEdgeOptions,
+        snapshot: safeEdgeOptions,
     });
 })();

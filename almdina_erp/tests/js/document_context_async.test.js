@@ -52,8 +52,9 @@ const fakeFrappe = {
             },
         },
     },
-    call() {
+    call(options = {}) {
         const pending = deferred();
+        pending.options = options;
         calls.push(pending);
         return pending.promise;
     },
@@ -93,6 +94,10 @@ function trigger(event, frm) {
     eventHandlers.forEach(handler => handler(frm));
 }
 
+function callFor(method, fromIndex = 0) {
+    return calls.slice(fromIndex).find(call => call.options && call.options.method === method) || null;
+}
+
 async function flushPromises() {
     await Promise.resolve();
     await Promise.resolve();
@@ -119,27 +124,57 @@ async function flushPromises() {
     };
     fakeWindow.cur_frm = frm;
 
-    // The defaults response belongs to the first visit and must not update the
-    // same Form instance after an A -> B -> A navigation cycle. Comparing only
-    // the document name would incorrectly accept this stale response.
+    // Both factory defaults and the safe edge-profile lookup belong to the first
+    // visit. Neither may update the same Form instance after an A -> B -> A
+    // navigation cycle. Identify requests by endpoint instead of relying on call
+    // count/order as more document-scoped reads are introduced.
     trigger("onload", frm);
-    assert.equal(calls.length, 1);
+    const defaultsCall = callFor(
+        "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults"
+    );
+    const initialEdgeLookup = callFor(
+        "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options"
+    );
+    assert.ok(defaultsCall);
+    assert.ok(initialEdgeLookup);
+    assert.equal(databaseCalls.length, 0);
+
     frm.doc.name = "DCO-2026-00002";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
     frm.doc.name = "DCO-2026-00001";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    calls[0].resolve({ message: { kerf_mm: 9 } });
+    defaultsCall.resolve({ message: { kerf_mm: 9 } });
+    initialEdgeLookup.resolve({
+        message: {
+            options: [{ name: "EDGE-OLD", edge_color: "Old White" }],
+            include_financial: false,
+        },
+    });
     await flushPromises();
     assert.equal(setValues.length, 0);
+    assert.equal(frm._almdina_safe_edge_options_loaded, undefined);
 
-    // The same rule applies to edge-color defaults.
+    // The same rule applies to edge-color defaults. The color now comes from the
+    // order-scoped safe lookup rather than a direct Edge Banding Type DB read.
     frm.doc.default_edge_type = "EDGE-22";
     frm.doc.edge_color = "";
+    const beforeEdgeColorCalls = calls.length;
     trigger("default_edge_type", frm);
-    assert.equal(databaseCalls.length, 1);
+    const edgeColorLookup = callFor(
+        "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options",
+        beforeEdgeColorCalls
+    );
+    assert.ok(edgeColorLookup);
+    assert.equal(databaseCalls.length, 0);
+
     frm.doc.name = "DCO-2026-00003";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    databaseCalls[0].resolve({ message: { edge_color: "White" } });
+    edgeColorLookup.resolve({
+        message: {
+            options: [{ name: "EDGE-22", edge_color: "White" }],
+            include_financial: false,
+        },
+    });
     await flushPromises();
     assert.equal(setValues.length, 0);
 

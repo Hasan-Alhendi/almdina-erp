@@ -64,12 +64,18 @@ def test_order_has_editable_text_edge_color_below_default_edge_type():
     assert doc["field_order"].index("edge_color") < doc["field_order"].index("pieces_section")
 
 
-def test_edge_color_is_defaulted_from_selected_edge_type_but_remains_editable():
+def test_edge_color_is_defaulted_from_safe_order_lookup_but_remains_editable():
     source = _source(DEFAULTS)
-    assert 'frappe.db.get_value("Edge Banding Type", requestedType, "edge_color")' in source
+    assert "edge_banding_lookup_service.get_order_edge_banding_options" in source
+    assert "loadSafeEdgeOptions(frm).then(payload =>" in source
+    assert "(payload.options || []).find" in source
+    assert 'frappe.db.get_value("Edge Banding Type"' not in source
     assert 'frm.set_value("edge_color", color)' in source
     assert "default_edge_type(frm)" in source
     assert "apply_edge_color_default(frm, true)" in source
+    # Keep the stale-response guard: a delayed result for profile A must never
+    # overwrite the color after the operator has already switched to profile B.
+    assert "if (frm.doc.default_edge_type !== requestedType) return;" in source
 
 
 def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_duplicates():
