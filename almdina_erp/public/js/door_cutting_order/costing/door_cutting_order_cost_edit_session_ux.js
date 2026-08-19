@@ -162,9 +162,30 @@
         return draft ? draft[fieldname] : null;
     }
 
-    function validateRequiredCostSettings(frm, draft) {
+    function captureCostSettings(frm, draft) {
+        return Object.fromEntries(
+            COST_SETTING_FIELDS.map((fieldname) => [
+                fieldname,
+                draftControlValue(frm, fieldname, draft),
+            ])
+        );
+    }
+
+    function normalizeCostSettings(values) {
+        return Object.fromEntries(
+            COST_SETTING_FIELDS.map((fieldname) => {
+                const raw = values ? values[fieldname] : null;
+                if (raw === null || raw === undefined || String(raw).trim() === "") {
+                    return [fieldname, raw];
+                }
+                return [fieldname, Number(raw)];
+            })
+        );
+    }
+
+    function validateRequiredCostSettings(frm, values) {
         const missing = COST_SETTING_FIELDS.filter((fieldname) => {
-            const value = draftControlValue(frm, fieldname, draft);
+            const value = values ? values[fieldname] : null;
             return value === null || value === undefined || String(value).trim() === "";
         });
         if (!missing.length) return true;
@@ -181,6 +202,15 @@
             fieldEditor.focus(frm, missing[0]);
         }
         return false;
+    }
+
+    function validSavedSnapshot(payload) {
+        return Boolean(
+            payload
+            && payload.order
+            && Object.prototype.hasOwnProperty.call(payload.order, "board_rate_usd")
+            && Object.prototype.hasOwnProperty.call(payload.order, "cutting_cost_per_board_usd")
+        );
     }
 
     async function startEditing(frm) {
@@ -233,20 +263,38 @@
         const store = storeFor(frm);
         const state = store && store.snapshot();
         const api = window.AlmdinaCostWorkspaceAPI;
-        if (!store || !state || !api || typeof api.saveSettings !== "function") return false;
-        if (!validateRequiredCostSettings(frm, state.draft || {})) return false;
-
-        if (state.dirty) {
-            await api.saveSettings(frm.doc.name, state.draft || {});
-        }
-
-        unmountDraftControls(frm);
         const owner = stateOwner();
-        if (owner && typeof owner.load === "function") {
-            await owner.load(frm, { force: true });
+        if (!store || !state || !api || typeof api.saveSettings !== "function") return false;
+
+        // Capture the visible controls exactly once. Validation, dirty detection,
+        // and transport all consume this same payload so the UI can never show
+        // one value while the workspace saves a stale draft.
+        const captured = captureCostSettings(frm, state.draft || {});
+        if (!validateRequiredCostSettings(frm, captured)) return false;
+        const payload = normalizeCostSettings(captured);
+        store.replaceDraft(payload);
+        const pending = store.snapshot();
+
+        if (pending.dirty) {
+            const saved = await api.saveSettings(frm.doc.name, payload);
+            if (!validSavedSnapshot(saved)) {
+                frappe.msgprint({
+                    title: __("تعذر حفظ التكلفة"),
+                    message: __("لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل."),
+                    indicator: "red",
+                });
+                return false;
+            }
+            if (owner && typeof owner.commit === "function") {
+                owner.commit(frm, saved);
+            } else {
+                store.commit(saved);
+            }
         } else {
             store.cancelEdit();
         }
+
+        unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
         signalEditChanged(frm);
@@ -311,6 +359,8 @@
         cancelEditing,
         saveEditing,
         applyFieldAccess,
+        captureCostSettings,
+        normalizeCostSettings,
         validateRequiredCostSettings,
         schedule,
     });
