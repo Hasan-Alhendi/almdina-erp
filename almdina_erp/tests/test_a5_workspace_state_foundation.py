@@ -125,8 +125,12 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
             self.assertNotIn("fields_dict", source)
             self.assertNotIn("frm.doc", source)
         self.assertIn("RECALCULATE_METHOD", plan_api)
+        self.assertIn("PREVIEW_METHOD", plan_api)
+        self.assertIn("COMMIT_PREVIEW_METHOD", plan_api)
         self.assertIn("APPROVE_METHOD", plan_api)
         self.assertIn("recalculate,", plan_api)
+        self.assertIn("preview,", plan_api)
+        self.assertIn("commitPreview,", plan_api)
         self.assertIn("approve,", plan_api)
 
     def test_a52_edit_sessions_save_workspace_drafts_not_dco_fields(self) -> None:
@@ -170,14 +174,18 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("AlmdinaPlanWorkspaceState", source)
         self.assertIn("AlmdinaPlanWorkspaceAPI", source)
+        self.assertIn("AlmdinaPlanPreviewSession", source)
         self.assertIn("activeSettings", source)
-        self.assertIn("transport.recalculate(frm.doc.name, settings)", source)
+        self.assertIn("previews.preview(frm, settings)", source)
+        self.assertNotIn("transport.recalculate(frm.doc.name, settings)", source)
         self.assertIn("transport.approve(frm.doc.name, source)", source)
         self.assertIn("refreshWorkspaceOwners", source)
         self.assertNotIn("frappe.call", source)
         self.assertNotIn("frm.reload_doc", source)
         self.assertNotIn('frm.set_value("packing_mode"', source)
         self.assertNotIn("RECALCULATE_METHOD", source)
+        self.assertNotIn("PREVIEW_METHOD", source)
+        self.assertNotIn("COMMIT_PREVIEW_METHOD", source)
         self.assertNotIn("APPROVE_METHOD", source)
 
     def test_a52_presenter_adapters_are_store_first_and_transport_free(self) -> None:
