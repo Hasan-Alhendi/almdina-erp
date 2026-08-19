@@ -293,11 +293,18 @@
         return `.${TOOLBAR_CLASS}[data-almdina-tab-edit-kind="${kind}"]`;
     }
 
+    function wrapperNode(wrapper) {
+        if (!wrapper) return null;
+        if (wrapper.nodeType) return wrapper;
+        if (wrapper[0] && wrapper[0].nodeType) return wrapper[0];
+        return null;
+    }
+
     function toolbarAnchor(frm, kind) {
         const config = KIND_CONFIG[kind];
         const field = config && frm && frm.fields_dict && frm.fields_dict[config.anchor];
-        const wrapper = field && field.$wrapper;
-        return wrapper && wrapper.length ? wrapper[0] : null;
+        const wrapper = field && (field.$wrapper || field.wrapper);
+        return wrapperNode(wrapper);
     }
 
     function toolbarFor(frm, kind) {
