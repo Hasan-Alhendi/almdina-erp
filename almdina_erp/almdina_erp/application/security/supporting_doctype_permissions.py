@@ -109,7 +109,16 @@ def supporting_field_permission_projection(
     doctype: str,
     state: Mapping[str, Any] | None,
 ) -> dict[int, dict[str, bool]]:
-    """Keep protected fields on related records aligned with capabilities."""
+    """Project technical field-level grants required by focused commands.
+
+    Cutting Plan financial fields live at permlevel 1. Frappe's
+    ``validate_higher_perm_levels`` silently restores an old database value when
+    the current user lacks native write access to that permlevel, even after an
+    authorized command has assigned a new value. ``edit_cost_settings`` therefore
+    needs this narrow native prerequisite. Business authority remains guarded by
+    the command capability and Cutting Plan ``has_permission`` hook; ordinary
+    direct field editing is not enabled by this projection.
+    """
 
     normalized = normalize_capability_state(state)
     if doctype != "Cutting Plan":
@@ -117,7 +126,7 @@ def supporting_field_permission_projection(
     return {
         1: {
             "read": normalized[Capability.VIEW_COSTS],
-            "write": False,
+            "write": normalized[Capability.EDIT_COST_SETTINGS],
         }
     }
 

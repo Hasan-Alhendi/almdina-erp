@@ -74,11 +74,19 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                 with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
                     with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
                         with patch.object(cost_commands, "refresh_order_commercial_totals"):
-                            result = cost_commands.update_plan_cost_settings(
-                                order,
-                                board_rate_usd=8,
-                                cutting_cost_per_board_usd=2,
-                            )
+                            with patch.object(
+                                cost_commands.frappe.db,
+                                "get_value",
+                                return_value={
+                                    "board_rate_usd": 8,
+                                    "cutting_cost_per_board_usd": 2,
+                                },
+                            ):
+                                result = cost_commands.update_plan_cost_settings(
+                                    order,
+                                    board_rate_usd=8,
+                                    cutting_cost_per_board_usd=2,
+                                )
 
         self.assertEqual(len(saved), 1)
         self.assertEqual(plan.board_rate_usd, 8)
@@ -93,6 +101,24 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
         self.assertEqual(plan.metadata_fingerprint, "metadata-fingerprint")
         self.assertEqual(plan.validation_status, "Valid")
         self.assertEqual(plan.plan_needs_recalculation, 0)
+
+    def test_cost_edit_fails_closed_if_frappe_restores_old_permlevel_values(self) -> None:
+        plan = SimpleNamespace(name="CP-A3-PERMLEVEL")
+
+        with patch.object(
+            cost_commands.frappe.db,
+            "get_value",
+            return_value={
+                "board_rate_usd": 0,
+                "cutting_cost_per_board_usd": 1,
+            },
+        ):
+            with self.assertRaises(frappe.ValidationError):
+                cost_commands._assert_cost_inputs_persisted(
+                    plan,
+                    board_rate_usd=22,
+                    cutting_cost_per_board_usd=2.5,
+                )
 
     def test_cost_save_response_uses_exact_saved_plan_revision(self) -> None:
         order = SimpleNamespace(

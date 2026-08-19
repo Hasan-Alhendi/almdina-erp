@@ -331,7 +331,7 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         self.assertIn("board_rate_usd", plan_fields)
         self.assertIn("total_cost_usd", plan_fields)
 
-    def test_cost_edit_grant_keeps_native_write_closed_and_noop_save_repairs_it(self) -> None:
+    def test_cost_edit_grant_repairs_exact_native_field_prerequisites(self) -> None:
         from almdina_erp.almdina_erp.services.permission_management_service import (
             update_role_permissions,
         )
@@ -347,18 +347,23 @@ class TestPermissionManagementIntegration(FrappeTestCase):
         )
         self.assertTrue(result["capabilities"][Capability.VIEW_COSTS])
 
+        expected_write_by_doctype = {
+            "Door Cutting Order": 0,
+            "Cutting Plan": 1,
+        }
         filters_by_doctype = [
             {
                 "parent": doctype,
                 "role": TARGET_ROLE,
                 "permlevel": 1,
             }
-            for doctype in ("Door Cutting Order", "Cutting Plan")
+            for doctype in expected_write_by_doctype
         ]
         for filters in filters_by_doctype:
             permission_name = frappe.db.get_value("Custom DocPerm", filters)
             self.assertIsNotNone(permission_name, filters["parent"])
-            frappe.db.set_value("Custom DocPerm", permission_name, "write", 1)
+            wrong_write = 1 - expected_write_by_doctype[filters["parent"]]
+            frappe.db.set_value("Custom DocPerm", permission_name, "write", wrong_write)
             frappe.clear_cache(doctype=filters["parent"])
 
         repaired = update_role_permissions(TARGET_ROLE, result["capabilities"])
@@ -368,7 +373,11 @@ class TestPermissionManagementIntegration(FrappeTestCase):
                 "Custom DocPerm", filters, ["read", "write"], as_dict=True
             )
             self.assertEqual(int(field_permission.read), 1, filters["parent"])
-            self.assertEqual(int(field_permission.write), 0, filters["parent"])
+            self.assertEqual(
+                int(field_permission.write),
+                expected_write_by_doctype[filters["parent"]],
+                filters["parent"],
+            )
 
     def test_partial_custom_matrix_repairs_untouched_standard_role_access(self) -> None:
         frappe.set_user("Administrator")
