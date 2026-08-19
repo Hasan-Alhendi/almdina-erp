@@ -60,6 +60,23 @@
         return snapshot;
     }
 
+    function settleUnavailable(frm, store, currentIdentity) {
+        const current = store.snapshot();
+        if (
+            frm[LOADED_IDENTITY_KEY] === currentIdentity
+            && current.identity === currentIdentity
+            && current.status === "idle"
+        ) {
+            return current;
+        }
+
+        const settled = store.reset(currentIdentity);
+        frm[LOADED_IDENTITY_KEY] = currentIdentity;
+        frm[LOAD_PROMISE_KEY] = null;
+        dispatch(frm, settled);
+        return settled;
+    }
+
     function rejectIdentityTransition(frm, store, expectedIdentity) {
         const liveIdentity = identity(frm);
         if (liveIdentity === expectedIdentity) return false;
@@ -78,10 +95,7 @@
         const currentIdentity = identity(frm);
         const orderName = String(frm.doc.name || "").trim();
         if (!orderName || (frm.is_new && frm.is_new()) || !canView(frm)) {
-            const state = store.reset(currentIdentity);
-            frm[LOADED_IDENTITY_KEY] = currentIdentity;
-            dispatch(frm, state);
-            return state;
+            return settleUnavailable(frm, store, currentIdentity);
         }
 
         if (
