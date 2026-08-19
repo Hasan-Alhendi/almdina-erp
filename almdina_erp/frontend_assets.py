@@ -36,6 +36,10 @@ doctype_js = {
         "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js",
+        # Plan previews are transient UI experiments layered over canonical Plan
+        # workspace state. They must exist before any renderer/action consumes a
+        # preview while the persisted workspace remains the source of truth.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js",
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
