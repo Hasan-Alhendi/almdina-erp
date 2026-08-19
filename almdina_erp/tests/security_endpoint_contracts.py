@@ -34,6 +34,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.cutting_plan_service", D, ("approve_order", "lock_cutting_plan", "reject_order", "send_order_to_production", "submit_order_for_review")),
     ("almdina_erp.almdina_erp.services.drawing_approval_service", C, ("approve_production_dxf",)),
     ("almdina_erp.almdina_erp.services.dxf_export_service", C, ("get_validated_dxf_plan",)),
+    ("almdina_erp.almdina_erp.services.edge_banding_lookup_service", C, ("get_order_edge_banding_options",)),
     ("almdina_erp.almdina_erp.services.export_validation_service", D, ("get_validated_dxf_plan",)),
     ("almdina_erp.almdina_erp.services.legacy_endpoint_service", D, ("cancel_legacy_replacement", "finish_legacy_stage", "start_legacy_stage")),
     ("almdina_erp.almdina_erp.services.legacy_endpoint_service", F, ("retired_product_endpoint",)),
