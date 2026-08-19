@@ -59,6 +59,10 @@
         return window.AlmdinaDocumentContext;
     }
 
+    function costWorkspaceState() {
+        return window.AlmdinaCostWorkspaceState || null;
+    }
+
     function costWrapper(frm) {
         const field = frm.fields_dict.order_cost_invoice_html;
         return field && field.$wrapper ? field.$wrapper : null;
@@ -91,44 +95,6 @@
             });
         });
         frm.__almdina_cost_snapshot_order = null;
-    }
-
-    function pendingPriceFields(piece) {
-        if (!piece || !piece.__almdina_pending_price_edit) return null;
-        if (piece.__almdina_pending_price_edit === "clipped") {
-            return {
-                __almdina_pending_price_edit: "clipped",
-                clipped_corner_edge_price_usd: piece.clipped_corner_edge_price_usd,
-                clipped_corner_edge_price_status: piece.clipped_corner_edge_price_status,
-                clipped_corner_edge_price_note: piece.clipped_corner_edge_price_note,
-                clipped_corner_edge_price_set_by: piece.clipped_corner_edge_price_set_by,
-                clipped_corner_edge_price_set_on: piece.clipped_corner_edge_price_set_on,
-            };
-        }
-        return {
-            __almdina_pending_price_edit: "special",
-            special_shape_custom_unit_price_usd: piece.special_shape_custom_unit_price_usd,
-            special_shape_final_unit_price_usd: piece.special_shape_final_unit_price_usd,
-            special_shape_price_status: piece.special_shape_price_status,
-            special_shape_price_note: piece.special_shape_price_note,
-            special_shape_price_approved_by: piece.special_shape_price_approved_by,
-            special_shape_price_approved_on: piece.special_shape_price_approved_on,
-        };
-    }
-
-    function mergeSnapshot(frm, snapshot) {
-        Object.assign(frm.doc, (snapshot && snapshot.order) || {});
-        const byName = new Map(
-            ((snapshot && snapshot.pieces) || []).map((piece) => [piece.name, piece])
-        );
-        (frm.doc.pieces || []).forEach((piece) => {
-            const costPiece = byName.get(piece.name);
-            if (!costPiece) return;
-            const pending = pendingPriceFields(piece);
-            Object.assign(piece, costPiece);
-            if (pending) Object.assign(piece, pending);
-        });
-        frm.__almdina_cost_snapshot_order = frm.doc.name;
     }
 
     function sourcePiece(frm, rowName) {
@@ -321,9 +287,15 @@
             delete piece.__almdina_pending_price_edit;
         }
 
-        frm.__almdinaCostSnapshotPromise = null;
-        frm.__almdinaCostSnapshotContext = null;
-        await loadCostSnapshot(frm);
+        // Mutating a piece can change the financial read model. Refresh it only
+        // through the canonical Cost workspace owner; this permission layer must
+        // never start or merge its own competing snapshot request.
+        const owner = costWorkspaceState();
+        if (owner && typeof owner.load === "function") {
+            await owner.load(frm, { force: true });
+        } else {
+            renderAuthorizedCost(frm);
+        }
         clearPriceOnlyDirty(frm);
         return true;
     }
@@ -461,40 +433,6 @@
         installActionsAfterRender(frm);
     }
 
-    function loadCostSnapshot(frm) {
-        if (frm.is_new()) {
-            renderAuthorizedCost(frm);
-            return Promise.resolve();
-        }
-        const context = documentContext();
-        if (
-            frm.__almdinaCostSnapshotPromise
-            && context.isCurrent(frm, frm.__almdinaCostSnapshotContext)
-        ) {
-            return frm.__almdinaCostSnapshotPromise;
-        }
-
-        const identity = context.capture(frm);
-        const orderName = frm.doc.name;
-        const snapshotPromise = Promise.resolve(frappe.call({
-            method: "almdina_erp.almdina_erp.services.cost_permission_service.get_order_cost_snapshot",
-            args: { order_name: orderName },
-        })).then((response) => {
-            if (!context.isCurrent(frm, identity)) return;
-            mergeSnapshot(frm, response.message || {});
-            renderAuthorizedCost(frm);
-        }).finally(() => {
-            if (frm.__almdinaCostSnapshotPromise === snapshotPromise) {
-                frm.__almdinaCostSnapshotPromise = null;
-                frm.__almdinaCostSnapshotContext = null;
-            }
-        });
-
-        frm.__almdinaCostSnapshotContext = identity;
-        frm.__almdinaCostSnapshotPromise = snapshotPromise;
-        return snapshotPromise;
-    }
-
     function apply(frm) {
         configureCostInputFields(frm);
 
@@ -506,18 +444,9 @@
 
         setCostTabVisibility(frm, true);
 
-        if (can(frm, "view_costs")) {
-            const context = documentContext();
-            const identity = context.capture(frm);
-            loadCostSnapshot(frm).catch((error) => {
-                if (!context.isCurrent(frm, identity)) return;
-                console.error("Failed to load protected cost snapshot", error);
-                scrubCostData(frm);
-                setCostTabVisibility(frm, false);
-            });
-            return;
-        }
-
+        // CostWorkspaceState + its presenter adapter are the sole snapshot owner.
+        // Rendering a pending workspace will ask that owner to load when needed;
+        // this permission layer intentionally performs no financial GET itself.
         renderAuthorizedCost(frm);
     }
 
@@ -536,7 +465,6 @@
     window.AlmdinaCostPermissionsUX = Object.freeze({
         apply,
         can,
-        mergeSnapshot,
         scrubCostData,
         flushPendingPriceEdits,
         pendingPricePieces,
