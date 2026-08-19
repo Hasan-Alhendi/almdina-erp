@@ -268,6 +268,9 @@
             [data-fieldname="plan_control_actions"] .dco-approve-cutting-plan {
                 display:none !important;
             }
+            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) {
+                display:block !important;
+            }
             @media (max-width:767px) {
                 .dco-plan-context-bar { align-items:stretch; }
                 .dco-plan-context-primary,
@@ -283,6 +286,14 @@
         const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
         field.$wrapper.toggle(Boolean(isEditing(frm)));
+    }
+
+    function hostFor(frm) {
+        const field = frm.fields_dict && frm.fields_dict.cutting_plan_html;
+        const wrapper = field && field.$wrapper;
+        return wrapper && wrapper.length
+            ? wrapper.find(`.${HOST_CLASS}`).first()
+            : $();
     }
 
     async function refreshWorkspace(frm) {
@@ -432,10 +443,23 @@
         return true;
     }
 
+    function refresh(frm) {
+        if (!frm || frm.doctype !== "Door Cutting Order") return false;
+        syncLegacyActionSurface(frm);
+        const host = hostFor(frm);
+        return host.length ? render(frm, host) : false;
+    }
+
+    frappe.ui.form.on("Door Cutting Order", {
+        almdina_edit_session_changed(frm) { refresh(frm); },
+        refresh_plan_controls(frm) { refresh(frm); },
+    });
+
     window.AlmdinaPlanContextActionsUX = Object.freeze({
         activeTab,
         rowForTab,
         render,
+        refresh,
         runApproval,
         runCancelApproval,
         runPrint,
