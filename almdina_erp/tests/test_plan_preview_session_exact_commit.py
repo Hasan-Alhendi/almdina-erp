@@ -101,6 +101,16 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("اضغط «تعديل» لبدء تجربة", source)
         self.assertIn("معاينة غير محفوظة", source)
 
+    def test_stale_preview_never_remains_presented_as_the_current_result(self) -> None:
+        source = (PUBLIC / "door_cutting_order_plan_preview_edit_ux.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("function renderPersistedEditingState(frm, status)", source)
+        self.assertIn("renderPersistedEditingState(frm, state.status)", source)
+        self.assertIn("المعاينة السابقة أصبحت قديمة", source)
+        self.assertIn("الخطة المعروضة أدناه هي الخطة المحفوظة", source)
+        self.assertIn('state.status === "ready" || state.status === "saving"', source)
+
     def test_preview_assets_load_at_the_correct_architecture_boundaries(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
         api = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"
