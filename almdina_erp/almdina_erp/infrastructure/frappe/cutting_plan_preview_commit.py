@@ -5,7 +5,13 @@ from typing import Any, Mapping
 import frappe
 from frappe import _
 
-from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_workspace
+from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+    OptimizationOutcome,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+    apply_calculation_outcome,
+    plan_input_fingerprint,
+)
 
 
 _SETTING_TO_PLAN_FIELD = {
@@ -29,14 +35,15 @@ def apply_exact_system_preview(
 
     No optimizer is invoked here. The input fingerprint is recomputed after the
     preview settings are applied, so a changed order cannot accept an old
-    geometry snapshot.
+    geometry snapshot. Projection reuses the public calculation-outcome port,
+    keeping this adapter independent from private workspace implementation APIs.
     """
 
     for setting_name, plan_field in _SETTING_TO_PLAN_FIELD.items():
         if setting_name in settings:
             setattr(plan, plan_field, settings[setting_name])
 
-    live_fingerprint = cutting_plan_workspace.plan_input_fingerprint(order, plan)
+    live_fingerprint = plan_input_fingerprint(order, plan)
     if not expected_input_fingerprint or live_fingerprint != expected_input_fingerprint:
         frappe.throw(
             _(
@@ -46,13 +53,17 @@ def apply_exact_system_preview(
             frappe.ValidationError,
         )
 
-    # This module is the persistence adapter paired with cutting_plan_workspace;
-    # using its single snapshot mapper keeps preview commit byte-for-byte aligned
-    # with normal System-plan projection without duplicating geometry mapping.
-    cutting_plan_workspace._apply_snapshot(  # noqa: SLF001
+    trusted_snapshot = dict(snapshot)
+    apply_calculation_outcome(
         order,
         plan,
-        dict(snapshot),
+        OptimizationOutcome(
+            snapshot=trusted_snapshot,
+            packing_score="",
+            required_boards=len(trusted_snapshot.get("sheets") or []),
+            method_label=str(trusted_snapshot.get("method_label") or ""),
+            expanded_pieces=(),
+        ),
         fingerprint=live_fingerprint,
     )
 
