@@ -2,6 +2,7 @@
     "use strict";
 
     const STYLE_ID = "dco-side-edge-profile-css";
+    const EDGE_PROFILE_LOOKUP_METHOD = "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options";
     const SIDE_ORDER = ["width_top", "width_bottom", "long_right", "long_left"];
     const SIDES = {
         long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", labelAr: "الطول الأيمن", labelEn: "Right long edge", axis: "long" },
@@ -9,12 +10,6 @@
         width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", labelAr: "العرض العلوي", labelEn: "Top width edge", axis: "width" },
         width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", labelAr: "العرض السفلي", labelEn: "Bottom width edge", axis: "width" },
     };
-    const EDGE_PROFILE_LOOKUP_CAPABILITIES = Object.freeze([
-        "view_edge_banding_types",
-        "create_order",
-        "edit_order",
-        "create_order_revision",
-    ]);
 
     function isArabic() {
         const lang = String(
@@ -68,45 +63,6 @@
         return rowByName(frm, tr.dataset.rowName);
     }
 
-    function permissionApi() {
-        return window.AlmdinaPermissions || null;
-    }
-
-    function permissionResolved() {
-        const api = permissionApi();
-        return Boolean(
-            api
-            && typeof api.version === "function"
-            && api.version() > 0
-            && typeof api.can === "function"
-        );
-    }
-
-    function canLoadProfiles() {
-        if (frappe.session && frappe.session.user === "Administrator") return true;
-        const api = permissionApi();
-        if (!permissionResolved()) return false;
-        return EDGE_PROFILE_LOOKUP_CAPABILITIES.some(capability => api.can(capability));
-    }
-
-    function canMutateOrderPreview(frm) {
-        if (
-            window.frappe
-            && frappe.almdina
-            && typeof frappe.almdina.orderCanEdit === "function"
-        ) {
-            return Boolean(frappe.almdina.orderCanEdit(frm));
-        }
-        const api = permissionApi();
-        return Boolean(
-            permissionResolved()
-            && api.can("edit_order")
-            && frm
-            && frm.doc
-            && frm.doc.docstatus === 0
-        );
-    }
-
     function profiles(frm) {
         if (!(frm._dco_side_edge_profiles instanceof Map)) {
             frm._dco_side_edge_profiles = new Map();
@@ -114,20 +70,27 @@
         return frm._dco_side_edge_profiles;
     }
 
+    function financialProfilesAvailable(frm) {
+        return Boolean(frm && frm._dco_side_edge_profiles_financial === true);
+    }
+
     function ensureProfiles(frm) {
-        if (!canLoadProfiles()) return Promise.resolve(profiles(frm));
         if (frm._dco_side_edge_profiles_loaded) return Promise.resolve(profiles(frm));
         if (frm._dco_side_edge_profiles_loading) return frm._dco_side_edge_profiles_loading;
 
-        frm._dco_side_edge_profiles_loading = frappe.db.get_list("Edge Banding Type", {
-            fields: ["name", "edge_type_name", "width_cm", "thickness_mm", "rate_usd_per_meter", "edge_color"],
-            filters: { disabled: 0 },
-            order_by: "width_cm asc, edge_type_name asc",
-            limit: 200,
-        }).then(rows => {
+        const orderName = frm && frm.doc && !frm.is_new()
+            ? String(frm.doc.name || "")
+            : "";
+        frm._dco_side_edge_profiles_loading = frappe.call({
+            method: EDGE_PROFILE_LOOKUP_METHOD,
+            args: { order_name: orderName },
+        }).then(response => {
+            const payload = (response && response.message) || {};
+            const rows = Array.isArray(payload.options) ? payload.options : [];
+            const includeFinancial = payload.include_financial === true;
             const map = profiles(frm);
             map.clear();
-            (rows || []).forEach(row => {
+            rows.forEach(row => {
                 const name = String(row.name || row.edge_type_name || "").trim();
                 if (!name) return;
                 map.set(name, {
@@ -135,15 +98,18 @@
                     label: String(row.edge_type_name || name),
                     width_cm: num(row.width_cm),
                     thickness_mm: num(row.thickness_mm),
-                    rate_usd_per_meter: num(row.rate_usd_per_meter),
+                    rate_usd_per_meter: includeFinancial ? num(row.rate_usd_per_meter) : null,
                     edge_color: String(row.edge_color || ""),
+                    finish_type: String(row.finish_type || ""),
+                    application_method: String(row.application_method || ""),
                 });
             });
+            frm._dco_side_edge_profiles_financial = includeFinancial;
             frm._dco_side_edge_profiles_loaded = true;
             schedule(frm);
             return map;
         }).catch(error => {
-            console.error("Failed to load edge profiles", error);
+            console.error("Failed to load order edge profiles", error);
             return profiles(frm);
         }).finally(() => {
             frm._dco_side_edge_profiles_loading = null;
@@ -190,7 +156,9 @@
             const dimension = config.axis === "long" ? finalLength : finalWidth;
             const meters = selected ? round(dimension * qtyValue / 100, 3) : 0;
             const thickness = profile ? num(profile.thickness_mm) : 0;
-            const rate = profile ? num(profile.rate_usd_per_meter) : 0;
+            const rate = profile && profile.rate_usd_per_meter !== null
+                ? num(profile.rate_usd_per_meter)
+                : null;
             sides[side] = {
                 side,
                 selected,
@@ -200,7 +168,7 @@
                 thickness,
                 meters,
                 rate,
-                amount: round(meters * rate, 3),
+                amount: rate === null ? null : round(meters * rate, 3),
             };
         });
 
@@ -213,8 +181,12 @@
         const cutLength = round(finalLength - lengthDeductionMm / 10, 3);
         const longMeters = round(longSides.reduce((sum, item) => sum + item.meters, 0), 3);
         const widthMeters = round(widthSides.reduce((sum, item) => sum + item.meters, 0), 3);
-        const longCost = round(longSides.reduce((sum, item) => sum + item.amount, 0), 3);
-        const widthCost = round(widthSides.reduce((sum, item) => sum + item.amount, 0), 3);
+        const longCost = financialProfilesAvailable(frm)
+            ? round(longSides.reduce((sum, item) => sum + num(item.amount), 0), 3)
+            : null;
+        const widthCost = financialProfilesAvailable(frm)
+            ? round(widthSides.reduce((sum, item) => sum + num(item.amount), 0), 3)
+            : null;
 
         return {
             finalWidth,
@@ -231,23 +203,23 @@
             edgeMeters: round(longMeters + widthMeters, 3),
             longCost,
             widthCost,
-            edgeCost: round(longCost + widthCost, 3),
+            edgeCost: financialProfilesAvailable(frm) ? round(num(longCost) + num(widthCost), 3) : null,
             longType: common(longSides.map(item => item.type)),
             widthType: common(widthSides.map(item => item.type)),
             edgeType: common(selectedSides.map(item => item.type)),
             longThickness: common(longSides.map(item => item.thickness)) || 0,
             widthThickness: common(widthSides.map(item => item.thickness)) || 0,
             edgeThickness: common(selectedSides.map(item => item.thickness)) || 0,
-            longRate: common(longSides.map(item => item.rate)) || 0,
-            widthRate: common(widthSides.map(item => item.rate)) || 0,
-            edgeRate: common(selectedSides.map(item => item.rate)) || 0,
+            longRate: financialProfilesAvailable(frm) ? (common(longSides.map(item => item.rate)) || 0) : null,
+            widthRate: financialProfilesAvailable(frm) ? (common(widthSides.map(item => item.rate)) || 0) : null,
+            edgeRate: financialProfilesAvailable(frm) ? (common(selectedSides.map(item => item.rate)) || 0) : null,
             valid: finalWidth > 0 && finalLength > 0 && cutWidth > 0 && cutLength > 0,
             missingType: selectedSides.some(item => !item.type),
             unknownType: selectedSides.some(item => item.type && !item.profile),
         };
     }
 
-    function syncPreviewFields(row, result) {
+    function syncPreviewFields(frm, row, result) {
         if (!row) return;
         row.edge_long_type = result.longType;
         row.edge_width_type = result.widthType;
@@ -261,6 +233,7 @@
         row.edge_long_meters = result.longMeters;
         row.edge_width_meters = result.widthMeters;
         row.edge_meters = result.edgeMeters;
+        if (!financialProfilesAvailable(frm)) return;
         row.edge_long_rate_usd = result.longRate;
         row.edge_width_rate_usd = result.widthRate;
         row.edge_rate_usd = result.edgeRate;
@@ -315,7 +288,6 @@
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger:hover{opacity:1;transform:translateY(-1px);border-color:var(--primary,#2490ef)}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{opacity:1;background:#fff6db;border-color:#d7a514;color:#8b6400;box-shadow:0 2px 6px rgba(185,132,0,.2)}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-missing{background:#fff0f0;border-color:#df5a5a;color:#b72d2d;opacity:1}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-readonly{display:none!important}
             .dco-side-edge-help{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:rgba(36,144,239,.08);font-weight:700}
             .dco-side-edge-help b{font-size:12px}
             .dco-side-profile-summary{padding:8px 10px;border:1px solid var(--border-color,#dfe3e8);border-radius:9px;background:var(--subtle-fg,#f7f9fb);line-height:1.7}
@@ -333,14 +305,18 @@
         const config = SIDES[side];
         const label = isArabic() ? config.labelAr : config.labelEn;
         if (!sideSelected(row, side)) {
-            return isArabic() ? `${label}: فعّل القشاط أولًا` : `${label}: enable edge banding first`;
+            return isArabic() ? `${label}: فعّل قشاط ${label} أولًا` : `${label}: enable edge banding first`;
         }
         const type = effectiveType(frm, row, side);
         const profile = profileFor(frm, row, side);
         const mode = overrideType(row, side) ? (isArabic() ? "مخصص" : "Custom") : (isArabic() ? "افتراضي" : "Default");
-        const meta = profile
-            ? `${format(profile.thickness_mm)} مم · $ ${money(profile.rate_usd_per_meter)}/م`
-            : (isArabic() ? "نوع غير متاح" : "Unavailable profile");
+        let meta = isArabic() ? "نوع غير متاح" : "Unavailable profile";
+        if (profile) {
+            meta = `${format(profile.thickness_mm)} مم`;
+            if (financialProfilesAvailable(frm)) {
+                meta += ` · $ ${money(profile.rate_usd_per_meter)}/م`;
+            }
+        }
         return `${label} — ${type || "—"} — ${mode} — ${meta}`;
     }
 
@@ -360,14 +336,11 @@
         const custom = Boolean(overrideType(row, side));
         const type = effectiveType(frm, row, side);
         const missing = selected && (!type || (frm._dco_side_edge_profiles_loaded && !profileFor(frm, row, side)));
-        const editable = canMutateOrderPreview(frm);
         indicator.textContent = custom ? "✦" : "⌄";
         indicator.classList.toggle("is-custom", custom);
         indicator.classList.toggle("is-missing", missing);
-        indicator.classList.toggle("is-readonly", !editable);
-        indicator.title = editable ? indicatorTitle(frm, row, side) : "";
+        indicator.title = indicatorTitle(frm, row, side);
         indicator.setAttribute("aria-pressed", custom ? "true" : "false");
-        indicator.setAttribute("aria-hidden", editable ? "false" : "true");
     }
 
     function renderRow(frm, tr) {
@@ -378,9 +351,7 @@
             edge_width_top: tr.querySelector("[data-check-field='edge_width_top']")?.classList.contains("is-checked") ? 1 : 0,
             edge_width_bottom: tr.querySelector("[data-check-field='edge_width_bottom']")?.classList.contains("is-checked") ? 1 : 0,
         };
-        if (canMutateOrderPreview(frm)) {
-            syncPreviewFields(rowByName(frm, tr.dataset.rowName), calculate(frm, row));
-        }
+        syncPreviewFields(frm, rowByName(frm, tr.dataset.rowName), calculate(frm, row));
         tr.querySelectorAll(".dco-check-toggle[data-check-field]").forEach(toggle => decorateToggle(frm, row, toggle));
         tr.querySelectorAll(":scope > td.dco-col-edge-type").forEach(cell => cell.setAttribute("aria-hidden", "true"));
     }
@@ -397,8 +368,8 @@
             help.appendChild(hint);
         }
         hint.innerHTML = isArabic()
-            ? '<b>⌄</b><span>كل ضلع يأخذ الافتراضي؛ اضغط الرمز فوقه للتخصيص الاستثنائي</span>'
-            : '<b>⌄</b><span>Each side uses the default; select its icon only for an exception</span>';
+            ? '<b>⌄</b><span>كل ضلع يأخذ الافتراضي؛ اضغط الرمز فوقه لاختيار نوع قشاط مختلف</span>'
+            : '<b>⌄</b><span>Each side uses the default; use its icon to choose a different profile</span>';
     }
 
     function apply(frm) {
@@ -431,11 +402,23 @@
         const profile = type ? profiles(frm).get(type) || null : null;
         if (!type) return isArabic() ? "لم يتم اختيار قشاط افتراضي للطلب." : "No default edge profile selected.";
         if (!profile) return `${esc(type)} — ${isArabic() ? "جاري تحميل البيانات أو النوع غير متاح" : "Loading or unavailable"}`;
-        return `${esc(type)} — ${format(profile.thickness_mm)} مم — $ ${money(profile.rate_usd_per_meter)}/م`;
+        let summary = `${esc(type)} — ${format(profile.thickness_mm)} مم`;
+        if (financialProfilesAvailable(frm)) {
+            summary += ` — $ ${money(profile.rate_usd_per_meter)}/م`;
+        }
+        return summary;
+    }
+
+    function profileSelectOptions(frm, current = "") {
+        const values = [""];
+        profiles(frm).forEach(profile => {
+            if (profile && profile.name) values.push(String(profile.name));
+        });
+        if (current && !values.includes(current)) values.push(current);
+        return values.join("\n");
     }
 
     function openSideDialog(frm, tr, side) {
-        if (!canMutateOrderPreview(frm)) return;
         const row = materialize(frm, tr);
         if (!row) return;
         const config = SIDES[side];
@@ -447,6 +430,7 @@
             });
             return;
         }
+        const current = overrideType(row, side);
 
         const dialog = new frappe.ui.Dialog({
             title: isArabic() ? `تخصيص قشاط ${label}` : `Customize ${label}`,
@@ -458,13 +442,13 @@
                 },
                 {
                     fieldname: "edge_type_override",
-                    fieldtype: "Link",
-                    options: "Edge Banding Type",
+                    fieldtype: "Select",
+                    options: profileSelectOptions(frm, current),
                     label: isArabic() ? "نوع خاص لهذا الضلع" : "Custom profile for this side",
                     description: isArabic()
                         ? "اترك الحقل فارغًا ليستخدم هذا الضلع القشاط الافتراضي للطلب."
                         : "Leave empty to use the order default.",
-                    default: overrideType(row, side),
+                    default: current,
                 },
             ],
             primary_action_label: isArabic() ? "حفظ التخصيص" : "Save override",
@@ -492,7 +476,6 @@
     }
 
     function clearOverrideWhenDisabled(frm, row, side) {
-        if (!canMutateOrderPreview(frm)) return false;
         const config = SIDES[side];
         if (!sideSelected(row, side) && row[config.overrideField]) {
             row[config.overrideField] = "";
@@ -523,7 +506,6 @@
                 event.preventDefault();
                 event.stopPropagation();
                 event.stopImmediatePropagation();
-                if (!canMutateOrderPreview(frm)) return;
                 const tr = indicator.closest("tr[data-row-name]");
                 openSideDialog(frm, tr, indicator.dataset.edgeSide);
                 return;
@@ -560,13 +542,9 @@
         setTimeout(() => apply(frm), 120);
     }
 
-    function refresh(frm) {
-        ensureProfiles(frm).finally(() => schedule(frm));
-    }
-
     frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { refresh(frm); },
-        refresh(frm) { refresh(frm); },
+        onload_post_render(frm) { ensureProfiles(frm).finally(() => schedule(frm)); },
+        refresh(frm) { ensureProfiles(frm).finally(() => schedule(frm)); },
         default_edge_type(frm) { schedule(frm); },
     });
 
@@ -582,11 +560,6 @@
         width_cm(frm) { schedule(frm); },
         length_cm(frm) { schedule(frm); },
         qty(frm) { schedule(frm); },
-    });
-
-    window.addEventListener("almdina:permissions-updated", () => {
-        const frm = window.cur_frm;
-        if (frm && frm.doctype === "Door Cutting Order") refresh(frm);
     });
 
     window.AlmdinaMultiEdgeBanding = {
