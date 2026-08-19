@@ -61,17 +61,38 @@ assert.strictEqual(
     "callers must receive a clone, not mutable store state"
 );
 
+const staleSameDocumentRequest = store.beginLoad("Door Cutting Order::DCO-2");
+const committed = store.commit({ settings: { kerf_mm: 5 } });
+assert.strictEqual(committed.status, "ready");
+assert.strictEqual(committed.data.settings.kerf_mm, 5);
+assert(
+    committed.requestId > staleSameDocumentRequest,
+    "an authoritative command commit must advance the request generation"
+);
+assert.strictEqual(
+    store.resolveLoad("Door Cutting Order::DCO-2", staleSameDocumentRequest, {
+        settings: { kerf_mm: 3 },
+    }),
+    false,
+    "a GET started before an authoritative commit must never overwrite that commit"
+);
+assert.strictEqual(
+    store.snapshot().data.settings.kerf_mm,
+    5,
+    "the authoritative committed value must survive a late stale GET"
+);
+
 assert.strictEqual(store.beginEdit(), true);
 assert.strictEqual(store.snapshot().editing, true);
 assert.strictEqual(store.patchDraft({ marker: "changed" }), true);
 assert.strictEqual(store.snapshot().dirty, true);
-assert.strictEqual(store.snapshot().data.settings.kerf_mm, 3);
+assert.strictEqual(store.snapshot().data.settings.kerf_mm, 5);
 assert.strictEqual(store.cancelEdit(), true);
 assert.strictEqual(store.snapshot().editing, false);
 assert.strictEqual(store.snapshot().dirty, false);
 assert.strictEqual(store.snapshot().draft, null);
 
 unsubscribe();
-assert(emitted >= 5);
+assert(emitted >= 7);
 
 console.log("workspace_store.test.js passed");

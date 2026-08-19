@@ -148,6 +148,10 @@
         }
 
         function commit(data) {
+            // A successful command is newer than every read that began before it.
+            // Advance the request generation so an in-flight GET can never replace
+            // the authoritative command response when it arrives later.
+            state.requestId += 1;
             state.status = data == null ? "empty" : "ready";
             state.data = clone(data);
             state.baseline = null;
@@ -155,8 +159,7 @@
             state.dirty = false;
             state.editing = false;
             state.error = null;
-            emit();
-            return true;
+            return emit();
         }
 
         function subscribe(listener) {
