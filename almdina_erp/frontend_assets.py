@@ -121,8 +121,9 @@ doctype_js = {
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
         # Explicit user intent remains separate from capability/stage policy.
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js",
-        # Preview Edit decorates the plan edit contract before the page coordinator
-        # consumes it: Edit -> many previews -> exact Save/Cancel.
+        # Preview presentation is a pure renderer; the interaction controller
+        # owns Edit -> many previews -> exact Save/Cancel and delegates all visuals.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_presenter.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_edit_ux.js",
         # The page coordinator owns only the visible top action and delegates
         # Order / Cutting Plan / Cost editing to their established session owners.
