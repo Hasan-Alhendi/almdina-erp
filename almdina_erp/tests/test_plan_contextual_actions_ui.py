@@ -116,6 +116,17 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn('cursor:help', summary)
         self.assertIn('title=', summary)
 
+    def test_plan_edit_action_is_integrated_into_the_settings_card(self) -> None:
+        summary = source(SETTINGS_SUMMARY)
+
+        self.assertIn("PLAN_TOOLBAR_SELECTOR", summary)
+        self.assertIn("function attachPlanToolbar(frm, summary)", summary)
+        self.assertIn("header.appendChild(toolbar)", summary)
+        self.assertIn("function restorePlanToolbar(frm)", summary)
+        self.assertIn("restorePlanToolbar(frm);", summary)
+        self.assertIn("toolbar.getAttribute(\"data-editing\") === \"1\"", summary)
+        self.assertIn("The page edit coordinator owns button behavior", summary)
+
     def test_dxf_export_is_explicitly_scoped_to_active_plan_source(self) -> None:
         frontend = source(SECURE_EXPORT)
         backend = source(DXF_SERVICE)
