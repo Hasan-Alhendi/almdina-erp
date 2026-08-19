@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
 
 ROOT = Path(__file__).resolve().parents[1]
 DCO = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
+CUTTING_PLAN_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.py"
 MANIFEST = ROOT / "frontend_assets.py"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 CONTEXT = CUTTING_PLAN / "door_cutting_order_plan_context_actions_ux.js"
@@ -153,6 +154,20 @@ class TestPlanContextualActionsUI(unittest.TestCase):
             with self.subTest(status=status):
                 with self.assertRaises(CuttingPlanLifecycleError):
                     cancel_approval_transition(status)
+
+    def test_revision_lineage_survives_replacement_and_cancellation(self) -> None:
+        doctype = source(CUTTING_PLAN_DOCTYPE)
+        parent_guard = doctype.split("def _validate_revision_parent(self)", 1)[1].split(
+            "\n    def _validate_working_settings", 1
+        )[0]
+
+        self.assertIn("IMMUTABLE_STATUSES = {APPROVED, SUPERSEDED, CANCELLED}", doctype)
+        self.assertIn("if self.is_new() and parent.status != APPROVED", parent_guard)
+        self.assertIn(
+            "if not self.is_new() and parent.status not in IMMUTABLE_STATUSES",
+            parent_guard,
+        )
+        self.assertIn("cint(self.revision) <= cint(parent.revision)", parent_guard)
 
 
 if __name__ == "__main__":
