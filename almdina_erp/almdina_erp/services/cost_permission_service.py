@@ -71,6 +71,15 @@ def _finite_non_negative(value: Any, label: str) -> float:
     return number
 
 
+def _required_cost_input(value: Any, label: str) -> float:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        frappe.throw(
+            _("يجب إدخال {0} من صفحة التكلفة.").format(label),
+            frappe.ValidationError,
+        )
+    return _finite_non_negative(value, label)
+
+
 def _authorized_order(order_name: str, capability: str) -> Any:
     order = frappe.get_doc("Door Cutting Order", order_name)
     order.check_permission("read")
@@ -137,10 +146,10 @@ def update_order_cost_settings(
     if order.status not in EDITABLE_ORDER_STATUSES:
         frappe.throw(_("Cost settings can only be changed while the order is editable."))
 
-    board_rate = _finite_non_negative(board_rate_usd, _("Board Rate USD"))
-    cutting_rate = _finite_non_negative(
+    board_rate = _required_cost_input(board_rate_usd, _("سعر اللوح"))
+    cutting_rate = _required_cost_input(
         cutting_cost_per_board_usd,
-        _("Cutting Cost / Board USD"),
+        _("أجور القص / لوح"),
     )
     from almdina_erp.almdina_erp.services.cutting_plan_cost_command_service import (
         update_plan_cost_settings,
