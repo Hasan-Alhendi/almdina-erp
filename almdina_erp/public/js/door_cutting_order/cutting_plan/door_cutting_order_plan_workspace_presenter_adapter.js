@@ -72,6 +72,9 @@
     }
 
     function activeSettings(frm) {
+        const payload = data(frm);
+        const editable = payload && payload.editable_settings;
+        if (editable) return { ...editable };
         const row = activeRow(frm);
         return row && row.settings ? { ...row.settings } : null;
     }

@@ -20,6 +20,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     cutting_plan_capability_allowed,
     require_cutting_plan_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    factory_default_plan_settings,
+)
 
 
 _PLAN_FIELDS = (
@@ -99,6 +102,16 @@ def _capabilities(order: Any) -> dict[str, bool]:
     }
 
 
+def _plan_settings(plan: Any) -> dict[str, Any]:
+    return {
+        "packing_mode": str(plan.get("optimization_mode") or "Auto Pro"),
+        "cutting_machine_type": str(plan.get("machine_type") or "Auto"),
+        "optimization_time_limit_sec": flt(plan.get("optimization_time_limit_sec")),
+        "kerf_mm": flt(plan.get("kerf_mm")),
+        "trim_margin_mm": flt(plan.get("trim_margin_mm")),
+    }
+
+
 def _plan_row(plan: Any) -> dict[str, Any]:
     snapshot_json = sanitize_plan_snapshot_json(str(plan.get("snapshot_json") or ""))
     return {
@@ -109,13 +122,7 @@ def _plan_row(plan: Any) -> dict[str, Any]:
         "status": str(plan.get("status") or ""),
         "approved_by": plan.get("approved_by"),
         "approved_on": plan.get("approved_on"),
-        "settings": {
-            "packing_mode": str(plan.get("optimization_mode") or "Auto Pro"),
-            "cutting_machine_type": str(plan.get("machine_type") or "Auto"),
-            "optimization_time_limit_sec": flt(plan.get("optimization_time_limit_sec")),
-            "kerf_mm": flt(plan.get("kerf_mm")),
-            "trim_margin_mm": flt(plan.get("trim_margin_mm")),
-        },
+        "settings": _plan_settings(plan),
         "engine": {
             "method_key": plan.get("method_key"),
             "method_label": plan.get("method_label"),
@@ -182,6 +189,33 @@ def _approved(rows: list[Any], order: Any) -> Any | None:
     return _latest(rows, status=APPROVED)
 
 
+def _editable_settings(rows: list[Any]) -> dict[str, Any]:
+    """Preview the settings that ensure_system_draft() will edit, without persisting.
+
+    This deliberately mirrors the command-side target selection: reuse an existing
+    System Draft first, otherwise inherit the latest Approved revision, then the
+    latest plan lineage, and finally factory defaults. The preview is settings-only
+    and is exposed only to EDIT_OPTIMIZER_SETTINGS holders.
+    """
+
+    target = (
+        _latest(rows, status=DRAFT, source_type=SYSTEM)
+        or _latest(rows, status=APPROVED)
+        or (rows[0] if rows else None)
+    )
+    if target:
+        return _plan_settings(target)
+
+    defaults = factory_default_plan_settings()
+    return {
+        "packing_mode": defaults.optimization_mode,
+        "cutting_machine_type": defaults.machine_type,
+        "optimization_time_limit_sec": flt(defaults.optimization_time_limit_sec),
+        "kerf_mm": flt(defaults.kerf_mm),
+        "trim_margin_mm": flt(defaults.trim_margin_mm),
+    }
+
+
 @frappe.whitelist()
 def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
     """Return a plan-only read model for the unified order workspace.
@@ -219,6 +253,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "production_path": getattr(order, "production_path", None),
         "approved_plan": getattr(order, "approved_plan", None),
         "capabilities": capabilities,
+        "editable_settings": _editable_settings(rows) if capabilities["edit_settings"] else None,
         "plans": {
             "system_draft": _plan_row(system) if system else None,
             "uploaded_draft": _plan_row(uploaded) if uploaded else None,
