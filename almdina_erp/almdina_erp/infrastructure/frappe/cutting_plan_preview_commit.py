@@ -54,6 +54,13 @@ def apply_exact_system_preview(
         )
 
     trusted_snapshot = dict(snapshot)
+    validation = trusted_snapshot.get("validation") or {}
+    if not trusted_snapshot.get("sheets") or not validation.get("is_valid"):
+        frappe.throw(
+            _("المعاينة الحالية لم تنجح في التحقق الهندسي ولا يمكن حفظها."),
+            frappe.ValidationError,
+        )
+
     apply_calculation_outcome(
         order,
         plan,
