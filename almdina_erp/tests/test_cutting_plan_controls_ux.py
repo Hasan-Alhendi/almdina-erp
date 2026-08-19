@@ -66,17 +66,21 @@ def test_simple_controls_keep_only_current_settings_recalculation_action():
     assert "إعادة الحساب بالإعدادات الحالية" in plan
 
 
-def test_recalculation_button_uses_focused_command_without_full_document_save():
+def test_recalculation_button_uses_preview_session_without_full_document_plan_save():
     controls = source(CONTROLS_UX)
     plan_api = source(PLAN_WORKSPACE_API)
 
+    # The legacy recalculation route remains transport-compatible, but the active
+    # form action delegates to the non-persisting preview session.
     assert (
         '"almdina_erp.almdina_erp.services.order_plan_permission_service.recalculate_order"'
         in plan_api
     )
     assert "RECALCULATE_METHOD" in plan_api
     assert "AlmdinaPlanWorkspaceAPI" in controls
-    assert "transport.recalculate(frm.doc.name, settings)" in controls
+    assert "AlmdinaPlanPreviewSession" in controls
+    assert "await previews.preview(frm, settings)" in controls
+    assert "transport.recalculate(frm.doc.name, settings)" not in controls
     assert "frappe.call" not in controls
     assert "frm.reload_doc" not in controls
     assert "frm.save" not in controls
@@ -88,6 +92,8 @@ def test_recalculation_button_uses_focused_command_without_full_document_save():
     assert "scheduleSimplify" in controls
     assert "setTextIfChanged" in controls
     assert "preparePlanInputs" in controls
+    assert "await preparePlanInputs(frm)" in controls
+    assert "await persistPendingOrderInputs(frm)" in controls
     assert 'can(frm, "recalculate_plan")' in controls
     assert 'can(frm, "edit_optimizer_settings")' in controls
     assert "canMutateCurrentStage(frm)" in controls
