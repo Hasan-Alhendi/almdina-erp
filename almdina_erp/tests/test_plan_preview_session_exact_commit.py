@@ -64,7 +64,8 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("plan_input_fingerprint(order, plan)", source)
         self.assertIn("live_fingerprint != expected_input_fingerprint", source)
-        self.assertIn("_apply_snapshot", source)
+        self.assertIn("apply_calculation_outcome", source)
+        self.assertNotIn("_apply_snapshot", source)
         self.assertNotIn("calculate_system_plan", source)
 
     def test_transport_exposes_preview_and_commit_without_ui_logic(self) -> None:
