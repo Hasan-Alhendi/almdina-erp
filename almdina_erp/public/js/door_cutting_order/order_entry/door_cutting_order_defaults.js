@@ -200,7 +200,7 @@
 
         return loadSafeEdgeOptions(frm).then(payload => {
             if (!context.isCurrent(frm, identity)) return;
-            if (String(frm.doc.default_edge_type || "").trim() !== requestedType) return;
+            if (frm.doc.default_edge_type !== requestedType) return;
             const row = (payload.options || []).find(option => (
                 String(option.name || option.edge_type_name || "").trim() === requestedType
             ));
