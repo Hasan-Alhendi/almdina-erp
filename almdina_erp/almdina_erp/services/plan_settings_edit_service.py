@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
+    require_stage_assignment_access,
+)
 from almdina_erp.almdina_erp.services.order_edit_policy import is_order_at_drawing_stage
 
 
@@ -180,6 +183,7 @@ def save_plan_settings(
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات خطة القص لهذا الطلب."),
     )
+    require_stage_assignment_access(doc)
     assert_plan_settings_edit_lifecycle(doc)
 
     updates = normalize_plan_settings_updates(
