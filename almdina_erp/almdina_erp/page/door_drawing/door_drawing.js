@@ -5,6 +5,7 @@
     const STYLESHEETS = Object.freeze([
         Object.freeze({ id: "almdina-door-drawing-professional-css", href: "/assets/almdina_erp/css/door_drawing_professional.css" }),
         Object.freeze({ id: "almdina-door-drawing-professional-page-css", href: "/assets/almdina_erp/css/door_drawing_professional_page.css" }),
+        Object.freeze({ id: "almdina-door-drawing-reference-css", href: "/assets/almdina_erp/css/door_drawing_reference.css" }),
     ]);
     const CORE_MODULES = Object.freeze([
         "/assets/almdina_erp/js/door_drawing_v4/domain/geometry.js",
@@ -34,6 +35,10 @@
         "/assets/almdina_erp/js/door_drawing_v4/professional/selection_overlay.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_shell.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/editor_controller.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/domain.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/cropper.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/scanner_bridge.js",
+        "/assets/almdina_erp/js/door_drawing_v4/reference/reference_controller.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_api.js",
         "/assets/almdina_erp/js/door_drawing_v4/professional/workspace_controller.js",
     ]);

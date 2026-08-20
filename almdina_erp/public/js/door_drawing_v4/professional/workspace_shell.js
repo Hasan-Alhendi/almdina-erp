@@ -28,7 +28,10 @@
                         <button type="button" class="ald-prof-icon-button" data-action="redo" title="إعادة Ctrl+Shift+Z">↷</button>
                         <span class="ald-prof-save-state" data-save-state>محفوظ</span>
                     </div>
-                    <div class="ald-prof-topbar-end"><button type="button" class="ald-prof-save" data-action="save">حفظ</button></div>
+                    <div class="ald-prof-topbar-end">
+                        <button type="button" class="ald-prof-reference-button" data-action="reference-image">صورة مرجعية</button>
+                        <button type="button" class="ald-prof-save" data-action="save">حفظ</button>
+                    </div>
                 </header>
                 <div class="ald-prof-body">
                     <aside class="ald-prof-sidebar ald-prof-sidebar-left">
@@ -60,10 +63,15 @@
         const properties = workspace.querySelector("[data-properties]");
         const hint = workspace.querySelector("[data-hint]");
         const saveState = workspace.querySelector("[data-save-state]");
+        const referenceButton = workspace.querySelector('[data-action="reference-image"]');
 
         return Object.freeze({
-            workspace, stage, canvas, numeric, layers, properties, hint,
+            workspace, stage, canvas, numeric, layers, properties, hint, referenceButton,
             setActiveTool(tool) { workspace.dataset.activeTool = tool; workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === tool)); },
+            setReferenceState(hasImage) {
+                referenceButton.classList.toggle("has-image", Boolean(hasImage));
+                referenceButton.textContent = hasImage ? "الصورة المرجعية ✓" : "صورة مرجعية";
+            },
             setSaveState(text, state = "saved") { saveState.textContent = text; saveState.dataset.state = state; },
             setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = Boolean(saving); button.textContent = saving ? "يتم الحفظ…" : "حفظ"; },
             setHint(text = "") { hint.textContent = text; hint.classList.toggle("is-visible", Boolean(text)); },
