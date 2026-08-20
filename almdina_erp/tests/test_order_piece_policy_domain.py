@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     drawing_token,
     evaluate_special_shape,
     geometry_changed,
+    pricing_basis_changed,
     protected_price_changed,
     reset_price_values,
     resolve_clipped_corner,
@@ -53,6 +54,103 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         self.assertTrue(geometry_changed(old, changed, drawing_changed=False))
         self.assertTrue(geometry_changed(old, same, drawing_changed=True))
         self.assertFalse(geometry_changed(None, changed, drawing_changed=True))
+
+    def test_reviewed_price_basis_is_independent_from_drawing_and_edge_geometry(self) -> None:
+        old = PieceGeometry(
+            piece_type="Special",
+            width_cm=90,
+            length_cm=210,
+            qty=2,
+        )
+        drawing_only = old
+        edge_only = PieceGeometry(
+            piece_type="Special",
+            width_cm=90,
+            length_cm=210,
+            qty=2,
+            edge_long_right=1,
+            edge_long_left=1,
+            edge_width_top=1,
+            edge_width_bottom=1,
+            edge_type="ABS",
+        )
+        other_geometry = PieceGeometry(
+            piece_type="Special",
+            width_cm=90,
+            length_cm=210,
+            qty=2,
+            allow_rotation=1,
+            clipped_corner_position="Top Right",
+            clipped_corner_width_cm=12,
+            clipped_corner_length_cm=18,
+        )
+        approved = SpecialPrice(
+            unit_price_usd=125,
+            status="Approved",
+            note="reviewed",
+            approved_by="accounts@example.com",
+            approved_on="2026-08-20",
+        )
+
+        for label, current, drawing_changed, default_edge_changed in (
+            ("drawing", drawing_only, True, False),
+            ("piece edge", edge_only, False, False),
+            ("default edge", old, False, True),
+            ("other geometry", other_geometry, False, False),
+        ):
+            with self.subTest(label=label):
+                decision = evaluate_special_shape(
+                    old_geometry=old,
+                    current_geometry=current,
+                    old_price=approved,
+                    current_price=approved,
+                    drawing_changed=drawing_changed,
+                    drawing_has_elements=True,
+                    default_edge_changed=default_edge_changed,
+                    approval_action=False,
+                )
+                self.assertFalse(decision.pricing_basis_changed)
+                self.assertFalse(decision.reset_price)
+
+        self.assertFalse(pricing_basis_changed(None, old))
+
+    def test_only_piece_type_dimensions_and_quantity_change_reviewed_price_basis(self) -> None:
+        old = PieceGeometry(
+            piece_type="Special",
+            width_cm=90,
+            length_cm=210,
+            qty=2,
+        )
+        cases = {
+            "piece_type": PieceGeometry(
+                piece_type="Regular",
+                width_cm=90,
+                length_cm=210,
+                qty=2,
+            ),
+            "width_cm": PieceGeometry(
+                piece_type="Special",
+                width_cm=91,
+                length_cm=210,
+                qty=2,
+            ),
+            "length_cm": PieceGeometry(
+                piece_type="Special",
+                width_cm=90,
+                length_cm=211,
+                qty=2,
+            ),
+            "qty": PieceGeometry(
+                piece_type="Special",
+                width_cm=90,
+                length_cm=210,
+                qty=3,
+            ),
+        }
+
+        for fieldname, current in cases.items():
+            with self.subTest(fieldname=fieldname):
+                self.assertTrue(pricing_basis_changed(old, current))
 
     def test_protected_price_change_detects_approval_fields(self) -> None:
         old = SpecialPrice(
