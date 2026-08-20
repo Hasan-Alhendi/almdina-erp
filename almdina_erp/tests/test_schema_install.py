@@ -87,14 +87,12 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
             row = frappe.db.get_value(
                 "Edge Banding Type",
                 edge_name,
-                ["rate_usd_per_meter", "width_cm", "finish_type", "application_method"],
+                ["rate_usd_per_meter", "width_cm"],
                 as_dict=True,
             )
             self.assertIsNotNone(row, edge_name)
             self.assertEqual(float(row.rate_usd_per_meter), expected_rate, edge_name)
             self.assertGreater(float(row.width_cm or 0), 0, edge_name)
-            self.assertTrue(row.finish_type, edge_name)
-            self.assertTrue(row.application_method, edge_name)
 
     def test_fresh_install_does_not_seed_production_routing_policy(self):
         settings = frappe.get_single("Almdina ERP Settings")

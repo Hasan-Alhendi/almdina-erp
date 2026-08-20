@@ -59,23 +59,21 @@ def test_order_has_editable_text_edge_color_below_default_edge_type():
     doc = json.loads(DOCTYPE.read_text(encoding="utf-8"))
     fields = {row["fieldname"]: row for row in doc["fields"]}
     assert fields["edge_color"]["fieldtype"] == "Data"
+    assert fields["edge_color"]["reqd"] == 1
     assert not fields["edge_color"].get("read_only")
     assert doc["field_order"].index("default_edge_type") < doc["field_order"].index("edge_color")
     assert doc["field_order"].index("edge_color") < doc["field_order"].index("pieces_section")
 
 
-def test_edge_color_is_defaulted_from_safe_order_lookup_but_remains_editable():
+def test_edge_color_is_manual_and_never_defaulted_from_edge_profile():
     source = _source(DEFAULTS)
     assert "edge_banding_lookup_service.get_order_edge_banding_options" in source
-    assert "loadSafeEdgeOptions(frm).then(payload =>" in source
-    assert "(payload.options || []).find" in source
+    assert "loadSafeEdgeOptions(frm);" in source
+    assert "أدخل لون القشاط يدويًا لهذا الطلب." in source
     assert 'frappe.db.get_value("Edge Banding Type"' not in source
-    assert 'frm.set_value("edge_color", color)' in source
-    assert "default_edge_type(frm)" in source
-    assert "apply_edge_color_default(frm, true)" in source
-    # Keep the stale-response guard: a delayed result for profile A must never
-    # overwrite the color after the operator has already switched to profile B.
-    assert "if (frm.doc.default_edge_type !== requestedType) return;" in source
+    assert 'frm.set_value("edge_color"' not in source
+    assert "apply_edge_color_default" not in source
+    assert "default_edge_type(frm)" not in source
 
 
 def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_duplicates():

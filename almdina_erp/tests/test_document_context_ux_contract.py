@@ -208,15 +208,18 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("almdina:stage-context-ready", source)
         self.assertIn("holdsStageOperationalRole", source)
 
-    def test_defaults_ignore_responses_captured_for_another_order(self) -> None:
+    def test_async_factory_defaults_ignore_responses_captured_for_another_order(self) -> None:
         source = DEFAULTS.read_text(encoding="utf-8")
 
-        self.assertGreaterEqual(source.count("const identity = context.capture(frm)"), 2)
+        self.assertEqual(source.count("const identity = context.capture(frm)"), 1)
         self.assertGreaterEqual(
             source.count("if (!context.isCurrent(frm, identity)) return"),
-            2,
+            1,
         )
-        self.assertIn("frm.doc.default_edge_type !== requestedType", source)
+        # Edge color is now a manual order input, so it must not own a second
+        # asynchronous defaulting request or mutate the operator's typed value.
+        self.assertNotIn("apply_edge_color_default", source)
+        self.assertNotIn('frm.set_value("edge_color"', source)
 
     def test_production_actions_wait_for_central_permission_refresh_without_detaching_groups(self) -> None:
         production = PRODUCTION_ACTIONS.read_text(encoding="utf-8")
