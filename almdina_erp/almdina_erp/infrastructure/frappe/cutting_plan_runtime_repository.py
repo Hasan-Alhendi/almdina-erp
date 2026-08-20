@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import
 @dataclass(frozen=True, slots=True)
 class ProductionPlanFacts:
     plan_name: str | None
+    approved_plan_name: str | None
     has_cutting_plan: bool
     plan_needs_recalculation: bool
     has_approved_plan: bool
@@ -109,13 +110,22 @@ def approved_plan_for_order(order: Any) -> Any | None:
 
 
 def production_plan_facts(order: Any) -> ProductionPlanFacts:
-    """Build shop-floor plan facts exclusively from canonical Cutting Plan state."""
+    """Build shop-floor plan facts exclusively from canonical Cutting Plan state.
 
+    ``approved_plan_name`` preserves whether the order has an explicit approval
+    relation, while ``has_approved_plan`` means that exact relation is still a
+    current, non-stale production approval. Keeping those facts separate lets the
+    workflow explain stale approvals accurately instead of asking for approval a
+    second time with a misleading message.
+    """
+
+    approved_plan_name = str(getattr(order, "approved_plan", None) or "").strip() or None
     approved = approved_plan_for_order(order)
     candidate = approved or current_working_plan(str(order.name))
     if not candidate:
         return ProductionPlanFacts(
             plan_name=None,
+            approved_plan_name=approved_plan_name,
             has_cutting_plan=False,
             plan_needs_recalculation=True,
             has_approved_plan=False,
@@ -125,6 +135,7 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
     stale = _plan_is_stale(order, candidate) if has_snapshot else True
     return ProductionPlanFacts(
         plan_name=str(candidate.name),
+        approved_plan_name=approved_plan_name,
         has_cutting_plan=has_snapshot,
         plan_needs_recalculation=stale,
         has_approved_plan=bool(approved and has_snapshot and not stale),
