@@ -250,7 +250,7 @@
         const transport = api();
         const firstPlan = !hasSystemDraft(frm);
         const canRun = firstPlan
-            ? Boolean(transport && typeof transport.recalculate === "function")
+            ? Boolean(transport && typeof transport.bootstrapPlan === "function")
             : Boolean(previews && typeof previews.preview === "function");
         return Boolean(
             workspaceReady(frm)
@@ -347,8 +347,8 @@
 
         try {
             if (!hasSystemDraft(frm)) {
-                if (typeof transport.recalculate !== "function") return false;
-                await transport.recalculate(frm.doc.name, settings);
+                if (typeof transport.bootstrapPlan !== "function") return false;
+                await transport.bootstrapPlan(frm.doc.name, settings);
                 if (previews && typeof previews.reset === "function") previews.reset(frm);
                 await refreshWorkspaceOwners(frm);
                 frappe.show_alert({
