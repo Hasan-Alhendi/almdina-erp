@@ -366,8 +366,45 @@ assert.deepStrictEqual(
         "DELIVERED-NEW",
         "DELIVERED-OLD",
     ],
-    "worker queue must render in-progress, ready, ready-for-delivery, completed, then delivered with state-specific chronology"
+    "mobile worker queue must render five states with state-specific chronology"
 );
+
+const desktopQueueItems = [
+    {
+        name: "READY",
+        doc: { status: "At CNC", department_status: "بحاجة للعمل" },
+        flag: { assignment_state: "assigned", assignment_time: "2026-08-17 09:00:00" },
+    },
+    {
+        name: "IN-PROGRESS",
+        doc: { status: "At CNC", department_status: "قيد العمل" },
+        flag: { assignment_state: "assigned", assignment_time: "2026-08-17 08:00:00" },
+    },
+    {
+        name: "READY-DELIVERY",
+        doc: { status: "Ready for Delivery", department_status: "مكتمل" },
+        flag: { assignment_state: "completed", completion_time: "2026-08-17 12:00:00" },
+    },
+    {
+        name: "COMPLETED",
+        doc: { status: "Completed", department_status: "مكتمل" },
+        flag: { assignment_state: "completed", completion_time: "2026-08-17 11:00:00" },
+    },
+    {
+        name: "DELIVERED",
+        doc: { status: "Delivered", department_status: "مكتمل", modified: "2026-08-17 16:00:00" },
+        flag: { assignment_state: "completed", completion_time: "2026-08-17 13:00:00" },
+    },
+];
+assert.deepStrictEqual(
+    Array.from(api.sortDesktopQueueItems(desktopQueueItems), item => item.name),
+    ["IN-PROGRESS", "READY", "DELIVERED", "READY-DELIVERY", "COMPLETED"],
+    "desktop table must preserve the legacy three-group ordering with all completed assignments newest-first"
+);
+assert(source.includes('const mobileLayout = root.classList.contains("dco-order-card-layout")'));
+assert(source.includes("? sortPersonalQueueItems(queueItems)"));
+assert(source.includes(": sortDesktopQueueItems(queueItems);"));
+
 assert.strictEqual(
     api.personalQueueState({ status: "At CNC", department_status: "قيد العمل" }, { assignment_state: "assigned" }),
     "in_progress"
