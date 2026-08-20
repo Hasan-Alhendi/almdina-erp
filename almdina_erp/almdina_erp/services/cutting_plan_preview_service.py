@@ -35,6 +35,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_preview_store im
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     calculate_system_plan,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
+    require_stage_assignment_access,
+)
 from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
     _assert_recalculation_state,
     plan_payload,
@@ -69,8 +72,6 @@ def _require_preview_capabilities(order: Any) -> None:
 
 def _normalized_settings(values: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_plan_settings_updates(values)
-    # A preview always represents a complete settings state. The frontend sends
-    # all five fields, so fail closed if a malformed client omits one.
     missing = [name for name in _SETTING_TO_PLAN_FIELD if name not in normalized]
     if missing:
         frappe.throw(
@@ -133,7 +134,7 @@ def _system_draft(order: Any, capability: str) -> Any:
     )
     if not plan:
         frappe.throw(
-            _("لا توجد خطة نظام قابلة للمعاينة حاليًا. أعد حساب الخطة أولًا."),
+            _("لم تُنشأ خطة نظام بعد. استخدم «حساب خطة القص» لإنشاء الخطة الأولى ثم ابدأ المعاينة والتعديل."),
             frappe.ValidationError,
         )
     return plan
@@ -157,6 +158,7 @@ def preview_cutting_plan(
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
     _require_preview_capabilities(order)
+    require_stage_assignment_access(order)
     assert_plan_settings_edit_lifecycle(order)
     _assert_recalculation_state(order)
 
@@ -224,6 +226,7 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str) -> dict[str, A
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
     _require_preview_capabilities(order)
+    require_stage_assignment_access(order)
     assert_plan_settings_edit_lifecycle(order)
     _assert_recalculation_state(order)
 
