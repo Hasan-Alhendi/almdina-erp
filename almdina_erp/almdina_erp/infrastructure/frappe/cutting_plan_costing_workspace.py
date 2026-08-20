@@ -101,6 +101,68 @@ def apply_plan_costs(plan: Any, *, edge_cost_usd: float | None = None) -> dict[s
     return values
 
 
+def persist_plan_cost_snapshot(plan: Any) -> dict[str, float | int]:
+    """Persist one trusted server-calculated financial snapshot.
+
+    Cutting Plan financial fields intentionally stay on permission level 1 so
+    ordinary plan editors cannot read or edit them through Desk. Geometry and
+    DXF commands, however, legitimately change derived cost totals whenever the
+    required board count changes. Frappe can discard those protected field
+    mutations during ``Document.save()`` for a user without that permlevel.
+
+    This narrow infrastructure boundary therefore persists only the already
+    calculated in-memory snapshot after the parent command has authorized the
+    order and saved the Draft plan. It does not accept raw request values and it
+    never grants the caller permission to edit cost inputs.
+    """
+
+    if str(getattr(plan, "status", None) or "") != DRAFT:
+        frappe.throw(
+            _("لا يمكن تحديث لقطة تكلفة خطة القص إلا على خطة في حالة المسودة."),
+            frappe.ValidationError,
+        )
+    if not str(getattr(plan, "name", None) or "").strip():
+        frappe.throw(_("تعذر حفظ تكلفة خطة القص قبل حفظ الخطة نفسها."), frappe.ValidationError)
+    if cint(getattr(plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION:
+        frappe.throw(
+            _("لم يتم حساب لقطة تكلفة حديثة لخطة القص."),
+            frappe.ValidationError,
+        )
+
+    values: dict[str, float | int] = {
+        "cost_snapshot_version": COST_SNAPSHOT_VERSION,
+        **{
+            fieldname: flt(getattr(plan, fieldname, 0))
+            for fieldname in PLAN_COST_FIELDS
+        },
+    }
+    frappe.db.set_value(
+        "Cutting Plan",
+        plan.name,
+        values,
+        update_modified=False,
+    )
+
+    persisted = frappe.db.get_value(
+        "Cutting Plan",
+        plan.name,
+        ["cost_snapshot_version", *PLAN_COST_FIELDS],
+        as_dict=True,
+    ) or {}
+    if cint(persisted.get("cost_snapshot_version")) != COST_SNAPSHOT_VERSION or any(
+        flt(persisted.get(fieldname)) != flt(values[fieldname])
+        for fieldname in PLAN_COST_FIELDS
+    ):
+        frappe.throw(
+            _(
+                "تعذر حفظ تكلفة خطة القص المشتقة. "
+                "أوقف النظام العملية لأن القيم المحفوظة لا تطابق نتيجة الحساب."
+            ),
+            frappe.ValidationError,
+        )
+    return values
+
+
 def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
     """Refresh only DCO-owned quote totals that depend on Plan financials.
 
@@ -221,6 +283,7 @@ __all__ = [
     "initial_plan_cost_values",
     "initialize_draft_plan_cost_snapshot",
     "overlay_authoritative_costs",
+    "persist_plan_cost_snapshot",
     "project_plan_costs_to_order",
     "refresh_order_commercial_totals",
 ]
