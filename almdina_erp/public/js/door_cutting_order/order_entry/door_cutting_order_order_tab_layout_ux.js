@@ -24,6 +24,11 @@
         }),
     });
 
+    const ALWAYS_VISIBLE_FIELDS = Object.freeze({
+        order_notes: "أضف ملاحظة للطلب…",
+        edge_color: "أدخل لون القشاط",
+    });
+
     function formRoot(frm) {
         const wrapper = frm && frm.wrapper;
         return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
@@ -63,9 +68,7 @@
                     width: 100%;
                     padding: 7px 0 11px;
                 }
-                .${ROOT_CLASS} .dco-order-section-heading__copy {
-                    min-width: 0;
-                }
+                .${ROOT_CLASS} .dco-order-section-heading__copy { min-width: 0; }
                 .${ROOT_CLASS} .dco-order-section-heading__title {
                     display: block;
                     margin: 0;
@@ -99,38 +102,78 @@
                 .${ROOT_CLASS} .dco-measurements-card > .section-head {
                     display: none !important;
                 }
-                .${ROOT_CLASS} .dco-order-primary-column {
-                    flex: 0 0 44% !important;
-                    max-width: 44% !important;
-                }
-                .${ROOT_CLASS} .dco-order-notes-column {
-                    flex: 0 0 56% !important;
-                    max-width: 56% !important;
-                }
-                .${ROOT_CLASS} .dco-material-board-column {
-                    flex: 0 0 38% !important;
-                    max-width: 38% !important;
-                }
-                .${ROOT_CLASS} .dco-material-size-column {
-                    flex: 0 0 24% !important;
-                    max-width: 24% !important;
+
+                /*
+                 * Frappe owns the native controls and their values. These two
+                 * section bodies only become layout grids; their original
+                 * form-column wrappers participate through display:contents so no
+                 * field is cloned, moved to another state owner, or reimplemented.
+                 */
+                .${ROOT_CLASS} .dco-order-intake-card > .section-body {
                     display: grid !important;
-                    grid-template-columns: repeat(2,minmax(0,1fr));
-                    gap: 8px;
-                    align-content: start;
+                    grid-template-columns: minmax(0,2fr) minmax(220px,1fr);
+                    gap: 12px 16px;
+                    direction: rtl;
+                    align-items: start;
                 }
-                .${ROOT_CLASS} .dco-material-edge-column {
-                    flex: 0 0 38% !important;
-                    max-width: 38% !important;
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body {
+                    display: grid !important;
+                    grid-template-columns: repeat(4,minmax(0,1fr));
+                    gap: 12px 14px;
+                    direction: rtl;
+                    align-items: start;
                 }
-                .${ROOT_CLASS} .dco-material-size-column > .frappe-control,
-                .${ROOT_CLASS} .dco-material-size-column > .form-group {
+                .${ROOT_CLASS} .dco-order-intake-card > .section-body > .form-column,
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body > .form-column {
+                    display: contents !important;
+                }
+
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"] {
+                    grid-column: 1;
+                    grid-row: 1;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"] {
+                    grid-column: 2;
+                    grid-row: 1;
+                }
+                .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
+                    grid-column: 1 / -1;
+                    grid-row: 2;
+                }
+
+                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_description"] {
+                    grid-column: 1 / span 2;
+                    grid-row: 1;
+                }
+                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_length_cm"] {
+                    grid-column: 3;
+                    grid-row: 1;
+                }
+                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_width_cm"] {
+                    grid-column: 4;
+                    grid-row: 1;
+                }
+                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="default_edge_type"] {
+                    grid-column: 1 / span 2;
+                    grid-row: 2;
+                }
+                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="edge_color"] {
+                    grid-column: 3 / span 2;
+                    grid-row: 2;
+                }
+
+                .${ROOT_CLASS} .dco-keep-empty-field {
+                    display: block !important;
+                    visibility: visible !important;
                     min-width: 0;
-                    width: 100% !important;
-                    margin-bottom: 0 !important;
+                }
+                .${ROOT_CLASS} .dco-empty-display:empty::before {
+                    content: attr(data-dco-empty-placeholder);
+                    color: var(--text-muted,#8a949e);
+                    font-weight: 500;
                 }
                 .${ROOT_CLASS} [data-fieldname="order_notes"] textarea {
-                    min-height: 78px !important;
+                    min-height: 72px !important;
                     max-height: 170px !important;
                     resize: none !important;
                     overflow-y: auto !important;
@@ -142,22 +185,6 @@
                     color: var(--text-muted,#7b8793) !important;
                     font-size: 10px !important;
                     line-height: 1.45 !important;
-                }
-                .${ROOT_CLASS} .dco-required-material-hint {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    margin-top: 7px;
-                    color: var(--text-muted,#687481);
-                    font-size: 10px;
-                    font-weight: 650;
-                }
-                .${ROOT_CLASS} .dco-required-material-hint__dot {
-                    width: 6px;
-                    height: 6px;
-                    border-radius: 999px;
-                    background: #ef4444;
-                    flex: 0 0 auto;
                 }
                 .${ROOT_CLASS} .dco-edge-color-origin {
                     display: inline-flex;
@@ -175,17 +202,30 @@
                     background: rgba(181,112,28,.10);
                     color: #9a5b12;
                 }
+
                 @media (max-width: 980px) {
-                    .${ROOT_CLASS} .dco-order-primary-column,
-                    .${ROOT_CLASS} .dco-order-notes-column,
-                    .${ROOT_CLASS} .dco-material-board-column,
-                    .${ROOT_CLASS} .dco-material-size-column,
-                    .${ROOT_CLASS} .dco-material-edge-column {
-                        flex: 0 0 50% !important;
-                        max-width: 50% !important;
+                    .${ROOT_CLASS} .dco-order-intake-card > .section-body {
+                        grid-template-columns: minmax(0,1.5fr) minmax(190px,1fr);
                     }
-                    .${ROOT_CLASS} .dco-material-edge-column {
-                        margin-top: 8px;
+                    .${ROOT_CLASS} .dco-material-edge-card > .section-body {
+                        grid-template-columns: repeat(2,minmax(0,1fr));
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_description"] {
+                        grid-column: 1 / -1;
+                        grid-row: auto;
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_length_cm"] {
+                        grid-column: 1;
+                        grid-row: auto;
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_width_cm"] {
+                        grid-column: 2;
+                        grid-row: auto;
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="default_edge_type"],
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="edge_color"] {
+                        grid-column: auto;
+                        grid-row: auto;
                     }
                 }
                 @media (max-width: 700px) {
@@ -194,29 +234,29 @@
                         padding: 5px 11px 12px !important;
                         border-radius: 12px !important;
                     }
-                    .${ROOT_CLASS} .dco-order-primary-column,
-                    .${ROOT_CLASS} .dco-order-notes-column,
-                    .${ROOT_CLASS} .dco-material-board-column,
-                    .${ROOT_CLASS} .dco-material-size-column,
-                    .${ROOT_CLASS} .dco-material-edge-column {
-                        flex: 0 0 100% !important;
-                        max-width: 100% !important;
+                    .${ROOT_CLASS} .dco-order-intake-card > .section-body {
+                        grid-template-columns: 1fr;
+                        gap: 9px;
                     }
-                    .${ROOT_CLASS} .dco-order-notes-column,
-                    .${ROOT_CLASS} .dco-material-size-column,
-                    .${ROOT_CLASS} .dco-material-edge-column {
-                        margin-top: 6px;
+                    .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"],
+                    .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_date"],
+                    .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="order_notes"] {
+                        grid-column: 1;
+                        grid-row: auto;
                     }
-                    .${ROOT_CLASS} .dco-material-size-column {
+                    .${ROOT_CLASS} .dco-material-edge-card > .section-body {
                         grid-template-columns: repeat(2,minmax(0,1fr));
+                        gap: 9px;
+                    }
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="default_edge_type"],
+                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="edge_color"] {
+                        grid-column: 1 / -1;
                     }
                     .${ROOT_CLASS} .dco-order-section-heading {
                         align-items: center;
                         padding-bottom: 9px;
                     }
-                    .${ROOT_CLASS} .dco-order-section-heading__subtitle {
-                        max-width: 240px;
-                    }
+                    .${ROOT_CLASS} .dco-order-section-heading__subtitle { max-width: 240px; }
                 }
             </style>
         `);
@@ -232,11 +272,6 @@
     function sectionNode(frm, fieldname) {
         const node = fieldNode(frm, fieldname);
         return node && node.closest ? node.closest(".form-section") : null;
-    }
-
-    function columnNode(frm, fieldname) {
-        const node = fieldNode(frm, fieldname);
-        return node && node.closest ? node.closest(".form-column") : null;
     }
 
     function pieceCount(frm) {
@@ -269,27 +304,13 @@
         return section;
     }
 
-    function markColumns(frm) {
-        const assignments = [
-            ["customer", "dco-order-primary-column"],
-            ["order_notes", "dco-order-notes-column"],
-            ["board_description", "dco-material-board-column"],
-            ["board_length_cm", "dco-material-size-column"],
-            ["default_edge_type", "dco-material-edge-column"],
-        ];
-        assignments.forEach(([fieldname, className]) => {
-            const column = columnNode(frm, fieldname);
-            if (column) column.classList.add(className);
-        });
-    }
-
     function autoGrowNotes(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_notes;
         const textarea = field && field.$input && field.$input.get(0);
         if (!textarea) return;
         const resize = () => {
             textarea.style.height = "auto";
-            const next = Math.min(170, Math.max(78, textarea.scrollHeight || 78));
+            const next = Math.min(170, Math.max(72, textarea.scrollHeight || 72));
             textarea.style.height = `${next}px`;
         };
         if (!textarea.__almdinaAutoGrowBound) {
@@ -297,6 +318,38 @@
             textarea.__almdinaAutoGrowBound = true;
         }
         resize();
+    }
+
+    function keepFieldVisible(frm, fieldname, placeholder) {
+        const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+        if (!field || (field.df && Number(field.df.hidden || 0) === 1)) return;
+        const wrapper = fieldNode(frm, fieldname);
+        if (!wrapper) return;
+
+        wrapper.classList.add("dco-keep-empty-field");
+        wrapper.classList.remove("hide-control");
+        wrapper.removeAttribute("hidden");
+        if (wrapper.style && wrapper.style.display === "none") wrapper.style.removeProperty("display");
+
+        const input = field.$input && field.$input.get(0);
+        if (input) input.setAttribute("placeholder", __(placeholder));
+
+        const value = String((frm.doc && frm.doc[fieldname]) || "").trim();
+        const display = wrapper.querySelector(".control-value, .like-disabled-input");
+        if (!display) return;
+        if (!value && !String(display.textContent || "").trim()) {
+            display.classList.add("dco-empty-display");
+            display.setAttribute("data-dco-empty-placeholder", __(placeholder));
+        } else {
+            display.classList.remove("dco-empty-display");
+            display.removeAttribute("data-dco-empty-placeholder");
+        }
+    }
+
+    function keepEmptyFieldsVisible(frm) {
+        Object.entries(ALWAYS_VISIBLE_FIELDS).forEach(([fieldname, placeholder]) => {
+            keepFieldVisible(frm, fieldname, placeholder);
+        });
     }
 
     function edgeOptionSnapshot(frm) {
@@ -330,19 +383,10 @@
         `);
     }
 
-    function ensureRequiredHint(frm) {
+    function removeLegacyRequiredHint(frm) {
         const section = sectionNode(frm, "board_section");
         if (!section) return;
-        let hint = section.querySelector(".dco-required-material-hint");
-        if (!hint) {
-            hint = document.createElement("div");
-            hint.className = "dco-required-material-hint";
-            hint.innerHTML = `
-                <span class="dco-required-material-hint__dot"></span>
-                <span>${frappe.utils.escape_html(__("نوع القشاط ولون القشاط مطلوبان قبل حفظ الطلب."))}</span>
-            `;
-            section.appendChild(hint);
-        }
+        section.querySelectorAll(".dco-required-material-hint").forEach((node) => node.remove());
     }
 
     function apply(frm) {
@@ -351,10 +395,10 @@
         installStyles();
         root.classList.add(ROOT_CLASS);
         Object.entries(SECTION_COPY).forEach(([fieldname, config]) => ensureHeading(frm, fieldname, config));
-        markColumns(frm);
+        keepEmptyFieldsVisible(frm);
         autoGrowNotes(frm);
         renderEdgeColorOrigin(frm);
-        ensureRequiredHint(frm);
+        removeLegacyRequiredHint(frm);
     }
 
     function schedule(frm) {
