@@ -39,8 +39,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import
     calculate_system_plan,
     plan_input_fingerprint,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
-    require_stage_operational_access,
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
+    require_stage_assignment_access,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import (
     assert_order_editable,
@@ -154,7 +154,7 @@ def _assert_recalculation_state(order: Any) -> None:
     if getattr(order, "current_production_stage", None) or getattr(
         order, "production_path", None
     ):
-        require_stage_operational_access(order)
+        require_stage_assignment_access(order)
         return
 
     if drawing_recalculation_allowed:
