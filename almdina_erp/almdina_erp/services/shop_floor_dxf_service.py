@@ -21,16 +21,16 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     seed_plan_settings,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
-    require_stage_operational_access,
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
+    require_stage_assignment_access,
 )
 
 MAX_DXF_FILE_SIZE = 10 * 1024 * 1024
 
 _POLICY_MESSAGES = {
     "not_at_drawing": "هذا الإجراء متاح فقط عندما يكون الطلب في مرحلة الرسم.",
-    "designer_not_assigned": "أسند الطلب إلى مصمم قبل تنفيذ هذا الإجراء.",
-    "not_assigned_designer": "فقط المصمم المسند لهذا الطلب يمكنه تنفيذ هذا الإجراء.",
+    "designer_not_assigned": "أسند الطلب إلى مستخدم قبل تنفيذ هذا الإجراء.",
+    "not_assigned_designer": "فقط المستخدم المسند لهذا الطلب يمكنه تنفيذ هذا الإجراء.",
     "plan_already_approved": "الخطة معتمدة ومقفلة ولا يمكن استبدال ملف DXF.",
 }
 
@@ -60,12 +60,12 @@ def _authorize_order(
     *,
     require_unlocked_plan: bool = True,
     require_assigned_designer: bool = True,
-    require_stage_role: bool = False,
+    require_assignment: bool = True,
 ) -> Any:
     order.check_permission("read")
     require_cutting_plan_capability(order, capability)
-    if require_stage_role:
-        require_stage_operational_access(order)
+    if require_assignment:
+        require_stage_assignment_access(order)
     if require_assigned_designer:
         try:
             validate_assigned_drawing_action(
@@ -85,7 +85,7 @@ def _get_authorized_order(
     *,
     require_unlocked_plan: bool = True,
     require_assigned_designer: bool = True,
-    require_stage_role: bool = False,
+    require_assignment: bool = True,
 ) -> Any:
     order = shop_floor_gateway.get_order(order_name)
     return _authorize_order(
@@ -93,7 +93,7 @@ def _get_authorized_order(
         capability,
         require_unlocked_plan=require_unlocked_plan,
         require_assigned_designer=require_assigned_designer,
-        require_stage_role=require_stage_role,
+        require_assignment=require_assignment,
     )
 
 
@@ -195,7 +195,7 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
         order_name,
         Capability.EXPORT_DXF,
         require_assigned_designer=False,
-        require_stage_role=True,
+        require_assignment=True,
         require_unlocked_plan=False,
     )
     current = order.drawing_dxf_status or "None"
@@ -239,7 +239,7 @@ def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
         order,
         upload_capability,
         require_assigned_designer=False,
-        require_stage_role=True,
+        require_assignment=True,
     )
     replacing_existing_file = bool(existing_file)
 
@@ -320,7 +320,7 @@ def approve_production_dxf(
     order_name: str,
     plan_source: str = "System",
 ) -> dict[str, Any]:
-    """Compatibility facade for the focused role-managed approval service."""
+    """Compatibility facade for the focused capability-managed approval service."""
 
     from almdina_erp.almdina_erp.services.drawing_approval_service import (
         approve_production_dxf as approve_drawing_plan,
