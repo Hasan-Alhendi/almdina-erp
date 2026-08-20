@@ -5,6 +5,7 @@
     let sequence = 0;
     function esc(value) { return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
     function finite(value, fallback = 0) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
+    function clampPrintedNoteFontSize(value) { const parsed = Number(value || 0); if (!Number.isFinite(parsed)) return 24; return Math.max(24, Math.min(38, parsed)); }
     function color(value, fallback = "#1463e6") { const resolved = String(value || ""); return /^#[0-9a-f]{3,8}$/i.test(resolved) ? resolved : fallback; }
     function point(value) { return value && Number.isFinite(Number(value.xMm)) && Number.isFinite(Number(value.yMm)) ? { x: Number(value.xMm), y: Number(value.yMm) } : null; }
     function path(points, closed) { const valid = (points || []).map(point).filter(Boolean); if (valid.length < 2) return ""; return `${valid.map((item, index) => `${index ? "L" : "M"}${item.x} ${item.y}`).join(" ")}${closed ? " Z" : ""}`; }
@@ -19,7 +20,7 @@
             return `${line}<g><rect x="${x - 55}" y="${y - 20}" width="110" height="28" rx="5" fill="#fff" stroke="${stroke}" stroke-width="1" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" text-anchor="middle" font-family="Tahoma,Arial,sans-serif" font-size="18" font-weight="700" fill="${stroke}">${esc(label)}</text></g>`;
         }
         if (["rect", "ellipse"].includes(element.type)) { const x = finite(element.xMm), y = finite(element.yMm), w = Math.max(0, finite(element.widthMm)), h = Math.max(0, finite(element.heightMm)); return element.type === "rect" ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="${width}" vector-effect="non-scaling-stroke"/>` : `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="none" stroke="${stroke}" stroke-width="${width}" vector-effect="non-scaling-stroke"/>`; }
-        if (element.type === "text") { const position = point(element.position); return position ? `<text x="${position.x}" y="${position.y}" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-family="Tahoma,Arial,sans-serif" font-size="22" font-weight="700" fill="${color(element.style && element.style.color, "#9a4b00")}" paint-order="stroke" stroke="#fff" stroke-width="3">${esc(element.text)}</text>` : ""; }
+        if (element.type === "text") { const position = point(element.position); const fontSize = clampPrintedNoteFontSize(element.font_size || element.fontSize || 24); return position ? `<text data-dco-readable-note="1" x="${position.x}" y="${position.y}" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="${color(element.style && element.style.color, "#9a4b00")}" paint-order="stroke" stroke="#fff" stroke-width="3">${esc(element.text)}</text>` : ""; }
         return "";
     }
     function referenceMarkup(reference, width, height) {
