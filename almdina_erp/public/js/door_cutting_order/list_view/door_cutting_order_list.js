@@ -84,6 +84,11 @@
         completed: Object.freeze({ rank: 3, field: "completion_time", direction: -1 }),
         delivered: Object.freeze({ rank: 4, field: "modified", direction: -1 }),
     });
+    const DESKTOP_QUEUE_SORT_RULES = Object.freeze({
+        in_progress: Object.freeze({ rank: 0, field: "assignment_time", direction: 1 }),
+        ready: Object.freeze({ rank: 1, field: "assignment_time", direction: 1 }),
+        completed: Object.freeze({ rank: 2, field: "completion_time", direction: -1 }),
+    });
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -670,15 +675,41 @@
         return "ready";
     }
 
-    function sortPersonalQueueItems(items) {
+    function desktopQueueState(doc, flag = {}) {
+        if (flag.assignment_state === "completed") return "completed";
+        if (String(doc && doc.department_status || "").trim() === "قيد العمل") {
+            return "in_progress";
+        }
+        return "ready";
+    }
+
+    function sortQueueItemsByRules(items, stateResolver, rules, fallbackState) {
         return [...items].sort((left, right) => {
-            const leftState = personalQueueState(left.doc, left.flag);
-            const rightState = personalQueueState(right.doc, right.flag);
-            const leftRule = PERSONAL_QUEUE_SORT_RULES[leftState] || PERSONAL_QUEUE_SORT_RULES.ready;
-            const rightRule = PERSONAL_QUEUE_SORT_RULES[rightState] || PERSONAL_QUEUE_SORT_RULES.ready;
+            const leftState = stateResolver(left.doc, left.flag);
+            const rightState = stateResolver(right.doc, right.flag);
+            const leftRule = rules[leftState] || rules[fallbackState];
+            const rightRule = rules[rightState] || rules[fallbackState];
             if (leftRule.rank !== rightRule.rank) return leftRule.rank - rightRule.rank;
             return compareQueueTimes(left, right, leftRule);
         });
+    }
+
+    function sortPersonalQueueItems(items) {
+        return sortQueueItemsByRules(
+            items,
+            personalQueueState,
+            PERSONAL_QUEUE_SORT_RULES,
+            "ready"
+        );
+    }
+
+    function sortDesktopQueueItems(items) {
+        return sortQueueItemsByRules(
+            items,
+            desktopQueueState,
+            DESKTOP_QUEUE_SORT_RULES,
+            "ready"
+        );
     }
 
     function isHistoryQueueState(state) {
@@ -712,6 +743,7 @@
             return;
         }
 
+        const mobileLayout = root.classList.contains("dco-order-card-layout");
         const queueItems = [];
         [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
@@ -719,7 +751,9 @@
             const flag = flags[name] || {};
             const doc = docs.get(name) || {};
             const queueState = personalQueueState(doc, flag);
-            const isHistory = isHistoryQueueState(queueState);
+            const isHistory = mobileLayout
+                ? isHistoryQueueState(queueState)
+                : desktopQueueState(doc, flag) === "completed";
             container.classList.remove("dco-list-row-other-role");
             container.classList.toggle("dco-list-row-completed", isHistory);
             const card = container.querySelector(".dco-mobile-order-card");
@@ -730,7 +764,10 @@
             queueItems.push({ container, flag, name, doc });
         });
 
-        const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);
+        const orderedItems = mobileLayout
+            ? sortPersonalQueueItems(queueItems)
+            : sortDesktopQueueItems(queueItems);
+        const ordered = orderedItems.map(item => item.container);
         const current = [...result.querySelectorAll(".list-row-container")]
             .filter(container => Boolean(rowDocumentName(container)));
         const needsReorder = ordered.some((container, index) => current[index] !== container);
@@ -905,6 +942,7 @@
         personalQueueState,
         quickActionContext,
         renderMobileCards,
+        sortDesktopQueueItems,
         sortPersonalQueueItems,
     });
 })();
