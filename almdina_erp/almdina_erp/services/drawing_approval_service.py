@@ -14,8 +14,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_gateway
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
-    require_stage_operational_access,
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
+    require_stage_assignment_access,
 )
 
 
@@ -43,7 +43,7 @@ def _authorized_order(order_name: str) -> Any:
         Capability.APPROVE_DXF,
         message=_("لا تملك صلاحية اعتماد خطة القص لهذا الطلب."),
     )
-    require_stage_operational_access(order)
+    require_stage_assignment_access(order)
     return order
 
 
