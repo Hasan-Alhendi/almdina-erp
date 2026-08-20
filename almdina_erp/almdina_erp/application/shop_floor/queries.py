@@ -13,16 +13,16 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     normalize_order_status,
     PRE_PRODUCTION_ORDER_STATUSES,
 )
+from almdina_erp.almdina_erp.domain.orders.planning_handoff_policy import (
+    PlanningHandoffFacts,
+    decide_planning_handoff,
+)
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
     build_production_action_context,
     decide_production_action,
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import ProductionRoute
-from almdina_erp.almdina_erp.domain.orders.stage_operational_access import (
-    actor_holds_operational_role,
-    decide_stage_scoped_mutation,
-)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     DRAWING_CAPABILITIES,
     PLANNING_CAPABILITIES,
@@ -164,12 +164,7 @@ def get_shop_floor_context(repository: ShopFloorQueryPort) -> dict[str, Any]:
     return {
         "identity": identity,
         "navigation": build_navigation_context(capabilities),
-        # The board needs the configured workflow order, but never needs role
-        # names. Command authorization and worker selection remain server-side.
         "production_routes": routes,
-        # Workers only ever see their own stages, so their list can safely append
-        # what they already finished. A supervisor's inbox spans the whole floor
-        # and stays limited to the active work.
         "personal_inbox": not repository.is_admin(),
         "capabilities": {
             capability: capability in capabilities
@@ -214,33 +209,34 @@ def _planning_handoff_block(
         route_stage = route.stage(stage_type)
     except ValueError:
         return "invalid_route_stage", "المرحلة الحالية ليست ضمن مسار الإنتاج المحدد."
-    if not route_stage.is_planning_stage:
+
+    decision = decide_planning_handoff(
+        PlanningHandoffFacts(
+            is_planning_stage=route_stage.is_planning_stage,
+            approved_plan_name=_value(order, "approved_plan_name")
+            or _value(order, "approved_plan"),
+            has_current_approved_plan=_as_bool(
+                _value(order, "has_current_approved_plan")
+            ),
+            plan_needs_recalculation=_as_bool(
+                _value(order, "plan_needs_recalculation")
+            ),
+        )
+    )
+    if decision.allowed:
         return None, ""
-    if not _value(order, "approved_plan"):
-        return (
-            "plan_not_approved",
-            "اعتمد خطة القص بعد مراجعتها قبل تسليم مرحلة التخطيط إلى القسم التالي.",
-        )
-    if _as_bool(_value(order, "plan_needs_recalculation")):
-        return (
-            "approved_plan_stale",
-            "خطة القص تغيّرت وتحتاج إلى إعادة حساب واعتماد جديد قبل مغادرة مرحلة التخطيط.",
-        )
-    return None, ""
+    return decision.code, decision.reason
 
 
 def _handoff_visibility(
     actions: Mapping[str, Mapping[str, Any]],
     handoff_code: str | None,
 ) -> bool:
-    """Return whether the authorized worker should see the handoff action.
+    """Return whether the authorized assignee should see the handoff action.
 
-    Planning readiness is intentionally separate from authorization: an assigned
-    worker who owns the handoff capability must still see «إنهاء العمل» while
-    the plan needs approval/recalculation. The command layer remains the final
-    gate and reports that readiness reason when the worker tries to finish.
-    Structural route corruption still hides the action because it cannot be
-    completed until the route itself is repaired.
+    Planning readiness is separate from authorization: an assigned user who owns
+    the handoff capability still sees «إنهاء العمل» while the plan needs approval
+    or recalculation, with the precise readiness reason shown by the shared policy.
     """
 
     authorized = bool(actions[Capability.HANDOFF_ASSIGNED_STAGE]["allowed"])
@@ -268,8 +264,6 @@ def _enrich_stage_rows(
     )
     orders = repository.order_summaries(order_names)
     actor = repository.current_user()
-    actor_roles = repository.actor_roles(actor)
-    is_admin = bool(repository.is_admin() or actor == "Administrator")
     current_stages: dict[str, Any] = {}
     for order in orders.values():
         stage_name = str(_value(order, "current_production_stage") or "").strip()
@@ -307,6 +301,10 @@ def _enrich_stage_rows(
             if current_stage
             else None
         )
+        actor_is_current_assignee = bool(
+            current_stage
+            and str(_value(current_stage, "assigned_to") or "").strip() == actor
+        )
         enriched.append(
             {
                 **dict(stage),
@@ -334,13 +332,10 @@ def _enrich_stage_rows(
                     else None
                 ),
                 "current_stage_operational_role": current_role,
-                # True only while the order sits on a stage whose operational role
-                # the actor holds — that is the work they can still act on.
-                "actor_holds_current_stage_role": actor_holds_operational_role(
-                    actor_roles,
-                    current_role,
-                    is_admin=is_admin,
-                ),
+                "actor_is_current_assignee": actor_is_current_assignee,
+                # Compatibility key for existing presenters. Its value is now
+                # assignment-based; no operational role grants an action.
+                "actor_holds_current_stage_role": actor_is_current_assignee,
                 "can_handoff_to": can_handoff_to,
                 "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
                 "can_handoff_stage": can_handoff,
@@ -356,16 +351,9 @@ def get_my_inbox(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
     user = repository.current_user()
     is_admin = repository.is_admin()
     stages = repository.list_inbox_stages(user=user, is_admin=is_admin)
-    rows = _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
-    # Workers only see orders whose current stage matches their operational
-    # role. Completed work they touched stays in get_my_archive().
-    if not is_admin and user != "Administrator":
-        rows = [
-            row
-            for row in rows
-            if row.get("actor_holds_current_stage_role")
-        ]
-    return rows
+    # The repository already scopes a personal inbox by assigned_to. Do not apply
+    # a second role-based filter here: assignment is the work ownership boundary.
+    return _enrich_stage_rows(repository, _filter_active_stages(repository, stages))
 
 
 def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
@@ -413,12 +401,11 @@ def get_order_operational_role_flags(
     repository: ShopFloorQueryPort,
     order_names: Any = None,
 ) -> dict[str, Any]:
-    """Return role classification and server-authorized quick actions per order.
+    """Return assignment classification and server-authorized quick actions.
 
-    Used by the shared Door Cutting Order list to put a worker's current
-    assignments first, then their completed work in a green trailer section,
-    while rendering only actions currently allowed by the domain policy.
-    Supervisors keep an unmarked list.
+    The public function name is retained for compatibility, but role membership no
+    longer classifies actionable work. Personal active work is defined by the
+    current stage assignment; capabilities decide which actions are available.
     """
 
     actor = str(repository.current_user() or "").strip()
@@ -437,7 +424,6 @@ def get_order_operational_role_flags(
         if personal_view and callable(timing_loader)
         else {}
     )
-    actor_roles = repository.actor_roles(actor)
     flags: dict[str, dict[str, Any]] = {}
     current_stages: dict[str, Any] = {}
     for name in names:
@@ -462,25 +448,18 @@ def get_order_operational_role_flags(
             order,
             repository.capabilities_for_order(order),
         )
-        actor_holds_current_role = actor_holds_operational_role(
-            actor_roles,
-            role,
-            is_admin=False,
-        )
         is_current_assignee = bool(
-            actor_holds_current_role
-            and stage_snapshot.get("active_stage_assigned_to") == actor
+            stage_snapshot.get("active_stage_assigned_to") == actor
         )
         timing = personal_timings.get(name) or {}
         flags[name] = {
-            "actor_holds_current_stage_role": actor_holds_current_role,
+            "actor_is_current_assignee": is_current_assignee,
+            "actor_holds_current_stage_role": is_current_assignee,
             "is_current_assignee": is_current_assignee,
             "assignment_state": "assigned" if is_current_assignee else "completed",
             "assignment_time": _value(timing, "assignment_time"),
             "completion_time": _value(timing, "completion_time"),
             "current_stage_operational_role": role,
-            # List actions are presentation hints from the same server policy
-            # used by the command endpoints. The commands still authorize again.
             "active_stage_name": stage_snapshot.get("active_stage_name"),
             "can_start_stage": stage_snapshot.get("can_start_stage") is True,
             "can_handoff_stage": stage_snapshot.get("can_handoff_stage") is True,
@@ -512,14 +491,17 @@ def _production_facts(
     repository: ShopFloorQueryPort,
     order: Any,
     stage: Any | None = None,
+    *,
+    route_starts_with_planning: bool = False,
 ) -> ProductionActionFacts:
     actor = repository.current_user()
     return ProductionActionFacts(
         order_status=_value(order, "status"),
         production_path=_value(order, "production_path"),
         current_stage_name=_value(order, "current_production_stage"),
-        has_cutting_plan=bool(_value(order, "cutting_plan_json")),
+        has_cutting_plan=_as_bool(_value(order, "has_cutting_plan")),
         plan_needs_recalculation=_as_bool(_value(order, "plan_needs_recalculation")),
+        route_starts_with_planning=route_starts_with_planning,
         stage_name=_value(stage, "name") if stage else None,
         stage_type=_value(stage, "stage_type") if stage else None,
         stage_status=_value(stage, "status") if stage else None,
@@ -527,7 +509,7 @@ def _production_facts(
         actor=actor,
         drawing_dxf_status=_value(order, "drawing_dxf_status"),
         operational_role=_resolve_operational_role(repository, order, stage),
-        actor_roles=repository.actor_roles(actor),
+        actor_roles=(),
         is_admin=actor == "Administrator",
     )
 
@@ -538,11 +520,17 @@ def _assert_query_action(
     action: str,
     *,
     stage: Any | None = None,
+    route_starts_with_planning: bool = False,
 ) -> None:
     decision = decide_production_action(
         action,
         capabilities=repository.capabilities_for_order(order),
-        facts=_production_facts(repository, order, stage),
+        facts=_production_facts(
+            repository,
+            order,
+            stage,
+            route_starts_with_planning=route_starts_with_planning,
+        ),
     )
     if decision.allowed:
         return
@@ -556,7 +544,13 @@ def get_dispatch_options(
     order_name: str,
 ) -> dict[str, Any]:
     order = repository.get_order(order_name)
-    _assert_query_action(repository, order, Capability.DISPATCH_ORDER)
+    # Route-independent gate: capability, status and duplicate-dispatch checks.
+    _assert_query_action(
+        repository,
+        order,
+        Capability.DISPATCH_ORDER,
+        route_starts_with_planning=True,
+    )
     routes = repository.list_active_routes()
     if not routes:
         raise ShopFloorQueryError(
@@ -566,6 +560,15 @@ def get_dispatch_options(
     configured_default = repository.default_production_route()
     path_rows = []
     for route in routes:
+        decision = decide_production_action(
+            Capability.DISPATCH_ORDER,
+            capabilities=repository.capabilities_for_order(order),
+            facts=_production_facts(
+                repository,
+                order,
+                route_starts_with_planning=route.starts_with_planning,
+            ),
+        )
         path_rows.append(
             {
                 "value": route.name,
@@ -575,8 +578,9 @@ def get_dispatch_options(
                 "operational_role": route.first_stage.operational_role,
                 "stage_count": len(route.stages),
                 "starts_with_planning": route.starts_with_planning,
-                "can_dispatch": True,
-                "dispatch_block_reason": "",
+                "can_dispatch": decision.allowed,
+                "dispatch_block_code": "" if decision.allowed else decision.code,
+                "dispatch_block_reason": "" if decision.allowed else decision.reason,
                 "stages": [
                     {
                         "sequence": stage.sequence,
@@ -649,6 +653,7 @@ def _active_stage_snapshot(
             "active_stage_type": None,
             "active_stage_assigned_to": None,
             "active_stage_operational_role": None,
+            "actor_is_current_assignee": False,
             "actor_holds_operational_role": False,
             "can_start_stage": False,
             "can_handoff_stage": False,
@@ -663,12 +668,9 @@ def _active_stage_snapshot(
     stage_status = str(_value(stage, "status") or "")
     stage_type = str(_value(stage, "stage_type") or "")
     operational_role = _resolve_operational_role(repository, order, stage) or ""
-    actor_holds_role = decide_stage_scoped_mutation(
-        actor_roles=repository.actor_roles(),
-        operational_role=operational_role or None,
-        has_current_stage=True,
-        is_admin=repository.current_user() == "Administrator",
-    )[0]
+    actor_is_current_assignee = bool(
+        str(_value(stage, "assigned_to") or "").strip() == repository.current_user()
+    )
     production_path = _value(order, "production_path")
     can_handoff_to = None
     route = _production_route(repository, str(production_path or ""))
@@ -696,7 +698,10 @@ def _active_stage_snapshot(
         "active_stage_type": stage_type,
         "active_stage_assigned_to": _value(stage, "assigned_to"),
         "active_stage_operational_role": operational_role or None,
-        "actor_holds_operational_role": bool(actor_holds_role),
+        "actor_is_current_assignee": actor_is_current_assignee,
+        # Compatibility key for existing frontend modules; assignment is now the
+        # authority, not role membership.
+        "actor_holds_operational_role": actor_is_current_assignee,
         "can_start_stage": bool(actions[Capability.START_ASSIGNED_STAGE]["allowed"]),
         "can_handoff_stage": can_handoff,
         "can_reassign_worker": bool(actions[Capability.REASSIGN_WORKER]["allowed"]),
@@ -840,8 +845,6 @@ def get_order_detail(
         except ValueError:
             planning_stage_active = False
     elif _value(order, "status") == "At Drawing":
-        # Transitional fallback for a legacy order that has not yet been migrated
-        # to an explicit Production Routing snapshot.
         planning_stage_active = True
 
     can_recalculate = bool(
@@ -849,7 +852,7 @@ def get_order_detail(
         and Capability.RECALCULATE_PLAN in document_capabilities
         and not approved_plan
         and planning_stage_active
-        and stage_snapshot.get("actor_holds_operational_role")
+        and stage_snapshot.get("actor_is_current_assignee")
     )
 
     return {
