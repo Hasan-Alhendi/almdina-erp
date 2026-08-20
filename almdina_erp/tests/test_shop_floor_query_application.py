@@ -210,6 +210,7 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "department_status": "قيد العمل",
                 "current_production_stage": "PST-CURRENT",
                 "approved_plan": None,
+                "has_current_approved_plan": False,
                 "plan_needs_recalculation": 0,
                 "revision": 2,
             }
@@ -228,12 +229,13 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertFalse(rows[0]["can_start_stage"])
 
         repository.orders["DCO-1"]["approved_plan"] = "PLAN-1"
+        repository.orders["DCO-1"]["has_current_approved_plan"] = True
         rows = queries.get_my_inbox(repository)
         self.assertTrue(rows[0]["can_handoff_stage"])
         self.assertEqual(rows[0]["handoff_block_code"], "")
         self.assertTrue(rows[0]["actor_holds_current_stage_role"])
 
-    def test_inbox_hides_foreign_role_assignments_for_workers(self) -> None:
+    def test_inbox_keeps_assigned_stage_even_when_operational_role_differs(self) -> None:
         repository = FakeRepository()
         repository.roles = ("عامل رسم",)
         repository.inbox = [
@@ -266,7 +268,10 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             }
         }
 
-        self.assertEqual(queries.get_my_inbox(repository), [])
+        rows = queries.get_my_inbox(repository)
+        self.assertEqual([row["name"] for row in rows], ["PST-CNC"])
+        self.assertTrue(rows[0]["actor_is_current_assignee"])
+        self.assertTrue(rows[0]["can_start_stage"])
 
     def test_archive_marks_orders_whose_current_stage_role_is_not_mine(self) -> None:
         repository = FakeRepository()
@@ -409,26 +414,32 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         with self.assertRaises(queries.ShopFloorPermissionDenied):
             queries.get_order_detail(repository, "DCO-1")
 
-    def test_dispatch_options_allow_all_routes_without_plan_approval(self) -> None:
+    def test_dispatch_options_are_route_aware_before_a_plan_exists(self) -> None:
         repository = FakeRepository()
         repository.order = SimpleNamespace(
             name="DCO-1",
             status="Approved",
             production_path=None,
             current_production_stage=None,
-            cutting_plan_json='{"sheets":[{}]}',
-            plan_needs_recalculation=0,
+            has_cutting_plan=False,
+            plan_needs_recalculation=False,
             approved_plan=None,
         )
 
         result = queries.get_dispatch_options(repository, "DCO-1")
         by_name = {row["value"]: row for row in result["paths"]}
-        self.assertTrue(by_name["Sharyoun"]["can_dispatch"])
-        self.assertEqual(by_name["Sharyoun"]["dispatch_block_reason"], "")
+        self.assertFalse(by_name["Sharyoun"]["can_dispatch"])
+        self.assertEqual(by_name["Sharyoun"]["dispatch_block_code"], "missing_cutting_plan")
+        self.assertIn("خطة القص", by_name["Sharyoun"]["dispatch_block_reason"])
         self.assertTrue(by_name["Drawing"]["can_dispatch"])
         self.assertTrue(by_name["Drawing"]["starts_with_planning"])
         self.assertTrue(by_name["Drawing"]["stages"][0]["is_planning_stage"])
-        self.assertTrue(all(row["can_dispatch"] for row in result["paths"]))
+
+        repository.order.has_cutting_plan = True
+        result = queries.get_dispatch_options(repository, "DCO-1")
+        by_name = {row["value"]: row for row in result["paths"]}
+        self.assertTrue(by_name["Sharyoun"]["can_dispatch"])
+        self.assertEqual(by_name["Sharyoun"]["dispatch_block_reason"], "")
 
         repository.capabilities.remove(Capability.DISPATCH_ORDER)
         with self.assertRaises(queries.ShopFloorPermissionDenied):
@@ -444,8 +455,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             current_production_stage="PST-2",
             approved_plan=None,
             approved_plan_source="System",
-            cutting_plan_json='{"sheets":[{}]}',
-            plan_needs_recalculation=0,
+            has_current_approved_plan=False,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
         )
         repository.order_stages = [
             {"name": "PST-2", "stage_type": "Drawing", "piece_label": None}
@@ -480,8 +492,10 @@ class TestShopFloorQueryApplication(unittest.TestCase):
         self.assertTrue(detail["document_capabilities"][Capability.VIEW_CUTTING_PLAN])
 
         repository.order.approved_plan = "PLAN-1"
+        repository.order.has_current_approved_plan = True
         detail = queries.get_order_detail(repository, "DCO-2")
         self.assertTrue(detail["stage_snapshot"]["can_handoff_stage"])
+        self.assertEqual(detail["stage_snapshot"]["handoff_block_code"], "")
         self.assertFalse(detail["can_recalculate_drawing_plan"])
 
     def test_any_configured_planning_stage_enables_recalculation_without_drawing_name(self) -> None:
@@ -498,8 +512,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             current_production_stage="PST-2",
             approved_plan=None,
             approved_plan_source="System",
-            cutting_plan_json='{"sheets":[{}]}',
-            plan_needs_recalculation=0,
+            has_current_approved_plan=False,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
         )
         repository.stage_summaries["PST-2"] = {
             "name": "PST-2",
@@ -521,8 +536,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             current_production_stage="PST-2",
             approved_plan="PLAN-1",
             approved_plan_source="System",
-            cutting_plan_json='{"sheets":[{}]}',
-            plan_needs_recalculation=0,
+            has_current_approved_plan=True,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
         )
         repository.stage_summaries = {
             "PST-2": {
@@ -549,8 +565,9 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             production_path="Drawing",
             current_production_stage="PST-2",
             approved_plan="PLAN-1",
-            cutting_plan_json='{"sheets":[{}]}',
-            plan_needs_recalculation=0,
+            has_current_approved_plan=True,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
         )
         repository.stage_summaries["PST-2"] = {
             "name": "PST-2",
@@ -578,8 +595,8 @@ class TestShopFloorQueryApplication(unittest.TestCase):
             status="At CNC",
             production_path="Drawing",
             current_production_stage="PST-3",
-            cutting_plan_json='{"sheets":[{}]}',
-            plan_needs_recalculation=0,
+            has_cutting_plan=True,
+            plan_needs_recalculation=False,
         )
         repository.revert_rows = [
             {"name": "PST-1", "stage_type": "Drawing", "status": "Completed", "sequence": 10, "assigned_to": "a@example.com", "piece_label": None},

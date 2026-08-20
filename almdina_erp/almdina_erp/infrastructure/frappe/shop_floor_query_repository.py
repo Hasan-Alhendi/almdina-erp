@@ -21,6 +21,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     granted_capabilities,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    approved_plan_for_order,
     current_working_plan,
     latest_plan,
     production_plan_facts,
@@ -70,6 +71,37 @@ def _order_document(order: Any) -> Any | None:
         document = frappe.get_doc(_ORDER_DOCTYPE, name)
         cache[name] = document
     return document
+
+
+def _project_plan_facts(order: Any, document: Any | None) -> Any:
+    """Attach canonical, in-memory plan facts without legacy DCO state reads."""
+
+    facts = production_plan_facts(document) if document is not None else None
+    approved = approved_plan_for_order(document) if document is not None else None
+    approved_source = (
+        "Custom"
+        if approved is not None
+        and str(getattr(approved, "source_type", None) or "") == UPLOADED_DXF
+        else "System"
+    )
+
+    setattr(order, "has_cutting_plan", bool(facts and facts.has_cutting_plan))
+    setattr(
+        order,
+        "plan_needs_recalculation",
+        bool(facts.plan_needs_recalculation if facts is not None else True),
+    )
+    setattr(order, "has_current_approved_plan", bool(facts and facts.has_approved_plan))
+    setattr(
+        order,
+        "approved_plan_name",
+        facts.approved_plan_name if facts is not None else None,
+    )
+    # Compatibility projection for application/legacy presenters. The value is
+    # derived solely from the exact approved Cutting Plan revision; no removed
+    # Door Cutting Order field is consulted or persisted.
+    setattr(order, "approved_plan_source", approved_source)
+    return order
 
 
 class FrappeShopFloorQueryRepository:
@@ -256,22 +288,14 @@ class FrappeShopFloorQueryRepository:
         )
         for row in rows:
             document = _order_document(row)
-            facts = production_plan_facts(document) if document is not None else None
-            # These three attributes preserve the application query shape while
-            # deriving every operational value from canonical Cutting Plan state.
-            # They are in-memory projections only; no DCO compatibility field is read.
-            row.cutting_plan_json = (
-                "canonical" if facts is not None and facts.has_cutting_plan else ""
-            )
-            row.plan_needs_recalculation = int(
-                facts.plan_needs_recalculation if facts is not None else True
-            )
+            _project_plan_facts(row, document)
             dxf_plan = latest_plan(str(row.name), source_type=UPLOADED_DXF)
             row.production_dxf = str(getattr(dxf_plan, "dxf_file", None) or "")
         return {row.name: row for row in rows}
 
     def get_order(self, order_name: str) -> Any:
-        return frappe.get_doc(_ORDER_DOCTYPE, order_name)
+        document = frappe.get_doc(_ORDER_DOCTYPE, order_name)
+        return _project_plan_facts(document, document)
 
     def can_view_order(self, order: Any) -> bool:
         if self.is_admin():

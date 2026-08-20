@@ -86,7 +86,7 @@ def test_designer_plan_edit_capability_is_not_replaced_by_current_stage_role() -
     assert "canMutateCurrentStage(frm)" in context
 
 
-def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages() -> None:
+def test_approved_plan_can_be_revised_at_planning_without_unlocking_later_stages() -> None:
     session = source(PLAN_EDIT_SESSION)
     controls = source(PLAN_CONTROLS)
     service = source(PLAN_SETTINGS_SERVICE)
@@ -110,20 +110,20 @@ def test_approved_plan_can_be_revised_at_drawing_without_unlocking_later_stages(
     assert 'getattr(doc, "approved_plan", None) and not is_order_at_drawing_stage(doc)' in service
     assert "خطة القص المعتمدة لا يمكن تعديل إعداداتها خارج مرحلة الرسم" in service
 
-    # Browser plan lifecycle reads the approved-plan identity from the Plan
-    # workspace snapshot. DCO lifecycle facts (stage/status/docstatus) remain
-    # intentionally document-owned.
+    # Browser controls resolve Planning from configurable route metadata rather
+    # than hard-coding the Drawing stage name.
     assert "function approvedPlanName(frm)" in controls
     assert "const approved = approvedPlanName(frm);" in controls
-    assert "if (approved && isDrawingStage(frm))" in controls
+    assert "if (approved && isPlanningStage(frm))" in controls
     assert "if (approved) return false;" in controls
-    assert "frm.doc.approved_plan && isDrawingStage(frm)" not in controls
-    assert "frm.doc.approved_plan && !isDrawingStage(frm)" not in controls
+    assert "isDrawingStage(frm)" not in controls
+    assert "frm.doc.approved_plan" not in controls
 
-    # A2 moves recalculation policy into the canonical Cutting Plan command owner.
+    # Recalculation is capability + assignment scoped at the canonical command.
     assert "drawing_recalculation_allowed = user_can_recalculate_drawing_system_plan(order)" in recalculation
     assert 'getattr(order, "approved_plan", None) and not drawing_recalculation_allowed' in recalculation
-    assert "require_stage_operational_access(order)" in recalculation
+    assert "require_stage_assignment_access(order)" in recalculation
+    assert "require_stage_operational_access" not in recalculation
     assert "cutting_plan_command_service import" in legacy_recalculation
     assert "recalculate_order_plan(" in legacy_recalculation
     assert "ignore_permissions=True" not in legacy_recalculation

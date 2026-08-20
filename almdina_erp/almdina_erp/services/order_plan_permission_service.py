@@ -18,8 +18,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     cutting_plan_capability_allowed,
     require_cutting_plan_capability,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.stage_operational_access import (
-    require_stage_operational_access,
+from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
+    require_stage_assignment_access,
 )
 
 
@@ -117,7 +117,7 @@ def _drawing_changed(doc: Any, old: Any | None) -> bool:
 
 
 def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) -> None:
-    """Protect legacy DCO projections without making them Plan authority."""
+    """Protect compatibility DCO surfaces with canonical capabilities + assignment."""
 
     del method
     old = None if doc.is_new() else doc.get_doc_before_save()
@@ -149,7 +149,7 @@ def enforce_plan_and_drawing_permissions(doc: Any, method: str | None = None) ->
         getattr(doc, "current_production_stage", None)
         or getattr(doc, "production_path", None)
     ):
-        require_stage_operational_access(doc)
+        require_stage_assignment_access(doc)
 
 
 def _requested_optimizer_updates(
@@ -210,6 +210,15 @@ def recalculate_order(
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
+    """Canonical recalculation facade scoped by current stage assignment."""
+
+    name = str(order_name or "").strip()
+    if not name:
+        frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
+    order = frappe.get_doc("Door Cutting Order", name)
+    order.check_permission("read")
+    require_stage_assignment_access(order)
+
     from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
         recalculate_order_plan,
     )
@@ -243,6 +252,7 @@ def simulate_optimizer_plan(
         Capability.EDIT_OPTIMIZER_SETTINGS,
         message=_("لا تملك صلاحية تجربة خوارزمية القص على هذا الطلب."),
     )
+    require_stage_assignment_access(stored)
 
     preview = frappe.copy_doc(stored)
     preview.name = stored.name

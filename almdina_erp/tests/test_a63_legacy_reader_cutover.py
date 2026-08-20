@@ -86,6 +86,13 @@ def test_shop_floor_plan_reads_are_canonical_only() -> None:
     assert "source_type=SYSTEM" in repository
     assert "dual_plan_fields" not in repository
 
+    projection = repository.split("def _project_plan_facts", 1)[1].split(
+        "\n\nclass FrappeShopFloorQueryRepository", 1
+    )[0]
+    assert "facts = production_plan_facts(document)" in projection
+    assert "facts.has_cutting_plan" in projection
+    assert "facts.plan_needs_recalculation" in projection
+
     summaries = repository.split("def order_summaries", 1)[1].split(
         "\n    def get_order", 1
     )[0]
@@ -97,8 +104,7 @@ def test_shop_floor_plan_reads_are_canonical_only() -> None:
         '"custom_plan_json",',
     ):
         assert legacy_db_field not in summaries
-    assert "facts.has_cutting_plan" in summaries
-    assert "facts.plan_needs_recalculation" in summaries
+    assert "_project_plan_facts" in summaries
     assert "dxf_plan" in summaries
 
 

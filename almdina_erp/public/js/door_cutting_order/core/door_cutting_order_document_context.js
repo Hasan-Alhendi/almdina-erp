@@ -283,6 +283,9 @@
         frm.__almdina_approved_plan_loading = null;
         frm.__almdina_approved_plan_context = null;
         frm.__almdina_stage_type = null;
+        frm.__almdina_actor_is_current_assignee = false;
+        // Compatibility only: old modules may still read this name, but its
+        // value mirrors assignment ownership, never role membership.
         frm.__almdina_actor_holds_stage_role = false;
         frm.__almdina_stage_operational_role = null;
         frm.__almdina_stage_context = null;
@@ -290,6 +293,7 @@
         frm.__almdina_stage_context_key = null;
         frm.__almdinaStageContextPromise = null;
         frm.__almdinaStageContextToken = null;
+        frm.__almdinaStageContextRequestId = 0;
         frm.__almdinaProductionRouteName = null;
         frm.__almdinaProductionRouteSteps = null;
         frm.__almdinaProductionActionsContext = null;
@@ -324,9 +328,13 @@
 
     function applyStageContext(frm, message) {
         const stage = message || {};
+        const assigned = stage.actor_is_current_assignee !== undefined
+            ? Boolean(stage.actor_is_current_assignee)
+            : Boolean(stage.actor_holds_operational_role);
         frm.__almdina_stage_context = stage;
         frm.__almdina_stage_type = stage.active_stage_type || null;
-        frm.__almdina_actor_holds_stage_role = Boolean(stage.actor_holds_operational_role);
+        frm.__almdina_actor_is_current_assignee = assigned;
+        frm.__almdina_actor_holds_stage_role = assigned;
         frm.__almdina_stage_operational_role = stage.active_stage_operational_role || null;
         frm.__almdina_stage_context_ready = true;
         frm.__almdina_stage_context_key = String(frm.doc.current_production_stage || "");
@@ -337,6 +345,7 @@
             && frm.__almdina_stage_context_key === "";
         frm.__almdina_stage_context = null;
         frm.__almdina_stage_type = null;
+        frm.__almdina_actor_is_current_assignee = false;
         frm.__almdina_actor_holds_stage_role = false;
         frm.__almdina_stage_operational_role = null;
         frm.__almdina_stage_context_ready = true;
@@ -353,27 +362,31 @@
         );
     }
 
-    function holdsStageOperationalRole(frm) {
+    function isCurrentStageAssignee(frm) {
         if (!frm || !frm.doc) return false;
-        // Pre-production (no route yet): capability matrix alone decides.
-        // Once a production path exists, an empty stage means the order left the
-        // route (ready / delivered) and stage-scoped mutations must stay closed.
+        // Pre-production has no assignee yet; capabilities/lifecycle decide.
+        // A route with no active stage has already left active production.
         if (!frm.doc.current_production_stage) {
             return !String(frm.doc.production_path || "").trim();
         }
         if (!frm.__almdina_stage_context_ready) return false;
-        return Boolean(frm.__almdina_actor_holds_stage_role);
+        return Boolean(frm.__almdina_actor_is_current_assignee);
+    }
+
+    // Compatibility alias for older feature modules. It intentionally answers
+    // assignment ownership now; operational roles are not authorization.
+    function holdsStageOperationalRole(frm) {
+        return isCurrentStageAssignee(frm);
     }
 
     function canMutateCurrentStage(frm) {
         if (!frm || !frm.doc) return false;
         if (isStageContextPending(frm)) return false;
-        return holdsStageOperationalRole(frm);
+        return isCurrentStageAssignee(frm);
     }
 
-    // Tuning the cutting algorithm is a plan-side surface governed by its own
-    // capability. It never rides on the order edit session, so a role that only
-    // carries «تعديل خوارزمية القص» can still change it and read the result.
+    // Tuning the cutting algorithm is a Plan capability. During an active route
+    // it is additionally scoped to the current assignee, never to a role name.
     function canTuneCuttingAlgorithm(frm) {
         if (!frm || !frm.doc || frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
@@ -385,8 +398,7 @@
     }
 
     // Comparing algorithms is an inspection, not an edit: the engine runs on a
-    // throwaway copy and nothing is persisted. It therefore stays open at every
-    // stage and even on an approved plan, for anyone holding the capability.
+    // throwaway copy and nothing is persisted. Capability checks remain server-side.
     function canPreviewCuttingAlgorithm(frm) {
         return Boolean(frm && frm.doc && !frm.is_new());
     }
@@ -400,15 +412,14 @@
             return "";
         }
         if (isStageContextPending(frm)) {
-            return "جاري التحقق من صلاحية المرحلة الحالية...";
+            return "جاري التحقق من إسناد المرحلة الحالية...";
         }
-        if (holdsStageOperationalRole(frm)) return "";
-        const role = frm.__almdina_stage_operational_role;
-        const stage = frm.__almdina_stage_type;
-        if (role && stage) {
-            return `يمكنك عرض هذا الطلب فقط. المرحلة الحالية «${stage}» مخصّصة للدور التشغيلي «${role}»، وليست ضمن أدوارك.`;
+        if (isCurrentStageAssignee(frm)) return "";
+        const stage = frm.__almdina_stage_context || {};
+        if (stage.active_stage_assigned_to) {
+            return "يمكنك عرض هذا الطلب فقط. المرحلة الحالية مسندة إلى مستخدم آخر.";
         }
-        return "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية.";
+        return "يمكنك عرض هذا الطلب فقط. أسند المرحلة الحالية إلى مستخدم قبل تنفيذ أي تعديل.";
     }
 
     // A surface is any region that a lazily loaded module owns. Rendering runs
@@ -546,11 +557,12 @@
         }));
     }
 
-    function ensureStageContext(frm) {
+    function ensureStageContext(frm, options = {}) {
         if (!frm || !frm.doc || frm.is_new()) {
             return Promise.resolve(false);
         }
 
+        const force = Boolean(options && options.force);
         const token = capture(frm);
         const stageName = String(frm.doc.current_production_stage || "").trim();
         if (!stageName) {
@@ -560,7 +572,8 @@
 
         const cacheKey = stageName;
         if (
-            frm.__almdina_stage_context_ready
+            !force
+            && frm.__almdina_stage_context_ready
             && frm.__almdina_stage_context_key === cacheKey
             && !frm.__almdinaStageContextPromise
         ) {
@@ -568,32 +581,41 @@
         }
 
         if (
-            frm.__almdinaStageContextPromise
+            !force
+            && frm.__almdinaStageContextPromise
             && frm.__almdina_stage_context_key === cacheKey
             && isSameDocument(frm, frm.__almdinaStageContextToken)
         ) {
             return frm.__almdinaStageContextPromise;
         }
 
+        const requestId = Number(frm.__almdinaStageContextRequestId || 0) + 1;
+        frm.__almdinaStageContextRequestId = requestId;
         frm.__almdina_stage_context_ready = false;
         frm.__almdina_stage_context_key = cacheKey;
         frm.__almdinaStageContextToken = token;
-        frm.__almdinaStageContextPromise = frappe
+
+        const promise = frappe
             .call({
                 method: STAGE_CONTEXT_METHOD,
                 args: { order_name: frm.doc.name },
             })
             .then((response) => {
+                if (frm.__almdinaStageContextRequestId !== requestId) return false;
                 if (!isSameDocument(frm, token)) return false;
-                if (frm.doc.current_production_stage !== stageName) return false;
+                if (String(frm.doc.current_production_stage || "").trim() !== stageName) return false;
                 applyStageContext(frm, response.message || {});
                 notifyStageContextReady(frm);
                 return true;
             })
             .catch((error) => {
                 console.error("Failed to load production stage context", error);
-                if (isSameDocument(frm, token)) {
+                if (
+                    frm.__almdinaStageContextRequestId === requestId
+                    && isSameDocument(frm, token)
+                ) {
                     frm.__almdina_stage_context = null;
+                    frm.__almdina_actor_is_current_assignee = false;
                     frm.__almdina_actor_holds_stage_role = false;
                     frm.__almdina_stage_context_ready = true;
                     notifyStageContextReady(frm);
@@ -601,13 +623,19 @@
                 return false;
             })
             .finally(() => {
-                if (frm.__almdinaStageContextToken === token) {
+                if (frm.__almdinaStageContextRequestId !== requestId) return;
+                if (frm.__almdinaStageContextPromise === promise) {
                     frm.__almdinaStageContextPromise = null;
                     frm.__almdinaStageContextToken = null;
                 }
             });
 
-        return frm.__almdinaStageContextPromise;
+        frm.__almdinaStageContextPromise = promise;
+        return promise;
+    }
+
+    function refreshStageContext(frm) {
+        return ensureStageContext(frm, { force: true });
     }
 
     function afterStageContext(frm, callback) {
@@ -645,7 +673,9 @@
         isSameDocument,
         synchronize,
         ensureStageContext,
+        refreshStageContext,
         afterStageContext,
+        isCurrentStageAssignee,
         holdsStageOperationalRole,
         canMutateCurrentStage,
         canTuneCuttingAlgorithm,

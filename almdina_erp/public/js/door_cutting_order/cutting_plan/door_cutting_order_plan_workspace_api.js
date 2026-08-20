@@ -69,6 +69,20 @@
         );
     }
 
+    // First-plan creation is an explicit command, not a preview. Keeping this
+    // semantic entry point in the transport adapter lets the controls own policy
+    // without depending on the generic recalculation transport name.
+    function bootstrapPlan(orderName, settings) {
+        return call(
+            RECALCULATE_METHOD,
+            settingsArgs(orderName, settings),
+            {
+                freeze: true,
+                freezeMessage: __("جاري إنشاء خطة القص الأولى..."),
+            }
+        );
+    }
+
     function preview(orderName, settings) {
         return call(
             PREVIEW_METHOD,
@@ -130,6 +144,7 @@
         load,
         saveSettings,
         recalculate,
+        bootstrapPlan,
         preview,
         commitPreview,
         approve,

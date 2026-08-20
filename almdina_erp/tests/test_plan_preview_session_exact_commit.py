@@ -130,7 +130,13 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("&& workspaceEditing(frm)", controls)
+        # The first persisted System Plan is an explicit bootstrap command and
+        # must not require an optimizer edit session. Once a System Draft exists,
+        # recalculation returns to Preview -> review -> exact commit semantics.
+        self.assertIn("(firstPlan || workspaceEditing(frm))", controls)
+        self.assertIn('typeof transport.bootstrapPlan === "function"', controls)
+        self.assertIn("await transport.bootstrapPlan(frm.doc.name, settings)", controls)
+        self.assertIn('typeof previews.preview === "function"', controls)
         self.assertIn("await previews.preview(frm, settings)", controls)
         self.assertIn('"almdina:plan-preview-updated"', controls)
         self.assertNotIn("transport.recalculate(frm.doc.name, settings)", controls)

@@ -107,7 +107,7 @@ def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
     assert "اعتماد الطلب أُلغي" in permissions
 
 
-def test_role_managed_drawing_approval_preserves_shop_floor_status():
+def test_assignment_scoped_drawing_approval_preserves_shop_floor_status():
     approval_service = _source(DRAWING_APPROVAL_SERVICE)
     command_service = _source(PLAN_COMMAND_SERVICE)
     policy = _source(DRAWING_APPROVAL_POLICY)
@@ -120,7 +120,8 @@ def test_role_managed_drawing_approval_preserves_shop_floor_status():
 
     assert "Capability.APPROVE_DXF" in approval_service
     assert "require_cutting_plan_capability" in approval_service
-    assert "require_stage_operational_access" in approval_service
+    assert "require_stage_assignment_access" in approval_service
+    assert "require_stage_operational_access" not in approval_service
     assert "current_assignee" not in policy
     assert "session_user" not in policy
     assert "approval_warning" in policy
