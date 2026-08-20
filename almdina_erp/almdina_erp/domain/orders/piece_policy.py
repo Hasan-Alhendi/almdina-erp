@@ -143,6 +143,27 @@ def geometry_changed(
     )
 
 
+def pricing_basis_changed(
+    old: PieceGeometry | None,
+    current: PieceGeometry,
+) -> bool:
+    """Return whether fields that define the reviewed piece price changed.
+
+    Drawing/documentation, edge banding and other geometric details are deliberately
+    excluded. A reviewed price is invalidated only when the piece type, overall
+    width, overall length or quantity changes.
+    """
+
+    if old is None:
+        return False
+    return bool(
+        old.piece_type != current.piece_type
+        or not _same_number(old.width_cm, current.width_cm)
+        or not _same_number(old.length_cm, current.length_cm)
+        or old.qty != current.qty
+    )
+
+
 def protected_price_changed(
     old: SpecialPrice | None,
     current: SpecialPrice,
@@ -180,13 +201,12 @@ def evaluate_special_shape(
         current_geometry,
         drawing_changed=drawing_changed,
     )
-    changed_pricing_basis = bool(
-        changed_geometry
-        or (
-            default_edge_changed
-            and current_geometry.piece_type == "Special"
-            and not current_geometry.edge_type
-        )
+    # Keep the legacy input in the policy boundary because callers may still need to
+    # report header edge changes as geometry context. It must not invalidate price.
+    _ = default_edge_changed
+    changed_pricing_basis = pricing_basis_changed(
+        old_geometry,
+        current_geometry,
     )
     changed_protected_price = protected_price_changed(old_price, current_price)
     safe_invalidation = bool(
@@ -282,6 +302,7 @@ __all__ = [
     "drawing_token",
     "evaluate_special_shape",
     "geometry_changed",
+    "pricing_basis_changed",
     "protected_price_changed",
     "pending_custom_edge_price_labels",
     "reset_price_values",
