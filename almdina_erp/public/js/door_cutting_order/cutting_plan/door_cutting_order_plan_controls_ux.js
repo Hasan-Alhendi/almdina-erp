@@ -73,6 +73,10 @@
         return (data && data.plans) || {};
     }
 
+    function hasSystemDraft(frm) {
+        return Boolean(plans(frm).system_draft);
+    }
+
     function activePlan(frm) {
         const owner = stateOwner();
         return owner && typeof owner.activePlan === "function"
@@ -169,8 +173,6 @@
     }
 
     function applyOptimizerFieldAccess(frm) {
-        // A5.2: native DCO optimizer fields are compatibility display only.
-        // The detached Plan workspace editor is the sole writable surface.
         OPTIMIZER_FIELDS.forEach((fieldname) => {
             const field = frm.fields_dict && frm.fields_dict[fieldname];
             if (!field || !field.df) return;
@@ -180,31 +182,34 @@
         });
     }
 
-    function holdsStageOperationalRole(frm) {
-        const context = documentContext();
-        if (context && typeof context.holdsStageOperationalRole === "function") {
-            return context.holdsStageOperationalRole(frm);
+    function isCurrentAssignee(frm) {
+        if (!frm || !frm.doc) return false;
+        if (!frm.doc.current_production_stage) {
+            return !String(frm.doc.production_path || "").trim();
         }
-        return Boolean(frm && frm.__almdina_actor_holds_stage_role);
+        const stage = frm.__almdina_stage_context || {};
+        if (stage.actor_is_current_assignee !== undefined) {
+            return Boolean(stage.actor_is_current_assignee);
+        }
+        return Boolean(frm.__almdina_actor_holds_stage_role);
     }
 
     function canMutateCurrentStage(frm) {
-        const context = documentContext();
-        if (context && typeof context.canMutateCurrentStage === "function") {
-            return context.canMutateCurrentStage(frm);
-        }
-        return holdsStageOperationalRole(frm);
+        return isCurrentAssignee(frm);
     }
 
-    function isDrawingStage(frm) {
+    function isPlanningStage(frm) {
         if (!frm || !frm.doc) return false;
-        const status = String(frm.doc.status || "").trim();
+        if (String(frm.doc.status || "").trim() === "At Drawing") return true;
+        const context = frm.__almdina_stage_context || {};
         const stageType = String(
-            frm.__almdina_stage_type
-            || (frm.__almdina_stage_context && frm.__almdina_stage_context.active_stage_type)
-            || ""
+            frm.__almdina_stage_type || context.active_stage_type || ""
         ).trim();
-        return status === "At Drawing" || stageType === "Drawing";
+        const routeStages = Array.isArray(context.route_stages) ? context.route_stages : [];
+        return routeStages.some((stage) => (
+            String(stage.stage_type || "").trim() === stageType
+            && Boolean(stage.is_planning_stage)
+        ));
     }
 
     function canTuneCuttingAlgorithm(frm) {
@@ -214,36 +219,41 @@
         if (!workspaceReady(frm)) return false;
 
         const approved = approvedPlanName(frm);
-        if (approved && isDrawingStage(frm)) return canMutateCurrentStage(frm);
+        if (approved && isPlanningStage(frm)) return canMutateCurrentStage(frm);
         if (approved) return false;
-
-        const context = documentContext();
-        if (context && typeof context.canTuneCuttingAlgorithm === "function") {
-            return context.canTuneCuttingAlgorithm(frm);
-        }
         if (!canMutateCurrentStage(frm)) return false;
-        if (frm.doc.current_production_stage) return true;
+        if (frm.doc.current_production_stage) return isPlanningStage(frm);
         return EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft");
     }
 
     function stageMutationBlockReason(frm) {
-        const context = documentContext();
-        if (context && typeof context.stageMutationBlockReason === "function") {
-            return context.stageMutationBlockReason(frm) || "";
+        if (!frm || !frm.doc) return "";
+        if (!frm.doc.current_production_stage) {
+            return String(frm.doc.production_path || "").trim()
+                ? __("الطلب غادر مراحل الإنتاج النشطة ولا يمكن تعديل خطة القص.")
+                : "";
         }
-        return "";
+        const stage = frm.__almdina_stage_context || {};
+        if (stage.actor_is_current_assignee === true) return "";
+        if (stage.active_stage_assigned_to) {
+            return __("يمكنك عرض الخطة فقط لأن المرحلة الحالية مسندة إلى مستخدم آخر.");
+        }
+        return __("أسند المرحلة الحالية إلى مستخدم قبل تعديل خطة القص.");
     }
 
     function canCalculate(frm) {
         const previews = previewOwner();
+        const transport = api();
+        const canRun = hasSystemDraft(frm)
+            ? Boolean(previews && typeof previews.preview === "function")
+            : Boolean(transport && typeof transport.recalculate === "function");
         return Boolean(
             workspaceReady(frm)
             && workspaceEditing(frm)
             && canTuneCuttingAlgorithm(frm)
             && can(frm, "recalculate_plan")
-            && previews
-            && typeof previews.preview === "function"
-            && !(typeof previews.isBusy === "function" && previews.isBusy(frm))
+            && canRun
+            && !(previews && typeof previews.isBusy === "function" && previews.isBusy(frm))
         );
     }
 
@@ -251,18 +261,18 @@
         if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
         if (!workspaceReady(frm)) return __("انتظر حتى يكتمل تحميل خطة القص.");
         if (!workspaceEditing(frm)) {
-            return __("اضغط «تعديل» لبدء تجربة إعدادات أو خوارزميات مختلفة.");
+            return __("اضغط «تعديل» لبدء إعداد خطة القص.");
         }
         const previews = previewOwner();
         if (previews && typeof previews.isBusy === "function" && previews.isBusy(frm)) {
             return __("انتظر حتى تكتمل عملية المعاينة أو الحفظ الحالية.");
         }
-        if (approvedPlanName(frm) && !isDrawingStage(frm)) {
-            return __("الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة الرسم.");
+        if (approvedPlanName(frm) && !isPlanningStage(frm)) {
+            return __("الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة التخطيط.");
         }
         if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");
         const stageReason = stageMutationBlockReason(frm);
-        if (stageReason) return __(stageReason);
+        if (stageReason) return stageReason;
         return "";
     }
 
@@ -285,8 +295,6 @@
         if (fastSave && typeof fastSave.persistPendingOrderInputs === "function") {
             return Boolean(await fastSave.persistPendingOrderInputs(frm));
         }
-        // Order requirements remain owned by DCO. Persisting genuinely dirty
-        // measurements before a Plan command is therefore intentional.
         if (frm && frm.is_dirty && frm.is_dirty()) {
             frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
             return false;
@@ -315,11 +323,6 @@
     }
 
     async function runRecalculation(frm) {
-        // Preview-first contract: this historical action name remains for API
-        // compatibility, but it never persists a Cutting Plan. Order-owned inputs
-        // are synchronized first so the server preview uses exactly what the user
-        // currently sees. Saving the Cutting Plan is owned exclusively by the
-        // exact-preview commit command.
         await ensureWorkspaceLoaded(frm);
         if (!canCalculate(frm)) {
             frappe.msgprint(recalculationDisabledReason(frm));
@@ -328,24 +331,38 @@
 
         const settings = activeSettings(frm);
         const previews = previewOwner();
-        if (!settings || !previews || typeof previews.preview !== "function") {
-            frappe.msgprint(__("تعذر تجهيز معاينة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+        const transport = api();
+        if (!settings || !transport) {
+            frappe.msgprint(__("تعذر تجهيز خدمة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
             return false;
         }
         if (!(await preparePlanInputs(frm))) return false;
         if (!(await persistPendingOrderInputs(frm))) return false;
 
         try {
+            if (!hasSystemDraft(frm)) {
+                if (typeof transport.recalculate !== "function") return false;
+                await transport.recalculate(frm.doc.name, settings);
+                if (previews && typeof previews.reset === "function") previews.reset(frm);
+                await refreshWorkspaceOwners(frm);
+                frappe.show_alert({
+                    message: __("تم إنشاء خطة القص الأولى وحفظها وتحديث التكلفة."),
+                    indicator: "green",
+                }, 5);
+                return true;
+            }
+
+            if (!previews || typeof previews.preview !== "function") return false;
             const ok = await previews.preview(frm, settings);
             if (ok) {
                 frappe.show_alert({
-                    message: __("تم إنشاء معاينة جديدة. لم يتم حفظ أي تغيير بعد."),
+                    message: __("تم إنشاء معاينة جديدة. راجعها ثم اضغط «حفظ» لاعتماد هذا التعديل على الخطة."),
                     indicator: "blue",
-                }, 4);
+                }, 5);
             }
             return Boolean(ok);
         } catch (error) {
-            console.error("Cutting plan preview failed", error);
+            console.error("Cutting plan calculation failed", error);
             throw error;
         }
     }
@@ -401,7 +418,7 @@
                 frappe.msgprint(__("ليست لديك صلاحية اعتماد خطة القص."));
             } else {
                 const reason = stageMutationBlockReason(frm);
-                frappe.msgprint(__(reason || "لا توجد خطة صالحة للاعتماد في الحالة الحالية."));
+                frappe.msgprint(reason || __("لا توجد خطة صالحة للاعتماد في الحالة الحالية."));
             }
             return false;
         }
@@ -420,6 +437,10 @@
                     try {
                         await transport.approve(frm.doc.name, source);
                         await refreshWorkspaceOwners(frm);
+                        const context = documentContext();
+                        if (context && typeof context.ensureStageContext === "function") {
+                            await context.ensureStageContext(frm, { force: true });
+                        }
                         frappe.show_alert({ message: __("تم اعتماد خطة القص للإنتاج."), indicator: "green" }, 5);
                         resolve(true);
                     } catch (error) {
@@ -477,14 +498,20 @@
 
     function bindRecalculationAction(frm, button) {
         if (!button || !button.length) return;
-        setTextIfChanged(button, __("إعادة الحساب بالإعدادات الحالية"));
+        const firstPlan = !hasSystemDraft(frm);
+        setTextIfChanged(
+            button,
+            firstPlan ? __("حساب خطة القص") : __("إعادة الحساب بالإعدادات الحالية")
+        );
         const allowed = canCalculate(frm);
         if (button.prop("disabled") === allowed) button.prop("disabled", !allowed);
         button.attr("aria-disabled", allowed ? "false" : "true");
         button.attr(
             "title",
             recalculationDisabledReason(frm)
-            || __("معاينة خطة القص مؤقتًا باستخدام إعدادات التعديل الحالية")
+            || (firstPlan
+                ? __("إنشاء وحفظ أول خطة قص وتحديث التكلفة تلقائيًا")
+                : __("إنشاء معاينة مؤقتة بهذه الإعدادات قبل حفظ التعديل"))
         );
         const element = button.get(0);
         if (element && !element.__almdinaPlanCommandBound) {
@@ -520,11 +547,16 @@
 
         const note = field.$wrapper.find(".dco-plan-note").first();
         if (note.length) {
-            const message = can(frm, "edit_optimizer_settings")
-                ? "اضغط «تعديل» لتجربة الخوارزميات والإعدادات كما تشاء. إعادة الحساب تنشئ معاينة فقط، ولا تُحفظ الخطة حتى تضغط «حفظ»."
-                : can(frm, "recalculate_plan")
-                    ? "يمكن تشغيل محرك الخطة فقط داخل جلسة تعديل الإعدادات. تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص»."
-                    : "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
+            let message;
+            if (!hasSystemDraft(frm) && can(frm, "recalculate_plan")) {
+                message = "ابدأ بـ«حساب خطة القص». سيتم حفظ الخطة الأولى وتحديث عدد الألواح والتكلفة تلقائيًا.";
+            } else if (can(frm, "edit_optimizer_settings")) {
+                message = "اضغط «تعديل» لتجربة الخوارزميات والإعدادات. إعادة الحساب تنشئ معاينة، ولا يُحفظ التعديل حتى تضغط «حفظ».";
+            } else if (can(frm, "recalculate_plan")) {
+                message = "يمكن تشغيل محرك الخطة داخل جلسة التعديل. تغيير إعدادات الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص».";
+            } else {
+                message = "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
+            }
             setTextIfChanged(note, message);
         }
     }
