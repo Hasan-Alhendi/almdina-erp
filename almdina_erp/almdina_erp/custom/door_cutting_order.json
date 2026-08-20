@@ -10,14 +10,6 @@
       "property": "default",
       "property_type": "Text",
       "value": ""
-    },
-    {
-      "doc_type": "Door Cutting Order",
-      "doctype_or_field": "DocField",
-      "field_name": "cutting_cost_per_board_usd",
-      "property": "reqd",
-      "property_type": "Check",
-      "value": "1"
     }
   ],
   "sync_on_migrate": 1
