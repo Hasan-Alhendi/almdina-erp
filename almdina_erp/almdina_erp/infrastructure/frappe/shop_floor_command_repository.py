@@ -85,6 +85,7 @@ class FrappeShopFloorCommandRepository(ShopFloorCommandPort):
             has_cutting_plan=plan.has_cutting_plan,
             plan_needs_recalculation=plan.plan_needs_recalculation,
             has_approved_plan=plan.has_approved_plan,
+            approved_plan_name=plan.approved_plan_name,
             drawing_dxf_status=order.drawing_dxf_status or None,
         )
 
