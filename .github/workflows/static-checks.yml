@@ -233,14 +233,8 @@ jobs:
           node almdina_erp/tests/js/factory_workforce_view_model.test.js
           node almdina_erp/tests/test_shape_print.js
 
-      - name: Run Door Drawing V3 geometry and architecture regressions
-        shell: bash
+      - name: Run special-shape documentation regressions
         run: |
-          set -euo pipefail
-          count=0
-          for test_file in almdina_erp/tests/js/door_drawing_v3_*.test.js; do
-            echo "Running ${test_file}"
-            node "${test_file}"
-            count=$((count + 1))
-          done
-          echo "Executed ${count} Door Drawing V3 regression tests"
+          node almdina_erp/tests/js/special_shape_documentation.test.js
+          python -m unittest -v almdina_erp.tests.test_special_shape_documentation_workspace_contract
+          python -m unittest -v almdina_erp.tests.test_special_shape_documentation_ownership_contract

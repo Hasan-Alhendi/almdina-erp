@@ -7,7 +7,6 @@ HOOKS = ROOT / "frontend_assets.py"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
 SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
-V3_PERSISTENCE = ROOT / "public" / "js" / "door_drawing_v3" / "infrastructure" / "persistence_adapter.js"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 PLAN_RENDERER = CUTTING_PLAN / "door_cutting_order_cutting_plan_renderer.js"
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
@@ -47,8 +46,9 @@ def _source(path: Path) -> str:
 
 def test_shape_output_contract_is_pure_immutable_and_version_aware():
     source = _source(CONTRACT)
-    for dependency in ("frappe", "document", "querySelector", "addEventListener"):
+    for dependency in ("frappe.call", "document.querySelector", "querySelector", "addEventListener"):
         assert dependency not in source
+    assert 'const DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation";' in source
     assert "const DRAWING_VERSION = 1;" in source
     assert "window.AlmdinaShapeOutputContract = Object.freeze({" in source
     assert "drawingFromPiece" in source
@@ -106,24 +106,17 @@ def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
         assert consumer in form_scripts
 
 
-def test_special_shape_button_resolves_v4_editor_at_click_time():
+def test_special_shape_button_resolves_documentation_workspace_at_click_time():
     operator = _source(OPERATOR)
     editor = _source(EDITOR)
     assert 'event.target.closest(".dco-special-sketch-button")' in operator
     assert "row && window.AlmdinaSpecialShapeEditor" in operator
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = Object.freeze(facade);" in editor
-    assert "__doorDrawingV4: true" in editor
-    assert "door_drawing_v4/domain/geometry.js" in editor
+    assert "__documentationOnly: true" in editor
+    assert "__manufacturingGeometrySeparated: true" in editor
+    assert "door_drawing_v4" not in editor
     assert "function open(frm, row" in editor
-
-
-def test_v3_persistence_keeps_server_compatibility_and_mm_document_authoritative():
-    persistence = _source(V3_PERSISTENCE)
-    assert 'authoritative: "door_drawing_v3"' in persistence
-    assert 'units: "mm"' in persistence
-    assert "door_drawing_v3: document" in persistence
-    assert "special_shape_geometry_json" not in persistence
 
 
 def test_customer_documents_keep_drawing_first_and_share_one_renderer():
@@ -132,8 +125,9 @@ def test_customer_documents_keep_drawing_first_and_share_one_renderer():
     presenter = _source(PRINT_PRESENTER)
     financial = _source(FINANCIAL_DOCUMENTS)
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in shape_print
-    assert "const selected = shapeOutput.visual(piece);" in shape_print
-    assert 'selected.kind === "drawing"' in shape_print
+    assert "shapeOutput.visual(piece)" in shape_print
+    assert 'selected.kind === "documentation"' in shape_print
+    assert "هذا توثيق لطلب العميل وليس ملف تصنيع" in shape_print
     assert "renderer.notesCell(row, row.notes" in presenter
     assert "window.AlmdinaOrderDocumentPrint" in measurement_actions
     assert '${measurementDocumentBody(frm)}' in presenter

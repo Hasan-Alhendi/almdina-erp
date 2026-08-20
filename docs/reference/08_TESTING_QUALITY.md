@@ -18,7 +18,7 @@
 | `Stage 13 Quality Gates` | Clean Architecture boundaries وعدم عودة fixed role gates |
 | `Stage 14 End-to-End Regression` | رحلة factory متصلة عبر personas والحالات |
 | `Frappe v16 Integration` | Bench حقيقي، install، migrate مرتين، schema، كامل اختبارات التطبيق |
-| `Door Drawing V3 Checks` | عقود محرر الرسم عند تغييره |
+| `Special Shape Documentation Checks` | عقد التوثيق والصورة والأشكال والقلم الذكي عند تغيير المحرر |
 | `Stage 15 Documentation Freeze` | وجود المرجع وربطه بالـArchitecture Freeze |
 
 وجود Workflow file لا يساوي نجاحه؛ الحكم هو نتيجة run على SHA المرشح للدمج.

@@ -158,7 +158,6 @@ class TestPlanPayloadApplication(unittest.TestCase):
         )
 
     def test_metadata_payload_preserves_four_effective_side_profiles(self) -> None:
-        drawing = '{"version":1,"elements":[]}'
         payload = build_plan_metadata_payload(
             default_edge_type="2cm Normal",
             edge_color="White",
@@ -175,8 +174,6 @@ class TestPlanPayloadApplication(unittest.TestCase):
                     edge_cost_usd=1.4,
                     area_m2=0.48,
                     notes="Flower shape",
-                    drawing_token=drawing,
-                    special_shape_status="Documented",
                     edge_long_right_type="2cm Glossy",
                     edge_long_left_type="2cm Normal",
                     edge_width_top_type="2cm Gold",
@@ -191,11 +188,8 @@ class TestPlanPayloadApplication(unittest.TestCase):
         self.assertEqual(piece["edge_long_left_type"], "2cm Normal")
         self.assertEqual(piece["edge_width_top_type"], "2cm Gold")
         self.assertEqual(piece["edge_width_bottom_type"], "")
-        self.assertEqual(
-            piece["drawing_hash"],
-            hashlib.sha256(drawing.encode("utf-8")).hexdigest(),
-        )
-        self.assertEqual(piece["special_shape_status"], "Documented")
+        self.assertNotIn("drawing_hash", piece)
+        self.assertNotIn("special_shape_status", piece)
 
     def test_fingerprint_matches_the_previous_canonical_algorithm(self) -> None:
         payload = {"version": 1, "pieces": [{"index": 1, "qty": 2}]}

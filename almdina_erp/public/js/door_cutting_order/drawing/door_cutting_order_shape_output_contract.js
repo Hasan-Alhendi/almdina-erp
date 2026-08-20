@@ -1,6 +1,7 @@
 (() => {
     "use strict";
 
+    const DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation";
     const DRAWING_VERSION = 1;
     const PARSE_CACHE_LIMIT = 300;
     const drawingCache = new Map();
@@ -42,6 +43,7 @@
                 !source
                 || typeof source !== "object"
                 || Array.isArray(source)
+                || source.schema !== DOCUMENTATION_SCHEMA
                 || Number(source.version) !== DRAWING_VERSION
                 || !Array.isArray(source.elements)
             ) {
@@ -67,7 +69,7 @@
             piece.special_shape_drawing_json
             || piece.drawing_json
         ));
-        return payload && payload.elements.length ? payload : null;
+        return payload && (payload.reference || payload.elements.length) ? payload : null;
     }
 
     function geometryFromPiece(piece) {
@@ -89,7 +91,7 @@
     function visual(piece) {
         const drawing = drawingFromPiece(piece);
         if (drawing) {
-            return Object.freeze({ kind: "drawing", payload: drawing });
+            return Object.freeze({ kind: "documentation", payload: drawing });
         }
         const polygon = geometryFromPiece(piece);
         return polygon
@@ -126,6 +128,7 @@
     }
 
     window.AlmdinaShapeOutputContract = Object.freeze({
+        DOCUMENTATION_SCHEMA,
         DRAWING_VERSION,
         parseDrawing,
         parseGeometry,

@@ -181,7 +181,7 @@
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
             if (icon) icon.textContent = "✎";
-            if (label) label.textContent = isArabic() ? "ارسم" : "Sketch";
+            if (label) label.textContent = isArabic() ? "وثّق" : "Document";
         }
 
         clone.querySelectorAll("[data-calc]").forEach(cell => { cell.textContent = "0.000"; });
@@ -262,11 +262,11 @@
                     ? (isArabic() ? "ضبط" : "Set")
                     : ((drawing || exact)
                         ? (isArabic() ? "موثقة" : "Documented")
-                        : (isArabic() ? "ارسم" : "Sketch"));
+                        : (isArabic() ? "وثّق" : "Document"));
             }
             sketch.title = clipped
                 ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-                : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
+                : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         }
 
         ensureRowSelector(frm, tr);

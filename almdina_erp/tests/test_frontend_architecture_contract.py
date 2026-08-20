@@ -11,10 +11,10 @@ GLOBAL_ARCH = REFERENCE / "02_ARCHITECTURE.md"
 REFERENCE_INDEX = REFERENCE / "README.md"
 DCO_FRONTEND_ARCH = ROOT / "public" / "js" / "door_cutting_order" / "ARCHITECTURE.md"
 FRONTEND_ASSET_MANIFEST = ROOT / "frontend_assets.py"
-DRAWING_V3 = ROOT / "public" / "js" / "door_drawing_v3"
+DOCUMENTATION = ROOT / "public" / "js" / "special_shape_documentation"
 
 REQUIRED_RULE_IDS = tuple(f"FE-ARCH-{index:03d}" for index in range(1, 16))
-DRAWING_V3_LAYERS = ("domain", "application", "infrastructure", "presentation")
+DOCUMENTATION_LAYERS = ("domain", "application", "infrastructure", "presentation")
 
 
 class TestFrontendArchitectureContract(unittest.TestCase):
@@ -101,15 +101,15 @@ class TestFrontendArchitectureContract(unittest.TestCase):
         self.assertIn("Explicit dual-load allowlist", dco)
         self.assertIn("Put new behavior under exactly one feature owner", dco)
 
-    def test_door_drawing_v3_stays_a_bounded_layered_subsystem(self) -> None:
+    def test_special_shape_documentation_stays_a_bounded_layered_subsystem(self) -> None:
         source = FRONTEND_ARCH.read_text(encoding="utf-8")
 
-        self.assertIn("Door Drawing V3", source)
+        self.assertIn("Special Shape Documentation", source)
         self.assertIn("domain/application/infrastructure/presentation", source)
-        for layer in DRAWING_V3_LAYERS:
+        for layer in DOCUMENTATION_LAYERS:
             self.assertTrue(
-                (DRAWING_V3 / layer).is_dir(),
-                f"Door Drawing V3 layer disappeared: {layer}",
+                (DOCUMENTATION / layer).is_dir(),
+                f"Special Shape Documentation layer disappeared: {layer}",
             )
 
     def test_contract_does_not_turn_file_size_into_an_architecture_rule(self) -> None:

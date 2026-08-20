@@ -174,7 +174,10 @@ class FrappeOrderPiecePolicyAdapter:
 
             if current_raw and drawing_changed:
                 drawing = validate_special_shape_drawing(current_raw)
-                drawing_has_elements = bool(drawing and drawing.get("elements"))
+                drawing_has_elements = bool(
+                    drawing
+                    and (drawing.get("reference") or drawing.get("elements"))
+                )
             elif current_raw:
                 drawing_has_elements = bool(
                     (old_row and old_row.special_shape_status == "Documented")
@@ -188,11 +191,7 @@ class FrappeOrderPiecePolicyAdapter:
             geometry_payload_changed = bool(
                 old_row and old_special_geometry != special_geometry
             )
-            documentation_changed = bool(
-                drawing_changed
-                or geometry_payload_changed
-                or (not old_row and special_geometry)
-            )
+            documentation_changed = bool(drawing_changed)
 
             decision = evaluate_special_shape(
                 old_geometry=self._geometry_snapshot(old_row),
@@ -202,9 +201,7 @@ class FrappeOrderPiecePolicyAdapter:
                 old_price=self._price_snapshot(old_row),
                 current_price=self._price_snapshot(row) or SpecialPrice(),
                 drawing_changed=bool(drawing_changed or geometry_payload_changed),
-                drawing_has_elements=bool(
-                    special_geometry or drawing_has_elements
-                ),
+                drawing_has_elements=bool(drawing_has_elements),
                 default_edge_changed=default_edge_changed,
                 approval_action=approval_action,
             )

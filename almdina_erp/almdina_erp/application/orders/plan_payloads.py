@@ -3,9 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_text
-
-
 @dataclass(frozen=True, slots=True)
 class PlanBoardInput:
     item: str
@@ -56,8 +53,6 @@ class PlanMetadataPiece:
     edge_cost_usd: float
     area_m2: float
     notes: str
-    drawing_token: str
-    special_shape_status: str
     edge_long_type: str = ""
     edge_width_type: str = ""
     edge_long_rate_usd: float = 0
@@ -169,8 +164,6 @@ def build_plan_metadata_payload(
                 "edge_cost_usd": piece.edge_cost_usd,
                 "area_m2": piece.area_m2,
                 "notes": piece.notes,
-                "drawing_hash": fingerprint_text(piece.drawing_token),
-                "special_shape_status": piece.special_shape_status,
             }
             for piece in pieces
         ],

@@ -24,11 +24,9 @@ OPERATOR_UX = (
     / "door_cutting_order_operator_ux.js"
 )
 EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
-V4_SHELL = APP_ROOT / "public" / "js" / "door_drawing_v4" / "presentation" / "editor_shell.js"
-V4_CONTROLLER = APP_ROOT / "public" / "js" / "door_drawing_v4" / "presentation" / "editor_controller.js"
-V4_INTERACTION = APP_ROOT / "public" / "js" / "door_drawing_v4" / "application" / "interaction_engine.js"
-V4_GEOMETRY = APP_ROOT / "public" / "js" / "door_drawing_v4" / "domain" / "geometry.js"
-V4_CSS = APP_ROOT / "public" / "css" / "door_drawing_v4.css"
+DOCUMENTATION = APP_ROOT / "public" / "js" / "special_shape_documentation"
+DOCUMENTATION_CSS = APP_ROOT / "public" / "css" / "special_shape_documentation.css"
+DOCUMENTATION_VALIDATOR = APP_ROOT / "almdina_erp" / "services" / "special_shape_drawing_validation_service.py"
 COST_PRESENTER = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
 COST_PERMISSIONS = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_permissions_ux.js"
 CUTTING_PLAN_COMMAND_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
@@ -81,44 +79,35 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
         assert fields[fieldname]["non_negative"] == 1
 
 
-def test_operator_opens_only_clean_v4_editor_runtime():
+def test_operator_opens_only_new_documentation_runtime():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
     entry = EDITOR_ENTRY.read_text(encoding="utf-8")
-    shell = V4_SHELL.read_text(encoding="utf-8")
-    controller = V4_CONTROLLER.read_text(encoding="utf-8")
-    interaction = V4_INTERACTION.read_text(encoding="utf-8")
-    geometry = V4_GEOMETRY.read_text(encoding="utf-8")
-    css = V4_CSS.read_text(encoding="utf-8")
+    shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
+    controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
+    pen = (DOCUMENTATION / "application" / "smart_pen.js").read_text(encoding="utf-8")
+    templates = (DOCUMENTATION / "application" / "templates.js").read_text(encoding="utf-8")
+    css = DOCUMENTATION_CSS.read_text(encoding="utf-8")
     hooks = HOOKS.read_text(encoding="utf-8")
 
     assert 'data-field="piece_type"' in operator
     assert "dco-special-sketch-button" in operator
     assert "AlmdinaSpecialShapeEditor.open" in operator
     assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
-    assert "__doorDrawingV4: true" in entry
-    assert "__canonicalMmGeometry: true" in entry
-    assert "door_drawing_v4/domain/geometry.js" in entry
-    assert "door_drawing_v4/presentation/editor_shell.js" in entry
-    assert "door_drawing_v4/presentation/editor_controller.js" in entry
-    assert "AlmdinaSketchEngine" not in entry
-    for tool in ("select", "node", "pen", "dimension", "hand"):
-        assert f'toolButton("{tool}"' in shell
-    assert 'inputmode="decimal"' in shell
-    assert 'aria-label="القيمة بالميليمتر"' in shell
-    assert 'placeholder="القيمة mm"' in shell
-    assert "function worldPoint(" in controller
-    assert "screenToleranceToMm" in controller
-    assert 'PEN_LENGTH: "pen-length"' in controller
-    assert 'DIMENSION_VALUE: "dimension-value"' in controller
-    assert "engine.inputLength(valueMm)" in controller
-    assert "engine.inputDimensionValue(valueMm)" in controller
-    assert "engine.undo()" in controller
-    assert "engine.redo()" in controller
-    assert "function beginNodeDrag(" in interaction
-    assert "function finishNodeDrag(" in interaction
-    assert 'const EPSILON_MM = 0.001' in geometry
-    assert ".ald-v4-editor-host" in css
-    assert ".ald-v4-dialog-actions" in css
+    assert "__documentationOnly: true" in entry
+    assert "__manufacturingGeometrySeparated: true" in entry
+    assert "door_drawing_v4" not in entry
+    for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
+        assert f'tool("{tool}"' in shell
+    for label in ("رفع صورة أو مسح", "شكل جاهز", "ملاحظات المصمم"):
+        assert label in shell
+    assert "Api.save(context.order.name, context.piece.name, D.toStored(document))" in controller
+    assert "geometry" not in controller.lower()
+    assert "function simplify(" in pen
+    assert "suggestClose" in pen
+    for template_id in ("clipped-corner", "top-arch", "side-arch", "trapezoid", "inner-opening", "slanted-edge"):
+        assert template_id in templates
+    assert ".ald-doc-toolbar" in css
+    assert "touch-action:none" in css
     for retired in (
         "door_cutting_order_sketch_engine.js",
         "door_cutting_order_exact_line_ux.js",
@@ -129,7 +118,7 @@ def test_operator_opens_only_clean_v4_editor_runtime():
 
 
 def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_authoritative():
-    service = SERVICE_PY.read_text(encoding="utf-8")
+    service = DOCUMENTATION_VALIDATOR.read_text(encoding="utf-8")
     policy = PIECE_POLICY.read_text(encoding="utf-8")
     costing = COSTING_DOMAIN.read_text(encoding="utf-8")
     adapter = COSTING_ADAPTER.read_text(encoding="utf-8")
@@ -137,8 +126,8 @@ def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_autho
     assert "validate_special_shape_drawing" in service
     assert "MAX_DRAWING_BYTES" in service
     assert "MAX_DRAWING_ELEMENTS" in service
-    assert "MAX_DRAWING_POINTS" in service
-    assert 'ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}' in service
+    assert "DOCUMENTATION_ELEMENT_TYPES" in service
+    assert '"stroke", "line", "rect", "ellipse", "arrow", "dimension", "text"' in service
     assert "validate_special_shape_drawing(current_raw)" in policy
     assert '"long_right": (' in costing
     assert "bool(piece.edge_long_right)" in costing
