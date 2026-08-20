@@ -10,6 +10,7 @@
         start: "almdina_erp.almdina_erp.services.shop_floor_commands.start_my_stage",
         handoffContext: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
         handoff: "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
+        deliver: "almdina_erp.almdina_erp.services.shop_floor_commands.mark_delivered",
     });
 
     let workerDropdownSequence = 0;
@@ -35,6 +36,13 @@
     }
 
     function actionFor(context) {
+        if (context && context.canDeliver === true) {
+            return {
+                kind: "deliver",
+                label: __("تم التسليم"),
+                indicator: "success",
+            };
+        }
         if (context && context.canStart === true) {
             return {
                 kind: "start",
@@ -90,13 +98,13 @@
         frappe.show_alert({ message, indicator: "green" });
     }
 
-    function runCommand({ method, args, button, successMessage, onSuccess }) {
+    function runCommand({ method, args, button, successMessage, freezeMessage, onSuccess }) {
         setBusy(button, true);
         return frappe.call({
             method,
             args,
             freeze: true,
-            freeze_message: __("جاري تحديث مسار الإنتاج..."),
+            freeze_message: freezeMessage || __("جاري تحديث مسار الإنتاج..."),
         }).then(response => {
             notify(successMessage);
             if (typeof onSuccess === "function") {
@@ -112,6 +120,17 @@
             args: { stage_name: context.stage },
             button: options.button,
             successMessage: __("تم بدء العمل."),
+            onSuccess: options.onSuccess,
+        });
+    }
+
+    function deliver(context, options) {
+        return runCommand({
+            method: METHODS.deliver,
+            args: { order_name: context.order },
+            button: options.button,
+            successMessage: __("تم تسليم الطلب للعميل."),
+            freezeMessage: __("جاري تسجيل تسليم الطلب..."),
             onSuccess: options.onSuccess,
         });
     }
@@ -373,7 +392,11 @@
 
     function perform(context, options = {}) {
         const action = actionFor(context);
-        if (!action || !context.stage) return;
+        if (!action) return;
+        if (action.kind === "deliver") {
+            return deliver(context, options);
+        }
+        if (!context.stage) return;
 
         const guard = frappe.call({
             method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",

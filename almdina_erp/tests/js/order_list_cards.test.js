@@ -38,6 +38,9 @@ const context = {
         },
         AlmdinaShopFloorQuickActions: {
             actionFor(actionContext) {
+                if (actionContext.canDeliver) {
+                    return { kind: "deliver", label: "تم التسليم", indicator: "success" };
+                }
                 if (actionContext.canStart) {
                     return { kind: "start", label: "بدء العمل", indicator: "primary" };
                 }
@@ -153,6 +156,7 @@ const completed = {
         stage: "PST-10",
         canStart: false,
         canHandoff: false,
+        canDeliver: false,
         assignmentState: "completed",
     },
 };
@@ -161,7 +165,47 @@ assert(completedHtml.includes("dco-mobile-order-card is-completed"));
 assert(completedHtml.includes("تم الإنجاز"), "completed mobile work must show a non-interactive completion state");
 assert(completedHtml.includes("dco-list-row-completed"), "completed cards must retain their green completion presentation");
 assert(completedHtml.includes("dco-card-complete-state"));
-assert(!completedHtml.includes("dco-card-production-action"), "the workflow button must disappear after completion");
+assert(!completedHtml.includes("dco-card-production-action"), "the workflow button must disappear after completion without delivery capability");
+assert(!completedHtml.includes("جاهز للتسليم"), "the external mobile card must not expose the internal ready-for-delivery wording");
+
+const deliveryAuthorized = {
+    ...completed,
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        canDeliver: true,
+        assignmentState: "completed",
+    },
+};
+const deliveryAuthorizedModel = api.cardViewModel(deliveryAuthorized);
+const deliveryAuthorizedHtml = api.buildCard(deliveryAuthorized, false);
+assert.strictEqual(deliveryAuthorizedModel.action.kind, "deliver");
+assert.strictEqual(deliveryAuthorizedModel.action.label, "تم التسليم");
+assert(deliveryAuthorizedHtml.includes('data-action-kind="deliver"'), "server-authorized delivery must render as the mobile quick action");
+assert(deliveryAuthorizedHtml.includes("تم التسليم"), "the delivery action must use the agreed Arabic label");
+assert(!deliveryAuthorizedHtml.includes("جاهز للتسليم"), "delivery authorization must not leak the internal ready-for-delivery label");
+
+const delivered = {
+    ...completed,
+    status: "Delivered",
+    __almdinaProductionActionContext: {
+        stage: "PST-10",
+        canStart: false,
+        canHandoff: false,
+        canDeliver: false,
+        assignmentState: "completed",
+    },
+};
+const deliveredModel = api.cardViewModel(delivered);
+const deliveredHtml = api.buildCard(delivered, false);
+assert.strictEqual(deliveredModel.state.key, "delivered");
+assert.strictEqual(deliveredModel.state.label, "تم التسليم");
+assert.strictEqual(deliveredModel.action, null);
+assert(deliveredHtml.includes("dco-card-complete-state"));
+assert(deliveredHtml.includes("تم التسليم"), "a delivered order must retain a non-interactive delivered state");
+assert(!deliveredHtml.includes("dco-card-production-action"), "a delivered order must never render another workflow button");
+assert(!deliveredHtml.includes("جاهز للتسليم"));
 
 const phoneRoot = { getBoundingClientRect: () => ({ width: 340 }) };
 assert.strictEqual(api.isPhoneLayout(phoneRoot), true, "a real phone must use order cards");
