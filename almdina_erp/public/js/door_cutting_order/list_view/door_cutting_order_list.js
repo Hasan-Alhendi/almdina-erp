@@ -6,7 +6,7 @@
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=5";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=6";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -28,10 +28,62 @@
         CNC: "CNC",
         "تقشيط": "Sanding",
     });
-    const COMPLETED_ORDER_STATUSES = new Set([
-        "Ready for Delivery",
-        "Completed",
-    ]);
+    const MOBILE_CARD_STATES = Object.freeze({
+        in_progress: Object.freeze({
+            label: "قيد التنفيذ",
+            cardClass: "is-in-progress",
+            icon: "activity",
+            history: false,
+        }),
+        ready: Object.freeze({
+            label: "جاهز للبدء",
+            cardClass: "is-ready",
+            icon: "play",
+            history: false,
+        }),
+        ready_for_delivery: Object.freeze({
+            label: "جاهز للتسليم",
+            cardClass: "is-ready-for-delivery",
+            icon: "package",
+            history: false,
+        }),
+        completed: Object.freeze({
+            label: "تم الإنجاز",
+            cardClass: "is-completed",
+            icon: "circle-check",
+            history: true,
+        }),
+        delivered: Object.freeze({
+            label: "تم التسليم",
+            cardClass: "is-delivered",
+            icon: "truck",
+            history: true,
+        }),
+    });
+    const MOBILE_ACTION_PRESENTATION = Object.freeze({
+        start: Object.freeze({
+            label: "بدء العمل",
+            className: "is-start",
+            icon: "play",
+        }),
+        handoff: Object.freeze({
+            label: "إنهاء العمل",
+            className: "is-finish",
+            icon: "check",
+        }),
+        deliver: Object.freeze({
+            label: "تم التسليم",
+            className: "is-deliver",
+            icon: "package-check",
+        }),
+    });
+    const PERSONAL_QUEUE_SORT_RULES = Object.freeze({
+        in_progress: Object.freeze({ rank: 0, field: "assignment_time", direction: 1 }),
+        ready: Object.freeze({ rank: 1, field: "assignment_time", direction: 1 }),
+        ready_for_delivery: Object.freeze({ rank: 2, field: "completion_time", direction: 1 }),
+        completed: Object.freeze({ rank: 3, field: "completion_time", direction: -1 }),
+        delivered: Object.freeze({ rank: 4, field: "modified", direction: -1 }),
+    });
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -212,17 +264,24 @@
         };
     }
 
+    function actionPresentation(action) {
+        if (!action) return null;
+        return MOBILE_ACTION_PRESENTATION[action.kind] || null;
+    }
+
     function mobileActionLabel(action) {
-        if (!action) return "";
-        if (action.kind === "start") return __("بدء العمل");
-        if (action.kind === "handoff") return __("إنهاء العمل");
-        if (action.kind === "deliver") return __("تم التسليم");
-        return action.label || "";
+        const presentation = actionPresentation(action);
+        return presentation ? __(presentation.label) : (action && action.label || "");
     }
 
     function mobileActionClass(action) {
-        if (!action) return "";
-        return action.kind === "start" ? "is-start" : "is-finish";
+        const presentation = actionPresentation(action);
+        return presentation ? presentation.className : "";
+    }
+
+    function mobileActionIcon(action) {
+        const presentation = actionPresentation(action);
+        return presentation ? presentation.icon : "check";
     }
 
     function mobileActionConfirmation(action, doc) {
@@ -240,36 +299,32 @@
         return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
     }
 
+    function cardStateDefinition(key) {
+        const definition = MOBILE_CARD_STATES[key];
+        if (!definition) return null;
+        return Object.freeze({
+            key,
+            label: __(definition.label),
+            cardClass: definition.cardClass,
+            icon: definition.icon,
+            history: definition.history === true,
+        });
+    }
+
     function cardState(doc, context, action) {
-        if (String(doc.status || "") === "Delivered") {
-            return Object.freeze({
-                key: "delivered",
-                label: __("تم التسليم"),
-                cardClass: "is-completed",
-            });
-        }
+        const status = String(doc.status || "").trim();
+        if (status === "Delivered") return cardStateDefinition("delivered");
+        if (status === "Ready for Delivery") return cardStateDefinition("ready_for_delivery");
 
         const completed = context.queueState === "completed"
             || context.assignmentState === "completed"
-            || COMPLETED_ORDER_STATUSES.has(String(doc.status || ""));
-        if (completed) {
-            return Object.freeze({
-                key: "completed",
-                label: __("تم الإنجاز"),
-                cardClass: "is-completed",
-            });
-        }
+            || status === "Completed";
+        if (completed) return cardStateDefinition("completed");
 
         const inProgress = context.queueState === "in_progress"
             || String(doc.department_status || "").trim() === "قيد العمل"
             || (action && action.kind === "handoff");
-        if (inProgress) {
-            return Object.freeze({
-                key: "progress",
-                label: __("قيد التنفيذ"),
-                cardClass: "is-progress",
-            });
-        }
+        if (inProgress) return cardStateDefinition("in_progress");
 
         const hasProductionContext = Boolean(
             context.queueState === "ready"
@@ -279,26 +334,23 @@
             || context.assignmentState === "assigned"
             || (action && action.kind === "start")
         );
-        if (hasProductionContext) {
-            return Object.freeze({
-                key: "ready",
-                label: __("جاهز للبدء"),
-                cardClass: "is-ready",
-            });
-        }
+        if (hasProductionContext) return cardStateDefinition("ready");
 
         return Object.freeze({
             key: "neutral",
             label: fallbackStatusLabel(doc),
             cardClass: "is-neutral",
+            icon: "activity",
+            history: false,
         });
     }
 
     function cardViewModel(doc) {
         const context = quickActionContext(doc);
         const quickActions = window.AlmdinaShopFloorQuickActions;
-        const action = quickActions && quickActions.actionFor(context);
-        const state = cardState(doc, context, action);
+        const candidateAction = quickActions && quickActions.actionFor(context);
+        const state = cardState(doc, context, candidateAction);
+        const action = state.history ? null : candidateAction;
         return Object.freeze({
             orderId: displayValue(doc.name),
             customer: displayValue(doc.customer),
@@ -309,7 +361,7 @@
             context,
             action,
             state,
-            completed: state.key === "completed" || state.key === "delivered",
+            history: state.history,
         });
     }
 
@@ -321,7 +373,12 @@
             layers: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 17l8 4 8-4"/>',
             calendar: '<path d="M5 5h14v15H5z"/><path d="M8 3v4M16 3v4M5 9h14"/>',
             play: '<path d="m10 8 6 4-6 4V8Z"/>',
+            activity: '<path d="M3 12h4l2.2-5 4.1 10 2.2-5H21"/>',
             check: '<path d="m7.5 12.5 3 3 6-7"/>',
+            "circle-check": '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/>',
+            package: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7M12 11v10"/>',
+            "package-check": '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7M12 11v4"/><path d="m9 16 2 2 4-4"/>',
+            truck: '<path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>',
             chevron: '<path d="m10 7 5 5-5 5"/>',
         };
         const body = paths[name] || "";
@@ -332,6 +389,7 @@
         return `
             <span class="dco-card-state-pill" role="status">
                 <span class="dco-card-state-dot" aria-hidden="true"></span>
+                <span class="dco-card-state-icon" aria-hidden="true">${iconSvg(state.icon)}</span>
                 <span>${escapeHtml(state.label)}</span>
             </span>
         `;
@@ -389,7 +447,6 @@
 
     function renderAction(model) {
         if (model.action) {
-            const icon = model.action.kind === "start" ? "play" : "check";
             return `
                 <footer class="dco-card-actions">
                     <button
@@ -398,16 +455,16 @@
                         data-action-kind="${escapeHtml(model.action.kind)}"
                     >
                         <span>${escapeHtml(mobileActionLabel(model.action))}</span>
-                        <span class="dco-card-action-icon" aria-hidden="true">${iconSvg(icon)}</span>
+                        <span class="dco-card-action-icon" aria-hidden="true">${iconSvg(mobileActionIcon(model.action))}</span>
                     </button>
                 </footer>
             `;
         }
-        if (model.completed) {
+        if (model.history) {
             return `
                 <div class="dco-card-complete-state" role="status">
                     <span>${escapeHtml(model.state.label)}</span>
-                    <span class="dco-card-complete-icon" aria-hidden="true">${iconSvg("check")}</span>
+                    <span class="dco-card-complete-icon" aria-hidden="true">${iconSvg(model.state.icon)}</span>
                 </div>
             `;
         }
@@ -416,10 +473,9 @@
 
     function buildCard(doc, hasSelection, preparedModel = null) {
         const model = preparedModel || cardViewModel(doc);
-        const completedClass = model.completed ? " dco-list-row-completed" : "";
         return `
             <article
-                class="dco-mobile-order-card ${model.state.cardClass}${completedClass}"
+                class="dco-mobile-order-card ${model.state.cardClass}"
                 data-order-name="${escapeHtml(doc.name)}"
                 data-card-state="${escapeHtml(model.state.key)}"
                 data-selectable="${hasSelection ? "1" : "0"}"
@@ -452,6 +508,7 @@
             model.date,
             model.state.key,
             model.state.label,
+            model.state.icon,
             action.kind || "",
             mobileActionLabel(model.action),
             model.context.stage || "",
@@ -585,18 +642,28 @@
         });
     }
 
-    function compareServerTimes(left, right, fieldname, direction) {
-        const leftValue = String(left.flag && left.flag[fieldname] || "");
-        const rightValue = String(right.flag && right.flag[fieldname] || "");
+    function queueTimeValue(item, fieldname) {
+        if (fieldname === "modified") {
+            return String(item.doc && item.doc.modified || item.flag && item.flag.completion_time || "");
+        }
+        return String(item.flag && item.flag[fieldname] || "");
+    }
+
+    function compareQueueTimes(left, right, rule) {
+        const leftValue = queueTimeValue(left, rule.field);
+        const rightValue = queueTimeValue(right, rule.field);
         if (!leftValue && !rightValue) return left.name.localeCompare(right.name);
         if (!leftValue) return 1;
         if (!rightValue) return -1;
         const compared = leftValue.localeCompare(rightValue);
-        return compared ? compared * direction : left.name.localeCompare(right.name);
+        return compared ? compared * rule.direction : left.name.localeCompare(right.name);
     }
 
     function personalQueueState(doc, flag = {}) {
-        if (flag.assignment_state === "completed") return "completed";
+        const status = String(doc && doc.status || "").trim();
+        if (status === "Delivered") return "delivered";
+        if (status === "Ready for Delivery") return "ready_for_delivery";
+        if (flag.assignment_state === "completed" || status === "Completed") return "completed";
         if (String(doc && doc.department_status || "").trim() === "قيد العمل") {
             return "in_progress";
         }
@@ -604,41 +671,18 @@
     }
 
     function sortPersonalQueueItems(items) {
-        const inProgress = [];
-        const ready = [];
-        const completed = [];
-
-        items.forEach(item => {
-            const state = personalQueueState(item.doc, item.flag);
-            if (state === "completed") {
-                completed.push(item);
-            } else if (state === "in_progress") {
-                inProgress.push(item);
-            } else {
-                ready.push(item);
-            }
+        return [...items].sort((left, right) => {
+            const leftState = personalQueueState(left.doc, left.flag);
+            const rightState = personalQueueState(right.doc, right.flag);
+            const leftRule = PERSONAL_QUEUE_SORT_RULES[leftState] || PERSONAL_QUEUE_SORT_RULES.ready;
+            const rightRule = PERSONAL_QUEUE_SORT_RULES[rightState] || PERSONAL_QUEUE_SORT_RULES.ready;
+            if (leftRule.rank !== rightRule.rank) return leftRule.rank - rightRule.rank;
+            return compareQueueTimes(left, right, leftRule);
         });
+    }
 
-        inProgress.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "assignment_time",
-            1
-        ));
-        ready.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "assignment_time",
-            1
-        ));
-        completed.sort((left, right) => compareServerTimes(
-            left,
-            right,
-            "completion_time",
-            -1
-        ));
-
-        return [...inProgress, ...ready, ...completed];
+    function isHistoryQueueState(state) {
+        return state === "completed" || state === "delivered";
     }
 
     function applyOperationalRolePresentation(listview, payload) {
@@ -674,13 +718,14 @@
             if (!name) return;
             const flag = flags[name] || {};
             const doc = docs.get(name) || {};
-            const isCompleted = personalQueueState(doc, flag) === "completed";
+            const queueState = personalQueueState(doc, flag);
+            const isHistory = isHistoryQueueState(queueState);
             container.classList.remove("dco-list-row-other-role");
-            container.classList.toggle("dco-list-row-completed", isCompleted);
+            container.classList.toggle("dco-list-row-completed", isHistory);
             const card = container.querySelector(".dco-mobile-order-card");
             if (card) {
                 card.classList.remove("dco-list-row-other-role");
-                card.classList.toggle("dco-list-row-completed", isCompleted);
+                card.classList.remove("dco-list-row-completed");
             }
             queueItems.push({ container, flag, name, doc });
         });
