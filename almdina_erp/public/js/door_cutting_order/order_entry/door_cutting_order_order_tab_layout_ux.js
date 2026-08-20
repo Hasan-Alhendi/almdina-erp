@@ -29,6 +29,18 @@
         edge_color: "أدخل لون القشاط",
     });
 
+    const MATERIAL_ROWS = Object.freeze({
+        primary: Object.freeze([
+            "board_description",
+            "board_length_cm",
+            "board_width_cm",
+        ]),
+        edge: Object.freeze([
+            "default_edge_type",
+            "edge_color",
+        ]),
+    });
+
     function formRoot(frm) {
         const wrapper = frm && frm.wrapper;
         return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
@@ -103,12 +115,7 @@
                     display: none !important;
                 }
 
-                /*
-                 * Frappe owns the native controls and their values. These two
-                 * section bodies only become layout grids; their original
-                 * form-column wrappers participate through display:contents so no
-                 * field is cloned, moved to another state owner, or reimplemented.
-                 */
+                /* Order intake: customer/date first row, notes full-width second row. */
                 .${ROOT_CLASS} .dco-order-intake-card > .section-body {
                     display: grid !important;
                     grid-template-columns: minmax(0,2fr) minmax(220px,1fr);
@@ -116,18 +123,9 @@
                     direction: rtl;
                     align-items: start;
                 }
-                .${ROOT_CLASS} .dco-material-edge-card > .section-body {
-                    display: grid !important;
-                    grid-template-columns: repeat(4,minmax(0,1fr));
-                    gap: 12px 14px;
-                    direction: rtl;
-                    align-items: start;
-                }
-                .${ROOT_CLASS} .dco-order-intake-card > .section-body > .form-column,
-                .${ROOT_CLASS} .dco-material-edge-card > .section-body > .form-column {
+                .${ROOT_CLASS} .dco-order-intake-card > .section-body > .form-column {
                     display: contents !important;
                 }
-
                 .${ROOT_CLASS} .dco-order-intake-card [data-fieldname="customer"] {
                     grid-column: 1;
                     grid-row: 1;
@@ -141,25 +139,39 @@
                     grid-row: 2;
                 }
 
-                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_description"] {
-                    grid-column: 1 / span 2;
-                    grid-row: 1;
+                /*
+                 * Material layout is explicit rather than inferred from Frappe's
+                 * Column Break DOM. We move the original field wrappers only;
+                 * controls, values, event handlers and document state remain owned
+                 * by Frappe. This guarantees the exact visual rows requested.
+                 */
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body {
+                    display: block !important;
                 }
-                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_length_cm"] {
-                    grid-column: 3;
-                    grid-row: 1;
+                .${ROOT_CLASS} .dco-material-edge-card > .section-body > .form-column {
+                    display: none !important;
                 }
-                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_width_cm"] {
-                    grid-column: 4;
-                    grid-row: 1;
+                .${ROOT_CLASS} .dco-material-row {
+                    display: grid;
+                    direction: rtl;
+                    gap: 12px 14px;
+                    align-items: start;
+                    width: 100%;
                 }
-                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="default_edge_type"] {
-                    grid-column: 1 / span 2;
-                    grid-row: 2;
+                .${ROOT_CLASS} .dco-material-row + .dco-material-row {
+                    margin-top: 12px;
                 }
-                .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="edge_color"] {
-                    grid-column: 3 / span 2;
-                    grid-row: 2;
+                .${ROOT_CLASS} .dco-material-row--primary {
+                    grid-template-columns: minmax(0,2fr) minmax(140px,1fr) minmax(140px,1fr);
+                }
+                .${ROOT_CLASS} .dco-material-row--edge {
+                    grid-template-columns: repeat(2,minmax(0,1fr));
+                }
+                .${ROOT_CLASS} .dco-material-row > .frappe-control,
+                .${ROOT_CLASS} .dco-material-row > .form-group {
+                    min-width: 0;
+                    width: 100% !important;
+                    margin-bottom: 0 !important;
                 }
 
                 .${ROOT_CLASS} .dco-keep-empty-field {
@@ -207,25 +219,8 @@
                     .${ROOT_CLASS} .dco-order-intake-card > .section-body {
                         grid-template-columns: minmax(0,1.5fr) minmax(190px,1fr);
                     }
-                    .${ROOT_CLASS} .dco-material-edge-card > .section-body {
-                        grid-template-columns: repeat(2,minmax(0,1fr));
-                    }
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_description"] {
-                        grid-column: 1 / -1;
-                        grid-row: auto;
-                    }
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_length_cm"] {
-                        grid-column: 1;
-                        grid-row: auto;
-                    }
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="board_width_cm"] {
-                        grid-column: 2;
-                        grid-row: auto;
-                    }
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="default_edge_type"],
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="edge_color"] {
-                        grid-column: auto;
-                        grid-row: auto;
+                    .${ROOT_CLASS} .dco-material-row--primary {
+                        grid-template-columns: minmax(0,1.5fr) minmax(120px,1fr) minmax(120px,1fr);
                     }
                 }
                 @media (max-width: 700px) {
@@ -244,13 +239,14 @@
                         grid-column: 1;
                         grid-row: auto;
                     }
-                    .${ROOT_CLASS} .dco-material-edge-card > .section-body {
+                    .${ROOT_CLASS} .dco-material-row--primary {
                         grid-template-columns: repeat(2,minmax(0,1fr));
-                        gap: 9px;
                     }
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="default_edge_type"],
-                    .${ROOT_CLASS} .dco-material-edge-card [data-fieldname="edge_color"] {
+                    .${ROOT_CLASS} .dco-material-row--primary [data-fieldname="board_description"] {
                         grid-column: 1 / -1;
+                    }
+                    .${ROOT_CLASS} .dco-material-row--edge {
+                        grid-template-columns: 1fr;
                     }
                     .${ROOT_CLASS} .dco-order-section-heading {
                         align-items: center;
@@ -302,6 +298,34 @@
             ${meta}
         `;
         return section;
+    }
+
+    function ensureMaterialRow(body, name) {
+        let row = body.querySelector(`:scope > .dco-material-row--${name}`);
+        if (!row) {
+            row = document.createElement("div");
+            row.className = `dco-material-row dco-material-row--${name}`;
+            body.appendChild(row);
+        }
+        return row;
+    }
+
+    function ensureMaterialRows(frm) {
+        const section = sectionNode(frm, "board_section");
+        const body = section && section.querySelector(":scope > .section-body");
+        if (!body) return;
+
+        const primary = ensureMaterialRow(body, "primary");
+        const edge = ensureMaterialRow(body, "edge");
+
+        MATERIAL_ROWS.primary.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== primary) primary.appendChild(node);
+        });
+        MATERIAL_ROWS.edge.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== edge) edge.appendChild(node);
+        });
     }
 
     function autoGrowNotes(frm) {
@@ -395,6 +419,7 @@
         installStyles();
         root.classList.add(ROOT_CLASS);
         Object.entries(SECTION_COPY).forEach(([fieldname, config]) => ensureHeading(frm, fieldname, config));
+        ensureMaterialRows(frm);
         keepEmptyFieldsVisible(frm);
         autoGrowNotes(frm);
         renderEdgeColorOrigin(frm);
