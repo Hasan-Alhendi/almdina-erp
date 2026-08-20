@@ -91,11 +91,12 @@ class TestStage12SecurityGate(unittest.TestCase):
             '"attached_to_doctype": "Cutting Plan"',
             '"attached_to_name": plan.name',
             '"attached_to_field": "dxf_file"',
-            'require_stage_operational_access(order)',
+            'require_stage_assignment_access(order)',
             'order.check_permission("read")',
             'require_cutting_plan_capability(order, capability)',
         ):
             self.assertIn(marker, source)
+        self.assertNotIn("require_stage_operational_access", source)
 
         upload_source = source.split("def upload_production_dxf", 1)[1]
         staged = upload_source.index("_validate_dxf_file_metadata(file_url)")
@@ -174,7 +175,7 @@ class TestStage12SecurityGate(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.code, "not_assigned")
 
-    def test_worker_cannot_operate_stage_for_another_operational_role(self) -> None:
+    def test_assigned_worker_with_capability_is_not_denied_by_operational_role(self) -> None:
         decision = decide_production_action(
             Capability.START_ASSIGNED_STAGE,
             capabilities={Capability.START_ASSIGNED_STAGE},
@@ -190,8 +191,8 @@ class TestStage12SecurityGate(unittest.TestCase):
                 actor_roles=("CNC Worker",),
             ),
         )
-        self.assertFalse(decision.allowed)
-        self.assertEqual(decision.code, "missing_operational_role")
+        self.assertTrue(decision.allowed, decision)
+        self.assertEqual(decision.code, "allowed")
 
     def test_supervisor_reassignment_does_not_require_worker_role(self) -> None:
         decision = decide_production_action(
