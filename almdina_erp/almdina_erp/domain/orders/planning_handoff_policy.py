@@ -29,22 +29,25 @@ def decide_planning_handoff(facts: PlanningHandoffFacts) -> PlanningHandoffDecis
     if not facts.is_planning_stage:
         return PlanningHandoffDecision(True, "allowed", "")
 
-    approved_name = str(facts.approved_plan_name or "").strip()
-    if not approved_name:
-        return PlanningHandoffDecision(
-            False,
-            "plan_not_approved",
-            "اعتمد خطة القص بعد مراجعتها قبل تسليم مرحلة التخطيط إلى القسم التالي.",
-        )
+    # The canonical current-approval fact is authoritative. The approved relation
+    # name is retained to distinguish a previous approval that became stale from
+    # an order that has never been approved at all.
+    if facts.has_current_approved_plan and not facts.plan_needs_recalculation:
+        return PlanningHandoffDecision(True, "allowed", "")
 
-    if facts.plan_needs_recalculation or not facts.has_current_approved_plan:
+    approved_name = str(facts.approved_plan_name or "").strip()
+    if approved_name:
         return PlanningHandoffDecision(
             False,
             "approved_plan_stale",
             "خطة القص المعتمدة لم تعد مطابقة لبيانات الطلب. أعد حسابها ومراجعتها واعتمادها قبل إرسالها إلى القسم التالي.",
         )
 
-    return PlanningHandoffDecision(True, "allowed", "")
+    return PlanningHandoffDecision(
+        False,
+        "plan_not_approved",
+        "اعتمد خطة القص بعد مراجعتها قبل تسليم مرحلة التخطيط إلى القسم التالي.",
+    )
 
 
 __all__ = [
