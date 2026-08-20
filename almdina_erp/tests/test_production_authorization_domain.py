@@ -140,12 +140,13 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
         )
         self.assertTrue(allowed.allowed)
 
-        missing_role = decide_production_action(
+        role_mismatch = decide_production_action(
             Capability.START_ASSIGNED_STAGE,
             capabilities={Capability.START_ASSIGNED_STAGE},
             facts=self.facts(actor_roles=("عامل رسم",)),
         )
-        self.assertEqual(missing_role.code, "missing_operational_role")
+        self.assertTrue(role_mismatch.allowed)
+        self.assertEqual(role_mismatch.code, "allowed")
 
     def test_handoff_policy_is_independent_from_drawing_and_dxf_metadata(self) -> None:
         for dxf_status in (None, "Uploaded", "Approved by Drawing"):
@@ -196,14 +197,15 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
             capabilities={Capability.START_ASSIGNED_STAGE},
             facts=self.facts(assigned_to="other@example.com"),
         )
-        self.assertIn("عامل", denied.reason)
-        missing = decide_production_action(
+        self.assertIn("مستخدم آخر", denied.reason)
+
+        role_mismatch = decide_production_action(
             Capability.START_ASSIGNED_STAGE,
             capabilities={Capability.START_ASSIGNED_STAGE},
             facts=self.facts(actor_roles=("عامل رسم",)),
         )
-        self.assertEqual(missing.code, "missing_operational_role")
-        self.assertIn("عرض", missing.reason)
+        self.assertTrue(role_mismatch.allowed)
+        self.assertEqual(role_mismatch.code, "allowed")
 
 
 if __name__ == "__main__":
