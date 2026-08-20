@@ -1,9 +1,6 @@
 (() => {
     "use strict";
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
-    const D = root.Document, H = root.History, T = root.Templates, Pen = root.SmartPen, Transform = root.ElementTransform, Api = root.WorkspaceApi;
-    const Shell = root.WorkspaceShell, Canvas = root.CanvasRenderer;
-    if (![D, H, T, Pen, Transform, Api, Shell, Canvas].every(Boolean)) throw new Error("Special-shape documentation dependencies are incomplete");
 
     const TOOL_HINTS = Object.freeze({
         select: "انقر على عنصر لتحديده. استخدم Delete للحذف.", pen: "ارسم بحرية؛ سننظف الخط ونثبت اتجاهاته.",
@@ -15,6 +12,8 @@
     function promptText() { return new Promise(resolve => frappe.prompt([{ fieldname: "text", fieldtype: "Data", label: "نص الملاحظة", reqd: 1, maxlength: 300 }], values => resolve(String(values.text || "").trim()), "إضافة ملاحظة", "إضافة")); }
     function distance(a, b) { return Math.hypot(b.xMm - a.xMm, b.yMm - a.yMm); }
     function makeElement(tool, start, end) {
+        const D = root.Document;
+        if (!D) throw new Error("Special-shape document contract is unavailable");
         if (tool === "line") return { id: D.id("line"), type: "line", start, end, style: { color: "#1463e6", width: 3 } };
         if (tool === "dimension") return { id: D.id("dimension"), type: "dimension", start, end, valueMm: Math.round(distance(start, end) * 10) / 10, unit: "mm", style: { color: "#173c75", width: 2 } };
         const xMm = Math.min(start.xMm, end.xMm), yMm = Math.min(start.yMm, end.yMm), widthMm = Math.abs(end.xMm - start.xMm), heightMm = Math.abs(end.yMm - start.yMm);
@@ -22,10 +21,13 @@
         return null;
     }
     function mount(wrapper) {
+        const D = root.Document, H = root.History, T = root.Templates, Pen = root.SmartPen, Transform = root.ElementTransform, Api = root.WorkspaceApi, Scanner = root.ScannerBridge;
+        const Shell = root.WorkspaceShell, Canvas = root.CanvasRenderer;
+        if (![D, H, T, Pen, Transform, Api, Scanner, Shell, Canvas].every(Boolean)) throw new Error("Special-shape documentation dependencies are incomplete");
         const main = wrapper.querySelector(".layout-main-section");
         if (!main) throw new Error("Documentation page main section is missing");
         let generation = 0, suspended = false, shell = null, renderer = null, context = null, history = null;
-        let tool = "select", selectedId = null, draft = null, dragging = false, saving = false, pendingFileRemovals = new Set();
+        let tool = "select", selectedId = null, draft = null, dragging = false, saving = false, scanning = false, pendingFileRemovals = new Set();
         const resizeHandler = () => { if (renderer) renderer.draw(); };
         const beforeUnloadHandler = event => {
             if (!history || !history.isDirty()) return;
@@ -33,7 +35,7 @@
             event.returnValue = "";
         };
 
-        function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; }
+        function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; scanning = false; }
         function showMessage(message, error = false) { main.innerHTML = `<div class="ald-doc-message ${error ? "is-error" : ""}">${frappe.utils.escape_html(String(message))}</div>`; }
         function back() { if (context) frappe.set_route("Form", "Door Cutting Order", context.order.name); else frappe.set_route("List", "Door Cutting Order"); }
         function render() {
@@ -55,15 +57,44 @@
             finally { saving = false; if (shell) shell.setSaving(false); }
         }
         async function requestBack() { if (!history || !history.isDirty()) { back(); return; } if (await confirmAsync("لديك تعديلات غير محفوظة. هل تريد الرجوع دون حفظ؟")) back(); }
-        async function upload(file) {
-            if (!file || !context.permissions.can_edit) return; if (file.size > 8 * 1024 * 1024) { frappe.msgprint("حجم الصورة يتجاوز 8 MB."); return; }
+        async function upload(file, options = {}) {
+            if (!file || !context || !context.permissions.can_edit) return false; if (file.size > 8 * 1024 * 1024) { frappe.msgprint("حجم الصورة يتجاوز 8 MB."); return false; }
+            const token = generation, activeContext = context;
             shell.setSaveState("جار رفع الصورة…", "saving");
             try {
-                const encoded = await readFile(file); const previous = history.get().reference; const result = await Api.upload(context.order.name, context.piece.name, file.name, encoded);
+                const encoded = await readFile(file); const previous = history.get().reference; const result = await Api.upload(activeContext.order.name, activeContext.piece.name, file.name, encoded);
+                if (token !== generation || suspended || !history) {
+                    await Api.removeImage(activeContext.order.name, activeContext.piece.name, result.file_url).catch(error => console.warn("Stale reference cleanup failed", error));
+                    return false;
+                }
                 if (previous && previous.fileUrl !== result.file_url) pendingFileRemovals.add(previous.fileUrl);
-                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 0.72, locked: true })); frappe.show_alert({ message: "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3);
-            } catch (error) { console.error("Reference upload failed", error); frappe.msgprint("تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB."); render(); }
-            finally { shell.referenceInput.value = ""; }
+                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 0.72, locked: true })); frappe.show_alert({ message: options.successMessage || "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3); return true;
+            } catch (error) { console.error("Reference upload failed", error); frappe.msgprint("تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB."); render(); return false; }
+            finally { if (shell) { shell.referenceInput.value = ""; shell.cameraInput.value = ""; } }
+        }
+        function scannerErrorMessage(error) {
+            if (error && error.code === Scanner.ERROR_CODES.FORBIDDEN) return "هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.";
+            if (error && error.code === Scanner.ERROR_CODES.SCAN_FAILED) return "تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.";
+            if (error && error.code === Scanner.ERROR_CODES.IMAGE_TOO_LARGE) return "الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.";
+            if (error && error.code === Scanner.ERROR_CODES.INVALID_RESPONSE) return "استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.";
+            return "تعذر الاتصال بالسكانر. شغّل Almdina Scanner Bridge على جهاز Windows ثم أعد المحاولة.";
+        }
+        async function scanReference() {
+            if (scanning || !context || !context.permissions.can_edit) return;
+            const token = generation; let feedback = "", feedbackState = "idle"; scanning = true;
+            shell.setScannerState({ busy: true, message: "سيظهر مربع Windows لاختيار جهاز السكانر وإعدادات المسح." });
+            try {
+                await Scanner.health(); if (token !== generation || suspended) return;
+                const file = await Scanner.scan(); if (token !== generation || suspended) return;
+                if (!file) { feedback = "تم إلغاء عملية المسح ولم تُضف صورة."; return; }
+                const added = await upload(file, { successMessage: "تم المسح وإضافة الصورة إلى التوثيق." });
+                feedback = added ? "تمت إضافة صورة السكانر. يمكنك الآن الرسم أو إضافة القياسات." : "تعذر إضافة صورة السكانر إلى التوثيق.";
+                feedbackState = added ? "success" : "error";
+            } catch (error) {
+                console.error("Scanner acquisition failed", error); feedback = scannerErrorMessage(error); feedbackState = "error"; frappe.msgprint(feedback);
+            } finally {
+                scanning = false; if (shell && token === generation && !suspended) shell.setScannerState({ busy: false, message: feedback, state: feedbackState });
+            }
         }
         async function removeImage() { if (!context.permissions.can_edit) return; const reference = history.get().reference; if (!reference || !await confirmAsync("هل تريد مسح الصورة المرجعية من التوثيق؟")) return; pendingFileRemovals.add(reference.fileUrl); commit(D.setReference(history.get(), null)); }
         function updateReference(changes) { if (!context.permissions.can_edit) return; const current = history.get(); if (!current.reference) return; commit(D.setReference(current, { ...current.reference, ...changes })); }
@@ -79,7 +110,22 @@
             if (tool === "text") { promptText().then(text => { if (text) commit(D.addElement(history.get(), { id: D.id("text"), type: "text", position: point, text, style: { color: "#9a4b00" } })); }); return; }
             dragging = true; draft = { start: point, points: [point], end: point };
         }
-        function pointerMove(event) { if (!dragging || !draft) return; const point = renderer.screenToMm(event); draft.end = point; if (tool === "select" && draft.original) { const transformed = draft.mode === "move" ? Transform.translate(draft.original, point.xMm - draft.start.xMm, point.yMm - draft.start.yMm, history.get().canvas) : Transform.resize(draft.original, draft.mode, point, history.get().canvas); draft.previewDocument = Transform.replace(history.get(), transformed); renderer.render(draft.previewDocument, { selectedId }); return; } if (tool === "pen") draft.points.push(point); else draft.points = [draft.start, point]; renderer.render(history.get(), { selectedId, preview: draft.points }); }
+        function pointerMove(event) {
+            if (!dragging || !draft) return;
+            const point = renderer.screenToMm(event); draft.end = point;
+            if (tool === "select" && draft.original) {
+                const transformed = draft.mode === "move"
+                    ? Transform.translate(draft.original, point.xMm - draft.start.xMm, point.yMm - draft.start.yMm, history.get().canvas)
+                    : Transform.resize(draft.original, draft.mode, point, history.get().canvas);
+                draft.previewDocument = Transform.replace(history.get(), transformed);
+                renderer.render(draft.previewDocument, { selectedId }); return;
+            }
+            if (tool === "pen") {
+                const samples = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [];
+                (samples.length ? samples : [event]).forEach(sample => draft.points.push(renderer.screenToMm(sample)));
+            } else draft.points = [draft.start, point];
+            renderer.render(history.get(), { selectedId, preview: draft.points });
+        }
         function pointerUp() {
             if (!dragging || !draft) return; dragging = false;
             if (tool === "select" && draft.previewDocument) { const next = draft.previewDocument; draft = null; commit(next); return; }
@@ -101,7 +147,7 @@
                 if (target.dataset.tool) chooseTool(target.dataset.tool);
                 else if (target.dataset.template && context.permissions.can_edit) { commit(T.apply(history.get(), target.dataset.template)); selectedId = null; }
                 else if (target.dataset.action === "back") requestBack(); else if (target.dataset.action === "save") save();
-                else if (target.dataset.action === "choose-image") shell.referenceInput.click(); else if (target.dataset.action === "undo") { history.undo(); selectedId = null; render(); }
+                else if (target.dataset.action === "choose-image") shell.referenceInput.click(); else if (target.dataset.action === "capture-image") shell.cameraInput.click(); else if (target.dataset.action === "scan-image") scanReference(); else if (target.dataset.action === "undo") { history.undo(); selectedId = null; render(); }
                 else if (target.dataset.action === "redo") { history.redo(); selectedId = null; render(); }
                 else if (target.dataset.action === "rotate-left") updateReference({ rotationDeg: history.get().reference.rotationDeg - 90 });
                 else if (target.dataset.action === "rotate-right") updateReference({ rotationDeg: history.get().reference.rotationDeg + 90 });
@@ -109,6 +155,7 @@
                 else if (target.dataset.layer && target.dataset.layer !== "reference") { selectedId = target.dataset.layer; tool = "select"; render(); }
             });
             shell.referenceInput.addEventListener("change", () => upload(shell.referenceInput.files && shell.referenceInput.files[0]));
+            shell.cameraInput.addEventListener("change", () => upload(shell.cameraInput.files && shell.cameraInput.files[0], { successMessage: "تم التقاط الصورة وإضافتها إلى التوثيق." }));
             workspace.querySelector("[data-opacity]").addEventListener("change", event => updateReference({ opacity: Number(event.target.value) / 100 }));
             workspace.querySelector("[data-reference-lock]").addEventListener("change", event => updateReference({ locked: Boolean(event.target.checked) }));
             workspace.querySelector("[data-notes]").addEventListener("change", event => commit(D.setNotes(history.get(), event.target.value)));

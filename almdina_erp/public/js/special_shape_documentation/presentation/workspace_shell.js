@@ -1,10 +1,13 @@
 (() => {
     "use strict";
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
-    const T = root.Templates;
     function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value ?? ""); return node.innerHTML; }
     function tool(id, icon, label, key = "", disabled = false) { return `<button type="button" class="ald-doc-tool" data-tool="${id}" title="${label}${key ? ` (${key})` : ""}" aria-label="${label}" ${disabled ? "disabled" : ""}><span>${icon}</span><small>${label}</small></button>`; }
-    function templates(disabled = false) { return T.DEFINITIONS.map(item => `<button type="button" class="ald-doc-template" data-template="${item.id}" title="${item.label}" aria-label="${item.label}" ${disabled ? "disabled" : ""}><span>${item.icon}</span><small>${item.label}</small></button>`).join(""); }
+    function templates(disabled = false) {
+        const definitions = root.Templates && root.Templates.DEFINITIONS;
+        if (!definitions) throw new Error("Special-shape templates are unavailable");
+        return definitions.map(item => `<button type="button" class="ald-doc-template" data-template="${item.id}" title="${item.label}" aria-label="${item.label}" ${disabled ? "disabled" : ""}><span>${item.icon}</span><small>${item.label}</small></button>`).join("");
+    }
     function mount(container, context) {
         const order = context.order, piece = context.piece, readOnly = !context.permissions.can_edit;
         container.innerHTML = `<section class="ald-doc-workspace" dir="rtl" data-read-only="${readOnly ? "1" : "0"}" aria-label="توثيق الدرفة الخاصة">
@@ -16,8 +19,17 @@
             <div class="ald-doc-layout">
                 <aside class="ald-doc-panel ald-doc-start-panel">
                     <h2>ابدأ من هنا</h2>
-                    <button type="button" class="ald-doc-source is-active" data-action="choose-image" ${readOnly ? "disabled" : ""}><span class="ald-doc-source-icon">▧</span><strong>رفع صورة أو مسح</strong><small>JPG · PNG · WEBP — حتى 8 MB</small></button>
-                    <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-reference-input hidden>
+                    <section class="ald-doc-source ald-doc-image-source is-active">
+                        <span class="ald-doc-source-icon" aria-hidden="true">▧</span><span class="ald-doc-source-copy"><strong>صورة مرجعية</strong><small>اختر المصدر المناسب — حتى 8 MB</small></span>
+                        <div class="ald-doc-source-actions">
+                            <button type="button" class="ald-doc-source-action" data-action="choose-image" ${readOnly ? "disabled" : ""}><span aria-hidden="true">↑</span> رفع صورة</button>
+                            <button type="button" class="ald-doc-source-action ald-doc-scan-action" data-action="scan-image" aria-describedby="ald-doc-scanner-status" ${readOnly ? "disabled" : ""}><span aria-hidden="true">▣</span> <span data-scan-label>مسح بالسكانر</span></button>
+                            <button type="button" class="ald-doc-source-action ald-doc-camera-action" data-action="capture-image" ${readOnly ? "disabled" : ""}><span aria-hidden="true">◎</span> التقاط بالكاميرا</button>
+                        </div>
+                        <p id="ald-doc-scanner-status" class="ald-doc-source-status" data-scanner-status role="status" aria-live="polite" hidden></p>
+                    </section>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" data-reference-input hidden>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-camera-input hidden>
                     <section class="ald-doc-source ald-doc-templates"><strong>شكل جاهز</strong><div class="ald-doc-template-grid">${templates(readOnly)}</div></section>
                     <button type="button" class="ald-doc-source" data-tool="pen" ${readOnly ? "disabled" : ""}><span class="ald-doc-source-icon">✎</span><strong>رسم بالقلم</strong><small>تنظيف وتثبيت تلقائي</small></button>
                     <section class="ald-doc-reference-controls" data-reference-controls hidden><div class="ald-doc-section-head"><strong>الصورة المرجعية</strong><span data-reference-lock-label>مقفلة</span></div>
@@ -45,9 +57,15 @@
             workspace,
             canvas: workspace.querySelector(".ald-doc-canvas"),
             referenceInput: workspace.querySelector("[data-reference-input]"),
+            cameraInput: workspace.querySelector("[data-camera-input]"),
             setActiveTool(value) { workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === value)); workspace.dataset.activeTool = value; },
             setSaveState(text, state) { const node = workspace.querySelector("[data-save-state]"); node.textContent = text; node.dataset.state = state; },
             setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = readOnly || saving; button.textContent = saving ? "جار الحفظ…" : "حفظ التوثيق"; },
+            setScannerState({ busy = false, message = "", state = "idle" } = {}) {
+                const button = workspace.querySelector('[data-action="scan-image"]'); const label = workspace.querySelector("[data-scan-label]"); const status = workspace.querySelector("[data-scanner-status]");
+                button.disabled = readOnly || busy; button.dataset.busy = busy ? "1" : "0"; button.setAttribute("aria-busy", busy ? "true" : "false"); label.textContent = busy ? "جار فتح السكانر…" : "مسح بالسكانر";
+                status.textContent = message; status.dataset.state = state; status.hidden = !message;
+            },
             setHint(value) { const node = workspace.querySelector("[data-hint]"); node.textContent = value || ""; node.hidden = !value; },
             render(document, state = {}) {
                 const reference = document.reference; const controls = workspace.querySelector("[data-reference-controls]"); controls.hidden = !reference;

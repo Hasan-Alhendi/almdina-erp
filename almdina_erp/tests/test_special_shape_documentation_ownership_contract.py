@@ -26,6 +26,15 @@ class TestSpecialShapeDocumentationOwnership(unittest.TestCase):
         self.assertNotIn("frappe.call", controller)
         self.assertIn("root.History", (SUBSYSTEM / "application" / "history.js").read_text(encoding="utf-8"))
 
+    def test_scanner_adapter_is_loopback_only_and_does_not_own_persistence(self) -> None:
+        scanner = (SUBSYSTEM / "infrastructure" / "scanner_bridge.js").read_text(encoding="utf-8")
+        self.assertIn('DEFAULT_BASE_URL = "http://127.0.0.1:17831"', scanner)
+        self.assertIn('resolved.hostname !== "127.0.0.1"', scanner)
+        self.assertIn("window.fetch", scanner)
+        self.assertNotIn("frappe.call", scanner)
+        self.assertNotIn("special_shape_drawing_json", scanner)
+        self.assertNotIn("special_shape_geometry_json", scanner)
+
     def test_runtime_has_no_legacy_editor_reference(self) -> None:
         roots = [ROOT / "public", ROOT / "almdina_erp" / "page" / "door_drawing"]
         for base in roots:
