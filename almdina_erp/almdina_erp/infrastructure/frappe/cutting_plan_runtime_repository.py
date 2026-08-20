@@ -20,6 +20,7 @@ class ProductionPlanFacts:
     has_cutting_plan: bool
     plan_needs_recalculation: bool
     has_approved_plan: bool
+    approved_plan_source_type: str | None = None
 
 
 def _plan_rows(order_name: str, **filters: Any) -> list[Any]:
@@ -114,13 +115,17 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
 
     ``approved_plan_name`` preserves whether the order has an explicit approval
     relation, while ``has_approved_plan`` means that exact relation is still a
-    current, non-stale production approval. Keeping those facts separate lets the
-    workflow explain stale approvals accurately instead of asking for approval a
-    second time with a misleading message.
+    current, non-stale production approval. Source type is read from the approved
+    Cutting Plan itself and is never mirrored back onto Door Cutting Order.
     """
 
     approved_plan_name = str(getattr(order, "approved_plan", None) or "").strip() or None
     approved = approved_plan_for_order(order)
+    approved_source = (
+        str(getattr(approved, "source_type", None) or "").strip() or None
+        if approved is not None
+        else None
+    )
     candidate = approved or current_working_plan(str(order.name))
     if not candidate:
         return ProductionPlanFacts(
@@ -129,6 +134,7 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
             has_cutting_plan=False,
             plan_needs_recalculation=True,
             has_approved_plan=False,
+            approved_plan_source_type=approved_source,
         )
 
     has_snapshot = bool(str(getattr(candidate, "snapshot_json", None) or "").strip())
@@ -139,6 +145,7 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
         has_cutting_plan=has_snapshot,
         plan_needs_recalculation=stale,
         has_approved_plan=bool(approved and has_snapshot and not stale),
+        approved_plan_source_type=approved_source,
     )
 
 
