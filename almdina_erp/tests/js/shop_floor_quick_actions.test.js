@@ -11,6 +11,8 @@ const source = fs.readFileSync(
 
 assert(!source.includes('context.stageType === "Sanding"'), "quick actions must not hard-code the final production stage");
 assert(source.includes("get_handoff_context"), "handoff decisions must come from the server routing context");
+assert(source.includes("mark_delivered"), "delivery must reuse the existing server delivery command");
+assert(!source.includes("frappe.get_roles"), "quick actions must not add client-side role-name authorization");
 assert(!source.includes('fieldtype: "Select"'), "worker handoff must not use a native mobile select picker");
 assert(!source.includes("frappe.prompt("), "worker handoff must use the anchored dropdown dialog instead of prompt Select");
 assert(source.includes("shop_floor_worker_dropdown.css"), "the focused worker dropdown stylesheet must be lazy-loaded");
@@ -96,6 +98,21 @@ vm.runInContext(source, context);
         "إنهاء وإرسال"
     );
 
+    const deliveryAction = api.actionFor({ canDeliver: true, canStart: true, canHandoff: true });
+    assert.strictEqual(deliveryAction.kind, "deliver", "server-authorized delivery must take precedence over production actions");
+    assert.strictEqual(deliveryAction.label, "تم التسليم");
+
+    const callsBeforeDelivery = calls.length;
+    await api.perform({ order: "DCO-DELIVER", canDeliver: true }, { button });
+    const deliveryCalls = calls.slice(callsBeforeDelivery);
+    assert.strictEqual(deliveryCalls.length, 1, "delivery must execute only the delivery command");
+    assert(deliveryCalls[0].method.endsWith("mark_delivered"), "delivery must reuse mark_delivered");
+    assert.strictEqual(deliveryCalls[0].args.order_name, "DCO-DELIVER");
+    assert(
+        !deliveryCalls.some(call => call.method.endsWith("get_current_stage_context")),
+        "delivery is an independent authorized quick action and must not depend on a production-stage guard"
+    );
+
     await api.perform({ order: "DCO-1", stage: "PST-1", canStart: true }, { button });
     const stageGuard = calls.find(call => call.method.endsWith("get_current_stage_context"));
     const startCall = calls.find(call => call.method.endsWith("start_my_stage"));
@@ -163,7 +180,7 @@ vm.runInContext(source, context);
         && call.args.stage_name === "PST-MOBILE-FINAL"
     )));
 
-    assert(alerts.length >= 4);
+    assert(alerts.length >= 5);
     assert.strictEqual(button.disabled, false);
 
     console.log("Shop-floor route-aware quick-action simulation passed");
