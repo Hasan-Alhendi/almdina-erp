@@ -77,7 +77,7 @@ def test_order_layout_presenter_is_presentation_only_and_loaded_after_operator_o
     assert "autoGrowNotes" in layout
 
 
-def test_order_and_material_controls_follow_two_clear_rows() -> None:
+def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     layout = LAYOUT.read_text(encoding="utf-8")
 
     assert "grid-template-columns: minmax(0,2fr) minmax(220px,1fr)" in layout
@@ -86,18 +86,23 @@ def test_order_and_material_controls_follow_two_clear_rows() -> None:
     assert 'dco-order-intake-card [data-fieldname="order_notes"]' in layout
     assert "grid-column: 1 / -1" in layout
 
-    assert "grid-template-columns: repeat(4,minmax(0,1fr))" in layout
-    for fieldname in (
-        "board_description",
-        "board_length_cm",
-        "board_width_cm",
-        "default_edge_type",
-        "edge_color",
-    ):
-        assert f'dco-material-edge-card [data-fieldname="{fieldname}"]' in layout
-    assert 'dco-material-edge-card [data-fieldname="board_description"]' in layout
-    assert 'dco-material-edge-card [data-fieldname="default_edge_type"]' in layout
-    assert 'dco-material-edge-card [data-fieldname="edge_color"]' in layout
+    # Material controls must be placed into two explicit visual rows using the
+    # original Frappe wrappers, not left to Column Break nesting.
+    assert "const MATERIAL_ROWS = Object.freeze" in layout
+    assert '"board_description"' in layout
+    assert '"board_length_cm"' in layout
+    assert '"board_width_cm"' in layout
+    assert '"default_edge_type"' in layout
+    assert '"edge_color"' in layout
+    assert "function ensureMaterialRows(frm)" in layout
+    assert 'ensureMaterialRow(body, "primary")' in layout
+    assert 'ensureMaterialRow(body, "edge")' in layout
+    assert "primary.appendChild(node)" in layout
+    assert "edge.appendChild(node)" in layout
+    assert "dco-material-row--primary" in layout
+    assert "grid-template-columns: minmax(0,2fr) minmax(140px,1fr) minmax(140px,1fr)" in layout
+    assert "dco-material-row--edge" in layout
+    assert "grid-template-columns: repeat(2,minmax(0,1fr))" in layout
 
 
 def test_notes_and_edge_color_never_disappear_when_empty() -> None:
