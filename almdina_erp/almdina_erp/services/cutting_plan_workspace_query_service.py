@@ -189,13 +189,13 @@ def _approved(rows: list[Any], order: Any) -> Any | None:
     return _latest(rows, status=APPROVED)
 
 
-def _editable_settings(rows: list[Any]) -> dict[str, Any]:
-    """Preview the settings that ensure_system_draft() will edit, without persisting.
+def _calculation_settings(rows: list[Any]) -> dict[str, Any]:
+    """Describe the settings the next system calculation will use, read-only.
 
-    This deliberately mirrors the command-side target selection: reuse an existing
-    System Draft first, otherwise inherit the latest Approved revision, then the
-    latest plan lineage, and finally factory defaults. The preview is settings-only
-    and is exposed only to EDIT_OPTIMIZER_SETTINGS holders.
+    This is intentionally available to RECALCULATE_PLAN holders even when they
+    cannot edit optimizer settings. EDIT_OPTIMIZER_SETTINGS controls whether the
+    same values may be changed; it must not be a hidden prerequisite for running
+    the engine with the already-configured/default values.
     """
 
     target = (
@@ -222,7 +222,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
 
     The payload intentionally excludes every monetary field. Capability filtering
     happens before individual source snapshots are exposed; mutation endpoints keep
-    their own stricter lifecycle/stage authorization.
+    their own stricter lifecycle/assignment authorization.
     """
 
     order = _authorized_order(order_name)
@@ -244,6 +244,11 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         else None
     )
     approved = _approved(rows, order) if capabilities["view_approved"] else None
+    calculation_settings = (
+        _calculation_settings(rows)
+        if capabilities["recalculate"] or capabilities["edit_settings"]
+        else None
+    )
 
     return {
         "order_name": order.name,
@@ -253,7 +258,8 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "production_path": getattr(order, "production_path", None),
         "approved_plan": getattr(order, "approved_plan", None),
         "capabilities": capabilities,
-        "editable_settings": _editable_settings(rows) if capabilities["edit_settings"] else None,
+        "calculation_settings": calculation_settings,
+        "editable_settings": calculation_settings if capabilities["edit_settings"] else None,
         "plans": {
             "system_draft": _plan_row(system) if system else None,
             "uploaded_draft": _plan_row(uploaded) if uploaded else None,
