@@ -12,6 +12,7 @@ DOCTYPE = (
     / "door_cutting_order"
     / "door_cutting_order.json"
 )
+CUSTOMIZATION = ROOT / "almdina_erp" / "custom" / "door_cutting_order.json"
 METADATA = (
     ROOT
     / "almdina_erp"
@@ -65,8 +66,20 @@ def test_migration_repairs_stale_required_cost_metadata_only() -> None:
     assert '"property": "reqd"' in source
     assert "set reqd = 0" in source
     assert "frappe.clear_cache(doctype=DOCTYPE)" in source
+    assert "frappe.get_meta(DOCTYPE, cached=False)" in source
     assert "permlevel" not in source
     assert "sync_order_cost_surface_metadata()" in lifecycle
+
+
+def test_exported_customizations_do_not_restore_native_cost_requirements() -> None:
+    customization = json.loads(CUSTOMIZATION.read_text(encoding="utf-8"))
+    stale_required_setters = [
+        row
+        for row in customization.get("property_setters", [])
+        if row.get("field_name") in COST_FIELDS and row.get("property") == "reqd"
+    ]
+
+    assert stale_required_setters == []
 
 
 def test_cost_workspace_save_keeps_both_values_mandatory() -> None:
