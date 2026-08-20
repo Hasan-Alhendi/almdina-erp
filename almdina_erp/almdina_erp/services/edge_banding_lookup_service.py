@@ -36,9 +36,6 @@ _OPERATIONAL_FIELDS = (
     "edge_type_name",
     "width_cm",
     "thickness_mm",
-    "edge_color",
-    "finish_type",
-    "application_method",
 )
 _FINANCIAL_FIELD = "rate_usd_per_meter"
 _SIDE_FIELDS: dict[str, tuple[str, str]] = {
@@ -85,9 +82,6 @@ def _serialize_row(row: Any, *, include_financial: bool) -> dict[str, Any]:
         "edge_type_name": str(row.edge_type_name or row.name or ""),
         "width_cm": row.width_cm,
         "thickness_mm": row.thickness_mm,
-        "edge_color": str(row.edge_color or ""),
-        "finish_type": str(row.finish_type or ""),
-        "application_method": str(row.application_method or ""),
     }
     if include_financial:
         payload[_FINANCIAL_FIELD] = row.rate_usd_per_meter
