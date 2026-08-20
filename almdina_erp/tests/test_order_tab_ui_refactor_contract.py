@@ -77,6 +77,44 @@ def test_order_layout_presenter_is_presentation_only_and_loaded_after_operator_o
     assert "autoGrowNotes" in layout
 
 
+def test_order_and_material_controls_follow_two_clear_rows() -> None:
+    layout = LAYOUT.read_text(encoding="utf-8")
+
+    assert "grid-template-columns: minmax(0,2fr) minmax(220px,1fr)" in layout
+    assert 'dco-order-intake-card [data-fieldname="customer"]' in layout
+    assert 'dco-order-intake-card [data-fieldname="order_date"]' in layout
+    assert 'dco-order-intake-card [data-fieldname="order_notes"]' in layout
+    assert "grid-column: 1 / -1" in layout
+
+    assert "grid-template-columns: repeat(4,minmax(0,1fr))" in layout
+    for fieldname in (
+        "board_description",
+        "board_length_cm",
+        "board_width_cm",
+        "default_edge_type",
+        "edge_color",
+    ):
+        assert f'dco-material-edge-card [data-fieldname="{fieldname}"]' in layout
+    assert 'dco-material-edge-card [data-fieldname="board_description"]' in layout
+    assert 'dco-material-edge-card [data-fieldname="default_edge_type"]' in layout
+    assert 'dco-material-edge-card [data-fieldname="edge_color"]' in layout
+
+
+def test_notes_and_edge_color_never_disappear_when_empty() -> None:
+    layout = LAYOUT.read_text(encoding="utf-8")
+
+    assert 'order_notes: "أضف ملاحظة للطلب…"' in layout
+    assert 'edge_color: "أدخل لون القشاط"' in layout
+    assert "function keepFieldVisible" in layout
+    assert 'wrapper.classList.add("dco-keep-empty-field")' in layout
+    assert 'wrapper.classList.remove("hide-control")' in layout
+    assert 'wrapper.removeAttribute("hidden")' in layout
+    assert 'input.setAttribute("placeholder", __(placeholder))' in layout
+    assert "dco-empty-display:empty::before" in layout
+    assert "removeLegacyRequiredHint" in layout
+    assert "ensureRequiredHint" not in layout
+
+
 def test_arabic_labels_reflect_the_new_information_hierarchy() -> None:
     defaults = DEFAULTS.read_text(encoding="utf-8")
 
