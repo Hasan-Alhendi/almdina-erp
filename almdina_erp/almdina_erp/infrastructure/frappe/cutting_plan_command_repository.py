@@ -21,7 +21,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context 
     PLAN_COMMAND_FLAG,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    COST_SNAPSHOT_VERSION,
     initial_plan_cost_values,
+    persist_plan_cost_snapshot,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     seed_plan_settings,
@@ -31,9 +33,15 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
 class FrappeCuttingPlanCommandRepository:
     """Persistence adapter for command-owned Cutting Plan mutations.
 
-    The adapter never bypasses Frappe permissions. The related order capability
-    is authorized before this repository is used, then carried only in ephemeral
-    Document.flags while the native insert/save operation runs.
+    The adapter never bypasses Frappe document permissions. The related order
+    capability is authorized before this repository is used, then carried only
+    in ephemeral ``Document.flags`` while the native insert/save operation runs.
+
+    Plan financial fields intentionally live at permission level 1. After a
+    trusted command saves one Draft whose server-calculated cost snapshot is
+    current, the repository persists that protected snapshot through the narrow
+    costing infrastructure boundary. This keeps plan editors unable to edit cost
+    inputs while ensuring geometry changes immediately refresh derived totals.
     """
 
     def __init__(self, capability: str):
@@ -61,6 +69,13 @@ class FrappeCuttingPlanCommandRepository:
             settings=cls._settings(plan),
         )
 
+    @staticmethod
+    def _has_current_cost_snapshot(plan: Any) -> bool:
+        return (
+            str(getattr(plan, "status", None) or "") == DRAFT
+            and cint(getattr(plan, "cost_snapshot_version", 0)) >= COST_SNAPSHOT_VERSION
+        )
+
     def _run_persist(
         self,
         plan: Any,
@@ -80,6 +95,9 @@ class FrappeCuttingPlanCommandRepository:
             plan.flags.pop(PLAN_COMMAND_FLAG, None)
             if allow_status_transition:
                 plan.flags.pop("allow_status_transition", None)
+
+        if self._has_current_cost_snapshot(plan):
+            persist_plan_cost_snapshot(plan)
         return plan
 
     def get_document(self, plan_name: str) -> Any:
