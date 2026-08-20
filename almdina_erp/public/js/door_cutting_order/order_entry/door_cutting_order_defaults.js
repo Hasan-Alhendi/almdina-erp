@@ -40,7 +40,7 @@
             }
         }
         if (frm.fields_dict.edge_color) {
-            const description = "يُجلب تلقائيًا من نوع القشاط، ويمكن تعديله لهذا الطلب.";
+            const description = "أدخل لون القشاط يدويًا لهذا الطلب.";
             if (frm.fields_dict.edge_color.df.description !== description) {
                 frm.set_df_property("edge_color", "description", description);
             }
@@ -192,36 +192,12 @@
         frm.dirty();
     }
 
-    function apply_edge_color_default(frm, force = false) {
-        const requestedType = String(frm.doc.default_edge_type || "").trim();
-        if (!requestedType) {
-            if (force && frm.doc.edge_color) return frm.set_value("edge_color", "");
-            return Promise.resolve();
-        }
-        if (!force && String(frm.doc.edge_color || "").trim()) return Promise.resolve();
-        const context = documentContext();
-        const identity = context.capture(frm);
-
-        return loadSafeEdgeOptions(frm).then(payload => {
-            if (!context.isCurrent(frm, identity)) return;
-            if (frm.doc.default_edge_type !== requestedType) return;
-            const row = (payload.options || []).find(option => (
-                String(option.name || option.edge_type_name || "").trim() === requestedType
-            ));
-            const color = String((row && row.edge_color) || "");
-            if (force || !String(frm.doc.edge_color || "").trim()) {
-                return frm.set_value("edge_color", color);
-            }
-        }).catch(error => console.error("Failed to apply safe edge color default", error));
-    }
-
     frappe.ui.form.on("Door Cutting Order", {
         onload(frm) {
             translateOrderMaterialLabels(frm);
             loadSafeEdgeOptions(frm);
             apply_factory_defaults(frm);
             applyBoardTextDefaults(frm);
-            if (frm.doc.default_edge_type && !frm.doc.edge_color) apply_edge_color_default(frm, false);
         },
         refresh(frm) {
             translateOrderMaterialLabels(frm);
@@ -236,9 +212,6 @@
         },
         board_width_cm(frm) {
             syncBoardDimensions(frm);
-        },
-        default_edge_type(frm) {
-            apply_edge_color_default(frm, true);
         },
     });
 

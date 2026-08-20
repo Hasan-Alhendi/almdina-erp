@@ -297,8 +297,6 @@ class TestFactoryMasterDataIntegration(FrappeTestCase):
                 "english_name": "Integration Edge",
                 "width_cm": 2,
                 "thickness_mm": 1,
-                "finish_type": "Regular",
-                "application_method": "Machine",
                 "rate_usd_per_meter": 1.5,
                 "disabled": 0,
             }

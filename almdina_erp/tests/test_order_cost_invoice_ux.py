@@ -4,7 +4,6 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-EDGE_TYPE = ROOT / "almdina_erp" / "doctype" / "edge_banding_type" / "edge_banding_type.json"
 COST_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
 MULTI_EDGE_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_multi_edge_documents_ux.js"
 PRINT_PRESENTER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
@@ -78,10 +77,11 @@ def test_printed_width_and_length_keep_visual_edge_direction_marks():
     assert ".dimension-lines-0{visibility:hidden}" in theme
 
 
-def test_edge_color_exists_in_master_and_customer_documents_show_it_once():
-    edge_doc = json.loads(EDGE_TYPE.read_text(encoding="utf-8"))
-    fields = {row["fieldname"]: row for row in edge_doc["fields"]}
+def test_edge_color_is_order_owned_and_customer_documents_show_it_once():
+    order_doc = json.loads(DOCTYPE.read_text(encoding="utf-8"))
+    fields = {row["fieldname"]: row for row in order_doc["fields"]}
     assert fields["edge_color"]["fieldtype"] == "Data"
+    assert fields["edge_color"]["reqd"] == 1
 
     presenter = _source(PRINT_PRESENTER)
     cost = _source(COST_PRESENTER)
