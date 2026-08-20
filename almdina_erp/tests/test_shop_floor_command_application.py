@@ -367,7 +367,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             sequence=10,
         )
 
-        with self.assertRaisesRegex(commands.ShopFloorCommandError, "عامل آخر"):
+        with self.assertRaisesRegex(commands.ShopFloorCommandError, "مستخدم آخر"):
             commands.start_my_stage(repository, "PST-1")
 
         self.assertLess(
@@ -421,7 +421,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             self._call_index(repository, "complete_stage"),
         )
 
-    def test_stale_plan_blocks_planning_handoff_even_when_old_plan_is_approved(self) -> None:
+    def test_stale_plan_blocks_planning_handoff_even_when_old_plan_was_approved(self) -> None:
         repository = FakeShopFloorCommandRepository()
         repository.orders["DCO-1"] = commands.OrderState(
             name="DCO-1",
@@ -430,7 +430,8 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             current_stage="PST-1",
             has_cutting_plan=True,
             plan_needs_recalculation=True,
-            has_approved_plan=True,
+            has_approved_plan=False,
+            approved_plan_name="PLAN-OLD",
         )
         repository.stages["PST-1"] = commands.StageState(
             name="PST-1",
@@ -441,7 +442,7 @@ class TestShopFloorCommandApplication(unittest.TestCase):
             sequence=10,
         )
 
-        with self.assertRaisesRegex(commands.ShopFloorCommandError, "إعادة حساب واعتماد جديد"):
+        with self.assertRaisesRegex(commands.ShopFloorCommandError, "لم تعد مطابقة"):
             commands.handoff_to_next(repository, "PST-1", "cnc@example.com")
 
     def test_handoff_validates_next_worker_before_completing_current_stage(self) -> None:
