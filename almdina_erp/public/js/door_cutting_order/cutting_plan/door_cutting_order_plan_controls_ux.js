@@ -88,7 +88,11 @@
         const state = workspaceSnapshot(frm);
         if (state && state.editing && state.draft) return { ...state.draft };
         const row = activePlan(frm);
-        return row && row.settings ? { ...row.settings } : null;
+        if (row && row.settings) return { ...row.settings };
+        const data = workspaceData(frm);
+        return data && data.calculation_settings
+            ? { ...data.calculation_settings }
+            : null;
     }
 
     function approvedPlanName(frm) {
@@ -244,12 +248,13 @@
     function canCalculate(frm) {
         const previews = previewOwner();
         const transport = api();
-        const canRun = hasSystemDraft(frm)
-            ? Boolean(previews && typeof previews.preview === "function")
-            : Boolean(transport && typeof transport.recalculate === "function");
+        const firstPlan = !hasSystemDraft(frm);
+        const canRun = firstPlan
+            ? Boolean(transport && typeof transport.recalculate === "function")
+            : Boolean(previews && typeof previews.preview === "function");
         return Boolean(
             workspaceReady(frm)
-            && workspaceEditing(frm)
+            && (firstPlan || workspaceEditing(frm))
             && canTuneCuttingAlgorithm(frm)
             && can(frm, "recalculate_plan")
             && canRun
@@ -260,8 +265,9 @@
     function recalculationDisabledReason(frm) {
         if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
         if (!workspaceReady(frm)) return __("انتظر حتى يكتمل تحميل خطة القص.");
-        if (!workspaceEditing(frm)) {
-            return __("اضغط «تعديل» لبدء إعداد خطة القص.");
+        const firstPlan = !hasSystemDraft(frm);
+        if (!firstPlan && !workspaceEditing(frm)) {
+            return __("اضغط «تعديل» لتجربة إعدادات جديدة ثم أعد الحساب للمعاينة.");
         }
         const previews = previewOwner();
         if (previews && typeof previews.isBusy === "function" && previews.isBusy(frm)) {
@@ -438,7 +444,9 @@
                         await transport.approve(frm.doc.name, source);
                         await refreshWorkspaceOwners(frm);
                         const context = documentContext();
-                        if (context && typeof context.ensureStageContext === "function") {
+                        if (context && typeof context.refreshStageContext === "function") {
+                            await context.refreshStageContext(frm);
+                        } else if (context && typeof context.ensureStageContext === "function") {
                             await context.ensureStageContext(frm, { force: true });
                         }
                         frappe.show_alert({ message: __("تم اعتماد خطة القص للإنتاج."), indicator: "green" }, 5);
@@ -549,11 +557,13 @@
         if (note.length) {
             let message;
             if (!hasSystemDraft(frm) && can(frm, "recalculate_plan")) {
-                message = "ابدأ بـ«حساب خطة القص». سيتم حفظ الخطة الأولى وتحديث عدد الألواح والتكلفة تلقائيًا.";
+                message = can(frm, "edit_optimizer_settings")
+                    ? "ابدأ بـ«حساب خطة القص». يمكنك تعديل الإعدادات أولًا أو استخدام إعدادات المصنع الحالية. سيتم حفظ الخطة وتحديث التكلفة تلقائيًا."
+                    : "ابدأ بـ«حساب خطة القص». ستستخدم إعدادات الخطة الحالية/إعدادات المصنع وتُحدَّث التكلفة تلقائيًا. تغيير الإعدادات يحتاج صلاحية مستقلة.";
             } else if (can(frm, "edit_optimizer_settings")) {
                 message = "اضغط «تعديل» لتجربة الخوارزميات والإعدادات. إعادة الحساب تنشئ معاينة، ولا يُحفظ التعديل حتى تضغط «حفظ».";
             } else if (can(frm, "recalculate_plan")) {
-                message = "يمكن تشغيل محرك الخطة داخل جلسة التعديل. تغيير إعدادات الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص».";
+                message = "يمكن إعادة تشغيل المحرك بالإعدادات المحفوظة. تغيير الخوارزمية أو Kerf أو Trim يحتاج صلاحية «تعديل خوارزمية القص».";
             } else {
                 message = "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
             }
