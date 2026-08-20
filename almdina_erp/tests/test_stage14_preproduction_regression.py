@@ -29,23 +29,10 @@ class TestStage14PreproductionRegression(unittest.TestCase):
             has_approved_plan=False,
         )
 
-    def test_new_draft_requires_a_valid_cutting_plan_before_production_dispatch(self) -> None:
+    def test_new_draft_can_enter_planning_before_a_cutting_plan_exists(self) -> None:
         repository = self.repository
         repository.as_actor("supervisor@example.com")
 
-        with self.assertRaisesRegex(commands.ShopFloorCommandError, "احسب خطة القص"):
-            commands.dispatch_order(
-                repository,
-                "DCO-E2E-DRAFT",
-                "Drawing",
-                "drawing@example.com",
-            )
-        self.assertIsNone(repository.orders["DCO-E2E-DRAFT"].current_stage)
-
-        repository.orders["DCO-E2E-DRAFT"] = replace(
-            repository.orders["DCO-E2E-DRAFT"],
-            has_cutting_plan=True,
-        )
         dispatched = commands.dispatch_order(
             repository,
             "DCO-E2E-DRAFT",
@@ -57,13 +44,10 @@ class TestStage14PreproductionRegression(unittest.TestCase):
         self.assertEqual(repository.orders["DCO-E2E-DRAFT"].status, "At Drawing")
         self.assertEqual(drawing_stage.stage_type, "Drawing")
         self.assertEqual(drawing_stage.assigned_to, "drawing@example.com")
+        self.assertFalse(repository.orders["DCO-E2E-DRAFT"].has_cutting_plan)
 
     def test_dxf_actions_follow_current_drawing_assignment_not_role_name(self) -> None:
         repository = self.repository
-        repository.orders["DCO-E2E-DRAFT"] = replace(
-            repository.orders["DCO-E2E-DRAFT"],
-            has_cutting_plan=True,
-        )
         repository.as_actor("supervisor@example.com")
         dispatched = commands.dispatch_order(
             repository,
