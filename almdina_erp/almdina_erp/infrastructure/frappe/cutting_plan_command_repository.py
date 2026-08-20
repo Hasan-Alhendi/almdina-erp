@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context 
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     COST_SNAPSHOT_VERSION,
+    PLAN_COST_FIELDS,
     initial_plan_cost_values,
     persist_plan_cost_snapshot,
 )
@@ -70,11 +71,19 @@ class FrappeCuttingPlanCommandRepository:
         )
 
     @staticmethod
-    def _has_current_cost_snapshot(plan: Any) -> bool:
-        return (
-            str(getattr(plan, "status", None) or "") == DRAFT
-            and cint(getattr(plan, "cost_snapshot_version", 0)) >= COST_SNAPSHOT_VERSION
-        )
+    def _current_cost_snapshot(plan: Any) -> dict[str, float | int] | None:
+        if (
+            str(getattr(plan, "status", None) or "") != DRAFT
+            or cint(getattr(plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION
+        ):
+            return None
+        return {
+            "cost_snapshot_version": COST_SNAPSHOT_VERSION,
+            **{
+                fieldname: flt(getattr(plan, fieldname, 0))
+                for fieldname in PLAN_COST_FIELDS
+            },
+        }
 
     def _run_persist(
         self,
@@ -83,6 +92,7 @@ class FrappeCuttingPlanCommandRepository:
         *,
         allow_status_transition: bool = False,
     ) -> Any:
+        protected_cost_snapshot = self._current_cost_snapshot(plan)
         plan.flags[PLAN_COMMAND_FLAG] = self.capability
         if allow_status_transition:
             plan.flags.allow_status_transition = True
@@ -96,7 +106,12 @@ class FrappeCuttingPlanCommandRepository:
             if allow_status_transition:
                 plan.flags.pop("allow_status_transition", None)
 
-        if self._has_current_cost_snapshot(plan):
+        if protected_cost_snapshot is not None:
+            # Frappe field-level permission sanitization may restore permlevel-1
+            # values on the in-memory document. Reapply only the snapshot that
+            # the already-authorized server command calculated before save.
+            for fieldname, value in protected_cost_snapshot.items():
+                setattr(plan, fieldname, value)
             persist_plan_cost_snapshot(plan)
         return plan
 
