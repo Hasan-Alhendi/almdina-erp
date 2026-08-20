@@ -23,7 +23,7 @@ GEOMETRY = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cut
 SECURE_DXF = CUTTING_PLAN / "secure_dxf_export.js"
 HOOKS = ROOT / "frontend_assets.py"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
-V4_GEOMETRY = ROOT / "public" / "js" / "door_drawing_v4" / "domain" / "geometry.js"
+DOCUMENTATION_CONTROLLER = ROOT / "public" / "js" / "special_shape_documentation" / "presentation" / "workspace_controller.js"
 
 
 def _fields(path: Path) -> dict[str, dict]:
@@ -41,7 +41,7 @@ def test_exact_geometry_is_separate_from_documentation_and_persisted_in_plan():
     assert placed["special_shape_geometry_json"]["read_only"] == 1
 
 
-def test_v4_editor_is_primary_while_production_geometry_contract_remains_available():
+def test_documentation_editor_is_primary_while_production_geometry_contract_remains_available():
     hooks = HOOKS.read_text(encoding="utf-8")
     geometry_hook = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"'
     contract_hook = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"'
@@ -52,14 +52,12 @@ def test_v4_editor_is_primary_while_production_geometry_contract_remains_availab
     assert hooks.index(geometry_hook) < hooks.index(contract_hook)
 
     editor = EDITOR.read_text(encoding="utf-8")
-    v4 = V4_GEOMETRY.read_text(encoding="utf-8")
-    assert "__doorDrawingV4: true" in editor
-    assert "door_drawing_v4/domain/geometry.js" in editor
-    assert 'const EPSILON_MM = 0.001' in v4
-    assert "function point(" in v4
-    assert "function distance(" in v4
-    assert "function pointFromPolar(" in v4
-    assert "special_shape_geometry_json" not in v4
+    controller = DOCUMENTATION_CONTROLLER.read_text(encoding="utf-8")
+    assert "__documentationOnly: true" in editor
+    assert "__manufacturingGeometrySeparated: true" in editor
+    assert "door_drawing_v4" not in editor
+    assert "special_shape_geometry_json" not in controller
+    assert "ManufacturingProjection" not in controller
 
 
 def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geometry():
@@ -76,7 +74,7 @@ def test_server_rejects_unsafe_or_mismatched_polygons_and_documents_exact_geomet
     assert "Special shape geometry length does not match the piece length." in service
     assert "validate_special_shape_geometry(" in policy
     assert "old_special_geometry != special_geometry" in policy
-    assert "special_geometry or drawing_has_elements" in policy
+    assert "drawing_has_elements=bool(drawing_has_elements)" in policy
     assert '"special_shape_geometry_json"' in policy
     assert "self.piece_policy.validate_rows()" in gateway
     assert "gateway.validate_piece_policies()" in save_use_case

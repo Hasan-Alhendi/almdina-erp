@@ -154,7 +154,7 @@ Event handlers وtimers وMutationObservers تكون idempotent أو قابلة 
 النصوص القابلة للترجمة تمر عبر `__()`، والواجهات تدعم RTL/logical layout، keyboard/focus، touch targets، responsive behavior، reduced-motion عندما توجد حركة، وحالات loading/error/empty/disabled/dirty الواضحة.
 
 ### `FE-ARCH-011` — Respect bounded frontend subsystems
-Door Drawing V3 يحتفظ ببنيته `domain/application/infrastructure/presentation`. لا تُفرض عليه بنية Frappe Page لمجرد توحيد الأسماء.
+Special Shape Documentation يحتفظ ببنيته `domain/application/infrastructure/presentation`. لا تُفرض عليه بنية Frappe Page لمجرد توحيد الأسماء، ولا تُدخل هندسة التصنيع إلى عقد التوثيق.
 
 ### `FE-ARCH-012` — Structural refactors are visually neutral first
 فصل API/Store/Renderer/CSS لا يُخلط في نفس الخطوة مع redesign غير ضروري. أول migration يحافظ على behavior وUI قدر الإمكان؛ تحسين UI/UX يأتي بChange مستقل قابل للمراجعة.
@@ -237,9 +237,9 @@ Professional UI لا يعني المزيد من animation أو cards؛ يعني 
 
 هو Contract قائم. راجع `public/js/door_cutting_order/ARCHITECTURE.md`. F6 يستهدف hotspots داخل owners الحالية ولا يعيد بناء شجرة DCO ولا يخلط path moves مع business changes.
 
-### Door Drawing V3
+### Special Shape Documentation
 
-هو bounded frontend subsystem بطبقات خاصة به. Domain geometry لا يعتمد DOM/Frappe، والـpresentation/infrastructure في الخارج. Generic Frappe-page refactor لا يطبق عليه.
+هو bounded frontend subsystem بطبقات خاصة به تحت `public/js/special_shape_documentation/`. عقد الوثيقة والقلم الذكي والأشكال لا تعتمد DOM/Frappe، والـpresentation/infrastructure في الخارج. هذا السطح يملك توثيق طلب العميل فقط؛ `special_shape_geometry_json` وDXF يبقيان في مسار التصنيع المستقل.
 
 ### Permission Context / shared infrastructure
 

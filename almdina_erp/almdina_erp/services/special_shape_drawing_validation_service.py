@@ -10,260 +10,173 @@ from frappe import _
 from almdina_erp.almdina_erp.services.special_shape_service import (
     MAX_DRAWING_BYTES,
     MAX_DRAWING_ELEMENTS,
-    validate_special_shape_drawing as validate_legacy_special_shape_drawing,
 )
 
-V4_SCHEMA = "almdina.door-drawing"
-V4_VERSION = 4
-V4_UNITS = "mm"
-V4_SEGMENT_LENGTH_DIMENSION = "segment-length"
-V4_HORIZONTAL_CONSTRAINT = "horizontal"
-V4_VERTICAL_CONSTRAINT = "vertical"
-V4_FIXED_LENGTH_CONSTRAINT = "fixed-length"
-V4_CONSTRAINT_TYPES = {
-    V4_HORIZONTAL_CONSTRAINT,
-    V4_VERTICAL_CONSTRAINT,
-    V4_FIXED_LENGTH_CONSTRAINT,
+DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation"
+DOCUMENTATION_VERSION = 1
+DOCUMENTATION_ELEMENT_TYPES = {
+    "stroke", "line", "rect", "ellipse", "arrow", "dimension", "text",
 }
-MAX_ENTITY_ID_LENGTH = 80
-MAX_DRAWING_COORDINATE_MM = 20_000
-DRAWING_EPSILON_MM = 0.001
-CONSTRAINT_TOLERANCE_MM = 0.01
+DOCUMENTATION_SOURCES = {"image", "template", "pen", "mixed"}
+DOCUMENTATION_TEMPLATES = {
+    "clipped-corner", "top-arch", "side-arch", "trapezoid", "inner-opening", "slanted-edge",
+}
+MAX_COORDINATE_MM = 20_000
+MAX_NOTES_LENGTH = 2_000
+MAX_TEXT_LENGTH = 300
+MAX_STROKE_POINTS = 500
+MAX_REFERENCE_URL_LENGTH = 500
 
 
-def _finite(value: Any, label: str) -> float:
+def _parse(raw_documentation: str | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(raw_documentation, str):
+        if len(raw_documentation.encode("utf-8")) > MAX_DRAWING_BYTES:
+            frappe.throw(_("توثيق الدرفة كبير جدًا. بسّط الرسم ثم حاول مرة أخرى."))
+        try:
+            documentation = json.loads(raw_documentation)
+        except (TypeError, ValueError):
+            frappe.throw(_("توثيق الدرفة يحتوي JSON غير صالح."))
+    elif isinstance(raw_documentation, dict):
+        try:
+            encoded = json.dumps(raw_documentation, ensure_ascii=False).encode("utf-8")
+        except (TypeError, ValueError):
+            frappe.throw(_("توثيق الدرفة يحتوي قيمًا غير قابلة للحفظ."))
+        if len(encoded) > MAX_DRAWING_BYTES:
+            frappe.throw(_("توثيق الدرفة كبير جدًا. بسّط الرسم ثم حاول مرة أخرى."))
+        documentation = raw_documentation
+    else:
+        frappe.throw(_("توثيق الدرفة يجب أن يكون كائن JSON."))
+    if not isinstance(documentation, dict):
+        frappe.throw(_("توثيق الدرفة يجب أن يكون كائن JSON."))
+    return documentation
+
+
+def _finite(value: Any, label: str, *, positive: bool = False) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
-        frappe.throw(_("{0} must be a valid number.").format(label))
-    if not math.isfinite(number):
-        frappe.throw(_("{0} must be finite.").format(label))
+        frappe.throw(_("{0} يجب أن يكون رقمًا صالحًا.").format(label))
+    if not math.isfinite(number) or abs(number) > MAX_COORDINATE_MM:
+        frappe.throw(_("{0} خارج نطاق مساحة التوثيق.").format(label))
+    if positive and number <= 0:
+        frappe.throw(_("{0} يجب أن يكون أكبر من صفر.").format(label))
     return number
 
 
-def _entity_id(value: Any, label: str) -> str:
-    entity_id = str(value or "")
-    if not entity_id or len(entity_id) > MAX_ENTITY_ID_LENGTH:
-        frappe.throw(_("{0} has an invalid identifier.").format(label))
-    return entity_id
+def _point(value: Any, label: str) -> None:
+    if not isinstance(value, dict):
+        frappe.throw(_("{0} يجب أن يكون نقطة صالحة.").format(label))
+    _finite(value.get("xMm"), _("إحداثي X"))
+    _finite(value.get("yMm"), _("إحداثي Y"))
 
 
-def _parse(raw_drawing: str | dict[str, Any]) -> dict[str, Any]:
-    if isinstance(raw_drawing, str):
-        if len(raw_drawing.encode("utf-8")) > MAX_DRAWING_BYTES:
-            frappe.throw(
-                _("Special shape documentation is too large. Keep the sketch simple and try again.")
-            )
-        try:
-            drawing = json.loads(raw_drawing)
-        except (TypeError, ValueError):
-            frappe.throw(_("Special shape documentation contains invalid JSON."))
-    elif isinstance(raw_drawing, dict):
-        drawing = raw_drawing
-    else:
-        frappe.throw(_("Special shape documentation must be a JSON object."))
-
-    if not isinstance(drawing, dict):
-        frappe.throw(_("Special shape documentation must be a JSON object."))
-    return drawing
-
-
-def _validate_blank(blank: Any) -> None:
-    if not isinstance(blank, dict):
-        frappe.throw(_("Drawing V4 blank dimensions are invalid."))
-    for fieldname in ("widthMm", "heightMm"):
-        value = _finite(blank.get(fieldname), _("Drawing V4 {0}").format(fieldname))
-        if value <= 0 or value > MAX_DRAWING_COORDINATE_MM:
-            frappe.throw(_("Drawing V4 blank dimensions are invalid."))
+def _validate_reference(reference: Any) -> None:
+    if reference in (None, {}):
+        return
+    if not isinstance(reference, dict):
+        frappe.throw(_("بيانات الصورة المرجعية غير صالحة."))
+    file_url = str(reference.get("fileUrl") or "").strip()
+    if not file_url.startswith("/private/files/") or len(file_url) > MAX_REFERENCE_URL_LENGTH:
+        frappe.throw(_("رابط الصورة المرجعية غير صالح."))
+    rotation = _finite(reference.get("rotationDeg", 0), _("تدوير الصورة"))
+    if rotation < -360 or rotation > 360:
+        frappe.throw(_("زاوية تدوير الصورة غير صالحة."))
+    try:
+        opacity = float(reference.get("opacity", 1))
+    except (TypeError, ValueError):
+        frappe.throw(_("شفافية الصورة غير صالحة."))
+    if not math.isfinite(opacity) or opacity < 0.1 or opacity > 1:
+        frappe.throw(_("شفافية الصورة يجب أن تكون بين 10% و100%."))
+    if not isinstance(reference.get("locked", True), bool):
+        frappe.throw(_("حالة قفل الصورة غير صالحة."))
 
 
-def _validate_v4(drawing: dict[str, Any]) -> dict[str, Any]:
-    if drawing.get("schema") != V4_SCHEMA:
-        frappe.throw(_("Unsupported special shape documentation schema."))
-    if drawing.get("units") != V4_UNITS:
-        frappe.throw(_("Drawing V4 must use millimetres."))
+def _validate_element(element: Any, index: int, identifiers: set[str]) -> None:
+    if not isinstance(element, dict):
+        frappe.throw(_("عنصر التوثيق رقم {0} غير صالح.").format(index))
+    element_id = str(element.get("id") or "").strip()
+    if not element_id or len(element_id) > 80 or element_id in identifiers:
+        frappe.throw(_("معرّف عنصر التوثيق رقم {0} غير صالح أو مكرر.").format(index))
+    identifiers.add(element_id)
+    element_type = str(element.get("type") or "")
+    if element_type not in DOCUMENTATION_ELEMENT_TYPES:
+        frappe.throw(_("نوع عنصر التوثيق رقم {0} غير مدعوم.").format(index))
 
-    _validate_blank(drawing.get("blank"))
-    nodes = drawing.get("nodes")
-    segments = drawing.get("segments")
-    paths = drawing.get("paths")
-    dimensions = drawing.get("dimensions", [])
-    constraints = drawing.get("constraints", [])
-    if (
-        not isinstance(nodes, list)
-        or not isinstance(segments, list)
-        or not isinstance(paths, list)
-        or not isinstance(dimensions, list)
-        or not isinstance(constraints, list)
-    ):
-        frappe.throw(
-            _("Drawing V4 must contain valid nodes, segments, paths, dimensions and constraints lists.")
-        )
-    if len(nodes) + len(segments) + len(paths) + len(dimensions) + len(constraints) > MAX_DRAWING_ELEMENTS:
-        frappe.throw(
-            _("Special shape documentation has too many entities. The maximum is {0}.").format(
-                MAX_DRAWING_ELEMENTS
-            )
-        )
-
-    entity_ids: set[str] = set()
-    node_points: dict[str, tuple[float, float]] = {}
-    for index, node in enumerate(nodes, start=1):
-        if not isinstance(node, dict):
-            frappe.throw(_("Drawing V4 node {0} must be an object.").format(index))
-        node_id = _entity_id(node.get("id"), _("Drawing V4 node {0}").format(index))
-        if node_id in entity_ids:
-            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
-        entity_ids.add(node_id)
-        x = _finite(node.get("xMm"), _("Drawing V4 node X"))
-        y = _finite(node.get("yMm"), _("Drawing V4 node Y"))
-        if abs(x) > MAX_DRAWING_COORDINATE_MM or abs(y) > MAX_DRAWING_COORDINATE_MM:
-            frappe.throw(_("Drawing V4 node is outside the allowed drawing area."))
-        node_points[node_id] = (x, y)
-
-    segment_refs: dict[str, tuple[str, str]] = {}
-    for index, segment in enumerate(segments, start=1):
-        if not isinstance(segment, dict):
-            frappe.throw(_("Drawing V4 segment {0} must be an object.").format(index))
-        segment_id = _entity_id(
-            segment.get("id"), _("Drawing V4 segment {0}").format(index)
-        )
-        if segment_id in entity_ids:
-            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
-        entity_ids.add(segment_id)
-        if segment.get("type") != "line":
-            frappe.throw(_("Drawing V4 currently supports line segments only."))
-        start_id = str(segment.get("startNodeId") or "")
-        end_id = str(segment.get("endNodeId") or "")
-        if start_id not in node_points or end_id not in node_points:
-            frappe.throw(_("Drawing V4 segment references a missing node."))
-        start = node_points[start_id]
-        end = node_points[end_id]
-        if math.hypot(end[0] - start[0], end[1] - start[1]) <= DRAWING_EPSILON_MM:
-            frappe.throw(_("Drawing V4 cannot contain zero-length segments."))
-        segment_refs[segment_id] = (start_id, end_id)
-
-    for index, path in enumerate(paths, start=1):
-        if not isinstance(path, dict):
-            frappe.throw(_("Drawing V4 path {0} must be an object.").format(index))
-        path_id = _entity_id(path.get("id"), _("Drawing V4 path {0}").format(index))
-        if path_id in entity_ids:
-            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
-        entity_ids.add(path_id)
-        start_node_id = str(path.get("startNodeId") or "")
-        if start_node_id not in node_points:
-            frappe.throw(_("Drawing V4 path references a missing start node."))
-        segment_ids = path.get("segmentIds")
-        if not isinstance(segment_ids, list):
-            frappe.throw(_("Drawing V4 path must contain a segmentIds list."))
-        if len(segment_ids) != len(set(map(str, segment_ids))):
-            frappe.throw(_("Drawing V4 path cannot contain duplicate segments."))
-
-        current_node_id = start_node_id
-        for segment_id_value in segment_ids:
-            segment_id = str(segment_id_value)
-            reference = segment_refs.get(segment_id)
-            if reference is None:
-                frappe.throw(_("Drawing V4 path references a missing segment."))
-            segment_start, segment_end = reference
-            if segment_start != current_node_id:
-                frappe.throw(_("Drawing V4 path segments are not continuous."))
-            current_node_id = segment_end
-
-        if bool(path.get("closed")) and segment_ids and current_node_id != start_node_id:
-            frappe.throw(_("Drawing V4 closed path does not return to its start node."))
-
-    dimensioned_segments: set[str] = set()
-    for index, dimension in enumerate(dimensions, start=1):
-        if not isinstance(dimension, dict):
-            frappe.throw(_("Drawing V4 dimension {0} must be an object.").format(index))
-        dimension_id = _entity_id(
-            dimension.get("id"), _("Drawing V4 dimension {0}").format(index)
-        )
-        if dimension_id in entity_ids:
-            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
-        entity_ids.add(dimension_id)
-        if dimension.get("type") != V4_SEGMENT_LENGTH_DIMENSION:
-            frappe.throw(_("Drawing V4 contains an unsupported dimension type."))
-        segment_id = str(dimension.get("segmentId") or "")
-        if segment_id not in segment_refs:
-            frappe.throw(_("Drawing V4 dimension references a missing segment."))
-        if segment_id in dimensioned_segments:
-            frappe.throw(_("Drawing V4 cannot contain duplicate length dimensions for one segment."))
-        dimensioned_segments.add(segment_id)
-
-    constraint_keys: set[tuple[str, str]] = set()
-    orientation_constraints: dict[str, str] = {}
-    for index, constraint in enumerate(constraints, start=1):
-        if not isinstance(constraint, dict):
-            frappe.throw(_("Drawing V4 constraint {0} must be an object.").format(index))
-        constraint_id = _entity_id(
-            constraint.get("id"), _("Drawing V4 constraint {0}").format(index)
-        )
-        if constraint_id in entity_ids:
-            frappe.throw(_("Drawing V4 entity identifiers must be unique."))
-        entity_ids.add(constraint_id)
-
-        constraint_type = str(constraint.get("type") or "")
-        if constraint_type not in V4_CONSTRAINT_TYPES:
-            frappe.throw(_("Drawing V4 contains an unsupported constraint type."))
-        segment_id = str(constraint.get("segmentId") or "")
-        if segment_id not in segment_refs:
-            frappe.throw(_("Drawing V4 constraint references a missing segment."))
-
-        semantic_key = (constraint_type, segment_id)
-        if semantic_key in constraint_keys:
-            frappe.throw(_("Drawing V4 cannot contain duplicate constraints for one segment."))
-        constraint_keys.add(semantic_key)
-
-        segment_start_id, segment_end_id = segment_refs[segment_id]
-        start = node_points[segment_start_id]
-        end = node_points[segment_end_id]
-
-        if constraint_type in {V4_HORIZONTAL_CONSTRAINT, V4_VERTICAL_CONSTRAINT}:
-            current_orientation = orientation_constraints.get(segment_id)
-            if current_orientation and current_orientation != constraint_type:
-                frappe.throw(_("Drawing V4 segment cannot be constrained as both horizontal and vertical."))
-            orientation_constraints[segment_id] = constraint_type
-            residual = (
-                abs(end[1] - start[1])
-                if constraint_type == V4_HORIZONTAL_CONSTRAINT
-                else abs(end[0] - start[0])
-            )
-            if residual > CONSTRAINT_TOLERANCE_MM:
-                frappe.throw(_("Drawing V4 geometry does not satisfy its axis constraint."))
-
-        if constraint_type == V4_FIXED_LENGTH_CONSTRAINT:
-            value_mm = _finite(constraint.get("valueMm"), _("Drawing V4 fixed length"))
-            if value_mm <= DRAWING_EPSILON_MM or value_mm > MAX_DRAWING_COORDINATE_MM:
-                frappe.throw(_("Drawing V4 fixed length is outside the allowed range."))
-            anchor_node_id = str(constraint.get("anchorNodeId") or "")
-            if anchor_node_id not in segment_refs[segment_id]:
-                frappe.throw(_("Drawing V4 fixed-length anchor must be a segment endpoint."))
-            actual_length = math.hypot(end[0] - start[0], end[1] - start[1])
-            if abs(actual_length - value_mm) > CONSTRAINT_TOLERANCE_MM:
-                frappe.throw(_("Drawing V4 geometry does not satisfy its fixed-length constraint."))
-
-    return drawing
+    if element_type == "stroke":
+        points = element.get("points")
+        if not isinstance(points, list) or len(points) < 2 or len(points) > MAX_STROKE_POINTS:
+            frappe.throw(_("ضربة القلم رقم {0} تحتوي عدد نقاط غير صالح.").format(index))
+        for point_index, value in enumerate(points, start=1):
+            _point(value, _("نقطة القلم {0}").format(point_index))
+        return
+    if element_type in {"line", "arrow", "dimension"}:
+        _point(element.get("start"), _("بداية العنصر"))
+        _point(element.get("end"), _("نهاية العنصر"))
+        if element_type == "dimension":
+            _finite(element.get("valueMm"), _("قيمة القياس"), positive=True)
+            if str(element.get("unit") or "mm") not in {"mm", "cm"}:
+                frappe.throw(_("وحدة القياس غير مدعومة."))
+        return
+    if element_type in {"rect", "ellipse"}:
+        _finite(element.get("xMm"), _("موضع X"))
+        _finite(element.get("yMm"), _("موضع Y"))
+        _finite(element.get("widthMm"), _("العرض"), positive=True)
+        _finite(element.get("heightMm"), _("الطول"), positive=True)
+        return
+    if element_type == "text":
+        _point(element.get("position"), _("موضع الملاحظة"))
+        text = str(element.get("text") or "").strip()
+        if not text or len(text) > MAX_TEXT_LENGTH:
+            frappe.throw(_("نص الملاحظة يجب ألا يتجاوز {0} حرفًا.").format(MAX_TEXT_LENGTH))
 
 
 def validate_special_shape_drawing(
-    raw_drawing: str | dict[str, Any] | None,
+    raw_documentation: str | dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """Validate the active V4 drawing document while retaining safe V1 delegation."""
+    """Validate explanatory documentation; it is never manufacturing geometry."""
 
-    if raw_drawing in (None, ""):
+    if raw_documentation in (None, ""):
         return None
-
-    drawing = _parse(raw_drawing)
+    documentation = _parse(raw_documentation)
+    if documentation.get("schema") != DOCUMENTATION_SCHEMA:
+        frappe.throw(_("عقد توثيق الدرفة غير مدعوم."))
     try:
-        version = int(drawing.get("version") or 0)
+        version = int(documentation.get("version") or 0)
     except (TypeError, ValueError):
         version = 0
+    if version != DOCUMENTATION_VERSION:
+        frappe.throw(_("إصدار توثيق الدرفة غير مدعوم."))
+    canvas = documentation.get("canvas")
+    if not isinstance(canvas, dict):
+        frappe.throw(_("مقاس لوحة التوثيق غير صالح."))
+    _finite(canvas.get("widthMm"), _("عرض الدرفة"), positive=True)
+    _finite(canvas.get("heightMm"), _("طول الدرفة"), positive=True)
+    _validate_reference(documentation.get("reference"))
 
-    if version == V4_VERSION:
-        return _validate_v4(drawing)
-    return validate_legacy_special_shape_drawing(drawing)
+    elements = documentation.get("elements")
+    if not isinstance(elements, list) or len(elements) > MAX_DRAWING_ELEMENTS:
+        frappe.throw(_("عناصر توثيق الدرفة كثيرة جدًا أو غير صالحة."))
+    identifiers: set[str] = set()
+    for index, element in enumerate(elements, start=1):
+        _validate_element(element, index, identifiers)
+
+    notes = str(documentation.get("notes") or "")
+    if len(notes) > MAX_NOTES_LENGTH:
+        frappe.throw(_("ملاحظات المصمم يجب ألا تتجاوز {0} حرفًا.").format(MAX_NOTES_LENGTH))
+    if str(documentation.get("source") or "mixed") not in DOCUMENTATION_SOURCES:
+        frappe.throw(_("مصدر توثيق الدرفة غير مدعوم."))
+    template_id = documentation.get("templateId")
+    if template_id not in (None, "") and str(template_id) not in DOCUMENTATION_TEMPLATES:
+        frappe.throw(_("الشكل الجاهز المحدد غير مدعوم."))
+    if not documentation.get("reference") and not elements:
+        frappe.throw(_("أضف صورة مرجعية أو عنصرًا توضيحيًا واحدًا على الأقل قبل الحفظ."))
+    return documentation
 
 
-__all__ = ["validate_special_shape_drawing"]
+__all__ = [
+    "DOCUMENTATION_ELEMENT_TYPES",
+    "DOCUMENTATION_SCHEMA",
+    "DOCUMENTATION_TEMPLATES",
+    "DOCUMENTATION_VERSION",
+    "validate_special_shape_drawing",
+]

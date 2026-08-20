@@ -34,26 +34,27 @@ load is bound to the document identity and a request token so a late response fr
 previous order cannot repaint the current order. The server remains authoritative for
 capabilities and all mutations.
 
-The active special-shape editor is separately layered under `door_drawing_v4/`
-(`domain`, `application`, `infrastructure`, `presentation`). The V4 document is the
-editable canonical drawing model and uses millimetres with shared node topology.
-The `drawing/special_shape_facade.js` integration entry point loads V4; legacy V3
-assets are not part of the active runtime path.
+The active special-shape documentation workspace is separately layered under
+`special_shape_documentation/` (`domain`, `application`, `infrastructure`,
+`presentation`). Its versioned document records the customer's explanatory image,
+annotations, dimensions, templates and smart-pen strokes. The
+`drawing/special_shape_facade.js` integration entry point routes to the standalone
+workspace. Legacy V3/V4 editor assets have been removed.
 
 ### Special-shape manufacturing boundary
 
 The editable drawing and the manufacturing payload have deliberately different
 contracts and responsibilities:
 
-1. `door_drawing_v4` owns the editable `almdina.door-drawing` version 4 document in millimetres.
-2. `application/manufacturing_projection.js` is the single V4 boundary that projects one closed manufacturing path from mm into the existing exact polygon contract.
+1. `special_shape_documentation` owns `almdina.special-shape-documentation` version 1 in `special_shape_drawing_json`.
+2. Documentation is explanatory only and never projects, infers or mutates manufacturing geometry.
 3. `special_shape_geometry_json` remains the production contract: version 1, `kind: "polygon"`, `units: "cm"`, with `blank_width_cm`, `blank_length_cm` and ordered polygon points.
 4. The existing special-shape geometry validator remains authoritative for raw-piece bounds, area, self-intersection and exact manufacturing validity.
-5. Cutting-plan and DXF consumers continue to read `special_shape_geometry_json`; they must not reconstruct manufacturing geometry from canvas pixels or presentation state.
+5. Cutting-plan and DXF consumers read `special_shape_geometry_json`; plan fingerprints do not include documentation images, notes or drawing elements.
+6. Saving documentation does not mark the cutting plan stale. Exact geometry changes retain their existing invalidation and price rules.
 
-Do not introduce another independent geometry source. New editor features must mutate
-the V4 document first and derive production geometry only through the manufacturing
-projection boundary.
+Do not reconstruct manufacturing geometry from documentation strokes, templates,
+images, canvas pixels or presentation state.
 
 ## Frontend asset manifest
 

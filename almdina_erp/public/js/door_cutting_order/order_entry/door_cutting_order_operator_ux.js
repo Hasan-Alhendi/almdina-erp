@@ -373,10 +373,10 @@
             ? (isArabic() ? "ضبط" : "Set")
             : ((hasDrawing || hasExactGeometry)
                 ? (isArabic() ? "موثقة" : "Documented")
-                : (isArabic() ? "ارسم" : "Sketch"));
+                : (isArabic() ? "وثّق" : "Document"));
         const shapeTitle = isClipped
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-            : (isArabic() ? "افتح ورقة الرسم والملاحظات" : "Open sketch and notes");
+            : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         return `
             <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>

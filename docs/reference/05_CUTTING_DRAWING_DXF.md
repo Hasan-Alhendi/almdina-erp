@@ -44,7 +44,7 @@ flowchart LR
 
 ## 5. Special shapes
 
-هناك قطع Regular، clipped-corner، وSpecial/custom geometry. قواعد الصلاحية/الهندسة يجب أن تبقى Server-side. واجهة الرسم يمكن أن تصبح أذكى وأسهل، لكن لا يجوز أن تتجاوز validation لمجرد أن الشكل “يبدو صحيحًا” في Canvas.
+هناك قطع Regular، clipped-corner، وSpecial/custom geometry. قواعد الصلاحية/الهندسة يجب أن تبقى Server-side. واجهة «توثيق الدرفة الخاصة» تجمع صورة العميل والملاحظات والقياسات فقط، ولا تنتج geometry للتصنيع. أي `special_shape_geometry_json` أو DXF دقيق يأتي من مسار المصمم/التصنيع المستقل ويخضع للـvalidation حتى لو بدا الشكل صحيحًا في Canvas.
 
 ## 6. System plan وCustom/Uploaded plan
 
@@ -122,5 +122,5 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 - DXF import/export validation.
 - drawing authorization.
 - plan snapshot security.
-- UI/Door Drawing V3 checks إذا تغير المحرر.
+- Special Shape Documentation checks إذا تغير محرر التوثيق.
 - Frappe integration إذا تغير persistence/schema/files.

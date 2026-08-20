@@ -50,14 +50,16 @@ def test_renderer_delegates_selection_to_the_shared_shape_output_contract():
     contract = text(CONTRACT)
     assert "const shapeOutput = window.AlmdinaShapeOutputContract;" in source
     assert "const selected = shapeOutput.visual(piece);" in source
-    assert 'selected.kind === "drawing"' in source
+    assert 'selected.kind === "documentation"' in source
     assert "const drawing = drawingFromPiece(piece);" in contract
-    assert 'return Object.freeze({ kind: "drawing", payload: drawing });' in contract
+    assert 'return Object.freeze({ kind: "documentation", payload: drawing });' in contract
     assert 'Object.freeze({ kind: "geometry", payload: polygon })' in contract
-    for element_type in ("pen", "line", "rectangle", "ellipse", "dimension", "note"):
-        assert f'element.type === "{element_type}"' in source
-    assert "MAX_PRINT_POINTS" in source
-    assert "safeColor" in source
+    assert 'element.type === "stroke"' in source
+    assert '["line", "arrow", "dimension"].includes(element.type)' in source
+    assert '["rect", "ellipse"].includes(element.type)' in source
+    assert 'element.type === "text"' in source
+    assert "documentationElement" in source
+    assert "function color" in source
 
 
 def test_measurement_print_places_drawing_inside_notes_without_adding_a_column():

@@ -8,8 +8,6 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
     PlanMetadataPiece,
     build_plan_metadata_payload,
 )
-from almdina_erp.almdina_erp.domain.orders.piece_policy import drawing_token
-
 from .plan_adapter import FrappeOrderPlanAdapter
 
 
@@ -104,12 +102,6 @@ class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
                     ),
                     area_m2=self.access.normalized_number(row.area_m2),
                     notes=str(row.notes or ""),
-                    drawing_token=drawing_token(
-                        row.special_shape_drawing_json
-                    ),
-                    special_shape_status=str(
-                        row.special_shape_status or ""
-                    ),
                     edge_long_type=str(row.edge_long_type or ""),
                     edge_width_type=str(row.edge_width_type or ""),
                     edge_long_rate_usd=self.access.normalized_number(

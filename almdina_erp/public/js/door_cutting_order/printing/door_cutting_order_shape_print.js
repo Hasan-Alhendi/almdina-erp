@@ -1,302 +1,46 @@
 (() => {
     "use strict";
-
-    const DEFAULT_CANVAS = { width: 1000, height: 650 };
-    const MAX_PRINT_POINTS = 1800;
     const shapeOutput = window.AlmdinaShapeOutputContract;
-    if (!shapeOutput) {
-        console.error("Shape output contract must load before the printable shape renderer");
-        return;
-    }
-    let previewSequence = 0;
-
-    function esc(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
-    function finite(value, fallback = 0) {
-        const result = Number(value);
-        return Number.isFinite(result) ? result : fallback;
-    }
-
-    function positive(value, fallback) {
-        const result = finite(value, fallback);
-        return result > 0 ? result : fallback;
-    }
-
-    function safeColor(value) {
-        const color = String(value || "").trim();
-        return /^#[0-9a-f]{3,8}$/i.test(color) ? color : "#172033";
-    }
-
-    function clampPrintedNoteFontSize(value) {
-        const parsed = Number(value || 0);
-        if (!Number.isFinite(parsed)) return 24;
-        return Math.max(24, Math.min(38, parsed));
-    }
-
-    function parse(raw) {
-        return shapeOutput.parseDrawing(raw) || shapeOutput.parseGeometry(raw);
-    }
-
-    const drawingPayload = shapeOutput.drawingFromPiece;
-    const geometryPayload = shapeOutput.geometryFromPiece;
-
-    function pointPair(point) {
-        if (!Array.isArray(point) || point.length < 2) return null;
-        const x = finite(point[0], NaN);
-        const y = finite(point[1], NaN);
-        return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
-    }
-
-    function printablePoints(points) {
-        const source = (Array.isArray(points) ? points : [])
-            .map(pointPair)
-            .filter(Boolean);
-        if (source.length <= MAX_PRINT_POINTS) return source;
-        const stride = Math.ceil(source.length / MAX_PRINT_POINTS);
-        const compact = source.filter((point, index) => index % stride === 0);
-        const last = source[source.length - 1];
-        if (compact[compact.length - 1] !== last) compact.push(last);
-        return compact;
-    }
-
-    function boundsForPoints(points) {
-        if (!points.length) return null;
-        const xs = points.map(point => point[0]);
-        const ys = points.map(point => point[1]);
-        return {
-            x: Math.min(...xs),
-            y: Math.min(...ys),
-            width: Math.max(...xs) - Math.min(...xs),
-            height: Math.max(...ys) - Math.min(...ys),
-        };
-    }
-
-    function unionBounds(first, second) {
-        if (!first) return second;
-        if (!second) return first;
-        const x = Math.min(first.x, second.x);
-        const y = Math.min(first.y, second.y);
-        const right = Math.max(first.x + first.width, second.x + second.width);
-        const bottom = Math.max(first.y + first.height, second.y + second.height);
-        return { x, y, width: right - x, height: bottom - y };
-    }
-
-    function elementBounds(element) {
-        if (!element || typeof element !== "object") return null;
-        if (element.type === "pen") {
-            return boundsForPoints(printablePoints(element.points));
+    if (!shapeOutput) { console.error("Shape output contract must load before the printable documentation renderer"); return; }
+    let sequence = 0;
+    function esc(value) { return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+    function finite(value, fallback = 0) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
+    function clampPrintedNoteFontSize(value) { const parsed = Number(value || 0); if (!Number.isFinite(parsed)) return 24; return Math.max(24, Math.min(38, parsed)); }
+    function color(value, fallback = "#1463e6") { const resolved = String(value || ""); return /^#[0-9a-f]{3,8}$/i.test(resolved) ? resolved : fallback; }
+    function point(value) { return value && Number.isFinite(Number(value.xMm)) && Number.isFinite(Number(value.yMm)) ? { x: Number(value.xMm), y: Number(value.yMm) } : null; }
+    function path(points, closed) { const valid = (points || []).map(point).filter(Boolean); if (valid.length < 2) return ""; return `${valid.map((item, index) => `${index ? "L" : "M"}${item.x} ${item.y}`).join(" ")}${closed ? " Z" : ""}`; }
+    function arrowHead(id, markerColor) { return `<marker id="${id}" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse"><path d="M8,0 L0,4 L8,8" fill="none" stroke="${markerColor}" stroke-width="1.2"/></marker>`; }
+    function documentationElement(element, markerId) {
+        if (!element || typeof element !== "object") return ""; const stroke = color(element.style && element.style.color); const width = Math.max(1, Math.min(8, finite(element.style && element.style.width, 3)));
+        if (element.type === "stroke") { const data = path(element.points, element.closed); return data ? `<path d="${data}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : ""; }
+        if (["line", "arrow", "dimension"].includes(element.type)) {
+            const start = point(element.start), end = point(element.end); if (!start || !end) return ""; const marker = element.type === "arrow" ? ` marker-end="url(#${markerId})"` : element.type === "dimension" ? ` marker-start="url(#${markerId})" marker-end="url(#${markerId})"` : "";
+            const line = `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="${stroke}" stroke-width="${width}" vector-effect="non-scaling-stroke"${marker}/>`;
+            if (element.type !== "dimension") return line; const unit = element.unit === "cm" ? "cm" : "mm"; const value = unit === "cm" ? finite(element.valueMm) / 10 : finite(element.valueMm); const label = `${Math.round(value * 10) / 10} ${unit}`; const x = (start.x + end.x) / 2, y = (start.y + end.y) / 2;
+            return `${line}<g><rect x="${x - 55}" y="${y - 20}" width="110" height="28" rx="5" fill="#fff" stroke="${stroke}" stroke-width="1" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" text-anchor="middle" font-family="Tahoma,Arial,sans-serif" font-size="18" font-weight="700" fill="${stroke}">${esc(label)}</text></g>`;
         }
-        if (element.type === "line" || element.type === "dimension") {
-            const x1 = finite(element.x1);
-            const y1 = finite(element.y1);
-            const x2 = finite(element.x2);
-            const y2 = finite(element.y2);
-            const labelHeight = element.type === "dimension" ? 42 : 0;
-            return {
-                x: Math.min(x1, x2),
-                y: Math.min(y1, y2) - labelHeight,
-                width: Math.abs(x2 - x1),
-                height: Math.abs(y2 - y1) + labelHeight,
-            };
-        }
-        if (element.type === "rectangle") {
-            return {
-                x: finite(element.x),
-                y: finite(element.y),
-                width: Math.max(0, finite(element.width)),
-                height: Math.max(0, finite(element.height)),
-            };
-        }
-        if (element.type === "ellipse") {
-            const rx = Math.max(0, finite(element.rx));
-            const ry = Math.max(0, finite(element.ry));
-            return {
-                x: finite(element.cx) - rx,
-                y: finite(element.cy) - ry,
-                width: rx * 2,
-                height: ry * 2,
-            };
-        }
-        if (element.type === "note") {
-            const text = String(element.text || "");
-            const fontSize = clampPrintedNoteFontSize(
-                element.font_size || element.fontSize || 24
-            );
-            const width = Math.min(
-                460,
-                Math.max(fontSize * 2, Math.min(34, text.length) * fontSize * 0.62)
-            );
-            const x = finite(element.x);
-            const anchor = element.text_anchor === "middle" ? "middle" : "end";
-            return {
-                x: anchor === "middle" ? x - width / 2 : x - width,
-                y: finite(element.y) - fontSize * 0.7,
-                width,
-                height: fontSize * 1.4,
-            };
-        }
-        return null;
-    }
-
-    function drawingViewBox(payload) {
-        const canvas = {
-            width: positive(payload.canvas && payload.canvas.width, DEFAULT_CANVAS.width),
-            height: positive(payload.canvas && payload.canvas.height, DEFAULT_CANVAS.height),
-        };
-        const bounds = payload.elements.reduce(
-            (result, element) => unionBounds(result, elementBounds(element)),
-            null
-        );
-        if (!bounds || (!bounds.width && !bounds.height)) {
-            return { x: 0, y: 0, width: canvas.width, height: canvas.height };
-        }
-        const padding = Math.max(22, Math.min(canvas.width, canvas.height) * 0.035);
-        const x = Math.min(canvas.width - 1, Math.max(0, bounds.x - padding));
-        const y = Math.min(canvas.height - 1, Math.max(0, bounds.y - padding));
-        const right = Math.max(x + 1, Math.min(canvas.width, bounds.x + bounds.width + padding));
-        const bottom = Math.max(y + 1, Math.min(canvas.height, bounds.y + bounds.height + padding));
-        return {
-            x,
-            y,
-            width: Math.max(80, right - x),
-            height: Math.max(60, bottom - y),
-        };
-    }
-
-    function pathData(points) {
-        return printablePoints(points)
-            .map((point, index) => `${index ? "L" : "M"}${point[0].toFixed(1)} ${point[1].toFixed(1)}`)
-            .join(" ");
-    }
-
-    function elementMarkup(element, markerId) {
-        if (!element || typeof element !== "object") return "";
-        const color = safeColor(element.color);
-        const stroke = `stroke="${color}" vector-effect="non-scaling-stroke"`;
-        if (element.type === "pen") {
-            const path = pathData(element.points);
-            return path
-                ? `<path d="${path}" fill="none" ${stroke} stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
-                : "";
-        }
-        if (element.type === "line") {
-            return `<line x1="${finite(element.x1)}" y1="${finite(element.y1)}" x2="${finite(element.x2)}" y2="${finite(element.y2)}" ${stroke} stroke-width="1.8" stroke-linecap="round"/>`;
-        }
-        if (element.type === "rectangle") {
-            return `<rect x="${finite(element.x)}" y="${finite(element.y)}" width="${Math.max(0, finite(element.width))}" height="${Math.max(0, finite(element.height))}" rx="2" fill="none" ${stroke} stroke-width="1.8"/>`;
-        }
-        if (element.type === "ellipse") {
-            return `<ellipse cx="${finite(element.cx)}" cy="${finite(element.cy)}" rx="${Math.max(0, finite(element.rx))}" ry="${Math.max(0, finite(element.ry))}" fill="none" ${stroke} stroke-width="1.8"/>`;
-        }
-        if (element.type === "dimension") {
-            const x1 = finite(element.x1);
-            const y1 = finite(element.y1);
-            const x2 = finite(element.x2);
-            const y2 = finite(element.y2);
-            const x = (x1 + x2) / 2;
-            const y = (y1 + y2) / 2 - 12;
-            const text = String(element.text || "");
-            const width = Math.max(68, Math.min(280, text.length * 14));
-            return `<g>
-                <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${stroke} stroke-width="1.25" marker-start="url(#${markerId})" marker-end="url(#${markerId})"/>
-                <rect x="${x - width / 2}" y="${y - 18}" width="${width}" height="27" rx="6" fill="#fff" stroke="${color}" stroke-width="1"/>
-                <text x="${x}" y="${y + 1}" text-anchor="middle" font-family="Tahoma,Arial,sans-serif" font-size="17" font-weight="700" fill="${color}">${esc(text)}</text>
-            </g>`;
-        }
-        if (element.type === "note") {
-            const text = String(element.text || "");
-            const displayText = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-            const x = finite(element.x);
-            const y = finite(element.y);
-            const fontSize = clampPrintedNoteFontSize(
-                element.font_size || element.fontSize || 24
-            );
-            const anchor = element.text_anchor === "middle" ? "middle" : "end";
-            return `<g>
-                <text data-dco-readable-note="1" x="${x}" y="${y}" direction="rtl" unicode-bidi="plaintext" text-anchor="${anchor}" dominant-baseline="middle" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="800" fill="${color}" paint-order="stroke" stroke="#fff" stroke-width="2.4" stroke-linejoin="round">${esc(displayText)}</text>
-            </g>`;
-        }
+        if (["rect", "ellipse"].includes(element.type)) { const x = finite(element.xMm), y = finite(element.yMm), w = Math.max(0, finite(element.widthMm)), h = Math.max(0, finite(element.heightMm)); return element.type === "rect" ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${stroke}" stroke-width="${width}" vector-effect="non-scaling-stroke"/>` : `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="none" stroke="${stroke}" stroke-width="${width}" vector-effect="non-scaling-stroke"/>`; }
+        if (element.type === "text") { const position = point(element.position); const fontSize = clampPrintedNoteFontSize(element.font_size || element.fontSize || 24); return position ? `<text data-dco-readable-note="1" x="${position.x}" y="${position.y}" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="${color(element.style && element.style.color, "#9a4b00")}" paint-order="stroke" stroke="#fff" stroke-width="3">${esc(element.text)}</text>` : ""; }
         return "";
     }
-
-    function drawingSvg(payload, label) {
-        previewSequence += 1;
-        const markerId = `dco-print-arrow-${previewSequence}`;
-        const viewBox = drawingViewBox(payload);
-        const elements = payload.elements
-            .map(element => elementMarkup(element, markerId))
-            .join("");
-        if (!elements) return "";
-        return `<svg viewBox="${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}">
-            <defs><marker id="${markerId}" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto-start-reverse"><path d="M7,0 L0,3.5 L7,7" fill="none" stroke="#172033" stroke-width="1.2"/></marker></defs>
-            <rect x="${viewBox.x}" y="${viewBox.y}" width="${viewBox.width}" height="${viewBox.height}" fill="#fff"/>
-            ${elements}
-        </svg>`;
+    function referenceMarkup(reference, width, height) {
+        if (!reference || !String(reference.fileUrl || "").startsWith("/private/files/")) return ""; const opacity = Math.max(.1, Math.min(1, finite(reference.opacity, .72))), rotation = Math.max(-360, Math.min(360, finite(reference.rotationDeg)));
+        return `<image href="${esc(reference.fileUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}" transform="rotate(${rotation} ${width / 2} ${height / 2})"/>`;
     }
-
+    function documentationSvg(payload, label) {
+        const width = Math.max(1, finite(payload.canvas && payload.canvas.widthMm, 800)), height = Math.max(1, finite(payload.canvas && payload.canvas.heightMm, 2100)); sequence += 1; const markerId = `dco-doc-arrow-${sequence}`;
+        const elements = (payload.elements || []).map(item => documentationElement(item, markerId)).join("");
+        return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><defs>${arrowHead(markerId, "#173c75")}</defs><rect width="${width}" height="${height}" fill="#fff"/>${referenceMarkup(payload.reference, width, height)}${elements}</svg>`;
+    }
     function geometrySvg(payload, label) {
-        const width = positive(payload.blank_width_cm, 0);
-        const length = positive(payload.blank_length_cm, 0);
-        const points = (payload.points || []).map(pointPair).filter(Boolean);
-        if (!width || !length || points.length < 3) return "";
-        const padding = Math.max(width, length) * 0.06;
-        const attribute = points.map(point => `${point[0]},${point[1]}`).join(" ");
-        return `<svg viewBox="${-padding} ${-padding} ${width + padding * 2} ${length + padding * 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}">
-            <polygon points="${attribute}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-        </svg>`;
+        const width = Math.max(0, finite(payload.blank_width_cm)), height = Math.max(0, finite(payload.blank_length_cm)); const points = (payload.points || []).filter(item => Array.isArray(item) && item.length >= 2).map(item => `${finite(item[0])},${finite(item[1])}`).join(" "); if (!width || !height || !points) return ""; const padding = Math.max(width, height) * .06;
+        return `<svg viewBox="${-padding} ${-padding} ${width + padding * 2} ${height + padding * 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><polygon points="${points}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
     }
-
-    function svg(piece, options = {}) {
-        const label = options.label || "رسمة الدرفة";
-        const selected = shapeOutput.visual(piece);
-        if (!selected) return "";
-        return selected.kind === "drawing"
-            ? drawingSvg(selected.payload, label)
-            : geometrySvg(selected.payload, label);
-    }
-
-    function hasVisual(piece) {
-        return shapeOutput.hasVisual(piece);
-    }
-
+    function svg(piece, options = {}) { const selected = shapeOutput.visual(piece); if (!selected) return ""; return selected.kind === "documentation" ? documentationSvg(selected.payload, options.label || "توثيق الدرفة") : geometrySvg(selected.payload, options.label || "هندسة الدرفة"); }
     function notesCell(piece, notes, options = {}) {
-        const drawing = svg(piece, options);
-        const text = String(notes || "").trim();
-        if (!drawing) return esc(text || "—");
-        return `<div class="dco-piece-notes">
-            ${text ? `<div class="dco-piece-notes-text">${esc(text)}</div>` : ""}
-            <figure class="dco-piece-sketch">
-                ${drawing}
-                <figcaption>${esc(options.caption || "رسمة الدرفة")}</figcaption>
-            </figure>
-        </div>`;
+        const selected = shapeOutput.visual(piece), visual = svg(piece, options), text = String(notes || "").trim(), documentationNotes = selected && selected.kind === "documentation" ? String(selected.payload.notes || "").trim() : ""; if (!visual) return esc(text || "—");
+        return `<div class="dco-piece-notes">${text ? `<div class="dco-piece-notes-text">${esc(text)}</div>` : ""}<figure class="dco-piece-sketch">${visual}<figcaption>${esc(options.caption || "توثيق الدرفة")}</figcaption>${documentationNotes ? `<p>${esc(documentationNotes)}</p>` : ""}<em>هذا توثيق لطلب العميل وليس ملف تصنيع</em></figure></div>`;
     }
-
-    const css = `
-.dco-piece-notes{display:flex;flex-direction:column;gap:4px;align-items:stretch;text-align:right}
-.dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
-.dco-piece-sketch{display:block;margin:0;padding:3px 4px 2px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}
-.dco-piece-sketch svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}
-.dco-piece-sketch svg text[data-dco-readable-note="1"]{font-family:Tahoma,"Segoe UI",Arial,sans-serif!important}
-.dco-piece-sketch figcaption{margin-top:1px;color:#59636d;font-size:7px;font-weight:700;line-height:1.2;text-align:center}
-tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}
-td.dco-notes-has-sketch{min-width:38mm}
-`;
-
-    window.AlmdinaShapePrint = Object.freeze({
-        parse,
-        drawingPayload,
-        geometryPayload,
-        hasVisual,
-        svg,
-        notesCell,
-        css,
-    });
+    const css = `.dco-piece-notes{display:flex;flex-direction:column;gap:4px;align-items:stretch;text-align:right}.dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}.dco-piece-sketch{display:block;margin:0;padding:4px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}.dco-piece-sketch svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}.dco-piece-sketch figcaption{margin-top:2px;color:#344054;font-size:7px;font-weight:700;text-align:center}.dco-piece-sketch p{margin:3px 0 0;font-size:7px;line-height:1.35;white-space:pre-wrap}.dco-piece-sketch em{display:block;margin-top:3px;color:#92400e;font-size:6px;font-style:normal;text-align:center}tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}td.dco-notes-has-sketch{min-width:38mm}`;
+    window.AlmdinaShapePrint = Object.freeze({ parse: shapeOutput.parseDrawing, drawingPayload: shapeOutput.drawingFromPiece, geometryPayload: shapeOutput.geometryFromPiece, hasVisual: shapeOutput.hasVisual, svg, notesCell, css });
 })();

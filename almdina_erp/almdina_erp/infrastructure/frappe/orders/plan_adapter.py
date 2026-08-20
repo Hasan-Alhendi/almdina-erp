@@ -28,7 +28,6 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
     build_plan_input_payload,
     build_plan_metadata_payload,
 )
-from almdina_erp.almdina_erp.domain.orders.piece_policy import drawing_token
 from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
@@ -176,12 +175,6 @@ class FrappeOrderPlanAdapter:
                     ),
                     area_m2=self.access.normalized_number(row.area_m2),
                     notes=str(row.notes or ""),
-                    drawing_token=drawing_token(
-                        row.special_shape_drawing_json
-                    ),
-                    special_shape_status=str(
-                        row.special_shape_status or ""
-                    ),
                 )
                 for index, row in enumerate(
                     self.document.pieces or [],

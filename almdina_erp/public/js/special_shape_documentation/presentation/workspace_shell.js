@@ -1,0 +1,72 @@
+(() => {
+    "use strict";
+    const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
+    const T = root.Templates;
+    function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value ?? ""); return node.innerHTML; }
+    function tool(id, icon, label, key = "", disabled = false) { return `<button type="button" class="ald-doc-tool" data-tool="${id}" title="${label}${key ? ` (${key})` : ""}" aria-label="${label}" ${disabled ? "disabled" : ""}><span>${icon}</span><small>${label}</small></button>`; }
+    function templates(disabled = false) { return T.DEFINITIONS.map(item => `<button type="button" class="ald-doc-template" data-template="${item.id}" title="${item.label}" aria-label="${item.label}" ${disabled ? "disabled" : ""}><span>${item.icon}</span><small>${item.label}</small></button>`).join(""); }
+    function mount(container, context) {
+        const order = context.order, piece = context.piece, readOnly = !context.permissions.can_edit;
+        container.innerHTML = `<section class="ald-doc-workspace" dir="rtl" data-read-only="${readOnly ? "1" : "0"}" aria-label="توثيق الدرفة الخاصة">
+            <header class="ald-doc-topbar">
+                <div class="ald-doc-title-group"><button type="button" class="ald-doc-back" data-action="back" aria-label="العودة للطلب">→</button><div><h1>توثيق الدرفة الخاصة</h1><p><bdi>${escapeHtml(order.name)}</bdi> · ${escapeHtml(order.customer || "")}</p></div></div>
+                <div class="ald-doc-piece-meta"><span>الدرفة ${escapeHtml(piece.piece_no || "")}</span><bdi>${escapeHtml(piece.width_cm)} × ${escapeHtml(piece.length_cm)} سم</bdi></div>
+                <div class="ald-doc-save-group"><span class="ald-doc-save-state" data-save-state data-state="saved">محفوظ</span><button type="button" class="ald-doc-primary" data-action="save" ${readOnly ? "disabled" : ""}>حفظ التوثيق</button></div>
+            </header>
+            <div class="ald-doc-layout">
+                <aside class="ald-doc-panel ald-doc-start-panel">
+                    <h2>ابدأ من هنا</h2>
+                    <button type="button" class="ald-doc-source is-active" data-action="choose-image" ${readOnly ? "disabled" : ""}><span class="ald-doc-source-icon">▧</span><strong>رفع صورة أو مسح</strong><small>JPG · PNG · WEBP — حتى 8 MB</small></button>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-reference-input hidden>
+                    <section class="ald-doc-source ald-doc-templates"><strong>شكل جاهز</strong><div class="ald-doc-template-grid">${templates(readOnly)}</div></section>
+                    <button type="button" class="ald-doc-source" data-tool="pen" ${readOnly ? "disabled" : ""}><span class="ald-doc-source-icon">✎</span><strong>رسم بالقلم</strong><small>تنظيف وتثبيت تلقائي</small></button>
+                    <section class="ald-doc-reference-controls" data-reference-controls hidden><div class="ald-doc-section-head"><strong>الصورة المرجعية</strong><span data-reference-lock-label>مقفلة</span></div>
+                        <label><span>تدوير</span><span class="ald-doc-inline"><button type="button" data-action="rotate-left" ${readOnly ? "disabled" : ""}>↶</button><bdi data-rotation>0°</bdi><button type="button" data-action="rotate-right" ${readOnly ? "disabled" : ""}>↷</button></span></label>
+                        <label><span>الشفافية</span><span class="ald-doc-inline"><output data-opacity-output>72%</output><input type="range" min="10" max="100" value="72" data-opacity ${readOnly ? "disabled" : ""}></span></label>
+                        <label><span>قفل الصورة</span><input type="checkbox" checked data-reference-lock ${readOnly ? "disabled" : ""}></label>
+                        <a class="ald-doc-download" data-reference-download target="_blank" rel="noopener" hidden>تنزيل الصورة الأصلية للمصمم</a><button type="button" class="ald-doc-danger" data-action="remove-image" ${readOnly ? "disabled" : ""}>مسح الصورة</button>
+                    </section>
+                </aside>
+                <main class="ald-doc-stage"><canvas class="ald-doc-canvas" tabindex="0" aria-label="لوحة توثيق الدرفة"></canvas><div class="ald-doc-hint" data-hint>اختر صورة أو شكلًا جاهزًا أو ابدأ بالقلم الذكي</div>
+                    <div class="ald-doc-toolbar" role="toolbar" aria-label="أدوات التوثيق">
+                        ${tool("select", "↖", "تحديد", "V")}${tool("pen", "✎", "قلم ذكي", "P", readOnly)}${tool("line", "╱", "خط", "L", readOnly)}${tool("rect", "□", "مستطيل", "R", readOnly)}${tool("ellipse", "○", "دائرة", "O", readOnly)}${tool("dimension", "↔", "قياس", "D", readOnly)}${tool("text", "T", "ملاحظة", "T", readOnly)}
+                        <span class="ald-doc-toolbar-separator"></span><button type="button" class="ald-doc-tool" data-action="undo" title="تراجع Ctrl+Z"><span>↶</span><small>تراجع</small></button><button type="button" class="ald-doc-tool" data-action="redo" title="إعادة Ctrl+Shift+Z"><span>↷</span><small>إعادة</small></button><span class="ald-doc-zoom">100%</span>
+                    </div>
+                </main>
+                <aside class="ald-doc-panel ald-doc-detail-panel"><h2>تفاصيل التوثيق</h2><label class="ald-doc-notes"><span>ملاحظات المصمم</span><textarea maxlength="2000" rows="5" data-notes placeholder="اكتب ما يجب أن ينتبه إليه المصمم…" ${readOnly ? "readonly" : ""}></textarea></label>
+                    <section><div class="ald-doc-section-head"><strong>الطبقات</strong><span data-element-count>0</span></div><div class="ald-doc-layers" data-layers></div></section>
+                    <div class="ald-doc-warning">⚠ <span>${escapeHtml(context.manufacturing_notice || "هذا توثيق لطلب العميل وليس ملف تصنيع")}</span></div>
+                    <section class="ald-doc-preview"><div class="ald-doc-section-head"><strong>ملخص التوثيق</strong><span>للطباعة والمصمم</span></div><dl><div><dt>المصدر</dt><dd data-summary-source>—</dd></div><div><dt>القياسات</dt><dd data-summary-dimensions>0</dd></div><div><dt>الملاحظات</dt><dd data-summary-notes>لا يوجد</dd></div></dl></section>
+                </aside>
+            </div>
+        </section>`;
+        const workspace = container.querySelector(".ald-doc-workspace");
+        return Object.freeze({
+            workspace,
+            canvas: workspace.querySelector(".ald-doc-canvas"),
+            referenceInput: workspace.querySelector("[data-reference-input]"),
+            setActiveTool(value) { workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === value)); workspace.dataset.activeTool = value; },
+            setSaveState(text, state) { const node = workspace.querySelector("[data-save-state]"); node.textContent = text; node.dataset.state = state; },
+            setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = readOnly || saving; button.textContent = saving ? "جار الحفظ…" : "حفظ التوثيق"; },
+            setHint(value) { const node = workspace.querySelector("[data-hint]"); node.textContent = value || ""; node.hidden = !value; },
+            render(document, state = {}) {
+                const reference = document.reference; const controls = workspace.querySelector("[data-reference-controls]"); controls.hidden = !reference;
+                const download = workspace.querySelector("[data-reference-download]"); download.hidden = !reference; if (reference) { download.href = reference.fileUrl; workspace.querySelector("[data-rotation]").textContent = `${reference.rotationDeg}°`; const opacity = Math.round(reference.opacity * 100); workspace.querySelector("[data-opacity]").value = opacity; workspace.querySelector("[data-opacity-output]").textContent = `${opacity}%`; workspace.querySelector("[data-reference-lock]").checked = reference.locked; workspace.querySelector("[data-reference-lock-label]").textContent = reference.locked ? "مقفلة" : "غير مقفلة"; }
+                workspace.querySelector("[data-notes]").value = document.notes;
+                const labels = { stroke: "رسم بالقلم", line: "خط", rect: "مستطيل", ellipse: "دائرة", arrow: "سهم", dimension: "قياس", text: "ملاحظة" };
+                const layers = workspace.querySelector("[data-layers]"); const items = [];
+                if (reference) items.push(`<button type="button" class="ald-doc-layer" data-layer="reference"><span>▧</span><strong>الصورة المرجعية</strong><small>${reference.locked ? "مقفلة" : "مفتوحة"}</small></button>`);
+                document.elements.forEach((element, index) => items.push(`<button type="button" class="ald-doc-layer ${state.selectedId === element.id ? "is-selected" : ""}" data-layer="${escapeHtml(element.id)}"><span>◇</span><strong>${labels[element.type] || "عنصر"} ${index + 1}</strong><small>${element.type}</small></button>`));
+                layers.innerHTML = items.length ? items.join("") : '<div class="ald-doc-empty">لا توجد طبقات بعد.</div>';
+                workspace.querySelector("[data-element-count]").textContent = String(document.elements.length + (reference ? 1 : 0));
+                const sourceLabels = { image: "صورة", template: "شكل جاهز", pen: "رسم", mixed: "مختلط" };
+                workspace.querySelector("[data-summary-source]").textContent = sourceLabels[document.source] || "—";
+                workspace.querySelector("[data-summary-dimensions]").textContent = String(document.elements.filter(item => item.type === "dimension").length);
+                workspace.querySelector("[data-summary-notes]").textContent = document.notes.trim() ? "موجودة" : "لا يوجد";
+                workspace.querySelector('[data-action="undo"]').disabled = !state.canUndo; workspace.querySelector('[data-action="redo"]').disabled = !state.canRedo;
+            },
+            destroy() { container.innerHTML = ""; },
+        });
+    }
+    root.WorkspaceShell = Object.freeze({ mount });
+})();

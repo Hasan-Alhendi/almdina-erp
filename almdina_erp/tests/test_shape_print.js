@@ -23,36 +23,45 @@ const renderer = window.AlmdinaShapePrint;
 const classicPiece = {
     piece_type: "Special",
     special_shape_drawing_json: JSON.stringify({
+        schema: "almdina.special-shape-documentation",
         version: 1,
-        canvas: { width: 1000, height: 650 },
+        canvas: { widthMm: 800, heightMm: 2100 },
+        reference: null,
         elements: [
             {
                 id: "outline",
-                type: "pen",
-                color: "#172033",
-                points: [[100, 100], [800, 100], [850, 520], [100, 520], [100, 100]],
+                type: "stroke",
+                style: { color: "#172033", width: 3 },
+                points: [
+                    { xMm: 100, yMm: 100 },
+                    { xMm: 700, yMm: 100 },
+                    { xMm: 750, yMm: 1900 },
+                    { xMm: 100, yMm: 1900 },
+                    { xMm: 100, yMm: 100 },
+                ],
+                closed: true,
             },
             {
                 id: "dimension",
                 type: "dimension",
-                color: "#1769aa",
-                x1: 100,
-                y1: 570,
-                x2: 850,
-                y2: 570,
-                text: "75 سم",
+                style: { color: "#1769aa", width: 2 },
+                start: { xMm: 100, yMm: 2000 },
+                end: { xMm: 750, yMm: 2000 },
+                valueMm: 650,
+                unit: "mm",
             },
             {
                 id: "note",
-                type: "note",
-                color: "url(javascript:alert(1))",
-                x: 380,
-                y: 330,
+                type: "text",
+                style: { color: "url(javascript:alert(1))" },
+                position: { xMm: 380, yMm: 1000 },
                 text: "<script>قص مائل</script>",
                 font_size: 32,
-                text_anchor: "middle",
             },
         ],
+        notes: "",
+        source: "pen",
+        templateId: null,
     }),
 };
 
@@ -64,7 +73,7 @@ assert.match(classicSvg, /<line /);
 assert.match(classicSvg, /&lt;script&gt;قص مائل/);
 assert.match(classicSvg, /data-dco-readable-note="1"/);
 assert.match(classicSvg, /font-size="32"/);
-assert.match(classicSvg, /text-anchor="middle"/);
+assert.match(classicSvg, /text-anchor="end"/);
 assert.match(classicSvg, /paint-order="stroke"/);
 assert.doesNotMatch(classicSvg, /fill="#fff8c9"/);
 assert.doesNotMatch(classicSvg, /<script>/);

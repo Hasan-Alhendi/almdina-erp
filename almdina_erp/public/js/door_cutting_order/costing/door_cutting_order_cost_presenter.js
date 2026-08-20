@@ -373,7 +373,7 @@
                     <input type="number" class="dco-inline-price-input" data-price-kind="special" data-piece-name="${esc(row.name)}" min="0" step="0.01" value="${priceValue || ""}" disabled readonly inputmode="decimal">
                     ${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${__("غير مسعّر")}</small>`}
                 </div>
-                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${__("عرض الرسم")}</button></div>
+                <div class="dco-special-price-actions"><button type="button" class="btn btn-default btn-xs dco-view-special-sketch" ${documented ? "" : "disabled"}>${__("عرض التوثيق")}</button></div>
                 ${row.priceNote ? `<div class="dco-special-price-note">${esc(row.priceNote)}</div>` : ""}
             </div>`;
         }).join("")}</div></div>`;
@@ -410,7 +410,7 @@
             const card = this.closest("[data-special-row]");
             const source = (frm.doc.pieces || []).find(row => row.name === (card && card.dataset.specialRow));
             if (!source || !window.AlmdinaSpecialShapeEditor || typeof window.AlmdinaSpecialShapeEditor.view !== "function") {
-                frappe.msgprint(__("تعذر تحميل رسم الدرفة الخاصة."));
+                frappe.msgprint(__("تعذر تحميل توثيق الدرفة الخاصة."));
                 return;
             }
             window.AlmdinaSpecialShapeEditor.view(frm, source);
