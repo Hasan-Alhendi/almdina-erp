@@ -19,6 +19,7 @@ _LIST_ACTION_CAPABILITIES = frozenset(
     {
         Capability.START_ASSIGNED_STAGE,
         Capability.HANDOFF_ASSIGNED_STAGE,
+        Capability.MARK_DELIVERED,
     }
 )
 
@@ -228,7 +229,7 @@ def get_order_operational_role_flags(
     )
 
     actor_roles = repository.actor_roles(actor)
-    # START/HANDOFF are custom order capabilities. The adapter's one bulk
+    # List actions are custom order capabilities. The adapter's one bulk
     # visible_order_names() query is the native read narrowing that
     # document_has_capability previously repeated for every capability and row.
     action_capabilities = frozenset(
@@ -285,6 +286,9 @@ def get_order_operational_role_flags(
                 order=order,
                 stage=stage,
                 routes=routes,
+            ),
+            "can_mark_delivered": bool(
+                actions[Capability.MARK_DELIVERED]["allowed"]
             ),
         }
 

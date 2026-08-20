@@ -30,7 +30,6 @@
     });
     const COMPLETED_ORDER_STATUSES = new Set([
         "Ready for Delivery",
-        "Delivered",
         "Completed",
     ]);
 
@@ -207,6 +206,7 @@
             stageType: STAGE_BY_DEPARTMENT[doc.current_department] || doc.current_department,
             canStart: authorized.canStart === true,
             canHandoff: authorized.canHandoff === true,
+            canDeliver: authorized.canDeliver === true,
             assignmentState: authorized.assignmentState || "",
             queueState: authorized.queueState || "",
         };
@@ -216,16 +216,20 @@
         if (!action) return "";
         if (action.kind === "start") return __("بدء العمل");
         if (action.kind === "handoff") return __("إنهاء العمل");
+        if (action.kind === "deliver") return __("تم التسليم");
         return action.label || "";
     }
 
     function mobileActionClass(action) {
         if (!action) return "";
-        return action.kind === "handoff" ? "is-finish" : "is-start";
+        return action.kind === "start" ? "is-start" : "is-finish";
     }
 
     function mobileActionConfirmation(action, doc) {
         const orderName = displayValue(doc && doc.name);
+        if (action && action.kind === "deliver") {
+            return `${__("هل تؤكد تسليم الطلب للعميل؟")} ${orderName}`;
+        }
         if (action && action.kind === "handoff") {
             return `${__("هل تريد تأكيد إنهاء العمل على الطلب؟")} ${orderName}`;
         }
@@ -237,6 +241,14 @@
     }
 
     function cardState(doc, context, action) {
+        if (String(doc.status || "") === "Delivered") {
+            return Object.freeze({
+                key: "delivered",
+                label: __("تم التسليم"),
+                cardClass: "is-completed",
+            });
+        }
+
         const completed = context.queueState === "completed"
             || context.assignmentState === "completed"
             || COMPLETED_ORDER_STATUSES.has(String(doc.status || ""));
@@ -297,7 +309,7 @@
             context,
             action,
             state,
-            completed: state.key === "completed",
+            completed: state.key === "completed" || state.key === "delivered",
         });
     }
 
@@ -377,7 +389,7 @@
 
     function renderAction(model) {
         if (model.action) {
-            const icon = model.action.kind === "handoff" ? "check" : "play";
+            const icon = model.action.kind === "start" ? "play" : "check";
             return `
                 <footer class="dco-card-actions">
                     <button
@@ -394,7 +406,7 @@
         if (model.completed) {
             return `
                 <div class="dco-card-complete-state" role="status">
-                    <span>${escapeHtml(__("تم الإنجاز"))}</span>
+                    <span>${escapeHtml(model.state.label)}</span>
                     <span class="dco-card-complete-icon" aria-hidden="true">${iconSvg("check")}</span>
                 </div>
             `;
@@ -645,6 +657,7 @@
                 stage: flag.active_stage_name || doc.current_production_stage || "",
                 canStart: flag.can_start_stage === true,
                 canHandoff: flag.can_handoff_stage === true,
+                canDeliver: flag.can_mark_delivered === true,
                 assignmentState: flag.assignment_state || "",
                 queueState: personalQueueState(doc, flag),
             };
