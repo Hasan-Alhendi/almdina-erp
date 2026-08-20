@@ -11,6 +11,10 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     resolve_shop_floor_stage_type,
     transition_stage,
 )
+from almdina_erp.almdina_erp.domain.orders.planning_handoff_policy import (
+    PlanningHandoffFacts,
+    decide_planning_handoff,
+)
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     ProductionActionFacts,
     decide_production_action,
@@ -36,6 +40,7 @@ class OrderState:
     has_cutting_plan: bool
     plan_needs_recalculation: bool
     has_approved_plan: bool = False
+    approved_plan_name: str | None = None
     drawing_dxf_status: str | None = None
 
 
@@ -226,6 +231,7 @@ def _facts(
     *,
     stage: StageState | None = None,
     actor: str | None = None,
+    route_starts_with_planning: bool = False,
 ) -> ProductionActionFacts:
     resolved_actor = actor or None
     return ProductionActionFacts(
@@ -234,6 +240,7 @@ def _facts(
         current_stage_name=order.current_stage,
         has_cutting_plan=order.has_cutting_plan,
         plan_needs_recalculation=order.plan_needs_recalculation,
+        route_starts_with_planning=route_starts_with_planning,
         stage_name=stage.name if stage else None,
         stage_type=stage.stage_type if stage else None,
         stage_status=stage.status if stage else None,
@@ -253,11 +260,18 @@ def _assert_action_allowed(
     *,
     stage: StageState | None = None,
     actor: str | None = None,
+    route_starts_with_planning: bool = False,
 ) -> None:
     decision = decide_production_action(
         action,
         capabilities=repository.capabilities_for_order(order.name),
-        facts=_facts(repository, order, stage=stage, actor=actor),
+        facts=_facts(
+            repository,
+            order,
+            stage=stage,
+            actor=actor,
+            route_starts_with_planning=route_starts_with_planning,
+        ),
     )
     if decision.allowed:
         return
@@ -275,20 +289,26 @@ def _assert_planning_handoff_gate(
         route_stage = route.stage(stage.stage_type)
     except ValueError as error:
         raise ShopFloorCommandError(str(error)) from error
-    if not route_stage.is_planning_stage:
-        return
-    if not order.has_approved_plan:
-        raise ShopFloorCommandError(
-            "اعتمد خطة القص بعد مراجعتها قبل تسليم مرحلة التخطيط إلى القسم التالي."
+
+    decision = decide_planning_handoff(
+        PlanningHandoffFacts(
+            is_planning_stage=route_stage.is_planning_stage,
+            approved_plan_name=order.approved_plan_name,
+            has_current_approved_plan=order.has_approved_plan,
+            plan_needs_recalculation=order.plan_needs_recalculation,
         )
-    if order.plan_needs_recalculation:
-        raise ShopFloorCommandError(
-            "خطة القص تغيّرت وتحتاج إلى إعادة حساب واعتماد جديد قبل مغادرة مرحلة التخطيط."
-        )
+    )
+    if not decision.allowed:
+        raise ShopFloorCommandError(decision.reason)
 
 
 def assert_order_ready_for_dispatch(order: OrderState) -> None:
-    """Compatibility validator that evaluates generic dispatch state only."""
+    """Validate route-independent dispatch prerequisites only.
+
+    Opening the route selector must not require a Cutting Plan because a selected
+    route may intentionally begin with Planning. Route-specific plan readiness is
+    evaluated after the user selects the route.
+    """
 
     decision = decide_production_action(
         Capability.DISPATCH_ORDER,
@@ -299,6 +319,7 @@ def assert_order_ready_for_dispatch(order: OrderState) -> None:
             current_stage_name=order.current_stage,
             has_cutting_plan=order.has_cutting_plan,
             plan_needs_recalculation=order.plan_needs_recalculation,
+            route_starts_with_planning=True,
             drawing_dxf_status=order.drawing_dxf_status,
         ),
     )
@@ -378,10 +399,15 @@ def dispatch_order(
     assignee: str,
 ) -> dict[str, Any]:
     order = _locked_order(repository, order_name)
-    _assert_action_allowed(repository, Capability.DISPATCH_ORDER, order)
+    route = _production_route(repository, path)
+    _assert_action_allowed(
+        repository,
+        Capability.DISPATCH_ORDER,
+        order,
+        route_starts_with_planning=route.starts_with_planning,
+    )
     repository.validate_special_shapes(order_name)
 
-    route = _production_route(repository, path)
     first = route.first_stage
     repository.assert_worker_for_role(assignee, first.operational_role)
     repository.cancel_active_order_stages(order_name)
