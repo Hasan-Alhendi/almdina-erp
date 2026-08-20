@@ -146,7 +146,7 @@ async function flushPromises() {
     defaultsCall.resolve({ message: { kerf_mm: 9 } });
     initialEdgeLookup.resolve({
         message: {
-            options: [{ name: "EDGE-OLD", edge_color: "Old White" }],
+            options: [{ name: "EDGE-OLD" }],
             include_financial: false,
         },
     });
@@ -154,29 +154,17 @@ async function flushPromises() {
     assert.equal(setValues.length, 0);
     assert.equal(frm._almdina_safe_edge_options_loaded, undefined);
 
-    // The same rule applies to edge-color defaults. The color now comes from the
-    // order-scoped safe lookup rather than a direct Edge Banding Type DB read.
+    // Edge color is order-owned manual input. Changing the default profile must
+    // not start another lookup and must never overwrite what the operator typed.
     frm.doc.default_edge_type = "EDGE-22";
-    frm.doc.edge_color = "";
-    const beforeEdgeColorCalls = calls.length;
+    frm.doc.edge_color = "Manual White";
+    const beforeProfileChangeCalls = calls.length;
     trigger("default_edge_type", frm);
-    const edgeColorLookup = callFor(
-        "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options",
-        beforeEdgeColorCalls
-    );
-    assert.ok(edgeColorLookup);
-    assert.equal(databaseCalls.length, 0);
-
-    frm.doc.name = "DCO-2026-00003";
-    fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    edgeColorLookup.resolve({
-        message: {
-            options: [{ name: "EDGE-22", edge_color: "White" }],
-            include_financial: false,
-        },
-    });
     await flushPromises();
+    assert.equal(calls.length, beforeProfileChangeCalls);
+    assert.equal(databaseCalls.length, 0);
     assert.equal(setValues.length, 0);
+    assert.equal(frm.doc.edge_color, "Manual White");
 
     // A stage lookup started for one order cannot activate drawing controls in
     // the order opened while that lookup was in flight.
