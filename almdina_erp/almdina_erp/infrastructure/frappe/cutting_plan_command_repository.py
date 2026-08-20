@@ -21,7 +21,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_context 
     PLAN_COMMAND_FLAG,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    COST_SNAPSHOT_VERSION,
+    PLAN_COST_FIELDS,
     initial_plan_cost_values,
+    persist_plan_cost_snapshot,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     seed_plan_settings,
@@ -31,9 +34,15 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
 class FrappeCuttingPlanCommandRepository:
     """Persistence adapter for command-owned Cutting Plan mutations.
 
-    The adapter never bypasses Frappe permissions. The related order capability
-    is authorized before this repository is used, then carried only in ephemeral
-    Document.flags while the native insert/save operation runs.
+    The adapter never bypasses Frappe document permissions. The related order
+    capability is authorized before this repository is used, then carried only
+    in ephemeral ``Document.flags`` while the native insert/save operation runs.
+
+    Plan financial fields intentionally live at permission level 1. After a
+    trusted command saves one Draft whose server-calculated cost snapshot is
+    current, the repository persists that protected snapshot through the narrow
+    costing infrastructure boundary. This keeps plan editors unable to edit cost
+    inputs while ensuring geometry changes immediately refresh derived totals.
     """
 
     def __init__(self, capability: str):
@@ -61,6 +70,21 @@ class FrappeCuttingPlanCommandRepository:
             settings=cls._settings(plan),
         )
 
+    @staticmethod
+    def _current_cost_snapshot(plan: Any) -> dict[str, float | int] | None:
+        if (
+            str(getattr(plan, "status", None) or "") != DRAFT
+            or cint(getattr(plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION
+        ):
+            return None
+        return {
+            "cost_snapshot_version": COST_SNAPSHOT_VERSION,
+            **{
+                fieldname: flt(getattr(plan, fieldname, 0))
+                for fieldname in PLAN_COST_FIELDS
+            },
+        }
+
     def _run_persist(
         self,
         plan: Any,
@@ -68,6 +92,7 @@ class FrappeCuttingPlanCommandRepository:
         *,
         allow_status_transition: bool = False,
     ) -> Any:
+        protected_cost_snapshot = self._current_cost_snapshot(plan)
         plan.flags[PLAN_COMMAND_FLAG] = self.capability
         if allow_status_transition:
             plan.flags.allow_status_transition = True
@@ -80,6 +105,14 @@ class FrappeCuttingPlanCommandRepository:
             plan.flags.pop(PLAN_COMMAND_FLAG, None)
             if allow_status_transition:
                 plan.flags.pop("allow_status_transition", None)
+
+        if protected_cost_snapshot is not None:
+            # Frappe field-level permission sanitization may restore permlevel-1
+            # values on the in-memory document. Reapply only the snapshot that
+            # the already-authorized server command calculated before save.
+            for fieldname, value in protected_cost_snapshot.items():
+                setattr(plan, fieldname, value)
+            persist_plan_cost_snapshot(plan)
         return plan
 
     def get_document(self, plan_name: str) -> Any:
