@@ -67,8 +67,6 @@
     function project(frm) {
         const payload = data(frm);
         if (!payload) return false;
-        // Transitional read-only view projection for the existing presenter.
-        // The Cost workspace store remains authoritative; no DCO persistence is used.
         projectOrder(frm, payload.order || {});
         projectPieces(frm, payload.pieces || []);
         return true;
@@ -140,11 +138,21 @@
         return true;
     }
 
+    function reconcilePermissionActions(frm) {
+        const permissionUx = window.AlmdinaCostPermissionsUX;
+        if (!permissionUx || typeof permissionUx.apply !== "function") return;
+        window.setTimeout(() => {
+            if (window.cur_frm !== frm || frm.doctype !== "Door Cutting Order") return;
+            permissionUx.apply(frm);
+        }, 0);
+    }
+
     function refreshCurrent() {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         const presenter = window.AlmdinaOrderCostUX;
         if (presenter && typeof presenter.render === "function") presenter.render(frm);
+        reconcilePermissionActions(frm);
     }
 
     window.addEventListener("almdina:cost-workspace-updated", refreshCurrent);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     PieceGeometry,
@@ -151,6 +152,24 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         for fieldname, current in cases.items():
             with self.subTest(fieldname=fieldname):
                 self.assertTrue(pricing_basis_changed(old, current))
+
+    def test_special_price_approval_does_not_require_drawing_documentation(self) -> None:
+        service_path = (
+            Path(__file__).resolve().parents[1]
+            / "almdina_erp"
+            / "services"
+            / "special_shape_service.py"
+        )
+        source = service_path.read_text(encoding="utf-8")
+        approval_source = source.split("def approve_special_piece_price", 1)[1]
+
+        self.assertNotIn("piece.special_shape_status", approval_source)
+        self.assertNotIn(
+            "Document the special door shape before approving its price.",
+            approval_source,
+        )
+        self.assertIn('if (piece.piece_type or "Regular") != "Special":', approval_source)
+        self.assertIn("has_special_price_approval_permission", approval_source)
 
     def test_protected_price_change_detects_approval_fields(self) -> None:
         old = SpecialPrice(
