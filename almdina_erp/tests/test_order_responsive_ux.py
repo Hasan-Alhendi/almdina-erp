@@ -245,7 +245,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'row.board_description || "—"' in inbox_renderer
 
 
-def test_desk_list_orders_five_workflow_states_and_keeps_history_rows_green():
+def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
 
@@ -255,19 +255,22 @@ def test_desk_list_orders_five_workflow_states_and_keeps_history_rows_green():
     assert 'if (status === "Delivered") return "delivered";' in list_source
     assert 'if (status === "Ready for Delivery") return "ready_for_delivery";' in list_source
     assert 'if (flag.assignment_state === "completed" || status === "Completed") return "completed";' in list_source
-    assert 'return "in_progress";' in list_source
-    assert 'return "ready";' in list_source
     assert "const PERSONAL_QUEUE_SORT_RULES = Object.freeze({" in list_source
-    assert 'in_progress: Object.freeze({ rank: 0, field: "assignment_time", direction: 1 })' in list_source
-    assert 'ready: Object.freeze({ rank: 1, field: "assignment_time", direction: 1 })' in list_source
     assert 'ready_for_delivery: Object.freeze({ rank: 2, field: "completion_time", direction: 1 })' in list_source
-    assert 'completed: Object.freeze({ rank: 3, field: "completion_time", direction: -1 })' in list_source
     assert 'delivered: Object.freeze({ rank: 4, field: "modified", direction: -1 })' in list_source
+    assert "function desktopQueueState(doc, flag = {})" in list_source
+    assert 'if (flag.assignment_state === "completed") return "completed";' in list_source
+    assert "const DESKTOP_QUEUE_SORT_RULES = Object.freeze({" in list_source
+    assert 'completed: Object.freeze({ rank: 2, field: "completion_time", direction: -1 })' in list_source
     assert "function sortPersonalQueueItems(items)" in list_source
-    assert "return [...items].sort((left, right) => {" in list_source
-    assert "if (leftRule.rank !== rightRule.rank) return leftRule.rank - rightRule.rank;" in list_source
-    assert "return compareQueueTimes(left, right, leftRule);" in list_source
-    assert "const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);" in list_source
+    assert "function sortDesktopQueueItems(items)" in list_source
+    assert "function sortQueueItemsByRules(items, stateResolver, rules, fallbackState)" in list_source
+    assert 'const mobileLayout = root.classList.contains("dco-order-card-layout");' in list_source
+    assert "? sortPersonalQueueItems(queueItems)" in list_source
+    assert ": sortDesktopQueueItems(queueItems);" in list_source
+    assert "const ordered = orderedItems.map(item => item.container);" in list_source
+    assert "const isHistory = mobileLayout" in list_source
+    assert ': desktopQueueState(doc, flag) === "completed";' in list_source
     assert 'classList.toggle("dco-list-row-completed"' in list_source
     assert "const needsReorder = ordered.some" in list_source
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
