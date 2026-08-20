@@ -41,6 +41,7 @@
     color: #0f172a;
 }
 
+/* Workflow-state tokens are intentionally centralized here. */
 .dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-ready {
     --dco-accent: #2563eb;
     --dco-accent-strong: #1d4ed8;
@@ -50,17 +51,27 @@
     --dco-card-bg: #ffffff;
 }
 
-.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-progress {
-    --dco-accent: #f97316;
-    --dco-accent-strong: #ea580c;
-    --dco-accent-soft: #fff7ed;
-    --dco-accent-border: #fed7aa;
-    --dco-card-border: #fdba74;
-    --dco-card-bg: #fffefd;
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-in-progress {
+    --dco-accent: #f59e0b;
+    --dco-accent-strong: #d97706;
+    --dco-accent-soft: #fffbeb;
+    --dco-accent-border: #fde68a;
+    --dco-card-border: #fcd34d;
+    --dco-card-bg: #fffdf7;
+    box-shadow: 0 10px 30px rgba(217, 119, 6, .10);
 }
 
-.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-completed,
-.dco-order-list.dco-order-card-layout .dco-mobile-order-card.dco-list-row-completed {
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-ready-for-delivery {
+    --dco-accent: #7c3aed;
+    --dco-accent-strong: #6d28d9;
+    --dco-accent-soft: #f5f3ff;
+    --dco-accent-border: #ddd6fe;
+    --dco-card-border: #c4b5fd;
+    --dco-card-bg: #fdfcff;
+    box-shadow: 0 10px 30px rgba(124, 58, 237, .10);
+}
+
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-completed {
     --dco-accent: #16a34a;
     --dco-accent-strong: #15803d;
     --dco-accent-soft: #ecfdf3;
@@ -70,6 +81,18 @@
     border-color: var(--dco-card-border) !important;
     background: var(--dco-card-bg) !important;
     box-shadow: 0 10px 30px rgba(22, 101, 52, .08);
+}
+
+.dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-delivered {
+    --dco-accent: #047857;
+    --dco-accent-strong: #065f46;
+    --dco-accent-soft: #ecfdf5;
+    --dco-accent-border: #a7f3d0;
+    --dco-card-border: #6ee7b7;
+    --dco-card-bg: #f7fffc;
+    border-color: var(--dco-card-border) !important;
+    background: var(--dco-card-bg) !important;
+    box-shadow: 0 10px 30px rgba(4, 120, 87, .10);
 }
 
 .dco-order-list.dco-order-card-layout .dco-mobile-order-card.is-neutral {
@@ -147,7 +170,7 @@
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    gap: 7px;
+    gap: 6px;
     min-height: 32px;
     padding: 7px 11px;
     border: 1px solid var(--dco-accent-border);
@@ -166,6 +189,21 @@
     border-radius: 999px;
     background: var(--dco-accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--dco-accent) 12%, transparent);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-state-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    color: var(--dco-accent-strong);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-state-icon .dco-card-icon {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.2;
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-order-row {
@@ -346,11 +384,15 @@
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-production-action.is-start {
-    background: linear-gradient(135deg, #2876ef 0%, #1459df 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-production-action.is-finish {
-    background: linear-gradient(135deg, #ff7a12 0%, #f05b08 100%);
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.dco-order-list.dco-order-card-layout .dco-card-production-action.is-deliver {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-production-action:hover,
@@ -394,16 +436,16 @@
     padding: 10px 16px;
     border: 0;
     border-radius: 13px;
-    background: linear-gradient(135deg, #3eb981 0%, #24a86a 100%);
+    background: linear-gradient(135deg, var(--dco-accent) 0%, var(--dco-accent-strong) 100%);
     color: #fff;
     font-size: 15px;
     font-weight: 850;
     line-height: 1.2;
-    box-shadow: 0 7px 18px rgba(22, 163, 74, .20);
+    box-shadow: 0 7px 18px color-mix(in srgb, var(--dco-accent) 20%, transparent);
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-complete-state .dco-card-complete-icon {
-    color: #16a34a;
+    color: var(--dco-accent);
 }
 
 .dco-order-list.dco-order-card-layout .dco-card-icon {
@@ -438,13 +480,19 @@
     .dco-order-list.dco-order-card-layout .dco-card-state-pill {
         min-height: 29px;
         padding: 6px 9px;
-        gap: 6px;
+        gap: 5px;
         font-size: 10px;
     }
 
     .dco-order-list.dco-order-card-layout .dco-card-state-dot {
         width: 7px;
         height: 7px;
+    }
+
+    .dco-order-list.dco-order-card-layout .dco-card-state-icon,
+    .dco-order-list.dco-order-card-layout .dco-card-state-icon .dco-card-icon {
+        width: 15px;
+        height: 15px;
     }
 
     .dco-order-list.dco-order-card-layout .dco-card-order-row {

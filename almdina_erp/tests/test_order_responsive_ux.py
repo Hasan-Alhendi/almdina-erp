@@ -193,6 +193,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'class="dco-mobile-order-card' in list_source
     assert 'class="dco-card-customer-block"' in list_source
     assert 'class="dco-card-state-pill"' in list_source
+    assert 'class="dco-card-state-icon"' in list_source
     assert 'class="dco-card-order-link"' in list_source
     assert 'class="dco-card-info-grid"' in list_source
     assert 'renderInfoTile("لون اللوح", model.boardColor' in list_source
@@ -207,7 +208,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'if (!applyCardLayoutClass(listview)) {' in list_source
     assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=5"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=6"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     scoped_result_rule = mobile_css.split(
         ".dco-order-list.dco-order-card-layout .result {",
@@ -220,10 +221,13 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in mobile_css
     assert ".dco-card-production-action.is-start" in mobile_css
     assert ".dco-card-production-action.is-finish" in mobile_css
+    assert ".dco-card-production-action.is-deliver" in mobile_css
     assert ".dco-card-complete-state" in mobile_css
     assert ".dco-mobile-order-card.is-ready" in mobile_css
-    assert ".dco-mobile-order-card.is-progress" in mobile_css
+    assert ".dco-mobile-order-card.is-in-progress" in mobile_css
+    assert ".dco-mobile-order-card.is-ready-for-delivery" in mobile_css
     assert ".dco-mobile-order-card.is-completed" in mobile_css
+    assert ".dco-mobile-order-card.is-delivered" in mobile_css
     assert ".dco-order-card-container > .list-row" in css
     assert ".dco-order-list.dco-order-card-layout .dco-mobile-order-card" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
@@ -241,21 +245,32 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'row.board_description || "—"' in inbox_renderer
 
 
-def test_desk_list_prioritizes_active_then_ready_then_completed_rows_green():
+def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     css = source(RESPONSIVE_CSS)
     list_source = source(LIST_UX)
 
     assert "function applyOperationalRoleRows(listview)" in list_source
     assert "get_order_operational_role_flags" in list_source
     assert "function personalQueueState(doc, flag = {})" in list_source
+    assert 'if (status === "Delivered") return "delivered";' in list_source
+    assert 'if (status === "Ready for Delivery") return "ready_for_delivery";' in list_source
+    assert 'if (flag.assignment_state === "completed" || status === "Completed") return "completed";' in list_source
+    assert "const PERSONAL_QUEUE_SORT_RULES = Object.freeze({" in list_source
+    assert 'ready_for_delivery: Object.freeze({ rank: 2, field: "completion_time", direction: 1 })' in list_source
+    assert 'delivered: Object.freeze({ rank: 4, field: "modified", direction: -1 })' in list_source
+    assert "function desktopQueueState(doc, flag = {})" in list_source
     assert 'if (flag.assignment_state === "completed") return "completed";' in list_source
-    assert 'return "in_progress";' in list_source
-    assert 'return "ready";' in list_source
+    assert "const DESKTOP_QUEUE_SORT_RULES = Object.freeze({" in list_source
+    assert 'completed: Object.freeze({ rank: 2, field: "completion_time", direction: -1 })' in list_source
     assert "function sortPersonalQueueItems(items)" in list_source
-    assert '"assignment_time"' in list_source
-    assert '"completion_time"' in list_source
-    assert "return [...inProgress, ...ready, ...completed];" in list_source
-    assert "const ordered = sortPersonalQueueItems(queueItems).map(item => item.container);" in list_source
+    assert "function sortDesktopQueueItems(items)" in list_source
+    assert "function sortQueueItemsByRules(items, stateResolver, rules, fallbackState)" in list_source
+    assert 'const mobileLayout = root.classList.contains("dco-order-card-layout");' in list_source
+    assert "? sortPersonalQueueItems(queueItems)" in list_source
+    assert ": sortDesktopQueueItems(queueItems);" in list_source
+    assert "const ordered = orderedItems.map(item => item.container);" in list_source
+    assert "const isHistory = mobileLayout" in list_source
+    assert ': desktopQueueState(doc, flag) === "completed";' in list_source
     assert 'classList.toggle("dco-list-row-completed"' in list_source
     assert "const needsReorder = ordered.some" in list_source
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
