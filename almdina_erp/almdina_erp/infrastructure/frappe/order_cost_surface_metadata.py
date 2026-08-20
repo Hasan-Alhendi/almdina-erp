@@ -63,7 +63,10 @@ def order_cost_surface_metadata_state() -> dict[str, object]:
             "property_setters": [],
         }
 
-    meta = frappe.get_meta(DOCTYPE)
+    # after_migrate runs in the same process that syncs customizations.  Bypass
+    # the request-local metadata cache so a just-deleted legacy Property Setter
+    # cannot make the invariant check observe the pre-repair required flag.
+    meta = frappe.get_meta(DOCTYPE, cached=False)
     fields: dict[str, int | None] = {}
     for fieldname in COST_INPUT_FIELDS:
         field = meta.get_field(fieldname)
