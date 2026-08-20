@@ -98,7 +98,7 @@ def test_operator_opens_only_new_documentation_runtime():
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell
-    for label in ("رفع صورة أو مسح", "شكل جاهز", "ملاحظات المصمم"):
+    for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "ملاحظات المصمم"):
         assert label in shell
     assert "Api.save(context.order.name, context.piece.name, D.toStored(document))" in controller
     assert "geometry" not in controller.lower()

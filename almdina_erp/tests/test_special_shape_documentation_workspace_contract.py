@@ -40,11 +40,15 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
     def test_page_loads_only_new_layered_subsystem(self) -> None:
         page = PAGE.read_text(encoding="utf-8")
         for layer in ("domain", "application", "infrastructure", "presentation"):
-            self.assertIn(f"special_shape_documentation/{layer}/", page)
+            self.assertIn(f"${{ASSET_ROOT}}/{layer}/", page)
         self.assertNotIn("door_drawing_v3", page)
         self.assertNotIn("door_drawing_v4", page)
         self.assertIn("hide.aldDocumentation", page)
         self.assertIn("active.suspend()", page)
+        self.assertIn("renderBootState(wrapper)", page)
+        self.assertIn("Promise.all(MODULES.map", page)
+        self.assertNotIn("MODULES.reduce", page)
+        self.assertIn("infrastructure/scanner_bridge.js", page)
 
     def test_legacy_editor_directories_and_styles_are_deleted(self) -> None:
         self.assertFalse(any((PUBLIC / "js" / "door_drawing_v3").rglob("*.js")))
@@ -82,11 +86,14 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
     def test_ui_contains_required_intake_and_designer_handoff(self) -> None:
         shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
-        for label in ("رفع صورة أو مسح", "شكل جاهز", "قلم ذكي", "ملاحظات المصمم", "حفظ التوثيق"):
+        for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "قلم ذكي", "ملاحظات المصمم", "حفظ التوثيق"):
             self.assertIn(label, shell)
         self.assertIn("تنزيل الصورة الأصلية للمصمم", shell)
         self.assertIn("هذا توثيق لطلب العميل وليس ملف تصنيع", shell)
         self.assertIn("pointerdown", controller)
+        self.assertIn("Scanner.health()", controller)
+        self.assertIn("Scanner.scan()", controller)
+        self.assertIn("getCoalescedEvents", controller)
         self.assertIn("Ctrl+Z", shell)
 
 

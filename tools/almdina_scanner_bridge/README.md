@@ -27,3 +27,9 @@ The default allowed ERP origin is `https://almadina-2.horizontechco.com`. Additi
 - `POST /scan` — opens the standard Windows scanner UI and returns one JPEG image. Cancelling the Windows dialog returns HTTP 204.
 
 The bridge listens on loopback only and validates the browser `Origin` before allowing scan requests.
+
+## Use from the ERP
+
+Open **توثيق الدرفة الخاصة** and choose **مسح بالسكانر**. The UI checks `/health`, opens the Windows scanner dialog through `/scan`, and uploads the returned JPEG through the same private, piece-scoped Frappe service used by **رفع صورة**. Cancelling the Windows dialog leaves the documentation unchanged.
+
+If the ERP reports that the bridge is unavailable, keep this PowerShell window running and confirm that `http://127.0.0.1:17831/health` is reachable on the same Windows workstation. If it reports an origin error, add the exact ERP origin to `-AllowedOrigins`; do not expose the listener on a network interface.

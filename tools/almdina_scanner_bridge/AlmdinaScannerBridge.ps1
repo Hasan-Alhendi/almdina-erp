@@ -31,6 +31,8 @@ function Write-JsonResponse {
 
 function Set-CorsHeaders {
     param([Parameter(Mandatory = $true)]$Context)
+    $Context.Response.Headers["Cache-Control"] = "no-store"
+    $Context.Response.Headers["X-Content-Type-Options"] = "nosniff"
     $Origin = [string]$Context.Request.Headers["Origin"]
     if ([string]::IsNullOrWhiteSpace($Origin)) {
         return $true

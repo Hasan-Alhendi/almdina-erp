@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 global.window = global;
 const root = path.resolve(__dirname, "../../public/js/special_shape_documentation");
@@ -8,8 +10,24 @@ require(path.join(root, "application/history.js"));
 require(path.join(root, "application/templates.js"));
 require(path.join(root, "application/smart_pen.js"));
 require(path.join(root, "application/element_transform.js"));
+require(path.join(root, "infrastructure/scanner_bridge.js"));
 
 const api = global.AlmdinaSpecialShapeDocumentation;
+
+const runtimeFiles = [
+    "presentation/workspace_controller.js", "presentation/workspace_shell.js", "presentation/canvas_renderer.js",
+    "infrastructure/scanner_bridge.js", "infrastructure/workspace_api.js", "application/element_transform.js",
+    "application/smart_pen.js", "application/templates.js", "application/history.js", "domain/document.js",
+];
+const parallelSandbox = { console, setTimeout, clearTimeout, AbortController, fetch, File, Blob, Response };
+parallelSandbox.window = parallelSandbox;
+vm.createContext(parallelSandbox);
+runtimeFiles.forEach(relative => vm.runInContext(fs.readFileSync(path.join(root, relative), "utf8"), parallelSandbox, { filename: relative }));
+const parallelApi = parallelSandbox.AlmdinaSpecialShapeDocumentation;
+const parallelDocument = parallelApi.Document.create({ width_cm: 80, length_cm: 210 });
+assert.ok(parallelApi.Templates.apply(parallelDocument, "top-arch").elements.length, "runtime modules must resolve dependencies after parallel, order-independent loading");
+assert.equal(parallelApi.History.create(parallelDocument).state().dirty, false);
+
 const piece = { width_cm: 80, length_cm: 210 };
 const initial = api.Document.create(piece);
 assert.equal(initial.schema, "almdina.special-shape-documentation");
@@ -22,14 +40,30 @@ for (const definition of api.Templates.DEFINITIONS) {
     assert.equal(applied.templateId, definition.id);
 }
 
-const noisy = [
-    { xMm: 100, yMm: 100 }, { xMm: 180, yMm: 103 }, { xMm: 260, yMm: 99 },
-    { xMm: 340, yMm: 102 }, { xMm: 104, yMm: 106 },
-];
-const cleaned = api.SmartPen.clean(noisy, { toleranceMm: 8, joinToleranceMm: 20 });
-assert.ok(cleaned.points.length < noisy.length, "smart pen must remove noise");
-assert.equal(cleaned.suggestClose, true, "near endpoints must offer closure");
-assert.deepEqual(api.SmartPen.close(cleaned.points).at(-1), cleaned.points[0]);
+const jitteredLine = Array.from({ length: 31 }, (_, index) => ({ xMm: 50 + index * 8, yMm: 100 + (index % 3 - 1) * 1.6 }));
+const cleanedLine = api.SmartPen.clean(jitteredLine, { toleranceMm: 5 });
+assert.equal(cleanedLine.kind, "straight");
+assert.equal(cleanedLine.points.length, 2, "a nearly straight stroke should collapse to one clean segment");
+assert.equal(cleanedLine.points[0].yMm, cleanedLine.points[1].yMm, "a nearly horizontal stroke should snap as one line");
+
+const center = { xMm: 240, yMm: 220 }, radius = 120;
+const sampledArc = Array.from({ length: 81 }, (_, index) => {
+    const angle = Math.PI - index * Math.PI / 80;
+    return { xMm: center.xMm + Math.cos(angle) * radius, yMm: center.yMm - Math.sin(angle) * radius + (index % 2 ? 0.45 : -0.45) };
+});
+const cleanedArc = api.SmartPen.clean(sampledArc, { toleranceMm: 5 });
+assert.equal(cleanedArc.kind, "curve");
+assert.ok(cleanedArc.points.length >= 20, "an arc must retain enough samples to render smoothly rather than as a polygon");
+const radialError = Math.max(...cleanedArc.points.map(point => Math.abs(Math.hypot(point.xMm - center.xMm, point.yMm - center.yMm) - radius)));
+assert.ok(radialError < 2, `arc cleanup must preserve curvature; radial error was ${radialError}`);
+
+const closedLoop = Array.from({ length: 65 }, (_, index) => {
+    const angle = index * Math.PI * 2 / 64;
+    return { xMm: 200 + Math.cos(angle) * 100, yMm: 200 + Math.sin(angle) * 100 };
+});
+const cleanedLoop = api.SmartPen.clean(closedLoop, { toleranceMm: 5, joinToleranceMm: 20 });
+assert.equal(cleanedLoop.suggestClose, true, "near endpoints must offer closure");
+assert.deepEqual(api.SmartPen.close(cleanedLoop.points).at(-1), cleanedLoop.points[0]);
 
 let template = api.Templates.apply(initial, "top-arch");
 const element = template.elements[0];
@@ -54,4 +88,38 @@ const image = api.Document.setReference(initial, { fileUrl: "/private/files/refe
 assert.equal(api.Document.hasContent(image), true);
 assert.equal(api.Document.fromStored(api.Document.toStored(image), piece).reference.fileUrl, "/private/files/reference.jpg");
 
-console.log("Special-shape documentation domain, templates, smart pen, transforms, and history passed");
+async function verifyScannerBridge() {
+    const calls = [];
+    const health = await api.ScannerBridge.health({
+        timeoutMs: 250,
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return new Response(JSON.stringify({ ok: true, service: "almadina-scanner-bridge", version: "1.0.0" }), { status: 200, headers: { "content-type": "application/json" } });
+        },
+    });
+    assert.equal(health.ok, true);
+    assert.equal(calls[0].url, "http://127.0.0.1:17831/health");
+    assert.equal(calls[0].options.credentials, "omit");
+
+    const scanned = await api.ScannerBridge.scan({
+        fetchImpl: async () => new Response(new Blob(["jpeg-data"], { type: "image/jpeg" }), { status: 200, headers: { "content-type": "image/jpeg" } }),
+    });
+    assert.equal(scanned.type, "image/jpeg");
+    assert.match(scanned.name, /^scan-.*\.jpg$/);
+
+    const cancelled = await api.ScannerBridge.scan({ fetchImpl: async () => new Response(null, { status: 204 }) });
+    assert.equal(cancelled, null, "cancelling the Windows scanner dialog must be a no-op");
+    await assert.rejects(
+        () => api.ScannerBridge.health({ timeoutMs: 250, fetchImpl: async () => { throw new Error("offline"); } }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.UNAVAILABLE,
+    );
+    await assert.rejects(
+        () => api.ScannerBridge.health({ baseUrl: "http://scanner.example.com:17831", fetchImpl: async () => { throw new Error("must not run"); } }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.INVALID_RESPONSE,
+        "the browser adapter must never send scanner requests outside IPv4 loopback",
+    );
+}
+
+verifyScannerBridge()
+    .then(() => console.log("Special-shape documentation domain, scanner, smooth smart pen, transforms, and history passed"))
+    .catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,8 +1,9 @@
 (() => {
     "use strict";
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
-    const doc = root.Document;
     function create(initial) {
+        const doc = root.Document;
+        if (!doc) throw new Error("Special-shape document contract is unavailable");
         let present = doc.clone(initial);
         let baseline = doc.toStored(present);
         let past = [];

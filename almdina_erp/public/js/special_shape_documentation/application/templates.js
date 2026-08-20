@@ -1,7 +1,6 @@
 (() => {
     "use strict";
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
-    const D = root.Document;
     const DEFINITIONS = Object.freeze([
         Object.freeze({ id: "clipped-corner", label: "زاوية مقصوصة", icon: "⌜" }),
         Object.freeze({ id: "top-arch", label: "قوس علوي", icon: "∩" }),
@@ -11,8 +10,13 @@
         Object.freeze({ id: "slanted-edge", label: "حافة مائلة", icon: "◩" }),
     ]);
     const p = (xMm, yMm) => ({ xMm, yMm });
-    function stroke(points, closed = true) { return { id: D.id("template"), type: "stroke", points, closed, style: { color: "#1463e6", width: 3 } }; }
+    function documentContract() {
+        if (!root.Document) throw new Error("Special-shape document contract is unavailable");
+        return root.Document;
+    }
+    function stroke(points, closed = true) { return { id: documentContract().id("template"), type: "stroke", points, closed, style: { color: "#1463e6", width: 3 } }; }
     function build(templateId, canvas) {
+        const D = documentContract();
         const w = Number(canvas.widthMm), h = Number(canvas.heightMm), inset = Math.max(16, Math.min(w, h) * 0.06);
         const l = inset, r = w - inset, t = inset, b = h - inset;
         const midX = w / 2, midY = h / 2;
@@ -30,7 +34,7 @@
         return [stroke(points)];
     }
     function apply(document, templateId) {
-        return D.replaceElements(document, build(templateId, document.canvas), { templateId, source: document.reference ? "mixed" : "template" });
+        return documentContract().replaceElements(document, build(templateId, document.canvas), { templateId, source: document.reference ? "mixed" : "template" });
     }
     root.Templates = Object.freeze({ DEFINITIONS, build, apply });
 })();
