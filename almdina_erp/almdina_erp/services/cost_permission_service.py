@@ -205,8 +205,6 @@ def approve_special_piece_price(
 
     if (piece.piece_type or "Regular") != "Special":
         frappe.throw(_("Only a special door can receive a custom inclusive price."))
-    if piece.special_shape_status != "Documented":
-        frappe.throw(_("Document the special door shape before approving its price."))
 
     price = _finite_non_negative(unit_price_usd, _("Special Unit Price USD"))
     approval_note = str(note or "").strip()
