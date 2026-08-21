@@ -5,7 +5,6 @@
         "board_rate_usd",
         "cutting_cost_per_board_usd",
     ]);
-    const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const ORDER_COST_FIELDS = [
         "board_rate_usd",
         "cutting_cost_per_board_usd",
@@ -46,8 +45,8 @@
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
-            permissions &&
-            (
+            permissions
+            && (
                 typeof permissions.canDocument === "function"
                     ? permissions.canDocument(frm, capability)
                     : permissions.can(capability)
@@ -102,17 +101,30 @@
     }
 
     function orderIsEditable(frm) {
+        // Pricing has its own capabilities and its own Cost edit session. Do not
+        // call frappe.almdina.orderCanEdit() here: that helper intentionally also
+        // requires edit_order + the Order edit session and would couple two
+        // independent permission surfaces. Mirror the server-side
+        // assert_order_editable() lifecycle boundary instead.
         if (!frm || !frm.doc || frm.is_new()) return false;
-        if (window.frappe && frappe.almdina && typeof frappe.almdina.orderCanEdit === "function") {
-            return Boolean(frappe.almdina.orderCanEdit(frm));
-        }
-        return (
-            Number(frm.doc.docstatus || 0) === 0
-            && EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft")
-        );
+        if (Number(frm.doc.docstatus || 0) !== 0) return false;
+        if (String(frm.doc.revision_state || "Current") === "Superseded") return false;
+        return String(frm.doc.status || "Draft") === "Draft";
     }
 
     function editSessionActive(frm) {
+        // Inline prices are part of the Cost tab, so the Cost edit session is the
+        // primary owner. Keep the Order session fallback for legacy callers that
+        // still save price edits through the order-level edit flow.
+        const costEditUx = window.AlmdinaCostEditSessionUX;
+        if (
+            costEditUx
+            && typeof costEditUx.isEditing === "function"
+            && costEditUx.isEditing(frm)
+        ) {
+            return true;
+        }
+
         const revisionUx = window.AlmdinaOrderRevisionUX;
         if (
             revisionUx
@@ -128,23 +140,30 @@
         );
     }
 
+    function requiredInlinePriceCapability(piece) {
+        if (!piece) return null;
+        if (piece.__almdina_pending_price_capability) {
+            return piece.__almdina_pending_price_capability;
+        }
+        if (piece.piece_type === "Special") {
+            return piece.special_shape_price_status === "Approved"
+                ? "edit_special_price"
+                : "approve_special_price";
+        }
+        if (piece.piece_type === "Clipped Corner") {
+            return piece.clipped_corner_edge_price_status === "Priced"
+                ? "edit_special_price"
+                : "approve_special_price";
+        }
+        return null;
+    }
+
     function canEditInlinePiecePrice(frm, piece) {
         if (!frm || !piece || !orderIsEditable(frm) || !editSessionActive(frm)) {
             return false;
         }
-        if (piece.piece_type === "Special") {
-            const capability = piece.special_shape_price_status === "Approved"
-                ? "edit_special_price"
-                : "approve_special_price";
-            return can(frm, capability);
-        }
-        if (piece.piece_type === "Clipped Corner") {
-            const capability = piece.clipped_corner_edge_price_status === "Priced"
-                ? "edit_special_price"
-                : "approve_special_price";
-            return can(frm, capability);
-        }
-        return false;
+        const capability = requiredInlinePriceCapability(piece);
+        return Boolean(capability && can(frm, capability));
     }
 
     function orderCostFieldsEditable(frm) {
@@ -202,8 +221,24 @@
         }
     }
 
+    function rememberPendingCapability(piece, kind) {
+        if (!piece || piece.__almdina_pending_price_capability) return;
+        if (kind === "clipped") {
+            piece.__almdina_pending_price_capability =
+                piece.clipped_corner_edge_price_status === "Priced"
+                    ? "edit_special_price"
+                    : "approve_special_price";
+            return;
+        }
+        piece.__almdina_pending_price_capability =
+            piece.special_shape_price_status === "Approved"
+                ? "edit_special_price"
+                : "approve_special_price";
+    }
+
     function applyInlinePriceToPiece(piece, kind, rawValue) {
         const price = Math.max(0, Number(rawValue) || 0);
+        rememberPendingCapability(piece, kind);
         if (kind === "clipped") {
             piece.clipped_corner_edge_price_usd = price;
             piece.clipped_corner_edge_price_status = price > 0 ? "Priced" : "Unpriced";
@@ -248,13 +283,28 @@
         return (frm.doc.pieces || []).filter((piece) => piece.__almdina_pending_price_edit);
     }
 
+    function clearPendingPriceMarker(piece) {
+        if (!piece) return;
+        delete piece.__almdina_pending_price_edit;
+        delete piece.__almdina_pending_price_capability;
+    }
+
     function clearPriceOnlyDirty(frm) {
         if (!frm || !frm.doc) return;
         if (pendingPricePieces(frm).length) return;
         frm.doc.__unsaved = 0;
     }
 
-    async function flushPendingPriceEdits(frm) {
+    async function refreshAuthoritativeCost(frm) {
+        const owner = costWorkspaceState();
+        if (owner && typeof owner.load === "function") {
+            await owner.load(frm, { force: true });
+            return;
+        }
+        renderAuthorizedCost(frm);
+    }
+
+    async function flushPendingPriceEdits(frm, options = {}) {
         const pending = pendingPricePieces(frm);
         if (!pending.length) return false;
 
@@ -273,7 +323,7 @@
                 });
             } else {
                 await frappe.call({
-                    method: "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price",
+                    method: "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
                     args: {
                         order_name: frm.doc.name,
                         piece_name: piece.name,
@@ -281,22 +331,27 @@
                         note: piece.special_shape_price_note || "",
                     },
                     freeze: true,
-                    freeze_message: __("جاري اعتماد أسعار القشاط..."),
+                    freeze_message: __("جاري اعتماد أسعار الدرف الخاصة..."),
                 });
             }
-            delete piece.__almdina_pending_price_edit;
+            clearPendingPriceMarker(piece);
         }
 
-        // Mutating a piece can change the financial read model. Refresh it only
-        // through the canonical Cost workspace owner; this permission layer must
-        // never start or merge its own competing snapshot request.
-        const owner = costWorkspaceState();
-        if (owner && typeof owner.load === "function") {
-            await owner.load(frm, { force: true });
-        } else {
-            renderAuthorizedCost(frm);
+        if (options.refresh !== false) {
+            await refreshAuthoritativeCost(frm);
         }
         clearPriceOnlyDirty(frm);
+        return true;
+    }
+
+    async function discardPendingPriceEdits(frm, options = {}) {
+        const pending = pendingPricePieces(frm);
+        if (!pending.length) return false;
+        pending.forEach(clearPendingPriceMarker);
+        clearPriceOnlyDirty(frm);
+        if (options.refresh !== false) {
+            await refreshAuthoritativeCost(frm);
+        }
         return true;
     }
 
@@ -465,8 +520,10 @@
     window.AlmdinaCostPermissionsUX = Object.freeze({
         apply,
         can,
+        canEditInlinePiecePrice,
         scrubCostData,
         flushPendingPriceEdits,
+        discardPendingPriceEdits,
         pendingPricePieces,
     });
 })();

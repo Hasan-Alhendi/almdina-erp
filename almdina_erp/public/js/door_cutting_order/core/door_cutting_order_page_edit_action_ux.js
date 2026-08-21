@@ -234,6 +234,9 @@
         if (kind === "plan" && typeof api.canEditPlanSettings === "function") {
             return Boolean(api.canEditPlanSettings(frm));
         }
+        if (kind === "cost" && typeof api.canEditCostWorkspace === "function") {
+            return Boolean(api.canEditCostWorkspace(frm));
+        }
         if (kind === "cost" && typeof api.canEditCostSettings === "function") {
             return Boolean(api.canEditCostSettings(frm));
         }
@@ -337,7 +340,7 @@
         if (!permissionsResolved()) return "جاري التحقق من صلاحيات التعديل.";
         if (kind === "order") return "لا تملك صلاحية تعديل الطلب أو أن حالته الحالية لا تسمح بالتعديل.";
         if (kind === "plan") return "لا تملك صلاحية تعديل إعدادات خطة القص أو أن حالة الطلب الحالية لا تسمح بذلك.";
-        return "لا تملك صلاحية تعديل إعدادات التكلفة أو أن حالة الطلب الحالية لا تسمح بذلك.";
+        return "لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة، أو أن حالة الطلب الحالية لا تسمح بذلك.";
     }
 
     function button(label, className, disabled, title) {

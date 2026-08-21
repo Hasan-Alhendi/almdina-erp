@@ -152,7 +152,9 @@ class DoorCuttingOrder(Document):
         self._gateway().costing.calculate_special_shape_pricing()
 
     def ensure_special_shapes_documented(self) -> None:
-        self._gateway().ensure_special_shapes_documented()
+        """Compatibility boundary: special-door drawing is optional metadata."""
+
+        return None
 
     def ensure_special_prices_approved(self) -> None:
         self._gateway().ensure_special_prices_approved()

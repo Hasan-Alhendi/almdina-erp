@@ -154,8 +154,8 @@ def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometr
     assert "function canEditInlinePiecePrice(frm, piece)" in permissions
     assert '"approve_special_price"' in permissions
     assert "function applyInlinePriceToPiece(piece, kind, rawValue)" in permissions
-    assert "function flushPendingPriceEdits(frm)" in permissions
-    assert "special_shape_service.approve_special_piece_price" in permissions
+    assert "function flushPendingPriceEdits(frm, options = {})" in permissions
+    assert "cost_permission_service.approve_special_piece_price" in permissions
     assert 'note: piece.special_shape_price_note || ""' in permissions
 
     assert "old_special_geometry != special_geometry" in policy
@@ -178,18 +178,20 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "boardCount * boardRate" in presenter
     assert "boardCount * cuttingRate" in presenter
     assert "function quoteTotal(frm)" in presenter
-    assert "special_shape_service.approve_special_piece_price" in permissions
+    assert "cost_permission_service.approve_special_piece_price" in permissions
     assert "frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm)" in permissions
 
 
-def test_review_and_production_approval_gate_special_documentation_and_price():
+def test_review_and_production_keep_special_drawing_optional_but_require_price():
     order = ORDER_PY.read_text(encoding="utf-8")
     command_service = CUTTING_PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
     workspace = CUTTING_PLAN_WORKSPACE.read_text(encoding="utf-8")
     placed_piece_fields = _fields(CUTTING_PLAN_PIECE_JSON)
+
     assert "def ensure_special_shapes_documented" in order
+    assert "special-door drawing is optional metadata" in order
+    assert "self._gateway().ensure_special_shapes_documented()" not in order
     assert "def ensure_special_prices_approved" in order
-    assert "order.ensure_special_shapes_documented()" in command_service
     assert "order.ensure_special_prices_approved()" in command_service
     assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace

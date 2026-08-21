@@ -57,6 +57,11 @@
         frm.doc.pieces.forEach((piece) => {
             const financial = byName.get(piece && piece.name);
             if (!financial) return;
+            // Inline special/clipped prices are a short-lived Cost-tab draft.
+            // An asynchronous read snapshot may be older than the value the user
+            // just typed, so never project over a pending draft. Save/Cancel clears
+            // this marker and then reloads the authoritative snapshot normally.
+            if (piece && piece.__almdina_pending_price_edit) return;
             Object.entries(financial).forEach(([fieldname, value]) => {
                 if (fieldname === "name") return;
                 piece[fieldname] = value;

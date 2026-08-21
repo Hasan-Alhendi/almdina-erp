@@ -198,9 +198,12 @@ def test_tab_local_edit_buttons_fail_closed_against_each_session_permission_poli
     assert "permissionsResolved() && canEdit(frm, kind)" in page_source
     assert 'can(frm, "edit_optimizer_settings")' in plan_source
     assert 'can(frm, "view_costs") && can(frm, "edit_cost_settings")' in cost_source
+    assert 'can(frm, "approve_special_price") || can(frm, "edit_special_price")' in cost_source
+    assert "canEditCostSettings(frm) || canEditPiecePrices(frm)" in cost_source
+    assert 'typeof api.canEditCostWorkspace === "function"' in page_source
     assert 'can(frm, "edit_order")' in order_source
     assert "لا تملك صلاحية تعديل إعدادات خطة القص" in page_source
-    assert "لا تملك صلاحية تعديل إعدادات التكلفة" in page_source
+    assert "تعديل التكلفة أو تسعير الدرف الخاصة" in page_source
 
 
 def test_plan_read_mode_restores_canonical_settings_without_restoring_dco_fields():
