@@ -11,7 +11,7 @@
         board_rate_usd: "سعر اللوح",
         cutting_cost_per_board_usd: "أجور القص / لوح",
     });
-    const EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
+    const COST_SETTINGS_EDITABLE_ORDER_STATUSES = new Set(["Draft", "Pending Review", "Rejected"]);
     const STATUS_KEY = "__almdinaFocusedCostStatus";
     const STATUS_OWNER_KEY = "__almdinaFocusedCostStatusOwnerInstalled";
 
@@ -49,13 +49,34 @@
         return typeof permissions.can === "function" && Boolean(permissions.can(capability));
     }
 
-    function canEditCostSettings(frm) {
+    function baseDocumentEditable(frm) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return false;
         if (frm.is_new && frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if (String(frm.doc.revision_state || "Current") === "Superseded") return false;
-        if (!EDITABLE_ORDER_STATUSES.has(String(frm.doc.status || "Draft"))) return false;
+        return true;
+    }
+
+    function canEditCostSettings(frm) {
+        if (!baseDocumentEditable(frm)) return false;
+        if (!COST_SETTINGS_EDITABLE_ORDER_STATUSES.has(String(frm.doc.status || "Draft"))) return false;
         return Boolean(can(frm, "view_costs") && can(frm, "edit_cost_settings"));
+    }
+
+    function canEditPiecePrices(frm) {
+        if (!baseDocumentEditable(frm)) return false;
+        // Canonical price commands call assert_order_editable(), which is Draft-only.
+        if (String(frm.doc.status || "Draft") !== "Draft") return false;
+        return Boolean(
+            can(frm, "view_costs")
+            && (can(frm, "approve_special_price") || can(frm, "edit_special_price"))
+        );
+    }
+
+    function canEditCostWorkspace(frm) {
+        // One visual edit session hosts independent financial authorities. Owning
+        // price approval must never imply edit_cost_settings, and vice versa.
+        return canEditCostSettings(frm) || canEditPiecePrices(frm);
     }
 
     function workspaceSnapshot(frm) {
@@ -133,6 +154,10 @@
     }
 
     function mountDraftControls(frm) {
+        if (!canEditCostSettings(frm)) {
+            unmountDraftControls(frm);
+            return false;
+        }
         const store = storeFor(frm);
         const fieldEditor = editor();
         const state = store && store.snapshot();
@@ -236,8 +261,8 @@
     }
 
     async function startEditing(frm) {
-        if (!canEditCostSettings(frm)) {
-            frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة في حالة الطلب الحالية."));
+        if (!canEditCostWorkspace(frm)) {
+            frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة في حالة الطلب الحالية."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
@@ -249,16 +274,22 @@
         const store = storeFor(frm);
         const seed = currentSettings(frm);
         if (!store || !seed) {
-            frappe.msgprint(__("تعذر تحميل إعدادات التكلفة الحالية."));
+            frappe.msgprint(__("تعذر تحميل بيانات التكلفة الحالية."));
             return false;
         }
         store.beginEdit(seed);
         applyFieldAccess(frm);
-        mountDraftControls(frm);
+        if (canEditCostSettings(frm)) {
+            mountDraftControls(frm);
+        } else {
+            unmountDraftControls(frm);
+        }
         signalEditChanged(frm);
-        const fieldEditor = editor();
-        if (fieldEditor && typeof fieldEditor.focus === "function") {
-            fieldEditor.focus(frm, "board_rate_usd");
+        if (canEditCostSettings(frm)) {
+            const fieldEditor = editor();
+            if (fieldEditor && typeof fieldEditor.focus === "function") {
+                fieldEditor.focus(frm, "board_rate_usd");
+            }
         }
         return true;
     }
@@ -280,48 +311,53 @@
 
     async function saveEditing(frm) {
         if (!isEditing(frm)) return false;
-        if (!canEditCostSettings(frm)) {
+        if (!canEditCostWorkspace(frm)) {
             await cancelEditing(frm);
-            frappe.msgprint(__("لم تعد حالة الطلب تسمح لك بتعديل التكلفة."));
+            frappe.msgprint(__("لم تعد حالة الطلب أو صلاحياتك تسمح بتعديل هذا القسم."));
             return false;
         }
 
         const store = storeFor(frm);
         const state = store && store.snapshot();
-        const api = window.AlmdinaCostWorkspaceAPI;
         const owner = stateOwner();
-        if (!store || !state || !api || typeof api.saveSettings !== "function") return false;
+        if (!store || !state) return false;
 
-        // Capture the visible controls exactly once. Validation, dirty detection,
-        // and transport all consume this same payload so the UI can never show
-        // one value while the workspace saves a stale draft.
-        const captured = captureCostSettings(frm, state.draft || {});
-        const payload = normalizeCostSettings(captured);
-        store.replaceDraft(payload);
-        const pending = store.snapshot();
+        if (canEditCostSettings(frm)) {
+            const api = window.AlmdinaCostWorkspaceAPI;
+            if (!api || typeof api.saveSettings !== "function") return false;
 
-        // A price-only edit must not be blocked by unrelated cost-setting
-        // validation. Validate these fields only when their own draft changed.
-        if (pending.dirty && !validateRequiredCostSettings(frm, captured)) {
-            return false;
-        }
+            // Capture the visible controls exactly once. Validation, dirty detection,
+            // and transport all consume this same payload so the UI can never show
+            // one value while the workspace saves a stale draft.
+            const captured = captureCostSettings(frm, state.draft || {});
+            const payload = normalizeCostSettings(captured);
+            store.replaceDraft(payload);
+            const pending = store.snapshot();
 
-        if (pending.dirty) {
-            const saved = await api.saveSettings(frm.doc.name, payload);
-            if (!validSavedSnapshot(saved)) {
-                frappe.msgprint({
-                    title: __("تعذر حفظ التكلفة"),
-                    message: __("لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل."),
-                    indicator: "red",
-                });
+            if (pending.dirty && !validateRequiredCostSettings(frm, captured)) {
                 return false;
             }
-            if (owner && typeof owner.commit === "function") {
-                owner.commit(frm, saved);
+
+            if (pending.dirty) {
+                const saved = await api.saveSettings(frm.doc.name, payload);
+                if (!validSavedSnapshot(saved)) {
+                    frappe.msgprint({
+                        title: __("تعذر حفظ التكلفة"),
+                        message: __("لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل."),
+                        indicator: "red",
+                    });
+                    return false;
+                }
+                if (owner && typeof owner.commit === "function") {
+                    owner.commit(frm, saved);
+                } else {
+                    store.commit(saved);
+                }
             } else {
-                store.commit(saved);
+                store.cancelEdit();
             }
         } else {
+            // Price-only authority owns no board/cutting settings draft.
             store.cancelEdit();
         }
 
@@ -352,7 +388,7 @@
 
     function sync(frm) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
-        if (isEditing(frm) && !canEditCostSettings(frm)) {
+        if (isEditing(frm) && !canEditCostWorkspace(frm)) {
             const store = storeFor(frm);
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
@@ -367,7 +403,11 @@
         }
         if (isEditing(frm)) {
             applyFieldAccess(frm);
-            mountDraftControls(frm);
+            if (canEditCostSettings(frm)) {
+                mountDraftControls(frm);
+            } else {
+                unmountDraftControls(frm);
+            }
             return;
         }
         unmountDraftControls(frm);
@@ -403,6 +443,8 @@
     window.AlmdinaCostEditSessionUX = Object.freeze({
         COST_SETTING_FIELDS,
         canEditCostSettings,
+        canEditPiecePrices,
+        canEditCostWorkspace,
         isEditing,
         costSettingsMayWrite,
         startEditing,
