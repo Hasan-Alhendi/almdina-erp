@@ -46,8 +46,8 @@
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
-            permissions &&
-            (
+            permissions
+            && (
                 typeof permissions.canDocument === "function"
                     ? permissions.canDocument(frm, capability)
                     : permissions.can(capability)
@@ -113,6 +113,18 @@
     }
 
     function editSessionActive(frm) {
+        // Inline prices are part of the Cost tab, so the Cost edit session is the
+        // primary owner. Keep the Order session fallback for legacy callers that
+        // still save price edits through the order-level edit flow.
+        const costEditUx = window.AlmdinaCostEditSessionUX;
+        if (
+            costEditUx
+            && typeof costEditUx.isEditing === "function"
+            && costEditUx.isEditing(frm)
+        ) {
+            return true;
+        }
+
         const revisionUx = window.AlmdinaOrderRevisionUX;
         if (
             revisionUx
@@ -254,7 +266,16 @@
         frm.doc.__unsaved = 0;
     }
 
-    async function flushPendingPriceEdits(frm) {
+    async function refreshAuthoritativeCost(frm) {
+        const owner = costWorkspaceState();
+        if (owner && typeof owner.load === "function") {
+            await owner.load(frm, { force: true });
+            return;
+        }
+        renderAuthorizedCost(frm);
+    }
+
+    async function flushPendingPriceEdits(frm, options = {}) {
         const pending = pendingPricePieces(frm);
         if (!pending.length) return false;
 
@@ -273,7 +294,7 @@
                 });
             } else {
                 await frappe.call({
-                    method: "almdina_erp.almdina_erp.services.special_shape_service.approve_special_piece_price",
+                    method: "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
                     args: {
                         order_name: frm.doc.name,
                         piece_name: piece.name,
@@ -281,22 +302,29 @@
                         note: piece.special_shape_price_note || "",
                     },
                     freeze: true,
-                    freeze_message: __("جاري اعتماد أسعار القشاط..."),
+                    freeze_message: __("جاري اعتماد أسعار الدرف الخاصة..."),
                 });
             }
             delete piece.__almdina_pending_price_edit;
         }
 
-        // Mutating a piece can change the financial read model. Refresh it only
-        // through the canonical Cost workspace owner; this permission layer must
-        // never start or merge its own competing snapshot request.
-        const owner = costWorkspaceState();
-        if (owner && typeof owner.load === "function") {
-            await owner.load(frm, { force: true });
-        } else {
-            renderAuthorizedCost(frm);
+        if (options.refresh !== false) {
+            await refreshAuthoritativeCost(frm);
         }
         clearPriceOnlyDirty(frm);
+        return true;
+    }
+
+    async function discardPendingPriceEdits(frm, options = {}) {
+        const pending = pendingPricePieces(frm);
+        if (!pending.length) return false;
+        pending.forEach((piece) => {
+            delete piece.__almdina_pending_price_edit;
+        });
+        clearPriceOnlyDirty(frm);
+        if (options.refresh !== false) {
+            await refreshAuthoritativeCost(frm);
+        }
         return true;
     }
 
@@ -465,8 +493,10 @@
     window.AlmdinaCostPermissionsUX = Object.freeze({
         apply,
         can,
+        canEditInlinePiecePrice,
         scrubCostData,
         flushPendingPriceEdits,
+        discardPendingPriceEdits,
         pendingPricePieces,
     });
 })();
