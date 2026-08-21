@@ -36,6 +36,10 @@
         return window.AlmdinaCostWorkspacePresenterAdapter || null;
     }
 
+    function priceOwner() {
+        return window.AlmdinaCostPermissionsUX || null;
+    }
+
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         if (!permissions) return false;
@@ -213,6 +217,24 @@
         );
     }
 
+    function pendingPricePieces(frm) {
+        const owner = priceOwner();
+        if (!owner || typeof owner.pendingPricePieces !== "function") return [];
+        return owner.pendingPricePieces(frm) || [];
+    }
+
+    async function flushPendingPriceEdits(frm, options = {}) {
+        const owner = priceOwner();
+        if (!owner || typeof owner.flushPendingPriceEdits !== "function") return false;
+        return Boolean(await owner.flushPendingPriceEdits(frm, options));
+    }
+
+    async function discardPendingPriceEdits(frm, options = {}) {
+        const owner = priceOwner();
+        if (!owner || typeof owner.discardPendingPriceEdits !== "function") return false;
+        return Boolean(await owner.discardPendingPriceEdits(frm, options));
+    }
+
     async function startEditing(frm) {
         if (!canEditCostSettings(frm)) {
             frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة في حالة الطلب الحالية."));
@@ -246,7 +268,11 @@
         const store = storeFor(frm);
         if (store) store.cancelEdit();
         unmountDraftControls(frm);
-        projectCurrent(frm);
+
+        const discardedPrice = await discardPendingPriceEdits(frm);
+        if (!discardedPrice) {
+            projectCurrent(frm);
+        }
         applyFieldAccess(frm);
         signalEditChanged(frm);
         return true;
@@ -270,10 +296,15 @@
         // and transport all consume this same payload so the UI can never show
         // one value while the workspace saves a stale draft.
         const captured = captureCostSettings(frm, state.draft || {});
-        if (!validateRequiredCostSettings(frm, captured)) return false;
         const payload = normalizeCostSettings(captured);
         store.replaceDraft(payload);
         const pending = store.snapshot();
+
+        // A price-only edit must not be blocked by unrelated cost-setting
+        // validation. Validate these fields only when their own draft changed.
+        if (pending.dirty && !validateRequiredCostSettings(frm, captured)) {
+            return false;
+        }
 
         if (pending.dirty) {
             const saved = await api.saveSettings(frm.doc.name, payload);
@@ -297,6 +328,20 @@
         unmountDraftControls(frm);
         projectCurrent(frm);
         applyFieldAccess(frm);
+
+        // Special/clipped prices belong to their capability-protected commands,
+        // but the Cost tab Save action owns this user intent. Flush them here,
+        // after the settings draft closes, and reload one authoritative snapshot.
+        const hadPendingPrices = pendingPricePieces(frm).length > 0;
+        if (hadPendingPrices) {
+            await flushPendingPriceEdits(frm, { refresh: false });
+            if (owner && typeof owner.load === "function") {
+                await owner.load(frm, { force: true });
+            } else {
+                projectCurrent(frm);
+            }
+        }
+
         signalEditChanged(frm);
         frappe.show_alert({
             message: __("تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة."),
@@ -311,6 +356,11 @@
             const store = storeFor(frm);
             if (store) store.cancelEdit();
             unmountDraftControls(frm);
+            // Permission/state loss must not leave an unsaved local price marker
+            // that can later leak into another edit session.
+            discardPendingPriceEdits(frm).catch((error) => {
+                console.debug("Could not discard pending Cost price edits", error);
+            });
             applyFieldAccess(frm);
             signalEditChanged(frm);
             return;
