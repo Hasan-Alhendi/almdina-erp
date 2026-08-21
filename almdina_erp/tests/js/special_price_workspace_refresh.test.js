@@ -44,6 +44,7 @@ const fakeWindow = {
                         name: "ROW-1",
                         special_shape_price_status: "Estimated",
                         special_shape_custom_unit_price_usd: 0,
+                        special_shape_final_unit_price_usd: 0,
                     }],
                 },
             };
@@ -119,12 +120,40 @@ assert.equal(
 assert.equal(
     frm.doc.pieces[0].special_shape_price_status,
     "Estimated",
-    "The workspace projection should still update the live piece financial snapshot"
+    "The workspace projection should update an ordinary live piece financial snapshot"
 );
+
+// Reproduce the production race: the user types a Special price while an older
+// Cost snapshot still contains the previous zero/Estimated value. Rendering must
+// preserve the local pending draft until Save/Cancel resolves it.
+frm.doc.pieces[0].special_shape_custom_unit_price_usd = 150;
+frm.doc.pieces[0].special_shape_final_unit_price_usd = 150;
+frm.doc.pieces[0].special_shape_price_status = "Approved";
+frm.doc.pieces[0].__almdina_pending_price_edit = "special";
+refreshListener();
+
+assert.equal(legacyRenderCount, 2);
+assert.equal(permissionApplyCount, 2);
+assert.equal(
+    frm.doc.pieces[0].special_shape_custom_unit_price_usd,
+    150,
+    "An asynchronous Cost snapshot must not overwrite the Special price draft"
+);
+assert.equal(frm.doc.pieces[0].special_shape_price_status, "Approved");
+assert.equal(frm.doc.pieces[0].__almdina_pending_price_edit, "special");
+
+// Once Save/Cancel clears the pending marker, authoritative snapshots own the
+// financial piece projection again.
+delete frm.doc.pieces[0].__almdina_pending_price_edit;
+refreshListener();
+assert.equal(legacyRenderCount, 3);
+assert.equal(permissionApplyCount, 3);
+assert.equal(frm.doc.pieces[0].special_shape_custom_unit_price_usd, 0);
+assert.equal(frm.doc.pieces[0].special_shape_price_status, "Estimated");
 
 fakeWindow.cur_frm = { doctype: "Customer" };
 refreshListener();
-assert.equal(legacyRenderCount, 1, "A stale/non-order route must not repaint the prior order");
-assert.equal(permissionApplyCount, 1, "A stale/non-order route must not re-apply order permissions");
+assert.equal(legacyRenderCount, 3, "A stale/non-order route must not repaint the prior order");
+assert.equal(permissionApplyCount, 3, "A stale/non-order route must not re-apply order permissions");
 
 console.log("Special price workspace refresh regression simulation passed");
