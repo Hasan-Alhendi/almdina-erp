@@ -110,6 +110,9 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
             permission_source,
         )
         self.assertIn("discardPendingPriceEdits", permission_source)
+        self.assertIn("__almdina_pending_price_capability", permission_source)
+        self.assertNotIn("frappe.almdina.orderCanEdit(frm)", permission_source)
+        self.assertIn('return String(frm.doc.status || "Draft") === "Draft";', permission_source)
 
         edit_source = COST_EDIT_SESSION_UX_PATH.read_text(encoding="utf-8")
         self.assertIn("flushPendingPriceEdits", edit_source)
