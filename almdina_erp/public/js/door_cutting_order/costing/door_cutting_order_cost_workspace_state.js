@@ -50,14 +50,6 @@
         }));
     }
 
-    function syncDocumentVersion(frm, payload) {
-        const modified = payload && payload.order_modified;
-        if (!modified) return false;
-        const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
-        if (!coordinator || typeof coordinator.syncDocumentModified !== "function") return false;
-        return coordinator.syncDocumentModified(frm, modified);
-    }
-
     function reset(frm) {
         const store = storeFor(frm);
         if (!store) return null;
@@ -89,7 +81,6 @@
         const snapshot = store.commit(payload);
         frm[LOADED_IDENTITY_KEY] = currentIdentity;
         frm[LOAD_PROMISE_KEY] = null;
-        syncDocumentVersion(frm, payload);
         dispatch(frm, snapshot);
         return snapshot;
     }
@@ -154,7 +145,8 @@
                 const accepted = store.resolveLoad(currentIdentity, requestId, payload);
                 if (!accepted) return store.snapshot();
                 frm[LOADED_IDENTITY_KEY] = currentIdentity;
-                syncDocumentVersion(frm, payload);
+                // Cost GET is read-only workspace data. Never advance frm.doc.modified
+                // from a read because that could hide a real concurrent DCO mutation.
                 const state = store.snapshot();
                 dispatch(frm, state);
                 return state;
