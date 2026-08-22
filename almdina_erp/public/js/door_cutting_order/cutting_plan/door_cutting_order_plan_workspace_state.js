@@ -60,6 +60,14 @@
         return snapshot;
     }
 
+    function invalidate(frm, reason = "dependency_changed") {
+        const store = storeFor(frm);
+        if (!store || typeof store.invalidate !== "function") return false;
+        const snapshot = store.invalidate(reason);
+        dispatch(frm, snapshot);
+        return snapshot;
+    }
+
     function settleUnavailable(frm, store, currentIdentity) {
         const current = store.snapshot();
         if (
@@ -98,12 +106,14 @@
             return settleUnavailable(frm, store, currentIdentity);
         }
 
+        const current = store.snapshot();
         if (
             !options.force
             && frm[LOADED_IDENTITY_KEY] === currentIdentity
-            && store.snapshot().status === "ready"
+            && current.status === "ready"
+            && current.freshness !== "stale"
         ) {
-            return store.snapshot();
+            return current;
         }
         if (!options.force && frm[LOAD_PROMISE_KEY]) return frm[LOAD_PROMISE_KEY];
 
@@ -179,13 +189,25 @@
         if (frm && frm.doctype === "Door Cutting Order") schedule(frm, true);
     });
 
-    window.AlmdinaPlanWorkspaceState = Object.freeze({
+    const owner = Object.freeze({
         canView,
         storeFor,
         reset,
+        invalidate,
         load,
         snapshot,
         activePlan,
         schedule,
     });
+    window.AlmdinaPlanWorkspaceState = owner;
+
+    const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
+    if (coordinator && typeof coordinator.register === "function") {
+        coordinator.register("plan", {
+            canLoad: canView,
+            invalidate,
+            load,
+            snapshot,
+        });
+    }
 })();

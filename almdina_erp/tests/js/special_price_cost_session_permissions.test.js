@@ -14,6 +14,11 @@ const source = fs.readFileSync(
 );
 
 const grants = new Set(["view_costs", "approve_special_price"]);
+const pricingCalls = [];
+const syncCalls = [];
+let pricingMode = "success";
+let successfulCallIndex = 0;
+
 const fakeFrappe = {
     almdina: {
         orderCanEdit() {
@@ -31,6 +36,24 @@ const fakeFrappe = {
             on() {},
         },
     },
+    async call(options) {
+        pricingCalls.push({
+            method: options.method,
+            expectedModified: options.args.expected_modified,
+            pieceName: options.args.piece_name,
+        });
+
+        if (pricingMode === "partial" && pricingCalls.length === 2) {
+            throw new Error("simulated second-command failure");
+        }
+
+        successfulCallIndex += 1;
+        return {
+            message: {
+                order_modified: `server-${successfulCallIndex}`,
+            },
+        };
+    },
 };
 
 const frm = {
@@ -40,11 +63,16 @@ const frm = {
         docstatus: 0,
         status: "Draft",
         revision_state: "Current",
+        modified: "client-0",
+        __unsaved: 0,
         pieces: [],
     },
     fields_dict: {},
     is_new() {
         return false;
+    },
+    is_dirty() {
+        return Boolean(this.doc.__unsaved);
     },
 };
 
@@ -69,6 +97,16 @@ const fakeWindow = {
             return false;
         },
     },
+    AlmdinaWorkspaceSyncCoordinator: {
+        syncDocumentModified(receivedFrm, modified) {
+            assert.equal(receivedFrm, frm);
+            assert.equal(receivedFrm.doc.__unsaved, 0,
+                "the form token may advance only after local pricing dirty state is cleared");
+            syncCalls.push(modified);
+            receivedFrm.doc.modified = modified;
+            return true;
+        },
+    },
 };
 
 const context = vm.createContext({
@@ -83,6 +121,7 @@ const context = vm.createContext({
     String,
     Math,
     Promise,
+    Error,
     MutationObserver: class MutationObserver {
         observe() {}
         disconnect() {}
@@ -163,4 +202,92 @@ assert.equal(
     "Pricing stays locked outside an explicit edit session"
 );
 
-console.log("Special price Cost-session authorization simulation passed");
+function specialPending(name, price) {
+    return {
+        name,
+        piece_type: "Special",
+        special_shape_price_status: "Approved",
+        special_shape_custom_unit_price_usd: price,
+        special_shape_price_note: "",
+        __almdina_pending_price_edit: "special",
+        __almdina_pending_price_capability: "approve_special_price",
+    };
+}
+
+function clippedPending(name, price) {
+    return {
+        name,
+        piece_type: "Clipped Corner",
+        clipped_corner_edge_price_status: "Priced",
+        clipped_corner_edge_price_usd: price,
+        clipped_corner_edge_price_note: "",
+        __almdina_pending_price_edit: "clipped",
+        __almdina_pending_price_capability: "approve_special_price",
+    };
+}
+
+(async () => {
+    fakeWindow.AlmdinaCostEditSessionUX.isEditing = () => true;
+
+    pricingCalls.length = 0;
+    syncCalls.length = 0;
+    successfulCallIndex = 0;
+    pricingMode = "success";
+    frm.doc.modified = "client-0";
+    frm.doc.__unsaved = 1;
+    frm.__almdina_pricing_command_modified = null;
+    frm.doc.pieces = [
+        specialPending("ROW-A", 120),
+        clippedPending("ROW-B", 30),
+    ];
+
+    await api.flushPendingPriceEdits(frm, { refresh: false });
+    assert.deepEqual(
+        pricingCalls.map(call => call.expectedModified),
+        ["client-0", "server-1"],
+        "each pricing command must consume the version returned by the previous successful command"
+    );
+    assert.deepEqual(syncCalls, ["server-2"],
+        "frm.doc.modified must advance once, after all local pricing commands finish");
+    assert.equal(frm.doc.modified, "server-2");
+    assert.equal(frm.doc.__unsaved, 0);
+    assert.equal(frm.__almdina_pricing_command_modified, null);
+    assert.equal(api.pendingPricePieces(frm).length, 0);
+
+    pricingCalls.length = 0;
+    syncCalls.length = 0;
+    successfulCallIndex = 2;
+    pricingMode = "partial";
+    frm.doc.modified = "server-2";
+    frm.doc.__unsaved = 1;
+    frm.__almdina_pricing_command_modified = null;
+    frm.doc.pieces = [
+        specialPending("ROW-C", 140),
+        clippedPending("ROW-D", 35),
+    ];
+
+    await assert.rejects(
+        api.flushPendingPriceEdits(frm, { refresh: false }),
+        /simulated second-command failure/
+    );
+    assert.equal(frm.doc.modified, "server-2",
+        "partial success must not advance the form write token while another local price remains pending");
+    assert.equal(frm.__almdina_pricing_command_modified, "server-3",
+        "the successful command version must be retained for a safe retry");
+    assert.equal(api.pendingPricePieces(frm).length, 1);
+    assert.equal(api.pendingPricePieces(frm)[0].name, "ROW-D");
+
+    pricingMode = "success";
+    pricingCalls.length = 0;
+    await api.flushPendingPriceEdits(frm, { refresh: false });
+    assert.equal(pricingCalls[0].expectedModified, "server-3",
+        "retry must continue from the last successful pricing command version");
+    assert.equal(frm.doc.modified, "server-4");
+    assert.deepEqual(syncCalls, ["server-4"]);
+    assert.equal(api.pendingPricePieces(frm).length, 0);
+
+    console.log("Special price Cost-session authorization and concurrency simulation passed");
+})().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});

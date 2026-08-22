@@ -60,6 +60,14 @@
         return snapshot;
     }
 
+    function invalidate(frm, reason = "dependency_changed") {
+        const store = storeFor(frm);
+        if (!store || typeof store.invalidate !== "function") return false;
+        const snapshot = store.invalidate(reason);
+        dispatch(frm, snapshot);
+        return snapshot;
+    }
+
     function commit(frm, payload) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return null;
         const store = storeFor(frm);
@@ -115,12 +123,14 @@
             return settleUnavailable(frm, store, currentIdentity);
         }
 
+        const current = store.snapshot();
         if (
             !options.force
             && frm[LOADED_IDENTITY_KEY] === currentIdentity
-            && store.snapshot().status === "ready"
+            && current.status === "ready"
+            && current.freshness !== "stale"
         ) {
-            return store.snapshot();
+            return current;
         }
         if (!options.force && frm[LOAD_PROMISE_KEY]) return frm[LOAD_PROMISE_KEY];
 
@@ -135,6 +145,8 @@
                 const accepted = store.resolveLoad(currentIdentity, requestId, payload);
                 if (!accepted) return store.snapshot();
                 frm[LOADED_IDENTITY_KEY] = currentIdentity;
+                // Cost GET is read-only workspace data. Never advance frm.doc.modified
+                // from a read because that could hide a real concurrent DCO mutation.
                 const state = store.snapshot();
                 dispatch(frm, state);
                 return state;
@@ -195,14 +207,26 @@
         if (frm && frm.doctype === "Door Cutting Order") schedule(frm, true);
     });
 
-    window.AlmdinaCostWorkspaceState = Object.freeze({
+    const owner = Object.freeze({
         canView,
         storeFor,
         reset,
+        invalidate,
         commit,
         load,
         snapshot,
         settings,
         schedule,
     });
+    window.AlmdinaCostWorkspaceState = owner;
+
+    const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
+    if (coordinator && typeof coordinator.register === "function") {
+        coordinator.register("cost", {
+            canLoad: canView,
+            invalidate,
+            load,
+            snapshot,
+        });
+    }
 })();

@@ -88,6 +88,43 @@ def _authorized_order(order_name: str, capability: str) -> Any:
     return order
 
 
+def _locked_order(order_name: str) -> Any:
+    """Lock and load one DCO before a focused pricing mutation."""
+
+    name = str(order_name or "").strip()
+    if not name:
+        frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (name,),
+    )
+    order = frappe.get_doc("Door Cutting Order", name)
+    order.check_permission("read")
+    return order
+
+
+def _require_expected_document_version(order: Any, expected_modified: str | None) -> None:
+    """Preserve optimistic concurrency for commands that save the parent DCO.
+
+    Pricing is edited through a focused Cost command instead of the native DCO
+    form save. The browser must therefore send the document version it actually
+    opened. Advancing that token from an unrelated GET would hide concurrent
+    edits, so only a successful mutation may return a new trusted version.
+    """
+
+    expected = str(expected_modified or "").strip()
+    current = _document_version(order)
+    if expected and expected == current:
+        return
+    frappe.throw(
+        _(
+            "تم تعديل الطلب بعد فتحه. أعد تحميل الطلب لمراجعة آخر التغييرات "
+            "قبل حفظ السعر."
+        ),
+        frappe.TimestampMismatchError,
+    )
+
+
 def _require_cost_visibility(order: Any) -> None:
     require_cutting_plan_capability(order, Capability.VIEW_COSTS)
 
@@ -104,6 +141,12 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
         "name": piece.name,
         **{fieldname: getattr(piece, fieldname, None) for fieldname in PIECE_COST_FIELDS},
     }
+
+
+def _document_version(order: Any) -> str:
+    """Return the DCO optimistic-concurrency token after the current command/read."""
+
+    return str(getattr(order, "modified", None) or "")
 
 
 def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
@@ -123,6 +166,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
     return {
         "order_name": order.name,
+        "order_modified": _document_version(order),
         "cutting_plan": str(getattr(plan, "name", None) or "") or None,
         "order": resolved_order,
         "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
@@ -188,11 +232,11 @@ def approve_special_piece_price(
     piece_name: str,
     unit_price_usd: float,
     note: str | None = None,
+    expected_modified: str | None = None,
 ) -> dict[str, Any]:
     """Approve or edit a special-door price through configurable capabilities."""
 
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    order.check_permission("read")
+    order = _locked_order(order_name)
     _require_cost_visibility(order)
     piece = _special_piece(order, piece_name)
     required_capability = (
@@ -201,6 +245,7 @@ def approve_special_piece_price(
         else Capability.APPROVE_SPECIAL_PRICE
     )
     require_document_capability(order, required_capability)
+    _require_expected_document_version(order, expected_modified)
     assert_order_editable(order)
 
     if (piece.piece_type or "Regular") != "Special":
@@ -221,6 +266,7 @@ def approve_special_piece_price(
 
     return {
         "order_name": order.name,
+        "order_modified": _document_version(order),
         "piece_name": piece.name,
         "unit_price_usd": flt(piece.special_shape_final_unit_price_usd),
         "price_status": piece.special_shape_price_status,
@@ -238,11 +284,11 @@ def update_clipped_corner_edge_price(
     piece_name: str,
     edge_price_usd: float,
     note: str | None = None,
+    expected_modified: str | None = None,
 ) -> dict[str, Any]:
     """Set or update cut-corner edge banding processing cost via pricing capabilities."""
 
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    order.check_permission("read")
+    order = _locked_order(order_name)
     _require_cost_visibility(order)
     piece = _special_piece(order, piece_name)
     required_capability = (
@@ -251,6 +297,7 @@ def update_clipped_corner_edge_price(
         else Capability.APPROVE_SPECIAL_PRICE
     )
     require_document_capability(order, required_capability)
+    _require_expected_document_version(order, expected_modified)
     assert_order_editable(order)
 
     if (piece.piece_type or "Regular") != "Clipped Corner":
@@ -271,6 +318,7 @@ def update_clipped_corner_edge_price(
 
     return {
         "order_name": order.name,
+        "order_modified": _document_version(order),
         "piece_name": piece.name,
         "edge_price_usd": flt(piece.clipped_corner_edge_price_usd),
         "price_status": piece.clipped_corner_edge_price_status,
