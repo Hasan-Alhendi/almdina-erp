@@ -17,6 +17,8 @@ on:
       - "almdina_erp/tests/js/shape_output_contract.test.js"
       - "almdina_erp/tests/test_order_piece_policy_domain.py"
       - "almdina_erp/tests/test_special_shape_documentation_*"
+      - "tools/almdina_scanner_bridge/**"
+      - ".github/workflows/scanner-bridge-windows.yml"
       - ".github/workflows/special-shape-documentation-checks.yml"
   pull_request:
     paths:
@@ -33,6 +35,8 @@ on:
       - "almdina_erp/tests/js/shape_output_contract.test.js"
       - "almdina_erp/tests/test_order_piece_policy_domain.py"
       - "almdina_erp/tests/test_special_shape_documentation_*"
+      - "tools/almdina_scanner_bridge/**"
+      - ".github/workflows/scanner-bridge-windows.yml"
       - ".github/workflows/special-shape-documentation-checks.yml"
 
 permissions:
@@ -64,6 +68,7 @@ jobs:
           python -m unittest -v almdina_erp.tests.test_order_piece_policy_domain
           python -m unittest -v almdina_erp.tests.test_special_shape_documentation_workspace_contract
           python -m unittest -v almdina_erp.tests.test_special_shape_documentation_ownership_contract
+          python -m unittest -v almdina_erp.tests.test_special_shape_documentation_scanner_installer_contract
       - name: Run documentation regressions
         run: |
           node almdina_erp/tests/js/special_shape_documentation.test.js

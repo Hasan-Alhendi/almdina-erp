@@ -239,7 +239,7 @@ Professional UI لا يعني المزيد من animation أو cards؛ يعني 
 
 ### Special Shape Documentation
 
-هو bounded frontend subsystem بطبقات خاصة به تحت `public/js/special_shape_documentation/`. عقد الوثيقة والقلم الذكي والأشكال لا تعتمد DOM/Frappe، والـpresentation/infrastructure في الخارج. محول السكانر المحلي يقع في `infrastructure/scanner_bridge.js` ولا يعرف Frappe أو نموذج الوثيقة؛ الـcontroller يمرر ملفه إلى `WorkspaceApi` القائم. هذا السطح يملك توثيق طلب العميل فقط؛ `special_shape_geometry_json` وDXF يبقيان في مسار التصنيع المستقل.
+هو bounded frontend subsystem بطبقات خاصة به تحت `public/js/special_shape_documentation/`. عقد الوثيقة والقلم الذكي والأشكال لا تعتمد DOM/Frappe، والـpresentation/infrastructure في الخارج. محول السكانر المحلي يقع في `infrastructure/scanner_bridge.js` ولا يعرف Frappe أو نموذج الوثيقة؛ الـcontroller يمرر ملفه إلى `WorkspaceApi` القائم. النظير على Windows تطبيق مستقل تحت `tools/almdina_scanner_bridge` يفصل سياسة الـOrigin والبروتوكول عن Tcp/WIA وواجهة شريط النظام، ويبدأ تلقائيًا بعد تثبيت per-user. هذا السطح يملك توثيق طلب العميل فقط؛ `special_shape_geometry_json` وDXF يبقيان في مسار التصنيع المستقل.
 
 ### Permission Context / shared infrastructure
 

@@ -3,10 +3,12 @@
 
     const root = window.AlmdinaSpecialShapeDocumentation = window.AlmdinaSpecialShapeDocumentation || Object.create(null);
     const DEFAULT_BASE_URL = "http://127.0.0.1:17831";
+    const INSTALLER_URL = "https://github.com/Hasan-Alhendi/almdina-erp/releases/download/scanner-bridge-latest/AlmdinaScannerBridgeSetup.exe";
     const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
     const ERROR_CODES = Object.freeze({
         UNAVAILABLE: "bridge-unavailable",
         FORBIDDEN: "bridge-forbidden",
+        BUSY: "scanner-busy",
         SCAN_FAILED: "scan-failed",
         INVALID_RESPONSE: "invalid-response",
         IMAGE_TOO_LARGE: "image-too-large",
@@ -84,6 +86,8 @@
         }
         if (response.status === 204) return null;
         if (response.status === 403) throw new ScannerBridgeError(ERROR_CODES.FORBIDDEN, "Scanner bridge rejected this origin");
+        if (response.status === 409) throw new ScannerBridgeError(ERROR_CODES.BUSY, "Scanner is already busy");
+        if (response.status === 413) throw new ScannerBridgeError(ERROR_CODES.IMAGE_TOO_LARGE, "Scanned image is too large");
         if (!response.ok) throw new ScannerBridgeError(ERROR_CODES.SCAN_FAILED, `Scanner acquisition failed (${response.status})`);
 
         const contentType = String(response.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
@@ -100,5 +104,5 @@
         return new FileConstructor([blob], `scan-${stamp}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
     }
 
-    root.ScannerBridge = Object.freeze({ DEFAULT_BASE_URL, ERROR_CODES, ScannerBridgeError, health, scan });
+    root.ScannerBridge = Object.freeze({ DEFAULT_BASE_URL, INSTALLER_URL, ERROR_CODES, ScannerBridgeError, health, scan });
 })();

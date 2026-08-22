@@ -74,14 +74,15 @@
         }
         function scannerErrorMessage(error) {
             if (error && error.code === Scanner.ERROR_CODES.FORBIDDEN) return "هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.";
+            if (error && error.code === Scanner.ERROR_CODES.BUSY) return "السكانر مشغول بعملية أخرى. انتظر انتهاءها ثم أعد المحاولة.";
             if (error && error.code === Scanner.ERROR_CODES.SCAN_FAILED) return "تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.";
             if (error && error.code === Scanner.ERROR_CODES.IMAGE_TOO_LARGE) return "الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.";
             if (error && error.code === Scanner.ERROR_CODES.INVALID_RESPONSE) return "استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.";
-            return "تعذر الاتصال بالسكانر. شغّل Almdina Scanner Bridge على جهاز Windows ثم أعد المحاولة.";
+            return "برنامج السكانر غير مثبت أو متوقف. ثبّته مرة واحدة، أو افتحه من قائمة ابدأ إذا كان مثبتًا.";
         }
         async function scanReference() {
             if (scanning || !context || !context.permissions.can_edit) return;
-            const token = generation; let feedback = "", feedbackState = "idle"; scanning = true;
+            const token = generation; let feedback = "", feedbackState = "idle", installerUrl = ""; scanning = true;
             shell.setScannerState({ busy: true, message: "سيظهر مربع Windows لاختيار جهاز السكانر وإعدادات المسح." });
             try {
                 await Scanner.health(); if (token !== generation || suspended) return;
@@ -91,9 +92,11 @@
                 feedback = added ? "تمت إضافة صورة السكانر. يمكنك الآن الرسم أو إضافة القياسات." : "تعذر إضافة صورة السكانر إلى التوثيق.";
                 feedbackState = added ? "success" : "error";
             } catch (error) {
-                console.error("Scanner acquisition failed", error); feedback = scannerErrorMessage(error); feedbackState = "error"; frappe.msgprint(feedback);
+                console.error("Scanner acquisition failed", error); feedback = scannerErrorMessage(error); feedbackState = "error";
+                if (error && error.code === Scanner.ERROR_CODES.UNAVAILABLE) installerUrl = Scanner.INSTALLER_URL;
+                frappe.msgprint(feedback);
             } finally {
-                scanning = false; if (shell && token === generation && !suspended) shell.setScannerState({ busy: false, message: feedback, state: feedbackState });
+                scanning = false; if (shell && token === generation && !suspended) shell.setScannerState({ busy: false, message: feedback, state: feedbackState, installerUrl });
             }
         }
         async function removeImage() { if (!context.permissions.can_edit) return; const reference = history.get().reference; if (!reference || !await confirmAsync("هل تريد مسح الصورة المرجعية من التوثيق؟")) return; pendingFileRemovals.add(reference.fileUrl); commit(D.setReference(history.get(), null)); }

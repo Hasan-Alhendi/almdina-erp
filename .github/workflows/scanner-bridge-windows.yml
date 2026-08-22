@@ -1,0 +1,146 @@
+name: Windows Scanner Bridge
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [Develop]
+    tags: ["scanner-bridge-v*"]
+    paths:
+      - "tools/almdina_scanner_bridge/**"
+      - "almdina_erp/public/js/special_shape_documentation/infrastructure/scanner_bridge.js"
+      - "almdina_erp/public/js/special_shape_documentation/presentation/workspace_controller.js"
+      - "almdina_erp/public/js/special_shape_documentation/presentation/workspace_shell.js"
+      - ".github/workflows/scanner-bridge-windows.yml"
+  pull_request:
+    paths:
+      - "tools/almdina_scanner_bridge/**"
+      - "almdina_erp/public/js/special_shape_documentation/infrastructure/scanner_bridge.js"
+      - "almdina_erp/public/js/special_shape_documentation/presentation/workspace_controller.js"
+      - "almdina_erp/public/js/special_shape_documentation/presentation/workspace_shell.js"
+      - ".github/workflows/scanner-bridge-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Test loopback protocol and origin policy
+        run: >-
+          dotnet run
+          --project tools/almdina_scanner_bridge/tests/Almdina.ScannerBridge.Core.Tests/Almdina.ScannerBridge.Core.Tests.csproj
+          --configuration Release
+
+      - name: Publish self-contained Windows tray app
+        run: >-
+          dotnet publish
+          tools/almdina_scanner_bridge/src/Almdina.ScannerBridge/Almdina.ScannerBridge.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output tools/almdina_scanner_bridge/build/publish
+
+      - name: Sign tray app when production certificate is configured
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $statusPath = "tools/almdina_scanner_bridge/build/signing-status.txt"
+          if ([string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64)) {
+            "unsigned" | Set-Content $statusPath
+            Write-Warning "No Windows signing certificate is configured; the CI artifact is for UAT only."
+            exit 0
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP "almadina-signing.pfx"
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Where-Object FullName -Match '\\x64\\signtool\.exe$' |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($signTool)) { throw "signtool.exe was not found" }
+          & $signTool sign /fd SHA256 /f $certificatePath /p $env:CERTIFICATE_PASSWORD /tr http://timestamp.digicert.com /td SHA256 "tools/almdina_scanner_bridge/build/publish/Almdina.ScannerBridge.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Signing the tray app failed" }
+          Remove-Item $certificatePath -Force
+          "signed" | Set-Content $statusPath
+
+      - name: Compile one-click installer
+        uses: Minionguyjpro/Inno-Setup-Action@ec985ef724d1fb4a05bfbc1a8e49930dc76d2b0c
+        with:
+          path: tools/almdina_scanner_bridge/installer/AlmdinaScannerBridge.iss
+          install_latest: true
+
+      - name: Sign installer and create checksum
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $installer = "tools/almdina_scanner_bridge/build/installer/AlmdinaScannerBridgeSetup.exe"
+          if (!(Test-Path $installer)) { throw "Installer was not created" }
+          if (![string]::IsNullOrWhiteSpace($env:CERTIFICATE_BASE64)) {
+            $certificatePath = Join-Path $env:RUNNER_TEMP "almadina-signing.pfx"
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+            $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+              Where-Object FullName -Match '\\x64\\signtool\.exe$' |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+            & $signTool sign /fd SHA256 /f $certificatePath /p $env:CERTIFICATE_PASSWORD /tr http://timestamp.digicert.com /td SHA256 $installer
+            if ($LASTEXITCODE -ne 0) { throw "Signing the installer failed" }
+            Remove-Item $certificatePath -Force
+          }
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  AlmdinaScannerBridgeSetup.exe" | Set-Content "tools/almdina_scanner_bridge/build/installer/AlmdinaScannerBridgeSetup.exe.sha256"
+          Copy-Item "tools/almdina_scanner_bridge/build/signing-status.txt" "tools/almdina_scanner_bridge/build/installer/signing-status.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Almdina-Scanner-Bridge-Windows
+          path: tools/almdina_scanner_bridge/build/installer/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/scanner-bridge-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Almdina-Scanner-Bridge-Windows
+          path: scanner-bridge-release
+      - name: Require signed production binaries
+        run: test "$(tr -d '\r\n' < scanner-bridge-release/signing-status.txt)" = "signed"
+      - name: Publish stable installer URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#scanner-bridge-v}"
+          if gh release view scanner-bridge-latest --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/scanner-bridge-latest" -f sha="${GITHUB_SHA}" -F force=true >/dev/null
+            gh release upload scanner-bridge-latest \
+              scanner-bridge-release/AlmdinaScannerBridgeSetup.exe \
+              scanner-bridge-release/AlmdinaScannerBridgeSetup.exe.sha256 \
+              --repo "${GITHUB_REPOSITORY}" --clobber
+            gh release edit scanner-bridge-latest --repo "${GITHUB_REPOSITORY}" \
+              --title "Almdina Scanner Bridge ${version}" \
+              --notes "Signed Windows installer built from ${GITHUB_REF_NAME} (${GITHUB_SHA})." \
+              --latest=false
+          else
+            gh release create scanner-bridge-latest \
+              scanner-bridge-release/AlmdinaScannerBridgeSetup.exe \
+              scanner-bridge-release/AlmdinaScannerBridgeSetup.exe.sha256 \
+              --repo "${GITHUB_REPOSITORY}" --target "${GITHUB_SHA}" \
+              --title "Almdina Scanner Bridge ${version}" \
+              --notes "Signed Windows installer built from ${GITHUB_REF_NAME} (${GITHUB_SHA})." \
+              --latest=false
+          fi

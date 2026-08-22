@@ -66,6 +66,14 @@ smoke test
 - لا تشخص stale browser asset كـBusiness bug قبل فحص cache/build.
 - لكن لا تستخدم cache كتبرير لبيانات DCO خاطئة بعد navigation؛ افصل asset-cache عن client state bug.
 
+### إصدار تطبيق سكانر Windows
+
+- ابنِ `AlmdinaScannerBridgeSetup.exe` من Workflow `Windows Scanner Bridge` على SHA المرشح نفسه.
+- Artifact غير الموقّع مخصص لـUAT فقط؛ إصدار الموظفين يجب أن يمر بتوقيع Authenticode وtimestamp، ويمنع الـWorkflow نشر Release بلا توقيع.
+- انشر tag بالشكل `scanner-bridge-v*` ليصبح المثبت الموقّع في رابط GitHub Release الثابت الذي تعرضه الواجهة.
+- اختبر التثبيت per-user، التشغيل مع تسجيل الدخول، `/health`، WIA، الإلغاء، والإزالة على جهاز Windows فعلي.
+- التطبيق لا يحتاج migration أو صلاحية مدير، ولا يجوز استبدال loopback بعنوان شبكي.
+
 ## 7. Smoke checklist
 
 بعد deployment مهم، اختبر بحسابات غير Administrator أيضًا:
