@@ -106,6 +106,12 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
     }
 
 
+def _document_version(order: Any) -> str:
+    """Return the DCO optimistic-concurrency token after the current command/read."""
+
+    return str(getattr(order, "modified", None) or "")
+
+
 def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
     order_snapshot = {
         fieldname: getattr(order, fieldname, None)
@@ -123,6 +129,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         resolved_order["required_boards"] = int(getattr(plan, "required_boards", 0) or 0)
     return {
         "order_name": order.name,
+        "order_modified": _document_version(order),
         "cutting_plan": str(getattr(plan, "name", None) or "") or None,
         "order": resolved_order,
         "pieces": [_piece_snapshot(piece) for piece in (order.pieces or [])],
@@ -221,6 +228,7 @@ def approve_special_piece_price(
 
     return {
         "order_name": order.name,
+        "order_modified": _document_version(order),
         "piece_name": piece.name,
         "unit_price_usd": flt(piece.special_shape_final_unit_price_usd),
         "price_status": piece.special_shape_price_status,
@@ -271,6 +279,7 @@ def update_clipped_corner_edge_price(
 
     return {
         "order_name": order.name,
+        "order_modified": _document_version(order),
         "piece_name": piece.name,
         "edge_price_usd": flt(piece.clipped_corner_edge_price_usd),
         "price_status": piece.clipped_corner_edge_price_status,
