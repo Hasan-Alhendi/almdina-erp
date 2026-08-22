@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
-    ORDER_LIST_ROUTE,
     WORKSPACE_CONTROL_CENTER,
     WORKSPACE_MAIN,
     WORKSPACE_REPORTS,
@@ -129,8 +128,8 @@ class TestControlCenterAuthorization(unittest.TestCase):
                 Capability.COMPLETE_REPLACEMENT,
             }
         )
-        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
-        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self.assertNotIn("home_page", navigation)
+        self.assertNotIn("default_route", navigation)
         self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
 
     def test_management_and_reports_expand_the_correct_workspaces(self) -> None:
