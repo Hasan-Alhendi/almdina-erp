@@ -24,16 +24,19 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 
-    if (
-        !frontend
-        || typeof frontend.requireAssets !== "function"
-        || typeof frontend.ensureStylesheet !== "function"
-    ) {
+    if (!frontend || typeof frontend.ensureStylesheet !== "function") {
         showBootstrapError(new Error("Almdina frontend foundation is unavailable"));
         return;
     }
 
-    const moduleLoad = frontend.requireAssets(MODULES);
+    // Deploys can briefly serve a newer Page script alongside an older cached
+    // global foundation. Keep the shared loader as the preferred owner, but fall
+    // back to one native Frappe batch when requireAssets is not available yet.
+    // This preserves the single-freeze cold-load behavior without making page
+    // availability depend on cache synchronization across independent assets.
+    const moduleLoad = typeof frontend.requireAssets === "function"
+        ? frontend.requireAssets(MODULES)
+        : Promise.resolve(frappe.require(MODULES));
     const styleLoad = frontend.ensureStylesheet(STYLESHEET, {
         id: "almdina-workforce-console-style",
     });
