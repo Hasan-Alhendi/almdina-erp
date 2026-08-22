@@ -14,6 +14,7 @@ NAVIGATION = (
     / "navigation_context.py"
 )
 BOOT = ROOT / "boot.py"
+HOOKS = ROOT / "hooks.py"
 PERMISSION_SERVICE = (
     ROOT
     / "almdina_erp"
@@ -63,6 +64,12 @@ class TestSharedShellWorkspaceBootOrder(unittest.TestCase):
         self.assertIn('system_administrator=user == "Administrator"', service)
         self.assertNotIn('bootinfo["home_page"] =', boot)
         self.assertNotIn('bootinfo["default_route"] =', boot)
+
+    def test_app_card_uses_native_frappe_workspace_route(self) -> None:
+        hooks = HOOKS.read_text(encoding="utf-8")
+
+        self.assertIn('"route": "/desk/almdina-erp"', hooks)
+        self.assertNotIn('"route": "/desk",', hooks)
 
     def test_administrator_app_card_is_not_rewritten_to_desktop(self) -> None:
         client = SHARED_SHELL.read_text(encoding="utf-8")
