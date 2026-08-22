@@ -88,13 +88,17 @@ def test_active_controller_keeps_save_orchestration_outside_the_doctype_base():
     assert "class DoorCuttingOrderController(DoorCuttingOrder)" in source
 
 
-def test_save_use_case_runs_optimizer_only_on_explicit_recalculation():
+def test_order_save_use_case_never_owns_cutting_plan_recalculation():
     source = _text(SAVE_USE_CASE)
-    assert "gateway.force_recalculation_requested()" in source
-    assert "gateway.calculate_cutting_plan(input_fingerprint)" in source
-    assert "gateway.can_reuse_current_plan(input_fingerprint)" in source
-    assert "gateway.refresh_current_plan(input_fingerprint)" in source
-    assert "gateway.invalidate_current_plan()" in source
+    assert "without touching Cutting Plan state" in source
+    assert "gateway.enforce_immutability()" in source
+    assert "gateway.calculate_cut_dimensions()" in source
+    assert "gateway.calculate_piece_costs()" in source
+    assert "force_recalculation_requested" not in source
+    assert "calculate_cutting_plan" not in source
+    assert "can_reuse_current_plan" not in source
+    assert "refresh_current_plan" not in source
+    assert "invalidate_current_plan" not in source
 
 
 def test_explicit_recalculation_is_owned_by_capability_protected_service():
