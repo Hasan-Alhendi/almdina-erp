@@ -18,7 +18,7 @@ add_to_apps_screen = [
         "name": "almdina_erp",
         "logo": "/assets/almdina_erp/images/factory-app.svg",
         "title": "Factory Management",
-        "route": "/desk",
+        "route": "/desk/almdina-erp",
     }
 ]
 
