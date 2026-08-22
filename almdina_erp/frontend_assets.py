@@ -45,6 +45,10 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js",
+        # DCO-specific dependency policy is deliberately separate from the shared
+        # freshness primitive: only this feature knows which inputs affect Plan,
+        # Cost, or the special-price basis.
+        "public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js",
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
@@ -145,6 +149,9 @@ doctype_js = {
         # A5.3 is presentation-only. It reads Plan/Cost workspace snapshots after
         # their edit/page coordinators and never becomes a state or command owner.
         "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js",
+        # Freshness UX is presentation-only and deliberately late: it annotates the
+        # already-rendered Cost surface and never owns pricing or persistence.
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js",
         # Final field-status owner on purpose: no later compatibility layer may
         # re-open native plan inputs. Workspace-owned detached controls remain the
         # only writable Plan settings surface during a Plan edit session.
