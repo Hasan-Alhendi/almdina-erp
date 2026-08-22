@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
-    ORDER_LIST_ROUTE,
     WORKSPACE_CONTROL_CENTER,
     WORKSPACE_MAIN,
     WORKSPACE_SETTINGS,
@@ -29,6 +28,10 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 
 
 class TestAuthorizationDomain(unittest.TestCase):
+    def _assert_frappe_owns_home(self, navigation: dict) -> None:
+        self.assertNotIn("home_page", navigation)
+        self.assertNotIn("default_route", navigation)
+
     def test_catalog_contains_every_capability_once(self) -> None:
         self.assertEqual(set(CAPABILITY_CATALOG), ALL_CAPABILITIES)
         self.assertEqual(
@@ -105,8 +108,7 @@ class TestAuthorizationDomain(unittest.TestCase):
             }
         )
         self.assertEqual(navigation["profile"], "shop_floor")
-        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
-        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self._assert_frappe_owns_home(navigation)
         self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(navigation["shared_shell"])
         self.assertTrue(navigation["sections"]["production"])
@@ -116,8 +118,7 @@ class TestAuthorizationDomain(unittest.TestCase):
         self.assertEqual(navigation["profile"], "shared")
         self.assertFalse(navigation["shared_shell"])
         self.assertFalse(navigation["app_only"])
-        self.assertEqual(navigation["home_page"], "")
-        self.assertEqual(navigation["default_route"], "")
+        self._assert_frappe_owns_home(navigation)
         self.assertEqual(navigation["workspaces"], [])
 
     def test_capabilities_expand_workspaces_without_changing_application(self) -> None:
@@ -129,8 +130,7 @@ class TestAuthorizationDomain(unittest.TestCase):
             }
         )
         self.assertEqual(navigation["profile"], "full")
-        self.assertEqual(navigation["home_page"], "almdina-erp")
-        self.assertEqual(navigation["default_route"], "/desk/almdina-erp")
+        self._assert_frappe_owns_home(navigation)
         self.assertIn(WORKSPACE_MAIN, navigation["workspaces"])
         self.assertIn(WORKSPACE_SHOP_FLOOR, navigation["workspaces"])
         self.assertIn(WORKSPACE_CONTROL_CENTER, navigation["workspaces"])

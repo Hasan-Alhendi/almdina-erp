@@ -202,22 +202,10 @@ def build_navigation_context(
         if has_permissions_admin:
             workspaces.append(WORKSPACE_GO_LIVE)
 
-    if system_administrator:
-        home_page = DESKTOP_PAGE_ROUTE
-        default_route = f"/desk/{DESKTOP_PAGE_ROUTE}"
-    elif operator_only:
-        home_page = ORDER_LIST_ROUTE
-        default_route = f"/desk/{ORDER_LIST_ROUTE}"
-    else:
-        home_page = WORKSPACE_MAIN_ROUTE
-        default_route = f"/desk/{WORKSPACE_MAIN_ROUTE}"
-
     return {
         "shared_shell": active,
         "app_only": active and not system_administrator,
         "profile": _profile(granted),
-        "home_page": home_page if active else "",
-        "default_route": default_route if active else "",
         "workspaces": workspaces,
         "sections": {
             "orders": has_orders,
