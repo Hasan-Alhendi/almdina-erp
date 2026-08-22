@@ -24,16 +24,18 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 
-    if (
-        !frontend
-        || typeof frontend.requireAssets !== "function"
-        || typeof frontend.ensureStylesheet !== "function"
-    ) {
+    if (!frontend || typeof frontend.ensureStylesheet !== "function") {
         showBootstrapError(new Error("Almdina frontend foundation is unavailable"));
         return;
     }
 
-    const moduleLoad = frontend.requireAssets(MODULES);
+    // App-level foundation assets may remain cached for one navigation while the
+    // Page script is already current after a deploy. Keep the shared loader when
+    // available and use one native Frappe batch as the compatibility path when it
+    // is not, avoiding both bootstrap failure and serial freeze/unfreeze flicker.
+    const moduleLoad = typeof frontend.requireAssets === "function"
+        ? frontend.requireAssets(MODULES)
+        : Promise.resolve(frappe.require(MODULES));
     const styleLoad = frontend.ensureStylesheet(STYLESHEET, {
         id: "almdina-production-settings-style",
     });
