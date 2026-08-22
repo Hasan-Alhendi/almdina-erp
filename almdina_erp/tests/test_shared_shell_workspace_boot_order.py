@@ -41,24 +41,28 @@ class TestSharedShellWorkspaceBootOrder(unittest.TestCase):
         self.assertIn("Object.prototype.hasOwnProperty.call(frappe.workspaces, key)", source)
         self.assertLess(source.index("function deskIsReady"), source.index("function waitForDesk"))
 
-    def test_main_profiles_use_real_workspace_slug(self) -> None:
+    def test_navigation_keeps_workspace_slug_but_does_not_own_landing(self) -> None:
         source = NAVIGATION.read_text(encoding="utf-8")
 
         self.assertIn('WORKSPACE_MAIN_ROUTE = "almdina-erp"', source)
-        self.assertIn('default_route = f"/desk/{WORKSPACE_MAIN_ROUTE}"', source)
-        self.assertIn("home_page = WORKSPACE_MAIN_ROUTE", source)
+        self.assertNotIn('default_route = f"/desk/{WORKSPACE_MAIN_ROUTE}"', source)
+        self.assertNotIn("home_page = WORKSPACE_MAIN_ROUTE", source)
+        self.assertNotIn('"home_page":', source)
+        self.assertNotIn('"default_route":', source)
 
-    def test_builtin_administrator_uses_registered_desktop_page(self) -> None:
+    def test_builtin_administrator_keeps_registered_desktop_ownership_in_frappe(self) -> None:
         navigation = NAVIGATION.read_text(encoding="utf-8")
         boot = BOOT.read_text(encoding="utf-8")
         service = PERMISSION_SERVICE.read_text(encoding="utf-8")
 
         self.assertIn('DESKTOP_PAGE_ROUTE = "desktop"', navigation)
         self.assertIn("system_administrator: bool = False", navigation)
-        self.assertIn('default_route = f"/desk/{DESKTOP_PAGE_ROUTE}"', navigation)
+        self.assertNotIn('default_route = f"/desk/{DESKTOP_PAGE_ROUTE}"', navigation)
         self.assertIn('SYSTEM_ADMINISTRATOR = "Administrator"', boot)
         self.assertIn("system_administrator=user == SYSTEM_ADMINISTRATOR", boot)
         self.assertIn('system_administrator=user == "Administrator"', service)
+        self.assertNotIn('bootinfo["home_page"] =', boot)
+        self.assertNotIn('bootinfo["default_route"] =', boot)
 
     def test_administrator_app_card_is_not_rewritten_to_desktop(self) -> None:
         client = SHARED_SHELL.read_text(encoding="utf-8")
