@@ -320,7 +320,11 @@ const queueItems = [
     {
         name: "READY-DELIVERY-NEW",
         doc: { status: "Ready for Delivery", department_status: "مكتمل" },
-        flag: { assignment_state: "completed", completion_time: "2026-08-17 14:00:00" },
+        flag: {
+            assignment_state: "completed",
+            completion_time: "2026-08-17 10:00:00",
+            ready_for_delivery_time: "2026-08-17 14:00:00",
+        },
     },
     {
         name: "DELIVERED-OLD",
@@ -333,9 +337,22 @@ const queueItems = [
         flag: { assignment_state: "assigned", assignment_time: "2026-08-17 10:00:00" },
     },
     {
-        name: "IN-PROGRESS",
+        name: "IN-PROGRESS-OLDER-START",
         doc: { status: "At CNC", department_status: "قيد العمل" },
-        flag: { assignment_state: "assigned", assignment_time: "2026-08-17 09:00:00" },
+        flag: {
+            assignment_state: "assigned",
+            assignment_time: "2026-08-17 09:00:00",
+            start_time: "2026-08-17 10:00:00",
+        },
+    },
+    {
+        name: "IN-PROGRESS-LATEST-START",
+        doc: { status: "At CNC", department_status: "قيد العمل" },
+        flag: {
+            assignment_state: "assigned",
+            assignment_time: "2026-08-17 07:00:00",
+            start_time: "2026-08-17 11:00:00",
+        },
     },
     {
         name: "COMPLETED-NEW",
@@ -345,7 +362,11 @@ const queueItems = [
     {
         name: "READY-DELIVERY-OLD",
         doc: { status: "Ready for Delivery", department_status: "مكتمل" },
-        flag: { assignment_state: "completed", completion_time: "2026-08-17 13:00:00" },
+        flag: {
+            assignment_state: "completed",
+            completion_time: "2026-08-17 15:00:00",
+            ready_for_delivery_time: "2026-08-17 13:00:00",
+        },
     },
     {
         name: "DELIVERED-NEW",
@@ -356,17 +377,18 @@ const queueItems = [
 assert.deepStrictEqual(
     Array.from(api.sortPersonalQueueItems(queueItems), item => item.name),
     [
-        "IN-PROGRESS",
+        "IN-PROGRESS-LATEST-START",
+        "IN-PROGRESS-OLDER-START",
         "READY-OLD",
         "READY-NEW",
-        "READY-DELIVERY-OLD",
         "READY-DELIVERY-NEW",
+        "READY-DELIVERY-OLD",
         "COMPLETED-NEW",
         "COMPLETED-OLD",
         "DELIVERED-NEW",
         "DELIVERED-OLD",
     ],
-    "mobile worker queue must render five states with state-specific chronology"
+    "mobile worker queue must use actual start time and final order completion time"
 );
 
 const desktopQueueItems = [

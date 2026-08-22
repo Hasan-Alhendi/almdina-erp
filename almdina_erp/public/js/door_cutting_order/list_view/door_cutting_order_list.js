@@ -78,9 +78,9 @@
         }),
     });
     const PERSONAL_QUEUE_SORT_RULES = Object.freeze({
-        in_progress: Object.freeze({ rank: 0, field: "assignment_time", direction: 1 }),
+        in_progress: Object.freeze({ rank: 0, field: "start_time", direction: -1 }),
         ready: Object.freeze({ rank: 1, field: "assignment_time", direction: 1 }),
-        ready_for_delivery: Object.freeze({ rank: 2, field: "completion_time", direction: 1 }),
+        ready_for_delivery: Object.freeze({ rank: 2, field: "ready_for_delivery_time", direction: -1 }),
         completed: Object.freeze({ rank: 3, field: "completion_time", direction: -1 }),
         delivered: Object.freeze({ rank: 4, field: "modified", direction: -1 }),
     });

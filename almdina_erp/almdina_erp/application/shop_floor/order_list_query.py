@@ -273,7 +273,9 @@ def get_order_operational_role_flags(
             "is_current_assignee": is_current_assignee,
             "assignment_state": "assigned" if is_current_assignee else "completed",
             "assignment_time": _value(timing, "assignment_time"),
+            "start_time": _value(stage, "start_time") if stage else None,
             "completion_time": _value(timing, "completion_time"),
+            "ready_for_delivery_time": _value(timing, "order_completion_time"),
             "current_stage_operational_role": operational_role,
             "active_stage_name": _value(stage, "name") if stage else stage_name or None,
             "can_start_stage": bool(
