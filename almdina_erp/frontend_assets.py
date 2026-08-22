@@ -33,6 +33,9 @@ doctype_js = {
         "public/js/permission_context.js",
         # A5 aggregate workspace state exists before any Plan/Cost consumer.
         "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js",
+        # Freshness coordination is a shared application primitive. Feature state
+        # owners register with it after evaluation; it owns no Plan/Cost policy.
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js",
