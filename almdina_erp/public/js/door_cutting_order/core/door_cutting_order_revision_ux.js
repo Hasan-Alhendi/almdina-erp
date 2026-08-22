@@ -572,6 +572,24 @@
         }
     }
 
+    function scheduleDependentUxRefresh(frm) {
+        if (!frm || frm.__almdinaDependentUxRefreshScheduled) return false;
+        frm.__almdinaDependentUxRefreshScheduled = true;
+
+        const run = () => {
+            frm.__almdinaDependentUxRefreshScheduled = false;
+            if (window.cur_frm && window.cur_frm !== frm) return;
+            refreshDependentUx(frm);
+        };
+        const queueAfterPaint = () => window.setTimeout(run, 0);
+        if (typeof window.requestAnimationFrame === "function") {
+            window.requestAnimationFrame(queueAfterPaint);
+        } else {
+            window.setTimeout(run, 0);
+        }
+        return true;
+    }
+
     function enterEditSession(frm) {
         if (!canOfferEditSession(frm)) {
             frappe.msgprint(__("يمكن تعديل الطلب فقط وهو في حالة المسودة."));
@@ -610,7 +628,7 @@
         applyEditableFields(frm);
         installEditSessionButtons(frm);
         schedulePrimaryActionSync(frm);
-        refreshDependentUx(frm);
+        scheduleDependentUxRefresh(frm);
         if (options.silent !== true) {
             frappe.show_alert({
                 message: __("تم حفظ التعديل وإعادة قفل الحقول. اعتماد الطلب/الخطة للإنتاج يتم بزر منفصل إن لزم."),
@@ -784,7 +802,7 @@
                 markEditSessionSticky(frm);
                 applyEditableFields(frm);
                 schedulePrimaryActionSync(frm);
-                requestAnimationFrame(() => refreshDependentUx(frm));
+                scheduleDependentUxRefresh(frm);
                 return;
             }
 
@@ -792,7 +810,9 @@
                 || (isEditSessionActive(frm) && !frm.is_new() && canOfferEditSession(frm));
             frm.__almdina_lock_after_save = false;
             if (shouldLock && isEditSessionActive(frm)) {
-                lockEditSession(frm);
+                // Native Frappe save already shows the success notification. Keep
+                // this path quiet so one user action produces one success toast.
+                lockEditSession(frm, { silent: true });
             }
         },
         refresh(frm) {
@@ -820,7 +840,7 @@
                 }, REVISION_GROUP);
                 schedulePrimaryActionSync(frm);
                 if (editable || wasEditable || leftEdit) {
-                    requestAnimationFrame(() => refreshDependentUx(frm));
+                    scheduleDependentUxRefresh(frm);
                 }
                 return;
             }
@@ -838,7 +858,7 @@
 
             // Re-sync grids when entering/leaving edit mode, including re-entry after back.
             if (editable || wasEditable || leftEdit) {
-                requestAnimationFrame(() => refreshDependentUx(frm));
+                scheduleDependentUxRefresh(frm);
             }
         },
     });
@@ -874,6 +894,7 @@
         commitEditSession,
         syncPrimaryAction,
         schedulePrimaryActionSync,
+        scheduleDependentUxRefresh,
         captureEditSessionPresence,
         restorePrimaryAfterPlanEngine,
         ensureLockedPrimaryAction,
