@@ -94,7 +94,7 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertIn("coordinator.syncDocumentModified", state)
         self.assertNotIn("frm.reload_doc", state)
 
-    def test_preview_cost_is_calculated_without_persisting_preview(self) -> None:
+    def test_preview_cost_is_in_memory_and_gated_by_view_costs(self) -> None:
         backend = (
             APP / "services" / "cutting_plan_preview_service.py"
         ).read_text(encoding="utf-8")
@@ -104,9 +104,14 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
             / "door_cutting_order_plan_preview_presenter.js"
         ).read_text(encoding="utf-8")
         self.assertIn("frappe.copy_doc(source_plan)", backend)
-        self.assertIn("apply_plan_costs(preview_plan", backend)
-        self.assertIn('"cost": {', backend)
+        self.assertIn("cutting_plan_capability_allowed", backend)
+        self.assertIn("Capability.VIEW_COSTS", backend)
+        self.assertIn("if include_cost:", backend)
+        self.assertIn("apply_plan_costs(", backend)
+        self.assertIn('summary["cost"] = _preview_cost_summary(plan)', backend)
         self.assertIn('"total_cost_usd": flt(plan.total_cost_usd)', backend)
+        self.assertIn("const cost = summary && summary.cost", presenter)
+        self.assertIn("if (cost)", presenter)
         self.assertIn("تكلفة الخطة المتوقعة", presenter)
         self.assertIn("هذه الخطة وتكلفتها المعروضة للمعاينة فقط", presenter)
 
