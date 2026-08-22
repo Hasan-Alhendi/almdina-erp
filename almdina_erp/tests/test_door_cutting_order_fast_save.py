@@ -41,6 +41,9 @@ EDGE_REPOSITORY = (
 PLAN_PERMISSION_SERVICE = (
     ROOT / "almdina_erp" / "services" / "order_plan_permission_service.py"
 )
+PLAN_COMMAND_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
+)
 FRONTEND_ASSETS = ROOT / "frontend_assets.py"
 HOOKS = ROOT / "hooks.py"
 FAST_SAVE_JS = (
@@ -95,11 +98,14 @@ def test_save_use_case_runs_optimizer_only_on_explicit_recalculation():
 
 
 def test_explicit_recalculation_is_owned_by_capability_protected_service():
-    source = _text(PLAN_PERMISSION_SERVICE)
-    assert "Capability.RECALCULATE_PLAN" in source
-    assert "_assert_recalculation_state(doc)" in source
-    assert "doc.flags.force_cutting_plan_recalculation = True" in source
-    assert "doc.save(ignore_permissions=True)" in source
+    facade = _text(PLAN_PERMISSION_SERVICE)
+    command = _text(PLAN_COMMAND_SERVICE)
+
+    assert "return recalculate_order_plan(" in facade
+    assert "Capability.RECALCULATE_PLAN" in command
+    assert "_assert_recalculation_state(order)" in command
+    assert "recalculate_system_plan(" in command
+    assert "doc.save(ignore_permissions=True)" not in command
 
     hooks = runpy.run_path(str(HOOKS))
     assert hooks["override_whitelisted_methods"][
@@ -146,14 +152,19 @@ def test_fast_save_assets_use_feature_owned_manifest_paths_and_ordering():
     assert FAST_SAVE_JS.is_file()
 
 
-def test_fast_save_script_keeps_explicit_save_then_recalculate_flow():
-    source = _text(FAST_SAVE_JS)
-    assert "event.stopImmediatePropagation()" in source
-    assert "await frm.save()" in source
-    assert "door_cutting_order.recalculate_order" in source
-    assert "await frm.reload_doc()" in source
-    assert "markOrderEditSessionRecalculated" in source
-    assert "بدون اعتماد الطلب" in source
+def test_fast_save_script_keeps_checkpoint_then_plan_command_flow():
+    fast_source = _text(FAST_SAVE_JS)
+    plan_source = _text(PLAN_JS)
+
+    assert "persistOrderEditCheckpoint" in fast_source
+    assert "markOrderInputPlanStale" in fast_source
+    assert "markOptimizerPlanStale" in fast_source
+    assert "await frm.save()" not in fast_source
+    assert "door_cutting_order.recalculate_order" not in fast_source
+
+    assert "runRecalculation" in plan_source
+    assert "controls.runRecalculation(frm)" in plan_source
+    assert "frm.save()/frm.call()" in plan_source
 
 
 def test_invoice_print_remains_available_while_plan_is_stale():
