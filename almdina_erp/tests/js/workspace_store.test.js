@@ -16,6 +16,7 @@ const context = {
     structuredClone,
     JSON,
     Set,
+    Date,
 };
 context.window = context;
 vm.createContext(context);
@@ -29,6 +30,8 @@ let emitted = 0;
 const unsubscribe = store.subscribe(() => {
     emitted += 1;
 });
+
+assert.strictEqual(store.snapshot().freshness, "unknown");
 
 const firstRequest = store.beginLoad("Door Cutting Order::DCO-1");
 assert.strictEqual(store.snapshot().status, "loading");
@@ -51,6 +54,8 @@ assert.strictEqual(
     true
 );
 assert.strictEqual(store.snapshot().status, "ready");
+assert.strictEqual(store.snapshot().freshness, "fresh");
+assert.strictEqual(store.isFresh(), true);
 assert.strictEqual(store.snapshot().data.settings.kerf_mm, 3);
 
 const escaped = store.snapshot();
@@ -61,9 +66,42 @@ assert.strictEqual(
     "callers must receive a clone, not mutable store state"
 );
 
+const requestBeforeInvalidation = store.beginLoad("Door Cutting Order::DCO-2");
+const invalidated = store.invalidate("order_inputs_changed");
+assert.strictEqual(invalidated.status, "loading");
+assert.strictEqual(invalidated.freshness, "stale");
+assert.strictEqual(invalidated.staleReason, "order_inputs_changed");
+assert.ok(invalidated.invalidatedAt);
+assert.strictEqual(store.isFresh(), false);
+assert.strictEqual(
+    store.resolveLoad("Door Cutting Order::DCO-2", requestBeforeInvalidation, {
+        settings: { kerf_mm: 77 },
+    }),
+    false,
+    "a GET started before dependency invalidation must never repaint stale data"
+);
+assert.strictEqual(
+    store.snapshot().data.settings.kerf_mm,
+    3,
+    "invalidation preserves the last known snapshot only as contextual data"
+);
+
+const refreshRequest = store.beginLoad("Door Cutting Order::DCO-2");
+assert.strictEqual(
+    store.resolveLoad("Door Cutting Order::DCO-2", refreshRequest, {
+        settings: { kerf_mm: 4 },
+    }),
+    true
+);
+assert.strictEqual(store.snapshot().freshness, "fresh");
+assert.strictEqual(store.snapshot().staleReason, null);
+assert.strictEqual(store.snapshot().invalidatedAt, null);
+assert.strictEqual(store.snapshot().data.settings.kerf_mm, 4);
+
 const staleSameDocumentRequest = store.beginLoad("Door Cutting Order::DCO-2");
 const committed = store.commit({ settings: { kerf_mm: 5 } });
 assert.strictEqual(committed.status, "ready");
+assert.strictEqual(committed.freshness, "fresh");
 assert.strictEqual(committed.data.settings.kerf_mm, 5);
 assert(
     committed.requestId > staleSameDocumentRequest,
@@ -93,6 +131,6 @@ assert.strictEqual(store.snapshot().dirty, false);
 assert.strictEqual(store.snapshot().draft, null);
 
 unsubscribe();
-assert(emitted >= 7);
+assert(emitted >= 11);
 
 console.log("workspace_store.test.js passed");

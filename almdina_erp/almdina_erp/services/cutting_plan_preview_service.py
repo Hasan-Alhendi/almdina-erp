@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
+    cutting_plan_capability_allowed,
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
@@ -86,8 +87,23 @@ def _apply_settings(plan: Any, settings: dict[str, Any]) -> None:
         setattr(plan, plan_field, settings[setting_name])
 
 
-def _preview_summary(plan: Any) -> dict[str, Any]:
+def _preview_cost_summary(plan: Any) -> dict[str, float]:
     return {
+        "board_rate_usd": flt(plan.board_rate_usd),
+        "cutting_cost_per_board_usd": flt(plan.cutting_cost_per_board_usd),
+        "mdf_cost_usd": flt(plan.mdf_cost_usd),
+        "cutting_cost_usd": flt(plan.cutting_cost_usd),
+        "edge_cost_usd": flt(plan.edge_cost_usd),
+        "total_cost_usd": flt(plan.total_cost_usd),
+    }
+
+
+def _preview_summary(
+    plan: Any,
+    *,
+    include_cost: bool = False,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
         "settings": {
             "packing_mode": str(plan.optimization_mode or ""),
             "cutting_machine_type": str(plan.machine_type or ""),
@@ -123,6 +139,9 @@ def _preview_summary(plan: Any) -> dict[str, Any]:
             "needs_recalculation": bool(plan.plan_needs_recalculation),
         },
     }
+    if include_cost:
+        summary["cost"] = _preview_cost_summary(plan)
+    return summary
 
 
 def _system_draft(order: Any, capability: str) -> Any:
@@ -176,6 +195,18 @@ def preview_cutting_plan(
     preview_plan = frappe.copy_doc(source_plan)
     _apply_settings(preview_plan, settings)
     calculate_system_plan(order, preview_plan)
+
+    # Cost is calculated on the in-memory preview so an authorized financial user
+    # can compare alternatives. It is never persisted here, and it is returned only
+    # when the same configurable VIEW_COSTS capability that protects the Cost tab is
+    # granted. Planning authority alone must never expose financial data.
+    include_cost = cutting_plan_capability_allowed(order, Capability.VIEW_COSTS)
+    if include_cost:
+        apply_plan_costs(
+            preview_plan,
+            edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)),
+        )
+
     snapshot = sanitize_plan_snapshot(
         frappe.parse_json(preview_plan.snapshot_json or "{}") or {}
     )
@@ -205,7 +236,7 @@ def preview_cutting_plan(
         "settings_fingerprint": session.settings_fingerprint,
         "input_fingerprint": session.input_fingerprint,
         "plan": session.snapshot,
-        "summary": _preview_summary(preview_plan),
+        "summary": _preview_summary(preview_plan, include_cost=include_cost),
         "is_preview": True,
     }
 

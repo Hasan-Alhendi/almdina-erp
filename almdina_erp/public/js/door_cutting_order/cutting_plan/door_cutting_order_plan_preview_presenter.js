@@ -32,11 +32,14 @@
                 .dco-plan-preview-banner.is-stale .dco-plan-preview-badge { background:#b45309; }
                 .dco-plan-preview-banner.is-error .dco-plan-preview-badge { background:#b91c1c; }
                 .dco-plan-preview-summary {
-                    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;direction:rtl;
+                    display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;direction:rtl;
                 }
                 .dco-plan-preview-summary__item {
                     padding:10px 12px;border:1px solid rgba(36,144,239,.18);
                     border-radius:11px;background:rgba(36,144,239,.045);
+                }
+                .dco-plan-preview-summary__item.is-cost {
+                    border-color:rgba(31,130,82,.24);background:rgba(31,130,82,.055);
                 }
                 .dco-plan-preview-summary__item span {
                     display:block;color:var(--text-muted,#687481);font-size:10px;font-weight:700;
@@ -44,6 +47,7 @@
                 .dco-plan-preview-summary__item strong {
                     display:block;margin-top:4px;font-size:13px;font-weight:850;
                 }
+                .dco-plan-preview-summary__item.is-cost strong { color:#14653d;direction:ltr;text-align:right; }
                 .dco-plan-preview-status {
                     padding:12px 14px;border:1px dashed var(--border-color,#ccd3da);
                     border-radius:11px;background:var(--subtle-fg,#fafafa);direction:rtl;
@@ -52,9 +56,6 @@
                 .dco-plan-preview-status span {
                     display:block;margin-top:4px;color:var(--text-muted,#687481);
                     font-size:10.5px;line-height:1.6;
-                }
-                @media (max-width:700px) {
-                    .dco-plan-preview-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
                 }
                 @media (max-width:480px) {
                     .dco-plan-preview-banner { display:block; }
@@ -67,6 +68,14 @@
 
     function escape(value) {
         return frappe.utils.escape_html(__(String(value ?? "")));
+    }
+
+    function money(value) {
+        const numeric = Number(value || 0);
+        return numeric.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
     }
 
     function actionWrapper(frm) {
@@ -84,6 +93,20 @@
         const field = frm && frm.fields_dict && frm.fields_dict.plan_controls_intro;
         const wrapper = field && field.$wrapper;
         return wrapper && wrapper.length ? wrapper : null;
+    }
+
+    function currentPreviewSummary(frm) {
+        const owner = window.AlmdinaPlanPreviewSession;
+        const state = owner && typeof owner.snapshot === "function"
+            ? owner.snapshot(frm)
+            : null;
+        return state && state.payload && state.payload.summary
+            ? state.payload.summary
+            : null;
+    }
+
+    function previewCostVisible(frm) {
+        return Boolean(currentPreviewSummary(frm) && currentPreviewSummary(frm).cost);
     }
 
     function lockSourceTabs(frm) {
@@ -134,17 +157,22 @@
         const engine = (summary && summary.engine) || {};
         const quality = (summary && summary.quality) || {};
         const items = [
-            ["عدد الألواح", `${Number(totals.required_boards || 0)}`],
-            ["نسبة الهدر", `${Number(totals.waste_percent || 0).toFixed(2)}%`],
-            ["الخوارزمية الفعلية", String(engine.method_label || engine.method_key || "—")],
-            ["خطوط القص", `${Number(quality.estimated_cut_count || 0)}`],
-        ].map(([label, value]) => `
-            <div class="dco-plan-preview-summary__item">
+            ["عدد الألواح", `${Number(totals.required_boards || 0)}`, ""],
+            ["نسبة الهدر", `${Number(totals.waste_percent || 0).toFixed(2)}%`, ""],
+            ["الخوارزمية الفعلية", String(engine.method_label || engine.method_key || "—"), ""],
+            ["خطوط القص", `${Number(quality.estimated_cut_count || 0)}`, ""],
+        ];
+        const cost = summary && summary.cost;
+        if (cost) {
+            items.push(["تكلفة الخطة المتوقعة", `$ ${money(cost.total_cost_usd)}`, "is-cost"]);
+        }
+        const markup = items.map(([label, value, className]) => `
+            <div class="dco-plan-preview-summary__item ${className}">
                 <span>${escape(label)}</span>
                 <strong>${frappe.utils.escape_html(value)}</strong>
             </div>
         `).join("");
-        wrapper.html(`<div class="dco-plan-preview-summary">${items}</div>`);
+        wrapper.html(`<div class="dco-plan-preview-summary">${markup}</div>`);
     }
 
     function renderPersistedEditingState(frm, status) {
@@ -202,6 +230,7 @@
 
         const saving = previewState.status === "saving";
         const invalid = !saving && !committable;
+        const hasCost = Boolean(payload.summary && payload.summary.cost);
         const title = saving
             ? "جاري حفظ المعاينة المختارة"
             : invalid
@@ -211,7 +240,9 @@
             ? "يتم الآن تثبيت نفس الخطة التي تراها دون إعادة تشغيل الخوارزمية."
             : invalid
                 ? "تم عرض النتيجة للمراجعة، لكنها لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى قبل الحفظ."
-                : "هذه هي الخطة التي سيتم حفظها حرفيًا عند الضغط على «حفظ». يمكنك تجربة خوارزمية أخرى قبل ذلك.";
+                : hasCost
+                    ? "هذه الخطة وتكلفتها المعروضة للمعاينة فقط. ستصبحان رسميتين معًا عند الضغط على «حفظ»."
+                    : "هذه الخطة للمعاينة فقط. ستصبح الخطة الجديدة رسمية عند الضغط على «حفظ».";
         const stateClass = invalid ? " is-error" : "";
         const badge = saving ? "حفظ" : invalid ? "غير صالحة" : "PREVIEW";
 
@@ -235,16 +266,21 @@
             note.text(__("اضغط «تعديل» لتجربة إعدادات أو خوارزميات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة."));
             return;
         }
+        const hasCost = previewCostVisible(frm);
         const messages = {
             idle: "عدّل الإعدادات كما تريد ثم اضغط «إعادة الحساب بالإعدادات الحالية» لمعاينة النتيجة. الحفظ لن يتفعل قبل المعاينة.",
             stale: "تم تعديل الإعدادات. أعد الحساب لمعاينة الخطة الجديدة قبل الحفظ.",
             previewing: "جاري حساب معاينة مؤقتة. لا يتم حفظ أي تغيير أثناء المعاينة.",
-            saving: "جاري حفظ نفس الخطة التي تمت معاينتها.",
+            saving: hasCost
+                ? "جاري حفظ نفس الخطة والتكلفة التي تمت معاينتها."
+                : "جاري حفظ نفس الخطة التي تمت معاينتها.",
             error: "تعذرت المعاينة. عدّل الإعدادات عند الحاجة ثم أعد الحساب.",
         };
         if (status === "ready") {
             note.text(__(committable
-                ? "المعاينة الحالية جاهزة للحفظ. يمكنك حفظها الآن أو تجربة خوارزمية أخرى."
+                ? hasCost
+                    ? "المعاينة الحالية جاهزة للحفظ. التكلفة الظاهرة تقديرية لهذه الخطة، وتصبح رسمية عند الحفظ."
+                    : "المعاينة الحالية جاهزة للحفظ. اضغط «حفظ» لاعتماد نفس الخطة المعروضة."
                 : "تم عرض المعاينة لكنها غير صالحة للحفظ. جرّب إعدادات أخرى ثم أعد الحساب."));
             return;
         }

@@ -15,6 +15,9 @@
             kind: state.kind,
             identity: state.identity,
             status: state.status,
+            freshness: state.freshness,
+            staleReason: state.staleReason,
+            invalidatedAt: state.invalidatedAt,
             data: clone(state.data),
             baseline: clone(state.baseline),
             draft: clone(state.draft),
@@ -35,6 +38,9 @@
             kind: String(kind || "workspace"),
             identity: "",
             status: "idle",
+            freshness: "unknown",
+            staleReason: null,
+            invalidatedAt: null,
             data: null,
             baseline: null,
             draft: null,
@@ -56,9 +62,18 @@
             return snapshot;
         }
 
+        function markFresh() {
+            state.freshness = "fresh";
+            state.staleReason = null;
+            state.invalidatedAt = null;
+        }
+
         function reset(identity = "") {
             state.identity = String(identity || "");
             state.status = "idle";
+            state.freshness = "unknown";
+            state.staleReason = null;
+            state.invalidatedAt = null;
             state.data = null;
             state.baseline = null;
             state.draft = null;
@@ -83,6 +98,7 @@
             if (state.identity !== String(identity || "")) return false;
             if (state.requestId !== Number(requestId)) return false;
             state.status = data == null ? "empty" : "ready";
+            markFresh();
             state.data = clone(data);
             state.baseline = null;
             state.draft = null;
@@ -97,6 +113,9 @@
             if (state.identity !== String(identity || "")) return false;
             if (state.requestId !== Number(requestId)) return false;
             state.status = "error";
+            state.freshness = "unknown";
+            state.staleReason = null;
+            state.invalidatedAt = null;
             state.data = null;
             state.baseline = null;
             state.draft = null;
@@ -105,6 +124,23 @@
             state.error = String(error && (error.message || error) || "تعذر تحميل البيانات.");
             emit();
             return true;
+        }
+
+        function invalidate(reason = "dependency_changed") {
+            // Invalidation is intentionally orthogonal to transport status. A
+            // ready workspace may keep its last snapshot for context while being
+            // explicitly marked stale so presentation code cannot mistake it for
+            // current server truth. Advancing requestId also rejects every GET
+            // that started before this dependency change.
+            state.freshness = "stale";
+            state.staleReason = String(reason || "dependency_changed");
+            state.invalidatedAt = Date.now();
+            state.requestId += 1;
+            return emit();
+        }
+
+        function isFresh() {
+            return state.freshness === "fresh";
         }
 
         function beginEdit(seed) {
@@ -153,6 +189,7 @@
             // the authoritative command response when it arrives later.
             state.requestId += 1;
             state.status = data == null ? "empty" : "ready";
+            markFresh();
             state.data = clone(data);
             state.baseline = null;
             state.draft = null;
@@ -174,6 +211,8 @@
             beginLoad,
             resolveLoad,
             rejectLoad,
+            invalidate,
+            isFresh,
             beginEdit,
             replaceDraft,
             patchDraft,
