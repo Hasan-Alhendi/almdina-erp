@@ -156,6 +156,37 @@
         return result;
     }
 
+    async function refreshCommittedWorkspaces(frm) {
+        const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
+        if (
+            coordinator
+            && typeof coordinator.invalidate === "function"
+            && typeof coordinator.refresh === "function"
+        ) {
+            coordinator.invalidate(frm, ["plan", "cost"], "plan_changed");
+            await coordinator.refresh(frm, ["plan", "cost"], {
+                force: true,
+                reason: "plan_changed",
+            });
+            const adapter = window.AlmdinaPlanWorkspacePresenterAdapter;
+            if (adapter && typeof adapter.project === "function") adapter.project(frm);
+            return true;
+        }
+
+        // Compatibility fallback for assets from before the shared coordinator.
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.refreshWorkspaceOwners === "function") {
+            await controls.refreshWorkspaceOwners(frm);
+            return true;
+        }
+        const workspace = window.AlmdinaPlanWorkspaceState;
+        if (workspace && typeof workspace.load === "function") {
+            await workspace.load(frm, { force: true });
+            return true;
+        }
+        return false;
+    }
+
     async function saveEditing(frm) {
         const owner = previewOwner();
         if (!owner || !owner.isCommittable(frm)) {
@@ -168,21 +199,13 @@
             if (!committed) return false;
             if (legacy.isEditing(frm)) await Promise.resolve(legacy.cancelEditing(frm));
 
-            const controls = window.AlmdinaPlanControlsUX;
-            if (controls && typeof controls.refreshWorkspaceOwners === "function") {
-                await controls.refreshWorkspaceOwners(frm);
-            } else {
-                const workspace = window.AlmdinaPlanWorkspaceState;
-                if (workspace && typeof workspace.load === "function") {
-                    await workspace.load(frm, { force: true });
-                }
-            }
+            await refreshCommittedWorkspaces(frm);
             const view = presenter();
             if (view && typeof view.restorePersistedPresentation === "function") {
                 view.restorePersistedPresentation(frm);
             }
             frappe.show_alert({
-                message: __("تم حفظ نفس خطة المعاينة التي اخترتها."),
+                message: __("تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها."),
                 indicator: "green",
             }, 5);
             schedule(frm);
@@ -223,6 +246,7 @@
 
     window.AlmdinaPlanPreviewEditUX = Object.freeze({
         canSaveEditing,
+        refreshCommittedWorkspaces,
         schedule,
         sync,
     });
