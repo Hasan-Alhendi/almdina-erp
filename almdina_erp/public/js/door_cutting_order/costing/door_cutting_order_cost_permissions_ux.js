@@ -295,6 +295,38 @@
         frm.doc.__unsaved = 0;
     }
 
+    function pricingExpectedModified(frm) {
+        return String(
+            (frm && frm.__almdina_pricing_command_modified)
+            || (frm && frm.doc && frm.doc.modified)
+            || ""
+        ).trim();
+    }
+
+    function rememberPricingCommandModified(frm, response) {
+        const payload = response && response.message !== undefined
+            ? response.message
+            : null;
+        const modified = String(payload && payload.order_modified || "").trim();
+        if (!modified) {
+            throw new Error(__("لم يعُد الخادم بنسخة الطلب بعد حفظ السعر."));
+        }
+        frm.__almdina_pricing_command_modified = modified;
+        return modified;
+    }
+
+    function finalizePricingDocumentVersion(frm) {
+        const modified = String(frm && frm.__almdina_pricing_command_modified || "").trim();
+        if (!modified) return false;
+        const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
+        if (!coordinator || typeof coordinator.syncDocumentModified !== "function") {
+            return false;
+        }
+        const synced = coordinator.syncDocumentModified(frm, modified);
+        if (synced) frm.__almdina_pricing_command_modified = null;
+        return synced;
+    }
+
     async function refreshAuthoritativeCost(frm) {
         const owner = costWorkspaceState();
         if (owner && typeof owner.load === "function") {
@@ -309,46 +341,60 @@
         if (!pending.length) return false;
 
         for (const piece of pending) {
+            const expectedModified = pricingExpectedModified(frm);
+            if (!expectedModified) {
+                throw new Error(__("تعذر التحقق من نسخة الطلب الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."));
+            }
+
+            let response;
             if (piece.__almdina_pending_price_edit === "clipped") {
-                await frappe.call({
+                response = await frappe.call({
                     method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
                     args: {
                         order_name: frm.doc.name,
                         piece_name: piece.name,
                         edge_price_usd: piece.clipped_corner_edge_price_usd,
                         note: piece.clipped_corner_edge_price_note || "",
+                        expected_modified: expectedModified,
                     },
                     freeze: true,
                     freeze_message: __("جاري اعتماد أسعار القشاط..."),
                 });
             } else {
-                await frappe.call({
+                response = await frappe.call({
                     method: "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
                     args: {
                         order_name: frm.doc.name,
                         piece_name: piece.name,
                         unit_price_usd: piece.special_shape_custom_unit_price_usd,
                         note: piece.special_shape_price_note || "",
+                        expected_modified: expectedModified,
                     },
                     freeze: true,
                     freeze_message: __("جاري اعتماد أسعار الدرف الخاصة..."),
                 });
             }
+            rememberPricingCommandModified(frm, response);
             clearPendingPriceMarker(piece);
         }
 
+        clearPriceOnlyDirty(frm);
+        finalizePricingDocumentVersion(frm);
         if (options.refresh !== false) {
             await refreshAuthoritativeCost(frm);
         }
-        clearPriceOnlyDirty(frm);
         return true;
     }
 
     async function discardPendingPriceEdits(frm, options = {}) {
         const pending = pendingPricePieces(frm);
-        if (!pending.length) return false;
+        const hasCommandVersion = Boolean(
+            String(frm && frm.__almdina_pricing_command_modified || "").trim()
+        );
+        if (!pending.length && !hasCommandVersion) return false;
         pending.forEach(clearPendingPriceMarker);
         clearPriceOnlyDirty(frm);
+        finalizePricingDocumentVersion(frm);
         if (options.refresh !== false) {
             await refreshAuthoritativeCost(frm);
         }
