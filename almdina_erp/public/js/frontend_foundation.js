@@ -3,6 +3,8 @@
 
     if (window.AlmdinaFrontend) return;
 
+    const pendingAssetGroups = new Map();
+
     function frappeRuntime() {
         if (window.frappe) return window.frappe;
         if (typeof frappe !== "undefined") return frappe;
@@ -43,6 +45,45 @@
             if (!response || !Object.prototype.hasOwnProperty.call(response, "message")) return null;
             return response.message;
         });
+    }
+
+    function normalizeAssets(items) {
+        const source = Array.isArray(items) ? items : [items];
+        const seen = new Set();
+        const assets = [];
+        source.forEach(item => {
+            const asset = String(item || "").trim();
+            if (!asset || seen.has(asset)) return;
+            seen.add(asset);
+            assets.push(asset);
+        });
+        return assets;
+    }
+
+    function requireAssets(items) {
+        const runtime = frappeRuntime();
+        if (!runtime || typeof runtime.require !== "function") {
+            return Promise.reject(new Error("Frappe asset loader is unavailable"));
+        }
+
+        const assets = normalizeAssets(items);
+        if (!assets.length) return Promise.resolve([]);
+
+        // Frappe v16 freezes/unfreezes the Desk once per frappe.require() call.
+        // Always submit a whole dependency group in one call so cold page loads
+        // cannot flash once per module. The group promise also prevents duplicate
+        // concurrent requests when Frappe fires overlapping page lifecycle hooks.
+        const key = assets.join("\n");
+        if (pendingAssetGroups.has(key)) return pendingAssetGroups.get(key);
+
+        const pending = Promise.resolve(runtime.require(assets))
+            .then(() => assets)
+            .catch(error => {
+                pendingAssetGroups.delete(key);
+                throw error;
+            });
+        pendingAssetGroups.set(key, pending);
+        return pending;
     }
 
     function createLatestRequestGate() {
@@ -183,6 +224,7 @@
     window.AlmdinaFrontend = Object.freeze({
         rpc,
         errorMessage,
+        requireAssets,
         createLatestRequestGate,
         createLifecycleScope,
         ensureStylesheet,

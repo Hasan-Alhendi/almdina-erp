@@ -24,19 +24,16 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 
-    if (!frontend || typeof frontend.ensureStylesheet !== "function") {
+    if (
+        !frontend
+        || typeof frontend.requireAssets !== "function"
+        || typeof frontend.ensureStylesheet !== "function"
+    ) {
         showBootstrapError(new Error("Almdina frontend foundation is unavailable"));
         return;
     }
-    if (typeof frappe.require !== "function") {
-        showBootstrapError(new Error("Frappe asset loader is unavailable"));
-        return;
-    }
 
-    const moduleLoad = MODULES.reduce(
-        (promise, asset) => promise.then(() => Promise.resolve(frappe.require(asset))),
-        Promise.resolve()
-    );
+    const moduleLoad = frontend.requireAssets(MODULES);
     const styleLoad = frontend.ensureStylesheet(STYLESHEET, {
         id: "almdina-workforce-console-style",
     });
