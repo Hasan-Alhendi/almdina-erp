@@ -131,6 +131,9 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
         "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
+        # Explicit Order-save intent must win over any transient plan-checkpoint
+        # preserve marker before Frappe evaluates after_save.
+        "public/js/door_cutting_order/core/door_cutting_order_edit_save_intent_ux.js",
         "public/js/door_cutting_order/core/order_lifecycle.js",
         "public/js/input_stability.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js",
