@@ -42,7 +42,8 @@
                 <main class="ald-doc-stage"><canvas class="ald-doc-canvas" tabindex="0" aria-label="لوحة توثيق الدرفة"></canvas><div class="ald-doc-hint" data-hint>اختر صورة أو شكلًا جاهزًا أو ابدأ بالقلم الذكي</div>
                     <div class="ald-doc-toolbar" role="toolbar" aria-label="أدوات التوثيق">
                         ${tool("select", "↖", "تحديد", "V")}${tool("pen", "✎", "قلم ذكي", "P", readOnly)}${tool("line", "╱", "خط", "L", readOnly)}${tool("rect", "□", "مستطيل", "R", readOnly)}${tool("ellipse", "○", "دائرة", "O", readOnly)}${tool("dimension", "↔", "قياس", "D", readOnly)}${tool("text", "T", "ملاحظة", "T", readOnly)}
-                        <span class="ald-doc-toolbar-separator"></span><button type="button" class="ald-doc-tool" data-action="undo" title="تراجع Ctrl+Z"><span>↶</span><small>تراجع</small></button><button type="button" class="ald-doc-tool" data-action="redo" title="إعادة Ctrl+Shift+Z"><span>↷</span><small>إعادة</small></button><span class="ald-doc-zoom">100%</span>
+                        <span class="ald-doc-toolbar-separator"></span><button type="button" class="ald-doc-tool" data-action="undo" title="تراجع Ctrl+Z"><span>↶</span><small>تراجع</small></button><button type="button" class="ald-doc-tool" data-action="redo" title="إعادة Ctrl+Y أو Ctrl+Shift+Z"><span>↷</span><small>إعادة</small></button>
+                        <span class="ald-doc-toolbar-separator"></span><div class="ald-doc-zoom-controls" aria-label="تكبير مساحة الرسم"><button type="button" data-action="zoom-out" title="تصغير" aria-label="تصغير">−</button><output class="ald-doc-zoom" data-zoom aria-live="polite">100%</output><button type="button" data-action="zoom-in" title="تكبير" aria-label="تكبير">+</button><button type="button" data-action="fit-view" title="ملاءمة الرسم (F)" aria-label="ملاءمة الرسم">ملاءمة</button></div>
                     </div>
                 </main>
                 <aside class="ald-doc-panel ald-doc-detail-panel"><h2>تفاصيل التوثيق</h2><label class="ald-doc-notes"><span>ملاحظات المصمم</span><textarea maxlength="2000" rows="5" data-notes placeholder="اكتب ما يجب أن ينتبه إليه المصمم…" ${readOnly ? "readonly" : ""}></textarea></label>
@@ -59,6 +60,8 @@
             referenceInput: workspace.querySelector("[data-reference-input]"),
             cameraInput: workspace.querySelector("[data-camera-input]"),
             setActiveTool(value) { workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === value)); workspace.dataset.activeTool = value; },
+            setPanMode(active) { workspace.dataset.panMode = active ? "1" : "0"; },
+            setZoom(value) { workspace.querySelector("[data-zoom]").textContent = `${Math.max(10, Math.min(400, Math.round(Number(value) || 100)))}%`; },
             setSaveState(text, state) { const node = workspace.querySelector("[data-save-state]"); node.textContent = text; node.dataset.state = state; },
             setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = readOnly || saving; button.textContent = saving ? "جار الحفظ…" : "حفظ التوثيق"; },
             setScannerState({ busy = false, message = "", state = "idle", installerUrl = "" } = {}) {

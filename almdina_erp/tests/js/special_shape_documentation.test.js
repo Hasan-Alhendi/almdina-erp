@@ -10,14 +10,17 @@ require(path.join(root, "application/history.js"));
 require(path.join(root, "application/templates.js"));
 require(path.join(root, "application/smart_pen.js"));
 require(path.join(root, "application/element_transform.js"));
+require(path.join(root, "application/element_clipboard.js"));
+require(path.join(root, "application/keyboard_shortcuts.js"));
 require(path.join(root, "infrastructure/scanner_bridge.js"));
+require(path.join(root, "presentation/canvas_viewport.js"));
 
 const api = global.AlmdinaSpecialShapeDocumentation;
 
 const runtimeFiles = [
-    "presentation/workspace_controller.js", "presentation/workspace_shell.js", "presentation/canvas_renderer.js",
+    "presentation/workspace_controller.js", "presentation/workspace_shell.js", "presentation/canvas_renderer.js", "presentation/canvas_viewport.js",
     "infrastructure/scanner_bridge.js", "infrastructure/workspace_api.js", "application/element_transform.js",
-    "application/smart_pen.js", "application/templates.js", "application/history.js", "domain/document.js",
+    "application/element_clipboard.js", "application/keyboard_shortcuts.js", "application/smart_pen.js", "application/templates.js", "application/history.js", "domain/document.js",
 ];
 const parallelSandbox = { console, setTimeout, clearTimeout, AbortController, fetch, File, Blob, Response };
 parallelSandbox.window = parallelSandbox;
@@ -72,6 +75,44 @@ assert.equal(moved.points[0].xMm, element.points[0].xMm + 20);
 assert.equal(moved.points[0].yMm, element.points[0].yMm + 30);
 const resized = api.ElementTransform.resize(element, "resize-end", { xMm: 760, yMm: 2000 }, template.canvas);
 assert.ok(api.ElementTransform.bounds(resized).maxX > api.ElementTransform.bounds(element).maxX);
+const movedOutsideDoor = api.ElementTransform.translate(element, -1000, -1000, template.canvas);
+assert.ok(api.ElementTransform.bounds(movedOutsideDoor).minX < 0, "the free workspace must not clamp moved elements to the door width");
+assert.ok(api.ElementTransform.bounds(movedOutsideDoor).minY < 0, "the free workspace must not clamp moved elements to the door height");
+const resizedOutsideDoor = api.ElementTransform.resize(element, "resize-end", { xMm: 1200, yMm: 2600 }, template.canvas);
+assert.ok(api.ElementTransform.bounds(resizedOutsideDoor).maxX > template.canvas.widthMm, "free resize must extend beyond the nominal door frame");
+assert.ok(api.ElementTransform.bounds(resizedOutsideDoor).maxY > template.canvas.heightMm, "free resize must extend beyond the nominal door frame");
+
+const initialViewport = api.CanvasViewport.initial(
+    { width: 900, height: 620 },
+    { widthMm: 400, heightMm: 2100 },
+);
+assert.equal(initialViewport.scale, 1, "a 40 cm door must open at a comfortable 100% scale without manual zoom");
+const anchor = { x: 450, y: 250 };
+const worldBeforeZoom = api.CanvasViewport.toWorld(initialViewport, anchor);
+const zoomedViewport = api.CanvasViewport.zoomAt(initialViewport, 2, anchor);
+const worldAfterZoom = api.CanvasViewport.toWorld(zoomedViewport, anchor);
+assert.deepEqual(worldAfterZoom, worldBeforeZoom, "zoom must stay centered under the pointer");
+const freePoint = api.CanvasViewport.toWorld({ scale: 1, x: 300, y: 180 }, { x: 0, y: 0 });
+assert.deepEqual(freePoint, { xMm: -300, yMm: -180 }, "the canvas coordinate system must remain free outside the nominal door frame");
+
+const shortcuts = api.KeyboardShortcuts;
+assert.equal(shortcuts.resolve({ code: "KeyV", key: "ر" }), "select", "V must select even while the Arabic keyboard layout is active");
+assert.equal(shortcuts.resolve({ code: "KeyP", key: "ح" }), "pen", "P must select the pen even while the Arabic keyboard layout is active");
+assert.equal(shortcuts.resolve({ code: "KeyL", key: "م" }), "line", "L must select the line tool with a non-English key value");
+assert.equal(shortcuts.resolve({ code: "KeyR", key: "ق" }), "rect", "R must select the rectangle tool with a non-English key value");
+assert.equal(shortcuts.resolve({ code: "KeyC", key: "ؤ", ctrlKey: true }), "copy");
+assert.equal(shortcuts.resolve({ code: "KeyV", key: "ر", ctrlKey: true }), "paste");
+assert.equal(shortcuts.resolve({ code: "KeyZ", key: "ئ", ctrlKey: true }), "undo");
+assert.equal(shortcuts.resolve({ code: "KeyY", key: "غ", ctrlKey: true }), "redo");
+assert.equal(shortcuts.resolve({ code: "KeyZ", key: "ئ", ctrlKey: true, shiftKey: true }), "redo");
+
+const clipboard = api.ElementClipboard.create(api.Document, api.ElementTransform);
+assert.equal(clipboard.copy(element), true);
+const firstPaste = clipboard.paste(24);
+assert.notEqual(firstPaste.id, element.id);
+assert.equal(api.ElementTransform.bounds(firstPaste).minX, api.ElementTransform.bounds(element).minX + 24);
+const secondPaste = clipboard.paste(24);
+assert.equal(api.ElementTransform.bounds(secondPaste).minX, api.ElementTransform.bounds(firstPaste).minX + 24, "repeated paste must offset each duplicate visibly");
 
 const history = api.History.create(initial);
 history.commit(template);
