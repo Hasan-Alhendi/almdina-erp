@@ -30,9 +30,13 @@ jobs:
         run: |
           node --check almdina_erp/public/js/frontend_foundation.js
           node --check almdina_erp/tests/js/frontend_asset_loader.test.js
+          node --check almdina_erp/tests/js/modular_page_asset_compatibility.test.js
 
       - name: Enforce batched page asset loading
         run: python -m unittest -v almdina_erp.tests.test_frontend_asset_loading_contract
 
       - name: Simulate shared asset-loader lifecycle
         run: node almdina_erp/tests/js/frontend_asset_loader.test.js
+
+      - name: Simulate cached-foundation deploy skew
+        run: node almdina_erp/tests/js/modular_page_asset_compatibility.test.js
