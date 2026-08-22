@@ -1,35 +1,70 @@
 # Almdina Scanner Bridge
 
-A small Windows-only local bridge used by the Almdina ERP special-door editor to acquire the paper sketch directly from a scanner/printer.
+تطبيق Windows صغير يربط محرر الدرفة الخاصة بسكانر WIA. يُثبَّت مرة واحدة، ويعمل في شريط النظام تلقائيًا عند تسجيل دخول الموظف؛ لا يحتاج الموظف إلى PowerShell أو صلاحيات مدير أو إبقاء نافذة مفتوحة.
 
-## Why it exists
+## تثبيت الموظف
 
-A normal browser page cannot call the Windows WIA scanner API directly. The ERP UI therefore talks only to a loopback service on `127.0.0.1`; that service opens the standard Windows scanner UI and returns the acquired image to the browser. The image is then uploaded to Frappe as a **private File** and only the file URL is stored in the special-door drawing JSON.
+1. نزّل `AlmdinaScannerBridgeSetup.exe` من رابط **تنزيل برنامج السكانر** الظاهر في واجهة الدرفة الخاصة، أو استلمه من مسؤول النظام.
+2. افتح الملف؛ يكتمل التثبيت تلقائيًا للمستخدم الحالي.
+3. تظهر أيقونة البرنامج في شريط Windows ويصبح زر **مسح بالسكانر** جاهزًا.
 
-## Run manually for testing
+يعمل التطبيق تلقائيًا مع تسجيل الدخول. يمكن فتح قائمته من أيقونة شريط النظام لاختبار السكانر، فتح نظام المدينة، تعطيل التشغيل التلقائي، أو الخروج مؤقتًا. الإزالة تتم من **Installed apps** في Windows أو اختصار الإزالة في قائمة ابدأ.
 
-1. Connect/install the printer-scanner in Windows and verify that Windows can scan from it.
-2. Open PowerShell.
-3. Run `AlmdinaScannerBridge.ps1`.
-4. If Windows reports an URL ACL error, open PowerShell once as Administrator and run:
+للنشر المركزي يمكن لمسؤول الأجهزة تشغيل المثبت بصمت:
 
-```powershell
-netsh http add urlacl url=http://127.0.0.1:17831/ user=$env:USERNAME
+```text
+AlmdinaScannerBridgeSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
-Then run the bridge normally again.
+التثبيت لكل مستخدم داخل `%LOCALAPPDATA%` ولا يطلب elevation. التطبيق self-contained ويدعم Windows 10/11 x64، ولا يحتاج تثبيت .NET منفصلًا.
 
-The default allowed ERP origin is `https://almadina-2.horizontechco.com`. Additional development origins can be passed with `-AllowedOrigins`.
+## لماذا يعمل كتطبيق شريط نظام؟
 
-## Endpoints
+صفحة المتصفح لا تستطيع استدعاء WIA مباشرة. كما أن Windows Service لا يملك جلسة تفاعلية مناسبة لعرض نافذة اختيار الجهاز للموظف. لذلك يعمل الجسر داخل جلسة الموظف ويبدأ معها، لكنه لا يعرض نافذة أوامر.
 
-- `GET /health` — bridge readiness check.
-- `POST /scan` — opens the standard Windows scanner UI and returns one JPEG image. Cancelling the Windows dialog returns HTTP 204.
+## العقد الأمني
 
-The bridge listens on loopback only and validates the browser `Origin` before allowing scan requests.
+- يستمع عبر `TcpListener` على `127.0.0.1:17831` فقط؛ لا يستخدم HTTP.sys ولا يحتاج `netsh` أو URL ACL.
+- يسمح فقط بالـOrigins المحددة، وأهمها `https://almadina-2.horizontechco.com`.
+- يتطلب Origin مسموحًا لـ`POST /scan`، ويعيد رؤوس CORS وPrivate Network Access اللازمة.
+- لا يملك بيانات دخول Frappe ولا يحفظ صورًا دائمة ولا يكتب JSON.
+- الصورة المؤقتة تُحذف فور قراءتها، ثم ترفعها واجهة ERP عبر خدمة `private File` المقيدة بالطلب والدرفة.
+- الحد الأقصى للصورة 8 MB، والاستجابة المقبولة JPEG فقط.
 
-## Use from the ERP
+## نقاط الاتصال
 
-Open **توثيق الدرفة الخاصة** and choose **مسح بالسكانر**. The UI checks `/health`, opens the Windows scanner dialog through `/scan`, and uploads the returned JPEG through the same private, piece-scoped Frappe service used by **رفع صورة**. Cancelling the Windows dialog leaves the documentation unchanged.
+- `GET /health` — فحص الجاهزية والإصدار، ويمكن فتحه محليًا للتشخيص.
+- `POST /scan` — يفتح واجهة WIA القياسية ويعيد JPEG واحدًا. الإلغاء يعيد HTTP 204.
+- `OPTIONS` — preflight مقيد بالـOrigin.
 
-If the ERP reports that the bridge is unavailable, keep this PowerShell window running and confirm that `http://127.0.0.1:17831/health` is reachable on the same Windows workstation. If it reports an origin error, add the exact ERP origin to `-AllowedOrigins`; do not expose the listener on a network interface.
+## البناء والاختبار
+
+الكود مقسم إلى Core مستقل عن Windows، وتطبيق WinForms للبنية الخارجية:
+
+```text
+src/Almdina.ScannerBridge.Core     origin policy + request dispatcher + scanner port
+src/Almdina.ScannerBridge          tray UI + loopback TCP adapter + WIA adapter
+tests/Almdina.ScannerBridge.Core.Tests
+installer/AlmdinaScannerBridge.iss
+```
+
+الأوامر للمطورين:
+
+```text
+dotnet run --project tools/almdina_scanner_bridge/tests/Almdina.ScannerBridge.Core.Tests/Almdina.ScannerBridge.Core.Tests.csproj --configuration Release
+dotnet publish tools/almdina_scanner_bridge/src/Almdina.ScannerBridge/Almdina.ScannerBridge.csproj --configuration Release --runtime win-x64 --self-contained true --output tools/almdina_scanner_bridge/build/publish
+```
+
+Workflow باسم `Windows Scanner Bridge` يبني التطبيق على Windows، يشغل اختبارات البروتوكول والسياسة، ينشئ المثبت، ويصدر SHA-256. Artifact غير الموقّع مخصص لـUAT فقط. إصدار production من tag بالشكل `scanner-bridge-v*` لا يُنشر ما لم تكن أسرار شهادة Authenticode التالية مضبوطة:
+
+- `WINDOWS_SIGNING_CERTIFICATE_BASE64`
+- `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`
+
+بعد إصدار tag موقّع يحدّث الـWorkflow قناة `scanner-bridge-latest`، ويبقى رابط الواجهة ثابتًا حتى مع إصدارات ERP الأخرى.
+
+## التشخيص
+
+- افتح `http://127.0.0.1:17831/health`؛ يجب أن ترى `ok: true`.
+- إن لم يعمل، افتح **Almdina Scanner Bridge** من قائمة ابدأ، ولا تستخدم PowerShell.
+- من أيقونة شريط النظام اختر **اختبار السكانر** للتأكد من تعريف الجهاز في Windows.
+- السجل التشخيصي المحدود يوجد في `%LOCALAPPDATA%\Almdina\ScannerBridge\logs\bridge.log`، ويدور تلقائيًا عند 1 MB.

@@ -100,6 +100,7 @@ async function verifyScannerBridge() {
     assert.equal(health.ok, true);
     assert.equal(calls[0].url, "http://127.0.0.1:17831/health");
     assert.equal(calls[0].options.credentials, "omit");
+    assert.equal(api.ScannerBridge.INSTALLER_URL, "https://github.com/Hasan-Alhendi/almdina-erp/releases/download/scanner-bridge-latest/AlmdinaScannerBridgeSetup.exe");
 
     const scanned = await api.ScannerBridge.scan({
         fetchImpl: async () => new Response(new Blob(["jpeg-data"], { type: "image/jpeg" }), { status: 200, headers: { "content-type": "image/jpeg" } }),
@@ -109,6 +110,14 @@ async function verifyScannerBridge() {
 
     const cancelled = await api.ScannerBridge.scan({ fetchImpl: async () => new Response(null, { status: 204 }) });
     assert.equal(cancelled, null, "cancelling the Windows scanner dialog must be a no-op");
+    await assert.rejects(
+        () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(null, { status: 409 }) }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.BUSY,
+    );
+    await assert.rejects(
+        () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(null, { status: 413 }) }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.IMAGE_TOO_LARGE,
+    );
     await assert.rejects(
         () => api.ScannerBridge.health({ timeoutMs: 250, fetchImpl: async () => { throw new Error("offline"); } }),
         error => error.code === api.ScannerBridge.ERROR_CODES.UNAVAILABLE,

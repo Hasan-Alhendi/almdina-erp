@@ -177,7 +177,18 @@
 - هل production DXF موجود وبالتالي المطلوب `replace_dxf` بدل `upload_dxf`؟
 - plan lock/approval state.
 
-## 13. مشكلة بعد Deploy أو Migrate
+## 13. زر «مسح بالسكانر» لا يتصل
+
+لا تطلب من الموظف تشغيل PowerShell.
+
+1. إذا لم يُثبت البرنامج، استخدم رابط **تنزيل برنامج السكانر — تثبيت مرة واحدة** داخل واجهة الدرفة.
+2. إذا كان مثبتًا، افتح **Almdina Scanner Bridge** من قائمة ابدأ وتأكد من ظهور أيقونته في شريط النظام.
+3. افتح `http://127.0.0.1:17831/health` على الجهاز نفسه؛ يجب أن يظهر `ok: true`.
+4. من أيقونة شريط النظام اختر **اختبار السكانر** وتأكد أن Windows يعرف الجهاز.
+5. إذا ظهر رفض Origin، تحقق أن إصدار التطبيق يسمح بعنوان بيئة ERP الحالي؛ لا توسع الاستماع إلى الشبكة.
+6. افحص `%LOCALAPPDATA%\Almdina\ScannerBridge\logs\bridge.log` وأرسل الإصدار والوقت لمسؤول النظام.
+
+## 14. مشكلة بعد Deploy أو Migrate
 
 اجمع:
 
@@ -191,7 +202,7 @@
 
 إذا migration فشل، لا تكرر أوامر destructive عشوائيًا؛ اعرف آخر patch اكتمل وراجع idempotency/backup.
 
-## 14. GitHub CI أحمر
+## 15. GitHub CI أحمر
 
 لا تبدأ بتعديل الـWorkflow لتجاوزه.
 
@@ -202,7 +213,7 @@
 5. أصلح code/docs السبب.
 6. لا تستخدم `continue-on-error`, `|| true`, حذف assertion أو mock واسع فقط للحصول على Green.
 
-## 15. قالب بلاغ مشكلة احترافي
+## 16. قالب بلاغ مشكلة احترافي
 
 ```text
 Title:
@@ -226,7 +237,7 @@ Business impact:
 Security/financial impact:
 ```
 
-## 16. تصنيف الأولوية
+## 17. تصنيف الأولوية
 
 - **Critical:** تسريب مالي/صلاحيات واسع، corruption، تنفيذ إنتاج خاطئ غير قابل للاحتواء.
 - **High:** وصول أجنبي/IDOR، تكلفة تظهر لغير مخول، طلب ينتقل لمستخدم/مرحلة خاطئة، DXF إنتاجي خاطئ.
@@ -235,6 +246,6 @@ Security/financial impact:
 
 الأولوية النهائية تعتمد على أثر الحالة الفعلية، وليس الاسم وحده.
 
-## 17. متى نفتح ADR بدل Bug fix؟
+## 18. متى نفتح ADR بدل Bug fix؟
 
 إذا تبين أن “الحل” يتطلب تغيير Capability model أو layer boundaries أو lifecycle الإجباري أو semantics للـsnapshots أو إعادة inventory إلى scope، فهذا ليس Bug fix محليًا. ارجع إلى [Architecture Freeze](ARCHITECTURE_FREEZE.md) وافتح ADR قبل التنفيذ.

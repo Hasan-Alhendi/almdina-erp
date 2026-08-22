@@ -26,7 +26,7 @@
                             <button type="button" class="ald-doc-source-action ald-doc-scan-action" data-action="scan-image" aria-describedby="ald-doc-scanner-status" ${readOnly ? "disabled" : ""}><span aria-hidden="true">▣</span> <span data-scan-label>مسح بالسكانر</span></button>
                             <button type="button" class="ald-doc-source-action ald-doc-camera-action" data-action="capture-image" ${readOnly ? "disabled" : ""}><span aria-hidden="true">◎</span> التقاط بالكاميرا</button>
                         </div>
-                        <p id="ald-doc-scanner-status" class="ald-doc-source-status" data-scanner-status role="status" aria-live="polite" hidden></p>
+                        <div class="ald-doc-scanner-feedback" data-scanner-feedback hidden><p id="ald-doc-scanner-status" class="ald-doc-source-status" data-scanner-status role="status" aria-live="polite"></p><a class="ald-doc-scanner-install" data-scanner-install target="_blank" rel="noopener" hidden>تنزيل برنامج السكانر — تثبيت مرة واحدة</a></div>
                     </section>
                     <input type="file" accept="image/jpeg,image/png,image/webp" data-reference-input hidden>
                     <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-camera-input hidden>
@@ -61,10 +61,10 @@
             setActiveTool(value) { workspace.querySelectorAll("[data-tool]").forEach(button => button.classList.toggle("is-active", button.dataset.tool === value)); workspace.dataset.activeTool = value; },
             setSaveState(text, state) { const node = workspace.querySelector("[data-save-state]"); node.textContent = text; node.dataset.state = state; },
             setSaving(saving) { const button = workspace.querySelector('[data-action="save"]'); button.disabled = readOnly || saving; button.textContent = saving ? "جار الحفظ…" : "حفظ التوثيق"; },
-            setScannerState({ busy = false, message = "", state = "idle" } = {}) {
-                const button = workspace.querySelector('[data-action="scan-image"]'); const label = workspace.querySelector("[data-scan-label]"); const status = workspace.querySelector("[data-scanner-status]");
+            setScannerState({ busy = false, message = "", state = "idle", installerUrl = "" } = {}) {
+                const button = workspace.querySelector('[data-action="scan-image"]'); const label = workspace.querySelector("[data-scan-label]"); const status = workspace.querySelector("[data-scanner-status]"); const feedback = workspace.querySelector("[data-scanner-feedback]"); const install = workspace.querySelector("[data-scanner-install]");
                 button.disabled = readOnly || busy; button.dataset.busy = busy ? "1" : "0"; button.setAttribute("aria-busy", busy ? "true" : "false"); label.textContent = busy ? "جار فتح السكانر…" : "مسح بالسكانر";
-                status.textContent = message; status.dataset.state = state; status.hidden = !message;
+                status.textContent = message; status.dataset.state = state; install.hidden = !installerUrl; if (installerUrl) install.href = installerUrl; else install.removeAttribute("href"); feedback.hidden = !message && !installerUrl;
             },
             setHint(value) { const node = workspace.querySelector("[data-hint]"); node.textContent = value || ""; node.hidden = !value; },
             render(document, state = {}) {

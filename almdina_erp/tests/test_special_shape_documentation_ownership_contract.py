@@ -29,6 +29,7 @@ class TestSpecialShapeDocumentationOwnership(unittest.TestCase):
     def test_scanner_adapter_is_loopback_only_and_does_not_own_persistence(self) -> None:
         scanner = (SUBSYSTEM / "infrastructure" / "scanner_bridge.js").read_text(encoding="utf-8")
         self.assertIn('DEFAULT_BASE_URL = "http://127.0.0.1:17831"', scanner)
+        self.assertIn("AlmdinaScannerBridgeSetup.exe", scanner)
         self.assertIn('resolved.hostname !== "127.0.0.1"', scanner)
         self.assertIn("window.fetch", scanner)
         self.assertNotIn("frappe.call", scanner)

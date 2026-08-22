@@ -93,6 +93,9 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("pointerdown", controller)
         self.assertIn("Scanner.health()", controller)
         self.assertIn("Scanner.scan()", controller)
+        self.assertIn("تنزيل برنامج السكانر — تثبيت مرة واحدة", shell)
+        self.assertIn("Scanner.INSTALLER_URL", controller)
+        self.assertNotIn("PowerShell", controller)
         self.assertIn("getCoalescedEvents", controller)
         self.assertIn("Ctrl+Z", shell)
 
