@@ -163,8 +163,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         plan_tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
         permission_refresh = '"public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"'
 
-        self.assertIn('"route": "/desk"', hooks)
-        self.assertNotIn('"route": "/desk/almdina-erp"', hooks)
+        self.assertIn('"route": "/desk/almdina-erp"', hooks)
+        self.assertNotIn('"route": "/desk",', hooks)
         self.assertLess(manifest.index(cost_presenter), manifest.index(cost_permissions))
         self.assertLess(manifest.index(plan_tabs), manifest.index(permission_refresh))
 
