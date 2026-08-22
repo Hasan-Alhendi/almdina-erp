@@ -80,7 +80,7 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
             self.assertIn("AlmdinaWorkspaceSyncCoordinator", source)
             self.assertIn(f'coordinator.register("{name}"', source)
 
-    def test_cost_document_version_is_part_of_canonical_read_contract(self) -> None:
+    def test_cost_reads_preserve_form_version_and_pricing_commands_advance_it(self) -> None:
         backend = (
             APP / "services" / "cost_permission_service.py"
         ).read_text(encoding="utf-8")
@@ -89,10 +89,51 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
             / "costing"
             / "door_cutting_order_cost_workspace_state.js"
         ).read_text(encoding="utf-8")
+        pricing_ux = (
+            PUBLIC
+            / "costing"
+            / "door_cutting_order_cost_permissions_ux.js"
+        ).read_text(encoding="utf-8")
+
+        # Read models may expose the server version for diagnostics, but a GET
+        # must never advance the native form's write token.
         self.assertIn('"order_modified": _document_version(order)', backend)
-        self.assertIn("payload && payload.order_modified", state)
-        self.assertIn("coordinator.syncDocumentModified", state)
-        self.assertNotIn("frm.reload_doc", state)
+        self.assertNotIn("syncDocumentModified", state)
+        self.assertIn("Never advance frm.doc.modified", state)
+
+        # Focused pricing mutations own their own optimistic-concurrency contract.
+        self.assertIn("def _locked_order(", backend)
+        self.assertIn("for update", backend)
+        self.assertIn("def _require_expected_document_version(", backend)
+        self.assertIn("frappe.TimestampMismatchError", backend)
+        self.assertEqual(backend.count("expected_modified: str | None = None"), 2)
+        self.assertEqual(
+            backend.count("_require_expected_document_version(order, expected_modified)"),
+            2,
+        )
+        self.assertIn("expected_modified: expectedModified", pricing_ux)
+        self.assertIn("__almdina_pricing_command_modified", pricing_ux)
+        self.assertIn("rememberPricingCommandModified", pricing_ux)
+        self.assertIn("finalizePricingDocumentVersion", pricing_ux)
+        self.assertIn("coordinator.syncDocumentModified(frm, modified)", pricing_ux)
+
+        # Authorization is evaluated before reporting a version mismatch so the
+        # concurrency guard does not become a document-information side channel.
+        approval = backend.split("def approve_special_piece_price(", 1)[1].split(
+            "@frappe.whitelist()", 1
+        )[0]
+        clipped = backend.split("def update_clipped_corner_edge_price(", 1)[1].split(
+            "__all__", 1
+        )[0]
+        for command in (approval, clipped):
+            self.assertLess(
+                command.index("require_document_capability(order, required_capability)"),
+                command.index("_require_expected_document_version(order, expected_modified)"),
+            )
+            self.assertLess(
+                command.index("_require_expected_document_version(order, expected_modified)"),
+                command.index("order.save(ignore_permissions=True)"),
+            )
 
     def test_preview_cost_is_in_memory_and_gated_by_view_costs(self) -> None:
         backend = (
