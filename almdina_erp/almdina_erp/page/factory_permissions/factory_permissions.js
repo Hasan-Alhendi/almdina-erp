@@ -23,16 +23,18 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 
-    if (
-        !frontend
-        || typeof frontend.requireAssets !== "function"
-        || typeof frontend.ensureStylesheet !== "function"
-    ) {
+    if (!frontend || typeof frontend.ensureStylesheet !== "function") {
         showBootstrapError(new Error("Almdina frontend foundation is unavailable"));
         return;
     }
 
-    const moduleLoad = frontend.requireAssets(MODULES);
+    // Page scripts and app-level assets are cached independently by Frappe/Desk.
+    // During a deploy the Page can therefore be newer than the cached foundation.
+    // Prefer the shared loader, but retain one native batched require as a
+    // compatibility path so deploy skew never blocks the permissions console.
+    const moduleLoad = typeof frontend.requireAssets === "function"
+        ? frontend.requireAssets(MODULES)
+        : Promise.resolve(frappe.require(MODULES));
     const styleLoad = frontend.ensureStylesheet(STYLESHEET, {
         id: "almdina-permission-console-style",
     });
