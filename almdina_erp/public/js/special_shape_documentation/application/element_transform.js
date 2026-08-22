@@ -17,14 +17,15 @@
         else if (next.type === "text") next.position = mapper(next.position);
         return next;
     }
-    function translate(element, dxMm, dyMm, canvas) {
-        const box = bounds(element); if (!box) return element;
-        const dx = Math.max(-box.minX, Math.min(Number(canvas.widthMm) - box.maxX, dxMm)); const dy = Math.max(-box.minY, Math.min(Number(canvas.heightMm) - box.maxY, dyMm));
+    function finite(value, fallback = 0) { const resolved = Number(value); return Number.isFinite(resolved) ? resolved : fallback; }
+    function translate(element, dxMm, dyMm) {
+        if (!bounds(element)) return element;
+        const dx = finite(dxMm), dy = finite(dyMm);
         return map(element, point => ({ xMm: point.xMm + dx, yMm: point.yMm + dy }));
     }
-    function resize(element, handle, target, canvas) {
+    function resize(element, handle, target) {
         const box = bounds(element); if (!box) return element; const startHandle = handle === "resize-start"; const anchor = startHandle ? { xMm: box.maxX, yMm: box.maxY } : { xMm: box.minX, yMm: box.minY };
-        const resolved = { xMm: Math.max(0, Math.min(Number(canvas.widthMm), target.xMm)), yMm: Math.max(0, Math.min(Number(canvas.heightMm), target.yMm)) };
+        const resolved = { xMm: finite(target && target.xMm, anchor.xMm), yMm: finite(target && target.yMm, anchor.yMm) };
         const oldWidth = Math.max(1, box.maxX - box.minX), oldHeight = Math.max(1, box.maxY - box.minY); const newWidth = Math.max(4, Math.abs(resolved.xMm - anchor.xMm)), newHeight = Math.max(4, Math.abs(resolved.yMm - anchor.yMm));
         return map(element, point => ({ xMm: anchor.xMm + (point.xMm - anchor.xMm) * (newWidth / oldWidth), yMm: anchor.yMm + (point.yMm - anchor.yMm) * (newHeight / oldHeight) }));
     }

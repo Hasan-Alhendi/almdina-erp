@@ -79,6 +79,21 @@ assert.doesNotMatch(classicSvg, /fill="#fff8c9"/);
 assert.doesNotMatch(classicSvg, /<script>/);
 assert.doesNotMatch(classicSvg, /url\(javascript:/);
 
+const freeWorkspacePiece = JSON.parse(JSON.stringify(classicPiece));
+const freeWorkspaceDrawing = JSON.parse(freeWorkspacePiece.special_shape_drawing_json);
+freeWorkspaceDrawing.elements.push({
+    id: "outside-door-frame",
+    type: "line",
+    start: { xMm: -250, yMm: -120 },
+    end: { xMm: 1200, yMm: 2350 },
+    style: { color: "#1463e6", width: 3 },
+});
+freeWorkspacePiece.special_shape_drawing_json = JSON.stringify(freeWorkspaceDrawing);
+const freeWorkspaceSvg = renderer.svg(freeWorkspacePiece);
+const freeViewBox = freeWorkspaceSvg.match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+assert.ok(freeViewBox[0] < -250 && freeViewBox[1] < -120, "print view must include free-canvas content before the nominal door origin");
+assert.ok(freeViewBox[0] + freeViewBox[2] > 1200 && freeViewBox[1] + freeViewBox[3] > 2350, "print view must include free-canvas content beyond the nominal door dimensions");
+
 const classicCell = renderer.notesCell(
     classicPiece,
     "ملاحظة <b>آمنة</b>",
