@@ -19,6 +19,13 @@
         return owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
     }
 
+    function previewState(frm) {
+        const owner = window.AlmdinaPlanPreviewSession;
+        return owner && typeof owner.snapshot === "function"
+            ? owner.snapshot(frm)
+            : null;
+    }
+
     function costWrapper(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_cost_invoice_html;
         return field && field.$wrapper && field.$wrapper.length ? field.$wrapper : null;
@@ -33,6 +40,9 @@
                 display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;padding:11px 13px;
                 border:1px solid rgba(190,125,25,.34);border-radius:12px;background:rgba(190,125,25,.085);
                 color:#77500f;font-size:11px;font-weight:750;line-height:1.65;
+            }
+            .${BANNER_CLASS}.is-preview{
+                border-color:rgba(36,144,239,.28);background:rgba(36,144,239,.065);color:var(--text-color,#26313b);
             }
             .${BANNER_CLASS} strong{display:block;margin-bottom:2px;font-size:12px;font-weight:900}
             .${BANNER_CLASS} .dco-freshness-icon{font-size:17px;line-height:1.25}
@@ -92,22 +102,6 @@
         };
     }
 
-    function renderCostBanner(frm, state) {
-        const wrapper = costWrapper(frm);
-        if (!wrapper) return;
-        wrapper.attr("data-almdina-cost-freshness", String(state && state.freshness || "unknown"));
-        wrapper.children(`.${BANNER_CLASS}`).remove();
-        if (!state || state.freshness !== "stale") return;
-
-        const copy = staleMessage(state.staleReason);
-        wrapper.prepend(`
-            <div class="${BANNER_CLASS}" role="status" aria-live="polite">
-                <span class="dco-freshness-icon" aria-hidden="true">⚠</span>
-                <div><strong>${frappe.utils.escape_html(copy.title)}</strong>${frappe.utils.escape_html(copy.body)}</div>
-            </div>
-        `);
-    }
-
     function money(value) {
         const number = Number(value || 0);
         if (!Number.isFinite(number)) return "0.00";
@@ -115,6 +109,50 @@
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
+    }
+
+    function previewMessage(state) {
+        if (!state || !["ready", "saving"].includes(state.status) || !state.payload) return null;
+        const summary = state.payload.summary || {};
+        const totals = summary.totals || {};
+        const cost = summary.cost || {};
+        const boards = Number(totals.required_boards || 0);
+        const expected = money(cost.total_cost_usd);
+        return {
+            title: state.status === "saving"
+                ? __("يتم الآن اعتماد معاينة خطة القص")
+                : __("هناك معاينة خطة غير محفوظة"),
+            body: __("التكلفة الرسمية أدناه تخص الخطة المحفوظة. المعاينة الحالية تستخدم {0} لوحًا وتكلفتها المتوقعة $ {1}. احفظ خطة القص لاعتماد هذه القيم.")
+                .replace("{0}", String(boards))
+                .replace("{1}", expected),
+        };
+    }
+
+    function renderCostBanner(frm, state) {
+        const wrapper = costWrapper(frm);
+        if (!wrapper) return;
+        wrapper.attr("data-almdina-cost-freshness", String(state && state.freshness || "unknown"));
+        wrapper.children(`.${BANNER_CLASS}`).remove();
+
+        if (state && state.freshness === "stale") {
+            const copy = staleMessage(state.staleReason);
+            wrapper.prepend(`
+                <div class="${BANNER_CLASS}" role="status" aria-live="polite">
+                    <span class="dco-freshness-icon" aria-hidden="true">⚠</span>
+                    <div><strong>${frappe.utils.escape_html(copy.title)}</strong>${frappe.utils.escape_html(copy.body)}</div>
+                </div>
+            `);
+            return;
+        }
+
+        const preview = previewMessage(previewState(frm));
+        if (!preview) return;
+        wrapper.prepend(`
+            <div class="${BANNER_CLASS} is-preview" role="status" aria-live="polite">
+                <span class="dco-freshness-icon" aria-hidden="true">◉</span>
+                <div><strong>${frappe.utils.escape_html(preview.title)}</strong>${frappe.utils.escape_html(preview.body)}</div>
+            </div>
+        `);
     }
 
     function markSpecialPriceBasisStale(frm) {
@@ -203,6 +241,7 @@
     [
         "almdina:workspace-freshness-changed",
         "almdina:cost-workspace-updated",
+        "almdina:plan-preview-updated",
         "almdina:surfaces-settled",
     ].forEach((eventName) => {
         window.addEventListener(eventName, () => {
@@ -215,5 +254,6 @@
         refresh,
         schedule,
         staleMessage,
+        previewMessage,
     });
 })();
