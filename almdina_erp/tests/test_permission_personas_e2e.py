@@ -7,7 +7,6 @@ from almdina_erp.almdina_erp.application.security.business_capability_state impo
     normalize_business_capability_state,
 )
 from almdina_erp.almdina_erp.application.security.navigation_context import (
-    ORDER_LIST_ROUTE,
     WORKSPACE_GO_LIVE,
     WORKSPACE_MAIN,
     WORKSPACE_REPORTS,
@@ -25,6 +24,10 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         navigation = build_navigation_context(enabled_business_capabilities(state))
         return state, navigation
 
+    def _assert_frappe_owns_home(self, navigation: dict) -> None:
+        self.assertNotIn("home_page", navigation)
+        self.assertNotIn("default_route", navigation)
+
     def test_order_entry_grants_expose_only_order_work(self) -> None:
         state, navigation = self._context(
             Capability.VIEW_ORDERS,
@@ -35,8 +38,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.PRINT_CUSTOMER_INVOICE,
         )
         self.assertEqual(navigation["profile"], "order_entry")
-        self.assertEqual(navigation["home_page"], "almdina-erp")
-        self.assertEqual(navigation["default_route"], "/desk/almdina-erp")
+        self._assert_frappe_owns_home(navigation)
         self.assertTrue(navigation["sections"]["orders"])
         for section in (
             "costing",
@@ -78,7 +80,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
         self.assertTrue(navigation["sections"]["planning"])
         self.assertTrue(navigation["sections"]["drawing"])
         self.assertTrue(navigation["sections"]["production"])
-        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
+        self._assert_frappe_owns_home(navigation)
         self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(state[Capability.UPLOAD_DXF])
         self.assertTrue(state[Capability.REPLACE_DXF])
@@ -100,8 +102,7 @@ class TestPermissionPersonasE2E(unittest.TestCase):
             Capability.COMPLETE_REPLACEMENT,
         )
         self.assertEqual(navigation["profile"], "shop_floor")
-        self.assertEqual(navigation["home_page"], ORDER_LIST_ROUTE)
-        self.assertEqual(navigation["default_route"], f"/desk/{ORDER_LIST_ROUTE}")
+        self._assert_frappe_owns_home(navigation)
         self.assertEqual(navigation["workspaces"], [WORKSPACE_MAIN])
         self.assertTrue(state[Capability.START_ASSIGNED_STAGE])
         self.assertTrue(state[Capability.HANDOFF_ASSIGNED_STAGE])
