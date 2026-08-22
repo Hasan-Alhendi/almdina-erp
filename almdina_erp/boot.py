@@ -235,12 +235,10 @@ def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
         return
 
     bootinfo["almdina_shared_shell"] = 1
-    bootinfo["home_page"] = navigation["home_page"]
-    bootinfo["default_route"] = navigation["default_route"]
 
-    # Ordinary Almdina users stay inside the factory application. The built-in
-    # Administrator deliberately keeps Frappe's complete app/workspace registry
-    # so /desk can render the standard Desktop and every installed app remains usable.
+    # Frappe owns the session landing route. Preserve the home page/default path
+    # already resolved from native Role Home Page and user Default Workspace.
+    # Almdina only projects authorized application/workspace visibility.
     if navigation.get("app_only"):
         allowed = set(navigation.get("workspaces") or ())
         surfaces = {
@@ -250,10 +248,6 @@ def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
         bootinfo["almdina_allowed_apps"] = [ALMDINA_APP]
         _filter_workspaces(bootinfo, allowed, surfaces)
         _filter_apps(bootinfo, allowed=allowed, surfaces=surfaces)
-
-        apps_data = bootinfo.get("apps_data")
-        if isinstance(apps_data, dict):
-            apps_data["default_path"] = navigation["default_route"]
     else:
         # /desk is the Administrator's Desktop. The Almdina app card itself must
         # still enter the factory workspace instead of returning to Desktop.
