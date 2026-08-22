@@ -156,9 +156,17 @@
         buttons.each(function syncButton() {
             const button = $(this);
             if (stale) {
+                button.attr("data-almdina-freshness-disabled", "1");
                 button.prop("disabled", true);
                 button.attr("aria-disabled", "true");
                 button.attr("title", __("حدّث التكلفة أولًا قبل طباعة فاتورة نهائية."));
+                return;
+            }
+            if (button.attr("data-almdina-freshness-disabled") === "1") {
+                button.removeAttr("data-almdina-freshness-disabled");
+                button.prop("disabled", false);
+                button.attr("aria-disabled", "false");
+                button.removeAttr("title");
             }
         });
     }
