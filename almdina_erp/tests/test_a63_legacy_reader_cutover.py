@@ -233,6 +233,16 @@ def test_preview_adapter_is_explicitly_transient_and_schema_independent() -> Non
     assert "ignore_permissions" not in preview
 
 
+def test_legacy_optimizer_preview_applies_requested_values_after_adapter_initialization() -> None:
+    service = (APP / "services" / "order_plan_permission_service.py").read_text(
+        encoding="utf-8"
+    )
+    preview = service.split("def simulate_optimizer_plan", 1)[1]
+    adapter_init = preview.index("preview._legacy_plan_adapter()")
+    overrides = preview.index("for fieldname, value in _requested_optimizer_updates(")
+    assert adapter_init < overrides
+
+
 def test_saved_dxf_paths_require_canonical_cutting_plan() -> None:
     export = (APP / "services" / "dxf_export_service.py").read_text(encoding="utf-8")
     compatibility = (APP / "services" / "export_validation_service.py").read_text(
@@ -300,15 +310,24 @@ def test_a64_first_schema_batch_removes_plan_ownership_fields() -> None:
     assert "drawing_dxf_status" in fields
 
 
-def test_a64_migration_runs_before_model_sync_and_drop_runs_after() -> None:
+def test_a64_migration_runs_after_model_sync_before_sanitize_and_drop() -> None:
     patches = (ROOT / "patches.txt").read_text(encoding="utf-8")
     migration = "almdina_erp.patches.v1_0.migrate_legacy_order_plan_projections"
+    sanitize = "almdina_erp.patches.v1_0.sanitize_historical_plan_snapshots"
     drop = "almdina_erp.patches.v1_0.drop_legacy_order_plan_columns"
-    assert migration in patches.split("[post_model_sync]", 1)[0]
-    assert drop in patches.split("[post_model_sync]", 1)[1]
+    pre, post = patches.split("[post_model_sync]", 1)
+
+    assert migration not in pre
+    assert migration in post
+    assert sanitize in post
+    assert drop in post
+    assert post.index(migration) < post.index(sanitize) < post.index(drop)
 
     migration_source = (
         ROOT / "patches" / "v1_0" / "migrate_legacy_order_plan_projections.py"
+    ).read_text(encoding="utf-8")
+    sanitize_source = (
+        ROOT / "patches" / "v1_0" / "sanitize_historical_plan_snapshots.py"
     ).read_text(encoding="utf-8")
     drop_source = (
         ROOT / "patches" / "v1_0" / "drop_legacy_order_plan_columns.py"
@@ -316,4 +335,6 @@ def test_a64_migration_runs_before_model_sync_and_drop_runs_after() -> None:
     assert "ignore_permissions" not in migration_source
     assert "ignore_permissions" not in drop_source
     assert "if _existing_order_plan(order_name):" in migration_source
+    assert "frappe.db.get_table_columns(doctype)" in sanitize_source
+    assert "if not available_fields:" in sanitize_source
     assert "frappe.db.has_column" in drop_source

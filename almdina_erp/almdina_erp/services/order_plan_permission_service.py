@@ -256,6 +256,10 @@ def simulate_optimizer_plan(
 
     preview = frappe.copy_doc(stored)
     preview.name = stored.name
+    # Initialize the compatibility adapter before applying requested overrides.
+    # Adapter initialization hydrates stored/default plan settings once; doing it
+    # afterward would silently replace the operator's preview values.
+    preview._legacy_plan_adapter()
     for fieldname, value in _requested_optimizer_updates(
         packing_mode=packing_mode,
         cutting_machine_type=cutting_machine_type,
