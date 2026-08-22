@@ -73,6 +73,23 @@ class TestShopFloorQueryArchitecture(unittest.TestCase):
         self.assertIn("def session_identity", application_source)
         self.assertIn("def global_capabilities", application_source)
 
+    def test_order_list_projection_exposes_activity_and_final_completion_times(self) -> None:
+        repository_source = ORDER_LIST_REPOSITORY_PATH.read_text(encoding="utf-8")
+        application_source = ORDER_LIST_APPLICATION_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('"start_time",', repository_source)
+        self.assertIn("as order_completion_time", repository_source)
+        self.assertIn("when ps.assigned_to = %s", repository_source)
+        self.assertNotIn("where ps.assigned_to = %s", repository_source)
+        self.assertIn(
+            '"start_time": _value(stage, "start_time") if stage else None,',
+            application_source,
+        )
+        self.assertIn(
+            '"ready_for_delivery_time": _value(timing, "order_completion_time"),',
+            application_source,
+        )
+
     def test_query_service_composes_application_and_repositories(self) -> None:
         source = QUERY_SERVICE_PATH.read_text(encoding="utf-8")
         self.assertIn("application.shop_floor import queries", source)

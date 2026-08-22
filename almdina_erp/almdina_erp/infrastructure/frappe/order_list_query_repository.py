@@ -74,6 +74,7 @@ class FrappeOrderListQueryRepository:
                 "department_label",
                 "operational_role",
                 "assigned_to",
+                "start_time",
             ],
             limit_page_length=max(len(names), 1),
         )
@@ -85,7 +86,46 @@ class FrappeOrderListQueryRepository:
         *,
         user: str,
     ) -> dict[str, Any]:
-        return self._shop_floor.personal_order_stage_timings(order_names, user=user)
+        """Return personal timings plus the order-wide final completion in one query."""
+        names = [str(name).strip() for name in order_names if str(name or "").strip()]
+        if not names:
+            return {}
+        placeholders = ", ".join(["%s"] * len(names))
+        rows = frappe.db.sql(
+            f"""
+            select ps.door_cutting_order,
+                   max(
+                       case
+                           when ps.assigned_to = %s
+                            and ps.name = dco.current_production_stage
+                            and ps.status in ('Pending', 'In Progress', 'Paused')
+                           then coalesce(ps.assignment_time, ps.creation)
+                       end
+                   ) as assignment_time,
+                   max(
+                       case
+                           when ps.assigned_to = %s
+                            and ps.status = 'Completed'
+                           then coalesce(ps.finish_time, ps.modified)
+                       end
+                   ) as completion_time,
+                   max(
+                       case
+                           when ps.status = 'Completed'
+                           then coalesce(ps.finish_time, ps.modified)
+                       end
+                   ) as order_completion_time
+              from `tabProduction Stage` ps
+              inner join `tabDoor Cutting Order` dco
+                      on dco.name = ps.door_cutting_order
+             where ifnull(ps.piece_label, '') = ''
+               and ps.door_cutting_order in ({placeholders})
+             group by ps.door_cutting_order
+            """,
+            [user, user, *names],
+            as_dict=True,
+        )
+        return {str(row.door_cutting_order): row for row in rows}
 
     def production_routes(self, route_names: Sequence[str]) -> dict[str, Any]:
         routes: dict[str, Any] = {}
