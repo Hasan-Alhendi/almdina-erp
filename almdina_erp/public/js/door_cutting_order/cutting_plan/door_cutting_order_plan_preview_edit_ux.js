@@ -187,6 +187,15 @@
         return false;
     }
 
+    function showCommittedResult(workspacesRefreshed) {
+        frappe.show_alert({
+            message: __(workspacesRefreshed
+                ? "تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها."
+                : "تم حفظ خطة المعاينة بنجاح، لكن تعذر تحديث العرض الآن. حدّث الصفحة لرؤية آخر خطة وتكلفة."),
+            indicator: workspacesRefreshed ? "green" : "orange",
+        }, workspacesRefreshed ? 5 : 7);
+    }
+
     async function saveEditing(frm) {
         const owner = previewOwner();
         if (!owner || !owner.isCommittable(frm)) {
@@ -194,27 +203,42 @@
             schedule(frm);
             return false;
         }
-        try {
-            const committed = await owner.commit(frm);
-            if (!committed) return false;
-            if (legacy.isEditing(frm)) await Promise.resolve(legacy.cancelEditing(frm));
 
-            await refreshCommittedWorkspaces(frm);
-            const view = presenter();
-            if (view && typeof view.restorePersistedPresentation === "function") {
-                view.restorePersistedPresentation(frm);
-            }
-            frappe.show_alert({
-                message: __("تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها."),
-                indicator: "green",
-            }, 5);
-            schedule(frm);
-            return true;
+        let committed = false;
+        try {
+            committed = await owner.commit(frm);
         } catch (error) {
             console.error("Cutting plan preview commit failed", error);
             schedule(frm);
             return false;
         }
+        if (!committed) return false;
+
+        // From this point the mutation is already durable. UI cleanup and workspace
+        // reconciliation are recoverable follow-up work and must never make the user
+        // believe the commit itself failed.
+        if (legacy.isEditing(frm)) {
+            try {
+                await Promise.resolve(legacy.cancelEditing(frm));
+            } catch (error) {
+                console.error("Cutting plan post-commit edit-session cleanup failed", error);
+            }
+        }
+
+        let workspacesRefreshed = false;
+        try {
+            workspacesRefreshed = await refreshCommittedWorkspaces(frm);
+        } catch (error) {
+            console.error("Cutting plan post-commit workspace refresh failed", error);
+        }
+
+        const view = presenter();
+        if (view && typeof view.restorePersistedPresentation === "function") {
+            view.restorePersistedPresentation(frm);
+        }
+        showCommittedResult(workspacesRefreshed);
+        schedule(frm);
+        return true;
     }
 
     window.AlmdinaPlanEditSessionUX = Object.freeze({

@@ -91,6 +91,13 @@
         recordImpact(frm, ["plan", "cost"], "order_inputs_changed");
     }
 
+    function onPieceCollectionChanged(frm) {
+        // Frappe emits pieces_add / pieces_remove for child-table structural changes.
+        // There may be no surviving row/field event after a deletion, so the
+        // collection event itself must invalidate both derived workspaces.
+        recordImpact(frm, ["plan", "cost"], "order_inputs_changed");
+    }
+
     function onPieceInputChanged(fieldname, frm, cdt, cdn) {
         const row = childRow(frm, cdt, cdn);
         const specialPriceChanged = markSpecialPriceBasisStale(row, fieldname);
@@ -161,7 +168,10 @@
     });
     frappe.ui.form.on("Door Cutting Order", orderHandlers);
 
-    const pieceHandlers = {};
+    const pieceHandlers = {
+        pieces_add: onPieceCollectionChanged,
+        pieces_remove: onPieceCollectionChanged,
+    };
     PIECE_PLAN_COST_FIELDS.forEach((fieldname) => {
         pieceHandlers[fieldname] = (frm, cdt, cdn) => onPieceInputChanged(fieldname, frm, cdt, cdn);
     });

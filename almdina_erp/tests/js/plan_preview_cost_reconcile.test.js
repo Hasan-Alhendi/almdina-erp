@@ -16,6 +16,7 @@ const source = fs.readFileSync(
 const calls = [];
 const formHandlers = [];
 const listeners = [];
+const alerts = [];
 let projected = 0;
 
 const frm = {
@@ -51,6 +52,10 @@ const fakeFrappe = {
             on(doctype, mapping) { formHandlers.push([doctype, mapping]); },
         },
     },
+    msgprint() {},
+    show_alert(options, seconds) {
+        alerts.push({ options: { ...options }, seconds });
+    },
 };
 
 const context = vm.createContext({
@@ -81,6 +86,35 @@ assert.equal(typeof ux.refreshCommittedWorkspaces, "function");
     ]);
     assert.equal(projected, 1);
     assert.ok(listeners.includes("almdina:plan-preview-updated"));
+
+    // A committed plan is durable before workspace reconciliation. A transient
+    // Cost refresh failure must therefore produce a recoverable warning, not make
+    // saveEditing report that the mutation itself failed.
+    calls.length = 0;
+    alerts.length = 0;
+    fakeWindow.AlmdinaPlanPreviewSession = {
+        isCommittable() { return true; },
+        isBusy() { return false; },
+        async commit() {
+            calls.push(["commit"]);
+            return true;
+        },
+    };
+    fakeWindow.AlmdinaWorkspaceSyncCoordinator.refresh = async (_frm, resources, options) => {
+        calls.push(["refresh", Array.from(resources), { ...options }]);
+        throw new Error("simulated cost refresh failure");
+    };
+
+    const saved = await fakeWindow.AlmdinaPlanEditSessionUX.saveEditing(frm);
+    assert.equal(saved, true, "a post-commit refresh failure must not turn a durable commit into failure");
+    assert.deepEqual(calls.slice(0, 3), [
+        ["commit"],
+        ["invalidate", ["plan", "cost"], "plan_changed"],
+        ["refresh", ["plan", "cost"], { force: true, reason: "plan_changed" }],
+    ]);
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0].options.indicator, "orange");
+    assert.match(alerts[0].options.message, /تم حفظ خطة المعاينة بنجاح/);
 
     console.log("Plan preview Cost reconciliation simulation passed");
 })().catch((error) => {

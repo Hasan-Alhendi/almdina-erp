@@ -89,6 +89,8 @@ assert.deepEqual(
 
 const detailHandlers = handlers.get("Door Cutting Order Detail");
 assert.ok(detailHandlers && typeof detailHandlers.qty === "function");
+assert.equal(typeof detailHandlers.pieces_add, "function");
+assert.equal(typeof detailHandlers.pieces_remove, "function");
 detailHandlers.qty(frm, "Door Cutting Order Detail", "ROW-1");
 
 const piece = frm.doc.pieces[0];
@@ -124,6 +126,20 @@ assert.deepEqual(invalidations[0], {
         resources: ["plan", "cost"],
         reason: "order_inputs_changed",
     });
+
+    invalidations.length = 0;
+    detailHandlers.pieces_add(frm, "Door Cutting Order Detail", "ROW-2");
+    assert.deepEqual(invalidations[0], {
+        resources: ["plan", "cost"],
+        reason: "order_inputs_changed",
+    }, "adding a piece must invalidate both Plan and Cost");
+
+    invalidations.length = 0;
+    detailHandlers.pieces_remove(frm, "Door Cutting Order Detail", "ROW-1");
+    assert.deepEqual(invalidations[0], {
+        resources: ["plan", "cost"],
+        reason: "order_inputs_changed",
+    }, "removing a piece must invalidate both Plan and Cost even when no row field event survives");
 
     console.log("DCO workspace mutation impact simulation passed");
 })().catch((error) => {
