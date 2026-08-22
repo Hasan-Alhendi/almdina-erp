@@ -17,12 +17,23 @@ _ORDER_PLAN_FIELDS = (
 )
 
 
+def _existing_fields(doctype: str, fields: tuple[str, ...]) -> tuple[str, ...]:
+    if not frappe.db.table_exists(doctype):
+        return ()
+    columns = set(frappe.db.get_table_columns(doctype))
+    return tuple(fieldname for fieldname in fields if fieldname in columns)
+
+
 def _sanitize_rows(doctype: str, fields: tuple[str, ...]) -> None:
+    available_fields = _existing_fields(doctype, fields)
+    if not available_fields:
+        return
+
     offset = 0
     while True:
         rows = frappe.get_all(
             doctype,
-            fields=["name", *fields],
+            fields=["name", *available_fields],
             order_by="name asc",
             limit_start=offset,
             limit_page_length=_BATCH_SIZE,
@@ -32,7 +43,7 @@ def _sanitize_rows(doctype: str, fields: tuple[str, ...]) -> None:
 
         for row in rows:
             updates: dict[str, Any] = {}
-            for fieldname in fields:
+            for fieldname in available_fields:
                 raw = row.get(fieldname)
                 if raw in (None, ""):
                     continue
@@ -52,7 +63,7 @@ def _sanitize_rows(doctype: str, fields: tuple[str, ...]) -> None:
 
 
 def execute() -> None:
-    """Remove financial metadata from every persisted operational plan JSON."""
+    """Remove financial metadata from persisted operational plan JSON safely."""
 
     _sanitize_rows("Door Cutting Order", _ORDER_PLAN_FIELDS)
     _sanitize_rows("Cutting Plan", ("snapshot_json",))
