@@ -22,7 +22,7 @@ let serverModified = "server-1";
 
 const frm = {
     doctype: "Door Cutting Order",
-    doc: { name: "DCO-1", modified: "client-old" },
+    doc: { name: "DCO-1", modified: "client-opened" },
     is_new() { return false; },
     is_dirty() { return false; },
 };
@@ -95,8 +95,8 @@ assert.ok(owner);
 (async () => {
     await owner.load(frm, { force: true });
     assert.equal(apiCalls, 1);
-    assert.equal(frm.doc.modified, "server-1",
-        "canonical Cost read must advance a clean form to the current DCO version");
+    assert.equal(frm.doc.modified, "client-opened",
+        "a Cost GET must never advance the DCO optimistic-concurrency token");
     assert.equal(owner.snapshot(frm).freshness, "fresh");
 
     owner.invalidate(frm, "order_inputs_changed");
@@ -105,17 +105,18 @@ assert.ok(owner);
     await owner.load(frm);
     assert.equal(apiCalls, 2,
         "ordinary load must bypass its ready cache when the workspace is stale");
-    assert.equal(frm.doc.modified, "server-2");
+    assert.equal(frm.doc.modified, "client-opened",
+        "refreshing stale Cost data must still preserve the version the form opened");
     assert.equal(owner.snapshot(frm).freshness, "fresh");
 
     frm.is_dirty = () => true;
     serverModified = "server-3";
     await owner.load(frm, { force: true });
-    assert.equal(frm.doc.modified, "server-2",
-        "a real local edit must preserve the original optimistic-concurrency token");
-    assert.equal(frm.__almdina_pending_server_modified, "server-3");
+    assert.equal(frm.doc.modified, "client-opened");
+    assert.equal(frm.__almdina_pending_server_modified, undefined,
+        "read-only snapshots must not install a pending server write token either");
 
-    console.log("Cost workspace document-version simulation passed");
+    console.log("Cost workspace read-version isolation simulation passed");
 })().catch((error) => {
     console.error(error);
     process.exitCode = 1;
