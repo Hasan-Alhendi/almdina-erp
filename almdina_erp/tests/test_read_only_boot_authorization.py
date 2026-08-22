@@ -113,6 +113,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
             }
         ).load()
         bootinfo = {
+            "home_page": "door-cutting-order",
+            "default_route": "/desk/door-cutting-order",
             "workspaces": {
                 "pages": [
                     {"name": "Almdina ERP", "module": "Almdina ERP", "app": "almdina_erp"},
@@ -132,8 +134,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         boot.boot_session(bootinfo)
         context = bootinfo["almdina_permissions"]
         self.assertEqual(context["profile"], "order_entry")
-        self.assertEqual(bootinfo["home_page"], "almdina-erp")
-        self.assertEqual(bootinfo["default_route"], "/desk/almdina-erp")
+        self.assertEqual(bootinfo["home_page"], "door-cutting-order")
+        self.assertEqual(bootinfo["default_route"], "/desk/door-cutting-order")
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
             ["Almdina ERP"],
@@ -141,6 +143,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
         self.assertTrue(context["navigation"]["shared_shell"])
         self.assertTrue(context["navigation"]["app_only"])
+        self.assertNotIn("home_page", context["navigation"])
+        self.assertNotIn("default_route", context["navigation"])
         self.assertNotIn("almdina_shop_floor_only", bootinfo)
         self.assertNotIn("almdina_order_entry_only", bootinfo)
 
@@ -157,6 +161,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
             }
         ).load()
         bootinfo = {
+            "home_page": "door-cutting-order",
+            "default_route": "/desk/door-cutting-order",
             "workspaces": {
                 "pages": [
                     {"name": "Almdina ERP", "module": "Almdina ERP", "app": "almdina_erp"},
@@ -185,6 +191,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertEqual([row["name"] for row in bootinfo["app_data"]], ["almdina_erp"])
         self.assertTrue(context["navigation"]["shared_shell"])
         self.assertTrue(context["navigation"]["app_only"])
+        self.assertNotIn("home_page", context["navigation"])
+        self.assertNotIn("default_route", context["navigation"])
         self.assertNotIn("almdina_shop_floor_only", bootinfo)
         self.assertNotIn("almdina_order_entry_only", bootinfo)
 
@@ -198,6 +206,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
             }
         ).load()
         bootinfo = {
+            "home_page": "almdina-erp",
+            "default_route": "/desk/almdina-erp",
             "workspaces": {
                 "pages": [
                     {"name": "Almdina ERP", "module": "Almdina ERP"},
@@ -235,6 +245,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
             user="Administrator",
         ).load()
         bootinfo = {
+            "home_page": "desktop",
+            "default_route": "/desk/desktop",
             "workspaces": {
                 "pages": [
                     {"name": "Almdina ERP", "module": "Almdina ERP", "app": "almdina_erp"},
@@ -257,6 +269,8 @@ class TestReadOnlyBootAuthorization(unittest.TestCase):
         self.assertEqual(bootinfo["home_page"], "desktop")
         self.assertEqual(bootinfo["default_route"], "/desk/desktop")
         self.assertFalse(context["navigation"]["app_only"])
+        self.assertNotIn("home_page", context["navigation"])
+        self.assertNotIn("default_route", context["navigation"])
         self.assertEqual(
             [row["name"] for row in bootinfo["workspaces"]["pages"]],
             ["Almdina ERP", "Stock"],
