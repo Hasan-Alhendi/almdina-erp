@@ -27,10 +27,33 @@
         if (!reference || !String(reference.fileUrl || "").startsWith("/private/files/")) return ""; const opacity = Math.max(.1, Math.min(1, finite(reference.opacity, .72))), rotation = Math.max(-360, Math.min(360, finite(reference.rotationDeg)));
         return `<image href="${esc(reference.fileUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}" transform="rotate(${rotation} ${width / 2} ${height / 2})"/>`;
     }
+    function elementBounds(element) {
+        if (!element || typeof element !== "object") return null; let points = [];
+        if (element.type === "stroke") points = element.points || [];
+        else if (["line", "arrow", "dimension"].includes(element.type)) points = [element.start, element.end];
+        else if (["rect", "ellipse"].includes(element.type)) points = [
+            { xMm: element.xMm, yMm: element.yMm },
+            { xMm: finite(element.xMm) + Math.max(0, finite(element.widthMm)), yMm: finite(element.yMm) + Math.max(0, finite(element.heightMm)) },
+        ];
+        else if (element.type === "text") points = [element.position, { xMm: finite(element.position && element.position.xMm) + 120, yMm: finite(element.position && element.position.yMm) + 40 }];
+        const valid = points.map(point).filter(Boolean); if (!valid.length) return null;
+        return { minX: Math.min(...valid.map(item => item.x)), maxX: Math.max(...valid.map(item => item.x)), minY: Math.min(...valid.map(item => item.y)), maxY: Math.max(...valid.map(item => item.y)) };
+    }
+    function documentationBounds(payload, width, height) {
+        const values = (payload.elements || []).map(elementBounds).filter(Boolean);
+        if (payload.reference) values.push({ minX: 0, minY: 0, maxX: width, maxY: height });
+        if (!values.length) values.push({ minX: 0, minY: 0, maxX: width, maxY: height });
+        const bounds = {
+            minX: Math.min(...values.map(value => value.minX)), maxX: Math.max(...values.map(value => value.maxX)),
+            minY: Math.min(...values.map(value => value.minY)), maxY: Math.max(...values.map(value => value.maxY)),
+        };
+        const padding = Math.max(20, Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * .04);
+        return { x: bounds.minX - padding, y: bounds.minY - padding, width: Math.max(1, bounds.maxX - bounds.minX) + padding * 2, height: Math.max(1, bounds.maxY - bounds.minY) + padding * 2 };
+    }
     function documentationSvg(payload, label) {
-        const width = Math.max(1, finite(payload.canvas && payload.canvas.widthMm, 800)), height = Math.max(1, finite(payload.canvas && payload.canvas.heightMm, 2100)); sequence += 1; const markerId = `dco-doc-arrow-${sequence}`;
+        const width = Math.max(1, finite(payload.canvas && payload.canvas.widthMm, 800)), height = Math.max(1, finite(payload.canvas && payload.canvas.heightMm, 2100)), view = documentationBounds(payload, width, height); sequence += 1; const markerId = `dco-doc-arrow-${sequence}`;
         const elements = (payload.elements || []).map(item => documentationElement(item, markerId)).join("");
-        return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><defs>${arrowHead(markerId, "#173c75")}</defs><rect width="${width}" height="${height}" fill="#fff"/>${referenceMarkup(payload.reference, width, height)}${elements}</svg>`;
+        return `<svg viewBox="${view.x} ${view.y} ${view.width} ${view.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><defs>${arrowHead(markerId, "#173c75")}</defs><rect x="${view.x}" y="${view.y}" width="${view.width}" height="${view.height}" fill="#fff"/>${referenceMarkup(payload.reference, width, height)}${elements}</svg>`;
     }
     function geometrySvg(payload, label) {
         const width = Math.max(0, finite(payload.blank_width_cm)), height = Math.max(0, finite(payload.blank_length_cm)); const points = (payload.points || []).filter(item => Array.isArray(item) && item.length >= 2).map(item => `${finite(item[0])},${finite(item[1])}`).join(" "); if (!width || !height || !points) return ""; const padding = Math.max(width, height) * .06;

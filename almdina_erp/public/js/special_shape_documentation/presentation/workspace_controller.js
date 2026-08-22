@@ -21,28 +21,37 @@
         return null;
     }
     function mount(wrapper) {
-        const D = root.Document, H = root.History, T = root.Templates, Pen = root.SmartPen, Transform = root.ElementTransform, Api = root.WorkspaceApi, Scanner = root.ScannerBridge;
+        const D = root.Document, H = root.History, T = root.Templates, Pen = root.SmartPen, Transform = root.ElementTransform, Clipboard = root.ElementClipboard, Shortcuts = root.KeyboardShortcuts, Api = root.WorkspaceApi, Scanner = root.ScannerBridge;
         const Shell = root.WorkspaceShell, Canvas = root.CanvasRenderer;
-        if (![D, H, T, Pen, Transform, Api, Scanner, Shell, Canvas].every(Boolean)) throw new Error("Special-shape documentation dependencies are incomplete");
+        if (![D, H, T, Pen, Transform, Clipboard, Shortcuts, Api, Scanner, Shell, Canvas].every(Boolean)) throw new Error("Special-shape documentation dependencies are incomplete");
         const main = wrapper.querySelector(".layout-main-section");
         if (!main) throw new Error("Documentation page main section is missing");
         let generation = 0, suspended = false, shell = null, renderer = null, context = null, history = null;
         let tool = "select", selectedId = null, draft = null, dragging = false, saving = false, scanning = false, pendingFileRemovals = new Set();
-        const resizeHandler = () => { if (renderer) renderer.draw(); };
+        const clipboard = Clipboard.create(D, Transform);
+        let spacePressed = false, panning = false, panPoint = null;
+        const resizeHandler = () => { if (renderer) { renderer.draw(); syncZoom(); } };
+        const keyupHandler = event => {
+            if (Shortcuts.physicalCode(event) !== "Space") return;
+            spacePressed = false;
+            if (!panning && shell) shell.setPanMode(false);
+        };
         const beforeUnloadHandler = event => {
             if (!history || !history.isDirty()) return;
             event.preventDefault();
             event.returnValue = "";
         };
 
-        function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; scanning = false; }
+        function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); window.removeEventListener("keyup", keyupHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; scanning = false; clipboard.clear(); spacePressed = false; panning = false; panPoint = null; }
         function showMessage(message, error = false) { main.innerHTML = `<div class="ald-doc-message ${error ? "is-error" : ""}">${frappe.utils.escape_html(String(message))}</div>`; }
         function back() { if (context) frappe.set_route("Form", "Door Cutting Order", context.order.name); else frappe.set_route("List", "Door Cutting Order"); }
         function render() {
             if (!history || !shell || !renderer) return; const state = history.state();
             shell.render(state.document, { ...state, selectedId }); shell.setActiveTool(tool); shell.setHint(TOOL_HINTS[tool]); shell.setSaveState(state.dirty ? "غير محفوظ" : "محفوظ", state.dirty ? "dirty" : "saved");
             renderer.render(draft && draft.previewDocument || state.document, { selectedId, preview: draft && draft.points });
+            syncZoom();
         }
+        function syncZoom() { if (shell && renderer) shell.setZoom(renderer.zoomPercentage()); }
         function commit(next) { history.commit(next); render(); }
         function chooseTool(next) { if (!context.permissions.can_edit && next !== "select") return; tool = next; draft = null; dragging = false; render(); }
         async function save() {
@@ -108,18 +117,33 @@
             commit(D.addElement(history.get(), { id: D.id("stroke"), type: "stroke", points, closed, style: { color: "#1463e6", width: 3 } })); draft = null;
         }
         function pointerDown(event) {
-            if (!context.permissions.can_edit && tool !== "select") return; shell.canvas.setPointerCapture(event.pointerId); const point = renderer.screenToMm(event);
+            shell.canvas.focus({ preventScroll: true });
+            if (event.button === 1 || spacePressed) {
+                event.preventDefault();
+                shell.canvas.setPointerCapture(event.pointerId);
+                panning = true;
+                panPoint = { x: event.clientX, y: event.clientY };
+                shell.setPanMode(true);
+                return;
+            }
+            if (event.button !== 0 || (!context.permissions.can_edit && tool !== "select")) return;
+            shell.canvas.setPointerCapture(event.pointerId); const point = renderer.screenToMm(event);
             if (tool === "select") { const hit = renderer.hitTest(event); selectedId = hit && hit.id || null; if (hit && context.permissions.can_edit) { dragging = true; draft = { mode: renderer.selectionRegion(event, hit), start: point, original: D.clone(hit), previewDocument: history.get() }; } render(); return; }
             if (tool === "text") { promptText().then(text => { if (text) commit(D.addElement(history.get(), { id: D.id("text"), type: "text", position: point, text, style: { color: "#9a4b00" } })); }); return; }
             dragging = true; draft = { start: point, points: [point], end: point };
         }
         function pointerMove(event) {
+            if (panning && panPoint) {
+                renderer.panBy(event.clientX - panPoint.x, event.clientY - panPoint.y);
+                panPoint = { x: event.clientX, y: event.clientY };
+                return;
+            }
             if (!dragging || !draft) return;
             const point = renderer.screenToMm(event); draft.end = point;
             if (tool === "select" && draft.original) {
                 const transformed = draft.mode === "move"
-                    ? Transform.translate(draft.original, point.xMm - draft.start.xMm, point.yMm - draft.start.yMm, history.get().canvas)
-                    : Transform.resize(draft.original, draft.mode, point, history.get().canvas);
+                    ? Transform.translate(draft.original, point.xMm - draft.start.xMm, point.yMm - draft.start.yMm)
+                    : Transform.resize(draft.original, draft.mode, point);
                 draft.previewDocument = Transform.replace(history.get(), transformed);
                 renderer.render(draft.previewDocument, { selectedId }); return;
             }
@@ -130,28 +154,88 @@
             renderer.render(history.get(), { selectedId, preview: draft.points });
         }
         function pointerUp() {
+            if (panning) {
+                panning = false;
+                panPoint = null;
+                if (shell) shell.setPanMode(spacePressed);
+                return;
+            }
             if (!dragging || !draft) return; dragging = false;
             if (tool === "select" && draft.previewDocument) { const next = draft.previewDocument; draft = null; commit(next); return; }
             if (tool === "pen") { finishPen(); return; }
             const element = makeElement(tool, draft.start, draft.end); draft = null; if (element && distance(element.start || { xMm: element.xMm, yMm: element.yMm }, element.end || { xMm: element.xMm + element.widthMm, yMm: element.yMm + element.heightMm }) > 3) commit(D.addElement(history.get(), element)); else render();
         }
+        function undo() { history.undo(); selectedId = null; render(); }
+        function redo() { history.redo(); selectedId = null; render(); }
+        function copySelection() {
+            const selected = history.get().elements.find(element => element.id === selectedId);
+            if (!selected) return false;
+            return clipboard.copy(selected);
+        }
+        function pasteSelection() {
+            if (!clipboard.canPaste() || !context.permissions.can_edit) return false;
+            const offsetMm = renderer.screenDeltaToMm(24);
+            const pasted = clipboard.paste(offsetMm);
+            selectedId = pasted.id;
+            commit(D.addElement(history.get(), pasted));
+            return true;
+        }
+        function deleteSelection() {
+            if (!selectedId || !context.permissions.can_edit) return false;
+            const next = D.removeElement(history.get(), selectedId);
+            selectedId = null;
+            commit(next);
+            return true;
+        }
+        function escapeInteraction() {
+            draft = null;
+            dragging = false;
+            selectedId = null;
+            render();
+        }
+        function executeShortcut(command) {
+            if (command === "save") { save(); return true; }
+            if (command === "undo") { undo(); return true; }
+            if (command === "redo") { redo(); return true; }
+            if (command === "copy") return copySelection();
+            if (command === "paste") return pasteSelection();
+            if (command === "delete") return deleteSelection();
+            if (command === "escape") { escapeInteraction(); return true; }
+            if (command === "pan") { spacePressed = true; shell.setPanMode(true); return true; }
+            if (command === "fit-view") { renderer.fitToContent(); syncZoom(); return true; }
+            if (command === "reset-zoom") { renderer.resetZoom(); syncZoom(); return true; }
+            if (["select", "pen", "line", "rect", "ellipse", "dimension", "text"].includes(command)) { chooseTool(command); return true; }
+            return false;
+        }
         function keydown(event) {
-            if (!history || /INPUT|TEXTAREA/.test(event.target.tagName)) return;
-            const key = event.key.toLowerCase(); if ((event.ctrlKey || event.metaKey) && key === "s") { event.preventDefault(); save(); return; }
-            if ((event.ctrlKey || event.metaKey) && key === "z") { event.preventDefault(); if (event.shiftKey) history.redo(); else history.undo(); selectedId = null; render(); return; }
-            const shortcuts = { v: "select", p: "pen", l: "line", r: "rect", o: "ellipse", d: "dimension", t: "text" }; if (shortcuts[key]) { event.preventDefault(); chooseTool(shortcuts[key]); return; }
-            if ((event.key === "Delete" || event.key === "Backspace") && selectedId && context.permissions.can_edit) { event.preventDefault(); commit(D.removeElement(history.get(), selectedId)); selectedId = null; }
-            if (event.key === "Escape") { draft = null; dragging = false; selectedId = null; render(); }
+            if (!history || Shortcuts.isEditableTarget(event.target)) return;
+            const command = Shortcuts.resolve(event);
+            if (command && executeShortcut(command)) event.preventDefault();
+        }
+        function wheel(event) {
+            if (!renderer) return;
+            event.preventDefault();
+            if (event.ctrlKey || event.metaKey) {
+                renderer.zoomAt(event, Math.exp(-Number(event.deltaY || 0) * 0.002));
+                syncZoom();
+                return;
+            }
+            const dx = event.shiftKey ? -Number(event.deltaY || 0) : -Number(event.deltaX || 0);
+            const dy = event.shiftKey ? 0 : -Number(event.deltaY || 0);
+            renderer.panBy(dx, dy);
         }
         function bindEvents() {
             const workspace = shell.workspace;
             workspace.addEventListener("click", event => {
                 const target = event.target.closest("button"); if (!target) return;
                 if (target.dataset.tool) chooseTool(target.dataset.tool);
-                else if (target.dataset.template && context.permissions.can_edit) { commit(T.apply(history.get(), target.dataset.template)); selectedId = null; }
+                else if (target.dataset.template && context.permissions.can_edit) { selectedId = null; commit(T.apply(history.get(), target.dataset.template)); }
                 else if (target.dataset.action === "back") requestBack(); else if (target.dataset.action === "save") save();
-                else if (target.dataset.action === "choose-image") shell.referenceInput.click(); else if (target.dataset.action === "capture-image") shell.cameraInput.click(); else if (target.dataset.action === "scan-image") scanReference(); else if (target.dataset.action === "undo") { history.undo(); selectedId = null; render(); }
-                else if (target.dataset.action === "redo") { history.redo(); selectedId = null; render(); }
+                else if (target.dataset.action === "choose-image") shell.referenceInput.click(); else if (target.dataset.action === "capture-image") shell.cameraInput.click(); else if (target.dataset.action === "scan-image") scanReference(); else if (target.dataset.action === "undo") undo();
+                else if (target.dataset.action === "redo") redo();
+                else if (target.dataset.action === "zoom-out") { renderer.zoomBy(0.8); syncZoom(); }
+                else if (target.dataset.action === "zoom-in") { renderer.zoomBy(1.25); syncZoom(); }
+                else if (target.dataset.action === "fit-view") { renderer.fitToContent(); syncZoom(); }
                 else if (target.dataset.action === "rotate-left") updateReference({ rotationDeg: history.get().reference.rotationDeg - 90 });
                 else if (target.dataset.action === "rotate-right") updateReference({ rotationDeg: history.get().reference.rotationDeg + 90 });
                 else if (target.dataset.action === "remove-image") removeImage();
@@ -162,8 +246,8 @@
             workspace.querySelector("[data-opacity]").addEventListener("change", event => updateReference({ opacity: Number(event.target.value) / 100 }));
             workspace.querySelector("[data-reference-lock]").addEventListener("change", event => updateReference({ locked: Boolean(event.target.checked) }));
             workspace.querySelector("[data-notes]").addEventListener("change", event => commit(D.setNotes(history.get(), event.target.value)));
-            shell.canvas.addEventListener("pointerdown", pointerDown); shell.canvas.addEventListener("pointermove", pointerMove); shell.canvas.addEventListener("pointerup", pointerUp); shell.canvas.addEventListener("pointercancel", pointerUp);
-            workspace.addEventListener("keydown", keydown); window.addEventListener("resize", resizeHandler); window.addEventListener("beforeunload", beforeUnloadHandler);
+            shell.canvas.addEventListener("pointerdown", pointerDown); shell.canvas.addEventListener("pointermove", pointerMove); shell.canvas.addEventListener("pointerup", pointerUp); shell.canvas.addEventListener("pointercancel", pointerUp); shell.canvas.addEventListener("wheel", wheel, { passive: false });
+            workspace.addEventListener("keydown", keydown); window.addEventListener("keyup", keyupHandler); window.addEventListener("resize", resizeHandler); window.addEventListener("beforeunload", beforeUnloadHandler);
         }
         async function open(route) {
             const token = ++generation; suspended = false; cleanup(); showMessage("جار تحميل توثيق الدرفة…");

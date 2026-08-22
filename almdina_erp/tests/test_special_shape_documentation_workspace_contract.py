@@ -49,6 +49,9 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("Promise.all(MODULES.map", page)
         self.assertNotIn("MODULES.reduce", page)
         self.assertIn("infrastructure/scanner_bridge.js", page)
+        self.assertIn("application/element_clipboard.js", page)
+        self.assertIn("application/keyboard_shortcuts.js", page)
+        self.assertIn("presentation/canvas_viewport.js", page)
 
     def test_legacy_editor_directories_and_styles_are_deleted(self) -> None:
         self.assertFalse(any((PUBLIC / "js" / "door_drawing_v3").rglob("*.js")))
@@ -97,7 +100,12 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("Scanner.INSTALLER_URL", controller)
         self.assertNotIn("PowerShell", controller)
         self.assertIn("getCoalescedEvents", controller)
+        self.assertIn("Shortcuts.resolve(event)", controller)
+        self.assertIn("copySelection()", controller)
+        self.assertIn("pasteSelection()", controller)
+        self.assertIn("renderer.zoomAt", controller)
         self.assertIn("Ctrl+Z", shell)
+        self.assertIn("Ctrl+Y", shell)
 
 
 if __name__ == "__main__":
