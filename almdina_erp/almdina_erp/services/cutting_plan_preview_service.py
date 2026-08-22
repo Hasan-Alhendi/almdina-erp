@@ -117,6 +117,14 @@ def _preview_summary(plan: Any) -> dict[str, Any]:
             "waste_area_m2": float(plan.waste_area_m2 or 0),
             "waste_percent": float(plan.waste_percent or 0),
         },
+        "cost": {
+            "board_rate_usd": flt(plan.board_rate_usd),
+            "cutting_cost_per_board_usd": flt(plan.cutting_cost_per_board_usd),
+            "mdf_cost_usd": flt(plan.mdf_cost_usd),
+            "cutting_cost_usd": flt(plan.cutting_cost_usd),
+            "edge_cost_usd": flt(plan.edge_cost_usd),
+            "total_cost_usd": flt(plan.total_cost_usd),
+        },
         "validation": {
             "status": str(plan.validation_status or ""),
             "errors": str(plan.validation_errors or ""),
@@ -176,6 +184,10 @@ def preview_cutting_plan(
     preview_plan = frappe.copy_doc(source_plan)
     _apply_settings(preview_plan, settings)
     calculate_system_plan(order, preview_plan)
+    # The preview stays fully in memory, but its financial projection must use the
+    # same calculator as a committed Plan so the operator can compare board-count
+    # alternatives without mistaking the persisted Cost workspace for the preview.
+    apply_plan_costs(preview_plan, edge_cost_usd=flt(getattr(order, "edge_cost_usd", 0)))
     snapshot = sanitize_plan_snapshot(
         frappe.parse_json(preview_plan.snapshot_json or "{}") or {}
     )
