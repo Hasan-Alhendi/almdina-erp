@@ -159,3 +159,7 @@ assert.equal(Object.isFrozen(frontend), true);
     console.error(error);
     process.exitCode = 1;
 });
+
+// This file is already a permanent Static Checks gate. Keep the Page-entry race
+// simulation attached to it so cold Desk bootstrap coverage cannot become orphaned.
+require("./page_foundation_bootstrap.test.js");
