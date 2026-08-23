@@ -7,6 +7,9 @@ frappe.pages["factory-stock-settings"].on_page_load = function (wrapper) {
 
     const $body = $(wrapper).find(".layout-main-section");
     let current = {};
+    let requestId = 0;
+    let activation = null;
+    const modalOwner = window.AlmdinaFrontend.createDialogOwner();
 
     function escape(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -51,14 +54,27 @@ frappe.pages["factory-stock-settings"].on_page_load = function (wrapper) {
     }
 
     function load() {
+        if (!activation || !activation.isActive()) return Promise.resolve(null);
+        const activeRequest = ++requestId;
+        $body.html(`<div class="text-muted" style="padding:20px">${__("جاري تحميل إعدادات المخزون...")}</div>`);
         return frappe.call({
             method: "almdina_erp.almdina_erp.services.settings_access_service.get_stock_settings",
             freeze: true,
-        }).then(r => render(r.message || {}));
+        }).then(r => {
+            if (activeRequest !== requestId || !activation.isActive()) return null;
+            render(r.message || {});
+            return r.message || {};
+        }).catch(error => {
+            if (activeRequest !== requestId || !activation.isActive()) return null;
+            const message = error && error.message ? error.message : __("تعذر تحميل إعدادات المخزون.");
+            $body.html(`<div class="frappe-card" style="padding:20px">${escape(message)}</div>`);
+            return null;
+        });
     }
 
     function openDialog() {
-        const dialog = new frappe.ui.Dialog({
+        if (!activation || !activation.isActive()) return;
+        const dialog = modalOwner.track(new frappe.ui.Dialog({
             title: __("Edit Stock Policy"),
             fields: [
                 { fieldname: "default_warehouse", fieldtype: "Link", options: "Warehouse", label: __("Default Warehouse"), default: current.default_warehouse },
@@ -75,21 +91,35 @@ frappe.pages["factory-stock-settings"].on_page_load = function (wrapper) {
             ],
             primary_action_label: __("Save"),
             primary_action(values) {
-                frappe.call({
+                if (!activation.isActive()) return null;
+                return frappe.call({
                     method: "almdina_erp.almdina_erp.services.settings_access_service.update_stock_settings",
                     args: { values: JSON.stringify(values) },
                     freeze: true,
                     freeze_message: __("Saving stock policy..."),
                 }).then(r => {
                     dialog.hide();
+                    if (!activation.isActive()) return null;
                     render(r.message || {});
                     frappe.show_alert({ message: __("Stock policy updated."), indicator: "green" });
+                    return r.message || {};
                 });
             },
-        });
+        }));
         dialog.show();
     }
 
-    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
-    load();
+    $body.html(`<div class="text-muted" style="padding:20px">${__("جاري تحميل إعدادات المخزون...")}</div>`);
+    const pageLifecycle = window.AlmdinaPageRevisit;
+    if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+        throw new Error("Almdina page lifecycle is required for Factory Stock Settings");
+    }
+    activation = pageLifecycle.bindActivationLifecycle(wrapper, {
+        onActivate: load,
+        onDeactivate: () => {
+            requestId += 1;
+            modalOwner.closeAll();
+        },
+    });
+    if (activation.isActive()) load();
 };

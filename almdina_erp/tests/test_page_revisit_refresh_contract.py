@@ -29,6 +29,7 @@ DATA_DRIVEN_PAGES = (
     "factory_plan_archive",
     "factory_production_settings",
     "factory_stock_settings",
+    "factory_system_preflight",
 )
 
 
@@ -52,21 +53,15 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
             page_source = (PAGES / page / f"{page}.js").read_text(encoding="utf-8")
             controller_path = PAGE_LOCAL_CONTROLLERS.get(page)
             if controller_path is None:
-                self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", page_source, page)
+                self.assertIn("bindActivationLifecycle(wrapper", page_source, page)
+                self.assertIn("onDeactivate", page_source, page)
                 continue
 
             controller_source = controller_path.read_text(encoding="utf-8")
             controller_asset = f'/assets/almdina_erp/js/{controller_path.parent.name}/controller.js'
             self.assertIn(controller_asset, page_source, page)
-            if page in {
-                "factory_permissions",
-                "factory_workforce",
-                "factory_production_settings",
-            }:
-                self.assertIn("bindActivationLifecycle(wrapper", controller_source, page)
-                self.assertIn("onDeactivate", controller_source, page)
-            else:
-                self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", controller_source, page)
+            self.assertIn("bindActivationLifecycle(wrapper", controller_source, page)
+            self.assertIn("onDeactivate", controller_source, page)
 
             if page == "factory_permissions":
                 self.assertIn(
@@ -82,7 +77,7 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
                 )
             elif page == "shop_floor_inbox":
                 self.assertIn(
-                    "AlmdinaPageRevisit.refreshOnRevisit(wrapper, refresh)",
+                    "onActivate: refresh",
                     controller_source,
                     page,
                 )

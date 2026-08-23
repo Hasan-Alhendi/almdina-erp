@@ -25,6 +25,7 @@ class TestFrontendFoundationContract(unittest.TestCase):
             "errorMessage",
             "createLatestRequestGate",
             "createLifecycleScope",
+            "createDialogOwner",
             "ensureStylesheet",
         ):
             self.assertIn(exported, source)
@@ -62,7 +63,8 @@ class TestFrontendFoundationContract(unittest.TestCase):
                 self.assertIn("function ensureCore()", source)
                 self.assertIn("frappe.require(assets)", source)
                 self.assertIn("bindActivationLifecycle", source)
-                self.assertIn("return ensureCore()", source)
+                self.assertIn("const pending = ensureCore()", source)
+                self.assertIn("__almdinaFrontendBootstrapRetry", source)
                 self.assertIn(
                     'if (!frontend || typeof frontend.ensureStylesheet !== "function")',
                     source,

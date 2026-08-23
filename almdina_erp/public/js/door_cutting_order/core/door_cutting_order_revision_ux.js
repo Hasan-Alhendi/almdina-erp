@@ -20,6 +20,22 @@
         "edge_color",
     ];
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function currentIdentity(frm) {
+        const context = documentContext();
+        return context && typeof context.capture === "function" ? context.capture(frm) : null;
+    }
+
+    function isCurrent(frm, identity) {
+        const context = documentContext();
+        return context && typeof context.isCurrent === "function"
+            ? context.isCurrent(frm, identity)
+            : window.cur_frm === frm;
+    }
+
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
@@ -749,6 +765,8 @@
     }
 
     function createRevision(frm, reason = "") {
+        const identity = currentIdentity(frm);
+        if (!isCurrent(frm, identity)) return Promise.resolve(null);
         return frappe.call({
             method: "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
             args: {
@@ -758,6 +776,7 @@
             freeze: true,
             freeze_message: __("جاري إنشاء نسخة تعديل مستقلة..."),
         }).then(response => {
+            if (!isCurrent(frm, identity)) return null;
             const data = response.message || {};
             if (!data.name) return;
             frappe.show_alert({

@@ -18,12 +18,24 @@
     function mount(wrapper) {
         if (wrapper.__almdinaShopFloorInboxDispose) wrapper.__almdinaShopFloorInboxDispose();
 
+        const pageLifecycleModule = window.AlmdinaPageRevisit;
+        if (!pageLifecycleModule || typeof pageLifecycleModule.bindActivationLifecycle !== "function") {
+            throw new Error("Almdina page lifecycle is required before Shop Floor Inbox");
+        }
+
         const state = State.create();
         const shell = Renderer.createShell(wrapper);
         let disposed = false;
+        let activation = null;
+        const actionDialogs = new Set();
 
         function active() {
-            return !disposed && !state.lifecycle.isDisposed();
+            return Boolean(!disposed && !state.lifecycle.isDisposed() && activation && activation.isActive());
+        }
+
+        function trackActionDialog(dialog) {
+            if (dialog && typeof dialog.hide === "function") actionDialogs.add(dialog);
+            return dialog;
         }
 
         async function loadSessionContext() {
@@ -53,6 +65,7 @@
         }
 
         async function renderAccount() {
+            if (!active()) return null;
             Renderer.syncTabs(shell, "account");
             Renderer.loading(shell, __("جاري تحميل معلومات الحساب..."));
             try {
@@ -67,6 +80,7 @@
         }
 
         async function loadList() {
+            if (!active()) return null;
             const requestedMode = state.mode();
             if (requestedMode === "account") return renderAccount();
             const token = state.beginListRequest({ mode: requestedMode });
@@ -111,43 +125,64 @@
         function quickAction(context, button) {
             const quickActions = window.AlmdinaShopFloorQuickActions;
             if (!quickActions || typeof quickActions.perform !== "function") return;
-            quickActions.perform(context, { button, onSuccess: loadList });
+            quickActions.perform(context, {
+                button,
+                onSuccess: loadList,
+                isActive: active,
+                onDialog: trackActionDialog,
+            });
+        }
+
+        function deactivate() {
+            state.deactivate();
+            actionDialogs.forEach(dialog => {
+                if (dialog && typeof dialog.hide === "function") dialog.hide();
+            });
+            actionDialogs.clear();
         }
 
         function finishHandoff(context, nextAssignee = "") {
+            if (!active()) return;
             Api.handoffStage(context.stage, nextAssignee)
                 .then(() => {
+                    if (!active()) return;
                     Dialogs.success(context.next ? __("تم إرسال الطلب للقسم التالي.") : __("الطلب جاهز للتسليم."));
                     loadList();
                 })
-                .catch(error => Dialogs.error(errorMessage(error, __("تعذر نقل الطلب."))));
+                .catch(error => {
+                    if (active()) trackActionDialog(Dialogs.error(errorMessage(error, __("تعذر نقل الطلب."))));
+                });
         }
 
         function handoff(context) {
-            if (!context || !context.stage) return;
+            if (!active() || !context || !context.stage) return;
             if (!context.next) {
-                Dialogs.confirmTerminal(() => finishHandoff(context));
+                trackActionDialog(Dialogs.confirmTerminal(() => finishHandoff(context)));
                 return;
             }
             Api.getHandoffContext(context.stage)
                 .then(handoffContext => {
+                    if (!active()) return;
                     const handoff = handoffContext || {};
                     const workers = Array.isArray(handoff.workers) ? handoff.workers : [];
                     if (!workers.length) {
-                        Dialogs.noWorkers(handoff);
+                        trackActionDialog(Dialogs.noWorkers(handoff));
                         return;
                     }
-                    Dialogs.promptWorker(handoff, nextAssignee => finishHandoff(context, nextAssignee));
+                    trackActionDialog(Dialogs.promptWorker(handoff, nextAssignee => finishHandoff(context, nextAssignee)));
                 })
-                .catch(error => Dialogs.error(errorMessage(error, __("تعذر تحميل عمال القسم التالي."))));
+                .catch(error => {
+                    if (active()) trackActionDialog(Dialogs.error(errorMessage(error, __("تعذر تحميل عمال القسم التالي."))));
+                });
         }
 
         function logout() {
-            Dialogs.confirmLogout(() => {
+            trackActionDialog(Dialogs.confirmLogout(() => {
+                if (!active()) return;
                 Api.logout(__("جاري تسجيل الخروج..."))
                     .catch(() => null)
                     .finally(() => { window.location.href = "/login"; });
-            });
+            }));
         }
 
         function refresh() {
@@ -171,23 +206,25 @@
         wrapper.__almdinaShopFloorInboxDispose = () => {
             if (disposed) return;
             disposed = true;
+            deactivate();
             state.dispose();
+            if (activation) activation.dispose();
             delete wrapper.__almdinaShopFloorInboxRefresh;
             delete wrapper.__almdinaShopFloorInboxDispose;
         };
 
-        if (window.AlmdinaPageRevisit) {
-            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, refresh);
+        activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
+            onActivate: refresh,
+            onDeactivate: deactivate,
+        });
+        if (!activation) {
+            wrapper.__almdinaShopFloorInboxDispose();
+            throw new Error("Shop Floor Inbox activation lifecycle is unavailable");
         }
-
-        loadSessionContext()
-            .then(context => context && active() ? loadList() : null)
-            .catch(error => {
-                if (active()) Renderer.error(shell, errorMessage(error, __("لا تملك صلاحية الدخول إلى صالة الإنتاج.")));
-            });
+        state.lifecycle.track(() => activation.dispose(), "shop-floor-page-activation");
+        if (activation.isActive()) refresh();
 
         return Object.freeze({ refresh, dispose: wrapper.__almdinaShopFloorInboxDispose });
     }
-
     window.AlmdinaShopFloorInboxController = Object.freeze({ mount });
 })();

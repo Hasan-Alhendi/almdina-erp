@@ -133,6 +133,14 @@ function createHarness() {
         return { track, timeout, dispose, isDisposed: () => disposed };
     }
 
+    function createDialogOwner() {
+        const owned = new Set();
+        return {
+            track(dialog) { if (dialog && typeof dialog.hide === "function") owned.add(dialog); return dialog; },
+            closeAll() { owned.forEach(dialog => dialog.hide()); owned.clear(); },
+        };
+    }
+
     const frappe = {
         container: { page: wrapper },
         ui: {
@@ -151,6 +159,7 @@ function createHarness() {
         AlmdinaFrontend: {
             createLatestRequestGate,
             createLifecycleScope,
+            createDialogOwner,
             errorMessage(error, fallback) {
                 return error && error.message ? error.message : fallback;
             },

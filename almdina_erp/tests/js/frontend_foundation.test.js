@@ -138,6 +138,15 @@ assert.equal(Object.isFrozen(frontend), true);
     assert.equal(newCleanupRuns, 1);
     assert.equal(lifecycle.cleanupCount(), 0);
 
+    const dialogOwner = frontend.createDialogOwner();
+    let dialogHides = 0;
+    const dialog = { hide() { dialogHides += 1; } };
+    assert.equal(dialogOwner.track(dialog), dialog);
+    assert.equal(dialogOwner.count(), 1);
+    dialogOwner.closeAll();
+    assert.equal(dialogHides, 1);
+    assert.equal(dialogOwner.count(), 0);
+
     const pendingStylesheet = frontend.ensureStylesheet(
         "/assets/almdina_erp/css/factory_permissions.css",
         { id: "factory-permissions-style" }
@@ -165,3 +174,4 @@ assert.equal(Object.isFrozen(frontend), true);
 require("./page_foundation_bootstrap.test.js");
 require("./page_revisit_refresh.test.js");
 require("./admin_page_lifecycle.test.js");
+require("./project_frontend_lifecycle.test.js");

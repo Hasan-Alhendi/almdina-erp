@@ -21,6 +21,7 @@
         const interactionsModule = window.AlmdinaFactoryPermissionsInteractions;
         if (
             !frontend
+            || typeof frontend.createDialogOwner !== "function"
             || !pageLifecycleModule
             || typeof pageLifecycleModule.bindActivationLifecycle !== "function"
             || !api
@@ -48,6 +49,7 @@
             escapeHtml: value => frappe.utils.escape_html(String(value ?? "")),
             translate: __,
         });
+        const modalOwner = frontend.createDialogOwner();
         let activation = null;
         let featureShellReady = false;
         const interactions = interactionsModule.bind({
@@ -84,6 +86,7 @@
             onDeactivate: () => {
                 cancelPreviewTimer();
                 store.deactivate();
+                modalOwner.closeAll();
             },
         });
         if (!activation) {
@@ -125,11 +128,11 @@
                 return loadRole(role);
             };
             if (!isDirty()) return selectRole();
-            frappe.confirm(
+            modalOwner.track(frappe.confirm(
                 __("لديك تغييرات غير محفوظة. هل تريد تجاهلها؟"),
-                selectRole,
-                () => renderer.setRolePickerValue(state.selectedRole)
-            );
+                () => isActive() && selectRole(),
+                () => isActive() && renderer.setRolePickerValue(state.selectedRole)
+            ));
         }
 
         function loadConsole() {
@@ -435,12 +438,12 @@
             };
 
             Promise.resolve(loadPreview()).then(preview => {
-                if (!preview || !isDirty()) return;
+                if (!isActive() || !preview || !isDirty()) return;
                 if (preview.requires_self_lockout_confirmation) {
-                    frappe.confirm(
+                    modalOwner.track(frappe.confirm(
                         __("سيؤدي هذا الحفظ إلى إزالة آخر صلاحية لديك لإدارة الصلاحيات. هل تريد المتابعة؟"),
-                        () => executeSave(true)
-                    );
+                        () => isActive() && executeSave(true)
+                    ));
                     return;
                 }
                 executeSave(false);

@@ -22,6 +22,7 @@
         const dialogsModule = window.AlmdinaFactoryProductionSettingsDialogs;
         if (
             !frontend
+            || typeof frontend.createDialogOwner !== "function"
             || !pageLifecycleModule
             || typeof pageLifecycleModule.bindActivationLifecycle !== "function"
             || !api
@@ -43,6 +44,7 @@
         const viewModel = viewModelModule.create({ translate: __ });
         const renderer = rendererModule.create({ $body, escapeHtml, translate: __ });
         const dialogs = dialogsModule.create({ translate: __, escapeHtml });
+        const modalOwner = frontend.createDialogOwner();
         let activation = null;
         let initialLoadPending = true;
 
@@ -67,7 +69,10 @@
         wrapper.__almdinaProductionSettingsController = instance;
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
-            onDeactivate: store.deactivate,
+            onDeactivate: () => {
+                store.deactivate();
+                modalOwner.closeAll();
+            },
         });
         if (!activation) {
             instance.dispose();
@@ -108,11 +113,11 @@
         }
 
         function openSectionDialog(section) {
-            if (!viewModel.sectionEditable(state.current, section)) return;
-            dialogs.openSection({
+            if (!activation.isActive() || !viewModel.sectionEditable(state.current, section)) return;
+            modalOwner.track(dialogs.openSection({
                 section,
                 current: state.current,
-                onSubmit: payload => api.updateSettings(
+                onSubmit: payload => activation.isActive() ? api.updateSettings(
                     payload,
                     freezeOptions(__("جاري حفظ الإعدادات..."))
                 ).then(data => {
@@ -121,13 +126,15 @@
                     render();
                     dialogs.showSaved();
                     return data;
-                }),
-            });
+                }) : null,
+            }));
         }
 
         function openAudit() {
+            if (!activation.isActive()) return Promise.resolve(null);
             const token = store.requests.audit.begin();
             const surface = dialogs.openAudit(renderer.auditLoadingHtml());
+            modalOwner.track(surface && surface.dialog);
             return api.getAudit({ freeze: false }).then(rows => {
                 if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
                 surface.setHtml(renderer.auditHtml(rows));

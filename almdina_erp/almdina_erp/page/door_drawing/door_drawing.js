@@ -68,6 +68,68 @@
     function fail(wrapper, error) { console.error("Special-shape documentation bootstrap failed", error); scaffold(wrapper); wrapper.querySelector(".layout-main-section").innerHTML = '<div class="ald-doc-message is-error">تعذر تحميل مساحة التوثيق. أعد تحميل الصفحة ثم حاول مرة أخرى.</div>'; }
     function enter() { document.body.classList.add("ald-special-shape-documentation-active"); }
     function leave() { document.body.classList.remove("ald-special-shape-documentation-active"); }
-    frappe.pages[PAGE_ROUTE].on_page_load = wrapper => { scaffold(wrapper); $(wrapper).off("hide.aldDocumentation").on("hide.aldDocumentation", () => { leave(); const active = wrapper.__almdinaDocumentationController; if (active) active.suspend(); }); controller(wrapper).catch(error => fail(wrapper, error)); };
-    frappe.pages[PAGE_ROUTE].on_page_show = wrapper => { enter(); controller(wrapper).then(active => { const context = route(); if (!context.orderName || !context.pieceName) active.showRouteError("رابط التوثيق غير مكتمل. افتحه من داخل الطلب."); else active.open(context); }).catch(error => { leave(); fail(wrapper, error); }); };
+
+    function activation(wrapper) {
+        return wrapper.__almdinaDocumentationActivation || null;
+    }
+
+    function deactivate(wrapper) {
+        wrapper.__almdinaDocumentationShowRequest = Number(wrapper.__almdinaDocumentationShowRequest || 0) + 1;
+        leave();
+        const active = wrapper.__almdinaDocumentationController;
+        if (active) active.suspend();
+    }
+
+    function openActiveRoute(wrapper) {
+        const owner = activation(wrapper);
+        if (!owner) return Promise.resolve(null);
+        owner.activate();
+        const generation = owner.generation();
+        const showRequest = Number(wrapper.__almdinaDocumentationShowRequest || 0) + 1;
+        wrapper.__almdinaDocumentationShowRequest = showRequest;
+        const requestedContext = route();
+        enter();
+        return controller(wrapper)
+            .then(active => {
+                if (
+                    !owner.isActive()
+                    || owner.generation() !== generation
+                    || wrapper.__almdinaDocumentationShowRequest !== showRequest
+                ) {
+                    active.suspend();
+                    return null;
+                }
+                if (!requestedContext.orderName || !requestedContext.pieceName) {
+                    active.showRouteError("رابط التوثيق غير مكتمل. افتحه من داخل الطلب.");
+                } else {
+                    active.open(requestedContext);
+                }
+                return active;
+            })
+            .catch(error => {
+                if (
+                    !owner.isActive()
+                    || owner.generation() !== generation
+                    || wrapper.__almdinaDocumentationShowRequest !== showRequest
+                ) return null;
+                leave();
+                fail(wrapper, error);
+                return null;
+            });
+    }
+
+    frappe.pages[PAGE_ROUTE].on_page_load = wrapper => {
+        scaffold(wrapper);
+        renderBootState(wrapper);
+        const pageLifecycle = window.AlmdinaPageRevisit;
+        if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+            fail(wrapper, new Error("Almdina page lifecycle is unavailable"));
+            return;
+        }
+        deactivate(wrapper);
+        wrapper.__almdinaDocumentationActivation = pageLifecycle.bindActivationLifecycle(wrapper, {
+            onDeactivate: () => deactivate(wrapper),
+        });
+    };
+    frappe.pages[PAGE_ROUTE].on_page_show = wrapper => openActiveRoute(wrapper);
 })();

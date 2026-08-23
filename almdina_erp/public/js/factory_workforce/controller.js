@@ -22,6 +22,7 @@
         const dialogsModule = window.AlmdinaFactoryWorkforceDialogs;
         if (
             !frontend
+            || typeof frontend.createDialogOwner !== "function"
             || !pageLifecycleModule
             || typeof pageLifecycleModule.bindActivationLifecycle !== "function"
             || !api
@@ -46,6 +47,7 @@
             translate: __,
         });
         const dialogs = dialogsModule.create({ translate: __ });
+        const modalOwner = frontend.createDialogOwner();
         let activation = null;
         let initialLoadPending = true;
 
@@ -86,7 +88,10 @@
         wrapper.__almdinaFactoryWorkforceController = instance;
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
-            onDeactivate: store.deactivate,
+            onDeactivate: () => {
+                store.deactivate();
+                modalOwner.closeAll();
+            },
         });
         if (!activation) {
             instance.dispose();
@@ -168,94 +173,99 @@
         }
 
         function openCreateDialog() {
-            if (!can("create_users")) return;
-            dialogs.openCreate({
+            if (!activation.isActive() || !can("create_users")) return;
+            modalOwner.track(dialogs.openCreate({
                 canAssignRoles: can("assign_user_roles"),
                 roleOptions,
                 validateRoles,
-                onSubmit: payload => api.createUser(
+                onSubmit: payload => activation.isActive() ? api.createUser(
                     payload,
                     freezeOptions(__("جاري إنشاء المستخدم..."))
                 ).then(() => {
-                    dialogs.showAlert(__("تم إنشاء المستخدم."));
+                    if (activation.isActive()) dialogs.showAlert(__("تم إنشاء المستخدم."));
                     return load();
-                }),
-            });
+                }) : null,
+            }));
         }
 
         function openEditDialog(email) {
+            if (!activation.isActive()) return;
             const user = userByEmail(email);
             if (!user) return;
             const canEdit = actionAllowed(user, "edit");
             const canAssignRoles = actionAllowed(user, "assign_roles");
             if (!canEdit && !canAssignRoles) return;
 
-            dialogs.openEdit({
+            modalOwner.track(dialogs.openEdit({
                 user,
                 canEdit,
                 canAssignRoles,
                 roleOptions,
                 validateRoles,
-                onSubmit: payload => api.updateUser(
+                onSubmit: payload => activation.isActive() ? api.updateUser(
                     user.email,
                     payload,
                     freezeOptions(__("جاري حفظ المستخدم..."))
                 ).then(() => {
-                    dialogs.showAlert(__("تم تحديث المستخدم."));
+                    if (activation.isActive()) dialogs.showAlert(__("تم تحديث المستخدم."));
                     return load();
-                }),
-            });
+                }) : null,
+            }));
         }
 
         function openPasswordDialog(email) {
+            if (!activation.isActive()) return;
             const user = userByEmail(email);
             if (!user || !actionAllowed(user, "reset_password")) return;
-            dialogs.openPassword({
+            modalOwner.track(dialogs.openPassword({
                 user,
-                onSubmit: temporaryPassword => api.resetPassword(
+                onSubmit: temporaryPassword => activation.isActive() ? api.resetPassword(
                     user.email,
                     temporaryPassword,
                     freezeOptions(__("جاري تحديث كلمة المرور..."))
                 ).then(() => {
-                    dialogs.showAlert(__("تم تحديث كلمة المرور دون تسجيل قيمتها."));
-                }),
-            });
+                    if (activation.isActive()) dialogs.showAlert(__("تم تحديث كلمة المرور دون تسجيل قيمتها."));
+                }) : null,
+            }));
         }
 
         function toggleUser(email, enabled) {
+            if (!activation.isActive()) return;
             const user = userByEmail(email);
             const action = enabled ? "enable" : "disable";
             if (!user || !actionAllowed(user, action)) return;
-            dialogs.confirmToggle({
+            modalOwner.track(dialogs.confirmToggle({
                 user,
                 enabled,
-                onConfirm: () => api.setEnabled(
+                onConfirm: () => activation.isActive() ? api.setEnabled(
                     user.email,
                     enabled,
                     freezeOptions(__("جاري تحديث الحساب..."))
                 ).then(() => {
-                    dialogs.showAlert(__("تم تحديث حالة المستخدم."));
+                    if (activation.isActive()) dialogs.showAlert(__("تم تحديث حالة المستخدم."));
                     return load();
-                }),
-            });
+                }) : null,
+            }));
         }
 
         function adoptUser(email) {
+            if (!activation.isActive()) return;
             const user = availableUserByEmail(email);
             if (!user || !can("create_users")) return;
-            dialogs.confirmAdopt({
+            modalOwner.track(dialogs.confirmAdopt({
                 user,
-                onConfirm: () => api.adoptUser(
+                onConfirm: () => activation.isActive() ? api.adoptUser(
                     user.email,
                     freezeOptions(__("جاري إضافة المستخدم إلى المعمل..."))
                 ).then(() => {
-                    dialogs.showAlert(__("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره."));
+                    if (activation.isActive()) dialogs.showAlert(__("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره."));
                     return load();
-                }),
-            });
+                }) : null,
+            }));
         }
 
         function openAudit(email) {
+            if (!activation.isActive()) return;
             const user = userByEmail(email);
             if (!user) return;
             const token = store.requests.audit.begin({ user: email });
@@ -265,7 +275,7 @@
             ).then(data => {
                 if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
                 const events = Array.isArray(data.events) ? data.events : [];
-                dialogs.openAudit({ user, html: renderer.auditHtml(events) });
+                modalOwner.track(dialogs.openAudit({ user, html: renderer.auditHtml(events) }));
             });
         }
     }

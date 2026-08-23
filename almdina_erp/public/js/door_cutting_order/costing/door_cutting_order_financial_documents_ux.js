@@ -293,6 +293,11 @@
     }
 
     function printFinancialDocument(frm, kind) {
+        const context = documentContext();
+        const identity = context && context.capture(frm);
+        if (!context || !context.isCurrent(frm, identity)) {
+            return Promise.resolve(null);
+        }
         const capability = requiredCapability(kind);
         const canPrint = kind === "customer_invoice"
             ? can(frm, capability)
@@ -317,6 +322,7 @@
                 ? __("جاري تجهيز تقرير التكلفة الداخلي...")
                 : __("جاري تجهيز فاتورة الزبون..."),
         }).then(response => {
+            if (!context.isCurrent(frm, identity)) return null;
             const payload = response.message || {};
             if (payload.kind !== kind || payload.order_name !== frm.doc.name) {
                 throw new Error("Financial document response does not match the active order");

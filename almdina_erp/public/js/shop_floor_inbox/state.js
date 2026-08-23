@@ -19,6 +19,12 @@
             search: "",
         };
 
+        function deactivate() {
+            contextGate.invalidate();
+            listGate.invalidate();
+            current.sessionContext = null;
+        }
+
         return Object.freeze({
             mode: () => current.mode,
             setMode(value) {
@@ -59,9 +65,9 @@
                     search: current.search,
                 });
             },
+            deactivate,
             dispose() {
-                contextGate.invalidate();
-                listGate.invalidate();
+                deactivate();
                 lifecycle.dispose();
             },
         });

@@ -57,6 +57,9 @@
 	}
 
 	function submitApproval(frm, source) {
+		const context = window.AlmdinaDocumentContext;
+		const identity = context && context.capture(frm);
+		if (!context || !context.isCurrent(frm, identity)) return Promise.resolve(null);
 		return frappe.call({
 			method: "almdina_erp.almdina_erp.services.shop_floor_service.approve_production_dxf",
 			args: { order_name: frm.doc.name, plan_source: source },
@@ -64,13 +67,15 @@
 			freeze_message: __("جاري اعتماد خطة الرسم..."),
 		}).then((response) => {
 			const result = response.message || {};
-			frappe.show_alert({
-				message: result.was_previously_approved
-					? __("تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.")
-					: __("تم اعتماد الرسم للإنتاج."),
-				indicator: "green",
-			}, 6);
-			return frm.reload_doc();
+			if (context.isCurrent(frm, identity)) {
+				frappe.show_alert({
+					message: result.was_previously_approved
+						? __("تم تحديث اعتماد الرسم واستبدال الخطة المعتمدة السابقة.")
+						: __("تم اعتماد الرسم للإنتاج."),
+					indicator: "green",
+				}, 6);
+			}
+			return context.isSameDocument(frm, identity) ? frm.reload_doc() : null;
 		});
 	}
 
@@ -121,7 +126,10 @@
 
 	frappe.ui.form.on("Door Cutting Order", {
 		refresh(frm) {
-			setTimeout(() => installButton(frm), 0);
+			const context = window.AlmdinaDocumentContext;
+			if (context && typeof context.schedule === "function") {
+				context.schedule(frm, "drawing-approval-install", () => installButton(frm), 0);
+			}
 		},
 	});
 

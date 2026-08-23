@@ -15,11 +15,24 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
     const $body = $(wrapper).find(".layout-main-section");
     let requestId = 0;
     let permissions = { can_approve: false, can_reject: false };
+    let activation = null;
+    const modalOwner = window.AlmdinaFrontend.createDialogOwner();
 
     injectStyles();
     page.set_primary_action(__("تحديث"), load, "refresh");
-    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
-    load();
+    loading();
+    const pageLifecycle = window.AlmdinaPageRevisit;
+    if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+        throw new Error("Almdina page lifecycle is required for Factory Approval Queue");
+    }
+    activation = pageLifecycle.bindActivationLifecycle(wrapper, {
+        onActivate: load,
+        onDeactivate: () => {
+            requestId += 1;
+            modalOwner.closeAll();
+        },
+    });
+    if (activation.isActive()) load();
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -47,17 +60,18 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
     }
 
     function load() {
+        if (!activation || !activation.isActive()) return Promise.resolve(null);
         const activeRequest = ++requestId;
         loading();
         return Promise.all([
             frappe.call({ method: METHODS.context, freeze: false }),
             frappe.call({ method: METHODS.list, freeze: false }),
         ]).then(([contextResponse, listResponse]) => {
-            if (activeRequest !== requestId) return;
+            if (activeRequest !== requestId || !activation.isActive()) return;
             permissions = contextResponse.message || permissions;
             render(listResponse.message || []);
         }).catch(error => {
-            if (activeRequest !== requestId) return;
+            if (activeRequest !== requestId || !activation.isActive()) return;
             renderError(error);
         });
     }
@@ -107,9 +121,9 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
     function bindActions() {
         $body.find(".aaq-reject").on("click", function () {
             const orderName = String($(this).closest(".aaq-card").data("order") || "");
-            frappe.prompt(
+            modalOwner.track(frappe.prompt(
                 [{ fieldname: "reason", fieldtype: "Small Text", label: __("سبب الرفض"), reqd: 1 }],
-                values => frappe.call({
+                values => activation.isActive() ? frappe.call({
                     method: METHODS.reject,
                     args: {
                         order_name: orderName,
@@ -118,12 +132,13 @@ frappe.pages["factory-approval-queue"].on_page_load = function (wrapper) {
                     freeze: true,
                     freeze_message: __("جاري إعادة الطلب للتعديل..."),
                 }).then(() => {
+                    if (!activation.isActive()) return null;
                     frappe.show_alert({ message: __("تم رفض الطلب وإعادته للتعديل."), indicator: "orange" });
                     return load();
-                }),
+                }) : null,
                 __("رفض الطلب"),
                 __("تأكيد الرفض")
-            );
+            ));
         });
     }
 };

@@ -54,6 +54,7 @@ jobs:
           node --check almdina_erp/public/js/shop_floor_inbox/controller.js
           node --check almdina_erp/public/js/page_revisit_refresh.js
           node --check almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
+          node --check almdina_erp/tests/js/project_frontend_lifecycle.test.js
 
       - name: Validate F6 targeted DCO JavaScript
         shell: bash
@@ -121,13 +122,19 @@ jobs:
           PY
 
       - name: Run F7 closure ownership contracts
-        run: python -m unittest almdina_erp.tests.test_frontend_refactor_closure -v
+        shell: bash
+        run: |
+          python -m unittest almdina_erp.tests.test_frontend_refactor_closure -v
+          python -m unittest almdina_erp.tests.test_project_frontend_lifecycle_contract -v
 
       - name: Simulate F4 document-context runtime
         run: node almdina_erp/tests/js/document_context.test.js
 
       - name: Simulate F5 Shop Floor Inbox view model
         run: node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
+
+      - name: Simulate project-wide frontend lifecycle
+        run: node almdina_erp/tests/js/project_frontend_lifecycle.test.js
 
       - name: Simulate F6 lifecycle layout and ownership helpers
         shell: bash

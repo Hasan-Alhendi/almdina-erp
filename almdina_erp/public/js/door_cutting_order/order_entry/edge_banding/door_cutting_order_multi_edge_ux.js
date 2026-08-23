@@ -468,6 +468,12 @@
     }
 
     function saveDrawingOverride(frm, row, side, nextType, dialog) {
+        const context = window.AlmdinaDocumentContext;
+        const identity = context && typeof context.capture === "function" ? context.capture(frm) : null;
+        const current = () => context && typeof context.isCurrent === "function"
+            ? context.isCurrent(frm, identity)
+            : window.cur_frm === frm;
+        if (!current()) return Promise.resolve(null);
         const button = dialog && typeof dialog.get_primary_btn === "function"
             ? dialog.get_primary_btn()
             : null;
@@ -485,8 +491,12 @@
             freeze_message: isArabic() ? "جارٍ حفظ نوع القشاط..." : "Saving edge profile...",
         }).then(response => {
             const message = (response && response.message) || {};
+            if (context && typeof context.isSameDocument === "function" && !context.isSameDocument(frm, identity)) {
+                return null;
+            }
             applySavedPiece(row, message.piece || {});
             if (dialog) dialog.hide();
+            if (!current()) return message;
             schedule(frm);
             frappe.show_alert({
                 message: isArabic() ? "تم حفظ نوع القشاط." : "Edge profile saved.",
@@ -499,7 +509,7 @@
             }));
             return message;
         }).finally(() => {
-            if (button && button.prop) button.prop("disabled", false);
+            if (current() && button && button.prop) button.prop("disabled", false);
         });
     }
 

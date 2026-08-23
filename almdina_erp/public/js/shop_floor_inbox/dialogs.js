@@ -2,7 +2,7 @@
     "use strict";
 
     function confirm(message, onYes) {
-        frappe.confirm(message, () => {
+        return frappe.confirm(message, () => {
             if (typeof onYes === "function") onYes();
         });
     }
@@ -18,7 +18,7 @@
 
     function promptWorker(handoff, onSubmit) {
         const workers = Array.isArray(handoff && handoff.workers) ? handoff.workers : [];
-        frappe.prompt(
+        return frappe.prompt(
             [{
                 fieldname: "next_assignee",
                 fieldtype: "Select",
@@ -35,7 +35,7 @@
     }
 
     function noWorkers(handoff) {
-        frappe.msgprint(__("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [
+        return frappe.msgprint(__("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [
             (handoff && handoff.operational_role) || "",
         ]));
     }
@@ -49,7 +49,7 @@
             frappe.show_alert({ message, indicator: "green" });
         },
         error(message) {
-            frappe.msgprint(message || __("تعذر تنفيذ العملية."));
+            return frappe.msgprint(message || __("تعذر تنفيذ العملية."));
         },
     });
 })();

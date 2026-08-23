@@ -5,6 +5,8 @@ frappe.pages["factory-system-preflight"].on_page_load = function (wrapper) {
         single_column: true,
     });
     const $body = $(wrapper).find(".layout-main-section");
+    let requestId = 0;
+    let activation = null;
 
     const checkLabels = {
         production_routing: __("Production Routing Check"),
@@ -75,14 +77,34 @@ frappe.pages["factory-system-preflight"].on_page_load = function (wrapper) {
     }
 
     function run() {
+        if (!activation || !activation.isActive()) return Promise.resolve(null);
+        const activeRequest = ++requestId;
         $body.html(`<div class="text-muted" style="padding:20px">${__("Running factory preflight checks...")}</div>`);
         return frappe.call({
             method: "almdina_erp.almdina_erp.services.preflight_service.run_factory_preflight",
             freeze: true,
             freeze_message: __("Running preflight..."),
-        }).then(r => render(r.message || {}));
+        }).then(r => {
+            if (activeRequest !== requestId || !activation.isActive()) return null;
+            render(r.message || {});
+            return r.message || {};
+        }).catch(error => {
+            if (activeRequest !== requestId || !activation.isActive()) return null;
+            const message = error && error.message ? error.message : __("تعذر تشغيل فحوصات جاهزية النظام.");
+            $body.html(`<div class="alert alert-danger">${escape(message)}</div>`);
+            return null;
+        });
     }
 
     page.set_primary_action(__("Run Preflight Again"), run, "refresh");
-    run();
+    $body.html(`<div class="text-muted" style="padding:20px">${__("Running factory preflight checks...")}</div>`);
+    const pageLifecycle = window.AlmdinaPageRevisit;
+    if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+        throw new Error("Almdina page lifecycle is required for Factory System Preflight");
+    }
+    activation = pageLifecycle.bindActivationLifecycle(wrapper, {
+        onActivate: run,
+        onDeactivate: () => { requestId += 1; },
+    });
+    if (activation.isActive()) run();
 };

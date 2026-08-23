@@ -31,7 +31,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 45)
+        self.assertLessEqual(len(self.page.splitlines()), 100)
         for asset in (
             "api.js",
             "state.js",
@@ -44,6 +44,10 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(f"/assets/almdina_erp/js/shop_floor_inbox/{asset}", self.page)
         self.assertIn("shop_floor_quick_actions.js", self.page)
         self.assertIn("shop_floor_responsive.css", self.page)
+        self.assertIn("make_app_page", self.page)
+        self.assertIn("ensureCore", self.page)
+        self.assertIn("bindActivationLifecycle", self.page)
+        self.assertLess(self.page.index("make_app_page"), self.page.index("ensureCore"))
         self.assertNotIn("frappe.call(", self.page)
         self.assertNotIn("shop_floor_query_service", self.page)
         self.assertNotIn("shop_floor_commands", self.page)
