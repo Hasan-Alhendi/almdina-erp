@@ -2,6 +2,8 @@
     "use strict";
 
     const STYLE_ASSET = "/assets/almdina_erp/css/factory_routing_workflow.css";
+    const FOUNDATION_ASSET = "/assets/almdina_erp/js/frontend_foundation.js";
+    const STYLE_ID = "almdina-routing-workflow-style";
     const METHODS = Object.freeze({
         load: "almdina_erp.almdina_erp.services.master_data_service.get_production_routing_console",
         save: "almdina_erp.almdina_erp.services.master_data_service.save_production_routing",
@@ -721,6 +723,83 @@
         }
     }
 
+    function frontendFoundation() {
+        const frontend = window.AlmdinaFrontend;
+        return frontend && typeof frontend.ensureStylesheet === "function"
+            ? frontend
+            : null;
+    }
+
+    function ensureRoutingWorkflowStylesheet() {
+        const ensure = () => {
+            const frontend = frontendFoundation();
+            if (!frontend) {
+                throw new Error("Almdina frontend foundation did not initialize");
+            }
+            return frontend.ensureStylesheet(STYLE_ASSET, {id: STYLE_ID});
+        };
+
+        if (frontendFoundation()) return Promise.resolve(ensure());
+        if (!frappe || typeof frappe.require !== "function") {
+            return Promise.reject(new Error("Frappe asset loader is unavailable"));
+        }
+        return Promise.resolve(frappe.require(FOUNDATION_ASSET)).then(ensure);
+    }
+
+    function removeOwnedRoutingWorkflowStylesheet() {
+        const stale = window.document && window.document.getElementById
+            ? window.document.getElementById(STYLE_ID)
+            : null;
+        if (stale && typeof stale.remove === "function") stale.remove();
+    }
+
+    function bootstrapRoutingWorkflowPage(workflowPage, {resetStyle = false} = {}) {
+        if (workflowPage.__almdinaStyleBootstrapPromise) {
+            return workflowPage.__almdinaStyleBootstrapPromise;
+        }
+        if (resetStyle) removeOwnedRoutingWorkflowStylesheet();
+
+        const pending = ensureRoutingWorkflowStylesheet()
+            .then(() => {
+                workflowPage.$main.off(".prw-bootstrap");
+                return workflowPage.init();
+            })
+            .catch(error => {
+                const fallback = __("تعذر تحميل تصميم إدارة مسارات الإنتاج.");
+                const frontend = frontendFoundation();
+                const message = frontend && typeof frontend.errorMessage === "function"
+                    ? frontend.errorMessage(error, fallback)
+                    : String(error && error.message ? error.message : fallback);
+                const safe = frappe.utils && typeof frappe.utils.escape_html === "function"
+                    ? frappe.utils.escape_html(message)
+                    : fallback;
+
+                console.error("Factory master data stylesheet bootstrap failed", error);
+                workflowPage.$main.html(`
+                    <div class="frappe-card" style="padding:24px;text-align:center">
+                        <b>${__("تعذر تحميل تصميم إدارة مسارات الإنتاج")}</b>
+                        <p style="margin:12px 0">${safe}</p>
+                        <button type="button" class="btn btn-default prw-bootstrap-retry">${__("إعادة المحاولة")}</button>
+                    </div>`);
+                workflowPage.$main
+                    .off(".prw-bootstrap")
+                    .on("click.prw-bootstrap", ".prw-bootstrap-retry", event => {
+                        $(event.currentTarget).prop("disabled", true);
+                        bootstrapRoutingWorkflowPage(workflowPage, {resetStyle: true});
+                    });
+                frappe.show_alert({message: fallback, indicator: "red"}, 7);
+                return null;
+            });
+
+        workflowPage.__almdinaStyleBootstrapPromise = pending;
+        pending.finally(() => {
+            if (workflowPage.__almdinaStyleBootstrapPromise === pending) {
+                workflowPage.__almdinaStyleBootstrapPromise = null;
+            }
+        });
+        return pending;
+    }
+
     frappe.pages["factory-master-data"].on_page_load = function (wrapper) {
         const page = frappe.ui.make_app_page({
             parent: wrapper,
@@ -732,8 +811,6 @@
         if (window.AlmdinaPageRevisit) {
             window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, () => workflowPage.load());
         }
-        Promise.resolve(frappe.require(STYLE_ASSET))
-            .catch(() => null)
-            .then(() => workflowPage.init());
+        bootstrapRoutingWorkflowPage(workflowPage);
     };
 })();
