@@ -221,7 +221,7 @@
                     ${workforceSectionHtml(model)}
                     ${availableUsersSectionHtml(model)}
                 </div>
-            `;
+            `);
         }
 
         function auditHtml(events) {
