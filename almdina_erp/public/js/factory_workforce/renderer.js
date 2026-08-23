@@ -156,7 +156,7 @@
                         <div class="aw-detail"><span>${t("مساحة العمل")}</span><b>${esc(user.defaultWorkspace)}</b></div>
                         <div class="aw-detail"><span>${t("آخر نشاط")}</span><b>${esc(user.lastActive)}</b></div>
                     </div>
-                    <div class="aw-scope-note">${t("إضافته إلى المعمل لا تمنحه أي دور ولا تغيّر Default Workspace أو Default App. صفحة الدخول تبقى تحت إدارة Frappe.")}</div>
+                    <div class="aw-scope-note">${t("إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا، ولا تغيّر Default Workspace أو Default App. صفحة الدخول تبقى تحت إدارة Frappe.")}</div>
                     <div class="aw-actions aw-actions-single"><button class="btn btn-primary aw-adopt-user" data-user="${esc(user.email)}">${t("إضافة إلى المعمل")}</button></div>
                 </article>
             `;
