@@ -18,6 +18,13 @@ LOOKUP_CLEANUP_PATCH = (
     / "v1_0"
     / "clean_order_lookup_business_grants.py"
 )
+LEGACY_PERMISSION_BOOTSTRAP = (
+    ROOT
+    / "almdina_erp"
+    / "infrastructure"
+    / "frappe"
+    / "legacy_permission_bootstrap.py"
+)
 PERMISSION_PATCHES = (
     "almdina_erp.patches.v1_0.bootstrap_legacy_role_capabilities",
     "almdina_erp.patches.v1_0.migrate_legacy_administration_capabilities",
@@ -43,6 +50,18 @@ class TestCanonicalPermissionResetPatch(unittest.TestCase):
 
         for patch in PERMISSION_PATCHES:
             self.assertLess(post.index(patch), reset_index)
+
+    def test_legacy_bootstrap_skips_protected_roles_before_repository_access(self) -> None:
+        source = LEGACY_PERMISSION_BOOTSTRAP.read_text(encoding="utf-8")
+        guard = "if role in PROTECTED_SYSTEM_ROLES:"
+        repository_read = 'before = repository.role_state(role)["capabilities"]'
+
+        self.assertIn("PROTECTED_SYSTEM_ROLES", source)
+        self.assertIn(guard, source)
+        self.assertIn(repository_read, source)
+        self.assertLess(source.index(guard), source.index(repository_read))
+        guard_block = source[source.index(guard):source.index(repository_read)]
+        self.assertIn("continue", guard_block)
 
     def test_reset_patch_is_registered_post_model_sync_once(self) -> None:
         registry = PATCHES.read_text(encoding="utf-8")
