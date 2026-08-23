@@ -15,6 +15,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
     FrappePermissionMatrixRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
+    PROTECTED_SYSTEM_ROLES,
+)
 
 
 BOOTSTRAP_SOURCE = "Almdina legacy permission upgrade bootstrap"
@@ -98,6 +101,11 @@ def bootstrap_legacy_role_permissions() -> list[str]:
     applied: list[str] = []
 
     for role in legacy_roles():
+        # Platform roles are deliberately outside Almdina's editable business
+        # authority. Legacy role catalogs can still contain System Manager, so
+        # migration must skip protected roles before touching the repository.
+        if role in PROTECTED_SYSTEM_ROLES:
+            continue
         if not frappe.db.exists("Role", role):
             continue
         if _has_explicit_matrix(role, doctypes):
