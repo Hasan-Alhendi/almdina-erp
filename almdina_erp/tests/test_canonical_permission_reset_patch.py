@@ -18,9 +18,32 @@ LOOKUP_CLEANUP_PATCH = (
     / "v1_0"
     / "clean_order_lookup_business_grants.py"
 )
+PERMISSION_PATCHES = (
+    "almdina_erp.patches.v1_0.bootstrap_legacy_role_capabilities",
+    "almdina_erp.patches.v1_0.migrate_legacy_administration_capabilities",
+    "almdina_erp.patches.v1_0.repair_capability_permission_projections",
+    "almdina_erp.patches.v1_0.repair_order_input_permissions",
+)
 
 
 class TestCanonicalPermissionResetPatch(unittest.TestCase):
+    def test_permission_state_patches_run_only_after_model_sync(self) -> None:
+        registry = PATCHES.read_text(encoding="utf-8")
+        pre, post = registry.split("[post_model_sync]", 1)
+
+        for patch in PERMISSION_PATCHES:
+            self.assertNotIn(patch, pre)
+            self.assertIn(patch, post)
+
+    def test_permission_state_migration_finishes_before_canonical_reset(self) -> None:
+        registry = PATCHES.read_text(encoding="utf-8")
+        _, post = registry.split("[post_model_sync]", 1)
+        reset = "almdina_erp.patches.v1_0.reset_canonical_permission_states"
+        reset_index = post.index(reset)
+
+        for patch in PERMISSION_PATCHES:
+            self.assertLess(post.index(patch), reset_index)
+
     def test_reset_patch_is_registered_post_model_sync_once(self) -> None:
         registry = PATCHES.read_text(encoding="utf-8")
         entry = "almdina_erp.patches.v1_0.reset_canonical_permission_states"
