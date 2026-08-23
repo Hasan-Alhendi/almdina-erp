@@ -45,6 +45,7 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         )
         self.assertIn("from .door_cutting_order import DoorCuttingOrder", source)
         self.assertIn("process_order_save(self._gateway())", source)
+        self.assertIn("invalidate_stale_draft_plans(self)", source)
         self.assertNotIn("frappe.model.document import Document", source)
         self.assertNotIn("PlanDoorCuttingOrder", source)
         self.assertNotIn("CostingDoorCuttingOrder", source)
@@ -82,6 +83,8 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         self.assertNotIn("from frappe", source)
         self.assertNotIn(".services", source)
         self.assertNotIn(".infrastructure", source)
+        self.assertNotIn("plan_input_fingerprint", source)
+        self.assertNotIn("calculate_cutting_plan", source)
 
     def test_frappe_order_adapters_are_split_by_responsibility(self) -> None:
         expected = {
@@ -105,7 +108,8 @@ class TestUnifiedOrderControllerArchitecture(unittest.TestCase):
         self.assertIn("FrappeEdgeProfileRepository", gateway)
         self.assertIn("FrappeOrderCutDimensionAdapter", gateway)
         self.assertIn("FrappeOrderCostingAdapter", gateway)
-        self.assertIn("FrappeCutDimensionPlanAdapter", gateway)
+        self.assertNotIn("FrappeCutDimensionPlanAdapter", gateway)
+        self.assertNotIn("sanitize_plan_snapshot_json", gateway)
         self.assertNotIn("domain.orders.costing", gateway)
         self.assertNotIn("domain.orders.cut_dimensions", gateway)
         self.assertNotIn("optimize_order_plan", gateway)

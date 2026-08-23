@@ -1,74 +1,52 @@
 frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
-    const page = frappe.ui.make_app_page({
-        parent: wrapper,
-        title: __("Factory Production Settings"),
-        single_column: true,
+    "use strict";
+
+    const MODULES = Object.freeze([
+        "/assets/almdina_erp/js/factory_production_settings/api.js",
+        "/assets/almdina_erp/js/factory_production_settings/state.js",
+        "/assets/almdina_erp/js/factory_production_settings/view_model.js",
+        "/assets/almdina_erp/js/factory_production_settings/renderer.js",
+        "/assets/almdina_erp/js/factory_production_settings/interactions.js",
+        "/assets/almdina_erp/js/factory_production_settings/dialogs.js",
+        "/assets/almdina_erp/js/factory_production_settings/controller.js",
+    ]);
+    const STYLESHEET = "/assets/almdina_erp/css/factory_production_settings.css";
+    const frontend = window.AlmdinaFrontend;
+    const $main = $(wrapper).find(".layout-main-section");
+
+    function showBootstrapError(error) {
+        const fallback = __("تعذر تحميل إعدادات المعمل.");
+        const message = frontend && typeof frontend.errorMessage === "function"
+            ? frontend.errorMessage(error, fallback)
+            : fallback;
+        const safe = frappe.utils.escape_html(String(message || fallback));
+        $main.html(`<div class="frappe-card" style="padding:24px;text-align:center">${safe}</div>`);
+        frappe.show_alert({ message, indicator: "red" }, 7);
+    }
+
+    if (!frontend || typeof frontend.ensureStylesheet !== "function") {
+        showBootstrapError(new Error("Almdina frontend foundation is unavailable"));
+        return;
+    }
+
+    // App-level foundation assets may remain cached for one navigation while the
+    // Page script is already current after a deploy. Keep the shared loader when
+    // available and use one native Frappe batch as the compatibility path when it
+    // is not, avoiding both bootstrap failure and serial freeze/unfreeze flicker.
+    const moduleLoad = typeof frontend.requireAssets === "function"
+        ? frontend.requireAssets(MODULES)
+        : Promise.resolve(frappe.require(MODULES));
+    const styleLoad = frontend.ensureStylesheet(STYLESHEET, {
+        id: "almdina-production-settings-style",
     });
 
-    const $body = $(wrapper).find(".layout-main-section");
-    let current = {};
-
-    function escape(value) {
-        return frappe.utils.escape_html(String(value ?? ""));
-    }
-
-    function render(data) {
-        current = data || {};
-        $body.html(`
-            <div class="frappe-card" style="padding:18px;max-width:920px">
-                <div class="row">
-                    <div class="col-md-6"><b>${__("Default Production Routing")}</b><div>${escape(current.default_production_routing || "-")}</div></div>
-                    <div class="col-md-6"><b>${__("Default Packing Mode")}</b><div>${escape(__(current.default_packing_mode || "-"))}</div></div>
-                </div>
-                <hr>
-                <div class="row">
-                    <div class="col-md-4"><b>${__("Default Kerf MM")}</b><div>${escape(current.default_kerf_mm)}</div></div>
-                    <div class="col-md-4"><b>${__("Default Trim Margin MM")}</b><div>${escape(current.default_trim_margin_mm)}</div></div>
-                    <div class="col-md-4"><b>${__("Default Cutting Cost / Board USD")}</b><div>${escape(current.default_cutting_cost_per_board_usd)}</div></div>
-                </div>
-                <hr>
-                <div class="text-muted">${__("Stage override policy is intentionally not editable from this limited Production Manager page.")}</div>
-            </div>
-        `);
-        page.clear_actions();
-        page.set_primary_action(__("Edit Production Defaults"), openDialog, "edit");
-    }
-
-    function load() {
-        return frappe.call({
-            method: "almdina_erp.almdina_erp.services.production_settings_service.get_production_settings",
-            freeze: true,
-        }).then(r => render(r.message || {}));
-    }
-
-    function openDialog() {
-        const options = (current.packing_options || ["Auto"]).join("\n");
-        const dialog = new frappe.ui.Dialog({
-            title: __("Edit Production Defaults"),
-            fields: [
-                { fieldname: "default_production_routing", fieldtype: "Link", options: "Production Routing", label: __("Default Production Routing"), reqd: 1, default: current.default_production_routing },
-                { fieldname: "default_packing_mode", fieldtype: "Select", options, label: __("Default Packing Mode"), reqd: 1, default: current.default_packing_mode || "Auto" },
-                { fieldname: "dimensions_section", fieldtype: "Section Break", label: __("Cutting Defaults") },
-                { fieldname: "default_kerf_mm", fieldtype: "Float", label: __("Default Kerf MM"), reqd: 1, default: current.default_kerf_mm },
-                { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: __("Default Trim Margin MM"), reqd: 1, default: current.default_trim_margin_mm },
-                { fieldname: "default_cutting_cost_per_board_usd", fieldtype: "Currency", label: __("Default Cutting Cost / Board USD"), reqd: 1, default: current.default_cutting_cost_per_board_usd },
-            ],
-            primary_action_label: __("Save"),
-            primary_action(values) {
-                frappe.call({
-                    method: "almdina_erp.almdina_erp.services.production_settings_service.update_production_settings",
-                    args: { values: JSON.stringify(values) },
-                    freeze: true,
-                    freeze_message: __("Saving production defaults..."),
-                }).then(r => {
-                    dialog.hide();
-                    render(r.message || {});
-                    frappe.show_alert({ message: __("Production defaults updated."), indicator: "green" });
-                });
-            },
-        });
-        dialog.show();
-    }
-
-    load();
+    Promise.all([moduleLoad, styleLoad])
+        .then(() => {
+            const controller = window.AlmdinaFactoryProductionSettingsController;
+            if (!controller || typeof controller.mount !== "function") {
+                throw new Error("Production Settings controller did not initialize");
+            }
+            controller.mount(wrapper);
+        })
+        .catch(showBootstrapError);
 };

@@ -7,11 +7,11 @@ global.window = {};
 
 require(path.resolve(
     __dirname,
-    "../../public/js/door_cutting_order_special_shape_geometry.js"
+    "../../public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
 ));
 require(path.resolve(
     __dirname,
-    "../../public/js/door_cutting_order_shape_output_contract.js"
+    "../../public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
 ));
 
 const geometry = window.AlmdinaSpecialShapeGeometry;
@@ -20,18 +20,21 @@ const contract = window.AlmdinaShapeOutputContract;
 assert.equal(Object.isFrozen(contract), true, "The output contract API must be immutable");
 
 const drawingRaw = JSON.stringify({
+    schema: "almdina.special-shape-documentation",
     version: 1,
-    canvas: { width: 1000, height: 650 },
+    canvas: { widthMm: 800, heightMm: 2000 },
+    reference: null,
     elements: [
         {
             id: "note-1",
-            type: "note",
-            x: 500,
-            y: 320,
-            color: "#172033",
+            type: "text",
+            position: { xMm: 500, yMm: 320 },
             text: "قص مائل",
         },
     ],
+    notes: "",
+    source: "pen",
+    templateId: null,
 });
 const parsedDrawing = contract.parseDrawing(drawingRaw);
 assert.ok(parsedDrawing);
@@ -43,8 +46,8 @@ assert.equal(
     parsedDrawing,
     "Repeated JSON reads should reuse the safe immutable parse"
 );
-assert.equal(contract.parseDrawing('{"version":2,"elements":[]}'), null);
-assert.equal(contract.parseDrawing('{"version":1,"elements":"invalid"}'), null);
+assert.equal(contract.parseDrawing('{"schema":"almdina.special-shape-documentation","version":2,"elements":[]}'), null);
+assert.equal(contract.parseDrawing('{"schema":"almdina.special-shape-documentation","version":1,"elements":"invalid"}'), null);
 assert.equal(contract.parseDrawing("{"), null);
 
 const geometryRaw = geometry.serialize(
@@ -64,10 +67,10 @@ const documentedPiece = {
     special_shape_drawing_json: drawingRaw,
 };
 
-assert.equal(contract.visual(documentedPiece).kind, "drawing");
+assert.equal(contract.visual(documentedPiece).kind, "documentation");
 assert.equal(
     contract.visual({ drawing_json: drawingRaw }).kind,
-    "drawing",
+    "documentation",
     "Invoice and measurement aliases must use the same documentation payload"
 );
 assert.equal(contract.visual(exactPiece).kind, "geometry");

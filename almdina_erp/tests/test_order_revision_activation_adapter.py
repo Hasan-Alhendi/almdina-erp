@@ -15,6 +15,9 @@ DISPATCH_PATH = ROOT / "almdina_erp" / "services" / "order_dispatch_service.py"
 CUTTING_MODULE = "almdina_erp.almdina_erp.services.cutting_plan_service"
 ACTIVATION_MODULE = "almdina_erp.almdina_erp.services.order_revision_activation"
 COMMANDS_MODULE = "almdina_erp.almdina_erp.services.shop_floor_commands"
+LIFECYCLE_MODULE = (
+    "almdina_erp.almdina_erp.services.order_lifecycle_permission_service"
+)
 
 
 def _load(path: Path, module_name: str, replacements: dict[str, types.ModuleType]):
@@ -45,25 +48,33 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
         )
         frappe.get_doc = lambda doctype, name: order
 
-        def throw(message: str, *args, **kwargs) -> None:
+        def throw(message: str, *args: Any, **kwargs: Any) -> None:
             raise RuntimeError(message)
 
         frappe.throw = throw
         return frappe
 
-    def test_approval_locks_chain_then_prepares_and_finalizes_revision(self) -> None:
+    def test_approval_locks_chain_then_checks_capability_and_activates_revision(self) -> None:
         calls: list[Any] = []
-        order = SimpleNamespace(name="DCO-REV-2", status="Pending Review")
+        order = SimpleNamespace(
+            name="DCO-REV-2",
+            status="Pending Review",
+            check_permission=lambda permission: calls.append(("permission", permission)),
+        )
         fake_frappe = self.fake_frappe(order, calls)
 
         cutting = types.ModuleType(CUTTING_MODULE)
-        cutting.require_any_role = lambda *roles: calls.append(("roles", roles))
 
         def lock_order(candidate):
             calls.append(("approve_plan", candidate.name))
             return {"name": candidate.name, "cutting_plan": "PLAN-REV-2"}
 
         cutting._lock_order_for_production = lock_order
+
+        lifecycle = types.ModuleType(LIFECYCLE_MODULE)
+        lifecycle.require_lifecycle_action = lambda candidate, action: calls.append(
+            ("lifecycle_guard", candidate.name, action)
+        )
 
         activation = types.ModuleType(ACTIVATION_MODULE)
         activation.load_locked_revision_order = lambda name: calls.append(
@@ -86,12 +97,15 @@ class TestOrderRevisionActivationAdapters(unittest.TestCase):
                 "frappe": fake_frappe,
                 CUTTING_MODULE: cutting,
                 ACTIVATION_MODULE: activation,
+                LIFECYCLE_MODULE: lifecycle,
             },
         )
         result = service.approve_order(order.name)
 
         self.assertEqual(result["revision_activation"]["replaced_revision"], "DCO-REV-1")
-        self.assertLess(calls.index(("chain_lock", order.name)), calls.index(("prepare", order.name)))
+        guard_call = next(call for call in calls if call[0] == "lifecycle_guard")
+        self.assertLess(calls.index(("chain_lock", order.name)), calls.index(guard_call))
+        self.assertLess(calls.index(guard_call), calls.index(("prepare", order.name)))
         self.assertLess(calls.index(("prepare", order.name)), calls.index(("approve_plan", order.name)))
         self.assertLess(
             calls.index(("approve_plan", order.name)),

@@ -2,58 +2,156 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
-PLAN_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
+SHOP_FLOOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "production"
+    / "shop_floor_order_ux.js"
+)
+LIFECYCLE_UX = ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
+PLAN_COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
+DRAWING_APPROVAL_SERVICE = (
+    ROOT / "almdina_erp" / "services" / "drawing_approval_service.py"
+)
+DRAWING_APPROVAL_POLICY = (
+    ROOT / "almdina_erp" / "application" / "security" / "drawing_approval_policy.py"
+)
 SHOP_FLOOR_COMMANDS = (
     ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"
 )
-SHOP_FLOOR_UX = ROOT / "public" / "js" / "shop_floor_order_ux.js"
+PRODUCTION_POLICY = (
+    ROOT / "almdina_erp" / "domain" / "orders" / "production_authorization.py"
+)
+DRAWING_APPROVAL_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_drawing_approval_ux.js"
+)
 
 
 def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_order_creator_dispatches_without_locking_cutting_plan():
-    workflow = _source(WORKFLOW)
-    assert 'frm.add_custom_button(__("إرسال للإنتاج")' in workflow
-    assert "open_dispatch_dialog" in workflow
-    assert "approve_order" not in workflow
-    assert "دون تثبيت خطة القص" in workflow
-    assert "return_order_to_draft" in workflow
-    assert "frappe.almdina.orderCanEdit" in workflow
+def test_order_creator_dispatches_directly_without_approval_or_plan_lock():
+    shop_floor = _source(SHOP_FLOOR_UX)
+    lifecycle = _source(LIFECYCLE_UX)
+
+    assert "function openDispatchDialog(frm)" in shop_floor
+    assert 'can(frm, "dispatch_order")' in shop_floor
+    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in shop_floor
+    assert "get_dispatch_options" in shop_floor
+    assert "dispatch_order" in shop_floor
+    assert "approve_order" not in shop_floor
+    assert "lock_cutting_plan" not in shop_floor
+
+    # Returning to Draft remains a separate lifecycle action and is not coupled
+    # to the production dispatch presenter.
+    assert "return_to_draft" in lifecycle
+    assert "return_order_to_draft" in lifecycle
 
 
-def test_dispatch_accepts_draft_orders_with_calculated_plan_only():
+def test_dispatch_uses_capability_and_calculated_plan_policy():
     shop_floor = _source(SHOP_FLOOR_COMMANDS)
-    ready = shop_floor.split("def assert_order_ready_for_dispatch", 1)[1].split(
-        "def get_handoff_workers", 1
-    )[0]
+    policy = _source(PRODUCTION_POLICY)
     dispatch = shop_floor.split("def dispatch_order", 1)[1].split(
         "def start_my_stage", 1
     )[0]
-    assert "assert_order_ready_for_dispatch(order)" in dispatch
-    assert "can_dispatch_from_status(order.status)" in ready
-    assert "order.has_cutting_plan" in ready
-    assert "plan_needs_recalculation" in ready
+
+    assert "Capability.DISPATCH_ORDER" in dispatch
+    assert "_assert_action_allowed" in dispatch
+    assert "can_dispatch_from_status(facts.order_status)" in policy
+    assert "facts.has_cutting_plan" in policy
+    assert "facts.plan_needs_recalculation" in policy
+    assert '"already_dispatched"' in policy
 
 
-def test_drawing_worker_locks_plan_without_resetting_shop_floor_status():
-    plan_service = _source(PLAN_SERVICE)
-    lock_block = plan_service.split("def lock_cutting_plan", 1)[1].split(
-        "def _lock_order_for_production", 1
+def test_review_and_order_approval_are_retired_in_favor_of_direct_dispatch():
+    lifecycle_ux = _source(LIFECYCLE_UX)
+    shop_floor_ux = _source(SHOP_FLOOR_UX)
+    permissions = _source(
+        ROOT / "almdina_erp" / "application" / "orders" / "lifecycle_permissions.py"
+    )
+    domain = _source(ROOT / "almdina_erp" / "domain" / "orders" / "lifecycle.py")
+
+    # Form never installs the retired review/approve buttons.
+    install = lifecycle_ux.split("function installButtons(frm, context)", 1)[1].split(
+        "function loadContext", 1
     )[0]
-    lock_impl = plan_service.split("def _lock_order_for_production", 1)[1].split(
-        "@frappe.whitelist()\ndef reject_order", 1
+    assert "submit_for_review" not in install
+    assert 'LABELS.approve' not in install
+    assert "return_to_draft" in install
+
+    # Domain + UI both allow draft (and leftover review) to go to production.
+    assert '"Pending Review"' in domain.split("DISPATCHABLE_ORDER_STATUSES", 1)[1].split(
+        "PRE_PRODUCTION_ORDER_STATUSES", 1
     )[0]
-    assert 'require_any_role("عامل رسم", "Production Manager")' in lock_block
-    assert "preserve_status=True" in lock_block
-    assert "if preserve_status:" in lock_impl
-    assert '"status": "Approved"' in lock_impl
+    assert "DISPATCHABLE_STATUSES" in shop_floor_ux
+    assert '"Draft"' in shop_floor_ux.split("const DISPATCHABLE_STATUSES", 1)[1].split(
+        "function addDispatchButton", 1
+    )[0]
+    assert 'status !== "Approved"' not in shop_floor_ux
+    # Direct toolbar button — never nested under «صالة الإنتاج».
+    dispatch_btn = shop_floor_ux.split("function addDispatchButton", 1)[1].split(
+        "function revertTargetsKey", 1
+    )[0]
+    assert 'frm.add_custom_button(__("إرسال للإنتاج"), () => openDispatchDialog(frm));' in dispatch_btn
+    assert "PRODUCTION_ACTION_GROUP" not in dispatch_btn
+
+    assert "إرسال الطلب للمراجعة أُلغي" in permissions
+    assert "اعتماد الطلب أُلغي" in permissions
 
 
-def test_drawing_form_exposes_lock_plan_action_for_drawing_path():
-    ux = _source(SHOP_FLOOR_UX)
-    assert "lock_cutting_plan" in ux
-    assert 'frm.add_custom_button(__("اعتماد خطة النظام")' in ux
-    assert 'plan_source: "System"' in ux
+def test_assignment_scoped_drawing_approval_preserves_shop_floor_status():
+    approval_service = _source(DRAWING_APPROVAL_SERVICE)
+    command_service = _source(PLAN_COMMAND_SERVICE)
+    policy = _source(DRAWING_APPROVAL_POLICY)
+    approval_command = command_service.split("def approve_order_plan", 1)[1].split(
+        "\n\ndef save_system_plan_settings", 1
+    )[0]
+    approved_relation = command_service.split(
+        "def _set_approved_plan_relation", 1
+    )[1].split("\n\ndef _legacy_plan_source", 1)[0]
+
+    assert "Capability.APPROVE_DXF" in approval_service
+    assert "require_cutting_plan_capability" in approval_service
+    assert "require_stage_assignment_access" in approval_service
+    assert "require_stage_operational_access" not in approval_service
+    assert "current_assignee" not in policy
+    assert "session_user" not in policy
+    assert "approval_warning" in policy
+
+    # A6.2 preserves shop-floor lifecycle state: approval transitions only the
+    # canonical Cutting Plan and stores the real approved_plan relation on DCO.
+    assert "approve_order_plan" in approval_service
+    assert "lock_cutting_plan" not in approval_service
+    assert "order.save(" not in approval_service
+    assert "frappe.db.set_value" not in approval_service
+    assert "plan.status = APPROVED" in approval_command
+    assert "order.status" not in approval_command
+    assert '"approved_plan"' in approved_relation
+    assert "plan.name" in approved_relation
+    assert '"status"' not in approved_relation
+    assert "current_production_stage" not in approved_relation
+    assert "production_path" not in approved_relation
+    assert "was_previously_approved" in approval_service
+    assert "require_any_role" not in approval_service
+
+
+def test_drawing_form_exposes_reapproval_with_warning():
+    ux = _source(DRAWING_APPROVAL_UX)
+    assert 'permissions.canDocument(frm, "approve_dxf")' in ux
+    assert 'const APPROVE_LABEL = __("اعتماد الرسم")' in ux
+    assert 'const REAPPROVE_LABEL = __("إعادة اعتماد الرسم")' in ux
+    assert "approve_production_dxf" in ux
+    assert "plan_source: source" in ux
+    assert "تم اعتماد خطة لهذا الطلب سابقًا" in ux
+    assert "current_assignee" not in ux
+    assert "isAssignedToCurrentUser" not in ux
+    assert "lock_cutting_plan" not in ux
+    assert "frm.add_custom_button" not in ux

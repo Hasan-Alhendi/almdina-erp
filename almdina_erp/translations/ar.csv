@@ -43,6 +43,9 @@ Factory Operations Summary,ملخص حركة المعمل
 Almdina Settings,إعدادات المعمل
 Production Routing,تسلسل مراحل الإنتاج
 Production Routing Stage,مرحلة ضمن تسلسل الإنتاج
+Stage Code,رمز المرحلة
+Department Label,اسم القسم الظاهر
+Operational Role,الدور التشغيلي المؤهل
 Master Data,البيانات الأساسية
 Edge Banding Types,أنواع القشاط
 Edge Banding Type,نوع القشاط
@@ -65,6 +68,8 @@ Home,الرئيسية
 Naming Series,تسلسل الترقيم
 Customer,العميل
 Order,الطلب
+Order Cost,تكلفة الطلب
+Order Cost and Customer Invoice,تكلفة الطلب وفاتورة الزبون
 Order Date,تاريخ الطلب
 Status,الحالة
 Revision,رقم المراجعة
@@ -75,12 +80,15 @@ Board,اللوح
 Board Item,صنف اللوح
 Board Material,مادة اللوح
 Board Color,لون اللوح
+Edge Color,لون القشاط
 Board Thickness (MM),سماكة اللوح (مم)
 Board Length (MM),طول اللوح (مم)
 Board Width (MM),عرض اللوح (مم)
 Board Rate USD,سعر اللوح بالدولار
 Cutting Cost / Board USD,تكلفة قص اللوح بالدولار
 Cutting Settings,إعدادات القص
+Cutting Plan Engine,محرك خطة القص
+Board Layout,توزيع القطع على الألواح
 Default Edge Type,نوع القشاط الافتراضي
 Kerf (MM),سماكة خط المنشار (مم)
 Trim Margin (MM),هامش تسوية حواف اللوح (مم)
@@ -163,6 +171,12 @@ Drilling,التخريم
 Assembly,التجميع
 Packing,التغليف
 Created,تم الإنشاء
+Added to Workforce,إضافة إلى المعمل
+Identity Updated,تحديث الهوية
+Roles Changed,تغيير الأدوار
+Enabled,تمكين
+Disabled,موقوف
+Password Reset,إعادة تعيين كلمة المرور
 Start,بدء
 Pause,إيقاف مؤقت
 Resume,استئناف العمل

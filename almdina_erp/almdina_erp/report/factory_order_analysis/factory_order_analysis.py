@@ -6,8 +6,13 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.services.report_permission_service import (
+    require_financial_report_access,
+)
+
 
 def execute(filters: dict[str, Any] | None = None):
+    require_financial_report_access()
     filters = frappe._dict(filters or {})
     columns = get_columns()
     conditions, values = get_conditions(filters)
@@ -49,8 +54,6 @@ def execute(filters: dict[str, Any] | None = None):
     )
 
     for row in rows:
-        # Status values are stored in English for workflow stability, but reports
-        # must display them in the active user language.
         if row.status:
             row.status = _(row.status)
         row.variance_usd = flt(row.actual_cost_usd) - flt(row.planned_cost_usd)
@@ -74,11 +77,7 @@ def get_conditions(filters: Any) -> tuple[str, dict[str, Any]]:
         if filters.get(fieldname):
             conditions.append(condition)
             value = filters.get(fieldname)
-            values[key] = (
-                f"%{value}%"
-                if fieldname == "board_description"
-                else value
-            )
+            values[key] = f"%{value}%" if fieldname == "board_description" else value
     return (" and " + " and ".join(conditions)) if conditions else "", values
 
 

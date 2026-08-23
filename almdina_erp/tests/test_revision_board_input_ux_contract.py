@@ -10,11 +10,35 @@ from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION_UX = ROOT / "public" / "js" / "door_cutting_order_revision_ux.js"
+REVISION_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_revision_ux.js"
+)
+LIFECYCLE_UX = (
+    ROOT / "public" / "js" / "door_cutting_order" / "core" / "order_lifecycle.js"
+)
 REVISION_SERVICE = ROOT / "almdina_erp" / "services" / "order_revision_service.py"
-BOARD_TEXT_UX = ROOT / "public" / "js" / "door_cutting_order_board_text_ux.js"
-FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order_fast_save_ux.js"
-TEXT_BOARD_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order_text_board_plan_ux.js"
+BOARD_TEXT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_board_text_ux.js"
+)
+FAST_SAVE_UX = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js"
+TEXT_BOARD_PLAN_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_text_board_plan_ux.js"
+)
 API_PATH = ROOT / "almdina_erp" / "api.py"
 DOCTYPE_JSON = (
     ROOT
@@ -23,6 +47,9 @@ DOCTYPE_JSON = (
     / "door_cutting_order"
     / "door_cutting_order.json"
 )
+_AUTHORIZATION_GATEWAY_MODULE = (
+    "almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway"
+)
 
 
 class TestRevisionReasonUxContract(unittest.TestCase):
@@ -30,7 +57,7 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         source = REVISION_UX.read_text(encoding="utf-8")
         self.assertIn('fieldname: "reason"', source)
         self.assertIn("reqd: 0", source)
-        self.assertIn('سبب إعادة الطلب للتعديل (اختياري)', source)
+        self.assertIn("سبب إنشاء نسخة التعديل (اختياري)", source)
         self.assertIn("function createRevision(frm, reason = \"\")", source)
         self.assertIn(
             "almdina_erp.almdina_erp.services.order_revision_service.create_order_revision",
@@ -39,27 +66,51 @@ class TestRevisionReasonUxContract(unittest.TestCase):
         self.assertIn('reason: String(reason || "").trim()', source)
         self.assertNotIn("اكتب سبب إعادة الطلب للتعديل", source)
 
+    def test_return_to_draft_dialog_keeps_reason_optional(self) -> None:
+        source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("سبب إعادة الطلب للمسودة (اختياري)", source)
+        self.assertIn("reqd: 0", source)
+        self.assertIn(
+            "order_revision_service.return_order_to_draft",
+            source,
+        )
+        self.assertIn('reason: String(values.reason || "").trim()', source)
+        self.assertIn("إعادة نفس الطلب إلى المسودة", source)
+        self.assertNotIn("routeToResult: true", source.split("function returnToDraft", 1)[1].split(
+            "function cancelOrder", 1
+        )[0])
+        self.assertNotIn("إنشاء نسخة", source.split("function returnToDraft", 1)[1].split(
+            "function cancelOrder", 1
+        )[0])
+
     def test_server_accepts_missing_reason_as_the_final_safety_boundary(self) -> None:
-        source = REVISION_SERVICE.read_text(encoding="utf-8")
-        self.assertIn('reason = str(reason or "").strip()', source)
-        self.assertNotIn("A revision reason is required.", source)
-        self.assertNotIn("if not reason:", source)
+        lifecycle = (
+            ROOT / "almdina_erp" / "services" / "order_lifecycle_service.py"
+        ).read_text(encoding="utf-8")
+        return_fn = lifecycle.split("def return_order_to_draft", 1)[1]
+        self.assertIn('reason = str(reason or "").strip()', return_fn)
+        self.assertNotIn("A revision reason is required.", return_fn)
+        # Missing reason is filled with a default audit message — never rejected.
+        self.assertNotIn("if not reason:", return_fn)
 
-    def test_legacy_return_to_draft_button_is_intercepted_globally(self) -> None:
-        source = REVISION_UX.read_text(encoding="utf-8")
-        self.assertIn("function installLegacyReturnButtonGuard()", source)
-        self.assertIn("document.addEventListener(\"click\"", source)
-        self.assertIn("document._dcoRevisionReturnButtonGuard", source)
-        self.assertIn("frappe.almdina.currentOrderRevisionForm", source)
-        self.assertIn('label.includes(__("إعادة للمسودة"))', source)
-        self.assertIn("event.stopImmediatePropagation()", source)
-        self.assertIn("openRevision(frm)", source)
-        self.assertNotIn("const pageRoot = frm.page", source)
+    def test_retired_buttons_are_removed_by_the_final_lifecycle_owner(self) -> None:
+        source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("const RETIRED_LABELS = Object.freeze([", source)
+        self.assertIn("function removeRetiredLifecycleButtons(frm)", source)
+        self.assertIn("RETIRED_LABELS.forEach", source)
+        self.assertIn("function removeLifecycleButtons(frm)", source)
+        self.assertIn('__("إعادة للمسودة")', source)
+        self.assertIn('__("Cancel Order")', source)
+        self.assertIn("removeRetiredLifecycleButtons(frm)", source)
+        self.assertNotIn('document.addEventListener("click"', source)
+        self.assertNotIn("stopImmediatePropagation", source)
 
-    def test_refresh_updates_the_active_form_used_by_global_guard(self) -> None:
-        source = REVISION_UX.read_text(encoding="utf-8")
-        self.assertIn("frappe.almdina.currentOrderRevisionForm = frm", source)
-        self.assertIn("if (!canCreateRevision(frm)) return", source)
+    def test_document_context_replaces_the_global_active_form_guard(self) -> None:
+        source = LIFECYCLE_UX.read_text(encoding="utf-8")
+        self.assertIn("documentContext().capture(frm)", source)
+        self.assertIn("documentContext().isCurrent(frm, identity)", source)
+        self.assertIn("context.order_name !== frm.doc.name", source)
+        self.assertNotIn("currentOrderRevisionForm", source)
 
 
 class TestBoardInputSyncContract(unittest.TestCase):
@@ -102,6 +153,7 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         fake_utils.flt = lambda value=0: float(value or 0)
         fake_utils.cint = lambda value=0: int(float(value or 0))
 
+        fake_frappe._ = lambda text: text
         fake_frappe.whitelist = lambda *args, **kwargs: (lambda fn: fn)
         fake_frappe.parse_json = json.loads
         fake_frappe.db = SimpleNamespace(
@@ -116,10 +168,19 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
 
         fake_frappe.get_doc = get_doc
 
+        fake_authorization = types.ModuleType(_AUTHORIZATION_GATEWAY_MODULE)
+        fake_authorization.doctype_has_capability = lambda *args, **kwargs: False
+        fake_authorization.document_has_capability = lambda *args, **kwargs: False
+        fake_authorization.require_any_document_capability = lambda *args, **kwargs: None
+        fake_authorization.require_doctype_capability = lambda *args, **kwargs: None
+        fake_authorization.require_document_capability = lambda *args, **kwargs: None
+
         previous_frappe = sys.modules.get("frappe")
         previous_utils = sys.modules.get("frappe.utils")
+        previous_authorization = sys.modules.get(_AUTHORIZATION_GATEWAY_MODULE)
         sys.modules["frappe"] = fake_frappe
         sys.modules["frappe.utils"] = fake_utils
+        sys.modules[_AUTHORIZATION_GATEWAY_MODULE] = fake_authorization
         try:
             spec = importlib.util.spec_from_file_location(
                 "_almdina_text_board_preview_regression",
@@ -139,6 +200,10 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
                 sys.modules.pop("frappe.utils", None)
             else:
                 sys.modules["frappe.utils"] = previous_utils
+            if previous_authorization is None:
+                sys.modules.pop(_AUTHORIZATION_GATEWAY_MODULE, None)
+            else:
+                sys.modules[_AUTHORIZATION_GATEWAY_MODULE] = previous_authorization
 
     def test_opening_an_existing_text_board_order_never_calls_item_loader(self) -> None:
         piece = SimpleNamespace(
@@ -193,7 +258,10 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
             approved_plan_source="System",
             approved_plan=None,
         )
-        stored = SimpleNamespace(check_permission=lambda permission: None)
+        stored = SimpleNamespace(
+            status="Draft",
+            check_permission=lambda permission: None,
+        )
         item_loader_called = False
 
         def forbidden_item_loader():
@@ -240,6 +308,7 @@ class TestTextBoardLivePreviewRegression(unittest.TestCase):
         self.assertEqual(result["full_board_length_mm"], 2440)
         self.assertEqual(result["full_board_width_mm"], 1220)
         self.assertEqual(result["required_boards"], 1)
+        self.assertNotIn("total_cost_usd", result)
 
     def test_preview_source_cannot_regress_to_hidden_item_validation(self) -> None:
         source = API_PATH.read_text(encoding="utf-8")

@@ -1,34 +1,26 @@
 {
   "actions": [],
-  "allow_rename": 1,
+  "allow_rename": 0,
   "autoname": "field:edge_type_name",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["edge_type_name","english_name","width_cm","thickness_mm","edge_color","finish_type","application_method","consumption_uom","rate_usd_per_meter","item_code","stock_uom","disabled"],
+  "field_order": ["edge_type_name","english_name","width_cm","thickness_mm","consumption_uom","rate_usd_per_meter","item_code","stock_uom","disabled"],
   "fields": [
     {"fieldname":"edge_type_name","fieldtype":"Data","in_list_view":1,"label":"Edge Type Name","reqd":1,"unique":1},
     {"fieldname":"english_name","fieldtype":"Data","label":"English Name"},
     {"fieldname":"width_cm","fieldtype":"Float","in_list_view":1,"label":"Width CM","non_negative":1},
     {"default":"1","description":"Thickness added to each selected finished edge and deducted from the raw cutting size.","fieldname":"thickness_mm","fieldtype":"Float","in_list_view":1,"label":"Thickness (MM)","non_negative":1,"precision":"3","reqd":1},
-    {"fieldname":"edge_color","fieldtype":"Data","in_list_view":1,"label":"Edge Color"},
-    {"fieldname":"finish_type","fieldtype":"Select","label":"Finish Type","options":"Regular\nGlossy\nGolden"},
-    {"fieldname":"application_method","fieldtype":"Select","label":"Application Method","options":"Machine\nManual"},
     {"fieldname":"consumption_uom","fieldtype":"Link","hidden":1,"label":"Legacy Consumption UOM","options":"UOM"},
     {"fieldname":"rate_usd_per_meter","fieldtype":"Currency","in_list_view":1,"label":"Rate USD / Meter","non_negative":1,"reqd":1},
     {"fieldname":"item_code","fieldtype":"Link","hidden":1,"label":"Legacy Stock Item","options":"Item"},
     {"fieldname":"stock_uom","fieldtype":"Link","hidden":1,"label":"Legacy Stock UOM","options":"UOM","read_only":1},
-    {"default":"0","fieldname":"disabled","fieldtype":"Check","label":"Disabled"}
+    {"default":"0","fieldname":"disabled","fieldtype":"Check","in_list_view":1,"label":"Disabled"}
   ],
   "links": [],
   "module":"Almdina ERP",
   "name":"Edge Banding Type",
   "naming_rule":"By fieldname",
-  "permissions":[
-    {"read":1,"report":1,"role":"Order Entry"},
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
-    {"read":1,"report":1,"role":"Stock Manager"},
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}
-  ],
+  "permissions": [],
   "sort_field":"modified",
   "sort_order":"DESC",
   "track_changes":1

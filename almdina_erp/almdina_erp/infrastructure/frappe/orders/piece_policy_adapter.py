@@ -14,12 +14,19 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     SpecialPrice,
     drawing_token,
     evaluate_special_shape,
+    pending_custom_edge_price_labels,
     reset_price_values,
     resolve_clipped_corner,
 )
-from almdina_erp.almdina_erp.services.special_shape_service import (
-    has_special_price_approval_role,
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    document_has_capability,
+)
+from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service import (
     validate_special_shape_drawing,
+)
+from almdina_erp.almdina_erp.services.special_shape_service import (
+    validate_special_shape_geometry,
 )
 
 from .document_access import FrappeOrderDocumentAccess
@@ -79,6 +86,15 @@ class FrappeOrderPiecePolicyAdapter:
             approved_on=get_datetime(approved_on) if approved_on else None,
         )
 
+    @staticmethod
+    def _required_price_capability(old_row: Any | None) -> str:
+        return (
+            Capability.EDIT_SPECIAL_PRICE
+            if old_row
+            and str(old_row.special_shape_price_status or "") == "Approved"
+            else Capability.APPROVE_SPECIAL_PRICE
+        )
+
     def _validate_clipped_corner(self, row: Any, index: int) -> None:
         try:
             result = resolve_clipped_corner(
@@ -114,6 +130,19 @@ class FrappeOrderPiecePolicyAdapter:
         row.clipped_corner_width_cm = round_value(result.width_cm, 3)
         row.clipped_corner_length_cm = round_value(result.length_cm, 3)
 
+    @staticmethod
+    def _validated_special_geometry(row: Any | None) -> dict[str, Any] | None:
+        if not row or str(getattr(row, "piece_type", None) or "Regular") != "Special":
+            return None
+        raw_geometry = getattr(row, "special_shape_geometry_json", "") or ""
+        if not raw_geometry:
+            return None
+        return validate_special_shape_geometry(
+            raw_geometry,
+            getattr(row, "width_cm", 0),
+            getattr(row, "length_cm", 0),
+        )
+
     def validate_rows(self) -> None:
         old_rows = self.access.old_piece_map()
         old_header = self.access.old_header()
@@ -125,7 +154,7 @@ class FrappeOrderPiecePolicyAdapter:
         approval_action = bool(
             self.document.flags.get("special_price_approval_action")
         )
-        can_approve_price: bool | None = None
+        permission_cache: dict[str, bool] = {}
 
         for index, row in enumerate(self.document.pieces or [], start=1):
             row.piece_type = row.piece_type or "Regular"
@@ -145,7 +174,10 @@ class FrappeOrderPiecePolicyAdapter:
 
             if current_raw and drawing_changed:
                 drawing = validate_special_shape_drawing(current_raw)
-                drawing_has_elements = bool(drawing and drawing.get("elements"))
+                drawing_has_elements = bool(
+                    drawing
+                    and (drawing.get("reference") or drawing.get("elements"))
+                )
             elif current_raw:
                 drawing_has_elements = bool(
                     (old_row and old_row.special_shape_status == "Documented")
@@ -154,6 +186,13 @@ class FrappeOrderPiecePolicyAdapter:
             else:
                 drawing_has_elements = False
 
+            special_geometry = self._validated_special_geometry(row)
+            old_special_geometry = self._validated_special_geometry(old_row)
+            geometry_payload_changed = bool(
+                old_row and old_special_geometry != special_geometry
+            )
+            documentation_changed = bool(drawing_changed)
+
             decision = evaluate_special_shape(
                 old_geometry=self._geometry_snapshot(old_row),
                 current_geometry=(
@@ -161,25 +200,29 @@ class FrappeOrderPiecePolicyAdapter:
                 ),
                 old_price=self._price_snapshot(old_row),
                 current_price=self._price_snapshot(row) or SpecialPrice(),
-                drawing_changed=drawing_changed,
-                drawing_has_elements=drawing_has_elements,
+                drawing_changed=bool(drawing_changed or geometry_payload_changed),
+                drawing_has_elements=bool(drawing_has_elements),
                 default_edge_changed=default_edge_changed,
                 approval_action=approval_action,
             )
 
             if decision.requires_price_permission:
-                if can_approve_price is None:
-                    can_approve_price = has_special_price_approval_role()
-                if not can_approve_price:
+                capability = self._required_price_capability(old_row)
+                if capability not in permission_cache:
+                    permission_cache[capability] = document_has_capability(
+                        self.document,
+                        capability,
+                    )
+                if not permission_cache[capability]:
                     frappe.throw(
                         _(
-                            "Row {0}: only Accounts Management can change or approve "
+                            "Row {0}: you do not have permission to approve or edit "
                             "the special door price."
                         ).format(index),
                         frappe.PermissionError,
                     )
 
-            if drawing_changed:
+            if documentation_changed:
                 row.special_shape_drawing_updated_by = frappe.session.user
                 row.special_shape_drawing_updated_on = now_datetime()
 
@@ -205,20 +248,17 @@ class FrappeOrderPiecePolicyAdapter:
                 ).format(", ".join(missing))
             )
 
-    def ensure_prices_approved(self) -> None:
-        pending = [
-            str(row.piece_no or row.idx)
-            for row in (self.document.pieces or [])
-            if (row.piece_type or "Regular") == "Special"
-            and row.special_shape_price_status != "Approved"
-        ]
+    def ensure_custom_edge_prices(self) -> None:
+        pending = pending_custom_edge_price_labels(self.document.pieces or [])
         if pending:
             frappe.throw(
                 _(
-                    "Accounts Management must approve every special door price "
-                    "before production approval. Pending rows: {0}."
-                ).format(", ".join(pending))
+                    "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ أو طباعة الفاتورة. المتبقي: {0}."
+                ).format("، ".join(pending))
             )
+
+    def ensure_prices_approved(self) -> None:
+        self.ensure_custom_edge_prices()
 
 
 __all__ = ["FrappeOrderPiecePolicyAdapter"]

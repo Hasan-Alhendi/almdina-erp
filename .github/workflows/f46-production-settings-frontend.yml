@@ -1,0 +1,48 @@
+name: Factory Production Settings Frontend Migration
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run Production Settings architecture and security contracts
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_factory_production_settings_frontend_architecture \
+            almdina_erp.tests.test_factory_production_settings_frontend_security \
+            almdina_erp.tests.test_page_revisit_refresh_contract
+
+      - name: Validate Production Settings JavaScript syntax
+        run: |
+          node --check almdina_erp/almdina_erp/page/factory_production_settings/factory_production_settings.js
+          node --check almdina_erp/public/js/factory_production_settings/api.js
+          node --check almdina_erp/public/js/factory_production_settings/state.js
+          node --check almdina_erp/public/js/factory_production_settings/view_model.js
+          node --check almdina_erp/public/js/factory_production_settings/renderer.js
+          node --check almdina_erp/public/js/factory_production_settings/interactions.js
+          node --check almdina_erp/public/js/factory_production_settings/dialogs.js
+          node --check almdina_erp/public/js/factory_production_settings/controller.js
+
+      - name: Run Production Settings view-model simulation
+        run: node almdina_erp/tests/js/factory_production_settings_view_model.test.js

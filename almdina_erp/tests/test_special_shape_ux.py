@@ -5,54 +5,35 @@ from pathlib import Path
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-DETAIL_JSON = (
-    APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order_detail"
-    / "door_cutting_order_detail.json"
-)
-ORDER_JSON = (
-    APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order.json"
-)
-SETTINGS_JSON = (
-    APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "almdina_erp_settings"
-    / "almdina_erp_settings.json"
-)
-ORDER_PY = (
-    APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "door_cutting_order"
-    / "door_cutting_order.py"
-)
-PLAN_RENDERER = (
-    APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
-)
+DETAIL_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
+ORDER_JSON = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
+SETTINGS_JSON = APP_ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
+ORDER_PY = APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.py"
+PIECE_POLICY = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "piece_policy_adapter.py"
+COSTING_ADAPTER = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "costing_adapter.py"
+COSTING_DOMAIN = APP_ROOT / "almdina_erp" / "domain" / "orders" / "costing.py"
+OPTIMIZE_APPLICATION = APP_ROOT / "almdina_erp" / "application" / "cutting" / "optimize_order_plan.py"
+PLAN_RENDERER = APP_ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
 SERVICE_PY = APP_ROOT / "almdina_erp" / "services" / "special_shape_service.py"
-OPERATOR_UX = APP_ROOT / "public" / "js" / "door_cutting_order_operator_ux.js"
-SKETCH_UX = APP_ROOT / "public" / "js" / "door_cutting_order_special_shape_ux.js"
-SKETCH_ENGINE = (
-    APP_ROOT / "public" / "js" / "door_cutting_order_sketch_engine.js"
-)
-COST_UX = APP_ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
-CUTTING_PLAN_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_service.py"
-REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
-CUTTING_PLAN_PIECE_JSON = (
+OPERATOR_UX = (
     APP_ROOT
-    / "almdina_erp"
-    / "doctype"
-    / "cutting_plan_piece"
-    / "cutting_plan_piece.json"
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_operator_ux.js"
 )
-HOOKS = APP_ROOT / "hooks.py"
+EDITOR_ENTRY = APP_ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
+DOCUMENTATION = APP_ROOT / "public" / "js" / "special_shape_documentation"
+DOCUMENTATION_CSS = APP_ROOT / "public" / "css" / "special_shape_documentation.css"
+DOCUMENTATION_VALIDATOR = APP_ROOT / "almdina_erp" / "services" / "special_shape_drawing_validation_service.py"
+COST_PRESENTER = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_presenter.js"
+COST_PERMISSIONS = APP_ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_cost_permissions_ux.js"
+CUTTING_PLAN_COMMAND_SERVICE = APP_ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
+CUTTING_PLAN_WORKSPACE = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_workspace.py"
+REMNANT_PLANNING = APP_ROOT / "almdina_erp" / "services" / "remnant_planning.py"
+CUTTING_PLAN_PIECE_JSON = APP_ROOT / "almdina_erp" / "doctype" / "cutting_plan_piece" / "cutting_plan_piece.json"
+HOOKS = APP_ROOT / "frontend_assets.py"
 
 
 def _fields(path: Path) -> dict[str, dict]:
@@ -65,7 +46,6 @@ def test_special_piece_schema_keeps_documentation_and_accounting_price_separate(
     assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial"
     assert fields["special_shape_drawing_json"]["fieldtype"] == "Long Text"
     assert fields["special_shape_status"]["read_only"] == 1
-
     for fieldname in (
         "special_shape_estimated_unit_price_usd",
         "special_shape_custom_unit_price_usd",
@@ -99,169 +79,131 @@ def test_special_estimate_defaults_are_configurable_and_start_at_zero():
         assert fields[fieldname]["non_negative"] == 1
 
 
-def test_operator_editor_adds_special_type_and_paper_like_sketch_action():
+def test_operator_opens_only_new_documentation_runtime():
     operator = OPERATOR_UX.read_text(encoding="utf-8")
-    sketch = SKETCH_UX.read_text(encoding="utf-8")
-    engine = SKETCH_ENGINE.read_text(encoding="utf-8")
+    entry = EDITOR_ENTRY.read_text(encoding="utf-8")
+    shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
+    controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
+    pen = (DOCUMENTATION / "application" / "smart_pen.js").read_text(encoding="utf-8")
+    templates = (DOCUMENTATION / "application" / "templates.js").read_text(encoding="utf-8")
+    css = DOCUMENTATION_CSS.read_text(encoding="utf-8")
     hooks = HOOKS.read_text(encoding="utf-8")
 
     assert 'data-field="piece_type"' in operator
     assert "dco-special-sketch-button" in operator
     assert "AlmdinaSpecialShapeEditor.open" in operator
-    assert '"public/js/door_cutting_order_special_shape_ux.js"' in hooks
-
-    for tool in ("pen", "line", "rectangle", "ellipse", "dimension", "note", "select", "eraser"):
-        assert f'key: "{tool}"' in sketch
-    assert "pointerdown" in sketch
-    assert "pointermove" in sketch
-    assert "pointerup" in sketch
-    assert "dco-sketch-undo" in sketch
-    assert "dco-sketch-redo" in sketch
-    assert "purpose: \"operator_documentation_only\"" in sketch
-    assert "normalizePenStroke" in sketch
-    assert "fitNearlyStraightLine" in engine
-    assert "smoothCorners" in engine
-    assert "getCoalescedEvents" in sketch
-    assert "clientPointToCanvas" in sketch
-    assert "getScreenCTM" in sketch
-    assert "erasePenStroke" in sketch
-    assert "dco-sketch-eraser-size" in sketch
-    assert "خط القلم لن يُحذف كاملًا" in sketch
-    assert "التنعيم وإغلاق النهايات يعملان أثناء الرسم" in sketch
-    assert "dco-sketch-selection-controls" in sketch
-    assert "translateElement" in sketch
-    assert "snapPenEndpoints" in sketch
-    assert "dco-sketch-zoom-in" in sketch
-    assert 'data-template="single-slope"' in sketch
-    assert 'data-template="double-clipped"' in sketch
-    assert 'data-template="clipped-corner"' in sketch
-    assert 'data-template="arch"' in sketch
-    assert '"public/js/door_cutting_order_special_shape_builder_ux.js"' not in hooks
-    assert "تعديلات لم تحفظ" in sketch
+    assert '"public/js/door_cutting_order/drawing/special_shape_facade.js"' in hooks
+    assert "__documentationOnly: true" in entry
+    assert "__manufacturingGeometrySeparated: true" in entry
+    assert "door_drawing_v4" not in entry
+    for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
+        assert f'tool("{tool}"' in shell
+    for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "ملاحظات المصمم"):
+        assert label in shell
+    assert "Api.save(context.order.name, context.piece.name, D.toStored(document))" in controller
+    assert "geometry" not in controller.lower()
+    assert "function simplify(" in pen
+    assert "suggestClose" in pen
+    for template_id in ("clipped-corner", "top-arch", "side-arch", "trapezoid", "inner-opening", "slanted-edge"):
+        assert template_id in templates
+    assert ".ald-doc-toolbar" in css
+    assert "touch-action:none" in css
+    for retired in (
+        "door_cutting_order_sketch_engine.js",
+        "door_cutting_order_exact_line_ux.js",
+        "door_cutting_order_figma_editor_ux.js",
+        "door_cutting_order_drawing_workspace_ux.js",
+    ):
+        assert retired not in hooks
 
 
-def test_sketch_is_documentation_while_selected_raw_edges_drive_preliminary_cost():
-    service = SERVICE_PY.read_text(encoding="utf-8")
-    order = ORDER_PY.read_text(encoding="utf-8")
+def test_drawing_validation_and_preliminary_edge_cost_policy_remain_server_authoritative():
+    service = DOCUMENTATION_VALIDATOR.read_text(encoding="utf-8")
+    policy = PIECE_POLICY.read_text(encoding="utf-8")
+    costing = COSTING_DOMAIN.read_text(encoding="utf-8")
+    adapter = COSTING_ADAPTER.read_text(encoding="utf-8")
     operator = OPERATOR_UX.read_text(encoding="utf-8")
-
     assert "validate_special_shape_drawing" in service
     assert "MAX_DRAWING_BYTES" in service
     assert "MAX_DRAWING_ELEMENTS" in service
-    assert "MAX_DRAWING_POINTS" in service
-    assert 'ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}' in service
-
-    assert "long_edges = cint(row.edge_long_right) + cint(row.edge_long_left)" in order
-    assert "width_edges = cint(row.edge_width_top) + cint(row.edge_width_bottom)" in order
-    assert '"edge_long_right": cint(row.edge_long_right)' in order
-    assert '"edge_width_bottom": cint(row.edge_width_bottom)' in order
-    assert "expand_piece_groups(piece_rows)" in order
-    assert "special_shape_raw_summary" in order
-
+    assert "DOCUMENTATION_ELEMENT_TYPES" in service
+    assert '"stroke", "line", "rect", "ellipse", "arrow", "dimension", "text"' in service
+    assert "validate_special_shape_drawing(current_raw)" in policy
+    assert '"long_right": (' in costing
+    assert "bool(piece.edge_long_right)" in costing
+    assert '"width_top": (' in costing
+    assert "bool(piece.edge_width_top)" in costing
+    assert "long_meters = right_meters + left_meters" in costing
+    assert "width_meters = top_meters + bottom_meters" in costing
+    assert "summary = calculate_piece_costs(" in adapter
     assert 'if ((row.piece_type || "Regular") === "Special") return 0' not in operator
-    assert 'fieldname === "piece_type" && value === "Special"' not in operator
-    assert "جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية" in operator
 
 
-def test_accounting_approval_is_role_checked_audited_and_invalidated_by_geometry_changes():
+def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
-    order = ORDER_PY.read_text(encoding="utf-8")
-    cost = COST_UX.read_text(encoding="utf-8")
+    policy = PIECE_POLICY.read_text(encoding="utf-8")
+    permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
 
-    assert 'SPECIAL_PRICE_APPROVER_ROLES = {"Accounts Management", "System Manager"}' in service
-    assert "has_special_price_approval_role()" in service
+    assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
+    assert "doctype_has_any_capability" in service
+    assert "SPECIAL_PRICE_APPROVER_ROLES" not in service
     assert "special_shape_price_approved_by = frappe.session.user" in service
     assert "special_shape_price_approved_on = now_datetime()" in service
     assert "order.save(ignore_permissions=True)" in service
-    assert "note: str | None = None" in service
-    assert "Write a short pricing note before approving the custom price." not in service
-    assert 'label: "ملاحظة التسعير (اختياري)"' in cost
-    assert 'note: values.note || ""' in cost
-    assert 'row.special_shape_price_status === "Approved"' in cost
-    assert "? n(row.special_shape_custom_unit_price_usd)" in cost
 
-    assert "row.special_shape_drawing_json" in order
-    for fieldname in (
-        "allow_rotation",
-        "edge_long_right",
-        "edge_long_left",
-        "edge_width_top",
-        "edge_width_bottom",
-    ):
-        assert f'"{fieldname}"' in order
-    assert "old_row.edge_type" in order
-    assert "row.edge_type" in order
-    assert "default_edge_changed = bool(" in order
-    assert "pricing_basis_changed = bool(" in order
-    assert "math.isclose(" in order
-    assert "cint(getattr(old_row, fieldname, 0))" in order
-    assert "old_drawing != drawing" in order
-    assert "if pricing_basis_changed and not approval_action" in order
-    assert 'row.special_shape_price_status = (' in order
-    assert 'row.special_shape_price_approved_by = ""' in order
+    assert "function canEditInlinePiecePrice(frm, piece)" in permissions
+    assert '"approve_special_price"' in permissions
+    assert "function applyInlinePriceToPiece(piece, kind, rawValue)" in permissions
+    assert "function flushPendingPriceEdits(frm, options = {})" in permissions
+    assert "cost_permission_service.approve_special_piece_price" in permissions
+    assert 'note: piece.special_shape_price_note || ""' in permissions
+
+    assert "old_special_geometry != special_geometry" in policy
+    assert "decision = evaluate_special_shape(" in policy
+    assert "if decision.reset_price:" in policy
+    assert "document_has_capability(" in policy
 
 
 def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
+    costing = COSTING_DOMAIN.read_text(encoding="utf-8")
+    adapter = COSTING_ADAPTER.read_text(encoding="utf-8")
+    presenter = COST_PRESENTER.read_text(encoding="utf-8")
+    permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
+
+    assert "invoice_base_total = board_and_cutting_cost + regular_edge_total" in costing
+    assert "customer_quote_total_usd=round_value(invoice_base_total + final_total, 3)" in costing
+    assert "total_cost_usd=round_value(mdf_cost + cutting_cost + edge_cost, 3)" in costing
+    assert "self.document.customer_quote_total_usd = (" in adapter
+    assert "self.document.total_cost_usd = summary.total_cost_usd" in adapter
+    assert "boardCount * boardRate" in presenter
+    assert "boardCount * cuttingRate" in presenter
+    assert "function quoteTotal(frm)" in presenter
+    assert "cost_permission_service.approve_special_piece_price" in permissions
+    assert "frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm)" in permissions
+
+
+def test_review_and_production_keep_special_drawing_optional_but_require_price():
     order = ORDER_PY.read_text(encoding="utf-8")
-    cost = COST_UX.read_text(encoding="utf-8")
-
-    assert "invoice_base_total = board_and_cutting_cost + regular_edge_total" in order
-    assert "self.customer_quote_total_usd = round_value(invoice_base_total + final_total, 3)" in order
-    assert "self.total_cost_usd = round_value(total_cost, 3)" in order
-
-    assert "استبعاد الحساب الآلي للدرف الخاصة" not in cost
-    assert "boardCount * boardRate" in cost
-    assert "boardCount * cuttingRate" in cost
-    assert "n(frm.doc.mdf_cost_usd)" in cost
-    assert "n(frm.doc.cutting_cost_usd)" in cost
-    assert "regularAreaRatio" not in cost
-    assert "حصة خام MDF" not in cost
-    assert "حصة قص وتجهيز" not in cost
-    assert "درفة خاصة رقم" in cost
-    assert "سعر معتمد شامل" in cost
-    assert "approve_special_piece_price" in cost
-    assert "سعر شامل" in cost
-    assert "التكلفة الداخلية تبقى مستقلة" in cost
-    assert "القشاط المبدئي" in cost
-    assert "${qty(row.edge_meters)} م · $ ${money(row.edge_cost_usd)}" in cost
-    assert "ملاحظة السعر:" in cost
-
-
-def test_saved_special_price_and_read_only_sketch_survive_refresh():
-    order = ORDER_PY.read_text(encoding="utf-8")
-    cost = COST_UX.read_text(encoding="utf-8")
-    sketch = SKETCH_UX.read_text(encoding="utf-8")
-
-    assert "flt(old_row.width_cm)" in order
-    assert "cint(old_row.qty) != cint(row.qty)" in order
-    assert 'row.special_shape_price_status === "Approved"' in cost
-    assert 'root.style.gridTemplateColumns = "minmax(0,1fr) 230px"' in sketch
-    assert 'root.querySelector(".dco-special-sketch-shell").style.gridTemplateColumns' not in sketch
-
-
-def test_review_and_production_approval_gate_special_documentation_and_price():
-    order = ORDER_PY.read_text(encoding="utf-8")
-    service = CUTTING_PLAN_SERVICE.read_text(encoding="utf-8")
+    command_service = CUTTING_PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
+    workspace = CUTTING_PLAN_WORKSPACE.read_text(encoding="utf-8")
     placed_piece_fields = _fields(CUTTING_PLAN_PIECE_JSON)
 
     assert "def ensure_special_shapes_documented" in order
+    assert "special-door drawing is optional metadata" in order
+    assert "self._gateway().ensure_special_shapes_documented()" not in order
     assert "def ensure_special_prices_approved" in order
-    assert "order.ensure_special_shapes_documented()" in service
-    assert "order.ensure_special_prices_approved()" in service
+    assert "order.ensure_special_prices_approved()" in command_service
     assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial"
-    assert '"piece_type": piece.get("piece_type") or "Regular"' in service
+    assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 
 
 def test_cutting_plan_visually_audits_every_special_raw_piece():
     order_js = PLAN_RENDERER.read_text(encoding="utf-8")
-    order_py = ORDER_PY.read_text(encoding="utf-8")
+    optimization = OPTIMIZE_APPLICATION.read_text(encoding="utf-8")
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
-
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
     assert "✦ درفة خاصة · خام CNC" in order_js
-    assert "قشاط مبدئي:" in order_js
-    assert '"special_shape_raw_summary": self._special_shape_raw_summary(' in order_py
-    assert '"complete": requested_ids.issubset(placed_ids) and not unplaced_ids' in order_py
+    assert "render_piece_edge_lines(piece)" in order_js
+    assert '"special_shape_raw_summary": summarize_special_shapes(expanded, plan)' in optimization
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning
-    assert '"special_shape_raw_summary": order._special_shape_raw_summary(' in remnant_planning

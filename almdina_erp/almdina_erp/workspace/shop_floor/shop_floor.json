@@ -19,15 +19,7 @@
   "parent_page": "",
   "public": 1,
   "quick_lists": [],
-  "roles": [
-    {"role": "عامل رسم"},
-    {"role": "عامل شريون"},
-    {"role": "عامل CNC"},
-    {"role": "عامل تقشيط"},
-    {"role": "Production Manager"},
-    {"role": "Order Entry"},
-    {"role": "System Manager"}
-  ],
+  "roles": [],
   "sequence_id": 2,
   "shortcuts": [
     {"color": "Blue", "label": "صالة الإنتاج", "link_to": "shop-floor-inbox", "type": "Page"}

@@ -25,18 +25,24 @@ def _execute(function: Callable[..., _Result], *args: Any, **kwargs: Any) -> _Re
     raise AssertionError("frappe.throw must interrupt execution")
 
 
-def assert_order_ready_for_dispatch(order: Any) -> None:
-    """Compatibility validator used by the revision-aware dispatch endpoint."""
+def _production_plan_facts(order: Any) -> Any:
+    from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+        production_plan_facts,
+    )
+    return production_plan_facts(order)
 
+
+def assert_order_ready_for_dispatch(order: Any) -> None:
+    """Compatibility facade over canonical Cutting Plan runtime facts."""
+    plan = _production_plan_facts(order)
     state = commands.OrderState(
         name=str(order.name),
         status=str(getattr(order, "status", None) or ""),
         production_path=getattr(order, "production_path", None) or None,
         current_stage=getattr(order, "current_production_stage", None) or None,
-        has_cutting_plan=bool(getattr(order, "cutting_plan_json", None)),
-        plan_needs_recalculation=bool(
-            int(getattr(order, "plan_needs_recalculation", None) or 0)
-        ),
+        has_cutting_plan=plan.has_cutting_plan,
+        plan_needs_recalculation=plan.plan_needs_recalculation,
+        has_approved_plan=plan.has_approved_plan,
         drawing_dxf_status=getattr(order, "drawing_dxf_status", None) or None,
     )
     try:
@@ -49,6 +55,11 @@ def assert_order_ready_for_dispatch(order: Any) -> None:
 @frappe.whitelist()
 def get_handoff_workers(stage_name: str) -> list[dict[str, str]]:
     return _execute(commands.get_handoff_workers, stage_name)
+
+
+@frappe.whitelist()
+def get_handoff_context(stage_name: str) -> dict[str, Any]:
+    return _execute(commands.get_handoff_context, stage_name)
 
 
 @frappe.whitelist()
@@ -67,6 +78,11 @@ def handoff_to_next(
     next_assignee: str | None = None,
 ) -> dict[str, Any]:
     return _execute(commands.handoff_to_next, stage_name, next_assignee)
+
+
+@frappe.whitelist()
+def reassign_worker(stage_name: str, assignee: str) -> dict[str, Any]:
+    return _execute(commands.reassign_worker, stage_name, assignee)
 
 
 @frappe.whitelist()
@@ -89,20 +105,14 @@ def revert_department(
 
 
 @frappe.whitelist()
-def return_order_to_draft(order_name: str) -> dict[str, Any]:
-    """Compatibility endpoint: immutable orders create controlled revisions."""
-
+def return_order_to_draft(order_name: str, reason: str | None = None) -> dict[str, Any]:
+    """Compatibility endpoint for the in-place lifecycle return-to-draft action."""
     from almdina_erp.almdina_erp.services.order_revision_service import (
-        create_order_revision,
+        return_order_to_draft as reset_same_order,
     )
-
-    return create_order_revision(
-        order_name,
-        reason=_("Legacy return-to-draft request converted to a controlled revision."),
-    )
+    return reset_same_order(order_name, reason=reason)
 
 
-# Private compatibility aliases retained for older Python callers and tests.
 _transition = commands._transition
 _next_stage = commands._next_stage
 _validate_path = commands._validate_path
@@ -111,9 +121,11 @@ _validate_path = commands._validate_path
 __all__ = [
     "assert_order_ready_for_dispatch",
     "dispatch_order",
+    "get_handoff_context",
     "get_handoff_workers",
     "handoff_to_next",
     "mark_delivered",
+    "reassign_worker",
     "return_order_to_draft",
     "revert_department",
     "start_my_stage",

@@ -5,8 +5,13 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.services.report_permission_service import (
+    require_operational_report_access,
+)
+
 
 def execute(filters: dict[str, Any] | None = None):
+    access = require_operational_report_access()
     filters = frappe._dict(filters or {})
     conditions: list[str] = []
     values: dict[str, Any] = {}
@@ -30,6 +35,11 @@ def execute(filters: dict[str, Any] | None = None):
         conditions.append("i.door_cutting_order = %(order_name)s")
         values["order_name"] = filters.order_name
 
+    financial_select = """
+            , r.planned_internal_loss_usd
+            , r.internal_loss_cost_usd
+            , r.charge_customer
+    """ if access.financial else ""
     where = " and " + " and ".join(conditions) if conditions else ""
     data = frappe.db.sql(
         f"""
@@ -46,10 +56,8 @@ def execute(filters: dict[str, Any] | None = None):
             r.name as replacement_piece,
             r.status as replacement_status,
             r.cutting_plan,
-            r.planned_internal_loss_usd,
-            r.internal_loss_cost_usd,
-            r.charge_customer,
             r.completed_on
+            {financial_select}
         from `tabProduction Incident` i
         left join `tabReplacement Piece` r on r.incident = i.name
         where 1 = 1 {where}
@@ -65,11 +73,11 @@ def execute(filters: dict[str, Any] | None = None):
             row.incident_status = _(row.incident_status)
         if row.replacement_status:
             row.replacement_status = _(row.replacement_status)
-    return get_columns(), data
+    return get_columns(include_financial=access.financial), data
 
 
-def get_columns():
-    return [
+def get_columns(*, include_financial: bool = False):
+    columns = [
         {"label": _("Incident"), "fieldname": "incident", "fieldtype": "Link", "options": "Production Incident", "width": 145},
         {"label": _("Date / Time"), "fieldname": "incident_datetime", "fieldtype": "Datetime", "width": 145},
         {"label": _("Order"), "fieldname": "door_cutting_order", "fieldtype": "Link", "options": "Door Cutting Order", "width": 145},
@@ -81,8 +89,14 @@ def get_columns():
         {"label": _("Replacement"), "fieldname": "replacement_piece", "fieldtype": "Link", "options": "Replacement Piece", "width": 145},
         {"label": _("Replacement Status"), "fieldname": "replacement_status", "fieldtype": "Data", "width": 120},
         {"label": _("Mini Plan"), "fieldname": "cutting_plan", "fieldtype": "Link", "options": "Cutting Plan", "width": 135},
-        {"label": _("Planned Loss USD"), "fieldname": "planned_internal_loss_usd", "fieldtype": "Currency", "width": 115},
-        {"label": _("Actual Loss USD"), "fieldname": "internal_loss_cost_usd", "fieldtype": "Currency", "width": 115},
-        {"label": _("Charge Customer"), "fieldname": "charge_customer", "fieldtype": "Check", "width": 105},
         {"label": _("Completed On"), "fieldname": "completed_on", "fieldtype": "Datetime", "width": 145},
     ]
+    if include_financial:
+        columns.extend(
+            [
+                {"label": _("Planned Loss USD"), "fieldname": "planned_internal_loss_usd", "fieldtype": "Currency", "width": 115},
+                {"label": _("Actual Loss USD"), "fieldname": "internal_loss_cost_usd", "fieldtype": "Currency", "width": 115},
+                {"label": _("Charge Customer"), "fieldname": "charge_customer", "fieldtype": "Check", "width": 105},
+            ]
+        )
+    return columns

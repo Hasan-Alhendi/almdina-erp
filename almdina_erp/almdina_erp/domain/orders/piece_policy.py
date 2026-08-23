@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 
 PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "Special"})
@@ -143,6 +143,27 @@ def geometry_changed(
     )
 
 
+def pricing_basis_changed(
+    old: PieceGeometry | None,
+    current: PieceGeometry,
+) -> bool:
+    """Return whether fields that define the reviewed piece price changed.
+
+    Drawing/documentation, edge banding and other geometric details are deliberately
+    excluded. A reviewed price is invalidated only when the piece type, overall
+    width, overall length or quantity changes.
+    """
+
+    if old is None:
+        return False
+    return bool(
+        old.piece_type != current.piece_type
+        or not _same_number(old.width_cm, current.width_cm)
+        or not _same_number(old.length_cm, current.length_cm)
+        or old.qty != current.qty
+    )
+
+
 def protected_price_changed(
     old: SpecialPrice | None,
     current: SpecialPrice,
@@ -180,13 +201,12 @@ def evaluate_special_shape(
         current_geometry,
         drawing_changed=drawing_changed,
     )
-    changed_pricing_basis = bool(
-        changed_geometry
-        or (
-            default_edge_changed
-            and current_geometry.piece_type == "Special"
-            and not current_geometry.edge_type
-        )
+    # Keep the legacy input in the policy boundary because callers may still need to
+    # report header edge changes as geometry context. It must not invalidate price.
+    _ = default_edge_changed
+    changed_pricing_basis = pricing_basis_changed(
+        old_geometry,
+        current_geometry,
     )
     changed_protected_price = protected_price_changed(old_price, current_price)
     safe_invalidation = bool(
@@ -230,7 +250,36 @@ def reset_price_values(piece_type: str) -> dict[str, Any]:
         "special_shape_price_note": "",
         "special_shape_price_approved_by": "",
         "special_shape_price_approved_on": None,
+        "clipped_corner_edge_price_usd": 0,
+        "clipped_corner_edge_price_status": (
+            "Unpriced" if piece_type == "Clipped Corner" else "Unpriced"
+        ),
+        "clipped_corner_edge_price_note": "",
+        "clipped_corner_edge_price_set_by": "",
+        "clipped_corner_edge_price_set_on": None,
     }
+
+
+def pending_custom_edge_price_labels(pieces: Any) -> tuple[str, ...]:
+    """Return Arabic labels for special/cut-corner rows still missing edge prices."""
+
+    pending: list[str] = []
+    for index, piece in enumerate(pieces or [], start=1):
+        if isinstance(piece, Mapping):
+            piece_type = str(piece.get("piece_type") or "Regular")
+            special_status = str(piece.get("special_shape_price_status") or "")
+            clipped_status = str(piece.get("clipped_corner_edge_price_status") or "Unpriced")
+        else:
+            piece_type = str(getattr(piece, "piece_type", None) or "Regular")
+            special_status = str(getattr(piece, "special_shape_price_status", None) or "")
+            clipped_status = str(
+                getattr(piece, "clipped_corner_edge_price_status", None) or "Unpriced"
+            )
+        if piece_type == "Special" and special_status != "Approved":
+            pending.append(f"درفة خاصة رقم {index}")
+        elif piece_type == "Clipped Corner" and clipped_status != "Priced":
+            pending.append(f"درفة زاوية مقصوصة {index}")
+    return tuple(pending)
 
 
 def _same_number(first: float, second: float) -> bool:
@@ -253,7 +302,9 @@ __all__ = [
     "drawing_token",
     "evaluate_special_shape",
     "geometry_changed",
+    "pricing_basis_changed",
     "protected_price_changed",
+    "pending_custom_edge_price_labels",
     "reset_price_values",
     "resolve_clipped_corner",
 ]

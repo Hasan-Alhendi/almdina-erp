@@ -62,19 +62,18 @@ def decide_plan_reuse(context: PlanReuseContext) -> PlanReuseDecision:
 
 
 def plan_invalidation_state(*, engine_version: str) -> dict[str, Any]:
-    """Return the authoritative field reset for a stale placement plan."""
+    """Return the authoritative field reset for a stale placement plan.
+
+    Board counts and money totals are intentionally omitted. Ordinary saves must
+    keep the last known invoice estimate visible until the placement plan is
+    recalculated; only geometry and fingerprints become stale.
+    """
 
     return {
         "plan_needs_recalculation": 1,
         "calculated_plan_input_hash": "",
         "calculated_plan_metadata_hash": "",
         "cutting_plan_json": "",
-        "required_boards": 0,
-        "waste_area_m2": 0,
-        "waste_percent": 0,
-        "mdf_cost_usd": 0,
-        "cutting_cost_usd": 0,
-        "total_cost_usd": 0,
         "packing_method": "",
         "packing_score": "خطة القص تحتاج إعادة حساب",
         "engine_version": engine_version,

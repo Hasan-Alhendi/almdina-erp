@@ -29,9 +29,9 @@ class FakeDatabase:
 
 
 class AdapterHarness:
-    def __init__(self, roles: set[str] | None = None) -> None:
-        self.roles = set(roles or ())
-        self.role_calls: list[str | None] = []
+    def __init__(self, *, can_recalculate: bool = False) -> None:
+        self.can_recalculate = can_recalculate
+        self.capability_calls: list[tuple[str, str | None]] = []
         self.db = FakeDatabase()
 
     def load(self):
@@ -39,14 +39,9 @@ class AdapterHarness:
         fake_frappe.db = self.db
         fake_frappe._ = lambda message: message
 
-        def get_roles(user: str | None = None) -> list[str]:
-            self.role_calls.append(user)
-            return sorted(self.roles)
-
         def throw(message: str) -> None:
             raise RuntimeError(message)
 
-        fake_frappe.get_roles = get_roles
         fake_frappe.throw = throw
 
         previous = sys.modules.get("frappe")
@@ -60,6 +55,10 @@ class AdapterHarness:
                 raise RuntimeError("Could not load order edit policy adapter")
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
+            module.doctype_has_capability = lambda capability, user=None: (
+                self.capability_calls.append((capability, user))
+                or self.can_recalculate
+            )
             return module
         finally:
             if previous is None:
@@ -69,46 +68,61 @@ class AdapterHarness:
 
 
 class TestOrderEditPolicyAdapter(unittest.TestCase):
-    def test_editability_is_status_driven_and_never_fetches_roles(self) -> None:
-        harness = AdapterHarness(roles={"System Manager"})
-        policy = harness.load()
+    def test_editability_checks_are_draft_only(self) -> None:
+        denied = AdapterHarness(can_recalculate=False)
+        denied_policy = denied.load()
 
-        self.assertTrue(policy.user_can_edit_order("Draft"))
-        self.assertFalse(policy.user_can_edit_order("Approved"))
-        self.assertFalse(policy.user_can_edit_order("Cutting In Progress", "worker@example.com"))
-        self.assertFalse(policy.user_can_edit_order("Delivered"))
-        self.assertEqual(harness.role_calls, [])
+        self.assertTrue(denied_policy.user_can_edit_order("Draft"))
+        self.assertFalse(denied_policy.user_can_edit_order("Rejected"))
+        self.assertFalse(denied_policy.user_can_edit_order("Approved"))
+        self.assertFalse(denied_policy.user_can_edit_order("At Drawing", "editor@example.com"))
+        self.assertFalse(denied_policy.user_can_edit_order("Cutting In Progress", "worker@example.com"))
+        self.assertFalse(denied_policy.user_can_edit_order("Delivered"))
+        self.assertEqual(denied.capability_calls, [])
 
-    def test_drawing_recalculation_short_circuits_before_database_lookup(self) -> None:
-        no_role = AdapterHarness(roles={"Order Entry"})
-        no_role_policy = no_role.load()
+        allowed = AdapterHarness(can_recalculate=True)
+        allowed_policy = allowed.load()
+        self.assertTrue(allowed_policy.user_can_edit_order("Draft"))
+        self.assertFalse(allowed_policy.user_can_edit_order("Approved"))
+        self.assertFalse(allowed_policy.user_can_edit_order("At Drawing", "editor@example.com"))
+        self.assertFalse(allowed_policy.user_can_edit_order("At Sharyoun", "editor@example.com"))
+        self.assertFalse(allowed_policy.user_can_edit_order("At CNC", "editor@example.com"))
+        self.assertFalse(allowed_policy.user_can_edit_order("Draft", revision_state="Superseded"))
+
+    def test_drawing_recalculation_permission_still_short_circuits_before_stage_lookup(self) -> None:
+        denied = AdapterHarness(can_recalculate=False)
+        denied_policy = denied.load()
         order = {
             "status": "Production In Progress",
             "production_path": "Drawing",
             "current_production_stage": "STAGE-DRAWING",
-            "approved_plan": None,
+            "approved_plan": "PLAN-0001",
         }
-        self.assertFalse(no_role_policy.user_can_recalculate_drawing_system_plan(order))
-        self.assertEqual(no_role.db.calls, [])
+        self.assertFalse(denied_policy.user_can_recalculate_drawing_system_plan(order))
+        self.assertEqual(denied.db.calls, [])
 
-        approved = AdapterHarness(roles={"عامل رسم"})
-        approved_policy = approved.load()
-        self.assertFalse(
-            approved_policy.user_can_recalculate_drawing_system_plan(
-                {**order, "approved_plan": "PLAN-0001"}
-            )
-        )
-        self.assertEqual(approved.db.calls, [])
+    def test_approved_plan_can_prepare_replacement_at_explicit_drawing_status(self) -> None:
+        harness = AdapterHarness(can_recalculate=True)
+        policy = harness.load()
+        order = {
+            "status": "At Drawing",
+            "production_path": "Drawing",
+            "current_production_stage": "STAGE-DRAWING",
+            "approved_plan": "PLAN-0001",
+        }
+
+        self.assertTrue(policy.user_can_recalculate_drawing_system_plan(order))
+        self.assertEqual(harness.db.calls, [])
 
     def test_drawing_stage_fallback_reads_only_the_current_stage_type(self) -> None:
-        harness = AdapterHarness(roles={"عامل رسم"})
+        harness = AdapterHarness(can_recalculate=True)
         harness.db.stage_types["STAGE-DRAWING"] = "Drawing"
         policy = harness.load()
         order = {
             "status": "Production In Progress",
             "production_path": "Drawing",
             "current_production_stage": "STAGE-DRAWING",
-            "approved_plan": None,
+            "approved_plan": "PLAN-0001",
         }
 
         self.assertTrue(policy.user_can_recalculate_drawing_system_plan(order))
@@ -117,8 +131,25 @@ class TestOrderEditPolicyAdapter(unittest.TestCase):
             [("Production Stage", "STAGE-DRAWING", "stage_type")],
         )
 
+    def test_non_drawing_stage_keeps_approved_plan_recalculation_closed(self) -> None:
+        harness = AdapterHarness(can_recalculate=True)
+        harness.db.stage_types["STAGE-CNC"] = "CNC"
+        policy = harness.load()
+        order = {
+            "status": "At CNC",
+            "production_path": "Production Route",
+            "current_production_stage": "STAGE-CNC",
+            "approved_plan": "PLAN-0001",
+        }
+
+        self.assertFalse(policy.user_can_recalculate_drawing_system_plan(order))
+        self.assertEqual(
+            harness.db.calls,
+            [("Production Stage", "STAGE-CNC", "stage_type")],
+        )
+
     def test_explicit_at_drawing_status_avoids_database_lookup(self) -> None:
-        harness = AdapterHarness(roles={"عامل رسم"})
+        harness = AdapterHarness(can_recalculate=True)
         policy = harness.load()
         order = {
             "status": "At Drawing",

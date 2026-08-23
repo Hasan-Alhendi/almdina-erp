@@ -6,15 +6,15 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-    path.resolve(__dirname, "../../public/js/door_cutting_order_cutting_plan_renderer.js"),
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"),
     "utf8"
 );
 const geometrySource = fs.readFileSync(
-    path.resolve(__dirname, "../../public/js/door_cutting_order_special_shape_geometry.js"),
+    path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"),
     "utf8"
 );
 const contractSource = fs.readFileSync(
-    path.resolve(__dirname, "../../public/js/door_cutting_order_shape_output_contract.js"),
+    path.resolve(__dirname, "../../public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"),
     "utf8"
 );
 

@@ -28,7 +28,6 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
     build_plan_input_payload,
     build_plan_metadata_payload,
 )
-from almdina_erp.almdina_erp.domain.orders.piece_policy import drawing_token
 from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
@@ -176,12 +175,6 @@ class FrappeOrderPlanAdapter:
                     ),
                     area_m2=self.access.normalized_number(row.area_m2),
                     notes=str(row.notes or ""),
-                    drawing_token=drawing_token(
-                        row.special_shape_drawing_json
-                    ),
-                    special_shape_status=str(
-                        row.special_shape_status or ""
-                    ),
                 )
                 for index, row in enumerate(
                     self.document.pieces or [],
@@ -289,6 +282,15 @@ class FrappeOrderPlanAdapter:
         for fieldname, value in state.items():
             setattr(self.document, fieldname, value)
         self.access.clear_system_plan_if_available()
+        # Keep last board count for invoice continuity; refresh money from current
+        # rates and freshly calculated edge totals.
+        boards = cint(self.document.required_boards)
+        if boards > 0:
+            self.costing.apply_order_costs(boards)
+        else:
+            self.document.mdf_cost_usd = 0
+            self.document.cutting_cost_usd = 0
+            self.document.total_cost_usd = flt(self.document.edge_cost_usd)
         self.costing.calculate_special_shape_pricing()
 
     def calculate_cutting_plan(self, input_fingerprint: str) -> None:

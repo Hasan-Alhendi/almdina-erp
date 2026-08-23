@@ -12,6 +12,13 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import (
 )
 
 
+def lock_order(order_name: str) -> None:
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (order_name,),
+    )
+
+
 def get_order(order_name: str) -> Any:
     return frappe.get_doc("Door Cutting Order", order_name)
 
@@ -50,7 +57,11 @@ def set_order_tracking(
         values["current_production_stage"] = None
     elif stage is not None:
         values["current_production_stage"] = stage.name
-        values["current_department"] = department_for_stage_type(stage.stage_type)
+        values["current_department"] = (
+            getattr(stage, "department_label", None)
+            or department_for_stage_type(stage.stage_type)
+            or stage.stage_type
+        )
         values["current_assignee"] = stage.assigned_to
         values["department_status"] = department_status_for_stage_status(stage.status)
         values["status"] = order_status_for_stage_type(stage.stage_type)
@@ -79,6 +90,7 @@ __all__ = [
     "get_order",
     "get_order_path",
     "get_order_status",
+    "lock_order",
     "required_piece_qty",
     "set_order_tracking",
 ]

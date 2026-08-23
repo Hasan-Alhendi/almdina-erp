@@ -87,41 +87,43 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
             row = frappe.db.get_value(
                 "Edge Banding Type",
                 edge_name,
-                ["rate_usd_per_meter", "width_cm", "finish_type", "application_method"],
+                ["rate_usd_per_meter", "width_cm"],
                 as_dict=True,
             )
             self.assertIsNotNone(row, edge_name)
             self.assertEqual(float(row.rate_usd_per_meter), expected_rate, edge_name)
             self.assertGreater(float(row.width_cm or 0), 0, edge_name)
-            self.assertTrue(row.finish_type, edge_name)
-            self.assertTrue(row.application_method, edge_name)
 
-    def test_default_routing_contains_v1_core_sequence(self):
+    def test_fresh_install_does_not_seed_production_routing_policy(self):
         settings = frappe.get_single("Almdina ERP Settings")
-        self.assertTrue(settings.default_production_routing)
-        rows = frappe.get_all(
-            "Production Routing Stage",
-            filters={
-                "parent": settings.default_production_routing,
-                "parenttype": "Production Routing",
-            },
-            fields=["sequence", "stage_type", "required"],
-            order_by="sequence asc",
+        self.assertFalse(settings.default_production_routing)
+        self.assertEqual(
+            frappe.get_all("Production Routing", pluck="name"),
+            [],
+            "Production routings must be created explicitly by an administrator.",
         )
-        core = [row.stage_type for row in rows if row.required]
-        self.assertEqual(core[:3], ["Review / Preparation", "Cutting", "Edge Banding"])
 
     def test_order_meta_has_no_stale_factory_defaults(self):
-        meta = frappe.get_meta("Door Cutting Order")
-        for fieldname in (
-            "kerf_mm",
-            "trim_margin_mm",
-            "cutting_cost_per_board_usd",
-            "packing_mode",
-        ):
-            field = meta.get_field(fieldname)
-            self.assertIsNotNone(field)
-            self.assertIn(field.default, (None, ""), f"{fieldname} still has stale static default {field.default!r}")
+        order_meta = frappe.get_meta("Door Cutting Order")
+        for fieldname in ("kerf_mm", "trim_margin_mm", "packing_mode"):
+            self.assertIsNone(
+                order_meta.get_field(fieldname),
+                f"{fieldname} must no longer be owned by Door Cutting Order",
+            )
+
+        cutting_cost = order_meta.get_field("cutting_cost_per_board_usd")
+        self.assertIsNotNone(cutting_cost)
+        self.assertIn(
+            cutting_cost.default,
+            (None, ""),
+            f"cutting_cost_per_board_usd still has stale static default {cutting_cost.default!r}",
+        )
+
+        plan_meta = frappe.get_meta("Cutting Plan")
+        for fieldname in ("optimization_mode", "kerf_mm", "trim_margin_mm"):
+            field = plan_meta.get_field(fieldname)
+            self.assertIsNotNone(field, f"Cutting Plan must own {fieldname}")
+            self.assertTrue(field.read_only, f"{fieldname} must remain command-owned/read-only")
 
     def test_unplaced_approval_flag_is_off_in_v1(self):
         settings = frappe.get_single("Almdina ERP Settings")

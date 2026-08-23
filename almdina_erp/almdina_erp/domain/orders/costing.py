@@ -327,15 +327,23 @@ def calculate_special_pricing(
             continue
 
         qty = max(1, int(piece.qty))
+        edge_total = _finite(piece.edge_cost_usd)
         area_share = (_finite(piece.area_m2) / total_area) if total_area else 0
-        allocated_total = (board_and_cutting_cost * area_share) + _finite(piece.edge_cost_usd)
-        baseline_unit = allocated_total / qty
-        estimated_unit = (
-            baseline_unit + fees[0] + fees[1] + fees[2]
-        ) * (1 + (fees[3] / 100))
+        allocated_total = (board_and_cutting_cost * area_share) + edge_total
+
+        # MDF and cutting are already billed once at order level. The special-door
+        # customer line is an additive service/edge charge only; including allocated
+        # board/cutting here would charge the same material and cutting twice.
+        special_service_unit = (edge_total / qty) + fees[0] + fees[1] + fees[2]
+        estimated_unit = special_service_unit * (1 + (fees[3] / 100))
         estimated_unit = round_value(estimated_unit, 3)
-        approved = bool(piece.price_status == "Approved" and piece.approved_by)
-        final_unit = _finite(piece.custom_unit_price_usd) if approved else estimated_unit
+
+        approved = bool(
+            piece.price_status == "Approved"
+            and piece.approved_by
+            and _finite(piece.custom_unit_price_usd) > 0
+        )
+        final_unit = _finite(piece.custom_unit_price_usd) if approved else 0.0
 
         if approved:
             approved_count += 1

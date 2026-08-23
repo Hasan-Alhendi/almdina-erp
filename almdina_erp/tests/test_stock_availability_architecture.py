@@ -16,8 +16,15 @@ REPOSITORY_PATH = (
     / "inventory"
     / "stock_availability_repository.py"
 )
-SERVICE_PATH = ROOT / "almdina_erp" / "services" / "stock_availability_service.py"
+RETIRED_SERVICE_PATH = ROOT / "almdina_erp" / "services" / "stock_availability_service.py"
 HOOKS_PATH = ROOT / "hooks.py"
+LEGACY_STOCK_ENDPOINT = (
+    "almdina_erp.almdina_erp.services.stock_service.check_order_stock"
+)
+RETIRED_PRODUCT_ENDPOINT = (
+    "almdina_erp.almdina_erp.services.legacy_endpoint_service."
+    "retired_product_endpoint"
+)
 
 
 class TestStockAvailabilityArchitecture(unittest.TestCase):
@@ -46,21 +53,19 @@ class TestStockAvailabilityArchitecture(unittest.TestCase):
         self.assertIn("class StockAvailabilityRepository(Protocol)", use_case)
         self.assertIn("evaluate_stock_availability", use_case)
 
-    def test_frappe_queries_live_in_inventory_repository(self) -> None:
+    def test_retired_stock_service_is_absent_while_repository_stays_isolated(self) -> None:
+        self.assertFalse(RETIRED_SERVICE_PATH.exists())
         repository = REPOSITORY_PATH.read_text(encoding="utf-8")
         self.assertIn("class FrappeStockAvailabilityRepository", repository)
         self.assertIn("tabMaterial Reservation Item", repository)
         self.assertIn("def get_stock_position", repository)
-        service = SERVICE_PATH.read_text(encoding="utf-8")
-        self.assertNotIn("frappe.db.", service)
-        self.assertNotIn("actual_qty - reserved_qty", service)
 
-    def test_legacy_public_endpoint_is_not_active(self) -> None:
+    def test_legacy_public_endpoint_is_fail_closed(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         overrides = hooks["override_whitelisted_methods"]
-        self.assertNotIn(
-            "almdina_erp.almdina_erp.services.stock_service.check_order_stock",
-            overrides,
+        self.assertEqual(
+            overrides.get(LEGACY_STOCK_ENDPOINT),
+            RETIRED_PRODUCT_ENDPOINT,
         )
 
 

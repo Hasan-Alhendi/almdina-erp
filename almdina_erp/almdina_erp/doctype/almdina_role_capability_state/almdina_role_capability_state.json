@@ -1,0 +1,41 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:role",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "role",
+    "capabilities_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "role",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Role",
+      "options": "Role",
+      "read_only": 1,
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "capabilities_json",
+      "fieldtype": "Code",
+      "label": "Capabilities JSON",
+      "options": "JSON",
+      "read_only": 1,
+      "reqd": 1
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "is_submittable": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Almdina Role Capability State",
+  "permissions": [],
+  "quick_entry": 0,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

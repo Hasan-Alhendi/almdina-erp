@@ -66,7 +66,14 @@ CUTTING_LIKE_STAGE_TYPES = frozenset({"Sharyoun", "CNC", "Cutting"})
 ACTIVE_STAGE_STATUSES = frozenset({"Pending", "In Progress", "Paused"})
 TERMINAL_STAGE_STATUSES = frozenset({"Completed", "Cancelled"})
 LOCKED_ORDER_STATUSES = frozenset({"Delivered", "Cancelled"})
-DISPATCHABLE_ORDER_STATUSES = frozenset({"Draft", "Rejected", "Approved"})
+# Review/approve were retired: draft-like and leftover review/approved orders
+# may all be sent straight to production.
+DISPATCHABLE_ORDER_STATUSES = frozenset(
+    {"Draft", "Rejected", "Pending Review", "Approved"}
+)
+PRE_PRODUCTION_ORDER_STATUSES = frozenset(
+    {"Draft", "Pending Review", "Rejected", "Approved"}
+)
 
 STAGE_TRANSITIONS: dict[str, tuple[frozenset[str], str]] = {
     "start": (frozenset({"Pending"}), "In Progress"),
@@ -155,12 +162,25 @@ def can_mark_delivered(status: str | None) -> bool:
 
 
 def can_return_to_draft(status: str | None) -> bool:
-    normalized = normalize_order_status(status)
-    return normalized not in {"Draft", "Rejected", "Delivered", "Cancelled"}
+    """Return-to-draft is capability-gated, not status-gated.
+
+    Status is accepted for API compatibility; callers authorize via
+    ``RETURN_ORDER_TO_DRAFT``. Already-draft documents are a no-op at runtime.
+    """
+
+    _ = normalize_order_status(status)
+    return True
 
 
 def can_revert_department(status: str | None, *, production_path: str | None) -> bool:
-    return normalize_order_status(status) != "Delivered" and bool(production_path)
+    """Revert is capability-gated; status/path do not authorize the action.
+
+    Structural target checks (existing earlier stages) remain in the command.
+    """
+
+    _ = normalize_order_status(status)
+    _ = production_path
+    return True
 
 
 def can_transition_stage(current_status: str, event: str) -> bool:

@@ -7,15 +7,15 @@ global.window = {};
 
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_special_shape_geometry.js"
+    "../public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
 ));
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_shape_output_contract.js"
+    "../public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
 ));
 require(path.resolve(
     __dirname,
-    "../public/js/door_cutting_order_shape_print.js"
+    "../public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"
 ));
 
 const renderer = window.AlmdinaShapePrint;
@@ -23,36 +23,45 @@ const renderer = window.AlmdinaShapePrint;
 const classicPiece = {
     piece_type: "Special",
     special_shape_drawing_json: JSON.stringify({
+        schema: "almdina.special-shape-documentation",
         version: 1,
-        canvas: { width: 1000, height: 650 },
+        canvas: { widthMm: 800, heightMm: 2100 },
+        reference: null,
         elements: [
             {
                 id: "outline",
-                type: "pen",
-                color: "#172033",
-                points: [[100, 100], [800, 100], [850, 520], [100, 520], [100, 100]],
+                type: "stroke",
+                style: { color: "#172033", width: 3 },
+                points: [
+                    { xMm: 100, yMm: 100 },
+                    { xMm: 700, yMm: 100 },
+                    { xMm: 750, yMm: 1900 },
+                    { xMm: 100, yMm: 1900 },
+                    { xMm: 100, yMm: 100 },
+                ],
+                closed: true,
             },
             {
                 id: "dimension",
                 type: "dimension",
-                color: "#1769aa",
-                x1: 100,
-                y1: 570,
-                x2: 850,
-                y2: 570,
-                text: "75 سم",
+                style: { color: "#1769aa", width: 2 },
+                start: { xMm: 100, yMm: 2000 },
+                end: { xMm: 750, yMm: 2000 },
+                valueMm: 650,
+                unit: "mm",
             },
             {
                 id: "note",
-                type: "note",
-                color: "url(javascript:alert(1))",
-                x: 380,
-                y: 330,
+                type: "text",
+                style: { color: "url(javascript:alert(1))" },
+                position: { xMm: 380, yMm: 1000 },
                 text: "<script>قص مائل</script>",
                 font_size: 32,
-                text_anchor: "middle",
             },
         ],
+        notes: "",
+        source: "pen",
+        templateId: null,
     }),
 };
 
@@ -64,11 +73,26 @@ assert.match(classicSvg, /<line /);
 assert.match(classicSvg, /&lt;script&gt;قص مائل/);
 assert.match(classicSvg, /data-dco-readable-note="1"/);
 assert.match(classicSvg, /font-size="32"/);
-assert.match(classicSvg, /text-anchor="middle"/);
+assert.match(classicSvg, /text-anchor="end"/);
 assert.match(classicSvg, /paint-order="stroke"/);
 assert.doesNotMatch(classicSvg, /fill="#fff8c9"/);
 assert.doesNotMatch(classicSvg, /<script>/);
 assert.doesNotMatch(classicSvg, /url\(javascript:/);
+
+const freeWorkspacePiece = JSON.parse(JSON.stringify(classicPiece));
+const freeWorkspaceDrawing = JSON.parse(freeWorkspacePiece.special_shape_drawing_json);
+freeWorkspaceDrawing.elements.push({
+    id: "outside-door-frame",
+    type: "line",
+    start: { xMm: -250, yMm: -120 },
+    end: { xMm: 1200, yMm: 2350 },
+    style: { color: "#1463e6", width: 3 },
+});
+freeWorkspacePiece.special_shape_drawing_json = JSON.stringify(freeWorkspaceDrawing);
+const freeWorkspaceSvg = renderer.svg(freeWorkspacePiece);
+const freeViewBox = freeWorkspaceSvg.match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+assert.ok(freeViewBox[0] < -250 && freeViewBox[1] < -120, "print view must include free-canvas content before the nominal door origin");
+assert.ok(freeViewBox[0] + freeViewBox[2] > 1200 && freeViewBox[1] + freeViewBox[3] > 2350, "print view must include free-canvas content beyond the nominal door dimensions");
 
 const classicCell = renderer.notesCell(
     classicPiece,

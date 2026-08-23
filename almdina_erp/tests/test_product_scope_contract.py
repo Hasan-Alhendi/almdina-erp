@@ -36,33 +36,64 @@ class TestProductScopeContract(unittest.TestCase):
         hooks = runpy.run_path(str(ROOT / "hooks.py"))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
         for script in (
-            "public/js/door_cutting_order_cost_invoice_ux.js",
-            "public/js/door_cutting_order_document_print_presenter.js",
-            "public/js/door_cutting_order_multi_edge_documents_ux.js",
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js",
+            "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
+            "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
+            "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
         ):
             self.assertIn(script, scripts)
+        self.assertNotIn(
+            "public/js/door_cutting_order_cost_invoice_ux.js",
+            scripts,
+        )
 
     def test_stock_features_are_not_active_ui_or_approval_dependencies(self) -> None:
-        hooks_source = (ROOT / "hooks.py").read_text(encoding="utf-8")
-        self.assertNotIn('"Material Consumption Log":', hooks_source)
-        self.assertNotIn("stock_service.check_order_stock", hooks_source)
+        hooks = runpy.run_path(str(ROOT / "hooks.py"))
+        self.assertNotIn("Material Consumption Log", hooks.get("doc_events", {}))
+
+        retired = (
+            "almdina_erp.almdina_erp.services.legacy_endpoint_service."
+            "retired_product_endpoint"
+        )
+        overrides = hooks["override_whitelisted_methods"]
+        for endpoint in (
+            "almdina_erp.almdina_erp.services.actual_consumption_reversal.reverse_actual_consumption",
+            "almdina_erp.almdina_erp.services.actual_consumption_service.record_actual_consumption",
+            "almdina_erp.almdina_erp.services.remnant_service.generate_order_remnants",
+            "almdina_erp.almdina_erp.services.settings_access_service.get_stock_settings",
+            "almdina_erp.almdina_erp.services.settings_access_service.update_stock_settings",
+            "almdina_erp.almdina_erp.services.stock_availability_service.check_order_stock",
+            "almdina_erp.almdina_erp.services.stock_service.check_order_stock",
+            "almdina_erp.almdina_erp.services.stock_service.consume_order_materials",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertEqual(overrides.get(endpoint), retired)
 
         approval_source = (
             ROOT
             / "almdina_erp"
             / "services"
-            / "cutting_plan_service.py"
+            / "cutting_plan_snapshot_service.py"
         ).read_text(encoding="utf-8")
         self.assertNotIn("services.stock_service", approval_source)
         self.assertNotIn("services.remnant_planning", approval_source)
-        self.assertIn("frappe.parse_json(order.cutting_plan_json", approval_source)
+        self.assertNotIn("order.cutting_plan_json", approval_source)
+        self.assertNotIn("ignore_permissions", approval_source)
+        self.assertIn("_retired_snapshot_api", approval_source)
 
-        workflow_source = (
-            ROOT / "public" / "js" / "door_cutting_order_workflow.js"
-        ).read_text(encoding="utf-8")
-        self.assertNotIn("stock_service", workflow_source)
-        self.assertNotIn("Stock Manager", workflow_source)
-        self.assertNotIn("فحص توفر المواد", workflow_source)
+        order_scripts = hooks["doctype_js"]["Door Cutting Order"]
+        retired_workflow = ROOT / "public" / "js" / "door_cutting_order_workflow.js"
+        self.assertFalse(retired_workflow.exists())
+        self.assertNotIn(
+            "public/js/door_cutting_order_workflow.js",
+            order_scripts,
+        )
+        for script in order_scripts:
+            source = (ROOT / script).read_text(encoding="utf-8")
+            for token in ("stock_service", "Stock Manager", "فحص توفر المواد"):
+                with self.subTest(script=script, token=token):
+                    self.assertNotIn(token, source)
 
         commands_source = (
             ROOT / "almdina_erp" / "application" / "shop_floor" / "commands.py"

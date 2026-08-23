@@ -1,23 +1,20 @@
 {
   "actions": [],
-  "allow_rename": 1,
+  "allow_rename": 0,
   "autoname": "field:routing_name",
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": ["routing_name", "disabled", "stages"],
   "fields": [
-    {"fieldname":"routing_name","fieldtype":"Data","in_list_view":1,"label":"Routing Name","reqd":1,"unique":1},
-    {"default":"0","fieldname":"disabled","fieldtype":"Check","label":"Disabled"},
-    {"fieldname":"stages","fieldtype":"Table","label":"Stages","options":"Production Routing Stage","reqd":1}
+    {"description":"اسم واضح للمسار، مثل: رسم ← CNC ← تقشيط.","fieldname":"routing_name","fieldtype":"Data","in_list_view":1,"label":"اسم مسار الإنتاج","reqd":1,"unique":1},
+    {"default":"0","description":"المسار المعطّل لا يظهر عند إرسال طلب جديد إلى الإنتاج.","fieldname":"disabled","fieldtype":"Check","in_list_view":1,"label":"معطّل"},
+    {"description":"رتّب المراحل حسب التنفيذ وحدد الدور التشغيلي لكل مرحلة. إذا كان المسار يبدأ بمراجعة خطة القص فاجعل أول مرحلة «مرحلة تخطيط».","fieldname":"stages","fieldtype":"Table","label":"مراحل المسار","options":"Production Routing Stage","reqd":1}
   ],
   "links": [],
   "module": "Almdina ERP",
   "name": "Production Routing",
   "naming_rule": "By fieldname",
-  "permissions":[
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
-    {"create":1,"delete":1,"read":1,"report":1,"role":"System Manager","write":1}
-  ],
+  "permissions": [],
   "sort_field":"modified",
   "sort_order":"DESC",
   "track_changes":1

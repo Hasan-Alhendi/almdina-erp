@@ -8,12 +8,8 @@
   "module": "Almdina ERP",
   "name": "Production Incidents and Replacements",
   "prepared_report": 0,
-  "ref_doctype": "Production Incident",
+  "ref_doctype": "Door Cutting Order",
   "report_name": "Production Incidents and Replacements",
   "report_type": "Script Report",
-  "roles": [
-    {"role":"Production Manager"},
-    {"role":"Accounts Management"},
-    {"role":"System Manager"}
-  ]
+  "roles": []
 }

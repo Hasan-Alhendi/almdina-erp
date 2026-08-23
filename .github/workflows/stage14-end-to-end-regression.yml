@@ -1,0 +1,66 @@
+name: Stage 14 End-to-End Regression
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  factory-journey-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test runner
+        run: python -m pip install pytest
+
+      - name: Validate Python syntax
+        run: python -m compileall -q almdina_erp
+
+      - name: Run connected factory journey
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_stage14_preproduction_regression \
+            almdina_erp.tests.test_stage14_end_to_end_regression
+
+      - name: Re-run persona and financial boundaries
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_permission_personas_e2e \
+            almdina_erp.tests.test_financial_document_application \
+            almdina_erp.tests.test_report_permission_contract \
+            almdina_erp.tests.test_replacement_planning
+
+      - name: Re-run production and lifecycle journeys
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_shop_floor_command_application \
+            almdina_erp.tests.test_shop_floor_query_application
+          python -m pytest -q \
+            almdina_erp/tests/test_configurable_order_lifecycle_permissions.py \
+            almdina_erp/tests/test_configurable_production_permissions.py \
+            almdina_erp/tests/test_configurable_production_routing_domain.py
+
+      - name: Re-run plan and financial isolation contracts
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_order_plan_payloads \
+            almdina_erp.tests.test_final_security_architecture \
+            almdina_erp.tests.test_stage12_security_gate
+
+      - name: Freeze Stage 11 through Stage 13 boundaries
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_backend_legacy_stage11_closure \
+            almdina_erp.tests.test_backend_legacy_audit_contract \
+            almdina_erp.tests.test_stage13_quality_gates

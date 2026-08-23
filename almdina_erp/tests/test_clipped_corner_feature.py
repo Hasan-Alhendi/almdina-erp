@@ -74,12 +74,14 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     hooks = HOOKS.read_text(encoding="utf-8")
 
     assert '<option value="Clipped Corner"' in operator
-    assert "AlmdinaClippedCornerEditor.open(frm, row)" in operator
+    assert "AlmdinaClippedCornerEditor.open(currentFrm, row)" in operator
     assert "dco-clipped-corner-row" in operator
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor
     assert "جعل المسافتين متساويتين" in editor
     assert "المستطيل الخارجي هو المساحة المحجوزة الآمنة" in editor
+    assert "let activeDialog = null" in editor
+    assert "Prevent stacked corner dialogs" in editor
     assert hooks.index("door_cutting_order_clipped_corner_ux.js") < hooks.index(
         "door_cutting_order_operator_ux.js"
     )

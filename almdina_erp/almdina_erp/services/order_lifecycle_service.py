@@ -6,29 +6,49 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
-from almdina_erp.almdina_erp.services.cutting_plan_service import require_any_role
+from almdina_erp.almdina_erp.application.orders.lifecycle_permissions import (
+    OrderLifecycleAction,
+)
+from almdina_erp.almdina_erp.domain.orders.lifecycle import normalize_order_status
+from almdina_erp.almdina_erp.services.order_lifecycle_permission_service import (
+    require_lifecycle_action,
+)
 
 
 def _cutting_stage(order_name: str) -> Any | None:
     name = frappe.db.get_value(
         "Production Stage",
-        {"door_cutting_order": order_name, "stage_type": "Cutting", "piece_label": ["in", ["", None]]},
+        {
+            "door_cutting_order": order_name,
+            "stage_type": "Cutting",
+            "piece_label": ["in", ["", None]],
+        },
         "name",
     )
     return frappe.get_doc("Production Stage", name) if name else None
 
 
 def _cancel_stages(order_name: str, reason: str) -> list[str]:
-    from almdina_erp.almdina_erp.services.production_service import _log_event
+    from almdina_erp.almdina_erp.infrastructure.frappe.production_event_repository import (
+        log_event as _log_event,
+    )
 
-    stages = frappe.get_all("Production Stage", filters={"door_cutting_order": order_name}, pluck="name")
+    stages = frappe.get_all(
+        "Production Stage",
+        filters={"door_cutting_order": order_name},
+        pluck="name",
+    )
     cancelled: list[str] = []
     for name in stages:
         stage = frappe.get_doc("Production Stage", name)
         if stage.status in {"Completed", "Cancelled"}:
             continue
         stage.status = "Cancelled"
-        stage.notes = ((stage.notes or "") + "\n" + _("Cancelled with order: {0}").format(reason)).strip()
+        stage.notes = (
+            (stage.notes or "")
+            + "\n"
+            + _("Cancelled with order: {0}").format(reason)
+        ).strip()
         stage.save(ignore_permissions=True)
         _log_event(stage, "Cancel", {"reason": reason})
         cancelled.append(name)
@@ -38,12 +58,16 @@ def _cancel_stages(order_name: str, reason: str) -> list[str]:
 def _cancel_unstarted_replacements(order_name: str, reason: str) -> list[str]:
     replacements = frappe.get_all(
         "Replacement Piece",
-        filters={"door_cutting_order": order_name, "status": ["!=", "Cancelled"]},
+        filters={
+            "door_cutting_order": order_name,
+            "status": ["!=", "Cancelled"],
+        },
         fields=["name", "status"],
     )
 
     physically_started = [
-        row for row in replacements
+        row
+        for row in replacements
         if row.status in {"In Progress", "Completed"}
     ]
     if physically_started:
@@ -55,13 +79,16 @@ def _cancel_unstarted_replacements(order_name: str, reason: str) -> list[str]:
         )
 
     from almdina_erp.almdina_erp.services.replacement_execution import (
-        cancel_replacement,
+        cancel_replacement_for_order_cancellation,
     )
 
     cancelled: list[str] = []
     for row in replacements:
         if row.status in {"Pending Approval", "Approved"}:
-            cancel_replacement(row.name, reason=_("Order cancelled: {0}").format(reason))
+            cancel_replacement_for_order_cancellation(
+                row.name,
+                reason=_("Order cancelled: {0}").format(reason),
+            )
             cancelled.append(row.name)
     return cancelled
 
@@ -72,22 +99,26 @@ def cancel_order(
     reason: str,
     reverse_stock: int | bool = 0,
 ) -> dict[str, Any]:
-    require_any_role("Production Manager")
+    del reverse_stock
+
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (order_name,),
+    )
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    order.check_permission("read")
+    require_lifecycle_action(order, OrderLifecycleAction.CANCEL)
+
+    reason = str(reason or "").strip()
     if not reason:
         frappe.throw(_("Cancellation reason is required."))
-
-    frappe.db.sql("select name from `tabDoor Cutting Order` where name = %s for update", (order_name,))
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    if order.status == "Cancelled":
-        return {"name": order.name, "status": "Cancelled", "already_cancelled": True}
-    if order.status == "Completed":
-        frappe.throw(_("A completed order cannot be cancelled through the normal workflow."))
 
     cutting = _cutting_stage(order.name)
     if cutting and cutting.status == "Completed":
         frappe.throw(
             _(
-                "Cutting is already completed. A completed cutting operation cannot be cancelled automatically."
+                "Cutting is already completed. A completed cutting operation "
+                "cannot be cancelled automatically."
             )
         )
 
@@ -101,10 +132,20 @@ def cancel_order(
             plan.status = "Cancelled"
             plan.save(ignore_permissions=True)
 
-    frappe.db.set_value("Door Cutting Order", order.name, "status", "Cancelled", update_modified=True)
+    frappe.db.set_value(
+        "Door Cutting Order",
+        order.name,
+        "status",
+        "Cancelled",
+        update_modified=True,
+    )
     order.add_comment(
         "Comment",
-        text=_("Order cancelled by {0} on {1}. Reason: {2}").format(frappe.session.user, now_datetime(), reason),
+        text=_("Order cancelled by {0} on {1}. Reason: {2}").format(
+            frappe.session.user,
+            now_datetime(),
+            reason,
+        ),
     )
 
     return {
@@ -112,4 +153,88 @@ def cancel_order(
         "status": "Cancelled",
         "cancelled_stages": cancelled_stages,
         "cancelled_replacements": cancelled_replacements,
+    }
+
+
+_IN_PLACE_DRAFT_FIELDS: dict[str, Any] = {
+    "status": "Draft",
+    "production_path": None,
+    "current_department": None,
+    "current_assignee": None,
+    "department_status": None,
+    "current_production_stage": None,
+    "approved_plan": None,
+    "approved_plan_source": "System",
+    "production_dxf": None,
+    "drawing_dxf_status": "None",
+    "plan_needs_recalculation": 1,
+}
+
+
+@frappe.whitelist()
+def return_order_to_draft(
+    order_name: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Reset the same order to Draft so it can be edited again.
+
+    Cancels active production stages and clears the production route. Does not
+    create a revision copy — the original document is the editable draft.
+    """
+
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (order_name,),
+    )
+    order = frappe.get_doc("Door Cutting Order", order_name)
+    order.check_permission("read")
+    require_lifecycle_action(order, OrderLifecycleAction.RETURN_TO_DRAFT)
+
+    reason = str(reason or "").strip() or _(
+        "Returned to draft for editing by {0}."
+    ).format(frappe.session.user)
+
+    # Already draft: capability was checked; nothing else to reset.
+    if normalize_order_status(order.status) == "Draft" and not (
+        order.production_path or order.current_production_stage
+    ):
+        return {
+            "name": order.name,
+            "status": order.status,
+            "cancelled_stages": 0,
+            "cancelled_replacements": 0,
+            "in_place": True,
+            "noop": True,
+        }
+
+    cancelled_replacements = _cancel_unstarted_replacements(order.name, reason)
+    cancelled_stages = _cancel_stages(order.name, reason)
+
+    if order.approved_plan:
+        plan = frappe.get_doc("Cutting Plan", order.approved_plan)
+        if plan.status == "Approved":
+            plan.flags.allow_status_transition = True
+            plan.status = "Cancelled"
+            plan.save(ignore_permissions=True)
+
+    for fieldname, value in _IN_PLACE_DRAFT_FIELDS.items():
+        order.set(fieldname, value)
+    order.flags.allow_status_transition = True
+    order.flags.allow_approved_edit = True
+    order.save(ignore_permissions=True)
+    order.add_comment(
+        "Comment",
+        text=_("Order returned to draft by {0} on {1}. Reason: {2}").format(
+            frappe.session.user,
+            now_datetime(),
+            reason,
+        ),
+    )
+
+    return {
+        "name": order.name,
+        "status": order.status,
+        "cancelled_stages": cancelled_stages,
+        "cancelled_replacements": cancelled_replacements,
+        "in_place": True,
     }

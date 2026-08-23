@@ -5,6 +5,10 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.services.report_permission_service import (
+    require_operational_report_access,
+)
+
 
 ACTIVE_HISTORY_STATUSES = (
     "Approved",
@@ -14,7 +18,6 @@ ACTIVE_HISTORY_STATUSES = (
     "At Sanding",
     "Ready for Delivery",
     "Delivered",
-    # Legacy statuses retained for historical orders.
     "Cutting In Progress",
     "Cut Completed",
     "Edge Banding In Progress",
@@ -27,6 +30,7 @@ ACTIVE_HISTORY_STATUSES = (
 
 
 def execute(filters: dict[str, Any] | None = None):
+    require_operational_report_access()
     filters = frappe._dict(filters or {})
     conditions, values = get_conditions(filters)
     rows = frappe.db.sql(

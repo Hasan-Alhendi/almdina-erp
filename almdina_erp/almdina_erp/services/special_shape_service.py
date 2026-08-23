@@ -9,8 +9,14 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_any_capability,
+)
 
-SPECIAL_PRICE_APPROVER_ROLES = {"Accounts Management", "System Manager"}
+SPECIAL_PRICE_APPROVAL_CAPABILITIES = frozenset(
+    {Capability.APPROVE_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE}
+)
 EDITABLE_ORDER_STATUSES = {"Draft", "Pending Review", "Rejected"}
 ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}
 MAX_DRAWING_BYTES = 300_000
@@ -375,9 +381,13 @@ def validate_special_shape_geometry(
     }
 
 
-def has_special_price_approval_role(user: str | None = None) -> bool:
-    roles = set(frappe.get_roles(user or frappe.session.user))
-    return bool(roles & SPECIAL_PRICE_APPROVER_ROLES)
+def has_special_price_approval_permission(user: str | None = None) -> bool:
+    """Resolve special-price access exclusively from configured capabilities."""
+
+    return doctype_has_any_capability(
+        SPECIAL_PRICE_APPROVAL_CAPABILITIES,
+        user=user,
+    )
 
 
 def _get_special_piece(order: Any, piece_name: str) -> Any:
@@ -396,9 +406,9 @@ def approve_special_piece_price(
 ) -> dict[str, Any]:
     """Approve an inclusive customer unit price without granting accounting full order edit rights."""
 
-    if not has_special_price_approval_role():
+    if not has_special_price_approval_permission():
         frappe.throw(
-            _("Only Accounts Management or System Manager can approve a special door price."),
+            _("You do not have permission to approve or edit a special door price."),
             frappe.PermissionError,
         )
 
@@ -410,8 +420,6 @@ def approve_special_piece_price(
     piece = _get_special_piece(order, piece_name)
     if (piece.piece_type or "Regular") != "Special":
         frappe.throw(_("Only a special door can receive a custom inclusive price."))
-    if piece.special_shape_status != "Documented":
-        frappe.throw(_("Document the special door shape before approving its price."))
 
     price = _finite_number(unit_price_usd, _("Special Unit Price USD"))
     if price < 0:

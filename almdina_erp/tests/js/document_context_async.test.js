@@ -27,6 +27,8 @@ const setValues = [];
 const fakeWindow = {
     cur_frm: null,
     clearTimeout() {},
+    addEventListener() {},
+    dispatchEvent() {},
 };
 const fakeDocument = {
     documentElement: { lang: "en" },
@@ -50,8 +52,9 @@ const fakeFrappe = {
             },
         },
     },
-    call() {
+    call(options = {}) {
         const pending = deferred();
+        pending.options = options;
         calls.push(pending);
         return pending.promise;
     },
@@ -74,15 +77,25 @@ const context = vm.createContext({
     Set,
     String,
     Number,
+    CustomEvent: class CustomEvent {
+        constructor(type, options = {}) {
+            this.type = type;
+            this.detail = options.detail;
+        }
+    },
     __: value => value,
 });
-vm.runInContext(source("door_cutting_order_document_context.js"), context);
-vm.runInContext(source("door_cutting_order_defaults.js"), context);
-vm.runInContext(source("door_cutting_order_drawing_plan_ux.js"), context);
+vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
+vm.runInContext(source("door_cutting_order/order_entry/door_cutting_order_defaults.js"), context);
+vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"), context);
 
 function trigger(event, frm) {
     const eventHandlers = handlers["Door Cutting Order"][event] || [];
     eventHandlers.forEach(handler => handler(frm));
+}
+
+function callFor(method, fromIndex = 0) {
+    return calls.slice(fromIndex).find(call => call.options && call.options.method === method) || null;
 }
 
 async function flushPromises() {
@@ -111,35 +124,56 @@ async function flushPromises() {
     };
     fakeWindow.cur_frm = frm;
 
-    // The defaults response belongs to the first order and must not update the
-    // same Form instance after navigation changes its document identity.
+    // Both factory defaults and the safe edge-profile lookup belong to the first
+    // visit. Neither may update the same Form instance after an A -> B -> A
+    // navigation cycle. Identify requests by endpoint instead of relying on call
+    // count/order as more document-scoped reads are introduced.
     trigger("onload", frm);
-    assert.equal(calls.length, 1);
+    const defaultsCall = callFor(
+        "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults"
+    );
+    const initialEdgeLookup = callFor(
+        "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options"
+    );
+    assert.ok(defaultsCall);
+    assert.ok(initialEdgeLookup);
+    assert.equal(databaseCalls.length, 0);
+
     frm.doc.name = "DCO-2026-00002";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    calls[0].resolve({ message: { kerf_mm: 9 } });
-    await flushPromises();
-    assert.equal(setValues.length, 0);
-
-    // The same rule applies to edge-color defaults.
-    frm.doc.default_edge_type = "EDGE-22";
-    frm.doc.edge_color = "";
-    trigger("default_edge_type", frm);
-    assert.equal(databaseCalls.length, 1);
-    frm.doc.name = "DCO-2026-00003";
+    frm.doc.name = "DCO-2026-00001";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    databaseCalls[0].resolve({ message: { edge_color: "White" } });
+    defaultsCall.resolve({ message: { kerf_mm: 9 } });
+    initialEdgeLookup.resolve({
+        message: {
+            options: [{ name: "EDGE-OLD" }],
+            include_financial: false,
+        },
+    });
     await flushPromises();
     assert.equal(setValues.length, 0);
+    assert.equal(frm._almdina_safe_edge_options_loaded, undefined);
+
+    // Edge color is order-owned manual input. Changing the default profile must
+    // not start another lookup and must never overwrite what the operator typed.
+    frm.doc.default_edge_type = "EDGE-22";
+    frm.doc.edge_color = "Manual White";
+    const beforeProfileChangeCalls = calls.length;
+    trigger("default_edge_type", frm);
+    await flushPromises();
+    assert.equal(calls.length, beforeProfileChangeCalls);
+    assert.equal(databaseCalls.length, 0);
+    assert.equal(setValues.length, 0);
+    assert.equal(frm.doc.edge_color, "Manual White");
 
     // A stage lookup started for one order cannot activate drawing controls in
     // the order opened while that lookup was in flight.
     frm.doc.current_production_stage = "STAGE-DRAWING";
     const stageLookup = fakeWindow.AlmdinaDrawingPlanUX.ensureStageType(frm);
-    assert.equal(databaseCalls.length, 2);
+    const stageCall = calls[calls.length - 1];
     frm.doc.name = "DCO-2026-00004";
     fakeWindow.AlmdinaDocumentContext.synchronize(frm);
-    databaseCalls[1].resolve({ message: { stage_type: "Drawing" } });
+    stageCall.resolve({ message: { active_stage_type: "Drawing" } });
     assert.equal(await stageLookup, false);
     assert.equal(frm.__almdina_stage_type, null);
 

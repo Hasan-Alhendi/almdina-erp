@@ -1,0 +1,91 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:USER-AUDIT-{#####}",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "target_user",
+    "action",
+    "changed_by",
+    "changed_on",
+    "summary",
+    "changed_fields",
+    "before_json",
+    "after_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "target_user",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Target User",
+      "options": "User",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "action",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Action",
+      "options": "Created\nAdded to Workforce\nIdentity Updated\nRoles Changed\nEnabled\nDisabled\nPassword Reset",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "changed_by",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Changed By",
+      "options": "User",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "default": "Now",
+      "fieldname": "changed_on",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Changed On",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "summary",
+      "fieldtype": "Small Text",
+      "label": "Summary",
+      "read_only": 1
+    },
+    {
+      "fieldname": "changed_fields",
+      "fieldtype": "Small Text",
+      "label": "Changed Fields",
+      "read_only": 1
+    },
+    {
+      "fieldname": "before_json",
+      "fieldtype": "Code",
+      "label": "Before JSON",
+      "options": "JSON",
+      "read_only": 1
+    },
+    {
+      "fieldname": "after_json",
+      "fieldtype": "Code",
+      "label": "After JSON",
+      "options": "JSON",
+      "read_only": 1
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "is_submittable": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Almdina User Audit",
+  "permissions": [],
+  "quick_entry": 0,
+  "sort_field": "changed_on",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

@@ -13,6 +13,10 @@ from almdina_erp.almdina_erp.domain.replacements.planning import (
     ReplacementPlanError,
     build_replacement_snapshot as build_domain_snapshot,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    approved_plan_for_order,
+    plan_settings,
+)
 
 
 def _board_dimension_cm(
@@ -32,7 +36,12 @@ def build_replacement_snapshot(
     order: Any,
     replacement: Any,
 ) -> dict[str, Any]:
-    """Map Frappe documents into the pure replacement planning domain."""
+    """Map replacement input using the exact approved Cutting Plan settings."""
+
+    approved_plan = approved_plan_for_order(order)
+    if not approved_plan:
+        frappe.throw(_("يجب وجود خطة قص معتمدة وصالحة قبل إنشاء خطة قطعة التعويض."))
+    settings = plan_settings(approved_plan)
 
     try:
         return build_domain_snapshot(
@@ -51,8 +60,8 @@ def build_replacement_snapshot(
                 "board_length_cm",
                 "full_board_length_mm",
             ),
-            trim_margin_mm=flt(order.trim_margin_mm),
-            kerf_mm=flt(order.kerf_mm),
+            trim_margin_mm=flt(settings.trim_margin_mm),
+            kerf_mm=flt(settings.kerf_mm),
             original_piece_label=replacement.original_piece_label,
             piece_width_cm=flt(replacement.width_cm),
             piece_length_cm=flt(replacement.length_cm),

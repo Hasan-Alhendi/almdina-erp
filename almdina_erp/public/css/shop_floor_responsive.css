@@ -1,0 +1,1284 @@
+/*
+ * Almdina Shop Floor presentation owner.
+ *
+ * This stylesheet owns visual hierarchy, responsive behavior, touch sizing,
+ * accessibility feedback, and production-card states. Authorization and
+ * production lifecycle decisions remain server-driven.
+ */
+
+.almdina-sf-content {
+    --sf-border: var(--border-color, #dfe3e8);
+    --sf-card: var(--card-bg, var(--fg-color, #fff));
+    --sf-subtle: var(--subtle-fg, #f7f8fa);
+    --sf-text: var(--text-color, #0f172a);
+    --sf-muted: var(--text-muted, #64748b);
+    --sf-primary: var(--primary, #2490ef);
+    --sf-radius-lg: 18px;
+    --sf-radius-md: 13px;
+    --sf-shadow: 0 8px 28px rgba(15, 23, 42, .065);
+}
+
+.almdina-sf-content,
+.almdina-sf-shell,
+.almdina-sf-list,
+.almdina-sf-order-card,
+.almdina-sf-boards,
+.almdina-sf-route-board,
+.almdina-sf-kanban,
+.almdina-sf-kanban-column {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.almdina-sf-shell {
+    width: 100%;
+    max-width: 1260px;
+    margin-inline: auto;
+    padding-bottom: 28px;
+}
+
+/* Top navigation ---------------------------------------------------------- */
+.almdina-sf-nav {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.almdina-sf-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--border-color, #dfe3e8);
+    border-radius: 14px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .045);
+}
+
+.almdina-sf-tab,
+.almdina-sf-refresh {
+    min-height: 42px;
+    border-radius: 9px !important;
+    font-weight: 750;
+    transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease;
+}
+
+.almdina-sf-tab {
+    flex: 0 0 auto;
+    padding-inline: 15px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted, #64748b);
+}
+
+.almdina-sf-tab:hover {
+    background: var(--subtle-fg, #f7f8fa);
+    color: var(--text-color, #0f172a);
+}
+
+.almdina-sf-tab.is-active {
+    border-color: rgba(36, 144, 239, .20);
+    background: rgba(36, 144, 239, .10);
+    color: var(--text-color, #0f172a);
+    box-shadow: inset 0 0 0 1px rgba(36, 144, 239, .04);
+}
+
+.almdina-sf-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-inline-start: auto;
+    padding-inline: 14px;
+}
+
+.almdina-sf-refresh > span:first-child {
+    font-size: 17px;
+    line-height: 1;
+}
+
+/* Hero ------------------------------------------------------------------- */
+.almdina-sf-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 22px;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 18px 20px;
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    background:
+        linear-gradient(135deg, rgba(36, 144, 239, .075), transparent 52%),
+        var(--sf-card);
+    box-shadow: var(--sf-shadow);
+}
+
+.almdina-sf-hero-copy {
+    min-width: 0;
+}
+
+.almdina-sf-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    margin-bottom: 7px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(36, 144, 239, .09);
+    color: #1d6fac;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-hero h2 {
+    margin: 0;
+    color: var(--sf-text);
+    font-size: clamp(20px, 2vw, 27px);
+    font-weight: 850;
+    line-height: 1.3;
+}
+
+.almdina-sf-hero p {
+    max-width: 720px;
+    margin: 6px 0 0;
+    color: var(--sf-muted);
+    font-size: 12px;
+    line-height: 1.8;
+}
+
+.almdina-sf-hero-stats {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.almdina-sf-hero-stat {
+    --sf-stat: #64748b;
+    display: grid;
+    min-width: 92px;
+    padding: 9px 11px;
+    border: 1px solid color-mix(in srgb, var(--sf-stat) 18%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--sf-stat) 6%, var(--sf-card));
+    text-align: center;
+}
+
+.almdina-sf-hero-stat[data-tone="active"] { --sf-stat: #2563eb; }
+.almdina-sf-hero-stat[data-tone="ready"] { --sf-stat: #16a34a; }
+
+.almdina-sf-hero-stat b {
+    color: var(--sf-stat);
+    font-size: 21px;
+    line-height: 1.05;
+}
+
+.almdina-sf-hero-stat span {
+    margin-top: 4px;
+    color: var(--sf-muted);
+    font-size: 10px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+/* Loading / error / empty states ---------------------------------------- */
+.almdina-sf-state {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-height: 92px;
+    padding: 18px;
+    border: 1px solid var(--sf-border);
+    border-radius: var(--sf-radius-lg);
+    background: var(--sf-card);
+    box-shadow: var(--sf-shadow);
+}
+
+.almdina-sf-state > div {
+    display: grid;
+    gap: 3px;
+}
+
+.almdina-sf-state b {
+    color: var(--sf-text);
+    font-size: 13px;
+}
+
+.almdina-sf-state span:not(.almdina-sf-spinner):not(.almdina-sf-state-icon) {
+    color: var(--sf-muted);
+    font-size: 12px;
+}
+
+.almdina-sf-spinner {
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    border: 3px solid rgba(36, 144, 239, .18);
+    border-inline-start-color: var(--sf-primary);
+    border-radius: 50%;
+    animation: almdina-sf-spin .7s linear infinite;
+}
+
+.almdina-sf-state.is-error {
+    border-color: rgba(220, 38, 38, .22);
+    background: color-mix(in srgb, #dc2626 4%, var(--sf-card));
+}
+
+.almdina-sf-state-icon {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, .10);
+    color: #b91c1c;
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.almdina-sf-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 112px;
+    padding: 22px 18px;
+    border: 1px dashed var(--sf-border);
+    border-radius: 15px;
+    background: var(--sf-subtle);
+    color: var(--sf-muted);
+    text-align: start;
+}
+
+.almdina-sf-empty-icon {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--sf-card);
+    color: var(--sf-primary);
+    box-shadow: 0 1px 5px rgba(15, 23, 42, .06);
+    font-size: 19px;
+}
+
+.almdina-sf-empty[data-tone="ready"] .almdina-sf-empty-icon {
+    color: #16a34a;
+}
+
+.almdina-sf-empty b {
+    display: block;
+    color: var(--sf-text);
+    font-size: 13px;
+}
+
+.almdina-sf-empty p {
+    margin: 4px 0 0;
+    color: var(--sf-muted);
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+/* Board controls --------------------------------------------------------- */
+.almdina-sf-board-shell {
+    max-width: 100%;
+}
+
+.almdina-sf-overview {
+    min-width: 0;
+}
+
+.almdina-sf-board-toolbar {
+    display: grid;
+    grid-template-columns: minmax(190px, .72fr) minmax(250px, 1fr) minmax(430px, 1.8fr);
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+    padding: 12px;
+    border: 1px solid var(--sf-border);
+    border-radius: 15px;
+    background: var(--sf-card);
+    box-shadow: 0 3px 16px rgba(15, 23, 42, .045);
+}
+
+.almdina-sf-filter-field {
+    min-width: 0;
+}
+
+.almdina-sf-board-toolbar label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--sf-muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-board-toolbar .form-control {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 9px;
+}
+
+.almdina-sf-board-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.almdina-sf-board-metric {
+    --sf-metric: #64748b;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid color-mix(in srgb, var(--sf-metric) 20%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--sf-metric) 7%, transparent);
+}
+
+.almdina-sf-board-metric[data-tone="pending"] { --sf-metric: #d97706; }
+.almdina-sf-board-metric[data-tone="progress"] { --sf-metric: #2563eb; }
+.almdina-sf-board-metric[data-tone="paused"] { --sf-metric: #dc2626; }
+.almdina-sf-board-metric[data-tone="ready"] { --sf-metric: #16a34a; }
+
+.almdina-sf-board-metric span {
+    display: block;
+    overflow: hidden;
+    color: var(--sf-muted);
+    font-size: 10px;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-board-metric b {
+    display: block;
+    margin-top: 1px;
+    color: var(--sf-metric);
+    font-size: 18px;
+    line-height: 1.15;
+}
+
+.almdina-sf-board-help {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 12px;
+    padding: 8px 11px;
+    border-inline-start: 3px solid var(--sf-primary);
+    border-radius: 9px;
+    background: rgba(36, 144, 239, .065);
+    color: var(--sf-muted);
+}
+
+.almdina-sf-board-help > span {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(36, 144, 239, .12);
+    color: #1d6fac;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.almdina-sf-board-help p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.7;
+}
+
+/* Route board / Kanban --------------------------------------------------- */
+.almdina-sf-boards {
+    display: grid;
+    gap: 16px;
+}
+
+.almdina-sf-route-board {
+    overflow: hidden;
+    border: 1px solid var(--sf-border);
+    border-radius: 16px;
+    background: var(--sf-subtle);
+    box-shadow: 0 4px 18px rgba(15, 23, 42, .05);
+}
+
+.almdina-sf-route-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 58px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--sf-border);
+    background: var(--sf-card);
+}
+
+.almdina-sf-route-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.almdina-sf-route-icon {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 9px;
+    background: rgba(36, 144, 239, .09);
+    color: #1d6fac;
+    font-size: 17px;
+}
+
+.almdina-sf-route-title > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.almdina-sf-route-heading h3 {
+    margin: 0;
+    overflow: hidden;
+    color: var(--sf-text);
+    font-size: 15px;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-route-heading span,
+.almdina-sf-route-heading small {
+    color: var(--sf-muted);
+    font-size: 11px;
+}
+
+.almdina-sf-route-heading small {
+    flex: 0 1 360px;
+    text-align: end;
+}
+
+.almdina-sf-kanban {
+    display: grid;
+    grid-auto-columns: minmax(270px, 1fr);
+    grid-auto-flow: column;
+    gap: 10px;
+    width: 100%;
+    padding: 10px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    scroll-snap-type: inline proximity;
+    -webkit-overflow-scrolling: touch;
+}
+
+.almdina-sf-kanban-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+    border: 1px solid var(--sf-border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--sf-card) 84%, transparent);
+    scroll-snap-align: start;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.almdina-sf-kanban-column.is-ready {
+    border-color: rgba(22, 163, 74, .20);
+    background: rgba(22, 163, 74, .045);
+}
+
+.almdina-sf-kanban-column.is-drag-over {
+    border-color: var(--sf-primary);
+    background: rgba(36, 144, 239, .09);
+    box-shadow: inset 0 0 0 2px rgba(36, 144, 239, .13);
+}
+
+.almdina-sf-kanban-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 45px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--sf-border);
+}
+
+.almdina-sf-kanban-column-header > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.almdina-sf-kanban-column-header b {
+    overflow: hidden;
+    color: var(--sf-text);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-kanban-column-header > div > span {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.almdina-sf-column-count {
+    display: inline-grid;
+    min-width: 24px;
+    min-height: 24px;
+    padding-inline: 6px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--sf-subtle);
+    color: var(--sf-muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-kanban-column.is-ready .almdina-sf-column-count {
+    background: rgba(22, 163, 74, .10);
+    color: #15803d;
+}
+
+.almdina-sf-kanban-cards {
+    display: grid;
+    align-content: start;
+    gap: 9px;
+    min-height: 172px;
+    padding: 9px;
+}
+
+.almdina-sf-kanban-empty {
+    display: grid;
+    gap: 4px;
+    min-height: 86px;
+    place-items: center;
+    border: 1px dashed var(--sf-border);
+    border-radius: 9px;
+    color: #94a3b8;
+    font-size: 11px;
+}
+
+.almdina-sf-kanban-empty > span {
+    font-size: 17px;
+}
+
+/* Order cards ------------------------------------------------------------ */
+.almdina-sf-order-card {
+    --sf-accent: var(--sf-primary);
+    position: relative;
+    width: 100%;
+    margin: 0 !important;
+    padding: 14px !important;
+    overflow: hidden;
+    border: 1px solid var(--sf-border) !important;
+    border-inline-start: 4px solid var(--sf-accent) !important;
+    border-radius: 14px !important;
+    background: var(--sf-card) !important;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .06) !important;
+    cursor: pointer;
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.almdina-sf-order-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--sf-accent);
+    opacity: .13;
+    pointer-events: none;
+}
+
+.almdina-sf-order-card[data-status="Pending"] { --sf-accent: #d97706; }
+.almdina-sf-order-card[data-status="In Progress"] { --sf-accent: #2563eb; }
+.almdina-sf-order-card[data-status="Paused"] { --sf-accent: #dc2626; }
+.almdina-sf-order-card[data-status="Completed"] { --sf-accent: #16a34a; }
+
+.almdina-sf-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.almdina-sf-card-identity {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.almdina-sf-order-number {
+    overflow: hidden;
+    color: var(--sf-text);
+    font-size: 15px;
+    font-weight: 850;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-card-subtitle {
+    overflow: hidden;
+    color: var(--sf-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.almdina-sf-order-card .indicator-pill {
+    min-height: 27px;
+    padding: 5px 9px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.almdina-sf-order-card[data-status="Pending"] .indicator-pill {
+    background: rgba(217, 119, 6, .11) !important;
+    color: #92400e !important;
+}
+
+.almdina-sf-order-card[data-status="In Progress"] .indicator-pill {
+    background: rgba(37, 99, 235, .10) !important;
+    color: #1d4ed8 !important;
+}
+
+.almdina-sf-order-card[data-status="Paused"] .indicator-pill {
+    background: rgba(220, 38, 38, .10) !important;
+    color: #b91c1c !important;
+}
+
+.almdina-sf-order-card[data-status="Completed"] .indicator-pill {
+    background: rgba(22, 163, 74, .11) !important;
+    color: #15803d !important;
+}
+
+.almdina-sf-card-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px 12px;
+    margin-top: 9px;
+    padding-top: 8px;
+    border-top: 1px solid var(--sf-border);
+}
+
+.almdina-sf-card-context > div {
+    display: flex;
+    gap: 5px;
+    align-items: baseline;
+    min-width: 0;
+    font-size: 11px;
+}
+
+.almdina-sf-card-context span {
+    color: var(--sf-muted);
+}
+
+.almdina-sf-card-context b {
+    overflow-wrap: anywhere;
+    color: var(--sf-text);
+    font-size: 11px;
+}
+
+.almdina-sf-card-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 10px;
+}
+
+.almdina-sf-meta-item {
+    min-width: 0;
+    min-height: 55px;
+    padding: 8px 9px;
+    border: 1px solid var(--sf-border);
+    border-radius: 10px;
+    background: var(--sf-subtle);
+}
+
+.almdina-sf-meta-item span {
+    display: block;
+    color: var(--sf-muted);
+    font-size: 10px;
+}
+
+.almdina-sf-meta-item b {
+    display: block;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+    color: var(--sf-text);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.almdina-sf-card-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 8px;
+    margin-top: 11px;
+}
+
+.almdina-sf-order-card :where(.sf-quick-action, .sf-open-btn) {
+    width: 100% !important;
+    min-width: 0;
+    min-height: 44px !important;
+    margin: 0 !important;
+    border-radius: 9px !important;
+    font-size: 12px;
+    font-weight: 800 !important;
+    touch-action: manipulation;
+}
+
+.almdina-sf-kanban-card {
+    padding: 11px !important;
+    border-radius: 11px !important;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, .05) !important;
+}
+
+.almdina-sf-kanban-card[draggable="true"] { cursor: grab; }
+.almdina-sf-kanban-card[draggable="true"]:active { cursor: grabbing; }
+
+.almdina-sf-kanban-card.is-dragging {
+    opacity: .48;
+    transform: rotate(.4deg) scale(.99);
+}
+
+.almdina-sf-kanban-card .almdina-sf-card-context {
+    margin-top: 7px;
+    padding-top: 6px;
+}
+
+.almdina-sf-kanban-card .almdina-sf-card-meta {
+    margin-top: 7px;
+}
+
+.almdina-sf-kanban-card .almdina-sf-meta-item {
+    min-height: 47px;
+    padding: 6px 7px;
+}
+
+.almdina-sf-kanban-card .almdina-sf-card-actions {
+    margin-top: 8px;
+}
+
+.almdina-sf-kanban-card :where(.sf-quick-action, .sf-open-btn) {
+    min-height: 38px !important;
+    padding-inline: 8px;
+    font-size: 11px;
+}
+
+.almdina-sf-drag-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 6px;
+    color: #94a3b8;
+    font-size: 9px;
+    text-align: center;
+}
+
+/* Shared quick-action busy state. Also used by the DCO mobile list. */
+.sf-quick-action {
+    position: relative;
+}
+
+.sf-quick-action.is-loading {
+    padding-inline-end: 38px !important;
+    opacity: .78;
+    pointer-events: none;
+}
+
+.sf-quick-action.is-loading::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 14px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    margin-top: -8px;
+    border: 2px solid currentColor;
+    border-inline-start-color: transparent;
+    border-radius: 50%;
+    animation: almdina-sf-spin .65s linear infinite;
+}
+
+.sf-quick-action[aria-busy="true"] {
+    cursor: progress;
+}
+
+/* Completed worker history is appended after actionable work and remains
+   read-only for production actions. */
+.almdina-sf-list-title.is-completed {
+    color: #15803d;
+}
+
+.almdina-sf-order-card.is-completed,
+.almdina-sf-order-card.is-completed[data-status] {
+    --sf-accent: #16a34a;
+    border-color: #86efac !important;
+    border-inline-start-color: #16a34a !important;
+    background: #dcfce7 !important;
+    box-shadow: 0 2px 12px rgba(22, 163, 74, .12) !important;
+}
+
+.almdina-sf-order-card.is-completed .indicator-pill,
+.almdina-sf-order-card.is-completed[data-status] .indicator-pill {
+    background: #16a34a !important;
+    color: #fff !important;
+}
+
+.almdina-sf-order-card.is-completed .almdina-sf-card-context {
+    border-top-color: #bbf7d0;
+}
+
+.almdina-sf-order-card.is-completed .almdina-sf-meta-item {
+    border-color: #bbf7d0;
+    background: rgba(255, 255, 255, .58);
+}
+
+.almdina-sf-order-card.is-completed .sf-open-btn {
+    border-color: #86efac !important;
+    background: #fff !important;
+    color: #15803d !important;
+}
+
+/* Worker list ------------------------------------------------------------ */
+.almdina-sf-list-section + .almdina-sf-list-section {
+    margin-top: 22px;
+}
+
+.almdina-sf-list-section.is-completed {
+    padding-top: 16px;
+    border-top: 1px solid var(--sf-border);
+}
+
+.almdina-sf-list-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 10px;
+    color: var(--sf-text);
+    font-size: 14px;
+    font-weight: 850;
+}
+
+.almdina-sf-list-title > div {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.almdina-sf-list-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--sf-primary);
+    box-shadow: 0 0 0 4px rgba(36, 144, 239, .08);
+}
+
+.almdina-sf-list-title.is-completed .almdina-sf-list-dot {
+    background: #16a34a;
+    box-shadow: 0 0 0 4px rgba(22, 163, 74, .08);
+}
+
+.almdina-sf-list-count {
+    display: inline-grid;
+    min-width: 28px;
+    min-height: 24px;
+    padding-inline: 8px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--sf-subtle);
+    color: var(--sf-muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.almdina-sf-list-title.is-completed .almdina-sf-list-count {
+    background: rgba(22, 163, 74, .10);
+    color: #15803d;
+}
+
+.almdina-sf-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+/* Account --------------------------------------------------------------- */
+.almdina-sf-account-card {
+    width: min(100%, 720px);
+    margin-inline: auto;
+    overflow: hidden;
+    border: 1px solid var(--sf-border);
+    border-radius: 17px;
+    background: var(--sf-card);
+    box-shadow: var(--sf-shadow);
+}
+
+.almdina-sf-account-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px;
+    border-bottom: 1px solid var(--sf-border);
+    background: linear-gradient(135deg, rgba(36, 144, 239, .055), transparent 62%);
+}
+
+.almdina-sf-account-avatar {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 14px;
+    background: rgba(36, 144, 239, .11);
+    color: #1d6fac;
+    font-size: 20px;
+    font-weight: 900;
+}
+
+.almdina-sf-account-heading h4 {
+    margin: 0;
+    color: var(--sf-text);
+    font-size: 16px;
+    font-weight: 850;
+}
+
+.almdina-sf-account-heading div > span {
+    display: block;
+    margin-top: 3px;
+    color: var(--sf-muted);
+    font-size: 11px;
+}
+
+.almdina-sf-account-details {
+    padding: 7px 18px;
+}
+
+.almdina-sf-account-row {
+    display: grid;
+    grid-template-columns: minmax(130px, .7fr) minmax(0, 1.3fr);
+    gap: 12px;
+    padding-block: 10px;
+    border-bottom: 1px solid var(--sf-border);
+}
+
+.almdina-sf-account-row:last-child {
+    border-bottom: 0;
+}
+
+.almdina-sf-account-row > span {
+    color: var(--sf-muted);
+    font-size: 11px;
+}
+
+.almdina-sf-account-row > b {
+    overflow-wrap: anywhere;
+    color: var(--sf-text);
+    font-size: 12px;
+}
+
+.almdina-sf-account-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--sf-border);
+    background: var(--sf-subtle);
+}
+
+.almdina-sf-account-footer > span {
+    color: var(--sf-muted);
+    font-size: 10px;
+}
+
+.almdina-sf-logout {
+    min-width: 132px;
+    min-height: 42px;
+    border-radius: 9px !important;
+    font-weight: 800;
+}
+
+/* Focus / hover ---------------------------------------------------------- */
+.almdina-sf-content :where(button, select, input):focus-visible,
+.almdina-sf-tabs :where(button):focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--sf-primary, #2490ef) 28%, transparent);
+    outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .almdina-sf-order-card:hover {
+        border-color: color-mix(in srgb, var(--sf-accent) 36%, var(--sf-border)) !important;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .09) !important;
+        transform: translateY(-1px);
+    }
+}
+
+/* Responsive ------------------------------------------------------------- */
+@media (max-width: 1200px) {
+    .almdina-sf-board-toolbar {
+        grid-template-columns: minmax(180px, .75fr) minmax(220px, 1fr);
+    }
+
+    .almdina-sf-board-metrics {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 900px) {
+    .almdina-sf-shell {
+        max-width: 100%;
+    }
+
+    .almdina-sf-tabs {
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .almdina-sf-tab,
+    .almdina-sf-refresh {
+        min-height: 44px;
+    }
+
+    .almdina-sf-hero {
+        grid-template-columns: 1fr;
+        gap: 13px;
+    }
+
+    .almdina-sf-hero-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .almdina-sf-hero-stat {
+        min-width: 0;
+    }
+
+    .almdina-sf-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+}
+
+@media (max-width: 720px) {
+    .almdina-sf-nav {
+        margin-bottom: 10px;
+    }
+
+    .almdina-sf-tabs {
+        gap: 5px;
+        padding: 5px;
+        border-radius: 12px;
+    }
+
+    .almdina-sf-tab,
+    .almdina-sf-refresh {
+        min-height: 46px;
+        padding-inline: 12px;
+        font-size: 12px;
+    }
+
+    .almdina-sf-refresh > span:last-child {
+        display: none;
+    }
+
+    .almdina-sf-hero {
+        margin-bottom: 10px;
+        padding: 14px;
+        border-radius: 14px;
+    }
+
+    .almdina-sf-hero h2 {
+        font-size: 20px;
+    }
+
+    .almdina-sf-hero p {
+        font-size: 11px;
+    }
+
+    .almdina-sf-hero-stats {
+        gap: 6px;
+    }
+
+    .almdina-sf-hero-stat {
+        padding: 8px 6px;
+    }
+
+    .almdina-sf-hero-stat b {
+        font-size: 18px;
+    }
+
+    .almdina-sf-board-toolbar {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .almdina-sf-board-metrics {
+        grid-column: auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-board-toolbar .form-control {
+        min-height: 46px;
+    }
+
+    .almdina-sf-route-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 5px;
+        padding: 10px 12px;
+    }
+
+    .almdina-sf-route-heading small {
+        flex: auto;
+        padding-inline-start: 40px;
+        text-align: start;
+    }
+
+    .almdina-sf-kanban {
+        grid-auto-columns: minmax(82vw, 82vw);
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .almdina-sf-kanban-column {
+        min-height: 200px;
+    }
+
+    .almdina-sf-board-help,
+    .almdina-sf-drag-hint {
+        display: none;
+    }
+
+    .almdina-sf-list {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .almdina-sf-order-card {
+        padding: 13px !important;
+        border-radius: 13px !important;
+    }
+
+    .almdina-sf-order-card :where(.sf-quick-action, .sf-open-btn) {
+        min-height: 48px !important;
+        font-size: 13px;
+    }
+
+    .almdina-sf-kanban-card :where(.sf-quick-action, .sf-open-btn) {
+        min-height: 48px !important;
+    }
+
+    .almdina-sf-account-heading,
+    .almdina-sf-account-details,
+    .almdina-sf-account-footer {
+        padding-inline: 14px;
+    }
+
+    .almdina-sf-account-row {
+        grid-template-columns: 1fr;
+        gap: 3px;
+    }
+
+    .almdina-sf-account-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .almdina-sf-logout {
+        width: 100%;
+        min-height: 48px;
+    }
+}
+
+@media (max-width: 480px) {
+    .almdina-sf-shell {
+        padding-bottom: 18px;
+    }
+
+    .almdina-sf-eyebrow {
+        margin-bottom: 5px;
+    }
+
+    .almdina-sf-hero-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-board-shell .almdina-sf-hero-stats .almdina-sf-hero-stat:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .almdina-sf-card-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-card-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .almdina-sf-route-title > div {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .almdina-sf-kanban {
+        grid-auto-columns: minmax(88vw, 88vw);
+    }
+}
+
+@media (max-width: 340px) {
+    .almdina-sf-card-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-hero-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .almdina-sf-board-shell .almdina-sf-hero-stats .almdina-sf-hero-stat:last-child {
+        grid-column: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .almdina-sf-order-card,
+    .almdina-sf-order-card *,
+    .almdina-sf-tabs *,
+    .almdina-sf-kanban-column,
+    .almdina-sf-spinner {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+@keyframes almdina-sf-spin {
+    to { transform: rotate(360deg); }
+}

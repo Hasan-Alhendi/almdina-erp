@@ -4,12 +4,51 @@ import json
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
-DEFAULTS = ROOT / "public" / "js" / "door_cutting_order_defaults.js"
-EDGE_COLOR_UX = ROOT / "public" / "js" / "door_cutting_order_edge_color_ux.js"
-EDGE_CONTROLS_UX = ROOT / "public" / "js" / "door_cutting_order_edge_profile_controls_ux.js"
-EDGE_DOUBLE_CLICK_GUARD = ROOT / "public" / "js" / "door_cutting_order_edge_profile_double_click_guard.js"
-MEASUREMENT_UX = ROOT / "public" / "js" / "door_cutting_order_measurement_actions_ux.js"
-HOOKS = ROOT / "hooks.py"
+DEFAULTS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "door_cutting_order_defaults.js"
+)
+EDGE_COLOR_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_color_ux.js"
+)
+EDGE_CONTROLS_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_controls_ux.js"
+)
+EDGE_DOUBLE_CLICK_GUARD = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "edge_banding"
+    / "door_cutting_order_edge_profile_double_click_guard.js"
+)
+MEASUREMENT_UX = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "order_entry"
+    / "measurements"
+    / "door_cutting_order_measurement_actions_ux.js"
+)
+HOOKS = ROOT / "frontend_assets.py"
 
 
 def _source(path: Path) -> str:
@@ -20,17 +59,21 @@ def test_order_has_editable_text_edge_color_below_default_edge_type():
     doc = json.loads(DOCTYPE.read_text(encoding="utf-8"))
     fields = {row["fieldname"]: row for row in doc["fields"]}
     assert fields["edge_color"]["fieldtype"] == "Data"
+    assert fields["edge_color"]["reqd"] == 1
     assert not fields["edge_color"].get("read_only")
     assert doc["field_order"].index("default_edge_type") < doc["field_order"].index("edge_color")
-    assert doc["field_order"].index("edge_color") < doc["field_order"].index("cutting_settings_column")
+    assert doc["field_order"].index("edge_color") < doc["field_order"].index("pieces_section")
 
 
-def test_edge_color_is_defaulted_from_selected_edge_type_but_remains_editable():
+def test_edge_color_is_manual_and_never_defaulted_from_edge_profile():
     source = _source(DEFAULTS)
-    assert 'frappe.db.get_value("Edge Banding Type", requestedType, "edge_color")' in source
-    assert 'frm.set_value("edge_color", color)' in source
-    assert "default_edge_type(frm)" in source
-    assert "apply_edge_color_default(frm, true)" in source
+    assert "edge_banding_lookup_service.get_order_edge_banding_options" in source
+    assert "loadSafeEdgeOptions(frm);" in source
+    assert "أدخل لون القشاط يدويًا لهذا الطلب." in source
+    assert 'frappe.db.get_value("Edge Banding Type"' not in source
+    assert 'frm.set_value("edge_color"' not in source
+    assert "apply_edge_color_default" not in source
+    assert "default_edge_type(frm)" not in source
 
 
 def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_duplicates():
@@ -44,24 +87,34 @@ def test_edge_color_stays_in_cost_kpi_and_fast_entry_context_without_table_dupli
     assert "patchInvoiceMeta" not in source
 
 
-def test_customer_print_uses_single_invoice_renderer_from_cost_tab():
-    cost = _source(ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js")
+def test_financial_documents_use_server_payload_and_shared_customer_presenter():
+    financial = _source(ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js")
+    presenter = _source(ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js")
     edge = _source(EDGE_COLOR_UX)
-    assert "function invoiceTotal(frm)" in cost
-    assert "invoiceLines(frm).reduce" in cost
-    assert "board_rate_usd(frm) { scheduleRender(frm); }" in cost
-    assert "cutting_cost_per_board_usd(frm) { scheduleRender(frm); }" in cost
-    assert "printInvoice," in cost
+    assert "get_customer_invoice_document" in financial
+    assert "get_internal_cost_report_document" in financial
+    assert "window.AlmdinaFinancialDocuments = Object.freeze" in financial
+    assert "resolvePrintIdentity()" in financial
+    assert "AlmdinaFactoryPrintIdentity" in financial
+    assert "printHtml(documentHtml(payload, printIdentity))" in financial
+    assert "presenter.printAuthorizedInvoice(frm, payload)" in financial
+    assert "function printAuthorizedInvoice(frm, payload)" in presenter
+    assert 'documentHtml(frm, "invoice", printIdentity, payload)' in presenter
+    assert 'documentHtml(frm, "measurements", printIdentity)' in presenter
     assert "function printHtml(frm)" not in edge
     assert "event.stopImmediatePropagation()" not in edge
 
 
-def test_measurement_print_and_standalone_header_contain_edge_color():
+def test_measurement_entry_print_delegates_to_unified_document_presenter():
     source = _source(MEASUREMENT_UX)
     assert "function orderEdgeColor(frm)" in source
-    assert 'const edgeColor = orderEdgeColor(frm)' in source
-    assert '<div><b>لون القشاط</b>${esc(edgeColor)}</div>' in source
-    assert "grid-template-columns:repeat(5" in source
+    assert "لون القشاط:" in source
+    assert "window.AlmdinaOrderDocumentPrint" in source
+    assert 'typeof documents.printMeasurements !== "function"' in source
+    assert "return Promise.resolve(documents.printMeasurements(frm))" in source
+    assert "function printDocumentHtml" not in source
+    assert "dco-measurements-print-frame" not in source
+    assert "dco-measurement-print-table" not in source
 
 
 def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
@@ -86,9 +139,9 @@ def test_edge_profiles_use_compact_double_click_popover_without_extra_row():
     assert "toggle.click()" in guard
     assert "controls.openSidePopover" in guard
 
-    controls_script = '"public/js/door_cutting_order_edge_profile_controls_ux.js"'
-    guard_script = '"public/js/door_cutting_order_edge_profile_double_click_guard.js"'
-    cut_script = '"public/js/door_cutting_order_cut_dimensions_ux.js"'
+    controls_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_controls_ux.js"'
+    guard_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_profile_double_click_guard.js"'
+    cut_script = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_cut_dimensions_ux.js"'
     assert controls_script in hooks
     assert guard_script in hooks
     assert cut_script in hooks
@@ -110,10 +163,13 @@ def test_edge_profile_lists_are_custom_and_scrollable():
     assert 'select = document.createElement("select")' not in controls
 
 
-def test_edge_color_layer_loads_after_invoice_renderer():
+def test_edge_color_layer_loads_after_secure_financial_presenters():
     hooks = HOOKS.read_text(encoding="utf-8")
-    invoice = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    edge_color = '"public/js/door_cutting_order_edge_color_ux.js"'
-    assert invoice in hooks
-    assert edge_color in hooks
-    assert hooks.index(invoice) < hooks.index(edge_color)
+    legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
+    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
+    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
+    edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
+    assert legacy not in hooks
+    for script in (presenter, financial, edge_color):
+        assert script in hooks
+    assert hooks.index(presenter) < hooks.index(financial) < hooks.index(edge_color)

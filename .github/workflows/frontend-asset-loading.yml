@@ -1,0 +1,42 @@
+name: Frontend Asset Loading Contract
+
+on:
+  push:
+    branches: [main, Develop, develop]
+  pull_request:
+    branches: [main, Develop, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  asset-loading-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate asset-loader JavaScript syntax
+        run: |
+          node --check almdina_erp/public/js/frontend_foundation.js
+          node --check almdina_erp/tests/js/frontend_asset_loader.test.js
+          node --check almdina_erp/tests/js/modular_page_asset_compatibility.test.js
+
+      - name: Enforce batched page asset loading
+        run: python -m unittest -v almdina_erp.tests.test_frontend_asset_loading_contract
+
+      - name: Simulate shared asset-loader lifecycle
+        run: node almdina_erp/tests/js/frontend_asset_loader.test.js
+
+      - name: Simulate cached-foundation deploy skew
+        run: node almdina_erp/tests/js/modular_page_asset_compatibility.test.js

@@ -32,15 +32,7 @@
   "module":"Almdina ERP",
   "name":"Material Consumption Log",
   "naming_rule":"By naming series field",
-  "permissions":[
-    {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"Production Manager","share":1,"write":1},
-    {"read":1,"report":1,"role":"Stock Manager"},
-    {"read":1,"report":1,"role":"Accounts Management"},
-    {"create":1,"read":1,"report":1,"role":"System Manager","write":1},
-    {"permlevel":1,"read":1,"role":"Production Manager","write":1},
-    {"permlevel":1,"read":1,"role":"Accounts Management"},
-    {"permlevel":1,"read":1,"role":"System Manager"}
-  ],
+  "permissions": [],
   "sort_field":"modified",
   "sort_order":"DESC",
   "track_changes":1

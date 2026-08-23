@@ -3,7 +3,16 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import flt
+
+from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
+    sanitize_plan_snapshot_json,
+)
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    require_document_capability,
+)
 
 
 def _internal_loss(order_name: str) -> float:
@@ -64,7 +73,30 @@ def on_replacement_update(doc: Any, method: str | None = None) -> None:
         sync_order_costs(doc.door_cutting_order)
 
 
+def _sanitize_cutting_plan_snapshot(doc: Any) -> None:
+    """Persist Cutting Plan geometry without embedded financial metadata."""
+
+    current = str(getattr(doc, "snapshot_json", None) or "")
+    if not current:
+        return
+    sanitized = sanitize_plan_snapshot_json(current)
+    if sanitized == current:
+        return
+
+    doc.snapshot_json = sanitized
+    if getattr(doc, "name", None):
+        frappe.db.set_value(
+            "Cutting Plan",
+            doc.name,
+            "snapshot_json",
+            sanitized,
+            update_modified=False,
+        )
+
+
 def on_order_plan_update(doc: Any, method: str | None = None) -> None:
+    _sanitize_cutting_plan_snapshot(doc)
+
     if (doc.plan_kind or "Order") != "Order" or doc.status != "Approved" or not doc.door_cutting_order:
         return
 
@@ -86,6 +118,13 @@ def on_order_plan_update(doc: Any, method: str | None = None) -> None:
 
 @frappe.whitelist()
 def refresh_order_costs(order_name: str) -> dict[str, Any]:
+    """Refresh derived cost totals only for users allowed to view order costs."""
+
     doc = frappe.get_doc("Door Cutting Order", order_name)
     doc.check_permission("read")
+    require_document_capability(
+        doc,
+        Capability.VIEW_COSTS,
+        message=_("لا تملك صلاحية عرض أو تحديث تكلفة هذا الطلب."),
+    )
     return sync_order_costs(order_name)

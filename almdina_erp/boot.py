@@ -4,167 +4,264 @@ from typing import Any
 
 import frappe
 
-from almdina_erp.almdina_erp.domain.security.authorization import (
-    is_order_entry_profile,
-    is_shop_floor_only,
+from almdina_erp.almdina_erp.application.security.permission_context import (
+    build_permission_context,
+)
+from almdina_erp.almdina_erp.application.security.workspace_visibility import (
+    project_workspace_page,
+    workspace_item_allowed,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    granted_capabilities,
 )
 
-SHOP_FLOOR_WORKSPACE = "Shop Floor"
-SHOP_FLOOR_PAGE = "shop-floor-inbox"
-ORDER_ENTRY_ICON_MODULES = frozenset({"Almdina ERP"})
-ALLOWED_MODULES_FOR_SHOP_FLOOR = ("Almdina ERP",)
+
+ALMDINA_APP = "almdina_erp"
+ALMDINA_MODULE = "Almdina ERP"
+ALMDINA_WORKSPACE_ROUTE = "/desk/almdina-erp"
+SYSTEM_ADMINISTRATOR = "Administrator"
 
 
-def _roles() -> frozenset[str]:
-    return frozenset(frappe.get_roles())
+def _context() -> dict[str, Any]:
+    user = frappe.session.user
+    return build_permission_context(
+        (),
+        granted_capabilities(user=user),
+        system_administrator=user == SYSTEM_ADMINISTRATOR,
+    )
 
 
-def _filter_order_entry(bootinfo: dict[str, Any]) -> None:
-    bootinfo["almdina_order_entry_only"] = 1
-    bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
+def _workspace_name(page: Any) -> str:
+    if isinstance(page, str):
+        return page
+    if not isinstance(page, dict):
+        return ""
+    return str(page.get("name") or page.get("title") or page.get("label") or "")
+
+
+def _workspace_page_allowed(
+    page: Any,
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> bool:
+    """Authorize a v16 workspace/sidebar record.
+
+    Link/URL rows are business destinations, not Workspaces. They must be checked
+    against their exact Almdina surface *before* the Workspace allow-list so a
+    translated sidebar link cannot inherit visibility from an allowed parent.
+    """
+
+    if isinstance(page, str):
+        return page in allowed
+    if not isinstance(page, dict):
+        return False
+
+    parent = str(page.get("parent_page") or "")
+    page_type = str(page.get("type") or "Workspace").strip().lower()
+
+    if page_type in {"link", "url"}:
+        decision = workspace_item_allowed(page, surfaces)
+        if decision is not None:
+            return decision
+        # Unknown child links inside the Almdina shell fail closed. New
+        # destinations must be classified in workspace_visibility explicitly.
+        if parent in allowed or parent == ALMDINA_MODULE:
+            return False
+        return False
+
+    return _workspace_name(page) in allowed
+
+
+def _project_allowed_pages(
+    pages: Any,
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> Any:
+    if not isinstance(pages, list):
+        return pages
+    return [
+        project_workspace_page(page, surfaces)
+        for page in pages
+        if _workspace_page_allowed(page, allowed=allowed, surfaces=surfaces)
+    ]
+
+
+def _filter_workspace_container(
+    bootinfo: dict[str, Any],
+    key: str,
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> None:
+    """Filter one Frappe workspace registry while preserving its metadata.
+
+    Frappe v16 uses ``sidebar_pages`` for the persistent Desk rail. Older builds
+    and some boot paths still expose ``workspaces``. Both must be projected or a
+    denied entry can remain visible even though the other registry was filtered.
+    """
+
+    container = bootinfo.get(key)
+    if not isinstance(container, dict):
+        return
+    pages = container.get("pages")
+    if isinstance(pages, list):
+        projected = _project_allowed_pages(pages, allowed=allowed, surfaces=surfaces)
+        container["pages"] = projected
+        bootinfo[key] = container
+        if key == "workspaces":
+            bootinfo["allowed_workspaces"] = projected
+
+
+def _filter_workspaces(
+    bootinfo: dict[str, Any],
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> None:
+    if not allowed:
+        return
+
+    # v16 persistent sidebar + compatibility workspace registry.
+    _filter_workspace_container(
+        bootinfo,
+        "sidebar_pages",
+        allowed=allowed,
+        surfaces=surfaces,
+    )
+    _filter_workspace_container(
+        bootinfo,
+        "workspaces",
+        allowed=allowed,
+        surfaces=surfaces,
+    )
 
     module_map = bootinfo.get("module_wise_workspaces")
     if isinstance(module_map, dict):
-        bootinfo["module_wise_workspaces"] = {
-            key: value
-            for key, value in module_map.items()
-            if key in ORDER_ENTRY_ICON_MODULES
-        }
-
-    allowed_workspaces: set[str] = set()
-    workspaces = bootinfo.get("workspaces")
-    if isinstance(workspaces, dict):
-        pages = workspaces.get("pages")
-        if isinstance(pages, list):
-            kept = [
-                page
-                for page in pages
-                if not isinstance(page, dict)
-                or page.get("module") in ORDER_ENTRY_ICON_MODULES
-                or page.get("app") == "almdina_erp"
-                or page.get("for_user") == frappe.session.user
-            ]
-            if kept:
-                workspaces["pages"] = kept
-                pages = kept
-        for page in pages or []:
-            if isinstance(page, dict):
-                if page.get("name"):
-                    allowed_workspaces.add(page["name"])
-                if page.get("title"):
-                    allowed_workspaces.add(page["title"])
+        filtered: dict[str, Any] = {}
+        for module, values in module_map.items():
+            if module != ALMDINA_MODULE:
+                continue
+            if isinstance(values, list):
+                kept = _project_allowed_pages(values, allowed=allowed, surfaces=surfaces)
+                if kept:
+                    filtered[module] = kept
+            elif _workspace_page_allowed(values, allowed=allowed, surfaces=surfaces):
+                filtered[module] = project_workspace_page(values, surfaces)
+        bootinfo["module_wise_workspaces"] = filtered
 
     icons = bootinfo.get("desktop_icons")
-    if isinstance(icons, list) and allowed_workspaces:
+    if isinstance(icons, list):
         bootinfo["desktop_icons"] = [
             icon
             for icon in icons
             if isinstance(icon, dict)
-            and (
-                icon.get("module_name") in allowed_workspaces
-                or icon.get("label") in allowed_workspaces
-            )
+            and str(icon.get("module_name") or icon.get("label") or "") in allowed
         ]
 
 
-def _filter_shop_floor(bootinfo: dict[str, Any]) -> None:
-    bootinfo["almdina_shop_floor_only"] = 1
-    bootinfo["almdina_shop_floor_home"] = SHOP_FLOOR_PAGE
-    bootinfo["almdina_allowed_pages"] = [SHOP_FLOOR_PAGE]
-    bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
-    bootinfo["home_page"] = SHOP_FLOOR_PAGE
+def _filter_app_workspaces(
+    app: dict[str, Any],
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> dict[str, Any]:
+    projected = dict(app)
+    workspaces = projected.get("workspaces")
+    if isinstance(workspaces, list):
+        projected["workspaces"] = _project_allowed_pages(
+            workspaces,
+            allowed=allowed,
+            surfaces=surfaces,
+        )
+    return projected
 
-    workspaces = bootinfo.get("workspaces")
-    if isinstance(workspaces, dict) and workspaces.get("pages"):
-        pages = [
-            page
-            for page in workspaces["pages"]
-            if (page.get("name") if isinstance(page, dict) else page)
-            == SHOP_FLOOR_WORKSPACE
-        ]
-        if not pages:
-            pages = [
-                page
-                for page in workspaces["pages"]
-                if isinstance(page, dict)
-                and str(page.get("title") or page.get("label") or "")
-                in {SHOP_FLOOR_WORKSPACE, "صالة الإنتاج"}
-            ]
-        workspaces["pages"] = pages
-        bootinfo["workspaces"] = workspaces
-        bootinfo["allowed_workspaces"] = pages
 
-    bootinfo["workspace_sidebar_item"] = {}
-    bootinfo["sidebar_pages"] = []
-    bootinfo["allowed_pages"] = [SHOP_FLOOR_PAGE]
-
+def _filter_apps(
+    bootinfo: dict[str, Any],
+    *,
+    allowed: set[str],
+    surfaces: dict[str, bool],
+) -> None:
     app_data = bootinfo.get("app_data")
     if isinstance(app_data, list):
-        trimmed = []
-        for app in app_data:
-            if not isinstance(app, dict):
-                continue
-            name = app.get("app_name") or app.get("name")
-            if name != "almdina_erp":
-                continue
-            app = dict(app)
-            app["workspaces"] = [SHOP_FLOOR_WORKSPACE]
-            app["app_route"] = f"/app/{SHOP_FLOOR_PAGE}"
-            app["modules"] = list(ALLOWED_MODULES_FOR_SHOP_FLOOR)
-            trimmed.append(app)
-        bootinfo["app_data"] = trimmed
-
-    bootinfo["desktop_icons"] = []
-
-    module_map = bootinfo.get("module_wise_workspaces")
-    if isinstance(module_map, dict):
-        bootinfo["module_wise_workspaces"] = {
-            key: [workspace for workspace in (value or []) if workspace == SHOP_FLOOR_WORKSPACE]
-            for key, value in module_map.items()
-            if key in ALLOWED_MODULES_FOR_SHOP_FLOOR
-        }
-
-
-def boot_session(bootinfo: dict[str, Any]) -> None:
-    """Apply navigation policy without mutating User, Role, or database state."""
-
-    roles = _roles()
-    if is_order_entry_profile(roles):
-        _filter_order_entry(bootinfo)
-        return
-    if is_shop_floor_only(roles):
-        _filter_shop_floor(bootinfo)
-
-
-def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
-    """Second read-only pass after Frappe assembles application metadata."""
-
-    if not bootinfo:
-        return
-
-    roles = _roles()
-    if bootinfo.get("almdina_order_entry_only") or is_order_entry_profile(roles):
-        bootinfo["almdina_order_entry_only"] = 1
-        bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
-        return
-
-    if not bootinfo.get("almdina_shop_floor_only"):
-        if not is_shop_floor_only(roles):
-            return
-        bootinfo["almdina_shop_floor_only"] = 1
+        bootinfo["app_data"] = [
+            _filter_app_workspaces(dict(app), allowed=allowed, surfaces=surfaces)
+            for app in app_data
+            if isinstance(app, dict)
+            and (app.get("app_name") or app.get("name")) == ALMDINA_APP
+        ]
 
     apps_data = bootinfo.get("apps_data")
     if isinstance(apps_data, dict):
-        apps = apps_data.get("apps") or []
-        apps_data["apps"] = [
-            app
-            for app in apps
-            if (app.get("name") if isinstance(app, dict) else app) == "almdina_erp"
-        ]
-        apps_data["default_path"] = f"/app/{SHOP_FLOOR_PAGE}"
+        apps = apps_data.get("apps")
+        if isinstance(apps, list):
+            projected_apps: list[Any] = []
+            for app in apps:
+                name = app.get("name") if isinstance(app, dict) else app
+                if name != ALMDINA_APP:
+                    continue
+                if isinstance(app, dict):
+                    projected_apps.append(
+                        _filter_app_workspaces(app, allowed=allowed, surfaces=surfaces)
+                    )
+                else:
+                    projected_apps.append(app)
+            apps_data["apps"] = projected_apps
         bootinfo["apps_data"] = apps_data
 
-    bootinfo["workspace_sidebar_item"] = {}
-    bootinfo["desktop_icons"] = []
-    bootinfo["home_page"] = SHOP_FLOOR_PAGE
-    bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
+
+def _set_almdina_app_route(bootinfo: dict[str, Any], route: str) -> None:
+    app_data = bootinfo.get("app_data")
+    if not isinstance(app_data, list):
+        return
+
+    for app in app_data:
+        if not isinstance(app, dict):
+            continue
+        if (app.get("app_name") or app.get("name")) == ALMDINA_APP:
+            app["app_route"] = route
+
+
+def _apply_shared_shell(bootinfo: dict[str, Any]) -> None:
+    context = _context()
+    navigation = context["navigation"]
+
+    # Permission flags are safe to expose to every session. Navigation changes
+    # are applied only when the user owns at least one Almdina capability.
+    bootinfo["almdina_permissions"] = context
+    bootinfo["almdina_navigation"] = navigation
+    if not navigation.get("shared_shell"):
+        return
+
+    bootinfo["almdina_shared_shell"] = 1
+
+    # Ordinary Almdina users stay inside the factory application. The built-in
+    # Administrator deliberately keeps Frappe's complete app/workspace registry
+    # so /desk can render the standard Desktop and every installed app remains usable.
+    if navigation.get("app_only"):
+        allowed = set(navigation.get("workspaces") or ())
+        surfaces = {
+            str(key): value is True
+            for key, value in dict(context.get("surfaces") or {}).items()
+        }
+        bootinfo["almdina_allowed_apps"] = [ALMDINA_APP]
+        _filter_workspaces(bootinfo, allowed, surfaces)
+        _filter_apps(bootinfo, allowed=allowed, surfaces=surfaces)
+    else:
+        # /desk is the Administrator's Desktop. The Almdina app card itself must
+        # still enter the factory workspace instead of returning to Desktop.
+        _set_almdina_app_route(bootinfo, ALMDINA_WORKSPACE_ROUTE)
+
+
+def boot_session(bootinfo: dict[str, Any]) -> None:
+    """Attach the read-only shared-shell authorization context."""
+
+    _apply_shared_shell(bootinfo)
+
+
+def extend_bootinfo(bootinfo: dict[str, Any] | None = None) -> None:
+    """Repeat the idempotent filter after Frappe assembles application metadata."""
+
+    if bootinfo:
+        _apply_shared_shell(bootinfo)

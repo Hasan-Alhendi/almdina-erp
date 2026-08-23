@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FOUNDATION = ROOT / "public" / "js" / "frontend_foundation.js"
+ASSETS = ROOT / "frontend_assets.py"
+STATIC_WORKFLOW = ROOT.parent / ".github" / "workflows" / "static-checks.yml"
+DCO_CONTEXT = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_document_context.js"
+
+
+class TestFrontendFoundationContract(unittest.TestCase):
+    def test_foundation_is_small_explicit_and_framework_neutral(self) -> None:
+        source = FOUNDATION.read_text(encoding="utf-8")
+
+        for exported in (
+            "rpc",
+            "errorMessage",
+            "createLatestRequestGate",
+            "createLifecycleScope",
+            "ensureStylesheet",
+        ):
+            self.assertIn(exported, source)
+
+        self.assertIn("window.AlmdinaFrontend", source)
+        self.assertNotIn("frappe.user_roles", source)
+        self.assertNotIn("System Manager", source)
+        self.assertNotIn("almdina_erp.almdina_erp.services.", source)
+        self.assertNotIn("innerHTML", source)
+        self.assertNotIn("MutationObserver", source)
+
+    def test_foundation_is_loaded_once_before_legacy_shared_shell(self) -> None:
+        source = ASSETS.read_text(encoding="utf-8")
+        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
+        shell_asset = '"/assets/almdina_erp/js/shared_shell.js"'
+
+        self.assertEqual(source.count(foundation_asset), 1)
+        self.assertLess(source.index(foundation_asset), source.index(shell_asset))
+
+    def test_dco_keeps_its_specialized_document_context(self) -> None:
+        source = DCO_CONTEXT.read_text(encoding="utf-8")
+
+        self.assertIn("window.AlmdinaDocumentContext", source)
+        self.assertIn("function isCurrent", source)
+        self.assertIn("function schedule", source)
+        self.assertIn("function registerObserver", source)
+        self.assertNotIn("AlmdinaFrontend.createLatestRequestGate", source)
+
+    def test_foundation_runtime_test_is_a_permanent_static_gate(self) -> None:
+        workflow = STATIC_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("almdina_erp.tests.test_frontend_foundation_contract", workflow)
+        self.assertIn("node almdina_erp/tests/js/frontend_foundation.test.js", workflow)
+
+
+if __name__ == "__main__":
+    unittest.main()

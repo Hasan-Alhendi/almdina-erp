@@ -1,0 +1,1 @@
+"""Pure costing aggregate rules."""

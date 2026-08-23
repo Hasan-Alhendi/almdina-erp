@@ -1,335 +1,462 @@
 from __future__ import annotations
 
+from typing import Any
+
 import frappe
 
-SHOP_FLOOR_ROLES = ("عامل رسم", "عامل شريون", "عامل CNC", "عامل تقشيط")
-ADMIN_ROLES = (
-	"System Manager",
-	"Production Manager",
-	"Order Entry",
-	"Accounts Management",
+from almdina_erp.almdina_erp.domain.security.authorization import (
+    CAPABILITY_CATALOG,
+    CUTTING_PLAN_DOCTYPE,
+    DRAWING_CAPABILITIES,
+    PLANNING_CAPABILITIES,
+    PRODUCTION_CAPABILITIES,
+    PRODUCTION_OPERATOR_CAPABILITIES,
+    Capability,
 )
-SHOP_FLOOR_WORKSPACE = "Shop Floor"
-SHOP_FLOOR_PAGE = "shop-floor-inbox"
-
-ORDER_ENTRY_ROLE = "Order Entry"
-ORDER_ENTRY_WORKSPACE = "Almdina ERP"
-
-# Roles that make the order-entry account a full factory manager.
-FACTORY_MANAGER_ROLES = (
-	"Order Entry",
-	"Production Manager",
-	"Accounts Management",
-	"Cutting Operator",
-	"Edge Operator",
+from almdina_erp.almdina_erp.domain.orders.lifecycle import (
+    PRE_PRODUCTION_ORDER_STATUSES,
+    normalize_order_status,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
+    doctype_has_capability,
 )
 
-# Keep only Almdina ERP module visible; block everything else for operators.
-ALLOWED_MODULES_FOR_SHOP_FLOOR = ("Almdina ERP",)
 
-# Customer selection still depends on ERPNext Selling; factory screens stay
-# inside the Almdina application.
-ALLOWED_MODULES_FOR_ORDER_ENTRY = (
-	"Almdina ERP",
-	"Selling",
-	"Setup",
-	"Accounts",
+_ORDER_AUTHORING_CAPABILITIES = frozenset(
+    {
+        Capability.CREATE_ORDER,
+        Capability.EDIT_ORDER,
+        Capability.CREATE_ORDER_REVISION,
+        Capability.SUBMIT_ORDER,
+    }
+)
+_SCOPE_OVERRIDING_CAPABILITIES = frozenset({Capability.VIEW_ALL_ORDERS})
+_FLOOR_WORKER_CAPABILITIES = frozenset(
+    {
+        Capability.START_ASSIGNED_STAGE,
+        Capability.HANDOFF_ASSIGNED_STAGE,
+    }
+)
+_STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES) | frozenset(
+    {
+        Capability.RECORD_INCIDENT,
+        Capability.CREATE_REPLACEMENT,
+        Capability.VIEW_OPERATIONAL_REPORTS,
+        Capability.VIEW_FINANCIAL_REPORTS,
+    }
+)
+_READ_PERMISSION_TYPES = frozenset({None, "read", "select"})
+_MUTATING_PERMISSION_TYPES = frozenset({"create", "write", "delete"})
+_WORKER_SCOPED_CAPABILITIES = (
+    PRODUCTION_OPERATOR_CAPABILITIES | PLANNING_CAPABILITIES | DRAWING_CAPABILITIES
 )
 
-# Only the Almdina desktop icons are surfaced to the factory manager.
-ORDER_ENTRY_ICON_MODULES = ("Almdina ERP",)
+_DCO_PERMISSION_CAPABILITIES = {
+    definition.permission_type: capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.applies_to == "Door Cutting Order"
+}
+_CUTTING_PLAN_PERMISSION_CAPABILITIES = {
+    definition.permission_type: capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.applies_to == CUTTING_PLAN_DOCTYPE
+}
+_REPLACEMENT_PERMISSION_CAPABILITIES = {
+    definition.permission_type: capability
+    for capability, definition in CAPABILITY_CATALOG.items()
+    if definition.applies_to == "Replacement Piece"
+}
+_KNOWN_CUSTOM_PERMISSION_TYPES = frozenset(
+    definition.permission_type
+    for definition in CAPABILITY_CATALOG.values()
+    if definition.custom
+)
 
 
-def _is_shop_floor_only() -> bool:
-	roles = set(frappe.get_roles())
-	if roles.intersection(ADMIN_ROLES):
-		return False
-	return bool(roles.intersection(SHOP_FLOOR_ROLES))
+def _resolved_permission_type(
+    ptype: str | None,
+    permission_type: str | None,
+) -> str | None:
+    """Accept Frappe v16's ``ptype`` and the historical local test keyword."""
+
+    return ptype if ptype is not None else permission_type
 
 
-def _user_is_shop_floor(user: str) -> bool:
-	roles = set(frappe.get_roles(user))
-	if roles.intersection(ADMIN_ROLES):
-		return False
-	return bool(roles.intersection(SHOP_FLOOR_ROLES))
+def _has(user: str, capability: str) -> bool:
+    return doctype_has_capability(capability, user=user)
 
 
-def _is_order_entry_only(user: str | None = None) -> bool:
-	"""Order-entry clerk: creates orders, but sees only the Almdina factory app."""
-	roles = set(frappe.get_roles(user) if user else frappe.get_roles())
-	if roles.intersection({"System Manager", "Administrator"}):
-		return False
-	return ORDER_ENTRY_ROLE in roles
+def _has_any(user: str, capabilities: frozenset[str]) -> bool:
+    return any(_has(user, capability) for capability in capabilities)
+
+
+def _requires_assigned_scope(user: str) -> bool:
+    """Return whether reads must stay inside stages assigned to the user."""
+
+    if user in {"Guest", "Administrator"}:
+        return False
+    if _has_any(user, _SCOPE_OVERRIDING_CAPABILITIES):
+        return False
+    if _has_any(user, _FLOOR_WORKER_CAPABILITIES | _WORKER_SCOPED_CAPABILITIES):
+        return True
+    if _has_any(user, _ORDER_AUTHORING_CAPABILITIES):
+        return False
+    return False
+
+
+def _pre_production_status_sql() -> str:
+    return ", ".join(
+        frappe.db.escape(status)
+        for status in sorted(PRE_PRODUCTION_ORDER_STATUSES)
+    )
+
+
+def _row_value(row: Any, fieldname: str) -> Any:
+    if isinstance(row, dict):
+        return row.get(fieldname)
+    return getattr(row, fieldname, None)
+
+
+def _dispatched_order_row(order_name: str) -> Any | None:
+    """Return the order only when it already reached the production floor."""
+
+    row = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        ["status", "current_production_stage"],
+        as_dict=True,
+    )
+    if not row:
+        return None
+    status = normalize_order_status(_row_value(row, "status"))
+    stage = str(_row_value(row, "current_production_stage") or "").strip()
+    if status in PRE_PRODUCTION_ORDER_STATUSES and not stage:
+        return None
+    return row
+
+
+def _assigned_order_subquery(user: str) -> str:
+    return _worker_visible_orders_subquery(user)
+
+
+def _worker_operational_roles(user: str) -> tuple[str, ...]:
+    from almdina_erp.almdina_erp.infrastructure.frappe import shop_floor_authorization
+
+    return shop_floor_authorization.roles_of(user)
+
+
+def _resolve_stage_operational_role(order_name: str, stage: Any) -> str | None:
+    role = str(_row_value(stage, "operational_role") or "").strip()
+    if role:
+        return role
+    stage_type = str(_row_value(stage, "stage_type") or "").strip()
+    if not stage_type:
+        return None
+    production_path = frappe.db.get_value(
+        "Door Cutting Order",
+        order_name,
+        "production_path",
+    )
+    if not production_path:
+        return None
+    from almdina_erp.almdina_erp.infrastructure.frappe import production_routing_repository
+
+    try:
+        route = production_routing_repository.get_route(str(production_path))
+        return str(route.stage(stage_type).operational_role or "").strip() or None
+    except (ValueError, AttributeError):
+        return None
+
+
+def _worker_actionable_orders_subquery(user: str) -> str:
+    roles = _worker_operational_roles(user)
+    user_sql = frappe.db.escape(user)
+    if not roles:
+        return " select null as door_cutting_order where 1=0"
+    role_sql = ", ".join(frappe.db.escape(role) for role in roles)
+    pre_production_sql = _pre_production_status_sql()
+    return (
+        " select distinct ps.door_cutting_order"
+        " from `tabProduction Stage` ps"
+        " inner join `tabDoor Cutting Order` dco on dco.name = ps.door_cutting_order"
+        f" where ps.name = dco.current_production_stage"
+        f" and ifnull(dco.current_production_stage, '') != ''"
+        f" and dco.status not in ({pre_production_sql})"
+        f" and ps.assigned_to = {user_sql}"
+        f" and ps.operational_role in ({role_sql})"
+    )
+
+
+def _worker_completed_orders_subquery(user: str) -> str:
+    user_sql = frappe.db.escape(user)
+    pre_production_sql = _pre_production_status_sql()
+    return (
+        " select distinct ps.door_cutting_order"
+        " from `tabProduction Stage` ps"
+        " inner join `tabDoor Cutting Order` dco on dco.name = ps.door_cutting_order"
+        f" where ps.assigned_to = {user_sql}"
+        " and ps.status = 'Completed'"
+        " and ifnull(ps.piece_label, '') = ''"
+        f" and dco.status not in ({pre_production_sql})"
+    )
+
+
+def _worker_visible_orders_subquery(user: str) -> str:
+    return _worker_actionable_orders_subquery(user) + " union " + _worker_completed_orders_subquery(user)
+
+
+def worker_can_view_order(user: str, order_name: str | None) -> bool:
+    if not order_name:
+        return False
+    if not _requires_assigned_scope(user):
+        return True
+
+    order = _dispatched_order_row(order_name)
+    if not order:
+        return False
+
+    if frappe.db.exists(
+        "Production Stage",
+        {
+            "door_cutting_order": order_name,
+            "assigned_to": user,
+            "status": "Completed",
+            "piece_label": ["is", "not set"],
+        },
+    ):
+        return True
+
+    current_stage_name = str(_row_value(order, "current_production_stage") or "").strip()
+    if not current_stage_name:
+        return False
+
+    stage = frappe.db.get_value(
+        "Production Stage",
+        current_stage_name,
+        ["assigned_to", "operational_role", "stage_type"],
+        as_dict=True,
+    )
+    if not stage or _row_value(stage, "assigned_to") != user:
+        return False
+
+    role = _resolve_stage_operational_role(order_name, stage)
+    if not role:
+        return False
+    return role in set(_worker_operational_roles(user))
+
+
+def _assigned_order_exists(user: str, order_name: str | None) -> bool:
+    return worker_can_view_order(user, order_name)
+
+
+def _scoped_read_decision(
+    *,
+    user: str,
+    required_capability: str,
+    order_name: str | None,
+) -> bool:
+    if user == "Administrator":
+        return True
+    if user == "Guest" or not _has(user, required_capability):
+        return False
+    if not _requires_assigned_scope(user):
+        return True
+    return _assigned_order_exists(user, order_name)
 
 
 def door_cutting_order_query(user: str | None = None) -> str:
-	user = user or frappe.session.user
-	if "System Manager" in frappe.get_roles(user):
-		return ""
-	if not _user_is_shop_floor(user):
-		return ""
-	return (
-		"`tabDoor Cutting Order`.name in ("
-		" select distinct door_cutting_order from `tabProduction Stage`"
-		f" where assigned_to = {frappe.db.escape(user)}"
-		" and stage_type in ('Sharyoun','Drawing','CNC','Sanding')"
-		")"
-	)
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has(user, Capability.VIEW_ORDERS):
+        return "1=0"
+    if not _requires_assigned_scope(user):
+        return ""
+    return "`tabDoor Cutting Order`.name in (" + _assigned_order_subquery(user) + ")"
 
 
 def production_stage_query(user: str | None = None) -> str:
-	user = user or frappe.session.user
-	if "System Manager" in frappe.get_roles(user):
-		return ""
-	if not _user_is_shop_floor(user):
-		return ""
-	return f"`tabProduction Stage`.assigned_to = {frappe.db.escape(user)}"
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has_any(user, _STAGE_READ_CAPABILITIES):
+        return "1=0"
+    if not _requires_assigned_scope(user):
+        return ""
+    return f"`tabProduction Stage`.assigned_to = {frappe.db.escape(user)}"
+
+
+def production_incident_query(user: str | None = None) -> str:
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    return "" if _has(user, Capability.VIEW_PRODUCTION_INCIDENTS) else "1=0"
 
 
 def cutting_plan_query(user: str | None = None) -> str:
-	user = user or frappe.session.user
-	if "System Manager" in frappe.get_roles(user):
-		return ""
-	if not _user_is_shop_floor(user):
-		return ""
-	return (
-		"`tabCutting Plan`.door_cutting_order in ("
-		" select distinct door_cutting_order from `tabProduction Stage`"
-		f" where assigned_to = {frappe.db.escape(user)}"
-		" and stage_type in ('Sharyoun','Drawing','CNC','Sanding')"
-		")"
-	)
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has(user, Capability.VIEW_CUTTING_PLAN):
+        return "1=0"
+    if not _requires_assigned_scope(user):
+        return ""
+    return "`tabCutting Plan`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
 
 
-def apply_shop_floor_user_restrictions(user: str | None = None) -> None:
-	"""Block non-factory modules and pin default workspace for a shop-floor user."""
-	user = user or frappe.session.user
-	if user in {"Guest", "Administrator"}:
-		return
-	if not _user_is_shop_floor(user):
-		return
-
-	doc = frappe.get_doc("User", user)
-	all_modules = frappe.get_all("Module Def", pluck="name")
-	blocked = [m for m in all_modules if m not in ALLOWED_MODULES_FOR_SHOP_FLOOR]
-
-	changed = False
-	existing = {row.module for row in (doc.block_modules or [])}
-	desired = set(blocked)
-	if existing != desired:
-		doc.set("block_modules", [])
-		for module in sorted(desired):
-			doc.append("block_modules", {"module": module})
-		changed = True
-
-	if doc.default_workspace != SHOP_FLOOR_WORKSPACE and frappe.db.exists("Workspace", SHOP_FLOOR_WORKSPACE):
-		doc.default_workspace = SHOP_FLOOR_WORKSPACE
-		changed = True
-
-	if changed:
-		doc.flags.ignore_permissions = True
-		doc.flags.ignore_password_policy = True
-		doc.save(ignore_permissions=True)
-		frappe.db.commit()
+def replacement_piece_query(user: str | None = None) -> str:
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    if not _has(user, Capability.VIEW_REPLACEMENTS):
+        return "1=0"
+    if not _requires_assigned_scope(user):
+        return ""
+    return "`tabReplacement Piece`.door_cutting_order in (" + _assigned_order_subquery(user) + ")"
 
 
-def apply_order_entry_user_restrictions(user: str | None = None) -> None:
-	"""Grant the full factory-manager role set and keep the Desk on the Almdina app."""
-	user = user or frappe.session.user
-	if user in {"Guest", "Administrator"}:
-		return
-	if not _is_order_entry_only(user):
-		return
-
-	doc = frappe.get_doc("User", user)
-	all_modules = frappe.get_all("Module Def", pluck="name")
-	desired = {m for m in all_modules if m not in ALLOWED_MODULES_FOR_ORDER_ENTRY}
-
-	changed = False
-	current_roles = {row.role for row in (doc.roles or [])}
-	for role in FACTORY_MANAGER_ROLES:
-		if role not in current_roles and frappe.db.exists("Role", role):
-			doc.append("roles", {"role": role})
-			changed = True
-
-	existing = {row.module for row in (doc.block_modules or [])}
-	if existing != desired:
-		doc.set("block_modules", [])
-		for module in sorted(desired):
-			doc.append("block_modules", {"module": module})
-		changed = True
-
-	if doc.default_workspace != ORDER_ENTRY_WORKSPACE and frappe.db.exists("Workspace", ORDER_ENTRY_WORKSPACE):
-		doc.default_workspace = ORDER_ENTRY_WORKSPACE
-		changed = True
-
-	if doc.default_app != "almdina_erp":
-		doc.default_app = "almdina_erp"
-		changed = True
-
-	if changed:
-		doc.flags.ignore_permissions = True
-		doc.flags.ignore_password_policy = True
-		doc.save(ignore_permissions=True)
-		frappe.db.commit()
+def _known_custom_type_owned_elsewhere(resolved_type: str | None, local_map: dict[str, str]) -> bool:
+    value = str(resolved_type or "")
+    return value in _KNOWN_CUSTOM_PERMISSION_TYPES and value not in local_map
 
 
-def _boot_order_entry(bootinfo) -> None:
-	"""Flag the session so the Desk keeps only the Almdina factory app visible.
+def door_cutting_order_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
 
-	`apps_data` is assembled after extend_bootinfo runs, so the apps screen itself is
-	trimmed client-side in order_entry_desk.js using this flag.
-	"""
-	try:
-		apply_order_entry_user_restrictions(frappe.session.user)
-	except Exception:
-		frappe.log_error(title="almdina order entry user restrictions")
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_ORDERS,
+            order_name=getattr(doc, "name", None),
+        )
+    if resolved_type == "delete":
+        return False
 
-	bootinfo["almdina_order_entry_only"] = 1
-	bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
-
-	module_map = bootinfo.get("module_wise_workspaces")
-	if isinstance(module_map, dict):
-		bootinfo["module_wise_workspaces"] = {
-			k: v for k, v in module_map.items() if k in ORDER_ENTRY_ICON_MODULES
-		}
-
-	# Required framework modules stay available while only Almdina workspaces are
-	# listed in the sidebar.
-	allowed_workspaces = set()
-	workspaces = bootinfo.get("workspaces")
-	if isinstance(workspaces, dict):
-		pages = workspaces.get("pages")
-		if isinstance(pages, list):
-			kept = [
-				p
-				for p in pages
-				if not isinstance(p, dict)
-				or p.get("module") in ORDER_ENTRY_ICON_MODULES
-				or p.get("app") == "almdina_erp"
-				or p.get("for_user") == frappe.session.user
-			]
-			if kept:
-				workspaces["pages"] = kept
-				pages = kept
-		for page in pages or []:
-			if isinstance(page, dict):
-				allowed_workspaces.add(page.get("name"))
-				allowed_workspaces.add(page.get("title"))
-
-	icons = bootinfo.get("desktop_icons")
-	if isinstance(icons, list) and allowed_workspaces:
-		bootinfo["desktop_icons"] = [
-			i
-			for i in icons
-			if isinstance(i, dict)
-			and (i.get("module_name") in allowed_workspaces or i.get("label") in allowed_workspaces)
-		]
+    required = _DCO_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
+    if required:
+        return _has(resolved_user, required)
+    if _known_custom_type_owned_elsewhere(resolved_type, _DCO_PERMISSION_CAPABILITIES):
+        return False
+    return resolved_type not in _MUTATING_PERMISSION_TYPES
 
 
-def boot_session(bootinfo) -> None:
-	"""Limit Desk navigation for pure shop-floor operators."""
-	if _is_order_entry_only():
-		_boot_order_entry(bootinfo)
-		return
+def production_stage_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
 
-	if not _is_shop_floor_only():
-		return
-
-	# Ensure module blocks exist (idempotent).
-	try:
-		apply_shop_floor_user_restrictions(frappe.session.user)
-	except Exception:
-		frappe.log_error(title="almdina shop floor user restrictions")
-
-	bootinfo["almdina_shop_floor_only"] = 1
-	bootinfo["almdina_shop_floor_home"] = SHOP_FLOOR_PAGE
-	bootinfo["almdina_allowed_pages"] = [SHOP_FLOOR_PAGE]
-	bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
-	bootinfo["home_page"] = SHOP_FLOOR_PAGE
-
-	# Keep only Shop Floor workspace pages.
-	workspaces = bootinfo.get("workspaces")
-	if isinstance(workspaces, dict) and workspaces.get("pages"):
-		pages = [
-			p
-			for p in workspaces["pages"]
-			if (p.get("name") if isinstance(p, dict) else p) == SHOP_FLOOR_WORKSPACE
-		]
-		if not pages:
-			# Fallback: keep any page titled Shop Floor / صالة الإنتاج
-			pages = [
-				p
-				for p in workspaces["pages"]
-				if isinstance(p, dict)
-				and str(p.get("title") or p.get("label") or "") in {SHOP_FLOOR_WORKSPACE, "صالة الإنتاج"}
-			]
-		workspaces["pages"] = pages
-		bootinfo["workspaces"] = workspaces
-		bootinfo["allowed_workspaces"] = pages
-
-	# Empty workspace sidebar for operators — navigation is the custom bottom tabs.
-	bootinfo["workspace_sidebar_item"] = {}
-	bootinfo["sidebar_pages"] = []
-	bootinfo["allowed_pages"] = [SHOP_FLOOR_PAGE]
-
-	# App switcher / desktop apps: Almdina only
-	app_data = bootinfo.get("app_data")
-	if isinstance(app_data, list):
-		trimmed = []
-		for app in app_data:
-			if not isinstance(app, dict):
-				continue
-			name = app.get("app_name") or app.get("name")
-			if name != "almdina_erp":
-				continue
-			app = dict(app)
-			app["workspaces"] = [SHOP_FLOOR_WORKSPACE]
-			app["app_route"] = f"/app/{SHOP_FLOOR_PAGE}"
-			app["modules"] = list(ALLOWED_MODULES_FOR_SHOP_FLOOR)
-			trimmed.append(app)
-		bootinfo["app_data"] = trimmed
-
-	# No desktop icons for operators
-	bootinfo["desktop_icons"] = []
-
-	module_map = bootinfo.get("module_wise_workspaces")
-	if isinstance(module_map, dict):
-		bootinfo["module_wise_workspaces"] = {
-			k: [w for w in (v or []) if w == SHOP_FLOOR_WORKSPACE]
-			for k, v in module_map.items()
-			if k in ALLOWED_MODULES_FOR_SHOP_FLOOR
-		}
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        if not _has_any(resolved_user, _STAGE_READ_CAPABILITIES):
+            return False
+        if not _requires_assigned_scope(resolved_user):
+            return True
+        return bool(getattr(doc, "assigned_to", None) == resolved_user)
+    if resolved_type in _MUTATING_PERMISSION_TYPES or str(resolved_type or "") in _KNOWN_CUSTOM_PERMISSION_TYPES:
+        return False
+    return True
 
 
-def extend_bootinfo(bootinfo=None) -> None:
-	"""Second-pass filter after sessions.get() adds apps_data."""
-	if not bootinfo:
-		return
+def production_incident_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    del doc
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _has(resolved_user, Capability.VIEW_PRODUCTION_INCIDENTS)
+    if resolved_type in _MUTATING_PERMISSION_TYPES or str(resolved_type or "") in _KNOWN_CUSTOM_PERMISSION_TYPES:
+        return False
+    return True
 
-	if bootinfo.get("almdina_order_entry_only") or _is_order_entry_only():
-		bootinfo["almdina_order_entry_only"] = 1
-		bootinfo["almdina_allowed_apps"] = ["almdina_erp"]
-		return
 
-	if not bootinfo.get("almdina_shop_floor_only"):
-		if not _is_shop_floor_only():
-			return
-		bootinfo["almdina_shop_floor_only"] = 1
+def cutting_plan_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+    order_name = getattr(doc, "door_cutting_order", None)
 
-	apps_data = bootinfo.get("apps_data")
-	if isinstance(apps_data, dict):
-		apps = apps_data.get("apps") or []
-		apps_data["apps"] = [
-			a
-			for a in apps
-			if (a.get("name") if isinstance(a, dict) else a) == "almdina_erp"
-		]
-		apps_data["default_path"] = f"/app/{SHOP_FLOOR_PAGE}"
-		bootinfo["apps_data"] = apps_data
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_CUTTING_PLAN,
+            order_name=order_name,
+        )
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        return False
 
-	# Strip leftover sidebar / workspace payloads again after session assembly.
-	bootinfo["workspace_sidebar_item"] = {}
-	bootinfo["desktop_icons"] = []
-	bootinfo["home_page"] = SHOP_FLOOR_PAGE
-	bootinfo["default_route"] = f"/app/{SHOP_FLOOR_PAGE}"
+    required = _CUTTING_PLAN_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
+    if required:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=required,
+            order_name=order_name,
+        )
+    return False
+
+
+def replacement_piece_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+
+    if resolved_user == "Administrator":
+        return True
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_REPLACEMENTS,
+            order_name=getattr(doc, "door_cutting_order", None),
+        )
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        return False
+
+    required = _REPLACEMENT_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
+    if required:
+        return _has(resolved_user, required)
+    if _known_custom_type_owned_elsewhere(resolved_type, _REPLACEMENT_PERMISSION_CAPABILITIES):
+        return False
+    return True
+
+
+__all__ = [
+    "cutting_plan_has_permission",
+    "cutting_plan_query",
+    "door_cutting_order_has_permission",
+    "door_cutting_order_query",
+    "production_incident_has_permission",
+    "production_incident_query",
+    "production_stage_has_permission",
+    "production_stage_query",
+    "replacement_piece_has_permission",
+    "replacement_piece_query",
+    "worker_can_view_order",
+]

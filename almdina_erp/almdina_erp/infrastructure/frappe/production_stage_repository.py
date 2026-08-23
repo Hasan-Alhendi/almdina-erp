@@ -5,7 +5,12 @@ from typing import Any
 import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
-from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_STAGE_TYPES
+
+def lock_stage(stage_name: str) -> None:
+    frappe.db.sql(
+        "select name from `tabProduction Stage` where name = %s for update",
+        (stage_name,),
+    )
 
 
 def get_stage(stage_name: str) -> Any:
@@ -16,7 +21,14 @@ def stage_exists(stage_name: str | None) -> bool:
     return bool(stage_name and frappe.db.exists("Production Stage", stage_name))
 
 
-def cancel_non_shop_floor_active_stages(order_name: str) -> None:
+def cancel_active_order_stages(order_name: str) -> None:
+    """Cancel stale order-wide stages before a fresh route is dispatched.
+
+    Exceptional-piece stages are independent work items and must survive the
+    order dispatch. Every other active stage is route work; no stage code is
+    privileged here because routes are administrator-configurable.
+    """
+
     rows = frappe.get_all(
         "Production Stage",
         filters={
@@ -26,7 +38,7 @@ def cancel_non_shop_floor_active_stages(order_name: str) -> None:
         fields=["name", "piece_label", "stage_type"],
     )
     for row in rows:
-        if row.piece_label or row.stage_type in SHOP_FLOOR_STAGE_TYPES:
+        if row.piece_label:
             continue
         frappe.db.set_value(
             "Production Stage",
@@ -42,14 +54,29 @@ def create_stage(
     stage_type: str,
     assignee: str,
     sequence: int,
+    *,
+    department_label: str | None = None,
+    operational_role: str | None = None,
 ) -> Any:
     stage = frappe.new_doc("Production Stage")
     stage.door_cutting_order = order_name
     stage.sequence = sequence
     stage.stage_type = stage_type
+    stage.department_label = department_label or stage_type
+    stage.operational_role = operational_role or ""
     stage.status = "Pending"
     stage.assigned_to = assignee
+    stage.assignment_time = now_datetime()
     stage.insert(ignore_permissions=True)
+    return stage
+
+
+def reassign_stage(stage_name: str, *, assignee: str) -> Any:
+    lock_stage(stage_name)
+    stage = get_stage(stage_name)
+    stage.assigned_to = assignee
+    stage.assignment_time = now_datetime()
+    stage.save(ignore_permissions=True)
     return stage
 
 
@@ -96,6 +123,9 @@ def start_stage(
     stage.status = target_status
     if not stage.assigned_to:
         stage.assigned_to = actor
+        stage.assignment_time = now_datetime()
+    elif not getattr(stage, "assignment_time", None):
+        stage.assignment_time = getattr(stage, "creation", None) or now_datetime()
     stage.save(ignore_permissions=True)
     return stage
 
@@ -163,6 +193,7 @@ def reopen_stage(stage_name: str, *, target_status: str) -> Any:
     stage.start_time = None
     stage.finished_by = None
     stage.finish_time = None
+    stage.assignment_time = now_datetime()
     stage.actual_working_seconds = 0
     stage.paused_seconds = 0
     stage.completed_qty = 0
@@ -172,7 +203,7 @@ def reopen_stage(stage_name: str, *, target_status: str) -> Any:
 
 
 __all__ = [
-    "cancel_non_shop_floor_active_stages",
+    "cancel_active_order_stages",
     "cancel_stage",
     "close_open_pause",
     "complete_stage",
@@ -180,6 +211,8 @@ __all__ = [
     "get_stage",
     "list_later_stages",
     "list_revert_stage_candidates",
+    "lock_stage",
+    "reassign_stage",
     "reopen_stage",
     "stage_exists",
     "start_stage",
