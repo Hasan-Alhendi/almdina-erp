@@ -39,7 +39,7 @@
                     <div class="aw-hero-copy">
                         <span class="aw-eyebrow">${t("إدارة القوى العاملة")}</span>
                         <h2>${t("مستخدمو Almdina")}</h2>
-                        <p>${t("أدر حسابات المعمل وأدوارها من مكان واحد. الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.")}</p>
+                        <p>${t("أدر حسابات المعمل وأدوارها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا؛ الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.")}</p>
                     </div>
                     <div class="aw-hero-meta" aria-label="${t("ملخص القائمة الحالية")}">
                         <span>${t("المستخدمون الظاهرون")}</span>
@@ -221,7 +221,7 @@
                     ${workforceSectionHtml(model)}
                     ${availableUsersSectionHtml(model)}
                 </div>
-            `);
+            `;
         }
 
         function auditHtml(events) {
