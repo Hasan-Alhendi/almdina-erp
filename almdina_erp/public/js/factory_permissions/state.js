@@ -45,6 +45,7 @@
             saving: false,
         };
         const requests = Object.freeze({
+            console: frontend.createLatestRequestGate(),
             role: frontend.createLatestRequestGate(),
             preview: frontend.createLatestRequestGate(),
             transfer: frontend.createLatestRequestGate(),
@@ -60,6 +61,21 @@
             requests.transfer.invalidate();
         }
 
+        function invalidateReads() {
+            requests.console.invalidate();
+            requests.role.invalidate();
+            invalidatePending();
+        }
+
+        function deactivate() {
+            invalidateReads();
+        }
+
+        function dispose() {
+            deactivate();
+            lifecycle.dispose();
+        }
+
         return Object.freeze({
             data,
             requests,
@@ -69,6 +85,9 @@
             unique,
             isDirty,
             invalidatePending,
+            invalidateReads,
+            deactivate,
+            dispose,
         });
     }
 

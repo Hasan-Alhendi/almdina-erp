@@ -30,7 +30,8 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_a_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 80)
+        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertIn("frappe.ui.make_app_page", self.page)
         for asset in (
             "api.js",
             "state.js",
@@ -183,7 +184,8 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("requests.console.begin", self.controller)
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("actionAllowed(user", self.controller)
-        self.assertIn("refreshOnRevisit", self.controller)
+        self.assertIn("bindActivationLifecycle", self.controller)
+        self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
         self.assertNotIn("workforce_service", self.controller)
         self.assertNotIn(".html(", self.controller)

@@ -29,13 +29,17 @@
             return data.current;
         }
 
-        function dispose() {
+        function deactivate() {
             requests.settings.invalidate();
             requests.audit.invalidate();
+        }
+
+        function dispose() {
+            deactivate();
             lifecycle.dispose();
         }
 
-        return Object.freeze({ data, requests, lifecycle, apply, dispose });
+        return Object.freeze({ data, requests, lifecycle, apply, deactivate, dispose });
     }
 
     window.AlmdinaFactoryProductionSettingsState = Object.freeze({ create });

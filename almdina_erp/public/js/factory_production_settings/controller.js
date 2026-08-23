@@ -13,6 +13,7 @@
         }
 
         const frontend = window.AlmdinaFrontend;
+        const pageLifecycleModule = window.AlmdinaPageRevisit;
         const api = window.AlmdinaFactoryProductionSettingsApi;
         const stateModule = window.AlmdinaFactoryProductionSettingsState;
         const viewModelModule = window.AlmdinaFactoryProductionSettingsViewModel;
@@ -21,6 +22,8 @@
         const dialogsModule = window.AlmdinaFactoryProductionSettingsDialogs;
         if (
             !frontend
+            || !pageLifecycleModule
+            || typeof pageLifecycleModule.bindActivationLifecycle !== "function"
             || !api
             || !stateModule
             || !viewModelModule
@@ -33,17 +36,17 @@
 
         const store = stateModule.create();
         const state = store.data;
-        const page = frappe.ui.make_app_page({
-            parent: wrapper,
-            title: __("إعدادات المعمل"),
-            single_column: true,
-        });
+        const page = wrapper.page;
+        if (!page) throw new Error("Production Settings page shell is unavailable");
         const $body = $(wrapper).find(".layout-main-section");
         const escapeHtml = value => frappe.utils.escape_html(String(value ?? ""));
         const viewModel = viewModelModule.create({ translate: __ });
         const renderer = rendererModule.create({ $body, escapeHtml, translate: __ });
         const dialogs = dialogsModule.create({ translate: __, escapeHtml });
+        let activation = null;
+        let initialLoadPending = true;
 
+        if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(__("سجل التغييرات"), openAudit, null, "history");
         page.add_inner_button(__("تحديث"), load, null, "refresh");
         interactionsModule.bind({
@@ -51,12 +54,6 @@
             lifecycle: store.lifecycle,
             callbacks: { onEditSection: openSectionDialog },
         });
-        if (window.AlmdinaPageRevisit) {
-            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
-        }
-
-        renderer.renderLoading();
-        load();
 
         const instance = Object.freeze({
             load,
@@ -68,6 +65,16 @@
             },
         });
         wrapper.__almdinaProductionSettingsController = instance;
+        activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
+            onActivate: load,
+            onDeactivate: store.deactivate,
+        });
+        if (!activation) {
+            instance.dispose();
+            throw new Error("Production Settings page lifecycle is unavailable");
+        }
+        store.lifecycle.track(() => activation.dispose(), "production-settings-page-activation");
+        if (activation.isActive()) load();
         return instance;
 
         function errorMessage(error, fallback) {
@@ -83,15 +90,18 @@
         }
 
         function load() {
+            if (!activation || !activation.isActive()) return Promise.resolve(null);
+            const isInitialLoad = initialLoadPending;
+            initialLoadPending = false;
             const token = store.requests.settings.begin();
-            renderer.renderLoading();
+            if (!isInitialLoad) renderer.renderLoading();
             return api.getSettings({ freeze: false }).then(data => {
-                if (!store.requests.settings.isCurrent(token)) return null;
+                if (!activation.isActive() || !store.requests.settings.isCurrent(token)) return null;
                 store.apply(data || {});
                 render();
                 return data;
             }).catch(error => {
-                if (!store.requests.settings.isCurrent(token)) return null;
+                if (!activation.isActive() || !store.requests.settings.isCurrent(token)) return null;
                 renderer.renderError(errorMessage(error, __("تعذر تحميل إعدادات المعمل.")));
                 return null;
             });
@@ -106,6 +116,7 @@
                     payload,
                     freezeOptions(__("جاري حفظ الإعدادات..."))
                 ).then(data => {
+                    if (!activation.isActive()) return data;
                     store.apply(data || {});
                     render();
                     dialogs.showSaved();
@@ -118,10 +129,10 @@
             const token = store.requests.audit.begin();
             const surface = dialogs.openAudit(renderer.auditLoadingHtml());
             return api.getAudit({ freeze: false }).then(rows => {
-                if (!store.requests.audit.isCurrent(token)) return;
+                if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
                 surface.setHtml(renderer.auditHtml(rows));
             }).catch(error => {
-                if (!store.requests.audit.isCurrent(token)) return;
+                if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
                 surface.setHtml(renderer.auditErrorHtml(
                     errorMessage(error, __("تعذر تحميل السجل."))
                 ));

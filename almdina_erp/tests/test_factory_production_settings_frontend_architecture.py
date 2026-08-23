@@ -33,7 +33,8 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 80)
+        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertIn("frappe.ui.make_app_page", self.page)
         metadata = json.loads(PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(metadata["roles"], [])
         for asset in (
@@ -165,7 +166,8 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("requests.settings.begin", self.controller)
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("viewModel.sectionEditable", self.controller)
-        self.assertIn("refreshOnRevisit", self.controller)
+        self.assertIn("bindActivationLifecycle", self.controller)
+        self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
         self.assertNotIn("production_settings_service", self.controller)
         self.assertNotIn(".html(", self.controller)

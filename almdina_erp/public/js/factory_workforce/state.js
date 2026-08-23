@@ -44,9 +44,13 @@
             return Boolean(data.users.length || data.availableUsers.length);
         }
 
-        function dispose() {
+        function deactivate() {
             requests.console.invalidate();
             requests.audit.invalidate();
+        }
+
+        function dispose() {
+            deactivate();
             lifecycle.dispose();
         }
 
@@ -56,6 +60,7 @@
             lifecycle,
             applyConsole,
             hasRows,
+            deactivate,
             dispose,
         });
     }
