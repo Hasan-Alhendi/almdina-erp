@@ -137,6 +137,19 @@
             return viewModel.roleOptions(state.roles, query);
         }
 
+        function validateRoles(selectedRoles) {
+            const policy = viewModel.roleHomePolicy(state.roles, selectedRoles);
+            if (!policy.hasConflict) return { ok: true };
+            const details = policy.configured
+                .map(item => `${item.role} ← ${item.homePage}`)
+                .join("<br>");
+            return {
+                ok: false,
+                message: __("لا يمكن إسناد أدوار تحتوي صفحات دخول مختلفة. عدّل Home Page في Role داخل Frappe أو اتركها فارغة في الأدوار الثانوية.")
+                    + `<div class="mt-2 text-muted">${details}</div>`,
+            };
+        }
+
         function userByEmail(email) {
             return viewModel.findUser(state.users, email);
         }
@@ -150,6 +163,7 @@
             dialogs.openCreate({
                 canAssignRoles: can("assign_user_roles"),
                 roleOptions,
+                validateRoles,
                 onSubmit: payload => api.createUser(
                     payload,
                     freezeOptions(__("جاري إنشاء المستخدم..."))
@@ -172,6 +186,7 @@
                 canEdit,
                 canAssignRoles,
                 roleOptions,
+                validateRoles,
                 onSubmit: payload => api.updateUser(
                     user.email,
                     payload,
