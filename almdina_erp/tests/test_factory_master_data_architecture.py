@@ -120,6 +120,20 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("سيُرفض الحذف", master)
         self.assertIn("@media", css)
 
+    def test_routing_workflow_stylesheet_bootstrap_is_explicit_and_fail_closed(self) -> None:
+        master = MASTER_PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("/assets/almdina_erp/js/frontend_foundation.js", master)
+        self.assertIn("ensureStylesheet(STYLE_ASSET", master)
+        self.assertIn("almdina-routing-workflow-style", master)
+        self.assertIn("bootstrapRoutingWorkflowPage", master)
+        self.assertNotIn("Promise.resolve(frappe.require(STYLE_ASSET))", master)
+        self.assertNotIn(".catch(() => null)", master)
+        self.assertLess(
+            master.index("ensureStylesheet(STYLE_ASSET"),
+            master.rindex("workflowPage.init()"),
+        )
+
     def test_settings_workspace_uses_consoles_not_raw_single_doctype(self) -> None:
         metadata = json.loads(WORKSPACE.read_text(encoding="utf-8"))
         targets = {row["link_to"] for row in metadata["links"]}
