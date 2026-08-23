@@ -127,6 +127,9 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("ensureStylesheet(STYLE_ASSET", master)
         self.assertIn("almdina-routing-workflow-style", master)
         self.assertIn("bootstrapRoutingWorkflowPage", master)
+        self.assertIn("__almdinaStyleBootstrapPromise", master)
+        self.assertIn('$(event.currentTarget).prop("disabled", true)', master)
+        self.assertIn("{resetStyle: true}", master)
         self.assertNotIn("Promise.resolve(frappe.require(STYLE_ASSET))", master)
         self.assertNotIn(".catch(() => null)", master)
         self.assertLess(
