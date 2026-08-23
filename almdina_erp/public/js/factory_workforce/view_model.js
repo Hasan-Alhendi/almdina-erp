@@ -27,14 +27,42 @@
             return (users || []).find(user => user && user.email === email) || null;
         }
 
+        function normalizeRoute(value) {
+            const route = String(value || "").trim();
+            if (!route || /^https?:\/\//.test(route) || route.startsWith("/")) return route;
+            return `/${route}`;
+        }
+
+        function roleHomePolicy(roles, selectedRoles = []) {
+            const catalog = new Map((roles || []).map(role => [String(role && role.name || ""), role || {}]));
+            const configured = (selectedRoles || [])
+                .map(name => {
+                    const role = catalog.get(String(name)) || {};
+                    return { role: String(name), homePage: normalizeRoute(role.home_page) };
+                })
+                .filter(item => item.homePage);
+            const routes = [...new Set(configured.map(item => item.homePage))];
+            return {
+                configured,
+                routes,
+                hasConflict: routes.length > 1,
+            };
+        }
+
         function roleOptions(roles, query = "") {
             const needle = String(query || "").toLowerCase();
             return (roles || [])
                 .filter(role => String(role && role.name || "").toLowerCase().includes(needle))
-                .map(role => ({
-                    value: role.name,
-                    description: role.desk_access ? t("وصول Desk") : t("دور بدون Desk"),
-                }));
+                .map(role => {
+                    const homePage = normalizeRoute(role.home_page);
+                    const access = role.desk_access ? t("وصول Desk") : t("دور بدون Desk");
+                    return {
+                        value: role.name,
+                        description: homePage
+                            ? `${access} · ${t("صفحة الدخول")}: ${homePage}`
+                            : `${access} · ${t("صفحة الدخول غير محددة")}`,
+                    };
+                });
         }
 
         function summaryCards(summary = {}) {
@@ -49,6 +77,9 @@
         function userModel(user, data) {
             const activeAssignments = Number(user && user.active_assignments || 0);
             const roles = Array.isArray(user && user.roles) ? user.roles : [];
+            const navigation = user && user.navigation || {};
+            const roleHomes = Array.isArray(navigation.role_home_pages) ? navigation.role_home_pages : [];
+            const configuredRoutes = roleHomes.map(item => item.home_page).filter(Boolean);
             return {
                 raw: user,
                 email: user.email,
@@ -59,6 +90,9 @@
                 languageLabel: user.language === "en" ? "English" : t("العربية"),
                 defaultWorkspace: user.default_workspace || "—",
                 lastActive: user.last_active || "—",
+                roleHomeSummary: configuredRoutes.length ? configuredRoutes.join(" · ") : t("حسب Frappe / غير محددة"),
+                roleHomeConflict: navigation.role_home_conflict === true,
+                defaultWorkspaceConflict: navigation.default_workspace_conflict === true,
                 canEdit: actionAllowed(user, "edit") || actionAllowed(user, "assign_roles"),
                 canResetPassword: actionAllowed(user, "reset_password"),
                 canDisable: actionAllowed(user, "disable"),
@@ -95,6 +129,8 @@
             can,
             actionAllowed,
             findUser,
+            normalizeRoute,
+            roleHomePolicy,
             roleOptions,
             summaryCards,
             userModel,

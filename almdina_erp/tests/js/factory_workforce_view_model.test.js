@@ -26,18 +26,20 @@ assert.ok(moduleApi && typeof moduleApi.create === "function");
 const model = moduleApi.create({ translate: value => value });
 
 const roles = [
-    { name: "Drawing", desk_access: 1 },
-    { name: "CNC", desk_access: 0 },
-    { name: "Sanding", desk_access: 1 },
+    { name: "Drawing", desk_access: 1, home_page: "/desk/door-cutting-order" },
+    { name: "CNC", desk_access: 0, home_page: "" },
+    { name: "Sanding", desk_access: 1, home_page: "/desk/shop-floor-inbox" },
 ];
 assert.deepEqual(
     JSON.parse(JSON.stringify(model.roleOptions(roles, "cn"))),
-    [{ value: "CNC", description: "دور بدون Desk" }]
+    [{ value: "CNC", description: "دور بدون Desk · صفحة الدخول غير محددة" }]
 );
 assert.deepEqual(
     JSON.parse(JSON.stringify(model.roleOptions(roles, "draw"))),
-    [{ value: "Drawing", description: "وصول Desk" }]
+    [{ value: "Drawing", description: "وصول Desk · صفحة الدخول: /desk/door-cutting-order" }]
 );
+assert.equal(model.roleHomePolicy(roles, ["Drawing"]).hasConflict, false);
+assert.equal(model.roleHomePolicy(roles, ["Drawing", "Sanding"]).hasConflict, true);
 
 const user = {
     email: "worker@example.com",

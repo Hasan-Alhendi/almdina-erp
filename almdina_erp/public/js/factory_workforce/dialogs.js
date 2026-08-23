@@ -15,11 +15,23 @@
                 fieldname: "roles",
                 fieldtype: "MultiSelectList",
                 label: t("الأدوار"),
-                description: t("اختر دورًا واحدًا أو أكثر. الصلاحيات تأتي من مصفوفة كل دور."),
+                description: t("اختر الأدوار والصلاحيات المطلوبة. صفحة الدخول تأتي من Home Page في Role داخل Frappe ولا يحددها نظام Almdina."),
                 default: defaultValue,
                 read_only: readOnly ? 1 : 0,
                 get_data: txt => roleOptions(txt),
             };
+        }
+
+        function validateRoleSelection(roles, validator) {
+            if (typeof validator !== "function") return true;
+            const result = validator(roles || []);
+            if (!result || result.ok !== false) return true;
+            frappe.msgprint({
+                title: t("تعارض في صفحة الدخول"),
+                message: result.message || t("الأدوار المحددة تحتوي صفحات دخول مختلفة."),
+                indicator: "orange",
+            });
+            return false;
         }
 
         function openCreate(config = {}) {
@@ -36,7 +48,9 @@
                 ],
                 primary_action_label: t("إنشاء المستخدم"),
                 primary_action: values => {
-                    const payload = { ...values, roles: canAssignRoles ? (values.roles || []) : [] };
+                    const roles = canAssignRoles ? (values.roles || []) : [];
+                    if (!validateRoleSelection(roles, config.validateRoles)) return false;
+                    const payload = { ...values, roles };
                     return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => dialog.hide());
                 },
             });
@@ -65,6 +79,7 @@
                 fields,
                 primary_action_label: t("حفظ"),
                 primary_action: values => {
+                    if (canAssignRoles && !validateRoleSelection(values.roles || [], config.validateRoles)) return false;
                     const payload = {};
                     if (canEdit) {
                         payload.first_name = values.first_name;
@@ -109,7 +124,7 @@
             const user = config.user;
             if (!user) return false;
             frappe.confirm(
-                t("سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا. هل تريد المتابعة؟", [user.email]),
+                t("سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا، وبدون تغيير Default Workspace أو Default App في Frappe. هل تريد المتابعة؟", [user.email]),
                 () => config.onConfirm && config.onConfirm()
             );
             return true;

@@ -5,6 +5,10 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.application.security.role_home_policy import (
+    RoleHomePolicy,
+    analyze_role_home_pages,
+)
 from almdina_erp.almdina_erp.application.security.workforce_management import (
     normalize_identity,
     normalize_role_selection,
@@ -99,10 +103,42 @@ def _facts(snapshot: dict[str, Any]) -> WorkforceFacts:
     )
 
 
+def _role_home_policy(roles: tuple[str, ...] | list[str]) -> RoleHomePolicy:
+    selected = tuple(normalize_role_selection(roles or ()))
+    return analyze_role_home_pages(selected, _repository.role_home_pages(selected))
+
+
+def _validate_role_home_policy(roles: tuple[str, ...]) -> None:
+    policy = _role_home_policy(roles)
+    if not policy.has_conflict:
+        return
+
+    details = "، ".join(f"{role} ← {route}" for role, route in policy.by_role)
+    raise ValueError(
+        "لا يمكن حفظ هذه الأدوار لأن أكثر من دور يحدد صفحة دخول مختلفة في Frappe. "
+        "حدد Home Page واحدة متوافقة بين أدوار المستخدم أو اترك Home Page فارغة في الأدوار الثانوية. "
+        f"التعارض الحالي: {details}"
+    )
+
+
+def _navigation_context(snapshot: dict[str, Any]) -> dict[str, Any]:
+    policy = _role_home_policy(tuple(snapshot.get("roles") or ()))
+    default_workspace = str(snapshot.get("default_workspace") or "")
+    return {
+        "role_home_pages": [
+            {"role": role, "home_page": route}
+            for role, route in policy.by_role
+        ],
+        "role_home_conflict": policy.has_conflict,
+        "default_workspace_conflict": bool(default_workspace and policy.routes),
+    }
+
+
 def _present_user(snapshot: dict[str, Any]) -> dict[str, Any]:
     row = dict(snapshot)
     row["roles"] = list(normalize_role_selection(row.get("roles") or ()))
     row["actions"] = action_context(_granted(), facts=_facts(row))
+    row["navigation"] = _navigation_context(row)
     row.pop("is_almdina", None)
     return row
 
@@ -124,7 +160,9 @@ def _present_available_user(snapshot: dict[str, Any]) -> dict[str, Any]:
 def _validated_roles(values: Any) -> tuple[str, ...]:
     try:
         selected = normalize_role_selection(values)
-        return _repository.validate_roles(selected)
+        selected = _repository.validate_roles(selected)
+        _validate_role_home_policy(selected)
+        return selected
     except ValueError as error:
         _raise_value_error(error)
     raise AssertionError("frappe.throw must interrupt execution")
@@ -253,7 +291,7 @@ def adopt_workforce_user(user: str) -> dict[str, Any]:
         action="Added to Workforce",
         before=before,
         after=after,
-        summary=_("تمت إضافة مستخدم Frappe موجود إلى مستخدمي المعمل دون منحه أي دور مصنع تلقائيًا."),
+        summary=_("تمت إضافة مستخدم Frappe موجود إلى مستخدمي المعمل دون منحه أي دور مصنع أو تغيير إعدادات التنقل الأصلية في Frappe."),
         changed_by=str(frappe.session.user),
     )
     return {"user": _present_user(after), "audit": audit_name}

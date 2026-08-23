@@ -12,6 +12,7 @@ APPLICATION = APP / "application" / "security" / "workforce_management.py"
 APPLICATION_PACKAGE = APP / "application" / "security" / "__init__.py"
 SURFACE_POLICY = APP / "application" / "security" / "surface_access.py"
 REPOSITORY = APP / "infrastructure" / "frappe" / "workforce_repository.py"
+MEMBERSHIP = APP / "infrastructure" / "frappe" / "workforce_membership.py"
 SERVICE = APP / "services" / "workforce_service.py"
 PROVISION = APP / "services" / "workforce_provisioning_service.py"
 PAGE = APP / "page" / "factory_workforce" / "factory_workforce.js"
@@ -110,12 +111,15 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
             self.assertIn(endpoint, api)
         self.assertIn('fieldtype: "MultiSelectList"', dialogs)
         self.assertIn("assign_user_roles", view_model)
+        self.assertIn("roleHomePolicy", view_model)
         self.assertIn("availableUsers", state)
         self.assertIn("مستخدمون غير مضافين إلى المعمل", renderer)
         self.assertIn("إضافة إلى المعمل", renderer)
         self.assertIn("لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا", renderer)
+        self.assertIn("Home Page", renderer)
         self.assertIn("createLatestRequestGate", state)
         self.assertIn("requests.console.begin", controller)
+        self.assertIn("validateRoles", controller)
         self.assertIn("@media(max-width:", css)
         self.assertIn('fieldtype: "Password"', dialogs)
         self.assertIn("factory_workforce/controller.js", page)
@@ -170,17 +174,22 @@ class TestWorkforceManagementArchitecture(unittest.TestCase):
 
     def test_repository_uses_explicit_scope_and_safe_adoption(self) -> None:
         repository = REPOSITORY.read_text(encoding="utf-8")
+        membership = MEMBERSHIP.read_text(encoding="utf-8")
         service = SERVICE.read_text(encoding="utf-8")
         self.assertIn("list_assignable_roles", repository)
         self.assertIn("validate_roles", repository)
         self.assertIn("list_available_users", repository)
         self.assertIn("adopt_user", repository)
-        self.assertIn("coalesce(u.default_app, '') = 'almdina_erp'", repository)
-        self.assertIn("coalesce(u.default_app, '') != 'almdina_erp'", repository)
+        self.assertIn("MEMBERSHIP_FIELD", repository)
+        self.assertIn('MEMBERSHIP_FIELD = "custom_almdina_workforce_member"', membership)
+        self.assertNotIn("coalesce(u.default_app, '') = 'almdina_erp'", repository)
+        self.assertNotIn("coalesce(u.default_app, '') != 'almdina_erp'", repository)
+        self.assertNotIn('user.default_app = "almdina_erp"', repository)
+        self.assertNotIn('user.default_workspace = "Almdina ERP"', repository)
         self.assertIn('if role != "System Manager"', repository)
         self.assertNotIn("RETAINED_SYSTEM_ROLES", repository)
         self.assertIn("Capability.CREATE_USERS in granted", service)
-        self.assertIn("دون منحه أي دور مصنع تلقائيًا", service)
+        self.assertIn("دون منحه أي دور مصنع", service)
         self.assertNotIn("MANAGED_OPERATIONAL_ROLES", repository)
         self.assertNotIn("infer_profile", repository)
 

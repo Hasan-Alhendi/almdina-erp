@@ -39,7 +39,7 @@
                     <div class="aw-hero-copy">
                         <span class="aw-eyebrow">${t("إدارة القوى العاملة")}</span>
                         <h2>${t("مستخدمو Almdina")}</h2>
-                        <p>${t("أدر حسابات المعمل وأدوارها وحالتها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا عند إضافة المستخدم.")}</p>
+                        <p>${t("أدر حسابات المعمل وأدوارها من مكان واحد. الأدوار والصلاحيات لا تُمنح تلقائيًا؛ الصلاحيات تملكها Almdina، أما صفحة الدخول فيحددها Home Page داخل Role في Frappe.")}</p>
                     </div>
                     <div class="aw-hero-meta" aria-label="${t("ملخص القائمة الحالية")}">
                         <span>${t("المستخدمون الظاهرون")}</span>
@@ -100,8 +100,14 @@
             const activeBadge = user.activeAssignments
                 ? `<span class="aw-badge is-warning">${t("مراحل نشطة")}: ${user.activeAssignments}</span>`
                 : "";
-            const warning = user.showActiveAssignmentWarning
+            const assignmentWarning = user.showActiveAssignmentWarning
                 ? `<div class="aw-active-warning"><span aria-hidden="true">!</span><span>${t("يجب إعادة إسناد المراحل النشطة قبل تعطيل المستخدم أو تغيير أدواره.")}</span></div>`
+                : "";
+            const roleConflictWarning = user.roleHomeConflict
+                ? `<div class="aw-active-warning"><span aria-hidden="true">!</span><span>${t("هناك أكثر من Role يحدد Home Page مختلفة. عدّل الأدوار في Frappe قبل تغييرها لهذا المستخدم.")}</span></div>`
+                : "";
+            const workspaceWarning = user.defaultWorkspaceConflict
+                ? `<div class="aw-active-warning"><span aria-hidden="true">!</span><span>${t("Default Workspace مضبوط لهذا المستخدم وقد يتغلب على Home Page الخاصة بالدور في Frappe. راجعه من إعداد المستخدم إذا أردت أن يكون الدور هو مصدر صفحة الدخول.")}</span></div>`
                 : "";
 
             return `
@@ -119,10 +125,11 @@
                     <div class="aw-badges aw-role-row">${roleBadges}${activeBadge}</div>
                     <div class="aw-details">
                         <div class="aw-detail"><span>${t("اللغة")}</span><b>${esc(user.languageLabel)}</b></div>
-                        <div class="aw-detail"><span>${t("مساحة العمل")}</span><b>${esc(user.defaultWorkspace)}</b></div>
+                        <div class="aw-detail"><span>${t("Home Page للأدوار")}</span><b>${esc(user.roleHomeSummary)}</b></div>
+                        <div class="aw-detail"><span>${t("Default Workspace")}</span><b>${esc(user.defaultWorkspace)}</b></div>
                         <div class="aw-detail"><span>${t("آخر نشاط")}</span><b>${esc(user.lastActive)}</b></div>
                     </div>
-                    ${warning}
+                    ${assignmentWarning}${roleConflictWarning}${workspaceWarning}
                     <div class="aw-actions">${buttons.join("")}</div>
                 </article>
             `;
@@ -149,7 +156,7 @@
                         <div class="aw-detail"><span>${t("مساحة العمل")}</span><b>${esc(user.defaultWorkspace)}</b></div>
                         <div class="aw-detail"><span>${t("آخر نشاط")}</span><b>${esc(user.lastActive)}</b></div>
                     </div>
-                    <div class="aw-scope-note">${t("إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا. بعد الإضافة يمكنك اختيار أدوار المعمل له بشكل صريح.")}</div>
+                    <div class="aw-scope-note">${t("إضافته إلى المعمل لا تمنحه أي دور أو صلاحية تشغيلية تلقائيًا، ولا تغيّر Default Workspace أو Default App. صفحة الدخول تبقى تحت إدارة Frappe.")}</div>
                     <div class="aw-actions aw-actions-single"><button class="btn btn-primary aw-adopt-user" data-user="${esc(user.email)}">${t("إضافة إلى المعمل")}</button></div>
                 </article>
             `;
@@ -182,7 +189,7 @@
                 <section class="aw-section aw-workforce-section">
                     ${sectionHeading(
                         t("مستخدمو المعمل"),
-                        t("الحسابات التي تم ضمها إلى Almdina ويمكن إدارة أدوارها وصلاحياتها من هنا."),
+                        t("الحسابات التي تم ضمها إلى Almdina. الأدوار تحدد الصلاحيات، وFrappe Role.Home Page يحدد صفحة الدخول."),
                         model.users.length
                     )}
                     <div class="aw-list aw-user-grid">${usersHtml(model.users)}</div>
