@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import frappe
 
+from almdina_erp.almdina_erp.infrastructure.frappe.workforce_membership import (
+    MEMBERSHIP_FIELD,
+)
 
-ALMDINA_APP = "almdina_erp"
+
 HIDDEN_PRIVILEGED_ROLE = "System Manager"
 
 
@@ -18,7 +21,7 @@ def _almdina_workforce_users() -> tuple[str, ...]:
             "User",
             filters={
                 "user_type": "System User",
-                "default_app": ALMDINA_APP,
+                MEMBERSHIP_FIELD: 1,
                 "name": ["not in", ["Administrator", "Guest"]],
             },
             pluck="name",
@@ -39,7 +42,7 @@ def revoke_hidden_system_manager_from_user(user: str) -> bool:
         {
             "name": resolved,
             "user_type": "System User",
-            "default_app": ALMDINA_APP,
+            MEMBERSHIP_FIELD: 1,
         },
     ):
         return False
@@ -63,8 +66,8 @@ def revoke_hidden_system_manager_from_user(user: str) -> bool:
 def revoke_hidden_system_manager_from_almdina_workforce() -> int:
     """Repair legacy Almdina users that silently retained System Manager.
 
-    The cleanup is deliberately scoped by ``User.default_app`` so it cannot strip
-    System Manager from unrelated ERPNext administrators.
+    Membership is application-owned and deliberately independent from Frappe's
+    default_app/default_workspace navigation preferences.
     """
 
     removed = 0
