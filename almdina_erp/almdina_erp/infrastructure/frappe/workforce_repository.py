@@ -16,6 +16,9 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.workforce_membership import (
+    MEMBERSHIP_FIELD,
+)
 
 
 # Workforce role assignment follows the same protected system-role policy used
@@ -46,8 +49,8 @@ class FrappeWorkforceRepository:
         )
 
     @staticmethod
-    def _is_almdina_user(*, default_app: str) -> bool:
-        return default_app == "almdina_erp"
+    def _is_almdina_user(*, member: object) -> bool:
+        return bool(cint(member))
 
     def lock_user(self, user: str) -> None:
         frappe.db.sql(
@@ -60,7 +63,7 @@ class FrappeWorkforceRepository:
 
     def list_assignable_roles(self) -> list[dict[str, Any]]:
         role_meta = frappe.get_meta("Role")
-        fields = ["name", "desk_access"]
+        fields = ["name", "desk_access", "home_page"]
         if role_meta.has_field("disabled"):
             fields.append("disabled")
         rows = frappe.get_all("Role", fields=fields, order_by="name asc")
@@ -68,6 +71,7 @@ class FrappeWorkforceRepository:
             {
                 "name": str(row.name),
                 "desk_access": bool(row.get("desk_access")),
+                "home_page": str(row.get("home_page") or ""),
             }
             for row in rows
             if row.name not in PROTECTED_ASSIGNMENT_ROLES
@@ -84,6 +88,18 @@ class FrappeWorkforceRepository:
                 + ", ".join(invalid)
             )
         return selected
+
+    def role_home_pages(self, roles: Sequence[str]) -> dict[str, str]:
+        selected = tuple(dict.fromkeys(str(role) for role in roles if role))
+        if not selected:
+            return {}
+        rows = frappe.get_all(
+            "Role",
+            filters={"name": ["in", selected]},
+            fields=["name", "home_page"],
+        )
+        values = {str(row.name): str(row.get("home_page") or "") for row in rows}
+        return {role: values.get(role, "") for role in selected}
 
     def active_assignment_count(self, user: str) -> int:
         return int(
@@ -113,7 +129,7 @@ class FrappeWorkforceRepository:
             "last_active": str(user.last_active or ""),
             "active_assignments": self.active_assignment_count(user.name),
             "is_almdina": self._is_almdina_user(
-                default_app=str(user.default_app or ""),
+                member=getattr(user, MEMBERSHIP_FIELD, 0),
             ),
         }
 
@@ -133,14 +149,15 @@ class FrappeWorkforceRepository:
         limit: int,
         almdina: bool,
     ) -> list[str]:
+        membership_condition = (
+            f"coalesce(u.`{MEMBERSHIP_FIELD}`, 0) = 1"
+            if almdina
+            else f"coalesce(u.`{MEMBERSHIP_FIELD}`, 0) = 0"
+        )
         conditions = [
             "u.user_type = 'System User'",
             "u.name not in ('Guest', 'Administrator')",
-            (
-                "coalesce(u.default_app, '') = 'almdina_erp'"
-                if almdina
-                else "coalesce(u.default_app, '') != 'almdina_erp'"
-            ),
+            membership_condition,
         ]
         values: list[Any] = []
         normalized_search = str(search or "").strip()
@@ -208,10 +225,10 @@ class FrappeWorkforceRepository:
     def adopt_user(self, user_name: str) -> dict[str, Any]:
         """Explicitly move an existing System User into Almdina scope.
 
-        Existing non-protected roles are preserved to avoid destructive changes to
-        ERPNext access. The platform-wide System Manager role is deliberately
-        removed, while Desk User is retained/added as non-business shell access.
-        No factory business role is granted by this operation.
+        Existing non-protected roles and native Frappe navigation preferences are
+        preserved. System Manager is deliberately removed, while Desk User is
+        retained/added as non-business shell access. No factory business role or
+        landing route is granted by this operation.
         """
 
         resolved = str(user_name or "").strip().lower()
@@ -223,7 +240,7 @@ class FrappeWorkforceRepository:
         user = frappe.get_doc("User", resolved)
         if str(user.user_type or "") != "System User":
             raise ValueError("يمكن إضافة مستخدمي النظام فقط إلى مستخدمي معمل Almdina.")
-        if self._is_almdina_user(default_app=str(user.default_app or "")):
+        if self._is_almdina_user(member=getattr(user, MEMBERSHIP_FIELD, 0)):
             return self.get_user(resolved)
 
         retained_roles = tuple(
@@ -236,9 +253,7 @@ class FrappeWorkforceRepository:
         for role in required_roles:
             if frappe.db.exists("Role", role):
                 user.append("roles", {"role": role})
-        user.default_app = "almdina_erp"
-        if frappe.db.exists("Workspace", "Almdina ERP"):
-            user.default_workspace = "Almdina ERP"
+        user.set(MEMBERSHIP_FIELD, 1)
         user.save(ignore_permissions=True)
         frappe.clear_cache(user=resolved)
         return self.get_user(resolved)
@@ -263,8 +278,7 @@ class FrappeWorkforceRepository:
                 "user_type": "System User",
                 "language": identity.language,
                 "enabled": 1,
-                "default_app": "almdina_erp",
-                "default_workspace": "Almdina ERP",
+                MEMBERSHIP_FIELD: 1,
             }
         )
         for role in ("Desk User", *selected_roles):
@@ -304,9 +318,6 @@ class FrappeWorkforceRepository:
         for role in required_roles:
             if frappe.db.exists("Role", role):
                 user.append("roles", {"role": role})
-        user.default_app = "almdina_erp"
-        if frappe.db.exists("Workspace", "Almdina ERP"):
-            user.default_workspace = "Almdina ERP"
         user.save(ignore_permissions=True)
         frappe.clear_cache(user=user_name)
         return self.get_user(user_name)

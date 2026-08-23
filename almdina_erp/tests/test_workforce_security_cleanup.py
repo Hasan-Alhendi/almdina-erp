@@ -3,6 +3,9 @@ from __future__ import annotations
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from almdina_erp.almdina_erp.infrastructure.frappe.workforce_membership import (
+    MEMBERSHIP_FIELD,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.workforce_security_cleanup import (
     revoke_hidden_system_manager_from_almdina_workforce,
 )
@@ -19,8 +22,8 @@ class TestWorkforceSecurityCleanup(FrappeTestCase):
         for user in (ALMDINA_USER, OUTSIDE_USER):
             if frappe.db.exists("User", user):
                 frappe.delete_doc("User", user, force=True, ignore_permissions=True)
-        self._create_user(ALMDINA_USER, default_app="almdina_erp")
-        self._create_user(OUTSIDE_USER, default_app="")
+        self._create_user(ALMDINA_USER, is_almdina=True)
+        self._create_user(OUTSIDE_USER, is_almdina=False)
 
     def tearDown(self):
         frappe.set_user("Administrator")
@@ -31,7 +34,7 @@ class TestWorkforceSecurityCleanup(FrappeTestCase):
         super().tearDown()
 
     @staticmethod
-    def _create_user(email: str, *, default_app: str) -> None:
+    def _create_user(email: str, *, is_almdina: bool) -> None:
         user = frappe.get_doc(
             {
                 "doctype": "User",
@@ -40,7 +43,8 @@ class TestWorkforceSecurityCleanup(FrappeTestCase):
                 "enabled": 1,
                 "send_welcome_email": 0,
                 "user_type": "System User",
-                "default_app": default_app,
+                "default_app": "",
+                MEMBERSHIP_FIELD: 1 if is_almdina else 0,
             }
         )
         for role in ("Desk User", "System Manager"):
