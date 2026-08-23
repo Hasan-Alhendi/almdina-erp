@@ -43,7 +43,18 @@ class TestWorkforceNativeNavigationContract(unittest.TestCase):
             / "native_app_navigation.py"
         ).read_text(encoding="utf-8")
 
-        self.assertNotIn("home_page", membership)
+        for forbidden_write in (
+            'set_value("Role"',
+            "set_value('Role'",
+            'db_set("home_page"',
+            "db_set('home_page'",
+            'set_value("User",',
+            "set_value('User',",
+            'default_workspace =',
+            'default_app =',
+        ):
+            self.assertNotIn(forbidden_write, membership)
+
         self.assertNotIn("Role", native_navigation)
         self.assertNotIn("home_page", native_navigation)
 
