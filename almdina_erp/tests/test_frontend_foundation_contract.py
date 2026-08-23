@@ -9,6 +9,11 @@ FOUNDATION = ROOT / "public" / "js" / "frontend_foundation.js"
 ASSETS = ROOT / "frontend_assets.py"
 STATIC_WORKFLOW = ROOT.parent / ".github" / "workflows" / "static-checks.yml"
 DCO_CONTEXT = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_document_context.js"
+PAGE_ENTRIES = (
+    ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js",
+    ROOT / "almdina_erp" / "page" / "factory_workforce" / "factory_workforce.js",
+    ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js",
+)
 
 
 class TestFrontendFoundationContract(unittest.TestCase):
@@ -38,6 +43,24 @@ class TestFrontendFoundationContract(unittest.TestCase):
 
         self.assertEqual(source.count(foundation_asset), 1)
         self.assertLess(source.index(foundation_asset), source.index(shell_asset))
+
+    def test_modular_pages_self_bootstrap_when_global_foundation_is_late(self) -> None:
+        for page_entry in PAGE_ENTRIES:
+            with self.subTest(page=page_entry.name):
+                source = page_entry.read_text(encoding="utf-8")
+
+                self.assertIn(
+                    'const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";',
+                    source,
+                )
+                self.assertIn("function ensureFoundation()", source)
+                self.assertIn("Promise.resolve(frappe.require(FOUNDATION))", source)
+                self.assertIn("const loaded = window.AlmdinaFrontend;", source)
+                self.assertIn("return ensureFoundation()", source)
+                self.assertNotIn(
+                    'if (!frontend || typeof frontend.ensureStylesheet !== "function")',
+                    source,
+                )
 
     def test_dco_keeps_its_specialized_document_context(self) -> None:
         source = DCO_CONTEXT.read_text(encoding="utf-8")
