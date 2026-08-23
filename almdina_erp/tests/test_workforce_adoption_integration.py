@@ -53,6 +53,7 @@ class TestWorkforceAdoptionIntegration(FrappeTestCase):
                 "send_welcome_email": 0,
                 "user_type": "System User",
                 "default_app": "",
+                "default_workspace": "",
             }
         )
         for role in ("Desk User", EXISTING_ROLE, "System Manager"):
@@ -79,12 +80,22 @@ class TestWorkforceAdoptionIntegration(FrappeTestCase):
         workforce_before = {
             row["email"] for row in repository.list_users(search=EXTERNAL_USER)
         }
+        navigation_before = frappe.db.get_value(
+            "User",
+            EXTERNAL_USER,
+            ["default_app", "default_workspace"],
+            as_dict=True,
+        )
         self.assertIn(EXTERNAL_USER, available_before)
         self.assertNotIn(EXTERNAL_USER, workforce_before)
 
         adopted = repository.adopt_user(EXTERNAL_USER)
         self.assertTrue(adopted["is_almdina"])
-        self.assertEqual(adopted["default_app"], "almdina_erp")
+        self.assertEqual(adopted["default_app"], navigation_before.default_app or "")
+        self.assertEqual(
+            adopted["default_workspace"],
+            navigation_before.default_workspace or "",
+        )
 
         direct_roles = set(
             frappe.get_all(
