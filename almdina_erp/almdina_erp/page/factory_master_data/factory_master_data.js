@@ -746,8 +746,20 @@
         return Promise.resolve(frappe.require(FOUNDATION_ASSET)).then(ensure);
     }
 
-    function bootstrapRoutingWorkflowPage(workflowPage) {
-        return ensureRoutingWorkflowStylesheet()
+    function removeOwnedRoutingWorkflowStylesheet() {
+        const stale = window.document && window.document.getElementById
+            ? window.document.getElementById(STYLE_ID)
+            : null;
+        if (stale && typeof stale.remove === "function") stale.remove();
+    }
+
+    function bootstrapRoutingWorkflowPage(workflowPage, {resetStyle = false} = {}) {
+        if (workflowPage.__almdinaStyleBootstrapPromise) {
+            return workflowPage.__almdinaStyleBootstrapPromise;
+        }
+        if (resetStyle) removeOwnedRoutingWorkflowStylesheet();
+
+        const pending = ensureRoutingWorkflowStylesheet()
             .then(() => {
                 workflowPage.$main.off(".prw-bootstrap");
                 return workflowPage.init();
@@ -771,16 +783,21 @@
                     </div>`);
                 workflowPage.$main
                     .off(".prw-bootstrap")
-                    .on("click.prw-bootstrap", ".prw-bootstrap-retry", () => {
-                        const stale = window.document && window.document.getElementById
-                            ? window.document.getElementById(STYLE_ID)
-                            : null;
-                        if (stale && typeof stale.remove === "function") stale.remove();
-                        bootstrapRoutingWorkflowPage(workflowPage);
+                    .on("click.prw-bootstrap", ".prw-bootstrap-retry", event => {
+                        $(event.currentTarget).prop("disabled", true);
+                        bootstrapRoutingWorkflowPage(workflowPage, {resetStyle: true});
                     });
                 frappe.show_alert({message: fallback, indicator: "red"}, 7);
                 return null;
             });
+
+        workflowPage.__almdinaStyleBootstrapPromise = pending;
+        pending.finally(() => {
+            if (workflowPage.__almdinaStyleBootstrapPromise === pending) {
+                workflowPage.__almdinaStyleBootstrapPromise = null;
+            }
+        });
+        return pending;
     }
 
     frappe.pages["factory-master-data"].on_page_load = function (wrapper) {
