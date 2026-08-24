@@ -77,6 +77,7 @@
         const instance = Object.freeze({
             load,
             dispose() {
+                dialogs.dispose();
                 store.dispose();
                 if (wrapper.__almdinaFactoryWorkforceController === instance) {
                     wrapper.__almdinaFactoryWorkforceController = null;
@@ -86,7 +87,10 @@
         wrapper.__almdinaFactoryWorkforceController = instance;
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
-            onDeactivate: store.deactivate,
+            onDeactivate: () => {
+                dialogs.deactivate();
+                store.deactivate();
+            },
         });
         if (!activation) {
             instance.dispose();
@@ -102,6 +106,32 @@
 
         function freezeOptions(message) {
             return { freeze: true, freezeMessage: message };
+        }
+
+        function activeGeneration() {
+            return activation && activation.isActive() ? activation.generation() : null;
+        }
+
+        function isCurrentGeneration(generation) {
+            return generation !== null
+                && activation.isActive()
+                && activation.generation() === generation;
+        }
+
+        function runMutation(generation, request, successMessage, refresh = true, preserveDraft = false) {
+            if (!isCurrentGeneration(generation)) return Promise.resolve(null);
+            return Promise.resolve().then(request).then(data => {
+                if (!isCurrentGeneration(generation)) {
+                    if (refresh && activation.isActive()) return load().then(() => data);
+                    return data;
+                }
+                dialogs.showAlert(successMessage);
+                if (!refresh) return data;
+                return load().then(() => data);
+            }).catch(error => {
+                if (!isCurrentGeneration(generation) && !preserveDraft) return null;
+                throw error;
+            });
         }
 
         function can(capability) {
@@ -169,17 +199,19 @@
 
         function openCreateDialog() {
             if (!can("create_users")) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
             dialogs.openCreate({
                 canAssignRoles: can("assign_user_roles"),
                 roleOptions,
                 validateRoles,
-                onSubmit: payload => api.createUser(
-                    payload,
-                    freezeOptions(__("جاري إنشاء المستخدم..."))
-                ).then(() => {
-                    dialogs.showAlert(__("تم إنشاء المستخدم."));
-                    return load();
-                }),
+                onSubmit: payload => runMutation(
+                    generation,
+                    () => api.createUser(payload, freezeOptions(__("جاري إنشاء المستخدم..."))),
+                    __("تم إنشاء المستخدم."),
+                    true,
+                    true
+                ),
             });
         }
 
@@ -189,6 +221,8 @@
             const canEdit = actionAllowed(user, "edit");
             const canAssignRoles = actionAllowed(user, "assign_roles");
             if (!canEdit && !canAssignRoles) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
 
             dialogs.openEdit({
                 user,
@@ -196,29 +230,30 @@
                 canAssignRoles,
                 roleOptions,
                 validateRoles,
-                onSubmit: payload => api.updateUser(
-                    user.email,
-                    payload,
-                    freezeOptions(__("جاري حفظ المستخدم..."))
-                ).then(() => {
-                    dialogs.showAlert(__("تم تحديث المستخدم."));
-                    return load();
-                }),
+                onSubmit: payload => runMutation(
+                    generation,
+                    () => api.updateUser(user.email, payload, freezeOptions(__("جاري حفظ المستخدم..."))),
+                    __("تم تحديث المستخدم."),
+                    true,
+                    true
+                ),
             });
         }
 
         function openPasswordDialog(email) {
             const user = userByEmail(email);
             if (!user || !actionAllowed(user, "reset_password")) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
             dialogs.openPassword({
                 user,
-                onSubmit: temporaryPassword => api.resetPassword(
-                    user.email,
-                    temporaryPassword,
-                    freezeOptions(__("جاري تحديث كلمة المرور..."))
-                ).then(() => {
-                    dialogs.showAlert(__("تم تحديث كلمة المرور دون تسجيل قيمتها."));
-                }),
+                onSubmit: temporaryPassword => runMutation(
+                    generation,
+                    () => api.resetPassword(user.email, temporaryPassword, freezeOptions(__("جاري تحديث كلمة المرور..."))),
+                    __("تم تحديث كلمة المرور دون تسجيل قيمتها."),
+                    false,
+                    true
+                ),
             });
         }
 
@@ -226,44 +261,45 @@
             const user = userByEmail(email);
             const action = enabled ? "enable" : "disable";
             if (!user || !actionAllowed(user, action)) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
             dialogs.confirmToggle({
                 user,
                 enabled,
-                onConfirm: () => api.setEnabled(
-                    user.email,
-                    enabled,
-                    freezeOptions(__("جاري تحديث الحساب..."))
-                ).then(() => {
-                    dialogs.showAlert(__("تم تحديث حالة المستخدم."));
-                    return load();
-                }),
+                onConfirm: () => runMutation(
+                    generation,
+                    () => api.setEnabled(user.email, enabled, freezeOptions(__("جاري تحديث الحساب..."))),
+                    __("تم تحديث حالة المستخدم.")
+                ),
             });
         }
 
         function adoptUser(email) {
             const user = availableUserByEmail(email);
             if (!user || !can("create_users")) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
             dialogs.confirmAdopt({
                 user,
-                onConfirm: () => api.adoptUser(
-                    user.email,
-                    freezeOptions(__("جاري إضافة المستخدم إلى المعمل..."))
-                ).then(() => {
-                    dialogs.showAlert(__("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره."));
-                    return load();
-                }),
+                onConfirm: () => runMutation(
+                    generation,
+                    () => api.adoptUser(user.email, freezeOptions(__("جاري إضافة المستخدم إلى المعمل..."))),
+                    __("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره.")
+                ),
             });
         }
 
         function openAudit(email) {
             const user = userByEmail(email);
             if (!user) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
             const token = store.requests.audit.begin({ user: email });
             return api.getAudit(
                 user.email,
                 freezeOptions(__("جاري تحميل السجل..."))
             ).then(data => {
-                if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
+                if (!isCurrentGeneration(generation) || !store.requests.audit.isCurrent(token)) return;
                 const events = Array.isArray(data.events) ? data.events : [];
                 dialogs.openAudit({ user, html: renderer.auditHtml(events) });
             });

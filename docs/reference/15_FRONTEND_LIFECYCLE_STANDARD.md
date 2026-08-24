@@ -370,9 +370,9 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 
 | Surface | Family | Status | الملاحظة |
 |---|---|---|---|
-| Factory Workforce | PAGE | Certification pending | read/activation lifecycle مثبتة؛ mutation/transient-surface guards وruntime regressions ما زالت مطلوبة |
-| Factory Permissions | PAGE | Certification pending | read/activation وdirty-aware revisit مثبتة؛ mutation/transient-child hardening وruntime regressions ما زالت مطلوبة |
-| Factory Production Settings | PAGE | Certification pending | read/activation lifecycle وmutation UI guard موجودة؛ transient-child/mutation runtime regressions ما زالت مطلوبة |
+| Factory Workforce | PAGE | Certified | read/activation، visit-generation mutation completion، transient-child ownership، revisit reconciliation، وremount مثبتة runtime |
+| Factory Permissions | PAGE | Certified | read/preview/import/export guards، dirty-aware revisit، save reconciliation، confirmation ownership، وremount مثبتة runtime |
+| Factory Production Settings | PAGE | Certified | read/activation، visit-generation mutation reconciliation، edit/audit child ownership، وremount مثبتة runtime |
 | Shop Floor Inbox | PAGE | Migration pending | request gates موجودة؛ full page activation contract غير معتمدة بعد |
 | Factory Master Data | PAGE | Migration pending | revisit compatibility ليست certification |
 | Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |

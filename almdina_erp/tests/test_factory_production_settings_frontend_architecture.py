@@ -149,6 +149,10 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(f'fieldtype: "{fieldtype}"', self.dialogs)
         self.assertIn("frappe.msgprint", self.dialogs)
         self.assertIn("frappe.show_alert", self.dialogs)
+        self.assertIn("ownedSurfaces", self.dialogs)
+        self.assertIn("drafts", self.dialogs)
+        self.assertIn("surface.get_values(true)", self.dialogs)
+        self.assertIn("function deactivate()", self.dialogs)
         self.assertNotIn("frappe.call(", self.dialogs)
         self.assertNotIn("production_settings_service", self.dialogs)
 
@@ -167,6 +171,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("viewModel.sectionEditable", self.controller)
         self.assertIn("bindActivationLifecycle", self.controller)
+        self.assertIn("activation.generation()", self.controller)
         self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
         self.assertNotIn("production_settings_service", self.controller)

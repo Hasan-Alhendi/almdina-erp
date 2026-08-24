@@ -127,9 +127,9 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
     def test_certification_table_is_explicit_and_does_not_certify_by_helper(self) -> None:
         self.assertIn("## 8. Current Lifecycle Certification Status", self.standard)
         for row in (
-            "| Factory Workforce | PAGE | Certification pending |",
-            "| Factory Permissions | PAGE | Certification pending |",
-            "| Factory Production Settings | PAGE | Certification pending |",
+            "| Factory Workforce | PAGE | Certified |",
+            "| Factory Permissions | PAGE | Certified |",
+            "| Factory Production Settings | PAGE | Certified |",
             "| Shop Floor Inbox | PAGE | Migration pending |",
             "| Factory Master Data | PAGE | Migration pending |",
             "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
