@@ -104,9 +104,21 @@ vm.runInContext(source("state.js"), context, { filename: "state.js" });
 
     const preview = first.requests.preview.begin();
     const transfer = first.requests.transfer.begin();
+    const consoleRequest = first.requests.console.begin();
     first.invalidatePending();
     assert.equal(first.requests.preview.isCurrent(preview), false);
     assert.equal(first.requests.transfer.isCurrent(transfer), false);
+    assert.equal(first.requests.console.isCurrent(consoleRequest), true);
+
+    const currentConsole = first.requests.console.begin();
+    const currentRole = first.requests.role.begin();
+    const currentPreview = first.requests.preview.begin();
+    const currentTransfer = first.requests.transfer.begin();
+    first.dispose();
+    assert.equal(first.requests.console.isCurrent(currentConsole), false);
+    assert.equal(first.requests.role.isCurrent(currentRole), false);
+    assert.equal(first.requests.preview.isCurrent(currentPreview), false);
+    assert.equal(first.requests.transfer.isCurrent(currentTransfer), false);
 
     assert.equal(
         JSON.stringify(first.unique(["view", "view", "", null, "edit"])),

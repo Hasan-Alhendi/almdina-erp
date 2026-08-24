@@ -53,11 +53,17 @@ class TestFrontendFoundationContract(unittest.TestCase):
                     'const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";',
                     source,
                 )
-                self.assertIn("function ensureFoundation()", source)
-                self.assertIn("Promise.resolve(frappe.require(FOUNDATION))", source)
-                self.assertIn("const loaded = window.AlmdinaFrontend;", source)
-                self.assertIn("return ensureFoundation()", source)
-                self.assertNotIn(
+                self.assertIn(
+                    'const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";',
+                    source,
+                )
+                self.assertIn("frappe.ui.make_app_page", source)
+                self.assertLess(source.index("frappe.ui.make_app_page"), source.index("function ensureCore()"))
+                self.assertIn("function ensureCore()", source)
+                self.assertIn("frappe.require(assets)", source)
+                self.assertIn("bindActivationLifecycle", source)
+                self.assertIn("return ensureCore()", source)
+                self.assertIn(
                     'if (!frontend || typeof frontend.ensureStylesheet !== "function")',
                     source,
                 )

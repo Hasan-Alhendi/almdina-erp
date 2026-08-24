@@ -67,10 +67,21 @@ async function simulateCachedFoundation(config) {
         show_alert() {
             alertCount += 1;
         },
+        ui: {
+            make_app_page(options) {
+                options.parent.page = { parent: options.parent };
+                return options.parent.page;
+            },
+        },
     };
 
     const windowObject = {
         AlmdinaFrontend: cachedFoundation,
+        AlmdinaPageRevisit: {
+            bindActivationLifecycle() {
+                return { isActive: () => true, dispose() {} };
+            },
+        },
         [config.controller]: {
             mount() {
                 mountCount += 1;
@@ -109,7 +120,11 @@ async function simulateCachedFoundation(config) {
     await flushPromises();
 
     assert.equal(alertCount, 0, `${config.page} must not alert on cached-foundation deploy skew`);
-    assert.equal(renderedError, "", `${config.page} must not render a bootstrap error`);
+    assert.equal(
+        renderedError.includes("تعذر تحميل"),
+        false,
+        `${config.page} must not render a bootstrap error`
+    );
     assert.equal(mountCount, 1, `${config.page} controller must mount once`);
     assert.equal(requireCalls.length, 1, `${config.page} must issue exactly one native fallback require`);
     assert.ok(Array.isArray(requireCalls[0]), `${config.page} fallback must be a batch array`);

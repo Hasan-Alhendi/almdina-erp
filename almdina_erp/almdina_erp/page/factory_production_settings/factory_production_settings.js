@@ -2,6 +2,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
     "use strict";
 
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
+    const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
         "/assets/almdina_erp/js/factory_production_settings/api.js",
         "/assets/almdina_erp/js/factory_production_settings/state.js",
@@ -12,7 +13,19 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/factory_production_settings/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_production_settings.css";
+
+    frappe.ui.make_app_page({
+        parent: wrapper,
+        title: __("إعدادات المعمل"),
+        single_column: true,
+    });
     const $main = $(wrapper).find(".layout-main-section");
+    $main.html(`
+        <div class="aps-loading" role="status" aria-live="polite">
+            <span class="aps-loading-dot" aria-hidden="true"></span>
+            <div><strong>${__("جاري تحميل إعدادات المعمل")}</strong><span>${__("يتم تجهيز القيم والصلاحيات الحالية...")}</span></div>
+        </div>
+    `);
 
     function showBootstrapError(error) {
         const fallback = __("تعذر تحميل إعدادات المعمل.");
@@ -25,22 +38,33 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 
-    function ensureFoundation() {
-        const current = window.AlmdinaFrontend;
-        if (current && typeof current.ensureStylesheet === "function") {
-            return Promise.resolve(current);
+    function resolveCore() {
+        const frontend = window.AlmdinaFrontend;
+        const lifecycle = window.AlmdinaPageRevisit;
+        if (!frontend || typeof frontend.ensureStylesheet !== "function") {
+            throw new Error("Almdina frontend foundation did not initialize");
         }
-
-        return Promise.resolve(frappe.require(FOUNDATION)).then(() => {
-            const loaded = window.AlmdinaFrontend;
-            if (!loaded || typeof loaded.ensureStylesheet !== "function") {
-                throw new Error("Almdina frontend foundation did not initialize");
-            }
-            return loaded;
-        });
+        if (!lifecycle || typeof lifecycle.bindActivationLifecycle !== "function") {
+            throw new Error("Almdina page lifecycle did not initialize");
+        }
+        return frontend;
     }
 
-    return ensureFoundation()
+    function ensureCore() {
+        const frontend = window.AlmdinaFrontend;
+        const assets = [];
+        if (!frontend || typeof frontend.ensureStylesheet !== "function") assets.push(FOUNDATION);
+        if (!window.AlmdinaPageRevisit || typeof window.AlmdinaPageRevisit.bindActivationLifecycle !== "function") {
+            assets.push(PAGE_LIFECYCLE);
+        }
+        if (!assets.length) return Promise.resolve(resolveCore());
+        const pending = frontend && typeof frontend.requireAssets === "function"
+            ? frontend.requireAssets(assets)
+            : frappe.require(assets);
+        return Promise.resolve(pending).then(resolveCore);
+    }
+
+    return ensureCore()
         .then(frontend => {
             // Page scripts can win the race against app-level include evaluation on
             // a cold Desk load. Resolve the shared foundation first, then keep the
