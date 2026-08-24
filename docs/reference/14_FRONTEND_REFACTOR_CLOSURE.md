@@ -2,6 +2,7 @@
 
 > **Status:** Canonical frontend ownership map after F4–F7  
 > **Scope:** Structural ownership, lifecycle, rendering boundaries, and quality gates  
+> **Lifecycle standard:** [15 — Project-wide Frontend Lifecycle Standard](15_FRONTEND_LIFECYCLE_STANDARD.md)
 > **Non-goals:** UI redesign, business-rule changes, authorization changes, workflow changes, schema/data migration
 
 ## 1. لماذا أُغلقت مرحلة الـrefactor؟
@@ -9,6 +10,8 @@
 هدف سلسلة F4–F7 لم يكن إضافة Features جديدة، بل إزالة الملكيات المتداخلة التي كانت تجعل إصلاح جزء من الواجهة قادرًا على كسر جزء آخر بعيد عنه. الإغلاق يعني أن المسارات الحرجة أصبحت تملك Owners معلنين، وأن الحدود محمية باختبارات وCI، وليس أن الواجهة لن تتطور لاحقًا.
 
 بعد هذه النقطة، أي Feature أو Fix يجب أن يُنفّذ داخل الـOwner الحالي كلما أمكن. إنشاء Patch عالمي أو Observer موازٍ أو Orchestrator ضخم جديد ليس مسارًا افتراضيًا مقبولًا.
+
+خريطة الملكية في هذه الوثيقة تحدد **من يملك ماذا** بعد F4–F7، بينما يحدد [15 — Frontend Lifecycle Standard](15_FRONTEND_LIFECYCLE_STANDARD.md) **كيف تُدار حياة الـowner** حسب عائلة الـsurface وكيف تُثبت certification دون فرض helper واحدة على المشروع.
 
 ## 2. خريطة الملكية النهائية
 

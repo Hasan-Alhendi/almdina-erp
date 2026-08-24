@@ -50,6 +50,7 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_frontend_architecture_contract \
+            almdina_erp.tests.test_frontend_lifecycle_standard_contract \
             almdina_erp.tests.test_frontend_foundation_contract \
             almdina_erp.tests.test_a5_workspace_state_foundation \
             almdina_erp.tests.test_workspace_freshness_architecture
