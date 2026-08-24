@@ -6,6 +6,9 @@ from unittest.mock import patch
 
 import frappe
 
+from almdina_erp.almdina_erp.application.costing.financial_documents import (
+    build_customer_invoice_document,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_costing_workspace as workspace
 from almdina_erp.almdina_erp.services import cost_permission_service as cost_service
 from almdina_erp.almdina_erp.services import cutting_plan_command_service as plan_commands
@@ -159,6 +162,174 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
         self.assertEqual(payload["order"]["cutting_cost_per_board_usd"], 2.5)
         self.assertEqual(payload["order"]["required_boards"], 2)
         self.assertEqual(payload["order"]["total_cost_usd"], 52)
+
+    def test_special_price_projection_is_persisted_and_used_by_customer_print(self) -> None:
+        piece = SimpleNamespace(
+            name="DCO-DETAIL-SPECIAL-1",
+            piece_no=1,
+            piece_type="Special",
+            width_cm=40,
+            length_cm=80,
+            qty=2,
+            area_m2=0.64,
+            edge_type="2cm عادي",
+            edge_meters=4,
+            edge_rate_usd=0.5,
+            edge_cost_usd=4,
+            notes="",
+            special_shape_estimated_unit_price_usd=0,
+            special_shape_custom_unit_price_usd=25,
+            special_shape_final_unit_price_usd=0,
+            special_shape_price_status="Approved",
+            special_shape_price_note="سعر معتمد",
+            special_shape_price_approved_by="accounts@example.com",
+            special_shape_price_approved_on="2026-08-24 12:00:00",
+        )
+        order = SimpleNamespace(
+            name="DCO-A3-SPECIAL-PRINT",
+            pieces=[piece],
+            total_area_m2=0.64,
+            board_rate_usd=0,
+            cutting_cost_per_board_usd=0,
+            mdf_cost_usd=0,
+            cutting_cost_usd=0,
+            edge_cost_usd=0,
+            total_cost_usd=0,
+            special_shapes_baseline_cost_usd=0,
+            special_shapes_estimated_total_usd=0,
+            special_shapes_final_total_usd=0,
+            customer_quote_total_usd=0,
+            customer_quote_status="Estimated",
+        )
+        plan = SimpleNamespace(
+            status="Draft",
+            cost_snapshot_version=workspace.COST_SNAPSHOT_VERSION,
+            board_rate_usd=20,
+            cutting_cost_per_board_usd=3,
+            mdf_cost_usd=40,
+            cutting_cost_usd=6,
+            edge_cost_usd=4,
+            total_cost_usd=50,
+        )
+        settings = SimpleNamespace(
+            default_special_design_fee_usd=0,
+            default_special_cnc_fee_usd=0,
+            default_special_manual_edge_fee_usd=0,
+            default_special_margin_percent=0,
+        )
+
+        with patch.object(workspace.frappe, "get_cached_doc", return_value=settings):
+            with patch.object(workspace.frappe.db, "set_value") as set_value:
+                totals = workspace.refresh_order_commercial_totals(order, plan)
+
+        self.assertEqual(piece.special_shape_final_unit_price_usd, 25)
+        self.assertEqual(piece.special_shape_price_status, "Approved")
+        self.assertEqual(totals["special_shapes_final_total_usd"], 50)
+        self.assertEqual(totals["customer_quote_total_usd"], 96)
+        set_value.assert_any_call(
+            "Door Cutting Order Detail",
+            piece.name,
+            {
+                "special_shape_estimated_unit_price_usd": 2.0,
+                "special_shape_final_unit_price_usd": 25.0,
+                "special_shape_price_status": "Approved",
+            },
+            update_modified=False,
+        )
+
+        invoice = build_customer_invoice_document(
+            {
+                "name": order.name,
+                "customer": "زبون",
+                "order_date": "2026-08-24",
+                "board_description": "MDF",
+                "edge_color": "أبيض",
+                "revision": 1,
+                "required_boards": 0,
+                "board_rate_usd": 0,
+                "cutting_cost_per_board_usd": 0,
+                "mdf_cost_usd": plan.mdf_cost_usd,
+                "cutting_cost_usd": plan.cutting_cost_usd,
+                "edge_cost_usd": plan.edge_cost_usd,
+                "customer_quote_total_usd": totals["customer_quote_total_usd"],
+                "customer_quote_status": totals["customer_quote_status"],
+            },
+            [
+                {
+                    "piece_no": piece.piece_no,
+                    "piece_type": piece.piece_type,
+                    "width_cm": piece.width_cm,
+                    "length_cm": piece.length_cm,
+                    "qty": piece.qty,
+                    "edge_type": piece.edge_type,
+                    "edge_meters": piece.edge_meters,
+                    "edge_rate_usd": piece.edge_rate_usd,
+                    "edge_cost_usd": piece.edge_cost_usd,
+                    "special_shape_final_unit_price_usd": piece.special_shape_final_unit_price_usd,
+                    "special_shape_price_note": piece.special_shape_price_note,
+                }
+            ],
+        )
+        special_line = next(line for line in invoice["lines"] if line["type"] == "special")
+        self.assertEqual(special_line["rate_usd"], 25)
+        self.assertEqual(special_line["amount_usd"], 50)
+
+    def test_special_price_command_refreshes_projection_before_response(self) -> None:
+        piece = SimpleNamespace(
+            name="DCO-DETAIL-SPECIAL-COMMAND",
+            piece_type="Special",
+            special_shape_custom_unit_price_usd=0,
+            special_shape_final_unit_price_usd=0,
+            special_shape_price_status="Estimated",
+            special_shape_price_note="",
+            special_shape_price_approved_by="",
+            special_shape_price_approved_on=None,
+        )
+        order = SimpleNamespace(
+            name="DCO-A3-SPECIAL-COMMAND",
+            modified="v1",
+            pieces=[piece],
+            flags=SimpleNamespace(),
+            customer_quote_total_usd=0,
+            customer_quote_status="Estimated",
+        )
+
+        def save(*, ignore_permissions: bool) -> None:
+            self.assertTrue(ignore_permissions)
+            order.modified = "v2"
+
+        order.save = save
+
+        def refresh(saved_order) -> dict[str, object]:
+            self.assertIs(saved_order, order)
+            piece.special_shape_final_unit_price_usd = piece.special_shape_custom_unit_price_usd
+            saved_order.customer_quote_total_usd = 50
+            saved_order.customer_quote_status = "Approved"
+            return {
+                "customer_quote_total_usd": 50,
+                "customer_quote_status": "Approved",
+            }
+
+        with patch.object(cost_service, "_locked_order", return_value=order):
+            with patch.object(cost_service, "_require_cost_visibility"):
+                with patch.object(cost_service, "require_document_capability"):
+                    with patch.object(cost_service, "_require_expected_document_version"):
+                        with patch.object(cost_service, "assert_order_editable"):
+                            with patch.object(cost_service, "refresh_order_commercial_totals", side_effect=refresh) as refresh_mock:
+                                with patch.object(cost_service.frappe, "session", SimpleNamespace(user="accounts@example.com")):
+                                    result = cost_service.approve_special_piece_price(
+                                        order.name,
+                                        piece.name,
+                                        25,
+                                        "سعر معتمد",
+                                        expected_modified="v1",
+                                    )
+
+        refresh_mock.assert_called_once_with(order)
+        self.assertEqual(result["unit_price_usd"], 25)
+        self.assertEqual(result["customer_quote_total_usd"], 50)
+        self.assertEqual(result["customer_quote_status"], "Approved")
+        self.assertEqual(result["order_modified"], "v2")
 
     def test_legacy_draft_read_falls_back_without_mutating_it(self) -> None:
         order = SimpleNamespace(
