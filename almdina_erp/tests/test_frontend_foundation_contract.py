@@ -10,6 +10,7 @@ ASSETS = ROOT / "frontend_assets.py"
 STATIC_WORKFLOW = ROOT.parent / ".github" / "workflows" / "static-checks.yml"
 DCO_CONTEXT = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_document_context.js"
 PAGE_ENTRIES = (
+    ROOT / "almdina_erp" / "page" / "shop_floor_inbox" / "shop_floor_inbox.js",
     ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js",
     ROOT / "almdina_erp" / "page" / "factory_workforce" / "factory_workforce.js",
     ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js",

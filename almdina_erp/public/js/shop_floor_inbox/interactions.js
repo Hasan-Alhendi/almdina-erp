@@ -19,6 +19,12 @@
         let $dragged = null;
         $root.off(namespace);
 
+        function deactivate() {
+            if ($dragged) $dragged.removeClass("is-dragging");
+            $root.find(".almdina-sf-kanban-column").removeClass("is-drag-over");
+            $dragged = null;
+        }
+
         $root.on(`click${namespace}`, ".almdina-sf-tab", function () {
             actions.setMode($(this).attr("data-sf-mode"));
         });
@@ -79,8 +85,10 @@
 
         lifecycle.track(() => {
             $root.off(namespace);
-            $dragged = null;
+            deactivate();
         }, "shop-floor-inbox-events");
+
+        return Object.freeze({ deactivate });
     }
 
     window.AlmdinaShopFloorInboxInteractions = Object.freeze({ bind, cardContext });

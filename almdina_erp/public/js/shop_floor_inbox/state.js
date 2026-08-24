@@ -9,6 +9,8 @@
     function create() {
         const contextGate = Frontend.createLatestRequestGate();
         const listGate = Frontend.createLatestRequestGate();
+        const handoffGate = Frontend.createLatestRequestGate();
+        const quickActionGate = Frontend.createLatestRequestGate();
         const lifecycle = Frontend.createLifecycleScope();
         const current = {
             mode: "board",
@@ -18,6 +20,13 @@
             routeFilter: "",
             search: "",
         };
+
+        function deactivate() {
+            contextGate.invalidate();
+            listGate.invalidate();
+            handoffGate.invalidate();
+            quickActionGate.invalidate();
+        }
 
         return Object.freeze({
             mode: () => current.mode,
@@ -48,6 +57,10 @@
             isCurrentContextRequest: token => contextGate.isCurrent(token),
             beginListRequest: meta => listGate.begin(meta),
             isCurrentListRequest: token => listGate.isCurrent(token),
+            beginHandoffRequest: meta => handoffGate.begin(meta),
+            isCurrentHandoffRequest: token => handoffGate.isCurrent(token),
+            beginQuickAction: meta => quickActionGate.begin(meta),
+            isCurrentQuickAction: token => quickActionGate.isCurrent(token),
             lifecycle,
             snapshot() {
                 return Object.freeze({
@@ -59,9 +72,9 @@
                     search: current.search,
                 });
             },
+            deactivate,
             dispose() {
-                contextGate.invalidate();
-                listGate.invalidate();
+                deactivate();
                 lifecycle.dispose();
             },
         });

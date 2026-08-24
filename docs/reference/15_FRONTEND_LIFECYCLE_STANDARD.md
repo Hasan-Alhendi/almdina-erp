@@ -373,8 +373,13 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 | Factory Workforce | PAGE | Certified | read/activation، visit-generation mutation completion، transient-child ownership، revisit reconciliation، وremount مثبتة runtime |
 | Factory Permissions | PAGE | Certified | read/preview/import/export guards، dirty-aware revisit، save reconciliation، confirmation ownership، وremount مثبتة runtime |
 | Factory Production Settings | PAGE | Certified | read/activation، visit-generation mutation reconciliation، edit/audit child ownership، وremount مثبتة runtime |
-| Shop Floor Inbox | PAGE | Migration pending | request gates موجودة؛ full page activation contract غير معتمدة بعد |
+| Shop Floor Inbox | PAGE | Certified | synchronous first-load، activation/read invalidation، visit-generation mutation reconciliation، caller-owned QuickActions children، UI-state preservation، وremount مثبتة runtime |
 | Factory Master Data | PAGE | Migration pending | revisit compatibility ليست certification |
+| Factory Plan Archive | PAGE | Migration pending | read request id وrevisit compatibility موجودان؛ activation/mutation/transient-child contract غير معتمدة |
+| Factory Approval Queue | PAGE | Migration pending | revisit compatibility موجودة؛ approve/reject mutation وprompt ownership غير معتمدين |
+| Factory Stock Settings | PAGE | Retirement decision pending | surface تاريخية مرتبطة بالـstock المستبعد من Active Product Scope؛ لا تمنح certification قبل قرار الإبقاء أو الإزالة |
+| Factory System Preflight | PAGE | Lifecycle migration pending | custom page بلا activation owner أو runtime certification حاليًا |
+| Factory Performance Benchmark | PAGE | Lifecycle migration pending | custom page بلا activation owner أو runtime certification حاليًا |
 | Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |
 | Door Cutting Order List | LIST | Certification pending | list-specific identity/refresh contract لم تُعتمد runtime بعد |
 | Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required | التقارير الحالية filters declarative ولا تملك custom async lifecycle |

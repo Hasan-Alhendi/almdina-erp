@@ -165,3 +165,7 @@ assert.equal(Object.isFrozen(frontend), true);
 require("./page_foundation_bootstrap.test.js");
 require("./page_revisit_refresh.test.js");
 require("./admin_page_lifecycle.test.js");
+require("./shop_floor_page_lifecycle.test.js");
+require("./shop_floor_quick_actions_lifecycle.test.js");
+require("./shop_floor_dialogs_lifecycle.test.js");
+require("./shop_floor_interactions_lifecycle.test.js");

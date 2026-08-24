@@ -94,11 +94,29 @@
         return options;
     }
 
-    function notify(message) {
-        frappe.show_alert({ message, indicator: "green" });
+    function lifecycleBoundary(options = {}) {
+        const owner = options.lifecycle && typeof options.lifecycle === "object"
+            ? options.lifecycle
+            : {};
+        return Object.freeze({
+            isCurrent: typeof owner.isCurrent === "function" ? owner.isCurrent : () => true,
+            ownTransient: typeof owner.ownTransient === "function"
+                ? owner.ownTransient
+                : surface => surface,
+            onStaleMutationSuccess: typeof owner.onStaleMutationSuccess === "function"
+                ? owner.onStaleMutationSuccess
+                : () => null,
+        });
     }
 
-    function runCommand({ method, args, button, successMessage, freezeMessage, onSuccess }) {
+    function notify(message, boundary) {
+        if (!boundary.isCurrent()) return null;
+        return frappe.show_alert({ message, indicator: "green" });
+    }
+
+    function runCommand({ method, args, button, successMessage, freezeMessage, onSuccess, onError, lifecycle }) {
+        const boundary = lifecycleBoundary({ lifecycle });
+        if (!boundary.isCurrent()) return Promise.resolve(null);
         setBusy(button, true);
         return frappe.call({
             method,
@@ -106,12 +124,23 @@
             freeze: true,
             freeze_message: freezeMessage || __("جاري تحديث مسار الإنتاج..."),
         }).then(response => {
-            notify(successMessage);
-            if (typeof onSuccess === "function") {
-                onSuccess(response.message || {});
+            const data = response.message || {};
+            if (!boundary.isCurrent()) {
+                return Promise.resolve(boundary.onStaleMutationSuccess(data)).then(() => data);
             }
-            return response.message || {};
-        }).finally(() => setBusy(button, false));
+            notify(successMessage, boundary);
+            if (typeof onSuccess === "function") onSuccess(data);
+            return data;
+        }).catch(error => {
+            if (!boundary.isCurrent()) return null;
+            if (typeof onError === "function") {
+                onError(error);
+                return null;
+            }
+            throw error;
+        }).finally(() => {
+            if (boundary.isCurrent()) setBusy(button, false);
+        });
     }
 
     function start(context, options) {
@@ -121,6 +150,8 @@
             button: options.button,
             successMessage: __("تم بدء العمل."),
             onSuccess: options.onSuccess,
+            onError: options.onError,
+            lifecycle: options.lifecycle,
         });
     }
 
@@ -132,6 +163,8 @@
             successMessage: __("تم تسليم الطلب للعميل."),
             freezeMessage: __("جاري تسجيل تسليم الطلب..."),
             onSuccess: options.onSuccess,
+            onError: options.onError,
+            lifecycle: options.lifecycle,
         });
     }
 
@@ -142,16 +175,23 @@
             button: options.button,
             successMessage: __("الطلب جاهز للتسليم."),
             onSuccess: options.onSuccess,
+            onError: options.onError,
+            lifecycle: options.lifecycle,
         });
 
         if (options.skipFinalConfirmation === true) {
             return finish();
         }
 
-        frappe.confirm(
+        const boundary = lifecycleBoundary(options);
+        if (!boundary.isCurrent()) return null;
+        const surface = frappe.confirm(
             __("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"),
-            finish
+            () => {
+                if (boundary.isCurrent()) finish();
+            }
         );
+        boundary.ownTransient(surface, "terminal-confirm");
         return null;
     }
 
@@ -200,7 +240,9 @@
         `;
     }
 
-    function createWorkerDropdownDialog({ title, label, workers, primaryLabel, onSubmit }) {
+    function createWorkerDropdownDialog({ title, label, workers, primaryLabel, onSubmit, lifecycle }) {
+        const boundary = lifecycleBoundary({ lifecycle });
+        if (!boundary.isCurrent()) return null;
         ensureWorkerDropdownStylesheet();
         const choices = workerOptions(workers);
         let selected = choices.length === 1 ? choices[0] : null;
@@ -218,6 +260,10 @@
             }],
             primary_action_label: primaryLabel,
             primary_action() {
+                if (!boundary.isCurrent()) {
+                    dialog.hide();
+                    return null;
+                }
                 if (!selected) {
                     frappe.show_alert({
                         message: __("اختر العامل التالي أولاً."),
@@ -230,6 +276,8 @@
             },
         });
 
+        boundary.ownTransient(dialog, "worker-dialog");
+        if (!boundary.isCurrent()) return dialog;
         dialog.show();
         const field = dialog.fields_dict && dialog.fields_dict.next_assignee_dropdown;
         const root = field && field.$wrapper && field.$wrapper[0];
@@ -283,6 +331,7 @@
         };
 
         trigger.addEventListener("click", () => {
+            if (!boundary.isCurrent()) return;
             const willOpen = trigger.getAttribute("aria-expanded") !== "true";
             setOpen(willOpen);
             if (willOpen) {
@@ -292,6 +341,7 @@
         });
 
         trigger.addEventListener("keydown", event => {
+            if (!boundary.isCurrent()) return;
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();
                 setOpen(true);
@@ -302,6 +352,7 @@
         });
 
         menu.addEventListener("click", event => {
+            if (!boundary.isCurrent()) return;
             const optionNode = event.target.closest(".almdina-worker-dropdown-option");
             if (!optionNode) return;
             const choice = choices.find(item => item.value === optionNode.dataset.value);
@@ -309,6 +360,7 @@
         });
 
         menu.addEventListener("keydown", event => {
+            if (!boundary.isCurrent()) return;
             const current = event.target.closest(".almdina-worker-dropdown-option");
             if (!current) return;
             const currentIndex = optionNodes.indexOf(current);
@@ -335,16 +387,18 @@
     }
 
     function promptNextWorker(context, options, handoffContext) {
+        const boundary = lifecycleBoundary(options);
+        if (!boundary.isCurrent()) return null;
         const workers = Array.isArray(handoffContext.workers)
             ? handoffContext.workers
             : [];
         if (!workers.length) {
-            frappe.msgprint(
+            const surface = frappe.msgprint(
                 __("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [
                     handoffContext.operational_role || "",
                 ])
             );
-            return;
+            return boundary.ownTransient(surface, "no-workers");
         }
 
         const nextDepartment = handoffContext.next_department
@@ -355,7 +409,9 @@
             label: `${__("العامل التالي")} — ${nextDepartment}`,
             workers,
             primaryLabel: __("إرسال"),
+            lifecycle: options.lifecycle,
             onSubmit(nextAssignee, dialog) {
+                if (!boundary.isCurrent()) return null;
                 dialog.hide();
                 return runCommand({
                     method: METHODS.handoff,
@@ -366,17 +422,22 @@
                     button: options.button,
                     successMessage: __("تم إنهاء المرحلة وإرسال الطلب للقسم التالي."),
                     onSuccess: options.onSuccess,
+                    onError: options.onError,
+                    lifecycle: options.lifecycle,
                 });
             },
         });
     }
 
     function handoff(context, options) {
+        const boundary = lifecycleBoundary(options);
+        if (!boundary.isCurrent()) return Promise.resolve(null);
         setBusy(options.button, true);
         return frappe.call({
             method: METHODS.handoffContext,
             args: { stage_name: context.stage },
         }).then(response => {
+            if (!boundary.isCurrent()) return null;
             setBusy(options.button, false);
             const handoffContext = response.message || {};
             if (handoffContext.final_stage === true) {
@@ -385,12 +446,19 @@
             promptNextWorker(context, options, handoffContext);
             return handoffContext;
         }).catch(error => {
+            if (!boundary.isCurrent()) return null;
             setBusy(options.button, false);
+            if (typeof options.onError === "function") {
+                options.onError(error);
+                return null;
+            }
             throw error;
         });
     }
 
     function perform(context, options = {}) {
+        const boundary = lifecycleBoundary(options);
+        if (!boundary.isCurrent()) return null;
         const action = actionFor(context);
         if (!action) return;
         if (action.kind === "deliver") {
@@ -402,24 +470,34 @@
             method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
             args: { order_name: context.order },
         }).then(response => {
+            if (!boundary.isCurrent()) return null;
             const stage = response.message || {};
             if (stage.actor_holds_operational_role === false) {
-                frappe.msgprint(__(
+                const surface = frappe.msgprint(__(
                     "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية."
                 ));
+                boundary.ownTransient(surface, "not-operational-role");
                 return null;
             }
             const stillAllowed = action.kind === "start"
                 ? stage.can_start_stage === true
                 : stage.can_handoff_stage === true;
             if (!stillAllowed) {
-                frappe.msgprint(__("لم يعد هذا الإجراء متاحًا في حالة الطلب الحالية."));
+                const surface = frappe.msgprint(__("لم يعد هذا الإجراء متاحًا في حالة الطلب الحالية."));
+                boundary.ownTransient(surface, "action-unavailable");
                 return null;
             }
             if (action.kind === "start") {
                 return start(context, options);
             }
             return handoff(context, options);
+        }).catch(error => {
+            if (!boundary.isCurrent()) return null;
+            if (typeof options.onError === "function") {
+                options.onError(error);
+                return null;
+            }
+            throw error;
         });
         return guard;
     }
