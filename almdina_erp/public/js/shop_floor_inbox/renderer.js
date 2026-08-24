@@ -17,14 +17,16 @@
         return labels[status] || __(status || "");
     }
 
-    function createShell(wrapper) {
-        const page = frappe.ui.make_app_page({
-            parent: wrapper,
-            title: __("صالة الإنتاج"),
-            single_column: true,
-        });
+    function createShell(wrapper, page) {
+        if (!page) throw new Error("Shop Floor Inbox page shell is unavailable");
         const $section = $(wrapper).find(".layout-main-section");
-        $section.html(`
+        let $content = $section.children(".almdina-sf-content").first();
+        if (!$content.length) {
+            $content = $('<div class="almdina-sf-content"></div>');
+            $section.append($content);
+        }
+        if (!$section.children(".almdina-sf-nav").length) {
+            $content.before(`
             <div class="almdina-sf-nav" aria-label="${__("التنقل في صالة الإنتاج")}">
                 <div class="almdina-sf-tabs" role="tablist" aria-label="${__("أقسام صالة الإنتاج")}">
                     <button type="button" class="almdina-sf-tab is-active" role="tab" aria-selected="true" data-sf-mode="board">${__("لوحة الإنتاج")}</button>
@@ -35,8 +37,8 @@
                     </button>
                 </div>
             </div>
-            <div class="almdina-sf-content"></div>
-        `);
+            `);
+        }
         try {
             page.clear_primary_action();
             page.clear_inner_toolbar();
@@ -47,7 +49,8 @@
             page,
             $section,
             $tabs: $section.find(".almdina-sf-tabs"),
-            $content: $section.find(".almdina-sf-content"),
+            $content,
+            hasBootstrapLoading: () => $content.find('[data-almdina-loading-owner="shop-floor-bootstrap"]').length > 0,
         });
     }
 

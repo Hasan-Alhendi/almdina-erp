@@ -16,6 +16,11 @@ assert(!source.includes("frappe.get_roles"), "quick actions must not add client-
 assert(!source.includes('fieldtype: "Select"'), "worker handoff must not use a native mobile select picker");
 assert(!source.includes("frappe.prompt("), "worker handoff must use the anchored dropdown dialog instead of prompt Select");
 assert(source.includes("shop_floor_worker_dropdown.css"), "the focused worker dropdown stylesheet must be lazy-loaded");
+assert(source.includes("function lifecycleBoundary(options = {})"), "quick actions must accept caller-owned lifecycle capability");
+assert(source.includes("owner.isCurrent"), "quick-action UI commits must ask the caller whether the visit is current");
+assert(source.includes("owner.ownTransient"), "quick-action child surfaces must remain caller-owned");
+assert(source.includes("owner.onStaleMutationSuccess"), "stale mutation success must request caller reconciliation");
+assert(!source.includes("AlmdinaMutationLifecycle"), "quick actions must not create a shared mutation framework");
 
 const calls = [];
 const alerts = [];
