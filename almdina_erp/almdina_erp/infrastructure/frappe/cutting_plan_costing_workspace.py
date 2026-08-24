@@ -192,6 +192,16 @@ def _persist_special_piece_pricing_projection(order: Any, summary: Any) -> None:
             )
 
 
+def _commercial_cost_basis(order: Any, plan: Any | None) -> tuple[float, float]:
+    """Resolve Plan-owned cost inputs without leaking ownership into DCO projection."""
+
+    costs = authoritative_cost_values(order, plan=plan)
+    return (
+        flt(costs["mdf_cost_usd"]) + flt(costs["cutting_cost_usd"]),
+        flt(costs["total_cost_usd"]),
+    )
+
+
 def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict[str, Any]:
     """Refresh DCO-owned per-piece and aggregate commercial projections.
 
@@ -209,7 +219,7 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         manual_edge_fee_usd=flt(settings.default_special_manual_edge_fee_usd),
         margin_percent=flt(settings.default_special_margin_percent),
     )
-    costs = authoritative_cost_values(order, plan=plan)
+    board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, plan)
     try:
         summary = calculate_special_pricing(
             (
@@ -226,10 +236,8 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
             ),
             settings=pricing_settings,
             total_area_m2=flt(order.total_area_m2),
-            board_and_cutting_cost_usd=(
-                flt(costs["mdf_cost_usd"]) + flt(costs["cutting_cost_usd"])
-            ),
-            total_cost_usd=flt(costs["total_cost_usd"]),
+            board_and_cutting_cost_usd=board_and_cutting_cost_usd,
+            total_cost_usd=total_cost_usd,
         )
     except CostingError as error:
         if str(error) == "special_shape_defaults_negative":
