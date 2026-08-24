@@ -69,11 +69,14 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
                 self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", controller_source, page)
 
             if page == "factory_permissions":
-                self.assertIn(
-                    "state.saving || isDirty() ? null : loadConsole()",
-                    controller_source,
-                    page,
-                )
+                for marker in (
+                    "onActivate: activatePage",
+                    "function activatePage()",
+                    "state.saving",
+                    "reconcileAfterSave",
+                    "isDirty()",
+                ):
+                    self.assertIn(marker, controller_source, page)
             elif page in {"factory_workforce", "factory_production_settings"}:
                 self.assertIn(
                     "onActivate: load",

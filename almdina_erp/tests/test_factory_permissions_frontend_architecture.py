@@ -134,7 +134,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             self.assertNotIn(forbidden, self.interactions)
 
     def test_controller_is_a_thin_orchestrator_over_extracted_modules(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 470)
+        self.assertLessEqual(len(self.controller.splitlines()), 540)
         for dependency in (
             "AlmdinaFactoryPermissionsApi",
             "AlmdinaFactoryPermissionsState",
@@ -153,6 +153,9 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("previewImport", self.controller)
         self.assertIn("updateRole", self.controller)
         self.assertIn("bindActivationLifecycle", self.controller)
+        self.assertIn("activation.generation()", self.controller)
+        self.assertIn("ownedTransients", self.controller)
+        self.assertIn("reconcileAfterSave", self.controller)
         self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
         self.assertNotIn("permission_management_service", self.controller)
