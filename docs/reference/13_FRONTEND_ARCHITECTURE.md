@@ -3,6 +3,7 @@
 > **Status:** Canonical frontend specialization  
 > **Audience:** Frontend developers, reviewers, QA, Coding AI  
 > **Parent contract:** [02 — Architecture](02_ARCHITECTURE.md)  
+> **Lifecycle specialization:** [15 — Project-wide Frontend Lifecycle Standard](15_FRONTEND_LIFECYCLE_STANDARD.md)
 > **Freeze:** [Architecture Freeze](ARCHITECTURE_FREEZE.md)
 
 ## 1. الهدف
@@ -19,6 +20,8 @@
 - تنفيذ Refactor تدريجي يحافظ على الشكل والسلوك أولًا، ثم تحسين UI/UX بشكل مستقل ومقصود.
 
 لا يوجد قرار في هذه المرحلة لإدخال React أو Vue أو أي Framework واجهات جديد. Frappe/JavaScript الحالي يبقى التقنية الأساسية ما لم يُعتمد تغيير معماري منفصل عبر ADR.
+
+هذه الوثيقة تبقى المرجع الأعلى لتنظيم الواجهة. العقود المتخصصة لـmount/activation/identity/async cleanup حسب نوع الـsurface موثقة في [15 — Frontend Lifecycle Standard](15_FRONTEND_LIFECYCLE_STANDARD.md)، دون فرض implementation واحدة على Frappe Pages وForms وLists وReports وSpecial Workspaces.
 
 ## 2. اتجاه الاعتماد في الواجهة
 
