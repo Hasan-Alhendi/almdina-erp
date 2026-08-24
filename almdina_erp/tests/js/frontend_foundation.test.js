@@ -163,3 +163,5 @@ assert.equal(Object.isFrozen(frontend), true);
 // This file is already a permanent Static Checks gate. Keep the Page-entry race
 // simulation attached to it so cold Desk bootstrap coverage cannot become orphaned.
 require("./page_foundation_bootstrap.test.js");
+require("./page_revisit_refresh.test.js");
+require("./admin_page_lifecycle.test.js");

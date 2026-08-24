@@ -13,12 +13,22 @@
         }
 
         const frontend = window.AlmdinaFrontend;
+        const pageLifecycleModule = window.AlmdinaPageRevisit;
         const api = window.AlmdinaFactoryPermissionsApi;
         const stateModule = window.AlmdinaFactoryPermissionsState;
         const viewModelModule = window.AlmdinaFactoryPermissionsViewModel;
         const rendererModule = window.AlmdinaFactoryPermissionsRenderer;
         const interactionsModule = window.AlmdinaFactoryPermissionsInteractions;
-        if (!frontend || !api || !stateModule || !viewModelModule || !rendererModule || !interactionsModule) {
+        if (
+            !frontend
+            || !pageLifecycleModule
+            || typeof pageLifecycleModule.bindActivationLifecycle !== "function"
+            || !api
+            || !stateModule
+            || !viewModelModule
+            || !rendererModule
+            || !interactionsModule
+        ) {
             throw new Error("Factory permissions frontend modules are unavailable");
         }
 
@@ -30,12 +40,7 @@
         const unique = store.unique;
         const isDirty = store.isDirty;
         const viewModel = viewModelModule.create({ translate: __ });
-
-        frappe.ui.make_app_page({
-            parent: wrapper,
-            title: __("إدارة صلاحيات المعمل"),
-            single_column: true,
-        });
+        if (!wrapper.page) throw new Error("Factory permissions page shell is unavailable");
 
         const $main = $(wrapper).find(".layout-main-section");
         const renderer = rendererModule.create({
@@ -43,7 +48,8 @@
             escapeHtml: value => frappe.utils.escape_html(String(value ?? "")),
             translate: __,
         });
-        renderer.renderShell();
+        let activation = null;
+        let featureShellReady = false;
         const interactions = interactionsModule.bind({
             $main,
             lifecycle,
@@ -62,28 +68,44 @@
             },
         });
 
-        if (window.AlmdinaPageRevisit) {
-            // Unsaved matrix edits outrank freshness: only reload a clean console.
-            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, () => (
-                state.saving || isDirty() ? null : loadConsole()
-            ));
-        }
-        loadConsole();
-
         const instance = Object.freeze({
+            load: loadConsole,
             dispose() {
-                lifecycle.dispose();
                 interactions.dispose();
+                store.dispose();
                 if (wrapper.__almdinaFactoryPermissionsController === instance) {
                     wrapper.__almdinaFactoryPermissionsController = null;
                 }
             },
         });
         wrapper.__almdinaFactoryPermissionsController = instance;
+        activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
+            onActivate: () => (state.saving || isDirty() ? null : loadConsole()),
+            onDeactivate: () => {
+                cancelPreviewTimer();
+                store.deactivate();
+            },
+        });
+        if (!activation) {
+            instance.dispose();
+            throw new Error("Factory permissions page lifecycle is unavailable");
+        }
+        lifecycle.track(() => activation.dispose(), "permissions-page-activation");
+        if (activation.isActive() && !state.saving && !isDirty()) loadConsole();
         return instance;
 
         function errorMessage(error, fallback) {
             return frontend.errorMessage(error, fallback);
+        }
+
+        function isActive() {
+            return Boolean(activation && activation.isActive());
+        }
+
+        function ensureFeatureShell() {
+            if (featureShellReady) return;
+            renderer.renderShell();
+            featureShellReady = true;
         }
 
         function renderRoleMenu(query) {
@@ -98,17 +120,27 @@
         }
 
         function requestRoleChange(role) {
-            if (!isDirty()) return loadRole(role);
+            const selectRole = () => {
+                store.requests.console.invalidate();
+                return loadRole(role);
+            };
+            if (!isDirty()) return selectRole();
             frappe.confirm(
                 __("لديك تغييرات غير محفوظة. هل تريد تجاهلها؟"),
-                () => loadRole(role),
+                selectRole,
                 () => renderer.setRolePickerValue(state.selectedRole)
             );
         }
 
         function loadConsole() {
+            if (!isActive() || state.saving || isDirty()) return Promise.resolve(null);
+            store.requests.role.invalidate();
+            store.invalidatePending();
+            const token = store.requests.console.begin();
             return api.getConsole({ freeze: false }).then(data => {
+                if (!isActive() || !store.requests.console.isCurrent(token)) return null;
                 const resolved = data || {};
+                ensureFeatureShell();
                 state.catalog = Array.isArray(resolved.catalog) ? resolved.catalog : [];
                 state.roles = Array.isArray(resolved.roles) ? resolved.roles : [];
                 state.transfer = resolved.transfer || {};
@@ -116,10 +148,15 @@
                 renderRoleMenu("");
                 if (!state.roles.length) return showEmpty(__("لا توجد أدوار قابلة للإدارة."));
                 return loadRole(String(state.roles[0].name || ""));
-            }).catch(error => showError(error, __("تعذر فتح إدارة الصلاحيات.")));
+            }).catch(error => {
+                if (!isActive() || !store.requests.console.isCurrent(token)) return null;
+                showError(error, __("تعذر فتح إدارة الصلاحيات."));
+                return null;
+            });
         }
 
         function loadRole(role) {
+            if (!isActive()) return Promise.resolve(null);
             cancelPreviewTimer();
             store.requests.preview.invalidate();
             const token = store.requests.role.begin({ role });
@@ -130,7 +167,7 @@
             renderer.closeRoleMenu(false, role);
             renderer.showRoleLoading(__("جاري تحميل صلاحيات الدور..."));
             return api.getRole(role, { freeze: false }).then(data => {
-                if (!store.requests.role.isCurrent(token) || role !== state.selectedRole) return;
+                if (!isActive() || !store.requests.role.isCurrent(token) || role !== state.selectedRole) return null;
                 const resolved = data || {};
                 state.baseline = clone(resolved.capabilities);
                 state.working = clone(resolved.capabilities);
@@ -138,7 +175,10 @@
                 renderPermissionState(resolved.audit || []);
                 renderer.showLoaded();
             }).catch(error => {
-                if (store.requests.role.isCurrent(token)) showError(error, __("تعذر تحميل صلاحيات الدور."));
+                if (isActive() && store.requests.role.isCurrent(token)) {
+                    showError(error, __("تعذر تحميل صلاحيات الدور."));
+                }
+                return null;
             });
         }
 
@@ -165,7 +205,9 @@
         function queuePreview() {
             syncDirtyState();
             lifecycle.timeout(() => {
-                loadPreview().then(() => syncDirtyState());
+                loadPreview().then(() => {
+                    if (isActive()) syncDirtyState();
+                });
             }, 180, "permissions-preview-timer");
         }
 
@@ -199,13 +241,14 @@
         }
 
         function loadPreview() {
-            if (!state.selectedRole) return Promise.resolve(null);
+            if (!isActive() || !state.selectedRole) return Promise.resolve(null);
             const requestedRole = state.selectedRole;
             const requestedState = clone(state.working);
             const token = store.requests.preview.begin({ role: requestedRole, state: stable(requestedState) });
             return api.previewRole(requestedRole, requestedState, { freeze: false }).then(data => {
                 if (
-                    !store.requests.preview.isCurrent(token)
+                    !isActive()
+                    || !store.requests.preview.isCurrent(token)
                     || requestedRole !== state.selectedRole
                     || stable(requestedState) !== stable(state.working)
                 ) {
@@ -213,7 +256,7 @@
                 }
                 return applyPreview(data || {});
             }).catch(error => {
-                if (store.requests.preview.isCurrent(token)) {
+                if (isActive() && store.requests.preview.isCurrent(token)) {
                     frappe.show_alert({ message: errorMessage(error, __("تعذر حساب أثر الصلاحيات.")), indicator: "red" });
                 }
                 return null;
@@ -231,15 +274,18 @@
         }
 
         function previewExternal(request, successMessage) {
+            if (!isActive()) return Promise.resolve(null);
             const requestedRole = state.selectedRole;
             const token = store.requests.transfer.begin({ role: requestedRole });
             return Promise.resolve().then(request).then(data => {
-                if (!store.requests.transfer.isCurrent(token) || requestedRole !== state.selectedRole) return null;
+                if (!isActive() || !store.requests.transfer.isCurrent(token) || requestedRole !== state.selectedRole) {
+                    return null;
+                }
                 const preview = applyPreview(data || {});
                 frappe.show_alert({ message: successMessage, indicator: "green" }, 6);
                 return preview;
             }).catch(error => {
-                if (store.requests.transfer.isCurrent(token)) {
+                if (isActive() && store.requests.transfer.isCurrent(token)) {
                     frappe.msgprint({
                         title: __("تعذر تحميل الصلاحيات"),
                         message: frappe.utils.escape_html(String(errorMessage(error, __("حدث خطأ غير متوقع.")) || "")),
@@ -251,25 +297,35 @@
         }
 
         function exportSelectedRole() {
-            if (!state.selectedRole) return;
+            if (!isActive() || !state.selectedRole) return;
             const requestedRole = state.selectedRole;
+            const token = store.requests.transfer.begin({ role: requestedRole, operation: "export" });
             api.exportRole(requestedRole, {
                 freeze: true,
                 freezeMessage: __("جاري تجهيز ملف الصلاحيات..."),
             }).then(documentData => {
-                if (requestedRole !== state.selectedRole) return;
+                if (
+                    !isActive()
+                    || !store.requests.transfer.isCurrent(token)
+                    || requestedRole !== state.selectedRole
+                ) {
+                    return;
+                }
                 const filename = `almdina-permissions-${requestedRole.replace(/[^a-zA-Z0-9_-]+/g, "-")}.json`;
                 renderer.downloadJson(filename, documentData || {});
                 frappe.show_alert({ message: __("تم تصدير ملف الصلاحيات."), indicator: "green" });
-            }).catch(error => frappe.msgprint({
-                title: __("تعذر التصدير"),
-                message: frappe.utils.escape_html(String(errorMessage(error, __("حدث خطأ غير متوقع.")) || "")),
-                indicator: "red",
-            }));
+            }).catch(error => {
+                if (!isActive() || !store.requests.transfer.isCurrent(token)) return;
+                frappe.msgprint({
+                    title: __("تعذر التصدير"),
+                    message: frappe.utils.escape_html(String(errorMessage(error, __("حدث خطأ غير متوقع.")) || "")),
+                    indicator: "red",
+                });
+            });
         }
 
         function importPermissionFile(file) {
-            if (!file || !state.selectedRole) return;
+            if (!isActive() || !file || !state.selectedRole) return;
             const maxBytes = Number(state.transfer.max_bytes || 131072);
             if (file.size > maxBytes) {
                 frappe.msgprint({ title: __("ملف كبير جدًا"), message: __("حجم ملف الصلاحيات يتجاوز الحد المسموح."), indicator: "red" });
@@ -277,6 +333,7 @@
             }
             const reader = new FileReader();
             reader.onload = () => {
+                if (!isActive()) return;
                 const payload = String(reader.result || "");
                 try {
                     const parsed = JSON.parse(payload);
@@ -294,7 +351,10 @@
                     __("تم التحقق من الملف وتحميله للمعاينة فقط. لن يتغير الدور قبل الحفظ.")
                 );
             };
-            reader.onerror = () => frappe.msgprint({ title: __("تعذر قراءة الملف"), message: __("لم يتمكن المتصفح من قراءة ملف الصلاحيات."), indicator: "red" });
+            reader.onerror = () => {
+                if (!isActive()) return;
+                frappe.msgprint({ title: __("تعذر قراءة الملف"), message: __("لم يتمكن المتصفح من قراءة ملف الصلاحيات."), indicator: "red" });
+            };
             reader.readAsText(file, "utf-8");
         }
 
@@ -318,6 +378,7 @@
         }
 
         function resetWorkingState() {
+            if (!isActive()) return;
             store.invalidatePending();
             state.working = clone(state.baseline);
             state.preview = { capabilities: clone(state.working), changes: [], impact: (state.preview && state.preview.impact) || {} };
@@ -356,16 +417,20 @@
                     state.baseline = clone(resolved.capabilities || requestedState);
                     state.working = clone(state.baseline);
                     state.preview = { capabilities: clone(state.working), changes: [], impact: resolved.impact || {} };
-                    renderPermissionState(resolved.audit || []);
+                    if (isActive()) renderPermissionState(resolved.audit || []);
                     await refreshRuntimePermissions();
-                    frappe.show_alert({ message: __("تم حفظ صلاحيات الدور."), indicator: "green" });
+                    if (isActive()) {
+                        frappe.show_alert({ message: __("تم حفظ صلاحيات الدور."), indicator: "green" });
+                    }
                     return true;
                 } catch (error) {
-                    frappe.show_alert({ message: errorMessage(error, __("تعذر حفظ الصلاحيات.")), indicator: "red" }, 7);
+                    if (isActive()) {
+                        frappe.show_alert({ message: errorMessage(error, __("تعذر حفظ الصلاحيات.")), indicator: "red" }, 7);
+                    }
                     return false;
                 } finally {
                     state.saving = false;
-                    syncDirtyState();
+                    if (isActive()) syncDirtyState();
                 }
             };
 
@@ -383,6 +448,7 @@
         }
 
         function showEmpty(message) {
+            ensureFeatureShell();
             renderer.showEmpty(message);
         }
 

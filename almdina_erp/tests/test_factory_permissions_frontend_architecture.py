@@ -28,7 +28,8 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_entry_is_a_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 80)
+        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertIn("frappe.ui.make_app_page", self.page)
         self.assertIn("frontend.ensureStylesheet", self.page)
         for asset in (
             "api.js",
@@ -133,7 +134,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
             self.assertNotIn(forbidden, self.interactions)
 
     def test_controller_is_a_thin_orchestrator_over_extracted_modules(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 420)
+        self.assertLessEqual(len(self.controller.splitlines()), 470)
         for dependency in (
             "AlmdinaFactoryPermissionsApi",
             "AlmdinaFactoryPermissionsState",
@@ -144,12 +145,15 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         ):
             self.assertIn(dependency, self.controller)
         self.assertIn("requests.role.begin", self.controller)
+        self.assertIn("requests.console.begin", self.controller)
         self.assertIn("requests.preview.begin", self.controller)
         self.assertIn("requests.transfer.begin", self.controller)
         self.assertIn("lifecycle.timeout", self.controller)
         self.assertIn("requires_self_lockout_confirmation", self.controller)
         self.assertIn("previewImport", self.controller)
         self.assertIn("updateRole", self.controller)
+        self.assertIn("bindActivationLifecycle", self.controller)
+        self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
         self.assertNotIn("permission_management_service", self.controller)
         self.assertNotIn("style.textContent", self.controller)

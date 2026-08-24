@@ -37,11 +37,15 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
         hooks = HOOKS.read_text(encoding="utf-8")
         self.assertIn('"/assets/almdina_erp/js/page_revisit_refresh.js"', hooks)
 
-    def test_helper_skips_the_show_event_of_the_initial_load(self) -> None:
+    def test_helper_separates_mount_from_active_visit_lifetime(self) -> None:
         source = HELPER.read_text(encoding="utf-8")
+        self.assertIn("function bindActivationLifecycle(wrapper, callbacks = {})", source)
         self.assertIn("function refreshOnRevisit(wrapper, reload)", source)
-        self.assertIn("wrapper.on_page_show = function ()", source)
-        self.assertIn("initialShowConsumed", source)
+        self.assertIn('`show${EVENT_NAMESPACE}`', source)
+        self.assertIn('`hide${EVENT_NAMESPACE}`', source)
+        self.assertIn("isCurrentPage(wrapper)", source)
+        self.assertIn("hasVisited(wrapper)", source)
+        self.assertNotIn("wrapper.on_page_show =", source)
 
     def test_every_data_driven_page_reloads_when_revisited(self) -> None:
         for page in DATA_DRIVEN_PAGES:
@@ -54,7 +58,15 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
             controller_source = controller_path.read_text(encoding="utf-8")
             controller_asset = f'/assets/almdina_erp/js/{controller_path.parent.name}/controller.js'
             self.assertIn(controller_asset, page_source, page)
-            self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", controller_source, page)
+            if page in {
+                "factory_permissions",
+                "factory_workforce",
+                "factory_production_settings",
+            }:
+                self.assertIn("bindActivationLifecycle(wrapper", controller_source, page)
+                self.assertIn("onDeactivate", controller_source, page)
+            else:
+                self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", controller_source, page)
 
             if page == "factory_permissions":
                 self.assertIn(
@@ -64,7 +76,7 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
                 )
             elif page in {"factory_workforce", "factory_production_settings"}:
                 self.assertIn(
-                    "AlmdinaPageRevisit.refreshOnRevisit(wrapper, load)",
+                    "onActivate: load",
                     controller_source,
                     page,
                 )

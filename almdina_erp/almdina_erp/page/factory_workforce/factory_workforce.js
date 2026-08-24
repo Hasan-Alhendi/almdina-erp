@@ -2,6 +2,7 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
     "use strict";
 
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
+    const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
         "/assets/almdina_erp/js/factory_workforce/api.js",
         "/assets/almdina_erp/js/factory_workforce/state.js",
@@ -12,7 +13,19 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/factory_workforce/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_workforce.css";
+
+    frappe.ui.make_app_page({
+        parent: wrapper,
+        title: __("المستخدمون والقوى العاملة"),
+        single_column: true,
+    });
     const $main = $(wrapper).find(".layout-main-section");
+    $main.html(`
+        <div class="aw-loading" role="status" aria-live="polite">
+            <span class="aw-loading-dot" aria-hidden="true"></span>
+            <span>${__("جاري تحميل مستخدمي المعمل...")}</span>
+        </div>
+    `);
 
     function showBootstrapError(error) {
         const fallback = __("تعذر تحميل واجهة المستخدمين والقوى العاملة.");
@@ -25,22 +38,33 @@ frappe.pages["factory-workforce"].on_page_load = function (wrapper) {
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 
-    function ensureFoundation() {
-        const current = window.AlmdinaFrontend;
-        if (current && typeof current.ensureStylesheet === "function") {
-            return Promise.resolve(current);
+    function resolveCore() {
+        const frontend = window.AlmdinaFrontend;
+        const lifecycle = window.AlmdinaPageRevisit;
+        if (!frontend || typeof frontend.ensureStylesheet !== "function") {
+            throw new Error("Almdina frontend foundation did not initialize");
         }
-
-        return Promise.resolve(frappe.require(FOUNDATION)).then(() => {
-            const loaded = window.AlmdinaFrontend;
-            if (!loaded || typeof loaded.ensureStylesheet !== "function") {
-                throw new Error("Almdina frontend foundation did not initialize");
-            }
-            return loaded;
-        });
+        if (!lifecycle || typeof lifecycle.bindActivationLifecycle !== "function") {
+            throw new Error("Almdina page lifecycle did not initialize");
+        }
+        return frontend;
     }
 
-    return ensureFoundation()
+    function ensureCore() {
+        const frontend = window.AlmdinaFrontend;
+        const assets = [];
+        if (!frontend || typeof frontend.ensureStylesheet !== "function") assets.push(FOUNDATION);
+        if (!window.AlmdinaPageRevisit || typeof window.AlmdinaPageRevisit.bindActivationLifecycle !== "function") {
+            assets.push(PAGE_LIFECYCLE);
+        }
+        if (!assets.length) return Promise.resolve(resolveCore());
+        const pending = frontend && typeof frontend.requireAssets === "function"
+            ? frontend.requireAssets(assets)
+            : frappe.require(assets);
+        return Promise.resolve(pending).then(resolveCore);
+    }
+
+    return ensureCore()
         .then(frontend => {
             // Cold Desk navigation can evaluate this Page before app-level include
             // assets finish. Bootstrap the shared foundation on demand instead of

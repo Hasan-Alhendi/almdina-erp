@@ -13,6 +13,7 @@
         }
 
         const frontend = window.AlmdinaFrontend;
+        const pageLifecycleModule = window.AlmdinaPageRevisit;
         const api = window.AlmdinaFactoryWorkforceApi;
         const stateModule = window.AlmdinaFactoryWorkforceState;
         const viewModelModule = window.AlmdinaFactoryWorkforceViewModel;
@@ -21,6 +22,8 @@
         const dialogsModule = window.AlmdinaFactoryWorkforceDialogs;
         if (
             !frontend
+            || !pageLifecycleModule
+            || typeof pageLifecycleModule.bindActivationLifecycle !== "function"
             || !api
             || !stateModule
             || !viewModelModule
@@ -34,11 +37,8 @@
         const store = stateModule.create();
         const state = store.data;
         const viewModel = viewModelModule.create({ translate: __ });
-        const page = frappe.ui.make_app_page({
-            parent: wrapper,
-            title: __("المستخدمون والقوى العاملة"),
-            single_column: true,
-        });
+        const page = wrapper.page;
+        if (!page) throw new Error("Factory workforce page shell is unavailable");
         const $main = $(wrapper).find(".layout-main-section");
         const renderer = rendererModule.create({
             $main,
@@ -46,7 +46,10 @@
             translate: __,
         });
         const dialogs = dialogsModule.create({ translate: __ });
+        let activation = null;
+        let initialLoadPending = true;
 
+        if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");
         page.add_inner_button(__("تحديث"), load, null, "refresh");
 
@@ -71,13 +74,6 @@
             },
         });
 
-        if (window.AlmdinaPageRevisit) {
-            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
-        }
-
-        renderer.renderLoading();
-        load();
-
         const instance = Object.freeze({
             load,
             dispose() {
@@ -88,6 +84,16 @@
             },
         });
         wrapper.__almdinaFactoryWorkforceController = instance;
+        activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
+            onActivate: load,
+            onDeactivate: store.deactivate,
+        });
+        if (!activation) {
+            instance.dispose();
+            throw new Error("Factory workforce page lifecycle is unavailable");
+        }
+        store.lifecycle.track(() => activation.dispose(), "workforce-page-activation");
+        if (activation.isActive()) load();
         return instance;
 
         function errorMessage(error, fallback) {
@@ -115,19 +121,22 @@
         }
 
         function load() {
+            if (!activation || !activation.isActive()) return Promise.resolve(null);
+            const isInitialLoad = initialLoadPending;
+            initialLoadPending = false;
             const token = store.requests.console.begin({
                 search: state.search,
                 enabled: state.enabled,
             });
-            if (!store.hasRows()) renderer.renderLoading();
+            if (!isInitialLoad && !store.hasRows()) renderer.renderLoading();
             return api.getConsole(state.search, state.enabled, { freeze: false }).then(data => {
-                if (!store.requests.console.isCurrent(token)) return null;
+                if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
                 store.applyConsole(data || {});
                 syncPrimaryAction();
                 render();
                 return data;
             }).catch(error => {
-                if (!store.requests.console.isCurrent(token)) return null;
+                if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
                 renderer.renderError(errorMessage(error, __("تعذر تحميل البيانات.")));
                 return null;
             });
@@ -254,7 +263,7 @@
                 user.email,
                 freezeOptions(__("جاري تحميل السجل..."))
             ).then(data => {
-                if (!store.requests.audit.isCurrent(token)) return;
+                if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
                 const events = Array.isArray(data.events) ? data.events : [];
                 dialogs.openAudit({ user, html: renderer.auditHtml(events) });
             });
