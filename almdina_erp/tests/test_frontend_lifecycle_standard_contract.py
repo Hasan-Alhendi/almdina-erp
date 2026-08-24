@@ -12,6 +12,17 @@ REFERENCE_INDEX = REFERENCE / "README.md"
 FRONTEND_ARCHITECTURE = REFERENCE / "13_FRONTEND_ARCHITECTURE.md"
 REFACTOR_CLOSURE = REFERENCE / "14_FRONTEND_REFACTOR_CLOSURE.md"
 FOUNDATION = ROOT / "public" / "js" / "frontend_foundation.js"
+FRONTEND_RUNTIME_ROOTS = (
+    ROOT / "public" / "js",
+    ROOT / "almdina_erp" / "page",
+    ROOT / "almdina_erp" / "doctype",
+    ROOT / "almdina_erp" / "report",
+)
+IGNORED_RUNTIME_DIRECTORIES = frozenset({"node_modules", "vendor", "dist", "build"})
+FORBIDDEN_LIFECYCLE_PLATFORM_PATTERNS = (
+    re.compile(r"\b(?:window\.)?AlmdinaLifecycle\b"),
+    re.compile(r"\bAlmdinaLifecycle(?:Framework|Platform)\b"),
+)
 
 COMMON_RULE_IDS = tuple(f"FE-LC-{index:03d}" for index in range(1, 16))
 PRIMARY_FAMILIES = (
@@ -40,6 +51,19 @@ SHARED_PRIMITIVES = (
     "createLifecycleScope",
     "ensureStylesheet",
 )
+
+
+def first_party_frontend_runtime_files() -> tuple[Path, ...]:
+    files = []
+    for root in FRONTEND_RUNTIME_ROOTS:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.js"):
+            relative_parts = path.relative_to(root).parts
+            if any(part in IGNORED_RUNTIME_DIRECTORIES for part in relative_parts):
+                continue
+            files.append(path)
+    return tuple(sorted(files))
 
 
 class TestFrontendLifecycleStandardContract(unittest.TestCase):
@@ -103,9 +127,9 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
     def test_certification_table_is_explicit_and_does_not_certify_by_helper(self) -> None:
         self.assertIn("## 8. Current Lifecycle Certification Status", self.standard)
         for row in (
-            "| Factory Workforce | PAGE | Certified |",
-            "| Factory Permissions | PAGE | Certified |",
-            "| Factory Production Settings | PAGE | Certified |",
+            "| Factory Workforce | PAGE | Certification pending |",
+            "| Factory Permissions | PAGE | Certification pending |",
+            "| Factory Production Settings | PAGE | Certification pending |",
             "| Shop Floor Inbox | PAGE | Migration pending |",
             "| Factory Master Data | PAGE | Migration pending |",
             "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
@@ -117,6 +141,8 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             with self.subTest(row=row):
                 self.assertIn(row, self.standard)
 
+        self.assertIn("إثبات read/activation lifecycle فقط", self.standard)
+        self.assertIn("لا يكفي لـFull Certification", self.standard)
         self.assertIn("وجود helper أو `requestId` منفرد لا يمنح certification", self.standard)
 
     def test_existing_foundation_remains_the_shared_primitive_owner(self) -> None:
@@ -127,8 +153,16 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
                 self.assertIn(f"`AlmdinaFrontend.{primitive}`", self.standard)
 
         self.assertIn("window.AlmdinaFrontend", foundation)
-        self.assertNotIn("window.AlmdinaLifecycle", foundation)
         self.assertIn("لا يوجد قرار بإنشاء lifecycle platform جديدة", self.standard)
+
+    def test_first_party_frontend_has_no_parallel_lifecycle_platform(self) -> None:
+        runtime_files = first_party_frontend_runtime_files()
+        self.assertTrue(runtime_files)
+        for path in runtime_files:
+            source = path.read_text(encoding="utf-8")
+            for pattern in FORBIDDEN_LIFECYCLE_PLATFORM_PATTERNS:
+                with self.subTest(path=path.relative_to(ROOT.parent), pattern=pattern.pattern):
+                    self.assertIsNone(pattern.search(source))
 
     def test_static_enforcement_does_not_claim_runtime_async_correctness(self) -> None:
         self.assertIn("Static source markers لا تثبت async correctness", self.standard)

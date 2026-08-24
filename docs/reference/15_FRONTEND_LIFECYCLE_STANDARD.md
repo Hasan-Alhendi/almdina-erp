@@ -362,15 +362,17 @@ registries وglobal owners تستخدم keys مستقرة وتستبدل الت�
 
 ## 8. Current Lifecycle Certification Status
 
-**Certified** تعني أن الـsurface تحقق contract عائلتها بالكود، وأن السيناريوهات
-الدلالية المناسبة مثبتة بـruntime regression tests، وأن Architecture/asset contracts
-ذات الصلة خضراء. وجود helper أو `requestId` منفرد لا يمنح certification.
+**Certified** تعني أن الـsurface تحقق كامل contract عائلتها بالكود، بما في ذلك
+async reads وما ينطبق عليها من mutation completion وTransient Child Surface
+lifecycle، وأن هذه السيناريوهات مثبتة بـruntime regression tests مناسبة، وأن
+Architecture/asset contracts ذات الصلة خضراء. إثبات read/activation lifecycle فقط
+لا يكفي لـFull Certification، ووجود helper أو `requestId` منفرد لا يمنح certification.
 
 | Surface | Family | Status | الملاحظة |
 |---|---|---|---|
-| Factory Workforce | PAGE | Certified | full activation/deactivation، read invalidation، remount regressions |
-| Factory Permissions | PAGE | Certified | full activation/deactivation مع dirty-aware revisit وmutation completion guards |
-| Factory Production Settings | PAGE | Certified | full activation/deactivation، read invalidation، remount regressions |
+| Factory Workforce | PAGE | Certification pending | read/activation lifecycle مثبتة؛ mutation/transient-surface guards وruntime regressions ما زالت مطلوبة |
+| Factory Permissions | PAGE | Certification pending | read/activation وdirty-aware revisit مثبتة؛ mutation/transient-child hardening وruntime regressions ما زالت مطلوبة |
+| Factory Production Settings | PAGE | Certification pending | read/activation lifecycle وmutation UI guard موجودة؛ transient-child/mutation runtime regressions ما زالت مطلوبة |
 | Shop Floor Inbox | PAGE | Migration pending | request gates موجودة؛ full page activation contract غير معتمدة بعد |
 | Factory Master Data | PAGE | Migration pending | revisit compatibility ليست certification |
 | Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |
