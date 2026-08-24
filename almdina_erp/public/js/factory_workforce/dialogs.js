@@ -12,9 +12,24 @@
         const ownedSurfaces = new Map();
         const drafts = new Map();
 
+        function rememberDraft(surface, draftKey) {
+            if (!draftKey || !surface || typeof surface.get_values !== "function") return;
+            const values = surface.get_values(true);
+            if (values && typeof values === "object") drafts.set(draftKey, { ...values });
+        }
+
         function own(surface, draftKey = "") {
             if (surface && typeof surface.hide === "function") {
-                ownedSurfaces.set(surface, String(draftKey || ""));
+                const key = String(draftKey || "");
+                if (key) {
+                    for (const [previous, previousKey] of ownedSurfaces) {
+                        if (previousKey !== key) continue;
+                        rememberDraft(previous, previousKey);
+                        ownedSurfaces.delete(previous);
+                        previous.hide();
+                    }
+                }
+                ownedSurfaces.set(surface, key);
             }
             return surface;
         }
@@ -33,10 +48,7 @@
 
         function deactivate() {
             for (const [surface, draftKey] of ownedSurfaces) {
-                if (draftKey && typeof surface.get_values === "function") {
-                    const values = surface.get_values(true);
-                    if (values && typeof values === "object") drafts.set(draftKey, { ...values });
-                }
+                rememberDraft(surface, draftKey);
                 surface.hide();
             }
             ownedSurfaces.clear();

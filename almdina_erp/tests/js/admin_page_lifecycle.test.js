@@ -904,6 +904,10 @@ async function testDialogModulesOwnTransientSurfaces() {
     const resumedWorkforceDraft = workforce.openCreate({ canAssignRoles: false, roleOptions: () => [] });
     assert.equal(resumedWorkforceDraft.values.email, "draft@example.com", "Workforce revisit must restore unsent dialog input");
     assert.equal(resumedWorkforceDraft.values.first_name, "Draft");
+    resumedWorkforceDraft.values.first_name = "Replacement";
+    const replacementWorkforceDraft = workforce.openCreate({ canAssignRoles: false, roleOptions: () => [] });
+    assert.equal(resumedWorkforceDraft.hidden, 1, "a duplicate Workforce child owner must be replaced");
+    assert.equal(replacementWorkforceDraft.values.first_name, "Replacement");
     workforce.deactivate();
 
     vm.runInContext(source("factory_production_settings/dialogs.js"), context, { filename: "factory_production_settings/dialogs.js" });
@@ -933,6 +937,10 @@ async function testDialogModulesOwnTransientSurfaces() {
     const resumedSettingsDraft = settings.openSection({ section: "production", current: { values: {} } });
     assert.equal(resumedSettingsDraft.values.default_production_routing, "Draft Route", "Settings revisit must restore unsent section input");
     assert.equal(resumedSettingsDraft.values.allow_stage_override, 1);
+    resumedSettingsDraft.values.default_production_routing = "Replacement Route";
+    const replacementSettingsDraft = settings.openSection({ section: "production", current: { values: {} } });
+    assert.equal(resumedSettingsDraft.hidden, 1, "a duplicate Settings child owner must be replaced");
+    assert.equal(replacementSettingsDraft.values.default_production_routing, "Replacement Route");
 }
 
 (async () => {
