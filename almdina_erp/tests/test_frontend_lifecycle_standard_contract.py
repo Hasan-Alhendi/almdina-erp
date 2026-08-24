@@ -131,7 +131,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             "| Factory Permissions | PAGE | Certified |",
             "| Factory Production Settings | PAGE | Certified |",
             "| Shop Floor Inbox | PAGE | Certified |",
-            "| Factory Master Data | PAGE | Migration pending |",
+            "| Factory Master Data | PAGE | Certified |",
             "| Factory Plan Archive | PAGE | Migration pending |",
             "| Factory Approval Queue | PAGE | Migration pending |",
             "| Factory Stock Settings | PAGE | Retirement decision pending |",
