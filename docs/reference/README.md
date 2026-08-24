@@ -30,8 +30,8 @@
 | مشرف إنتاج | [11 — المهام اليومية](11_COMMON_TASKS.md) | [03 — Workflow](03_WORKFLOWS.md) |
 | مسؤول صلاحيات | [04 — Security/Permissions](04_SECURITY_PERMISSIONS.md) | [11 — المهام اليومية](11_COMMON_TASKS.md) |
 | Support | [12 — Troubleshooting](12_TROUBLESHOOTING.md) | [06 — UI/Data Map](06_DATA_UI_MAP.md) |
-| Developer | [02 — Architecture](02_ARCHITECTURE.md) | [07 — Change Rules](07_CHANGE_RULES.md) + [13 — Frontend Architecture](13_FRONTEND_ARCHITECTURE.md) + [14 — Refactor Closure](14_FRONTEND_REFACTOR_CLOSURE.md) عند تعديل الواجهة |
-| Coding AI | `AGENTS.md` | [02](02_ARCHITECTURE.md) + [07](07_CHANGE_RULES.md) + [13](13_FRONTEND_ARCHITECTURE.md) + [14](14_FRONTEND_REFACTOR_CLOSURE.md) لأي Frontend change |
+| Developer | [02 — Architecture](02_ARCHITECTURE.md) | [07 — Change Rules](07_CHANGE_RULES.md) + [13 — Frontend Architecture](13_FRONTEND_ARCHITECTURE.md) + [14 — Refactor Closure](14_FRONTEND_REFACTOR_CLOSURE.md) + [15 — Frontend Lifecycle](15_FRONTEND_LIFECYCLE_STANDARD.md) عند تعديل دورة حياة الواجهة |
+| Coding AI | `AGENTS.md` | [02](02_ARCHITECTURE.md) + [07](07_CHANGE_RULES.md) + [13](13_FRONTEND_ARCHITECTURE.md) + [14](14_FRONTEND_REFACTOR_CLOSURE.md) + [15](15_FRONTEND_LIFECYCLE_STANDARD.md) لأي Frontend lifecycle change |
 | QA | [08 — Testing/Quality](08_TESTING_QUALITY.md) | [03](03_WORKFLOWS.md) + [04](04_SECURITY_PERMISSIONS.md) |
 | DevOps | [09 — Operations/Release](09_OPERATIONS_RELEASE.md) | [08 — Quality Gates](08_TESTING_QUALITY.md) |
 
@@ -51,6 +51,7 @@
 - [12 — Troubleshooting / التشخيص](12_TROUBLESHOOTING.md)
 - [13 — Frontend Architecture](13_FRONTEND_ARCHITECTURE.md)
 - [14 — Frontend Refactor Closure](14_FRONTEND_REFACTOR_CLOSURE.md)
+- [15 — Project-wide Frontend Lifecycle Standard](15_FRONTEND_LIFECYCLE_STANDARD.md)
 - [Architecture Freeze](ARCHITECTURE_FREEZE.md)
 
 ## قاعدة “مصدر الحقيقة”
