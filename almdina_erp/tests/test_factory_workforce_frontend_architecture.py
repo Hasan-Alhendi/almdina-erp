@@ -162,6 +162,8 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertIn('fieldtype: "Password"', self.dialogs)
         self.assertIn("frappe.confirm", self.dialogs)
         self.assertIn("frappe.show_alert", self.dialogs)
+        self.assertIn("ownedSurfaces", self.dialogs)
+        self.assertIn("function deactivate()", self.dialogs)
         for forbidden in (
             "frappe.call(",
             "workforce_service",
@@ -185,6 +187,8 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("requests.audit.begin", self.controller)
         self.assertIn("actionAllowed(user", self.controller)
         self.assertIn("bindActivationLifecycle", self.controller)
+        self.assertIn("activation.generation()", self.controller)
+        self.assertIn("runMutation", self.controller)
         self.assertNotIn("frappe.ui.make_app_page", self.controller)
         self.assertNotIn("frappe.call(", self.controller)
         self.assertNotIn("workforce_service", self.controller)

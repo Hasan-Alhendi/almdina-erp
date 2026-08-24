@@ -10,6 +10,17 @@
             throw new Error("Production Settings dialog dependencies are unavailable");
         }
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
+        const ownedSurfaces = new Set();
+
+        function own(surface) {
+            if (surface && typeof surface.hide === "function") ownedSurfaces.add(surface);
+            return surface;
+        }
+
+        function deactivate() {
+            for (const surface of ownedSurfaces) surface.hide();
+            ownedSurfaces.clear();
+        }
 
         function sectionFields(section, current = {}) {
             const values = current.values || current;
@@ -55,7 +66,7 @@
         }
 
         function openSection(config = {}) {
-            const dialog = new frappe.ui.Dialog({
+            const dialog = own(new frappe.ui.Dialog({
                 title: sectionTitle(config.section),
                 fields: sectionFields(config.section, config.current || {}),
                 primary_action_label: t("حفظ التغييرات"),
@@ -69,29 +80,34 @@
                         action = Promise.reject(error);
                     }
                     Promise.resolve(action)
-                        .then(() => dialog.hide())
+                        .then(() => {
+                            if (ownedSurfaces.has(dialog)) dialog.hide();
+                        })
                         .catch(error => {
+                            if (!ownedSurfaces.has(dialog)) return;
                             const fallback = t("حدث خطأ غير متوقع.");
                             const message = error && error.message ? error.message : fallback;
-                            frappe.msgprint({
+                            own(frappe.msgprint({
                                 title: t("تعذر الحفظ"),
                                 message: escapeHtml(message),
                                 indicator: "red",
-                            });
+                            }));
                         })
-                        .finally(() => button.prop("disabled", false));
+                        .finally(() => {
+                            if (ownedSurfaces.has(dialog)) button.prop("disabled", false);
+                        });
                 },
-            });
+            }));
             dialog.show();
             return dialog;
         }
 
         function openAudit(initialHtml) {
-            const dialog = new frappe.ui.Dialog({
+            const dialog = own(new frappe.ui.Dialog({
                 title: t("سجل تغييرات إعدادات المعمل"),
                 size: "large",
                 fields: [{ fieldname: "audit_html", fieldtype: "HTML" }],
-            });
+            }));
             const $wrapper = dialog.fields_dict.audit_html.$wrapper;
             $wrapper.html(String(initialHtml || ""));
             dialog.show();
@@ -111,6 +127,8 @@
             openSection,
             openAudit,
             showSaved,
+            deactivate,
+            dispose: deactivate,
         });
     }
 

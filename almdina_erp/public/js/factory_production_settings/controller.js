@@ -58,6 +58,7 @@
         const instance = Object.freeze({
             load,
             dispose() {
+                dialogs.dispose();
                 store.dispose();
                 if (wrapper.__almdinaProductionSettingsController === instance) {
                     wrapper.__almdinaProductionSettingsController = null;
@@ -67,7 +68,10 @@
         wrapper.__almdinaProductionSettingsController = instance;
         activation = pageLifecycleModule.bindActivationLifecycle(wrapper, {
             onActivate: load,
-            onDeactivate: store.deactivate,
+            onDeactivate: () => {
+                dialogs.deactivate();
+                store.deactivate();
+            },
         });
         if (!activation) {
             instance.dispose();
@@ -83,6 +87,16 @@
 
         function freezeOptions(message) {
             return { freeze: true, freezeMessage: message };
+        }
+
+        function activeGeneration() {
+            return activation && activation.isActive() ? activation.generation() : null;
+        }
+
+        function isCurrentGeneration(generation) {
+            return generation !== null
+                && activation.isActive()
+                && activation.generation() === generation;
         }
 
         function render() {
@@ -109,6 +123,8 @@
 
         function openSectionDialog(section) {
             if (!viewModel.sectionEditable(state.current, section)) return;
+            const generation = activeGeneration();
+            if (generation === null) return;
             dialogs.openSection({
                 section,
                 current: state.current,
@@ -116,23 +132,31 @@
                     payload,
                     freezeOptions(__("جاري حفظ الإعدادات..."))
                 ).then(data => {
-                    if (!activation.isActive()) return data;
+                    if (!isCurrentGeneration(generation)) {
+                        if (activation.isActive()) return load().then(() => data);
+                        return data;
+                    }
                     store.apply(data || {});
                     render();
                     dialogs.showSaved();
                     return data;
+                }).catch(error => {
+                    if (!isCurrentGeneration(generation)) return null;
+                    throw error;
                 }),
             });
         }
 
         function openAudit() {
+            const generation = activeGeneration();
+            if (generation === null) return;
             const token = store.requests.audit.begin();
             const surface = dialogs.openAudit(renderer.auditLoadingHtml());
             return api.getAudit({ freeze: false }).then(rows => {
-                if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
+                if (!isCurrentGeneration(generation) || !store.requests.audit.isCurrent(token)) return;
                 surface.setHtml(renderer.auditHtml(rows));
             }).catch(error => {
-                if (!activation.isActive() || !store.requests.audit.isCurrent(token)) return;
+                if (!isCurrentGeneration(generation) || !store.requests.audit.isCurrent(token)) return;
                 surface.setHtml(renderer.auditErrorHtml(
                     errorMessage(error, __("تعذر تحميل السجل."))
                 ));

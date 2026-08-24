@@ -9,6 +9,17 @@
             throw new Error("Factory workforce dialog translator is unavailable");
         }
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
+        const ownedSurfaces = new Set();
+
+        function own(surface) {
+            if (surface && typeof surface.hide === "function") ownedSurfaces.add(surface);
+            return surface;
+        }
+
+        function deactivate() {
+            for (const surface of ownedSurfaces) surface.hide();
+            ownedSurfaces.clear();
+        }
 
         function roleField(defaultValue = [], readOnly = false, roleOptions = () => []) {
             return {
@@ -26,17 +37,17 @@
             if (typeof validator !== "function") return true;
             const result = validator(roles || []);
             if (!result || result.ok !== false) return true;
-            frappe.msgprint({
+            own(frappe.msgprint({
                 title: t("تعارض في صفحة الدخول"),
                 message: result.message || t("الأدوار المحددة تحتوي صفحات دخول مختلفة."),
                 indicator: "orange",
-            });
+            }));
             return false;
         }
 
         function openCreate(config = {}) {
             const canAssignRoles = config.canAssignRoles === true;
-            const dialog = new frappe.ui.Dialog({
+            const dialog = own(new frappe.ui.Dialog({
                 title: t("إضافة مستخدم للمعمل"),
                 fields: [
                     { fieldname: "email", fieldtype: "Data", label: t("البريد الإلكتروني"), options: "Email", reqd: 1 },
@@ -51,9 +62,11 @@
                     const roles = canAssignRoles ? (values.roles || []) : [];
                     if (!validateRoleSelection(roles, config.validateRoles)) return false;
                     const payload = { ...values, roles };
-                    return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => dialog.hide());
+                    return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => {
+                        if (ownedSurfaces.has(dialog)) dialog.hide();
+                    });
                 },
-            });
+            }));
             dialog.show();
             return dialog;
         }
@@ -74,7 +87,7 @@
             if (canAssignRoles) fields.push(roleField(user.roles || [], false, config.roleOptions));
             if (!fields.length) return null;
 
-            const dialog = new frappe.ui.Dialog({
+            const dialog = own(new frappe.ui.Dialog({
                 title: t("تعديل المستخدم {0}", [user.email]),
                 fields,
                 primary_action_label: t("حفظ"),
@@ -87,9 +100,11 @@
                         payload.language = values.language;
                     }
                     if (canAssignRoles) payload.roles = values.roles || [];
-                    return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => dialog.hide());
+                    return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => {
+                        if (ownedSurfaces.has(dialog)) dialog.hide();
+                    });
                 },
-            });
+            }));
             dialog.show();
             return dialog;
         }
@@ -97,14 +112,16 @@
         function openPassword(config = {}) {
             const user = config.user;
             if (!user) return null;
-            const dialog = new frappe.ui.Dialog({
+            const dialog = own(new frappe.ui.Dialog({
                 title: t("تعيين كلمة مرور مؤقتة"),
                 fields: [{ fieldname: "temporary_password", fieldtype: "Password", label: t("كلمة المرور المؤقتة"), reqd: 1 }],
                 primary_action_label: t("حفظ كلمة المرور"),
                 primary_action: values => Promise.resolve(
                     config.onSubmit && config.onSubmit(values.temporary_password)
-                ).then(() => dialog.hide()),
-            });
+                ).then(() => {
+                    if (ownedSurfaces.has(dialog)) dialog.hide();
+                }),
+            }));
             dialog.show();
             return dialog;
         }
@@ -113,31 +130,31 @@
             const user = config.user;
             if (!user) return false;
             const label = config.enabled ? t("تفعيل") : t("تعطيل");
-            frappe.confirm(
+            own(frappe.confirm(
                 t("هل تريد {0} المستخدم {1}؟", [label, user.email]),
                 () => config.onConfirm && config.onConfirm()
-            );
+            ));
             return true;
         }
 
         function confirmAdopt(config = {}) {
             const user = config.user;
             if (!user) return false;
-            frappe.confirm(
+            own(frappe.confirm(
                 t("سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا، وبدون تغيير Default Workspace أو Default App في Frappe. هل تريد المتابعة؟", [user.email]),
                 () => config.onConfirm && config.onConfirm()
-            );
+            ));
             return true;
         }
 
         function openAudit(config = {}) {
             const user = config.user;
             if (!user) return null;
-            const dialog = new frappe.ui.Dialog({
+            const dialog = own(new frappe.ui.Dialog({
                 title: t("سجل تغييرات {0}", [user.email]),
                 fields: [{ fieldname: "audit", fieldtype: "HTML" }],
                 size: "large",
-            });
+            }));
             dialog.fields_dict.audit.$wrapper.html(String(config.html || ""));
             dialog.show();
             return dialog;
@@ -156,6 +173,8 @@
             confirmAdopt,
             openAudit,
             showAlert,
+            deactivate,
+            dispose: deactivate,
         });
     }
 
