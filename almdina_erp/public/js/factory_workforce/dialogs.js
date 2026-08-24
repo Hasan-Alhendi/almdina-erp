@@ -9,16 +9,42 @@
             throw new Error("Factory workforce dialog translator is unavailable");
         }
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
-        const ownedSurfaces = new Set();
+        const ownedSurfaces = new Map();
+        const drafts = new Map();
 
-        function own(surface) {
-            if (surface && typeof surface.hide === "function") ownedSurfaces.add(surface);
+        function own(surface, draftKey = "") {
+            if (surface && typeof surface.hide === "function") {
+                ownedSurfaces.set(surface, String(draftKey || ""));
+            }
             return surface;
         }
 
+        function restoreDraft(surface, draftKey) {
+            if (!drafts.has(draftKey) || !surface || typeof surface.set_values !== "function") return;
+            surface.set_values(drafts.get(draftKey));
+        }
+
+        function complete(surface, draftKey) {
+            drafts.delete(draftKey);
+            if (!ownedSurfaces.has(surface)) return;
+            ownedSurfaces.delete(surface);
+            surface.hide();
+        }
+
         function deactivate() {
-            for (const surface of ownedSurfaces) surface.hide();
+            for (const [surface, draftKey] of ownedSurfaces) {
+                if (draftKey && typeof surface.get_values === "function") {
+                    const values = surface.get_values(true);
+                    if (values && typeof values === "object") drafts.set(draftKey, { ...values });
+                }
+                surface.hide();
+            }
             ownedSurfaces.clear();
+        }
+
+        function dispose() {
+            deactivate();
+            drafts.clear();
         }
 
         function roleField(defaultValue = [], readOnly = false, roleOptions = () => []) {
@@ -47,6 +73,7 @@
 
         function openCreate(config = {}) {
             const canAssignRoles = config.canAssignRoles === true;
+            const draftKey = "create";
             const dialog = own(new frappe.ui.Dialog({
                 title: t("إضافة مستخدم للمعمل"),
                 fields: [
@@ -63,10 +90,14 @@
                     if (!validateRoleSelection(roles, config.validateRoles)) return false;
                     const payload = { ...values, roles };
                     return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => {
-                        if (ownedSurfaces.has(dialog)) dialog.hide();
+                        complete(dialog, draftKey);
+                    }).catch(error => {
+                        if (!ownedSurfaces.has(dialog)) return null;
+                        throw error;
                     });
                 },
-            }));
+            }), draftKey);
+            restoreDraft(dialog, draftKey);
             dialog.show();
             return dialog;
         }
@@ -87,6 +118,7 @@
             if (canAssignRoles) fields.push(roleField(user.roles || [], false, config.roleOptions));
             if (!fields.length) return null;
 
+            const draftKey = `edit:${user.email}`;
             const dialog = own(new frappe.ui.Dialog({
                 title: t("تعديل المستخدم {0}", [user.email]),
                 fields,
@@ -101,10 +133,14 @@
                     }
                     if (canAssignRoles) payload.roles = values.roles || [];
                     return Promise.resolve(config.onSubmit && config.onSubmit(payload)).then(() => {
-                        if (ownedSurfaces.has(dialog)) dialog.hide();
+                        complete(dialog, draftKey);
+                    }).catch(error => {
+                        if (!ownedSurfaces.has(dialog)) return null;
+                        throw error;
                     });
                 },
-            }));
+            }), draftKey);
+            restoreDraft(dialog, draftKey);
             dialog.show();
             return dialog;
         }
@@ -112,6 +148,7 @@
         function openPassword(config = {}) {
             const user = config.user;
             if (!user) return null;
+            const draftKey = `password:${user.email}`;
             const dialog = own(new frappe.ui.Dialog({
                 title: t("تعيين كلمة مرور مؤقتة"),
                 fields: [{ fieldname: "temporary_password", fieldtype: "Password", label: t("كلمة المرور المؤقتة"), reqd: 1 }],
@@ -119,9 +156,13 @@
                 primary_action: values => Promise.resolve(
                     config.onSubmit && config.onSubmit(values.temporary_password)
                 ).then(() => {
-                    if (ownedSurfaces.has(dialog)) dialog.hide();
+                    complete(dialog, draftKey);
+                }).catch(error => {
+                    if (!ownedSurfaces.has(dialog)) return null;
+                    throw error;
                 }),
-            }));
+            }), draftKey);
+            restoreDraft(dialog, draftKey);
             dialog.show();
             return dialog;
         }
@@ -174,7 +215,7 @@
             openAudit,
             showAlert,
             deactivate,
-            dispose: deactivate,
+            dispose,
         });
     }
 

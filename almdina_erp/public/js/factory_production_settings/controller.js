@@ -140,9 +140,6 @@
                     render();
                     dialogs.showSaved();
                     return data;
-                }).catch(error => {
-                    if (!isCurrentGeneration(generation)) return null;
-                    throw error;
                 }),
             });
         }

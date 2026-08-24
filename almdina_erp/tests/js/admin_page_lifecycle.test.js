@@ -834,6 +834,8 @@ async function testDialogModulesOwnTransientSurfaces() {
         constructor(config) {
             this.config = config;
             this.hidden = 0;
+            this.values = {};
+            this.restoredValues = [];
             this.fields_dict = {
                 audit: { $wrapper: { html() {} } },
                 audit_html: { $wrapper: { html() {} } },
@@ -842,6 +844,11 @@ async function testDialogModulesOwnTransientSurfaces() {
         }
         show() {}
         hide() { this.hidden += 1; }
+        get_values() { return { ...this.values }; }
+        set_values(values) {
+            this.values = { ...(values || {}) };
+            this.restoredValues.push({ ...this.values });
+        }
         get_primary_btn() {
             return { prop() { buttonWrites += 1; } };
         }
@@ -891,6 +898,14 @@ async function testDialogModulesOwnTransientSurfaces() {
     await workforceCompletion;
     assert.equal(createDialog.hidden, 1, "stale Workforce dialog completion must not touch an already deactivated child");
 
+    const workforceDraft = workforce.openCreate({ canAssignRoles: false, roleOptions: () => [] });
+    workforceDraft.values = { email: "draft@example.com", first_name: "Draft" };
+    workforce.deactivate();
+    const resumedWorkforceDraft = workforce.openCreate({ canAssignRoles: false, roleOptions: () => [] });
+    assert.equal(resumedWorkforceDraft.values.email, "draft@example.com", "Workforce revisit must restore unsent dialog input");
+    assert.equal(resumedWorkforceDraft.values.first_name, "Draft");
+    workforce.deactivate();
+
     vm.runInContext(source("factory_production_settings/dialogs.js"), context, { filename: "factory_production_settings/dialogs.js" });
     const settingsMutation = deferred();
     const settings = fakeWindow.AlmdinaFactoryProductionSettingsDialogs.create({
@@ -911,6 +926,13 @@ async function testDialogModulesOwnTransientSurfaces() {
     assert.equal(settingsDialog.hidden, 1, "stale Settings completion must not hide the child a second time");
     assert.equal(buttonWrites, 1, "stale Settings completion must not mutate hidden dialog controls");
     assert.equal(messages.length, 0, "deactivated child completions must not open error surfaces");
+
+    const settingsDraft = settings.openSection({ section: "production", current: { values: {} } });
+    settingsDraft.values = { default_production_routing: "Draft Route", allow_stage_override: 1 };
+    settings.deactivate();
+    const resumedSettingsDraft = settings.openSection({ section: "production", current: { values: {} } });
+    assert.equal(resumedSettingsDraft.values.default_production_routing, "Draft Route", "Settings revisit must restore unsent section input");
+    assert.equal(resumedSettingsDraft.values.allow_stage_override, 1);
 }
 
 (async () => {

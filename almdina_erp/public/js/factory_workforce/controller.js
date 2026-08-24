@@ -118,7 +118,7 @@
                 && activation.generation() === generation;
         }
 
-        function runMutation(generation, request, successMessage, refresh = true) {
+        function runMutation(generation, request, successMessage, refresh = true, preserveDraft = false) {
             if (!isCurrentGeneration(generation)) return Promise.resolve(null);
             return Promise.resolve().then(request).then(data => {
                 if (!isCurrentGeneration(generation)) {
@@ -129,7 +129,7 @@
                 if (!refresh) return data;
                 return load().then(() => data);
             }).catch(error => {
-                if (!isCurrentGeneration(generation)) return null;
+                if (!isCurrentGeneration(generation) && !preserveDraft) return null;
                 throw error;
             });
         }
@@ -208,7 +208,9 @@
                 onSubmit: payload => runMutation(
                     generation,
                     () => api.createUser(payload, freezeOptions(__("جاري إنشاء المستخدم..."))),
-                    __("تم إنشاء المستخدم.")
+                    __("تم إنشاء المستخدم."),
+                    true,
+                    true
                 ),
             });
         }
@@ -231,7 +233,9 @@
                 onSubmit: payload => runMutation(
                     generation,
                     () => api.updateUser(user.email, payload, freezeOptions(__("جاري حفظ المستخدم..."))),
-                    __("تم تحديث المستخدم.")
+                    __("تم تحديث المستخدم."),
+                    true,
+                    true
                 ),
             });
         }
@@ -247,7 +251,8 @@
                     generation,
                     () => api.resetPassword(user.email, temporaryPassword, freezeOptions(__("جاري تحديث كلمة المرور..."))),
                     __("تم تحديث كلمة المرور دون تسجيل قيمتها."),
-                    false
+                    false,
+                    true
                 ),
             });
         }

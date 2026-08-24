@@ -150,6 +150,8 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("frappe.msgprint", self.dialogs)
         self.assertIn("frappe.show_alert", self.dialogs)
         self.assertIn("ownedSurfaces", self.dialogs)
+        self.assertIn("drafts", self.dialogs)
+        self.assertIn("surface.get_values(true)", self.dialogs)
         self.assertIn("function deactivate()", self.dialogs)
         self.assertNotIn("frappe.call(", self.dialogs)
         self.assertNotIn("production_settings_service", self.dialogs)

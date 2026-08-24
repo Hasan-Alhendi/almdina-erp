@@ -163,6 +163,8 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("frappe.confirm", self.dialogs)
         self.assertIn("frappe.show_alert", self.dialogs)
         self.assertIn("ownedSurfaces", self.dialogs)
+        self.assertIn("drafts", self.dialogs)
+        self.assertIn("surface.get_values(true)", self.dialogs)
         self.assertIn("function deactivate()", self.dialogs)
         for forbidden in (
             "frappe.call(",
