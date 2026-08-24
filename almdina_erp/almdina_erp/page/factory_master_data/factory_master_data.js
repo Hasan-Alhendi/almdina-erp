@@ -27,11 +27,59 @@
                 draggedStageId: null,
             };
             this.stageCounter = 0;
+            this.activation = null;
+            this.initialized = false;
+            this.modalOwner = null;
         }
 
         init() {
+            if (this.initialized) return this;
+            this.initialized = true;
             this.page.add_inner_button(__("تحديث"), () => this.refresh(), null, "refresh");
+            return this;
+        }
+
+        setActivation(activation) {
+            this.activation = activation;
+            return this;
+        }
+
+        setDialogOwner(owner) {
+            if (!this.modalOwner) this.modalOwner = owner;
+            return this;
+        }
+
+        isActive() {
+            return Boolean(this.activation && this.activation.isActive());
+        }
+
+        activate() {
+            if (!this.isActive()) return Promise.resolve(null);
+            if (this.state.saving || (this.state.editor && this.state.editor.dirty)) {
+                return Promise.resolve(null);
+            }
             return this.load();
+        }
+
+        deactivate() {
+            this.state.requestId += 1;
+            if (this.modalOwner) this.modalOwner.closeAll();
+        }
+
+        confirm(message, onYes, onNo) {
+            const dialog = frappe.confirm(
+                message,
+                () => this.isActive() && typeof onYes === "function" ? onYes() : null,
+                () => this.isActive() && typeof onNo === "function" ? onNo() : null
+            );
+            return this.modalOwner ? this.modalOwner.track(dialog) : dialog;
+        }
+
+        dispose() {
+            this.deactivate();
+            this.$main.off(".prw").off(".prw-bootstrap");
+            if (this.activation) this.activation.dispose();
+            this.activation = null;
         }
 
         esc(value) {
@@ -59,18 +107,19 @@
         }
 
         load() {
+            if (!this.isActive()) return Promise.resolve(null);
             const requestId = ++this.state.requestId;
             this.$main.html(`<div class="prw-loading"><span class="prw-spinner"></span>${__("جاري تحميل مسارات الإنتاج...")}</div>`);
             return this.call(METHODS.load)
                 .then(data => {
-                    if (requestId !== this.state.requestId) return;
+                    if (requestId !== this.state.requestId || !this.isActive()) return;
                     this.state.data = data || {};
                     this.state.editor = null;
                     this.state.saving = false;
                     this.renderOverview();
                 })
                 .catch(error => {
-                    if (requestId !== this.state.requestId) return;
+                    if (requestId !== this.state.requestId || !this.isActive()) return;
                     const message = error && error.message
                         ? error.message
                         : __("تعذر تحميل مسارات الإنتاج.");
@@ -86,7 +135,7 @@
 
         refresh() {
             if (this.state.editor && this.state.editor.dirty) {
-                frappe.confirm(
+                this.confirm(
                     __("لديك تغييرات غير محفوظة. هل تريد تجاهلها وتحديث الصفحة؟"),
                     () => this.load()
                 );
@@ -562,7 +611,7 @@
             if (!this.state.editor || this.state.editor.readOnly) return;
             const stage = this.state.editor.stages.find(row => row.clientId === stageId);
             if (!stage) return;
-            frappe.confirm(
+            this.confirm(
                 `${__("حذف المرحلة")} «${stage.department_label || stage.stage_type || __("غير مسماة")}»؟`,
                 () => {
                     this.state.editor.stages = this.state.editor.stages.filter(row => row.clientId !== stageId);
@@ -667,13 +716,17 @@
             };
             this.call(METHODS.save, {payload}, __("جاري حفظ مسار الإنتاج..."))
                 .then(() => {
-                    frappe.show_alert({message: __("تم حفظ مسار الإنتاج بنجاح."), indicator: "green"});
                     this.state.editor = null;
+                    this.state.saving = false;
+                    if (!this.isActive()) return null;
+                    frappe.show_alert({message: __("تم حفظ مسار الإنتاج بنجاح."), indicator: "green"});
                     return this.load();
                 })
                 .catch(() => {
                     this.state.saving = false;
-                    this.$main.find(".prw-save-route").prop("disabled", false).text(__("حفظ المسار"));
+                    if (this.isActive()) {
+                        this.$main.find(".prw-save-route").prop("disabled", false).text(__("حفظ المسار"));
+                    }
                 });
         }
 
@@ -684,7 +737,7 @@
                 this.renderOverview();
             };
             if (this.state.editor && this.state.editor.dirty) {
-                frappe.confirm(__("هل تريد تجاهل التغييرات غير المحفوظة؟"), close);
+                this.confirm(__("هل تريد تجاهل التغييرات غير المحفوظة؟"), close);
             } else {
                 close();
             }
@@ -693,21 +746,22 @@
         toggleRoute(dataset) {
             const disabled = Number(dataset.disabled || 0);
             const action = disabled ? __("تعطيل") : __("تفعيل");
-            frappe.confirm(`${action} ${__("مسار الإنتاج")} «${dataset.name}»؟`, () => {
+            this.confirm(`${action} ${__("مسار الإنتاج")} «${dataset.name}»؟`, () => {
                 this.call(METHODS.toggle, {
                     name: dataset.name,
                     disabled,
                     expected_modified: dataset.modified,
                 }, __("جاري تحديث حالة المسار..."))
                     .then(() => {
+                        if (!this.isActive()) return null;
                         frappe.show_alert({message: __("تم تحديث حالة المسار."), indicator: "green"});
-                        this.load();
+                        return this.load();
                     });
             });
         }
 
         deleteRoute(dataset) {
-            frappe.confirm(
+            this.confirm(
                 __("سيُرفض الحذف إذا كان المسار مستخدمًا في طلب أو إعداد. هل تريد المتابعة؟"),
                 () => {
                     this.call(METHODS.remove, {
@@ -715,8 +769,9 @@
                         expected_modified: dataset.modified,
                     }, __("جاري التحقق وحذف المسار..."))
                         .then(() => {
+                            if (!this.isActive()) return null;
                             frappe.show_alert({message: __("تم حذف مسار الإنتاج."), indicator: "green"});
-                            this.load();
+                            return this.load();
                         });
                 }
             );
@@ -761,6 +816,11 @@
 
         const pending = ensureRoutingWorkflowStylesheet()
             .then(() => {
+                const frontend = frontendFoundation();
+                if (!frontend || typeof frontend.createDialogOwner !== "function") {
+                    throw new Error("Almdina dialog lifecycle is unavailable");
+                }
+                workflowPage.setDialogOwner(frontend.createDialogOwner());
                 workflowPage.$main.off(".prw-bootstrap");
                 return workflowPage.init();
             })
@@ -775,6 +835,7 @@
                     : fallback;
 
                 console.error("Factory master data stylesheet bootstrap failed", error);
+                if (!workflowPage.isActive()) return null;
                 workflowPage.$main.html(`
                     <div class="frappe-card" style="padding:24px;text-align:center">
                         <b>${__("تعذر تحميل تصميم إدارة مسارات الإنتاج")}</b>
@@ -801,16 +862,41 @@
     }
 
     frappe.pages["factory-master-data"].on_page_load = function (wrapper) {
+        const previous = wrapper.__almdinaRoutingWorkflowPage;
+        if (previous && typeof previous.dispose === "function") previous.dispose();
         const page = frappe.ui.make_app_page({
             parent: wrapper,
             title: __("إدارة مسارات الإنتاج"),
             single_column: true,
         });
         const workflowPage = new ProductionRoutingWorkflowPage(wrapper, page);
+        workflowPage.$main.html(`<div class="prw-loading"><span class="prw-spinner"></span>${__("جاري تحميل مسارات الإنتاج...")}</div>`);
         wrapper.__almdinaRoutingWorkflowPage = workflowPage;
-        if (window.AlmdinaPageRevisit) {
-            window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, () => workflowPage.load());
+        const pageLifecycle = window.AlmdinaPageRevisit;
+        if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+            throw new Error("Almdina page lifecycle is required for Factory Master Data");
         }
-        bootstrapRoutingWorkflowPage(workflowPage);
+        let activation = null;
+
+        function activateVisit(context) {
+            return bootstrapRoutingWorkflowPage(workflowPage).then(initialized => {
+                if (
+                    !initialized
+                    || !activation
+                    || !activation.isActive()
+                    || activation.generation() !== context.generation
+                ) return null;
+                return workflowPage.activate();
+            });
+        }
+
+        activation = pageLifecycle.bindActivationLifecycle(wrapper, {
+            onActivate: activateVisit,
+            onDeactivate: () => workflowPage.deactivate(),
+        });
+        workflowPage.setActivation(activation);
+        if (activation.isActive()) {
+            activateVisit({ generation: activation.generation() });
+        }
     };
 })();

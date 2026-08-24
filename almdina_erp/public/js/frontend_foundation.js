@@ -196,6 +196,28 @@
         });
     }
 
+    function createDialogOwner() {
+        const owned = new Set();
+
+        function track(dialog) {
+            if (dialog && typeof dialog.hide === "function") owned.add(dialog);
+            return dialog;
+        }
+
+        function closeAll() {
+            owned.forEach(dialog => {
+                try {
+                    dialog.hide();
+                } catch (error) {
+                    console.debug("Almdina owned dialog cleanup failed", error);
+                }
+            });
+            owned.clear();
+        }
+
+        return Object.freeze({ track, closeAll, count: () => owned.size });
+    }
+
     function ensureStylesheet(href, options = {}) {
         const resolvedHref = String(href || "").trim();
         if (!resolvedHref) return Promise.reject(new Error("Stylesheet href is required"));
@@ -227,6 +249,7 @@
         requireAssets,
         createLatestRequestGate,
         createLifecycleScope,
+        createDialogOwner,
         ensureStylesheet,
     });
 })();

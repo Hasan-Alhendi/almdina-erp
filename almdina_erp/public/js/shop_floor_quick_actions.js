@@ -94,11 +94,17 @@
         return options;
     }
 
-    function notify(message) {
+    function isActive(options) {
+        return !options || typeof options.isActive !== "function" || options.isActive();
+    }
+
+    function notify(message, options) {
+        if (!isActive(options)) return;
         frappe.show_alert({ message, indicator: "green" });
     }
 
-    function runCommand({ method, args, button, successMessage, freezeMessage, onSuccess }) {
+    function runCommand({ method, args, button, successMessage, freezeMessage, onSuccess, options }) {
+        if (!isActive(options)) return null;
         setBusy(button, true);
         return frappe.call({
             method,
@@ -106,8 +112,8 @@
             freeze: true,
             freeze_message: freezeMessage || __("جاري تحديث مسار الإنتاج..."),
         }).then(response => {
-            notify(successMessage);
-            if (typeof onSuccess === "function") {
+            notify(successMessage, options);
+            if (isActive(options) && typeof onSuccess === "function") {
                 onSuccess(response.message || {});
             }
             return response.message || {};
@@ -121,6 +127,7 @@
             button: options.button,
             successMessage: __("تم بدء العمل."),
             onSuccess: options.onSuccess,
+            options,
         });
     }
 
@@ -132,16 +139,19 @@
             successMessage: __("تم تسليم الطلب للعميل."),
             freezeMessage: __("جاري تسجيل تسليم الطلب..."),
             onSuccess: options.onSuccess,
+            options,
         });
     }
 
     function finishFinalStage(context, options) {
+        if (!isActive(options)) return null;
         const finish = () => runCommand({
             method: METHODS.handoff,
             args: { stage_name: context.stage },
             button: options.button,
             successMessage: __("الطلب جاهز للتسليم."),
             onSuccess: options.onSuccess,
+            options,
         });
 
         if (options.skipFinalConfirmation === true) {
@@ -150,7 +160,7 @@
 
         frappe.confirm(
             __("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"),
-            finish
+            () => isActive(options) && finish()
         );
         return null;
     }
@@ -335,6 +345,7 @@
     }
 
     function promptNextWorker(context, options, handoffContext) {
+        if (!isActive(options)) return null;
         const workers = Array.isArray(handoffContext.workers)
             ? handoffContext.workers
             : [];
@@ -350,13 +361,14 @@
         const nextDepartment = handoffContext.next_department
             || handoffContext.next_stage_type
             || __("القسم التالي");
-        return createWorkerDropdownDialog({
+        const dialog = createWorkerDropdownDialog({
             title: __("إنهاء وإرسال"),
             label: `${__("العامل التالي")} — ${nextDepartment}`,
             workers,
             primaryLabel: __("إرسال"),
             onSubmit(nextAssignee, dialog) {
                 dialog.hide();
+                if (!isActive(options)) return null;
                 return runCommand({
                     method: METHODS.handoff,
                     args: {
@@ -366,18 +378,23 @@
                     button: options.button,
                     successMessage: __("تم إنهاء المرحلة وإرسال الطلب للقسم التالي."),
                     onSuccess: options.onSuccess,
+                    options,
                 });
             },
         });
+        if (dialog && typeof options.onDialog === "function") options.onDialog(dialog);
+        return dialog;
     }
 
     function handoff(context, options) {
+        if (!isActive(options)) return null;
         setBusy(options.button, true);
         return frappe.call({
             method: METHODS.handoffContext,
             args: { stage_name: context.stage },
         }).then(response => {
             setBusy(options.button, false);
+            if (!isActive(options)) return null;
             const handoffContext = response.message || {};
             if (handoffContext.final_stage === true) {
                 return finishFinalStage(context, options);
@@ -391,6 +408,7 @@
     }
 
     function perform(context, options = {}) {
+        if (!isActive(options)) return null;
         const action = actionFor(context);
         if (!action) return;
         if (action.kind === "deliver") {
@@ -402,6 +420,7 @@
             method: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_current_stage_context",
             args: { order_name: context.order },
         }).then(response => {
+            if (!isActive(options)) return null;
             const stage = response.message || {};
             if (stage.actor_holds_operational_role === false) {
                 frappe.msgprint(__(

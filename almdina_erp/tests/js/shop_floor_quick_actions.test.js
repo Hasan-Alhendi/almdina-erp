@@ -22,6 +22,7 @@ const alerts = [];
 const dialogs = [];
 let dropdownHideCount = 0;
 let confirmationCount = 0;
+let hiddenDeliveryResolve = null;
 let handoffContext = {
     final_stage: false,
     next_stage_type: "CNC",
@@ -63,6 +64,12 @@ const context = {
         ui: { Dialog: FakeDialog },
         call(options) {
             calls.push(options);
+            if (
+                options.method.endsWith("mark_delivered")
+                && options.args.order_name === "DCO-HIDDEN"
+            ) {
+                return new Promise(resolve => { hiddenDeliveryResolve = resolve; });
+            }
             if (options.method.endsWith("get_handoff_context")) {
                 return Promise.resolve({ message: handoffContext });
             }
@@ -112,6 +119,30 @@ vm.runInContext(source, context);
         !deliveryCalls.some(call => call.method.endsWith("get_current_stage_context")),
         "delivery is an independent authorized quick action and must not depend on a production-stage guard"
     );
+
+    let actionOwnerActive = true;
+    let hiddenSuccessCount = 0;
+    const alertsBeforeHiddenDelivery = alerts.length;
+    const hiddenDelivery = api.perform(
+        { order: "DCO-HIDDEN", canDeliver: true },
+        {
+            button,
+            isActive: () => actionOwnerActive,
+            onSuccess: () => { hiddenSuccessCount += 1; },
+        }
+    );
+    actionOwnerActive = false;
+    hiddenDeliveryResolve({ message: { ok: true } });
+    await hiddenDelivery;
+    assert.strictEqual(alerts.length, alertsBeforeHiddenDelivery, "hidden mutation completion must not show an alert");
+    assert.strictEqual(hiddenSuccessCount, 0, "hidden mutation completion must not refresh its former owner");
+
+    const callsBeforeInactiveAction = calls.length;
+    api.perform(
+        { order: "DCO-INACTIVE", stage: "PST-INACTIVE", canStart: true },
+        { button, isActive: () => false }
+    );
+    assert.strictEqual(calls.length, callsBeforeInactiveAction, "an inactive owner must not start a new command");
 
     await api.perform({ order: "DCO-1", stage: "PST-1", canStart: true }, { button });
     const stageGuard = calls.find(call => call.method.endsWith("get_current_stage_context"));

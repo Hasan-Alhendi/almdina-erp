@@ -28,6 +28,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
     `);
 
     function showBootstrapError(error) {
+        if (frappe.container && frappe.container.page && frappe.container.page !== wrapper) return null;
         const fallback = __("تعذر تحميل إعدادات المعمل.");
         const frontend = window.AlmdinaFrontend;
         const message = frontend && typeof frontend.errorMessage === "function"
@@ -64,7 +65,9 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         return Promise.resolve(pending).then(resolveCore);
     }
 
-    return ensureCore()
+    function bootstrap() {
+        if (wrapper.__almdinaFrontendBootstrapPending) return wrapper.__almdinaFrontendBootstrapPending;
+        const pending = ensureCore()
         .then(frontend => {
             // Page scripts can win the race against app-level include evaluation on
             // a cold Desk load. Resolve the shared foundation first, then keep the
@@ -82,7 +85,16 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
             if (!controller || typeof controller.mount !== "function") {
                 throw new Error("Production Settings controller did not initialize");
             }
-            return controller.mount(wrapper);
+            const mounted = controller.mount(wrapper);
+            wrapper.__almdinaFrontendBootstrapMounted = true;
+            return mounted;
         })
-        .catch(showBootstrapError);
+        .catch(showBootstrapError)
+        .finally(() => { if (wrapper.__almdinaFrontendBootstrapPending === pending) wrapper.__almdinaFrontendBootstrapPending = null; });
+        wrapper.__almdinaFrontendBootstrapPending = pending;
+        return pending;
+    }
+    Object.assign(wrapper, { __almdinaFrontendBootstrapMounted: false, __almdinaFrontendBootstrapRetry: bootstrap });
+    return bootstrap();
 };
+frappe.pages["factory-production-settings"].on_page_show = wrapper => !wrapper.__almdinaFrontendBootstrapMounted && wrapper.__almdinaFrontendBootstrapRetry ? wrapper.__almdinaFrontendBootstrapRetry() : null;

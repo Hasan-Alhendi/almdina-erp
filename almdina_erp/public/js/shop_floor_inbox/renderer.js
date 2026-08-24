@@ -18,11 +18,8 @@
     }
 
     function createShell(wrapper) {
-        const page = frappe.ui.make_app_page({
-            parent: wrapper,
-            title: __("صالة الإنتاج"),
-            single_column: true,
-        });
+        const page = wrapper.page;
+        if (!page) throw new Error("Shop Floor Inbox page shell is unavailable");
         const $section = $(wrapper).find(".layout-main-section");
         $section.html(`
             <div class="almdina-sf-nav" aria-label="${__("التنقل في صالة الإنتاج")}">

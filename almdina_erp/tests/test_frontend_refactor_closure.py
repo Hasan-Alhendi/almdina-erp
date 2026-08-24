@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parent
 ASSETS = ROOT / "frontend_assets.py"
 CLOSURE_DOC = REPO / "docs" / "reference" / "14_FRONTEND_REFACTOR_CLOSURE.md"
+LIFECYCLE_DOC = REPO / "docs" / "reference" / "15_FRONTEND_LIFECYCLE_CLOSURE.md"
 
 ORDER_ENTRY = ROOT / "public" / "js" / "door_cutting_order" / "order_entry"
 MEASUREMENTS = ORDER_ENTRY / "measurements"
@@ -35,6 +36,7 @@ class FrontendRefactorClosureTest(unittest.TestCase):
         cls.dco_assets = cls.manifest["doctype_js"]["Door Cutting Order"]
         cls.app_assets = cls.manifest["app_include_js"]
         cls.doc = CLOSURE_DOC.read_text(encoding="utf-8")
+        cls.lifecycle_doc = LIFECYCLE_DOC.read_text(encoding="utf-8")
 
     def test_frontend_asset_registrations_have_no_duplicates(self) -> None:
         self.assertEqual(len(self.app_assets), len(set(self.app_assets)))
@@ -133,6 +135,22 @@ class FrontendRefactorClosureTest(unittest.TestCase):
             "schema/data migration",
         ):
             self.assertIn(marker, self.doc)
+
+    def test_project_lifecycle_closure_is_part_of_the_canonical_reference(self) -> None:
+        for marker in (
+            "Synchronous shell",
+            "inactive ⇄ active visits",
+            "factory-permissions",
+            "shop-floor-inbox",
+            "factory-master-data",
+            "door-drawing",
+            "Door Cutting Order Form",
+            "Door Cutting Order List",
+            "Replacement Piece Form",
+            "dirty state",
+            "remount",
+        ):
+            self.assertIn(marker, self.lifecycle_doc)
 
 
 if __name__ == "__main__":

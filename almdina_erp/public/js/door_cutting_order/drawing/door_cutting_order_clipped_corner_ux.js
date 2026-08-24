@@ -345,12 +345,25 @@
                     frappe.msgprint({ title: isArabic() ? "راجع مقاس الزاوية" : "Check corner size", message, indicator: "orange" });
                     return;
                 }
+                const context = window.AlmdinaDocumentContext;
+                const identity = context && typeof context.capture === "function" ? context.capture(frm) : null;
+                const current = () => context && typeof context.isCurrent === "function"
+                    ? context.isCurrent(frm, identity)
+                    : window.cur_frm === frm;
+                if (!current()) {
+                    dialog.hide();
+                    return;
+                }
 
                 Promise.all([
                     frappe.model.set_value(row.doctype, row.name, "clipped_corner_position", config.position),
                     frappe.model.set_value(row.doctype, row.name, "clipped_corner_width_cm", rounded(config.cutWidth)),
                     frappe.model.set_value(row.doctype, row.name, "clipped_corner_length_cm", rounded(config.cutLength)),
                 ]).then(() => {
+                    if (!current()) {
+                        dialog.hide();
+                        return;
+                    }
                     frm.dirty();
                     dialog.hide();
                     refreshFastTable(frm);

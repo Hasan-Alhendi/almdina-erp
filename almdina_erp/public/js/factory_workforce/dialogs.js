@@ -113,21 +113,19 @@
             const user = config.user;
             if (!user) return false;
             const label = config.enabled ? t("تفعيل") : t("تعطيل");
-            frappe.confirm(
+            return frappe.confirm(
                 t("هل تريد {0} المستخدم {1}؟", [label, user.email]),
                 () => config.onConfirm && config.onConfirm()
             );
-            return true;
         }
 
         function confirmAdopt(config = {}) {
             const user = config.user;
             if (!user) return false;
-            frappe.confirm(
+            return frappe.confirm(
                 t("سيتم إضافة الحساب {0} إلى نطاق المعمل بدون منحه أي دور أو صلاحية تشغيلية تلقائيًا، وبدون تغيير Default Workspace أو Default App في Frappe. هل تريد المتابعة؟", [user.email]),
                 () => config.onConfirm && config.onConfirm()
             );
-            return true;
         }
 
         function openAudit(config = {}) {

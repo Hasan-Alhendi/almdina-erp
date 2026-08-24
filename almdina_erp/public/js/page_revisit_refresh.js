@@ -78,11 +78,13 @@
 
         function dispose() {
             if (disposed) return false;
+            const wasActive = active;
             disposed = true;
             active = false;
             generation += 1;
             $wrapper.off(EVENT_NAMESPACE);
             if (wrapper[OWNER_KEY] === lifecycle) wrapper[OWNER_KEY] = null;
+            if (wasActive) invoke(callbacks.onDeactivate, "deactivate", context());
             return true;
         }
 

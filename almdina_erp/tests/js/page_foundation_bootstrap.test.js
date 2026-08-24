@@ -30,6 +30,13 @@ const SPECS = Object.freeze([
         stylesheet: "/assets/almdina_erp/css/factory_production_settings.css",
         loadingMarker: "جاري تحميل إعدادات المعمل",
     },
+    {
+        route: "shop-floor-inbox",
+        source: "shop_floor_inbox/shop_floor_inbox.js",
+        controller: "AlmdinaShopFloorInboxController",
+        stylesheet: "/assets/almdina_erp/css/shop_floor_responsive.css",
+        loadingMarker: "نجهّز صالة الإنتاج",
+    },
 ]);
 
 function pageSource(spec) {
@@ -45,7 +52,7 @@ function deferred() {
     return { promise, resolve };
 }
 
-async function simulate(spec, { foundationReady = false, legacyLoader = false } = {}) {
+async function simulate(spec, { foundationReady = false, legacyLoader = false, failFeatureOnce = false } = {}) {
     const requireCalls = [];
     const moduleGroups = [];
     const stylesheetCalls = [];
@@ -53,6 +60,7 @@ async function simulate(spec, { foundationReady = false, legacyLoader = false } 
     const pageShells = [];
     const alerts = [];
     const wrapper = { route: spec.route };
+    const otherPage = {};
     const main = {
         content: "",
         html(value) {
@@ -89,6 +97,9 @@ async function simulate(spec, { foundationReady = false, legacyLoader = false } 
     if (!legacyLoader) {
         foundation.requireAssets = items => {
             moduleGroups.push(Array.from(items || []));
+            if (failFeatureOnce && moduleGroups.length === 1) {
+                return Promise.reject(new Error("simulated hidden bootstrap failure"));
+            }
             installController();
             return Promise.resolve(items);
         };
@@ -103,6 +114,7 @@ async function simulate(spec, { foundationReady = false, legacyLoader = false } 
         pages: {
             [spec.route]: {},
         },
+        container: { page: wrapper },
         require(assets) {
             const recorded = Array.isArray(assets) ? Array.from(assets) : assets;
             requireCalls.push(recorded);
@@ -161,7 +173,15 @@ async function simulate(spec, { foundationReady = false, legacyLoader = false } 
     assert.equal(pageShells.length, 1, `${spec.route}: Frappe page shell must be synchronous`);
     assert.equal(mounts.length, 0, `${spec.route}: controller must wait for async dependencies`);
     assert.ok(main.content.includes(spec.loadingMarker), `${spec.route}: loading surface must exist before awaiting bootstrap`);
+    if (failFeatureOnce) frappe.container.page = otherPage;
     await Promise.resolve(result);
+
+    if (failFeatureOnce) {
+        assert.equal(alerts.length, 0, `${spec.route}: a hidden bootstrap failure must not alert`);
+        assert.equal(mounts.length, 0, `${spec.route}: a failed bootstrap must not mount a controller`);
+        frappe.container.page = wrapper;
+        await Promise.resolve(frappe.pages[spec.route].on_page_show(wrapper));
+    }
 
     return {
         alerts,
@@ -311,6 +331,11 @@ async function simulateShowHideWhileAssetsArePending(spec) {
         assert.equal(legacy.mounts.length, 1, `${spec.route}: compatibility controller mount must remain singular`);
 
         await simulateShowHideWhileAssetsArePending(spec);
+
+        const recovered = await simulate(spec, { foundationReady: true, failFeatureOnce: true });
+        assert.equal(recovered.moduleGroups.length, 2, `${spec.route}: the next visible visit must retry a hidden bootstrap failure`);
+        assert.equal(recovered.mounts.length, 1, `${spec.route}: the visible bootstrap retry must mount exactly once`);
+        assert.equal(recovered.alerts.length, 0, `${spec.route}: a recovered hidden failure must stay silent`);
     }
 
     console.log("Page foundation cold/warm bootstrap regression simulation passed");

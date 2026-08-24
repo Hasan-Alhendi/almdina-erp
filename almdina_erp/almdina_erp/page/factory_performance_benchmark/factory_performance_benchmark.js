@@ -5,6 +5,8 @@ frappe.pages["factory-performance-benchmark"].on_page_load = function (wrapper) 
         single_column: true,
     });
     const $body = $(wrapper).find(".layout-main-section");
+    let requestId = 0;
+    let activation = null;
 
     $body.html(`
         <div class="frappe-card" style="padding:20px;max-width:1100px">
@@ -81,12 +83,14 @@ frappe.pages["factory-performance-benchmark"].on_page_load = function (wrapper) 
         return labels[value] || value || "-";
     }
 
-    $body.find("#run-benchmark").on("click", () => {
+    function runBenchmark() {
+        if (!activation || !activation.isActive()) return Promise.resolve(null);
         if (!order.get_value()) {
             frappe.msgprint(__("Select a Door Cutting Order first."));
-            return;
+            return Promise.resolve(null);
         }
-        frappe.call({
+        const activeRequest = ++requestId;
+        return frappe.call({
             method: "almdina_erp.almdina_erp.services.performance_service.benchmark_order_cutting_engine",
             args: {
                 order_name: order.get_value(),
@@ -96,6 +100,7 @@ frappe.pages["factory-performance-benchmark"].on_page_load = function (wrapper) 
             freeze: true,
             freeze_message: __("Running cutting engine benchmark..."),
         }).then(r => {
+            if (activeRequest !== requestId || !activation.isActive()) return null;
             const data = r.message || {};
             const indicator = data.meets_target_on_this_run ? "green" : "red";
             const verdict = data.meets_target_on_this_run ? "ضمن هدف الزمن المحدد" : "تجاوز هدف الزمن المحدد";
@@ -129,6 +134,21 @@ frappe.pages["factory-performance-benchmark"].on_page_load = function (wrapper) 
                 </div>
                 <div class="text-muted">هذا الاختبار للقراءة فقط؛ لا ينشئ حركة مخزون ولا يغيّر الطلب. سجّل مواصفات السيرفر ونسخة التطبيق والنتيجة ضمن UAT.</div>
             `);
+            return data;
+        }).catch(error => {
+            if (activeRequest !== requestId || !activation.isActive()) return null;
+            const message = error && error.message ? error.message : __("تعذر تشغيل اختبار الأداء.");
+            $body.find("#benchmark-result").html(`<div class="alert alert-danger">${esc(message)}</div>`);
+            return null;
         });
+    }
+
+    $body.find("#run-benchmark").on("click", runBenchmark);
+    const pageLifecycle = window.AlmdinaPageRevisit;
+    if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+        throw new Error("Almdina page lifecycle is required for Factory Performance Benchmark");
+    }
+    activation = pageLifecycle.bindActivationLifecycle(wrapper, {
+        onDeactivate: () => { requestId += 1; },
     });
 };

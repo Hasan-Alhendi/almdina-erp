@@ -262,10 +262,15 @@
     }
 
     function validatedExport(frm) {
+        const context = window.AlmdinaDocumentContext;
+        const identity = context && context.capture(frm);
+        if (!context || !context.isCurrent(frm, identity)) return Promise.resolve(null);
         const args = { doc: JSON.stringify(frm.doc) };
         if (!frm.is_new()) args.order_name = frm.doc.name;
 
-        return fetchValidatedPlan(args).then(r => downloadValidatedPlan(r.message, frm.doc.name));
+        return fetchValidatedPlan(args).then(r => context.isCurrent(frm, identity)
+            ? downloadValidatedPlan(r.message, frm.doc.name)
+            : null);
     }
 
     function exportOrderDxf(orderName, planSource = null) {

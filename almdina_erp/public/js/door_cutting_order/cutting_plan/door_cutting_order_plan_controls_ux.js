@@ -412,7 +412,11 @@
     }
 
     async function runApproval(frm) {
+        const context = documentContext();
+        const identity = context && context.capture(frm);
+        if (!context || !context.isCurrent(frm, identity)) return false;
         await ensureWorkspaceLoaded(frm);
+        if (!context.isCurrent(frm, identity)) return false;
         const source = approvalSource(frm);
         if (!approvalAllowed(frm, source)) {
             const row = approvalRow(frm, source);
@@ -440,10 +444,17 @@
             frappe.confirm(
                 `${warning}<br><br><b>${sourceLabel}</b>`,
                 async () => {
+                    if (!context.isCurrent(frm, identity)) {
+                        resolve(false);
+                        return;
+                    }
                     try {
                         await transport.approve(frm.doc.name, source);
+                        if (!context.isCurrent(frm, identity)) {
+                            resolve(true);
+                            return;
+                        }
                         await refreshWorkspaceOwners(frm);
-                        const context = documentContext();
                         if (context && typeof context.refreshStageContext === "function") {
                             await context.refreshStageContext(frm);
                         } else if (context && typeof context.ensureStageContext === "function") {

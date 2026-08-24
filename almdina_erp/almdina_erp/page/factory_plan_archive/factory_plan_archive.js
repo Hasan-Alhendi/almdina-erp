@@ -13,11 +13,24 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
     const $body = $(wrapper).find(".layout-main-section");
     let rows = [];
     let requestId = 0;
+    let activation = null;
+    const modalOwner = window.AlmdinaFrontend.createDialogOwner();
 
     injectStyles();
     page.set_primary_action(__("تحديث"), load, "refresh");
-    if (window.AlmdinaPageRevisit) window.AlmdinaPageRevisit.refreshOnRevisit(wrapper, load);
-    load();
+    loading(__("جاري تحميل الطلبات ذات الخطط المعتمدة..."));
+    const pageLifecycle = window.AlmdinaPageRevisit;
+    if (!pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+        throw new Error("Almdina page lifecycle is required for Factory Plan Archive");
+    }
+    activation = pageLifecycle.bindActivationLifecycle(wrapper, {
+        onActivate: load,
+        onDeactivate: () => {
+            requestId += 1;
+            modalOwner.closeAll();
+        },
+    });
+    if (activation.isActive()) load();
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -38,14 +51,15 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
     }
 
     function load() {
+        if (!activation || !activation.isActive()) return Promise.resolve(null);
         const activeRequest = ++requestId;
         loading(__("جاري تحميل الطلبات ذات الخطط المعتمدة..."));
         return frappe.call({ method: METHODS.context, freeze: false }).then(response => {
-            if (activeRequest !== requestId) return;
+            if (activeRequest !== requestId || !activation.isActive()) return;
             rows = (response.message && response.message.orders) || [];
             render();
         }).catch(error => {
-            if (activeRequest !== requestId) return;
+            if (activeRequest !== requestId || !activation.isActive()) return;
             loading(error && error.message ? error.message : __("تعذر تحميل أرشيف الخطط."));
         });
     }
@@ -98,14 +112,15 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
             const $card = $(this).closest(".apa-card");
             const orderName = String($card.data("order") || "");
             const $result = $card.find(".apa-result");
-            frappe.confirm(
+            modalOwner.track(frappe.confirm(
                 __("هل تريد إنشاء أو استرجاع النسخة الرسمية المعتمدة لهذا الطلب؟"),
-                () => frappe.call({
+                () => activation.isActive() ? frappe.call({
                     method: METHODS.archive,
                     args: { order_name: orderName },
                     freeze: true,
                     freeze_message: __("جاري إنشاء ملف PDF الرسمي..."),
                 }).then(response => {
+                    if (!activation.isActive()) return null;
                     const data = response.message || {};
                     const link = data.file_url
                         ? `<a class="btn btn-default btn-sm" href="${esc(data.file_url)}" target="_blank" rel="noopener">${__("فتح الملف المؤرشف")}</a>`
@@ -114,8 +129,8 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
                         <b>${data.already_archived ? __("الملف موجود مسبقًا.") : __("تمت أرشفة الملف بنجاح.")}</b>
                         <div style="margin-top:7px">${link}</div>
                     `);
-                })
-            );
+                }) : null
+            ));
         });
     }
 };

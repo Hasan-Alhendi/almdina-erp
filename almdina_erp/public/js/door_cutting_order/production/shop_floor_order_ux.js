@@ -79,6 +79,8 @@
 
 	function callAction(method, args, successMessage, frm) {
 		const documentName = frm && frm.doc ? frm.doc.name : null;
+		const identity = capture(frm);
+		if (!isCurrent(frm, identity)) return Promise.resolve(null);
 		return frappe
 			.call({
 				method,
@@ -87,7 +89,7 @@
 				freeze_message: __("جاري تنفيذ العملية..."),
 			})
 			.then((response) => {
-				if (successMessage) {
+				if (successMessage && isCurrent(frm, identity)) {
 					frappe.show_alert({ message: successMessage, indicator: "green" });
 				}
 				if (frm && frm.doc && frm.doc.name === documentName) {
@@ -229,12 +231,15 @@
 	}
 
 	function openDispatchDialog(frm) {
+		const identity = capture(frm);
+		if (!isCurrent(frm, identity)) return Promise.resolve(null);
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.get_dispatch_options",
 				args: { order_name: frm.doc.name },
 			})
 			.then((response) => {
+				if (!isCurrent(frm, identity)) return null;
 				const payload = response.message || {};
 				const paths = Array.isArray(payload.paths) ? payload.paths : [];
 				const workers = payload.workers || {};
@@ -456,7 +461,10 @@
 	}
 
 	function openRevertDialog(frm) {
+		const identity = capture(frm);
+		if (!isCurrent(frm, identity)) return Promise.resolve(null);
 		return ensureRevertTargets(frm).then((rows) => {
+			if (!isCurrent(frm, identity)) return null;
 			if (!rows.length) {
 				frappe.msgprint(__("لا توجد مراحل يمكن الرجوع إليها."));
 				return;
@@ -569,10 +577,13 @@
 	}
 
 	function openHandoffDialog(frm, stageName) {
-		frappe.call({
+		const identity = capture(frm);
+		if (!isCurrent(frm, identity)) return Promise.resolve(null);
+		return frappe.call({
 			method: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
 			args: { stage_name: stageName },
 		}).then((response) => {
+			if (!isCurrent(frm, identity)) return null;
 			const handoff = response.message || {};
 			if (handoff.final_stage) {
 				frappe.confirm(__("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"), () =>
@@ -614,12 +625,15 @@
 	}
 
 	function openReassignDialog(frm, stageName, currentAssignee) {
+		const identity = capture(frm);
+		if (!isCurrent(frm, identity)) return Promise.resolve(null);
 		return frappe
 			.call({
 				method: "almdina_erp.almdina_erp.services.production_worker_service.get_reassignment_workers",
 				args: { stage_name: stageName },
 			})
 			.then((response) => {
+				if (!isCurrent(frm, identity)) return null;
 				const workers = (response.message || []).filter((worker) => worker.name !== currentAssignee);
 				if (!workers.length) {
 					frappe.msgprint(__("لا يوجد عامل آخر متاح لهذا القسم."));

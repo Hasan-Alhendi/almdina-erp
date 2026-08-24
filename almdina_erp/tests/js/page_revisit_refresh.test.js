@@ -145,6 +145,21 @@ function loadRuntime({ cachedOldApi = false } = {}) {
 })();
 
 (() => {
+    const { api, frappe } = loadRuntime();
+    const wrapper = {};
+    let oldDeactivations = 0;
+
+    frappe.container.page = wrapper;
+    const first = api.bindActivationLifecycle(wrapper, {
+        onDeactivate: () => { oldDeactivations += 1; },
+    });
+    api.bindActivationLifecycle(wrapper, {});
+
+    assert.equal(first.isDisposed(), true);
+    assert.equal(oldDeactivations, 1, "replacing an active owner must invalidate its active visit");
+})();
+
+(() => {
     const { api } = loadRuntime({ cachedOldApi: true });
     assert.equal(
         typeof api.bindActivationLifecycle,

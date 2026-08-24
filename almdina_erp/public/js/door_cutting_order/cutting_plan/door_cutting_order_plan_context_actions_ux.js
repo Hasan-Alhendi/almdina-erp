@@ -322,12 +322,23 @@
             frappe.msgprint(__("تعذر تحميل أمر إلغاء اعتماد خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
             return false;
         }
+        const context = documentContext();
+        const identity = context && context.capture(frm);
+        if (!context || !context.isCurrent(frm, identity)) return false;
         return new Promise((resolve) => {
             frappe.confirm(
                 __("سيتم إلغاء اعتماد خطة الإنتاج الحالية مع الاحتفاظ بها في سجل المراجعات، ولن تتحول الخطة القديمة إلى مسودة قابلة للتعديل. هل تريد المتابعة؟"),
                 async () => {
+                    if (!context.isCurrent(frm, identity)) {
+                        resolve(false);
+                        return;
+                    }
                     try {
                         await api.cancelApproval(frm.doc.name);
+                        if (!context.isCurrent(frm, identity)) {
+                            resolve(true);
+                            return;
+                        }
                         frm.__almdina_active_plan_tab = "System";
                         await refreshWorkspace(frm);
                         frappe.show_alert({

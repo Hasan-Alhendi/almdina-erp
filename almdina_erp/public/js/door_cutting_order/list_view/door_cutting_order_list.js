@@ -100,6 +100,13 @@
         return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
     }
 
+    function listIsActive(listview) {
+        const root = rootNode(listview);
+        if (!root) return false;
+        if (!frappe.container || !frappe.container.page) return true;
+        return frappe.container.page === root;
+    }
+
     function ensureMobileCardStylesheet() {
         if (typeof document === "undefined" || !document.head) return;
         if (document.getElementById(MOBILE_CARD_STYLESHEET_ID)) return;
@@ -548,6 +555,11 @@
                         button: actionButton,
                         onSuccess: () => listview.refresh(),
                         skipFinalConfirmation: action.kind === "handoff",
+                        isActive: () => listIsActive(listview),
+                        onDialog: dialog => {
+                            listview._dcoActionDialogs = listview._dcoActionDialogs || new Set();
+                            listview._dcoActionDialogs.add(dialog);
+                        },
                     })
                 );
             });
@@ -717,6 +729,7 @@
     }
 
     function applyOperationalRolePresentation(listview, payload) {
+        if (!listIsActive(listview)) return;
         const root = rootNode(listview);
         const result = root && root.querySelector(".result");
         if (!root || !result) return;
@@ -814,14 +827,20 @@
             args: { order_names: names },
             freeze: false,
         }).then(response => {
-            if (Number(listview._dcoRoleFlagGeneration || 0) !== generation) return null;
+            if (
+                Number(listview._dcoRoleFlagGeneration || 0) !== generation
+                || !listIsActive(listview)
+            ) return null;
             const payload = response && response.message;
             listview._dcoRoleFlagsPayload = payload || { personal_view: false, orders: {} };
             listview._dcoRoleFlagsPayloadGeneration = generation;
             applyOperationalRolePresentation(listview, listview._dcoRoleFlagsPayload);
             return listview._dcoRoleFlagsPayload;
         }).catch(error => {
-            if (Number(listview._dcoRoleFlagGeneration || 0) === generation) {
+            if (
+                Number(listview._dcoRoleFlagGeneration || 0) === generation
+                && listIsActive(listview)
+            ) {
                 console.debug("Could not classify Door Cutting Order list rows by operational role", error);
             }
             return null;
@@ -842,6 +861,7 @@
 
     function runScheduledPresentation(listview) {
         listview._dcoPresentationFrame = null;
+        if (!listIsActive(listview)) return;
         const refreshRoleFlags = listview._dcoPresentationNeedsRoleRefresh === true;
         listview._dcoPresentationNeedsRoleRefresh = false;
 
@@ -872,6 +892,35 @@
         listview._dcoPresentationFrame = schedule(() => runScheduledPresentation(listview));
     }
 
+    function deactivateList(listview) {
+        invalidateRoleFlags(listview);
+        if (listview._dcoActionDialogs) {
+            listview._dcoActionDialogs.forEach(dialog => {
+                if (dialog && typeof dialog.hide === "function") dialog.hide();
+            });
+            listview._dcoActionDialogs.clear();
+        }
+        listview._dcoPresentationNeedsRoleRefresh = false;
+        if (listview._dcoPresentationFrame != null) {
+            const cancel = window.cancelAnimationFrame || window.clearTimeout;
+            cancel.call(window, listview._dcoPresentationFrame);
+            listview._dcoPresentationFrame = null;
+        }
+    }
+
+    function installActivationLifecycle(listview) {
+        if (listview._dcoActivationLifecycle) return;
+        const root = rootNode(listview);
+        const pageLifecycle = window.AlmdinaPageRevisit;
+        if (!root || !pageLifecycle || typeof pageLifecycle.bindActivationLifecycle !== "function") {
+            throw new Error("Almdina page lifecycle is required for Door Cutting Order list");
+        }
+        listview._dcoActivationLifecycle = pageLifecycle.bindActivationLifecycle(root, {
+            onActivate: () => schedulePresentation(listview, { refreshRoleFlags: true }),
+            onDeactivate: () => deactivateList(listview),
+        });
+    }
+
     function installRowsObserver(listview) {
         if (listview._dcoRowsObserverInstalled || typeof MutationObserver !== "function") return;
         const root = rootNode(listview);
@@ -879,7 +928,7 @@
         if (!result) return;
 
         const observer = new MutationObserver(mutations => {
-            if (listview._dcoApplyingRolePresentation) return;
+            if (listview._dcoApplyingRolePresentation || !listIsActive(listview)) return;
             const frappeRowsAdded = mutations.some(mutation =>
                 [...mutation.addedNodes].some(node =>
                     node.nodeType === 1
@@ -897,6 +946,7 @@
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
         installCombinedSearch(listview);
+        installActivationLifecycle(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
     }
