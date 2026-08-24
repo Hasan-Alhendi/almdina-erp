@@ -514,11 +514,23 @@ async function testSaveCompletionAndNewerDraft() {
     owner.state.editor.routing_name = "Newer generation B draft";
     owner.markDirty();
     const newerSnapshot = JSON.stringify(owner.state.editor);
-    saveA.resolve({message: {name: "R-1"}});
+    saveA.resolve({message: {name: "R-1", modified: "server-version-A"}});
     await completionA;
     await flush();
     assert.equal(JSON.stringify(owner.state.editor), newerSnapshot, "old save A cannot overwrite generation B working state");
     assert.equal(owner.reconciliationPending, true);
+    assert.doesNotMatch(runtime.main.html, /جاري الحفظ/,
+        "generation B must own settlement UI and cannot remain stuck in saving state");
+
+    const saveB = runtime.enqueue(METHODS.save);
+    const completionB = owner.saveEditor();
+    assert.equal(
+        runtime.calls.at(-1).args.payload.expected_modified,
+        "server-version-A",
+        "the next explicit save must rebase concurrency metadata on save A without changing draft fields"
+    );
+    saveB.reject(new Error("stop after verifying the rebased payload"));
+    assert.equal(await completionB, false);
 
     owner.closeEditor();
     const discard = runtime.confirms.at(-1);

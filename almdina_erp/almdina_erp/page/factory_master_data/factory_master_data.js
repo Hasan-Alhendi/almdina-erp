@@ -48,6 +48,7 @@
             this.bootstrapLoadingOwned = true;
             this.reconciliationPending = false;
             this.completedSave = null;
+            this.pendingSave = null;
             this.ownedTransients = new Set();
             this.$refreshButton = null;
         }
@@ -120,6 +121,10 @@
             }
             this.init();
             const editor = this.state.editor;
+            if (this.state.saving) {
+                if (editor) this.renderEditor();
+                return this.waitForSaveSettlement(this.activeGeneration());
+            }
             if (editor && editor.dirty) {
                 const completed = this.completedSave;
                 if (
@@ -135,11 +140,30 @@
                 this.renderEditor();
                 return Promise.resolve(null);
             }
-            if (this.state.saving) {
-                if (editor) this.renderEditor();
-                return Promise.resolve(null);
-            }
             return this.load();
+        }
+
+        waitForSaveSettlement(generation) {
+            const pending = this.pendingSave;
+            if (!pending) return Promise.resolve(null);
+            return Promise.resolve(pending).then(() => {
+                if (!this.isCurrentGeneration(generation)) return null;
+                const editor = this.state.editor;
+                const completed = this.completedSave;
+                if (
+                    editor
+                    && completed
+                    && completed.workingId === editor.workingId
+                    && completed.revision === editor.revision
+                ) {
+                    this.state.editor = null;
+                    this.completedSave = null;
+                    return this.load({discardEditor: true});
+                }
+                if (editor) this.renderEditor();
+                else if (this.reconciliationPending) return this.reconcileWhenSafe();
+                return null;
+            });
         }
 
         deactivatePage() {
@@ -946,6 +970,13 @@
                 });
                 return Promise.resolve(false);
             }
+            const completed = this.completedSave;
+            if (completed && completed.workingId === editor.workingId) {
+                const saved = completed.data || {};
+                if (saved.name) editor.name = saved.name;
+                if (saved.modified) editor.expected_modified = String(saved.modified);
+                this.completedSave = null;
+            }
             const generation = this.activeGeneration();
             const workingId = editor.workingId;
             const revision = editor.revision;
@@ -964,7 +995,7 @@
                     is_planning_stage: Boolean(stage.is_planning_stage),
                 })),
             };
-            return this.call(METHODS.save, {payload}, __("جاري حفظ مسار الإنتاج..."))
+            const operation = this.call(METHODS.save, {payload}, __("جاري حفظ مسار الإنتاج..."))
                 .then(data => {
                     const tokenCurrent = this.mutationGate.isCurrent(token);
                     const sameEditor = Boolean(
@@ -978,7 +1009,7 @@
                     if (!tokenCurrent || !sameEditor || !this.isCurrentGeneration(generation)) {
                         if (!this.disposed) {
                             this.reconciliationPending = true;
-                            this.completedSave = {workingId, revision};
+                            this.completedSave = {workingId, revision, data};
                         }
                         return data;
                     }
@@ -1000,6 +1031,11 @@
                     }
                     return false;
                 });
+            this.pendingSave = operation;
+            operation.then(() => {
+                if (this.pendingSave === operation) this.pendingSave = null;
+            });
+            return operation;
         }
 
         closeEditor() {
