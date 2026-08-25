@@ -152,7 +152,7 @@
     function resetVirtualClone(frm, clone) {
         clone.dataset.rowName = `__virtual__perf_${Date.now()}_${++virtualSequence}`;
         clone.classList.add("dco-virtual-row");
-        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-row-selected");
+        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-extra-row", "dco-row-selected");
 
         const selectorCell = clone.querySelector(":scope > td.dco-select-col");
         if (selectorCell) selectorCell.replaceChildren();
@@ -166,6 +166,16 @@
             else if (fieldname === "qty") control.value = "1";
             else control.value = "";
         });
+
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        const typeCell = clone.querySelector(".dco-col-type");
+        if (typeCell && extraAddons && typeof extraAddons.renderTypePicker === "function") {
+            typeCell.innerHTML = extraAddons.renderTypePicker(
+                { piece_type: "Regular" },
+                { editable: isEditable(frm), virtual: true }
+            );
+        }
+        clone.querySelectorAll(".dco-extra-notes-cue").forEach(cue => cue.remove());
 
         clone.querySelectorAll("button.dco-check-toggle[data-check-field]").forEach(button => {
             button.classList.remove("is-checked");
@@ -223,6 +233,7 @@
     function updatePieceTypeVisual(frm, tr, row) {
         const special = row.piece_type === "Special";
         const clipped = row.piece_type === "Clipped Corner";
+        const extra = row.piece_type === "Extra";
         const shapeOutput = window.AlmdinaShapeOutputContract;
         const drawing = Boolean(
             shapeOutput
@@ -235,6 +246,7 @@
         );
         tr.classList.toggle("dco-special-row", special);
         tr.classList.toggle("dco-clipped-corner-row", clipped);
+        tr.classList.toggle("dco-extra-row", extra);
 
         const edgeButtons = tr.querySelector(".dco-edge-buttons");
         if (edgeButtons) {
@@ -269,6 +281,14 @@
                 : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         }
 
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        if (extraAddons && typeof extraAddons.syncRowPresentation === "function") {
+            extraAddons.syncRowPresentation(frm, tr, row, {
+                editable: isEditable(frm),
+                virtual: tr.classList.contains("dco-virtual-row"),
+            });
+        }
+
         ensureRowSelector(frm, tr);
     }
 
@@ -284,6 +304,44 @@
         }, 0);
     }
 
+    function refreshPieceTypeVisual(frm, tr, row) {
+        const root = getRoot(frm);
+        if (!root || !tr || !row) return false;
+        updatePieceTypeVisual(frm, tr, row);
+        ensureAllSelectors(frm, root);
+        refreshColumnHeaderStates(frm, root);
+        return true;
+    }
+
+    function setPieceType(frm, tr, pieceType, options = {}) {
+        const root = getRoot(frm);
+        if (!root || !tr) return null;
+
+        let row = rowByName(frm, tr.dataset.rowName || "");
+        if (!row && tr.classList.contains("dco-virtual-row")) {
+            row = materializeVirtualRow(frm, tr);
+        }
+        if (!row) return null;
+
+        const nextType = pieceType || "Regular";
+        const changed = (row.piece_type || "Regular") !== nextType;
+        row.piece_type = nextType;
+        if (nextType === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
+            window.AlmdinaClippedCornerEditor.prepare(row);
+        }
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        if (extraAddons && typeof extraAddons.reconcilePieceType === "function") {
+            extraAddons.reconcilePieceType(frm, row);
+        }
+        if (changed) frm.dirty();
+        refreshPieceTypeVisual(frm, tr, row);
+        if (options.focusTarget && options.focusTarget.isConnected) {
+            options.focusTarget.focus({ preventScroll: true });
+        }
+        if (changed) schedulePieceTypeTrigger(frm, row);
+        return row;
+    }
+
     function handlePieceTypeChange(frm, root, control, event) {
         const tr = control.closest("tr[data-row-name]");
         if (!tr) return;
@@ -293,22 +351,7 @@
         event.stopImmediatePropagation();
         event.stopPropagation();
 
-        let row = rowByName(frm, tr.dataset.rowName || "");
-        if (!row && tr.classList.contains("dco-virtual-row")) {
-            row = materializeVirtualRow(frm, tr);
-        }
-        if (!row) return;
-
-        row.piece_type = control.value || "Regular";
-        if (row.piece_type === "Clipped Corner" && window.AlmdinaClippedCornerEditor) {
-            window.AlmdinaClippedCornerEditor.prepare(row);
-        }
-        frm.dirty();
-        updatePieceTypeVisual(frm, tr, row);
-        ensureAllSelectors(frm, root);
-        refreshColumnHeaderStates(frm, root);
-        control.focus({ preventScroll: true });
-        schedulePieceTypeTrigger(frm, row);
+        setPieceType(frm, tr, control.value || "Regular", { focusTarget: control });
     }
 
     function installLeanObserver(frm, root) {
@@ -409,5 +452,11 @@
         refresh(frm) { schedule(frm); },
         pieces_add(frm) { scheduleRowRefresh(frm); },
         pieces_remove(frm) { scheduleRowRefresh(frm); },
+    });
+
+    window.AlmdinaTablePerformanceUX = Object.freeze({
+        setPieceType,
+        refreshPieceTypeVisual,
+        refreshAll: enhance,
     });
 })();

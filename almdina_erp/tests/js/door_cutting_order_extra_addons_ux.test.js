@@ -48,18 +48,32 @@ assert.deepEqual(
     }).map(item => item.fieldname))),
     ["extra_double", "extra_recessed_handle_cutout"]
 );
-assert.equal(api.renderControl({ piece_type: "Regular" }, { editable: true }), "");
 
-const emptyExtra = api.renderControl({ piece_type: "Extra" }, { editable: true });
-assert.match(emptyExtra, /aria-haspopup="dialog"/);
+const regularPicker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
+assert.match(regularPicker, /dco-piece-type-trigger/);
+assert.match(regularPicker, /aria-haspopup="menu"/);
+assert.match(regularPicker, /عادية/);
+
+const emptyExtra = api.renderTypePicker({ piece_type: "Extra" }, { editable: true });
+assert.match(emptyExtra, /إضافية/);
 assert.match(emptyExtra, /اختر إضافة واحدة على الأقل/);
 
-const selectedExtra = api.renderControl(
-    { piece_type: "Extra", extra_liner: 1 },
+const selectedExtra = api.renderTypePicker(
+    { piece_type: "Extra", extra_liner: 1, extra_double: 1 },
     { editable: true }
 );
-assert.match(selectedExtra, /Liner/);
-assert.match(selectedExtra, /<b>1<\/b>/);
+assert.match(selectedExtra, /لاينر/);
+assert.match(selectedExtra, /دبل/);
+assert.match(selectedExtra, />2<\/b>/);
+
+const menu = api.renderMenu({ piece_type: "Regular" });
+assert.match(menu, /role="menuitemradio"/);
+assert.match(menu, /data-piece-type-option="Extra"/);
+assert.match(menu, /aria-haspopup="menu" aria-expanded="false"/);
+assert.match(menu, /لاينر/);
+assert.match(menu, /دبل/);
+assert.match(menu, /مسكة غطس/);
+assert.match(menu, /يمكن اختيار أكثر من خيار/);
 assert.match(api.notesCueHtml({ piece_type: "Extra", notes: "" }), /اكتب تفاصيل التنفيذ/);
 assert.equal(api.notesCueHtml({ piece_type: "Extra", notes: "تم" }), "");
 

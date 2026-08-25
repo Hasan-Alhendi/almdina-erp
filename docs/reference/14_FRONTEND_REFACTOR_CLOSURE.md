@@ -93,6 +93,7 @@
 - `window.AlmdinaFrontend`
 - `window.AlmdinaDocumentContext`
 - `window.AlmdinaMeasurementLifecycle`
+- `window.AlmdinaTablePerformanceUX`
 - `window.AlmdinaFastEntryKeyboardUX`
 - `window.AlmdinaMultiEdgeBanding`
 - `window.AlmdinaEdgeProfileControls`

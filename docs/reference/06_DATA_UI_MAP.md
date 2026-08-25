@@ -91,6 +91,7 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 ### Extra door add-ons
 
 - اختيار `Double` / `Liner` / تفريغ المسكة المخفية هو Customer requirement محفوظ على `Door Cutting Order Detail`.
+- واجهة نوع الدرفة تعرض `Extra` كقائمة متفرعة متعددة الاختيار: hover/focus/click على desktop، وواجهة متراكبة مناسبة للمس على mobile.
 - أسعار الوحدة والإجماليات حقول مالية محمية وتُحفظ كلقطة تاريخية على السطر، بينما الإجمالي التجاري يُعرض في Cost/فاتورة الزبون.
 - `Almdina ERP Settings` هو مصدر أسعار المصنع للطلبات/الإضافات الجديدة؛ تعديل السعر لا يعيد تسعير اختيار محفوظ سابقًا.
 - `Special + Liner` لا يستخدم مسار Extra: يكتب Liner في الملاحظات/الرسم ويظل السعر الخاص الشامل هو مصدر السعر.
