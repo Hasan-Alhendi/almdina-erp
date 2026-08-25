@@ -45,16 +45,16 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 
 ### مساندة/تشخيص
 
-- `factory_system_preflight`.
-- `factory_performance_benchmark`.
 - Go-live workspace.
+- `factory_system_preflight`: **Retirement planned; removal pending**؛ endpoint التاريخية fail-closed، لذلك لا تُعامل كصفحة تشخيص نشطة ولا تُصرف عليها lifecycle migration.
+- `factory_performance_benchmark`: **Retirement planned; removal pending**؛ benchmark التاريخية fail-closed وليست جزءًا من production user flow.
 
-هذه ليست جزءًا من رحلة العامل اليومية.
+هذه ليست جزءًا من رحلة العامل اليومية. الصفحات المخطط لتقاعدها تبقى مؤقتًا فقط حتى يكتمل caller/navigation/Page-record audit في Change مستقل.
 
 ### Compatibility / scope caution
 
-- `factory_approval_queue`: قد يبقى لآثار Review/Approve، لكنه ليس دليلًا أن Review/Approve mandatory في المسار الحالي.
-- `factory_stock_settings`: وجود الصفحة/الكود تاريخيًا لا يعيد المخزون إلى Active Scope v1.1.
+- `factory_approval_queue`: **Temporary migration utility** لمعالجة سجلات `Pending Review` التاريخية فقط؛ بقاؤها ليس دليلًا أن Review/Approve mandatory في المسار الحالي، وحذفها يحتاج runtime/data proof.
+- `factory_stock_settings`: **Retirement planned; removal pending**؛ وجود الصفحة/الكود تاريخيًا لا يعيد المخزون إلى Active Scope v1.1، وحذفها يحتاج caller/navigation/Page-record audit مستقلًا.
 
 ## 4. أين توجد الحقيقة لكل نوع بيانات؟
 
