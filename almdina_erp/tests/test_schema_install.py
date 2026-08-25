@@ -19,6 +19,33 @@ EXPECTED_EDGE_RATES = {
     "قشاط 4سم لميع يدوي": 4.0,
 }
 
+RETIRED_STOCK_SETTINGS_PAGE = "factory-stock-settings"
+
+
+def assert_factory_stock_settings_page_absent() -> None:
+    if frappe.db.exists("Page", RETIRED_STOCK_SETTINGS_PAGE):
+        raise AssertionError(
+            f"Retired Standard Page still exists: {RETIRED_STOCK_SETTINGS_PAGE}"
+        )
+
+
+def seed_retired_factory_stock_settings_page() -> None:
+    assert_factory_stock_settings_page_absent()
+    page = frappe.get_doc(
+        {
+            "doctype": "Page",
+            "name": RETIRED_STOCK_SETTINGS_PAGE,
+            "page_name": RETIRED_STOCK_SETTINGS_PAGE,
+            "module": "Almdina ERP",
+            "standard": "Yes",
+            "title": "Factory Stock Settings",
+        }
+    )
+    page.db_insert()
+    frappe.db.commit()
+    if not frappe.db.exists("Page", RETIRED_STOCK_SETTINGS_PAGE):
+        raise AssertionError("Failed to seed retired Standard Page migration fixture")
+
 
 class TestAlmdinaSchemaInstall(FrappeTestCase):
     def test_required_doctypes_exist(self):
@@ -49,6 +76,9 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
         }
         missing = sorted(name for name in required if not frappe.db.exists("Page", name))
         self.assertEqual(missing, [])
+
+    def test_retired_factory_stock_settings_page_is_absent(self):
+        self.assertFalse(frappe.db.exists("Page", RETIRED_STOCK_SETTINGS_PAGE))
 
     def test_required_workspaces_exist(self):
         required = {

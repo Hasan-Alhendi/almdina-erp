@@ -54,7 +54,7 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 ### Compatibility / scope caution
 
 - `factory_approval_queue`: **Temporary migration utility** لمعالجة سجلات `Pending Review` التاريخية فقط؛ بقاؤها ليس دليلًا أن Review/Approve mandatory في المسار الحالي، وحذفها يحتاج runtime/data proof.
-- `factory_stock_settings`: **Retirement planned; removal pending**؛ وجود الصفحة/الكود تاريخيًا لا يعيد المخزون إلى Active Scope v1.1، وحذفها يحتاج caller/navigation/Page-record audit مستقلًا.
+- `factory_stock_settings`: **Retired / Removed**؛ أزيل Page source بعد اكتمال caller/navigation/Page-record audit، مع إبقاء aliases التاريخية fail-closed وبيانات الإعدادات المشتركة.
 
 ## 4. أين توجد الحقيقة لكل نوع بيانات؟
 
@@ -132,23 +132,25 @@ DocTypes مثل Permission/User/Master Data audits موجودة لتتبع تغ�
 
 ### 10.1 Caller matrix
 
-جميع الصفحات الخمس تملك فقط ملفات
-`page/<page>/{__init__.py,<page>.js,<page>.json}`. لا توجد لها ملفات CSS أو HTML أو
-templates أو Python controllers أو assets مستقلة خارج مجلد الصفحة.
+عند التدقيق كانت الصفحات الخمس تملك فقط ملفات
+`page/<page>/{__init__.py,<page>.js,<page>.json}`، دون CSS أو HTML أو templates أو
+Python controllers أو assets مستقلة. أزيل مصدر `factory_stock_settings` بعد هذا
+التدقيق؛ تبقى البنية المذكورة للصفحات الأربع الأخرى.
 
 | Surface | Navigation / JS callers | Backend boundary | Shared dependency finding | Product scope / Decision |
 |---|---|---|---|---|
-| `factory_stock_settings` | لا Workspace أو shortcut أو shared-shell route؛ route المباشر يأتي فقط من Standard Page. الـJS يستدعي `settings_access_service.get_stock_settings` و`update_stock_settings`. | الاسمان العامان محفوظان في `hooks.py` وموجهان إلى `legacy_endpoint_service.retired_product_endpoint`؛ implementation الأصلية محذوفة. | حقول stock القديمة محفوظة hidden/read-only، بينما حدود free-area في optimizer ما زالت مستخدمة هندسيًا. هذه الحقول والخدمات المشتركة ليست مملوكة للصفحة ولا تُحذف معها. | Inventory/Warehouse/Reservation/Consumption/Stock Entry/Board Remnant خارج Active Scope v1.1. **RETIRE-SAFE — High**. |
+| `factory_stock_settings` | أزيل Page source؛ لا Workspace أو shortcut أو Control Center/Go-Live أو shared-shell/surface route. أزيل معه caller الوحيد لخدمتي الإعدادات التاريخيتين. | الاسمان العامان محفوظان في `hooks.py` وموجهان إلى `legacy_endpoint_service.retired_product_endpoint`؛ implementation الأصلية محذوفة. | حقول stock القديمة محفوظة hidden/read-only، بينما حدود free-area في optimizer ما زالت مستخدمة هندسيًا. هذه الحقول والخدمات المشتركة ليست مملوكة للصفحة ولم تُحذف معها. | Inventory/Warehouse/Reservation/Consumption/Stock Entry/Board Remnant خارج Active Scope v1.1. **RETIRED / REMOVED — High**. |
 | `factory_system_preflight` | لا Workspace أو shortcut أو Control Center/Go-Live link أو shared-shell route؛ route مباشر فقط. الـJS يستدعي `preflight_service.run_factory_preflight`. | الاسم العام fail-closed عبر `retired_product_endpoint` وملف الخدمة الأصلي محذوف. | كانت الصفحة تفحص routing/core stages/roles/edge master/print formats/reports. لا diagnostics surface حديثة تستدعي هذه الخدمة ولا test تشغيلي يعتمد عليها. | ليست رحلة إنتاج نشطة، ولا يفرض Active Scope بديلًا in-product. **RETIRE-SAFE (REMOVE؛ لا replacement مطلوب حاليًا) — High**. |
 | `factory_performance_benchmark` | لا Workspace أو shortcut أو shared-shell route؛ route مباشر فقط. الـJS هو caller الوحيد لـ`performance_service.benchmark_order_cutting_engine`. | الاسم العام fail-closed عبر `retired_product_endpoint` وملف الخدمة الأصلي محذوف. | لا caller من optimizer أو production flow إلى خدمة benchmark. الإشارة في `IMPLEMENTATION_MATRIX_v1.0.md` تاريخية/outdated وليست runtime dependency. | أداة UAT/developer تاريخية، لا production user flow. **RETIRE-SAFE — High**. |
 | `factory_approval_queue` | Link + shortcut في `Almdina Control Center` و`Almdina Go-Live`، وroute guard في `shared_shell.js`، وsurface mapping في `surface_access.py` و`workspace_visibility.py`. | `approval_queue_service` نشطة: context/list يتطلبان `APPROVE_ORDER` أو `REJECT_ORDER`؛ reject يقفل الصف ثم يفوض إلى `order_review_service`. مسار approve موجود للتوافق لكنه يُرفض بسياسة lifecycle الحالية. | الكتابة الوحيدة غير الاختبارية لـ`Pending Review` هي `submit_order_for_review`، لكن `lifecycle_permissions.py` يرفض دائمًا submit/approve؛ DCO UI يزيل الزرين. `REJECT_ORDER` يبقى لمسح البيانات التاريخية، وcapabilities نفسها بيانات صلاحيات persisted لا تُحذف ضمن إزالة صفحة. | Review/Approve متقاعدان، لكن احتمال صفوف تاريخية يمنع الحذف دون count حي. **TEMPORARY-MIGRATION-UTILITY / RETIRE-AFTER-DATA-PROOF — High static, runtime blocked**. |
 | `factory_plan_archive` | Link + shortcut في Control Center وGo-Live، وshared-shell guard وsurface mappings فعالة. | `archive_service.get_archive_context` و`archive_approved_plan_pdf` active ومحمية بـ`ARCHIVE_APPROVED_PLAN` + document read/scope. | تنشئ/تسترجع PDF خاصًا idempotently، تربطه بـ`Door Cutting Order`، وتتحقق أن الخطة المرتبطة `Approved` ومن نوع `Order`؛ كما تنقل attachment التاريخي من `Cutting Plan` بأمان. | ميزة منتج نشطة مرتبطة بالخطة المعتمدة. **KEEP — High**. |
 
-الـPage JSON لكل سطح هو `standard: "Yes"` و`module: "Almdina ERP"`، واسمه
-هو route نفسه. `factory_stock_settings` مقيدة بأدوار Stock/Production/System Manager؛
-preflight وbenchmark مقيدتان بـProduction/System Manager؛ queue وarchive لا تضعان
-roles ثابتة وتعتمدان على capability context. Administrator قد يصل إلى route، لكن
-endpoints المتقاعدة تبقى fail-closed ولا يستعيد System Manager behavior قديمًا.
+كانت Page JSON للسطوح الخمسة `standard: "Yes"` و`module: "Almdina ERP"`، واسم كل
+منها هو route نفسه. أزيل JSON الخاص بـ`factory_stock_settings`، لذلك لا ينشئه install
+ويحذف migrate سجله القياسي اليتيم. تبقى preflight وbenchmark مقيدتين
+بـProduction/System Manager؛ queue وarchive لا تضعان roles ثابتة وتعتمدان على
+capability context. endpoints المتقاعدة تبقى fail-closed ولا يستعيد System Manager
+behavior قديمًا.
 
 ### 10.2 Endpoint retirement policy
 
@@ -186,8 +188,9 @@ bench --site <site> execute frappe.client.get_count \
 3. الـorphan cleanup يبني خريطة ملفات كل التطبيقات المثبتة، ثم يحذف فقط Page records
    المطابقة لـ`standard = "Yes"` إذا لم يعد لها JSON مصدر.
 
-لذلك removal الآمن لاحقًا هو حذف مجلد المصدر المحدد وروابطه في commit واحد، ثم تشغيل
-`bench migrate` مرتين واختبارات install/migrate. لا نضيف destructive patch أو
+لذلك removal الآمن هو حذف مجلد المصدر المحدد وروابطه في commit واحد، ثم تشغيل
+`bench migrate` مرتين واختبارات install/migrate. اتبع تقاعد Stock Settings هذا
+المسار دون destructive patch أو
 `delete_doc` مخصصًا؛ الـcustom Pages ذات `standard = "No"` ليست ضمن filter. يجب أخذ
 site backup الاعتيادي قبل upgrade. rollback هو إعادة ملفات المصدر/الروابط من commit
 السابق وتشغيل migrate؛ فيعيد `sync_all()` إنشاء الـStandard Page. لا يحمل أي من سجلات
@@ -195,8 +198,8 @@ Page الخمسة business data خاصة به.
 
 ### 10.5 Deletion graphs للـPRs اللاحقة
 
-- **Factory Stock Settings:** `[DELETE]` page source + title translations + revisit
-  entry + outdated setup link → `[MIGRATION]` Frappe orphan Page cleanup عبر migrate →
+- **Factory Stock Settings:** `[REMOVED]` page source + title translations + revisit
+  entry + outdated setup instructions → `[MIGRATION]` Frappe orphan Page cleanup عبر migrate →
   `[KEEP compatibility]` hook aliases fail-closed → `[KEEP shared]` settings data،
   production-settings legacy read view، optimizer free-area inputs، وأي historical
   stock/remnant modules خارج ownership الصفحة.
@@ -219,14 +222,14 @@ Plan Archive ليست deletion candidate. تبقى source/navigation/surface pol
 
 ### 10.6 Test evolution عند removal
 
-- `test_schema_install.py`: احذف توقع كل Page عند إزالة مصدرها؛ أبقِ Plan Archive،
-  وApproval Queue حتى data proof.
-- `test_page_revisit_refresh_contract.py`: احذف فقط entries للصفحات المحذوفة؛ أبقِ
-  Plan Archive.
+- `test_schema_install.py`: يثبت الآن غياب Stock Settings بعد install/migrate؛ عند
+  إزالة صفحات أخرى احذف توقعها أيضًا. أبقِ Plan Archive وApproval Queue حتى data proof.
+- `test_page_revisit_refresh_contract.py`: أزيل Stock Settings من inventory؛ احذف فقط
+  entries للصفحات التي تزال لاحقًا، وأبقِ Plan Archive.
 - `test_control_center_architecture.py` و`security_endpoint_contracts.py`: أبقِ
   archive/security contracts؛ حوّل queue assertions فقط بعد اكتمال تقاعدها.
-- `test_product_scope_contract.py`: يبقى منع navigation وإغلاق stock endpoints، ثم
-  يتحول أيضًا إلى absence contract بعد removal.
+- `test_product_scope_contract.py`: يبقى منع navigation وإغلاق stock endpoints، ويثبت
+  أيضًا غياب Stock Settings source مع بقاء حقول optimizer المشتركة.
 - `test_final_security_architecture.py` وbackend legacy contracts و
   `test_replacement_planning.py`: تبقى لأنها تحمي حذف implementations القديمة مع
   fail-closed compatibility، لا وجود الصفحة.

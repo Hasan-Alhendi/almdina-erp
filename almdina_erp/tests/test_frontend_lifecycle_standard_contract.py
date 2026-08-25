@@ -136,7 +136,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             "| Factory Master Data | PAGE | Certified |",
             "| Factory Plan Archive | PAGE | Keep; lifecycle migration pending |",
             "| Factory Approval Queue | PAGE | Temporary migration utility |",
-            "| Factory Stock Settings | PAGE | Retirement planned; removal pending |",
+            "| Factory Stock Settings | PAGE | Retired / Removed |",
             "| Factory System Preflight | PAGE | Retirement planned; removal pending |",
             "| Factory Performance Benchmark | PAGE | Retirement planned; removal pending |",
             "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
@@ -155,6 +155,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
     def test_estate_policy_does_not_spend_lifecycle_work_on_retired_pages(self) -> None:
         self.assertIn("### 8.1 Frontend estate policy", self.standard)
         self.assertIn("**Temporary migration utility**", self.standard)
+        self.assertIn("**Retired / Removed**", self.standard)
         self.assertIn("**Retirement planned; removal pending**", self.standard)
         self.assertIn("ليست مرشحًا للـlifecycle certification", self.standard)
         self.assertIn("runtime/data proof", self.standard)
@@ -162,7 +163,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
 
         for entry in (
             "`factory_approval_queue`: **Temporary migration utility**",
-            "`factory_stock_settings`: **Retirement planned; removal pending**",
+            "`factory_stock_settings`: **Retired / Removed**",
             "`factory_system_preflight`: **Retirement planned; removal pending**",
             "`factory_performance_benchmark`: **Retirement planned; removal pending**",
         ):

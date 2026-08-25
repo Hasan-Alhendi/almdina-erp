@@ -230,12 +230,7 @@ Edit Production Defaults,تعديل إعدادات التشغيل الافترا
 Stage override policy is intentionally not editable from this limited Production Manager page.,تجاوز ترتيب مراحل الإنتاج متاح فقط للمستخدمين المخولين ولا يمكن تعديله من هذه الصفحة.
 Saving production defaults...,جاري حفظ إعدادات التشغيل...
 Production defaults updated.,تم تحديث إعدادات التشغيل.
-Factory Stock Settings,إعدادات مخزون المعمل
-Read-only for your current role.,هذه البيانات للعرض فقط حسب صلاحيات حسابك.
-Edit Stock Policy,تعديل سياسة المخزون
 Remnant Cost,تكلفة بقايا الألواح
-Saving stock policy...,جاري حفظ سياسة المخزون...
-Stock policy updated.,تم تحديث سياسة المخزون.
 Save,حفظ
 
 Physical Location,مكان التخزين الفعلي
