@@ -34,8 +34,6 @@ def test_core_factory_operator_terms_have_meaningful_arabic_labels():
         "Factory Settings": "إعدادات المعمل",
         "Factory Order Analysis": "تحليل طلبات القص",
         "Production Stage Performance": "أداء مراحل الإنتاج",
-        "Factory Approval Queue": "طلبات بانتظار الاعتماد",
-        "Factory System Preflight": "فحص جاهزية إعدادات المعمل",
     }
     for source, expected in required.items():
         assert mapping.get(source) == expected, source

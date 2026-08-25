@@ -227,6 +227,9 @@ class TestProductScopeContract(unittest.TestCase):
             "factory-stock-settings",
             "factory-system-preflight",
             "factory-performance-benchmark",
+            "factory-approval-queue",
+            "Approval Queue",
+            "Safe Approval Queue",
         )
         workspace_root = ROOT / "almdina_erp" / "workspace"
         workspace_files = sorted(workspace_root.rglob("*.json"))
@@ -260,26 +263,52 @@ class TestProductScopeContract(unittest.TestCase):
                         f"{target} is exposed through Workspace content",
                     )
 
-    def test_factory_stock_settings_surface_and_navigation_are_removed(self) -> None:
-        page_root = ROOT / "almdina_erp" / "page" / "factory_stock_settings"
-        for filename in (
-            "__init__.py",
-            "factory_stock_settings.js",
-            "factory_stock_settings.json",
-        ):
-            self.assertFalse((page_root / filename).exists(), filename)
+    def test_retired_legacy_page_sources_and_navigation_are_removed(self) -> None:
+        retired_pages = {
+            "factory_stock_settings": "factory-stock-settings",
+            "factory_system_preflight": "factory-system-preflight",
+            "factory_performance_benchmark": "factory-performance-benchmark",
+            "factory_approval_queue": "factory-approval-queue",
+        }
+        for page_dir, route in retired_pages.items():
+            page_root = ROOT / "almdina_erp" / "page" / page_dir
+            for filename in ("__init__.py", f"{page_dir}.js", f"{page_dir}.json"):
+                with self.subTest(page=route, filename=filename):
+                    self.assertFalse((page_root / filename).exists(), filename)
 
         navigation_owners = (
             ROOT / "public" / "js" / "shared_shell.js",
+            ROOT / "public" / "js" / "arabic_operator_ui.js",
             ROOT / "almdina_erp" / "application" / "security" / "surface_access.py",
             ROOT / "almdina_erp" / "application" / "security" / "workspace_visibility.py",
             *sorted((ROOT / "almdina_erp" / "workspace").rglob("*.json")),
         )
         for path in navigation_owners:
             source = path.read_text(encoding="utf-8")
-            for token in ("factory-stock-settings", "factory_stock_settings"):
-                with self.subTest(path=path.relative_to(ROOT), token=token):
-                    self.assertNotIn(token, source)
+            for page_dir, route in retired_pages.items():
+                for token in (route, page_dir):
+                    with self.subTest(path=path.relative_to(ROOT), token=token):
+                        self.assertNotIn(token, source)
+
+    def test_factory_plan_archive_source_and_navigation_are_preserved(self) -> None:
+        page_root = ROOT / "almdina_erp" / "page" / "factory_plan_archive"
+        for filename in (
+            "__init__.py",
+            "factory_plan_archive.js",
+            "factory_plan_archive.json",
+        ):
+            self.assertTrue((page_root / filename).exists(), filename)
+
+        navigation_owners = (
+            ROOT / "public" / "js" / "shared_shell.js",
+            ROOT / "almdina_erp" / "application" / "security" / "surface_access.py",
+            ROOT / "almdina_erp" / "application" / "security" / "workspace_visibility.py",
+            ROOT / "almdina_erp" / "workspace" / "almdina_control_center" / "almdina_control_center.json",
+            ROOT / "almdina_erp" / "workspace" / "almdina_go_live" / "almdina_go_live.json",
+        )
+        for path in navigation_owners:
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertIn("factory-plan-archive", path.read_text(encoding="utf-8"))
 
     def test_new_install_does_not_create_stock_item_customizations(self) -> None:
         source = (ROOT / "install.py").read_text(encoding="utf-8")

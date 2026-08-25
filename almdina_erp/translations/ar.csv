@@ -32,8 +32,6 @@ Board Usage Analysis,تحليل استهلاك الألواح
 Piece Size Usage Analysis,تحليل المقاسات الأكثر استخدامًا
 Almdina Control Center,مركز متابعة المعمل
 Factory Control Center,مركز متابعة وتشغيل المعمل
-Approval Queue,طلبات بانتظار الاعتماد
-Factory Approval Queue,طلبات بانتظار الاعتماد
 Plan PDF Archive,أرشيف مخططات القص المعتمدة
 Factory Plan Archive,أرشيف مخططات القص المعتمدة
 Production Defaults,إعدادات التشغيل الافتراضية
@@ -52,11 +50,6 @@ Edge Banding Type,نوع القشاط
 System Factory Settings,إعدادات المعمل المتقدمة
 Almdina Go-Live,فحص جاهزية المعمل
 Go-Live Validation,فحص الجاهزية قبل التشغيل
-System Preflight,فحص إعدادات المعمل
-Factory System Preflight,فحص جاهزية إعدادات المعمل
-Performance Benchmark,اختبار سرعة خطة القص
-Factory Performance Benchmark,اختبار سرعة محرك خطة القص
-Safe Approval Queue,اعتماد الطلبات الآمن
 Approved Plan PDF Archive,أرشيف مخططات القص المعتمدة
 Validation Evidence,نتائج وفحوص الجاهزية
 Stock Availability,توفر المواد بالمخزون
@@ -459,8 +452,6 @@ Differences above plan will issue extra stock; differences below plan will retur
 Reconciling actual consumption...,جاري تسوية الاستهلاك الفعلي...
 Reconcile,تسوية
 
-Loading pending review orders...,جاري تحميل الطلبات التي تنتظر المراجعة...
-No orders are waiting for review.,لا توجد طلبات بانتظار المراجعة.
 Date,التاريخ
 Material / Color / Thickness,المادة / اللون / السماكة
 Boards,عدد الألواح
@@ -468,27 +459,8 @@ Method,طريقة ترتيب القص
 Actions,الإجراءات
 Approve,اعتماد
 Reject,إعادة للتعديل
-Approve this order using a database row lock and create its immutable production plan?,سيتم اعتماد الطلب وتثبيت خطة القص الحالية نهائيًا للتنفيذ. هل تريد المتابعة؟
-Approving order safely...,جاري اعتماد الطلب وتثبيت خطة القص...
-Order approved.,تم اعتماد الطلب.
-Order rejected and returned for revision.,تمت إعادة الطلب للتعديل.
 Refresh,تحديث
-Run Benchmark,تشغيل اختبار السرعة
-Repeats,عدد مرات الاختبار
-Packing Mode Override,طريقة ترتيب بديلة للاختبار
-Leave empty to use the order mode.,اتركه فارغًا لاستخدام طريقة الترتيب المحددة في الطلب.
-Select a Door Cutting Order first.,اختر طلب قص أولًا.
-Running cutting engine benchmark...,جاري اختبار سرعة محرك خطة القص...
-Target met on this run,الأداء ضمن الحد المطلوب في هذا الاختبار
-Target NOT met on this run,الأداء أبطأ من الحد المطلوب في هذا الاختبار
-Expanded Pieces,عدد القطع الفعلية
-Requested Mode,طريقة الترتيب المطلوبة
-Selected Method,طريقة الترتيب التي تم اختيارها
-Runs ms,أزمنة الاختبارات بالمللي ثانية
-Average ms,متوسط الزمن بالمللي ثانية
-Worst ms,أبطأ زمن بالمللي ثانية
 Unplaced,قطع لم يتم توزيعها
-"This benchmark is read-only and creates no stock movement or document changes. Record server specs, app commit SHA, result and evidence in UAT.",هذا الاختبار للقياس فقط ولا يغيّر المستندات أو المخزون.
 Generate and attach an immutable official PDF for an approved production cutting plan.,إنشاء وحفظ نسخة PDF رسمية ثابتة لخطة القص المعتمدة.
 Archive Approved Plan PDF,حفظ نسخة PDF للخطة المعتمدة
 Generating official PDF...,جاري إنشاء النسخة الرسمية PDF...
@@ -497,8 +469,6 @@ PDF was already archived.,تم حفظ نسخة PDF لهذه الخطة مسبق�
 PDF archived successfully.,تم حفظ نسخة PDF للخطة بنجاح.
 Plan,الخطة
 
-No configuration blockers were found. Controlled UAT may proceed.,إعدادات المعمل الأساسية سليمة. يمكن بدء الاختبارات التشغيلية.
-Configuration blockers exist. Do not start controlled UAT yet.,توجد إعدادات ناقصة تمنع بدء الاختبار التشغيلي.
 Blockers,مشاكل مانعة
 Warnings,تنبيهات
 Check,الفحص
@@ -507,47 +477,15 @@ Details,التفاصيل
 OK,سليم
 WARNING,تنبيه
 BLOCKER,مشكلة مانعة
-Running factory preflight checks...,جاري فحص جاهزية إعدادات المعمل...
-Running preflight...,جاري فحص الجاهزية...
-Run Preflight Again,إعادة فحص الجاهزية
-Default Warehouse Check,فحص المستودع الافتراضي
-Production Routing Check,فحص تسلسل مراحل الإنتاج
-Required Production Stages Check,فحص مراحل الإنتاج الأساسية
-Factory User Roles Check,فحص صلاحيات موظفي المعمل
-MDF Board Items Check,فحص أصناف ألواح MDF
-Edge Banding Master Data Check,فحص بيانات أنواع القشاط
-Edge Stock Mapping Check,فحص ربط القشاط بالمخزون
-Production Print Formats Check,فحص نماذج الطباعة
-Operational Reports Check,فحص تقارير التشغيل
 Company,الشركة
 Missing,مفقود
 Count,العدد
 Incomplete Records,سجلات غير مكتملة
-Unmapped Stock Items,أنواع غير مربوطة بالمخزون
 Problems,المشاكل
-Default Warehouse is configured and linked to a Company.,تم ضبط المستودع الافتراضي وربطه بالشركة.
-Configure a Default Warehouse linked to a Company.,يجب تحديد مستودع افتراضي مرتبط بالشركة.
-Default Production Routing is active.,تسلسل مراحل الإنتاج الافتراضي مفعّل.
-Configure an active Default Production Routing.,يجب اختيار تسلسل مراحل إنتاج افتراضي مفعّل.
-Routing contains the required v1.0 core stages.,تسلسل الإنتاج يحتوي المراحل الأساسية المطلوبة.
-Routing is missing one or more v1.0 core stages.,تسلسل الإنتاج ينقصه مرحلة أساسية أو أكثر.
-All required factory roles exist.,جميع صلاحيات موظفي المعمل المطلوبة موجودة.
-One or more required factory roles are missing.,توجد صلاحيات مطلوبة لموظفي المعمل غير موجودة.
-"MDF Items have valid physical identity, dimensions and whole-number stock UOM.",أصناف ألواح MDF تحتوي بيانات المقاس والسماكة والمادة واللون ووحدة المخزون بشكل صحيح.
-Fix MDF Item configuration before production.,يجب استكمال بيانات أصناف ألواح MDF قبل بدء الإنتاج.
-Enabled Edge Banding Types have valid structured master data.,بيانات أنواع القشاط المفعلة مكتملة وصحيحة.
-Fix incomplete Edge Banding Type master data.,يجب استكمال بيانات أنواع القشاط قبل التشغيل.
-All enabled Edge Banding Types are mapped to stock Items.,جميع أنواع القشاط المفعلة مربوطة بأصناف المخزون.
-Some enabled Edge Banding Types are not mapped to stock Items; orders using them cannot be approved for stock consumption.,بعض أنواع القشاط غير مربوطة بأصناف المخزون؛ لن يمكن اعتماد الطلبات التي تستخدمها لصرف المواد.
-Required production Print Formats are installed.,نماذج الطباعة المطلوبة للإنتاج مثبتة.
-Required production Print Formats are missing.,بعض نماذج الطباعة المطلوبة للإنتاج غير موجودة.
-Required operational reports are installed.,تقارير التشغيل المطلوبة موجودة.
-One or more operational reports are missing.,يوجد تقرير تشغيلي مطلوب أو أكثر غير موجود.
 dimensions,الأبعاد
 thickness,السماكة
 material,المادة
 color,اللون
-whole-number stock UOM,وحدة مخزون تعدّ بالأعداد الصحيحة
 rate,السعر
 width,العرض
 finish,نوع التشطيب
@@ -627,14 +565,7 @@ The cutting plan failed geometry validation and cannot be approved.,خطة ال�
 The cutting plan contains unplaced pieces and cannot be approved.,توجد قطع لم يتم توزيعها على الألواح لذلك لا يمكن اعتماد خطة القص.
 Only Draft cutting plans can be approved.,يمكن اعتماد خطط القص التي ما تزال مسودة فقط.
 Only a geometrically valid cutting plan can be approved.,لا يمكن اعتماد خطة قص إلا بعد التأكد من سلامتها هندسيًا.
-Only Draft or Rejected orders can be sent for review.,يمكن إرسال الطلب للمراجعة عندما يكون مسودة أو معادًا للتعديل فقط.
-Only orders in Pending Review can be approved.,يمكن اعتماد الطلبات التي تنتظر المراجعة فقط.
-"Approval plan is invalid:
-{0}","خطة القص المراد اعتمادها غير سليمة:
-{0}"
-Full boards: {0} | Waste: {1}% | Method: {2},ألواح جديدة: {0} | الهدر: {1}% | طريقة الترتيب: {2}
-Only orders in Pending Review can be rejected.,يمكن إعادة الطلب للتعديل عندما يكون بانتظار المراجعة فقط.
-Review rejection reason: {0},سبب إعادة الطلب للتعديل: {0}
+The legacy order review and approval workflow has been retired. Send orders directly to production through the supported workflow.,تم إيقاف مسار مراجعة واعتماد الطلب القديم. أرسل الطلب مباشرة إلى الإنتاج عبر المسار المعتمد.
 Order {0} has no approved Cutting Plan.,الطلب {0} لا يملك خطة قص معتمدة.
 Stock Item {0} does not exist.,صنف المخزون {0} غير موجود.
 Edge stock Item {0} uses Stock UOM {1}. Add a Meter UOM conversion before consumption.,صنف القشاط {0} يستخدم وحدة مخزون {1}. أضف تحويلًا إلى المتر قبل صرفه.

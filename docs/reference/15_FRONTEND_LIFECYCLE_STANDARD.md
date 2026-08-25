@@ -376,10 +376,10 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 | Shop Floor Inbox | PAGE | Certified | synchronous first-load، activation/read invalidation، visit-generation mutation reconciliation، caller-owned QuickActions children، UI-state preservation، وremount مثبتة runtime |
 | Factory Master Data | PAGE | Certified | synchronous bootstrap، activation/read invalidation، dirty editor preservation، visit-generation mutation reconciliation، transient-child ownership، وremount مثبتة runtime |
 | Factory Plan Archive | PAGE | Keep; lifecycle migration pending | feature نشطة لأرشفة PDF الرسمي للخطة المعتمدة؛ تبقى ضمن estate وتُعتمد لاحقًا بتغيير محدود |
-| Factory Approval Queue | PAGE | Temporary migration utility | Review/Approve القديم متقاعد؛ تبقى مؤقتًا فقط لمعالجة سجلات `Pending Review` التاريخية حتى يثبت runtime/data audit عدم الحاجة إليها |
+| Factory Approval Queue | PAGE | Retired / Removed | أزيل Page source وروابطها بعد إثبات runtime أن `Pending Review = 0`؛ بقيت capability grants، وأصبحت API التاريخية fail-closed |
 | Factory Stock Settings | PAGE | Retired / Removed | أزيل Page source بعد إثبات أنها orphaned وخارج Active Product Scope؛ بقيت endpoints التاريخية fail-closed وحقول optimizer المشتركة دون تغيير |
-| Factory System Preflight | PAGE | Retirement planned; removal pending | الصفحة تستدعي endpoint تاريخية متقاعدة/fail-closed؛ لا تُصرف عليها lifecycle migration قبل أي Product Decision جديد للتشخيص |
-| Factory Performance Benchmark | PAGE | Retirement planned; removal pending | الصفحة تستدعي benchmark endpoint تاريخية متقاعدة/fail-closed؛ لا تُصرف عليها lifecycle migration |
+| Factory System Preflight | PAGE | Retired / Removed | أزيل Page source؛ بقي alias التاريخي fail-closed، ولم تتغير routing/master-data/security tests المشتركة |
+| Factory Performance Benchmark | PAGE | Retired / Removed | أزيل Page source؛ بقي alias التاريخي fail-closed، ولم يتغير cutting engine أو performance regressions المشتركة |
 | Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |
 | Door Cutting Order List | LIST | Certification pending | list-specific identity/refresh contract لم تُعتمد runtime بعد |
 | Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required | التقارير الحالية filters declarative ولا تملك custom async lifecycle |
