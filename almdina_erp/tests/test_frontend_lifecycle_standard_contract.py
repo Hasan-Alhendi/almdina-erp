@@ -169,6 +169,20 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             with self.subTest(entry=entry):
                 self.assertIn(entry, self.data_ui_map)
 
+    def test_retirement_audit_keeps_static_and_runtime_proof_separate(self) -> None:
+        for marker in (
+            "## 10. Frontend Estate Retirement Audit",
+            "static repository proof",
+            "RETIRE-SAFE — High",
+            "TEMPORARY-MIGRATION-UTILITY / RETIRE-AFTER-DATA-PROOF",
+            "Runtime data proof المطلوب",
+            "frappe.client.get_count",
+            "remove_orphan_entities()",
+            "Plan Archive ليست deletion candidate",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.data_ui_map)
+
     def test_existing_foundation_remains_the_shared_primitive_owner(self) -> None:
         foundation = FOUNDATION.read_text(encoding="utf-8")
         for primitive in SHARED_PRIMITIVES:

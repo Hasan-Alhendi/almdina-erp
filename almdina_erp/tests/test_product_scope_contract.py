@@ -206,29 +206,59 @@ class TestProductScopeContract(unittest.TestCase):
             source,
         )
 
-    def test_primary_workspaces_do_not_expose_inventory(self) -> None:
+    def test_workspaces_do_not_expose_inventory_or_retired_utilities(self) -> None:
+        def string_values(value: object) -> list[str]:
+            if isinstance(value, str):
+                return [value]
+            if isinstance(value, list):
+                return [text for child in value for text in string_values(child)]
+            if isinstance(value, dict):
+                return [text for child in value.values() for text in string_values(child)]
+            return []
+
         banned_targets = (
-            '"link_to":"Warehouse"',
-            '"link_to":"Stock Reconciliation"',
-            '"link_to":"Board Remnant"',
-            '"link_to":"Material Reservation"',
-            '"link_to":"Material Consumption Log"',
-            '"link_to":"Order Stock Availability"',
-            '"link_to":"Remnant Inventory"',
-            '"link_to":"factory-stock-settings"',
+            "Warehouse",
+            "Stock Reconciliation",
+            "Board Remnant",
+            "Material Reservation",
+            "Material Consumption Log",
+            "Order Stock Availability",
+            "Remnant Inventory",
+            "factory-stock-settings",
+            "factory-system-preflight",
+            "factory-performance-benchmark",
         )
         workspace_root = ROOT / "almdina_erp" / "workspace"
-        for name in (
-            "almdina_erp/almdina_erp.json",
-            "almdina_reports/almdina_reports.json",
-            "almdina_settings/almdina_settings.json",
-            "almdina_control_center/almdina_control_center.json",
-            "almdina_go_live/almdina_go_live.json",
-        ):
-            source = (workspace_root / name).read_text(encoding="utf-8")
-            for target in banned_targets:
-                with self.subTest(workspace=name, target=target):
-                    self.assertNotIn(target, source)
+        workspace_files = sorted(workspace_root.rglob("*.json"))
+        self.assertTrue(workspace_files)
+        for path in workspace_files:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            targets = {
+                row.get("link_to")
+                for section in ("links", "shortcuts")
+                for row in payload.get(section, [])
+                if row.get("link_to")
+            }
+            content = json.loads(payload.get("content") or "[]")
+            rendered_values = tuple(
+                value.lower()
+                for value in string_values(content)
+            )
+            with self.subTest(workspace=path.relative_to(workspace_root)):
+                self.assertTrue(targets.isdisjoint(banned_targets), targets)
+                for target in banned_targets:
+                    tokens = {
+                        target.lower(),
+                        target.lower().replace(" ", "-"),
+                    }
+                    self.assertFalse(
+                        any(
+                            token in value
+                            for token in tokens
+                            for value in rendered_values
+                        ),
+                        f"{target} is exposed through Workspace content",
+                    )
 
     def test_new_install_does_not_create_stock_item_customizations(self) -> None:
         source = (ROOT / "install.py").read_text(encoding="utf-8")
