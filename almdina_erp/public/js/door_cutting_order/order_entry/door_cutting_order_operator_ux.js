@@ -466,21 +466,56 @@
         });
     }
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
     function loadEdgeTypes(frm) {
-        if (frm._dco_edge_types_loaded || frm._dco_edge_types_loading) return;
+        if (frm._dco_edge_types_loaded) return Promise.resolve(true);
+        const context = documentContext();
+        const token = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
+        const active = frm.__almdinaEdgeTypesRequest;
+        if (
+            active
+            && (
+                !context
+                || typeof context.isSameDocument !== "function"
+                || context.isSameDocument(frm, active.token)
+            )
+        ) {
+            return active.promise;
+        }
+
+        const requestState = { token, promise: null };
+        frm.__almdinaEdgeTypesRequest = requestState;
         frm._dco_edge_types_loading = true;
-        frappe.db.get_list("Edge Banding Type", {
+        const request = Promise.resolve(frappe.db.get_list("Edge Banding Type", {
             fields:["name","edge_type_name"],
             filters:{ disabled:0 },
             order_by:"width_cm asc, edge_type_name asc",
             limit:100,
-        }).then(rows => {
+        })).then(rows => {
+            if (frm.__almdinaEdgeTypesRequest !== requestState) return false;
+            if (context && !context.isCurrent(frm, token)) return false;
             frm._dco_edge_types = rows || [];
             frm._dco_edge_types_loaded = true;
             refreshEdgeSelects(frm);
-        }).catch(error => console.error("Failed to load edge types", error)).finally(() => {
-            frm._dco_edge_types_loading = false;
+            return true;
+        }).catch(error => {
+            if (!context || context.isCurrent(frm, token)) {
+                console.error("Failed to load edge types", error);
+            }
+            return false;
+        }).finally(() => {
+            if (frm.__almdinaEdgeTypesRequest === requestState) {
+                frm.__almdinaEdgeTypesRequest = null;
+                frm._dco_edge_types_loading = false;
+            }
         });
+        requestState.promise = request;
+        return request;
     }
 
     function renderFastMeasurements(frm) {
@@ -730,6 +765,6 @@
 
     window.AlmdinaDoorCuttingFastEntry = Object.assign(
         window.AlmdinaDoorCuttingFastEntry || {},
-        { render: renderFastMeasurements }
+        { render: renderFastMeasurements, loadEdgeTypes }
     );
 })();

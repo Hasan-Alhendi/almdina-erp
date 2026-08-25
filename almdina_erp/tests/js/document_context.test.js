@@ -27,7 +27,7 @@ function htmlWrapper(content) {
     };
 }
 
-function form(name) {
+function form(name, { isLocal = false } = {}) {
     const fields = [
         "operator_status_strip",
         "pieces_fast_entry",
@@ -38,12 +38,16 @@ function form(name) {
     ];
     return {
         doctype: "Door Cutting Order",
-        doc: { doctype: "Door Cutting Order", name },
+        doc: {
+            doctype: "Door Cutting Order",
+            name,
+            __islocal: isLocal ? 1 : 0,
+        },
         fields_dict: Object.fromEntries(
             fields.map(fieldname => [fieldname, { $wrapper: htmlWrapper(`old:${fieldname}`) }])
         ),
         is_new() {
-            return false;
+            return Boolean(this.doc.__islocal);
         },
         _dco_calc_timer: 77,
         __almdinaPlanSurfaceTimer: 88,
@@ -80,6 +84,7 @@ const fakeWindow = {
     },
 };
 const fakeFrappe = {
+    model: { new_names: {} },
     ui: {
         form: {
             on(doctype, events) {
@@ -198,5 +203,50 @@ assert.equal(thirdVisit.identity, secondVisit.identity);
 assert.equal(thirdVisit.generation, secondVisit.generation + 1);
 assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, secondVisit), false);
 assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(frm, thirdVisit), true);
+
+// Frappe first insert is a document promotion, not a navigation. The save
+// response records local -> permanent in frappe.model.new_names before the
+// after_save hook, then refreshes the same Form surface.
+const promoted = form("new-door-cutting-order-1", { isLocal: true });
+fakeWindow.cur_frm = promoted;
+handlers.before_load(promoted);
+const temporaryVisit = fakeWindow.AlmdinaDocumentContext.capture(promoted);
+const promotionGeneration = temporaryVisit.generation;
+let promotedEffectRuns = 0;
+const promotedTimer = fakeWindow.AlmdinaDocumentContext.schedule(
+    promoted,
+    "promotion-safe-measurement",
+    () => { promotedEffectRuns += 1; },
+    25
+);
+const promotedCallback = scheduledTimers.get(promotedTimer);
+const wrapperClearsBeforeSave = Object.fromEntries(
+    Object.entries(promoted.fields_dict).map(([name, field]) => [name, field.$wrapper.emptyCalls])
+);
+
+handlers.before_save(promoted);
+fakeFrappe.model.new_names["new-door-cutting-order-1"] = "DCO-2026-00999";
+promoted.doc = {
+    ...promoted.doc,
+    name: "DCO-2026-00999",
+    __islocal: 0,
+    localname: "new-door-cutting-order-1",
+};
+// Frappe dispatches after_save before refresh, but it does not await the
+// after_save promise before starting refresh. Exercise the harder completion
+// order so synchronize() itself must recognize the pending insert promotion.
+handlers.refresh(promoted);
+handlers.after_save(promoted);
+
+const permanentVisit = fakeWindow.AlmdinaDocumentContext.capture(promoted);
+assert.equal(permanentVisit.identity, "Door Cutting Order::DCO-2026-00999");
+assert.equal(permanentVisit.generation, promotionGeneration);
+assert.equal(fakeWindow.AlmdinaDocumentContext.isCurrent(promoted, temporaryVisit), true);
+assert.equal(scheduledTimers.has(promotedTimer), true);
+Object.entries(promoted.fields_dict).forEach(([name, field]) => {
+    assert.equal(field.$wrapper.emptyCalls, wrapperClearsBeforeSave[name]);
+});
+promotedCallback();
+assert.equal(promotedEffectRuns, 1);
 
 console.log("Door Cutting Order document context simulation passed");
