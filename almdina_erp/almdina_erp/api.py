@@ -115,6 +115,21 @@ def _serialize_order_preview(
                     "special_shape_price_note": row.special_shape_price_note,
                     "special_shape_price_approved_by": row.special_shape_price_approved_by,
                     "special_shape_price_approved_on": row.special_shape_price_approved_on,
+                    "extra_double_unit_price_usd": getattr(row, "extra_double_unit_price_usd", 0),
+                    "extra_double_total_usd": getattr(row, "extra_double_total_usd", 0),
+                    "extra_liner_unit_price_usd": getattr(row, "extra_liner_unit_price_usd", 0),
+                    "extra_liner_total_usd": getattr(row, "extra_liner_total_usd", 0),
+                    "extra_recessed_handle_cutout_unit_price_usd": getattr(
+                        row,
+                        "extra_recessed_handle_cutout_unit_price_usd",
+                        0,
+                    ),
+                    "extra_recessed_handle_cutout_total_usd": getattr(
+                        row,
+                        "extra_recessed_handle_cutout_total_usd",
+                        0,
+                    ),
+                    "extra_addons_total_usd": getattr(row, "extra_addons_total_usd", 0),
                 }
             )
         pieces.append(piece)
@@ -164,6 +179,7 @@ def _serialize_order_preview(
                 "special_shapes_baseline_cost_usd": preview.special_shapes_baseline_cost_usd,
                 "special_shapes_estimated_total_usd": preview.special_shapes_estimated_total_usd,
                 "special_shapes_final_total_usd": preview.special_shapes_final_total_usd,
+                "extra_addons_total_usd": getattr(preview, "extra_addons_total_usd", 0),
                 "customer_quote_total_usd": preview.customer_quote_total_usd,
                 "customer_quote_status": preview.customer_quote_status,
             }

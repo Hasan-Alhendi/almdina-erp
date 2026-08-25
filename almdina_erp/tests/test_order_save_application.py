@@ -32,6 +32,9 @@ class FakeOrderSaveGateway:
     def calculate_piece_costs(self) -> None:
         self.calls.append("calculate_piece_costs")
 
+    def calculate_extra_addon_prices(self) -> None:
+        self.calls.append("calculate_extra_addon_prices")
+
 
 class ExplodingPlanGateway(FakeOrderSaveGateway):
     """Legacy plan methods must never be reached by ordinary order save."""
@@ -68,6 +71,7 @@ class TestOrderSaveApplication(unittest.TestCase):
                 "load_board_snapshot",
                 "calculate_cut_dimensions",
                 "calculate_piece_costs",
+                "calculate_extra_addon_prices",
             ],
         )
 
@@ -76,11 +80,12 @@ class TestOrderSaveApplication(unittest.TestCase):
         process_order_save(gateway)
 
         self.assertEqual(
-            gateway.calls[-3:],
+            gateway.calls[-4:],
             [
                 "load_board_snapshot",
                 "calculate_cut_dimensions",
                 "calculate_piece_costs",
+                "calculate_extra_addon_prices",
             ],
         )
 

@@ -35,6 +35,11 @@
         "clipped_corner_length_cm",
         "special_shape_geometry_json",
     ];
+    const PIECE_COST_ONLY_FIELDS = [
+        "extra_double",
+        "extra_liner",
+        "extra_recessed_handle_cutout",
+    ];
 
     function syncCoordinator() {
         return window.AlmdinaWorkspaceSyncCoordinator || null;
@@ -109,6 +114,10 @@
         );
     }
 
+    function onPieceCostInputChanged(fieldname, frm) {
+        recordImpact(frm, ["cost"], `extra_addon_changed:${fieldname}`);
+    }
+
     function planNeedsRecalculation(frm) {
         if (Number(frm && frm.doc && frm.doc.plan_needs_recalculation || 0) === 1) return true;
         const owner = window.AlmdinaPlanWorkspaceState;
@@ -175,12 +184,16 @@
     PIECE_PLAN_COST_FIELDS.forEach((fieldname) => {
         pieceHandlers[fieldname] = (frm, cdt, cdn) => onPieceInputChanged(fieldname, frm, cdt, cdn);
     });
+    PIECE_COST_ONLY_FIELDS.forEach((fieldname) => {
+        pieceHandlers[fieldname] = (frm) => onPieceCostInputChanged(fieldname, frm);
+    });
     frappe.ui.form.on("Door Cutting Order Detail", pieceHandlers);
 
     window.AlmdinaOrderMutationImpactPolicy = Object.freeze({
         SPECIAL_PRICE_BASIS_FIELDS,
         ORDER_PLAN_COST_FIELDS,
         PIECE_PLAN_COST_FIELDS,
+        PIECE_COST_ONLY_FIELDS,
         recordImpact,
         reconcileAfterSave,
         planNeedsRecalculation,

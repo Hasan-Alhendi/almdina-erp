@@ -1,0 +1,197 @@
+.dco-operator-form .dco-col-type {
+    width: 190px !important;
+}
+
+.dco-operator-form .dco-extra-addons-trigger {
+    width: 100%;
+    min-height: 32px;
+    margin-top: 5px;
+    padding: 5px 8px;
+    border: 1px solid rgba(37, 99, 235, .32);
+    border-radius: 9px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, .10), rgba(14, 165, 233, .05));
+    color: #174ea6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.dco-operator-form .dco-extra-addons-trigger:focus-visible {
+    outline: 2px solid var(--primary, #2490ef);
+    outline-offset: 2px;
+}
+
+.dco-operator-form .dco-extra-addons-trigger b {
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #2563eb;
+    color: #fff;
+    display: inline-grid;
+    place-items: center;
+    font-size: 9px;
+}
+
+.dco-operator-form .dco-extra-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 4px;
+}
+
+.dco-operator-form .dco-extra-chip-list > span {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, .10);
+    color: #174ea6;
+    font-size: 8px;
+    font-weight: 800;
+}
+
+.dco-operator-form .dco-extra-required,
+.dco-operator-form .dco-extra-notes-cue {
+    display: block;
+    margin-top: 4px;
+    color: #a15c00;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1.4;
+}
+
+.dco-operator-form .dco-extra-row {
+    background: rgba(37, 99, 235, .025);
+}
+
+.dco-operator-form .dco-extra-row .dco-col-type {
+    background: linear-gradient(135deg, rgba(37, 99, 235, .045), rgba(14, 165, 233, .02));
+}
+
+.dco-extra-popover {
+    --dco-extra-anchor-top: 20px;
+    --dco-extra-anchor-left: 20px;
+    position: fixed;
+    z-index: 1060;
+    top: var(--dco-extra-anchor-top);
+    left: var(--dco-extra-anchor-left);
+    width: min(390px, calc(100vw - 24px));
+    max-height: min(560px, calc(100vh - var(--dco-extra-anchor-top) - 16px));
+    overflow: auto;
+    direction: rtl;
+    border: 1px solid var(--border-color, #d8dee6);
+    border-radius: 15px;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 18px 52px rgba(15, 23, 42, .22);
+    padding: 14px;
+}
+
+.dco-extra-popover-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 11px;
+    border-bottom: 1px solid var(--border-color, #e4e8ed);
+}
+
+.dco-extra-popover-head b,
+.dco-extra-popover-head span {
+    display: block;
+}
+
+.dco-extra-popover-head b {
+    font-size: 14px;
+}
+
+.dco-extra-popover-head span {
+    margin-top: 3px;
+    color: var(--text-muted, #67727e);
+    font-size: 10px;
+}
+
+.dco-extra-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--subtle-fg, #f1f4f6);
+    font-size: 20px;
+    line-height: 1;
+}
+
+.dco-extra-options {
+    display: grid;
+    gap: 8px;
+    padding: 12px 0;
+}
+
+.dco-extra-options label {
+    min-height: 52px;
+    margin: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--border-color, #dce2e8);
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.dco-extra-options label:has(input:checked) {
+    border-color: rgba(37, 99, 235, .48);
+    background: rgba(37, 99, 235, .06);
+}
+
+.dco-extra-options input {
+    width: 19px;
+    height: 19px;
+    margin: 0;
+    accent-color: #2563eb;
+}
+
+.dco-extra-options b,
+.dco-extra-options small {
+    display: block;
+}
+
+.dco-extra-options small {
+    margin-top: 2px;
+    color: var(--text-muted, #67727e);
+    font-size: 9px;
+}
+
+.dco-extra-error {
+    min-height: 18px;
+    color: #b42318;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.dco-extra-popover-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+@media (max-width: 720px) {
+    .dco-extra-popover {
+        top: auto;
+        right: 8px;
+        bottom: 8px;
+        left: 8px;
+        width: auto;
+        max-height: min(78vh, 620px);
+        border-radius: 18px;
+        padding-bottom: max(14px, env(safe-area-inset-bottom));
+    }
+
+    .dco-extra-popover-actions .btn {
+        min-height: 42px;
+        flex: 1;
+    }
+}

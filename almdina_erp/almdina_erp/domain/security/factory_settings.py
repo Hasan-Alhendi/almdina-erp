@@ -10,6 +10,7 @@ from .authorization import Capability, normalize_capabilities
 class FactorySettingsSection:
     CUTTING = "cutting"
     COSTING = "costing"
+    EXTRA_ADDONS = "extra_addons"
     PRODUCTION = "production"
     PRINT_IDENTITY = "print_identity"
 
@@ -35,6 +36,13 @@ SECTION_FIELDS = MappingProxyType(
                 "default_special_margin_percent",
             }
         ),
+        FactorySettingsSection.EXTRA_ADDONS: frozenset(
+            {
+                "default_extra_double_unit_price_usd",
+                "default_extra_liner_unit_price_usd",
+                "default_extra_recessed_handle_cutout_unit_price_usd",
+            }
+        ),
         FactorySettingsSection.PRODUCTION: frozenset(
             {
                 "default_production_routing",
@@ -56,6 +64,7 @@ SECTION_CAPABILITIES = MappingProxyType(
     {
         FactorySettingsSection.CUTTING: Capability.EDIT_FACTORY_CUTTING_DEFAULTS,
         FactorySettingsSection.COSTING: Capability.EDIT_FACTORY_COST_DEFAULTS,
+        FactorySettingsSection.EXTRA_ADDONS: Capability.EDIT_FACTORY_COST_DEFAULTS,
         FactorySettingsSection.PRODUCTION: Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
         FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
     }

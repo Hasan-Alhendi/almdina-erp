@@ -192,6 +192,35 @@ def _persist_special_piece_pricing_projection(order: Any, summary: Any) -> None:
             )
 
 
+def _persist_extra_addon_pricing_projection(order: Any) -> None:
+    """Persist only server-derived Extra price snapshots after the child save."""
+
+    fields = (
+        "extra_double_unit_price_usd",
+        "extra_double_total_usd",
+        "extra_liner_unit_price_usd",
+        "extra_liner_total_usd",
+        "extra_recessed_handle_cutout_unit_price_usd",
+        "extra_recessed_handle_cutout_total_usd",
+        "extra_addons_total_usd",
+    )
+    for piece in order.pieces or []:
+        if not bool(getattr(piece, "_extra_addon_snapshot_required", False)):
+            continue
+        piece_name = str(getattr(piece, "name", None) or "").strip()
+        if not piece_name:
+            continue
+        frappe.db.set_value(
+            "Door Cutting Order Detail",
+            piece_name,
+            {
+                fieldname: flt(getattr(piece, fieldname, 0))
+                for fieldname in fields
+            },
+            update_modified=False,
+        )
+
+
 def _commercial_cost_basis(order: Any, plan: Any | None) -> tuple[float, float]:
     """Resolve Plan-owned cost inputs without leaking ownership into DCO projection."""
 
@@ -238,6 +267,9 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
             total_area_m2=flt(order.total_area_m2),
             board_and_cutting_cost_usd=board_and_cutting_cost_usd,
             total_cost_usd=total_cost_usd,
+            extra_addons_total_usd=flt(
+                getattr(order, "extra_addons_total_usd", 0)
+            ),
         )
     except CostingError as error:
         if str(error) == "special_shape_defaults_negative":
@@ -245,10 +277,14 @@ def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict
         raise
 
     _persist_special_piece_pricing_projection(order, summary)
+    _persist_extra_addon_pricing_projection(order)
     values = {
         "special_shapes_baseline_cost_usd": summary.baseline_cost_usd,
         "special_shapes_estimated_total_usd": summary.estimated_total_usd,
         "special_shapes_final_total_usd": summary.final_total_usd,
+        "extra_addons_total_usd": flt(
+            getattr(order, "extra_addons_total_usd", 0)
+        ),
         "customer_quote_total_usd": summary.customer_quote_total_usd,
         "customer_quote_status": summary.customer_quote_status,
     }

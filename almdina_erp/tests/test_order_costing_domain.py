@@ -166,6 +166,26 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertFalse(summary.pieces[0].applicable)
         self.assertEqual(summary.pieces[0].price_status, "Not Applicable")
 
+    def test_extra_addons_are_added_once_to_the_customer_quote(self) -> None:
+        summary = calculate_special_pricing(
+            [
+                SpecialPricingPieceInput(
+                    piece_type="Extra",
+                    qty=2,
+                    area_m2=0.8,
+                    edge_cost_usd=2,
+                )
+            ],
+            settings=SpecialPricingSettings(),
+            total_area_m2=0.8,
+            board_and_cutting_cost_usd=30,
+            total_cost_usd=32,
+            extra_addons_total_usd=13,
+        )
+
+        self.assertEqual(summary.customer_quote_status, "Automatic")
+        self.assertEqual(summary.customer_quote_total_usd, 45)
+
     def test_estimated_special_price_is_additive_and_not_final(self) -> None:
         summary = calculate_special_pricing(
             [

@@ -64,6 +64,11 @@
                     [t("رسم القشاط اليدوي"), `${display(source.default_special_manual_edge_fee_usd)} USD`],
                     [t("هامش الدرف الخاصة"), `${display(source.default_special_margin_percent)}%`],
                 ], current),
+                section("extra_addons", t("إضافات الدرف Extra"), t("أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا."), [
+                    [t("Double / درفة"), `${display(source.default_extra_double_unit_price_usd)} USD`],
+                    [t("Liner / درفة"), `${display(source.default_extra_liner_unit_price_usd)} USD`],
+                    [t("تفريغ مسكة مخفية / درفة"), `${display(source.default_extra_recessed_handle_cutout_unit_price_usd)} USD`],
+                ], current),
                 section("production", t("ضوابط الإنتاج"), t("يمكن ترك المسار الافتراضي فارغًا وبناء المسارات من شاشة إدارة المسارات. عند إرسال الطلب للإنتاج يجب اختيار مسار فعلي."), [
                     [t("مسار الإنتاج الافتراضي"), source.default_production_routing || t("غير محدد")],
                     [t("تجاوز تسلسل المراحل"), source.allow_stage_override ? t("مسموح") : t("غير مسموح")],

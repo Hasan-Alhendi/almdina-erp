@@ -35,6 +35,12 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertFalse(denied.allowed)
         self.assertEqual(denied.code, "missing_capability")
 
+        extra = decide_settings_update(
+            {Capability.EDIT_FACTORY_COST_DEFAULTS},
+            {"default_extra_liner_unit_price_usd": 2.5},
+        )
+        self.assertTrue(extra.allowed)
+
     def test_all_granular_settings_grants_make_every_section_editable(self) -> None:
         expanded = expand_factory_settings_capabilities(
             {

@@ -350,6 +350,8 @@
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
         const isClipped = pieceType === "Clipped Corner";
+        const isExtra = pieceType === "Extra";
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
         const toggle = (field,label,extra="") => `
             <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
@@ -378,13 +380,14 @@
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
             : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         return `
-            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
+            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""} ${isExtra ? "dco-extra-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
                 <td class="dco-col-type" data-label="${labels.type}"><select class="dco-fast-select" data-field="piece_type" ${disabled}>
                     <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
                     <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
                     <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
-                </select></td>
+                    <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
+                </select>${extraAddons && typeof extraAddons.renderControl === "function" ? extraAddons.renderControl(data, { editable, virtual }) : ""}</td>
                 <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
@@ -402,7 +405,7 @@
                 </button></td>
                 <td class="dco-col-calc" data-label="${labels.area}" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-label="${labels.edgeMeters}" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
-                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
+                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}>${extraAddons && typeof extraAddons.notesCueHtml === "function" ? extraAddons.notesCueHtml(data) : ""}</td>
                 <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${isArabic() ? "حذف السطر" : "Delete row"}">×</button>` : ""}</td>
             </tr>`;
     }
@@ -419,6 +422,7 @@
                         <span class="dco-keyboard-flow">${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
                         <span class="dco-help-secondary">${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
                         <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية." : "For a special door, selected edge sides are preliminary and feed the estimate."}</span>
+                        <span class="dco-help-secondary">${isArabic() ? "الخاصة مع Liner: اكتب Liner في الملاحظات، وثّق الشكل، وأدخل السعر الخاص الشامل من التكلفة." : "Special + Liner: note Liner, document the shape, and use the inclusive custom price in Cost."}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
                 </div>
@@ -540,6 +544,10 @@
             if (root) root._dcoFastEntryHtml = html;
         }
         bindFastMeasurements(frm);
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        if (extraAddons && typeof extraAddons.bindTable === "function") {
+            extraAddons.bindTable(frm, root);
+        }
         loadEdgeTypes(frm);
     }
 
@@ -651,7 +659,13 @@
             const row = syncInputToModel(currentFrm, control, false);
             if (row) {
                 triggerChildField(currentFrm, row, control.dataset.field, 0);
-                if (control.dataset.field === "piece_type") renderFastMeasurements(currentFrm);
+                if (control.dataset.field === "piece_type") {
+                    const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+                    if (extraAddons && typeof extraAddons.reconcilePieceType === "function") {
+                        extraAddons.reconcilePieceType(currentFrm, row);
+                    }
+                    renderFastMeasurements(currentFrm);
+                }
             }
         });
 

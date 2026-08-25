@@ -25,6 +25,8 @@ class OrderSaveGateway(Protocol):
 
     def calculate_piece_costs(self) -> None: ...
 
+    def calculate_extra_addon_prices(self) -> None: ...
+
 
 def process_order_save(gateway: OrderSaveGateway) -> None:
     """Validate and prepare one order without touching Cutting Plan state."""
@@ -36,6 +38,7 @@ def process_order_save(gateway: OrderSaveGateway) -> None:
     gateway.load_board_snapshot()
     gateway.calculate_cut_dimensions()
     gateway.calculate_piece_costs()
+    gateway.calculate_extra_addon_prices()
 
 
 __all__ = [
