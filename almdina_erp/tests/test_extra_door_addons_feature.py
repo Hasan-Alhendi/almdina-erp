@@ -87,13 +87,22 @@ def test_pricing_math_stays_server_side_and_customer_invoice_is_itemized() -> No
 def test_extra_selection_invalidates_cost_only_and_ui_is_lifecycle_safe() -> None:
     mutation = MUTATION.read_text(encoding="utf-8")
     ux = UX.read_text(encoding="utf-8")
+    css = CSS.read_text(encoding="utf-8")
     assets = ASSETS.read_text(encoding="utf-8")
     assert "PIECE_COST_ONLY_FIELDS" in mutation
     assert 'recordImpact(frm, ["cost"]' in mutation
     assert "extra_double" not in mutation.split("const PIECE_PLAN_COST_FIELDS", 1)[1].split("];", 1)[0]
     assert "registerCleanup" in ux
     assert 'event.key !== "Escape"' in ux
-    assert 'aria-haspopup="dialog"' in ux
+    assert 'aria-haspopup="menu"' in ux
+    assert 'data-piece-type-option="${esc(item.value)}"' in ux
+    assert "pointerover" in ux
+    assert "لاينر" in ux
+    assert "دبل" in ux
+    assert "مسكة غطس" in ux
+    assert ".dco-piece-type-flyout.is-extra-open .dco-extra-submenu" in css
+    assert "@media (max-width: 720px)" in css
+    assert "prefers-reduced-motion" in css
     assert "door_cutting_order_extra_addons_ux.js" in assets
     assert "door_cutting_order_extra_addons.css" in assets
     assert CSS.exists()

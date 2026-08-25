@@ -4,12 +4,18 @@
     if (window.AlmdinaExtraDoorAddonsUX) return;
 
     const TYPE = "Extra";
+    const PIECE_TYPES = Object.freeze([
+        Object.freeze({ value: "Regular", labelAr: "عادية", labelEn: "Regular" }),
+        Object.freeze({ value: "Clipped Corner", labelAr: "زاوية مقصوصة", labelEn: "Clipped corner" }),
+        Object.freeze({ value: "Special", labelAr: "خاصة", labelEn: "Special" }),
+        Object.freeze({ value: TYPE, labelAr: "إضافية", labelEn: "Extra", hasSubmenu: true }),
+    ]);
     const FIELDS = Object.freeze([
-        Object.freeze({ fieldname: "extra_double", labelAr: "Double", labelEn: "Double" }),
-        Object.freeze({ fieldname: "extra_liner", labelAr: "Liner", labelEn: "Liner" }),
+        Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", labelEn: "Liner" }),
+        Object.freeze({ fieldname: "extra_double", labelAr: "دبل", labelEn: "Double" }),
         Object.freeze({
             fieldname: "extra_recessed_handle_cutout",
-            labelAr: "تفريغ مسكة مخفية",
+            labelAr: "مسكة غطس",
             labelEn: "Recessed handle cutout",
         }),
     ]);
@@ -35,26 +41,93 @@
         return String(value || "").replace(/["\\]/g, "\\$&");
     }
 
+    function pieceTypeDefinition(value) {
+        return PIECE_TYPES.find(item => item.value === value) || PIECE_TYPES[0];
+    }
+
+    function pieceTypeLabel(value) {
+        const item = pieceTypeDefinition(value);
+        return isArabic() ? item.labelAr : item.labelEn;
+    }
+
     function selectedFields(row) {
         return FIELDS.filter(item => Boolean(Number(row && row[item.fieldname] || 0)));
     }
 
-    function renderControl(row, options = {}) {
-        if (!row || (row.piece_type || "Regular") !== TYPE || options.virtual) return "";
+    function renderSelectedAddons(row) {
+        if (!row || (row.piece_type || "Regular") !== TYPE) return "";
         const selected = selectedFields(row);
-        const labels = selected.map(item => isArabic() ? item.labelAr : item.labelEn);
-        const title = isArabic() ? "إضافات الدرفة" : "Door add-ons";
-        const count = selected.length;
-        const chips = labels.length
-            ? `<span class="dco-extra-chip-list">${labels.map(label => `<span>${esc(label)}</span>`).join("")}</span>`
-            : `<span class="dco-extra-required">${isArabic() ? "اختر إضافة واحدة على الأقل" : "Choose at least one add-on"}</span>`;
+        if (!selected.length) {
+            return `<span class="dco-extra-required">${isArabic() ? "اختر إضافة واحدة على الأقل" : "Choose at least one add-on"}</span>`;
+        }
         return `
-            <button type="button" class="dco-extra-addons-trigger" aria-haspopup="dialog" aria-expanded="false" ${options.editable ? "" : "disabled"}>
-                <span aria-hidden="true">＋</span>
-                <span>${title}</span>
-                <b>${count}</b>
-            </button>
-            ${chips}
+            <span class="dco-extra-chip-list">
+                ${selected.map(item => `<span>${esc(isArabic() ? item.labelAr : item.labelEn)}</span>`).join("")}
+            </span>
+        `;
+    }
+
+    function renderTypePicker(row, options = {}) {
+        const pieceType = (row && row.piece_type) || "Regular";
+        const selectedCount = pieceType === TYPE ? selectedFields(row).length : 0;
+        const disabled = options.editable ? "" : "disabled";
+        const typeLabel = pieceTypeLabel(pieceType);
+        const accessibleLabel = isArabic()
+            ? `نوع الدرفة: ${typeLabel}`
+            : `Piece type: ${typeLabel}`;
+        return `
+            <div class="dco-piece-type-picker" data-piece-type="${esc(pieceType)}">
+                <button type="button" class="dco-piece-type-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${esc(accessibleLabel)}" ${disabled}>
+                    <span class="dco-piece-type-label">${esc(typeLabel)}</span>
+                    ${selectedCount ? `<b class="dco-piece-type-count" aria-label="${selectedCount}">${selectedCount}</b>` : ""}
+                    <span class="dco-piece-type-chevron" aria-hidden="true">⌄</span>
+                </button>
+                ${renderSelectedAddons(row)}
+            </div>
+        `;
+    }
+
+    function renderMenu(row) {
+        const currentType = (row && row.piece_type) || "Regular";
+        const selected = new Set(selectedFields(row).map(item => item.fieldname));
+        const submenuArrow = isArabic() ? "‹" : "›";
+        return `
+            <div class="dco-piece-type-menu" role="menu" aria-label="${isArabic() ? "نوع الدرفة" : "Piece type"}">
+                <div class="dco-piece-type-menu-title">${isArabic() ? "نوع الدرفة" : "Piece type"}</div>
+                ${PIECE_TYPES.map(item => {
+                    const label = isArabic() ? item.labelAr : item.labelEn;
+                    const selectedType = item.value === currentType;
+                    return `
+                        <button type="button" class="dco-piece-type-option ${item.hasSubmenu ? "has-submenu" : ""}" data-piece-type-option="${esc(item.value)}" role="menuitemradio" aria-checked="${selectedType ? "true" : "false"}" ${item.hasSubmenu ? 'aria-haspopup="menu" aria-expanded="false"' : ""}>
+                            <span class="dco-piece-type-check" aria-hidden="true">${selectedType ? "✓" : ""}</span>
+                            <span>${esc(label)}</span>
+                            ${item.hasSubmenu ? `<span class="dco-piece-type-submenu-arrow" aria-hidden="true">${submenuArrow}</span>` : ""}
+                        </button>
+                    `;
+                }).join("")}
+            </div>
+            <div class="dco-extra-submenu" role="menu" aria-label="${isArabic() ? "إضافات الدرفة" : "Door add-ons"}" aria-hidden="true">
+                <div class="dco-extra-submenu-head">
+                    <b>${isArabic() ? "إضافات الدرفة" : "Door add-ons"}</b>
+                    <span>${isArabic() ? "يمكن اختيار أكثر من خيار" : "Choose one or more"}</span>
+                </div>
+                <div class="dco-extra-options">
+                    ${FIELDS.map(item => {
+                        const label = isArabic() ? item.labelAr : item.labelEn;
+                        return `
+                            <label>
+                                <input type="checkbox" data-extra-field="${item.fieldname}" ${selected.has(item.fieldname) ? "checked" : ""}>
+                                <span><b>${esc(label)}</b><small>${isArabic() ? "السعر لكل درفة × العدد" : "Price per door × quantity"}</small></span>
+                            </label>
+                        `;
+                    }).join("")}
+                </div>
+                <div class="dco-extra-error" role="alert" aria-live="polite"></div>
+                <div class="dco-extra-submenu-actions">
+                    <button type="button" class="btn btn-default btn-sm dco-extra-cancel">${isArabic() ? "إلغاء" : "Cancel"}</button>
+                    <button type="button" class="btn btn-primary btn-sm dco-extra-apply">${isArabic() ? "تطبيق" : "Apply"}</button>
+                </div>
+            </div>
         `;
     }
 
@@ -75,9 +148,23 @@
         });
     }
 
-    function rerender(frm) {
-        const entry = window.AlmdinaDoorCuttingFastEntry;
-        if (entry && typeof entry.render === "function") entry.render(frm);
+    function syncRowPresentation(frm, tableRow, row, options = {}) {
+        if (!tableRow || !row) return false;
+        tableRow.classList.toggle("dco-extra-row", (row.piece_type || "Regular") === TYPE);
+        const typeCell = tableRow.querySelector(".dco-col-type");
+        if (typeCell) {
+            typeCell.innerHTML = renderTypePicker(row, {
+                editable: options.editable !== false,
+                virtual: Boolean(options.virtual),
+            });
+        }
+        const notesCell = tableRow.querySelector(".dco-col-notes");
+        if (notesCell) {
+            notesCell.querySelectorAll(".dco-extra-notes-cue").forEach(cue => cue.remove());
+            const cueHtml = notesCueHtml(row);
+            if (cueHtml) notesCell.insertAdjacentHTML("beforeend", cueHtml);
+        }
+        return true;
     }
 
     function focusNotes(frm, row) {
@@ -100,7 +187,7 @@
         }
     }
 
-    function focusAddonTrigger(frm, row) {
+    function focusTypeTrigger(frm, row) {
         const context = window.AlmdinaDocumentContext;
         const run = () => {
             const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
@@ -108,7 +195,7 @@
             if (!root) return;
             const escapedName = cssEscape(row.name);
             const trigger = root.querySelector(
-                `tr[data-row-name="${escapedName}"] .dco-extra-addons-trigger`
+                `tr[data-row-name="${escapedName}"] .dco-piece-type-trigger`
             );
             if (!trigger) return;
             trigger.focus({ preventScroll: true });
@@ -121,117 +208,229 @@
         }
     }
 
-    function closeSurface(frm) {
+    function closeSurface(frm, options = {}) {
         const active = frm && frm.__almdinaExtraAddonsSurface;
         if (!active) return false;
         frm.__almdinaExtraAddonsSurface = null;
-        active.trigger.setAttribute("aria-expanded", "false");
+        if (active.trigger && active.trigger.isConnected) {
+            active.trigger.setAttribute("aria-expanded", "false");
+        }
         active.surface.remove();
         document.removeEventListener("pointerdown", active.onOutside, true);
-        document.removeEventListener("keydown", active.onKeydown, true);
+        document.removeEventListener("keydown", active.onDocumentKeydown, true);
+        window.removeEventListener("resize", active.onResize);
+        if (options.restoreFocus && active.trigger && active.trigger.isConnected) {
+            active.trigger.focus({ preventScroll: true });
+        }
         return true;
     }
 
-    function placeSurface(surface, trigger) {
+    function placeSurface(active) {
+        const { surface, trigger } = active;
+        if (window.innerWidth <= 720) {
+            surface.classList.remove("opens-left", "opens-right", "is-stacked");
+            surface.style.removeProperty("--dco-piece-type-top");
+            surface.style.removeProperty("--dco-piece-type-left");
+            return;
+        }
+
         const rect = trigger.getBoundingClientRect();
-        const surfaceRect = surface.getBoundingClientRect();
-        const width = surfaceRect.width || 390;
-        const height = surfaceRect.height || 360;
-        const left = Math.min(
-            Math.max(12, Math.round(rect.left)),
-            Math.max(12, window.innerWidth - width - 12)
-        );
-        const below = rect.bottom + 8;
-        const top = below + Math.min(height, 360) <= window.innerHeight
+        const submenuOpen = surface.classList.contains("is-extra-open");
+        const mainWidth = 224;
+        const submenuWidth = 292;
+        const gap = 8;
+        const width = submenuOpen ? mainWidth + submenuWidth + gap : mainWidth;
+        const margin = 12;
+        const canFitSideBySide = submenuOpen && width <= window.innerWidth - (margin * 2);
+        const spaceBefore = rect.right - margin;
+        const spaceAfter = window.innerWidth - rect.left - margin;
+        const opensLeft = canFitSideBySide && spaceBefore >= spaceAfter;
+        const opensRight = canFitSideBySide && !opensLeft;
+        surface.classList.toggle("opens-left", opensLeft);
+        surface.classList.toggle("opens-right", opensRight);
+        surface.classList.toggle("is-stacked", submenuOpen && !opensLeft && !opensRight);
+
+        const actualWidth = surface.classList.contains("is-stacked")
+            ? Math.min(Math.max(mainWidth, submenuWidth), window.innerWidth - (margin * 2))
+            : width;
+        let left;
+        if (opensLeft) left = rect.right - actualWidth;
+        else if (opensRight) left = rect.left;
+        else left = Math.min(Math.max(margin, rect.right - actualWidth), window.innerWidth - actualWidth - margin);
+
+        const height = Math.min(surface.scrollHeight || 420, window.innerHeight - (margin * 2));
+        const below = rect.bottom + 7;
+        const top = below + height <= window.innerHeight - margin
             ? below
-            : Math.max(12, rect.top - height - 8);
-        surface.style.setProperty("--dco-extra-anchor-top", `${Math.round(top)}px`);
-        surface.style.setProperty("--dco-extra-anchor-left", `${left}px`);
+            : Math.max(margin, rect.top - height - 7);
+        surface.style.setProperty("--dco-piece-type-top", `${Math.round(top)}px`);
+        surface.style.setProperty("--dco-piece-type-left", `${Math.round(left)}px`);
     }
 
-    function openSurface(frm, row, trigger) {
+    function setExtraSubmenu(active, open, options = {}) {
+        const extraOption = active.surface.querySelector('[data-piece-type-option="Extra"]');
+        const submenu = active.surface.querySelector(".dco-extra-submenu");
+        active.surface.classList.toggle("is-extra-open", Boolean(open));
+        if (extraOption) extraOption.setAttribute("aria-expanded", open ? "true" : "false");
+        if (submenu) submenu.setAttribute("aria-hidden", open ? "false" : "true");
+        placeSurface(active);
+        if (open && options.focusFirst && submenu) {
+            const first = submenu.querySelector("input[data-extra-field]");
+            if (first) first.focus({ preventScroll: true });
+        }
+    }
+
+    function commitPieceType(frm, tableRow, pieceType) {
+        const performance = window.AlmdinaTablePerformanceUX;
+        if (!performance || typeof performance.setPieceType !== "function") {
+            throw new Error("AlmdinaTablePerformanceUX.setPieceType is required");
+        }
+        return performance.setPieceType(frm, tableRow, pieceType);
+    }
+
+    function refreshPieceTypeVisual(frm, tableRow, row) {
+        const performance = window.AlmdinaTablePerformanceUX;
+        if (performance && typeof performance.refreshPieceTypeVisual === "function") {
+            performance.refreshPieceTypeVisual(frm, tableRow, row);
+            return;
+        }
+        syncRowPresentation(frm, tableRow, row, { editable: true });
+    }
+
+    function applySelection(frm, row, chosen) {
+        const changed = [];
+        FIELDS.forEach(item => {
+            const value = chosen.has(item.fieldname) ? 1 : 0;
+            if (Number(row[item.fieldname] || 0) === value) return;
+            row[item.fieldname] = value;
+            changed.push(item.fieldname);
+        });
+        if (changed.length) {
+            frm.dirty();
+            triggerFields(frm, row, changed);
+        }
+        return changed;
+    }
+
+    function openSurface(frm, row, trigger, tableRow) {
         closeSurface(frm);
-        const selected = new Set(selectedFields(row).map(item => item.fieldname));
         const surface = document.createElement("div");
-        surface.className = "dco-extra-popover";
-        surface.setAttribute("role", "dialog");
-        surface.setAttribute("aria-modal", "false");
-        surface.setAttribute("aria-label", isArabic() ? "اختيار إضافات الدرفة" : "Choose door add-ons");
-        surface.innerHTML = `
-            <div class="dco-extra-popover-head">
-                <div><b>${isArabic() ? "إضافات الدرفة Extra" : "Extra door add-ons"}</b><span>${isArabic() ? "يمكن اختيار أكثر من إضافة" : "Choose one or more"}</span></div>
-                <button type="button" class="dco-extra-close" aria-label="${isArabic() ? "إغلاق" : "Close"}">×</button>
-            </div>
-            <div class="dco-extra-options">
-                ${FIELDS.map(item => {
-                    const label = isArabic() ? item.labelAr : item.labelEn;
-                    return `<label><input type="checkbox" data-extra-field="${item.fieldname}" ${selected.has(item.fieldname) ? "checked" : ""}><span><b>${esc(label)}</b><small>${isArabic() ? "السعر لكل درفة × العدد" : "Price per door × quantity"}</small></span></label>`;
-                }).join("")}
-            </div>
-            <div class="dco-extra-error" role="alert" aria-live="polite"></div>
-            <div class="dco-extra-popover-actions">
-                <button type="button" class="btn btn-default btn-sm dco-extra-cancel">${isArabic() ? "إلغاء" : "Cancel"}</button>
-                <button type="button" class="btn btn-primary btn-sm dco-extra-apply">${isArabic() ? "تطبيق" : "Apply"}</button>
-            </div>
-        `;
+        surface.className = "dco-piece-type-flyout";
+        surface.setAttribute("aria-label", isArabic() ? "اختيار نوع الدرفة وإضافاتها" : "Choose piece type and add-ons");
+        surface.innerHTML = renderMenu(row);
         document.body.appendChild(surface);
-        placeSurface(surface, trigger);
         trigger.setAttribute("aria-expanded", "true");
 
         const onOutside = event => {
             if (surface.contains(event.target) || trigger.contains(event.target)) return;
             closeSurface(frm);
         };
-        const onKeydown = event => {
+        const onDocumentKeydown = event => {
             if (event.key !== "Escape") return;
             event.preventDefault();
-            closeSurface(frm);
-            trigger.focus({ preventScroll: true });
+            closeSurface(frm, { restoreFocus: true });
         };
-        frm.__almdinaExtraAddonsSurface = { surface, trigger, onOutside, onKeydown };
+        const active = {
+            surface,
+            trigger,
+            tableRow,
+            onOutside,
+            onDocumentKeydown,
+            onResize: null,
+        };
+        active.onResize = () => placeSurface(active);
+        frm.__almdinaExtraAddonsSurface = active;
         document.addEventListener("pointerdown", onOutside, true);
-        document.addEventListener("keydown", onKeydown, true);
+        document.addEventListener("keydown", onDocumentKeydown, true);
+        window.addEventListener("resize", active.onResize);
 
-        surface.querySelector(".dco-extra-close").addEventListener("click", () => closeSurface(frm));
-        surface.querySelector(".dco-extra-cancel").addEventListener("click", () => closeSurface(frm));
-        surface.querySelector(".dco-extra-apply").addEventListener("click", () => {
+        surface.addEventListener("pointerover", event => {
+            const option = event.target.closest("[data-piece-type-option]");
+            if (!option || !surface.contains(option)) return;
+            setExtraSubmenu(active, option.dataset.pieceTypeOption === TYPE);
+        });
+        surface.addEventListener("focusin", event => {
+            const option = event.target.closest("[data-piece-type-option]");
+            if (!option || !surface.contains(option)) return;
+            setExtraSubmenu(active, option.dataset.pieceTypeOption === TYPE);
+        });
+        surface.addEventListener("change", event => {
+            if (!event.target.matches("input[data-extra-field]")) return;
+            const error = surface.querySelector(".dco-extra-error");
+            if (error) error.textContent = "";
+        });
+        surface.addEventListener("keydown", event => {
+            const option = event.target.closest("[data-piece-type-option]");
+            if (!option) return;
+            const options = [...surface.querySelectorAll("[data-piece-type-option]")];
+            const index = options.indexOf(option);
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                options[(index + step + options.length) % options.length].focus({ preventScroll: true });
+                return;
+            }
+            if (option.dataset.pieceTypeOption === TYPE && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+                event.preventDefault();
+                setExtraSubmenu(active, true, { focusFirst: true });
+            }
+        });
+        surface.addEventListener("click", event => {
+            const typeOption = event.target.closest("[data-piece-type-option]");
+            if (typeOption && surface.contains(typeOption)) {
+                event.preventDefault();
+                const nextType = typeOption.dataset.pieceTypeOption || "Regular";
+                if (nextType === TYPE) {
+                    setExtraSubmenu(active, true);
+                    return;
+                }
+                closeSurface(frm);
+                commitPieceType(frm, tableRow, nextType);
+                return;
+            }
+            if (event.target.closest(".dco-extra-cancel")) {
+                closeSurface(frm, { restoreFocus: true });
+                return;
+            }
+            if (!event.target.closest(".dco-extra-apply")) return;
             const chosen = new Set(
                 [...surface.querySelectorAll("input[data-extra-field]:checked")]
                     .map(input => input.dataset.extraField)
             );
             if (!chosen.size) {
-                surface.querySelector(".dco-extra-error").textContent = isArabic()
-                    ? "اختر إضافة واحدة على الأقل."
-                    : "Choose at least one add-on.";
-                surface.querySelector("input[data-extra-field]").focus();
+                const error = surface.querySelector(".dco-extra-error");
+                if (error) {
+                    error.textContent = isArabic()
+                        ? "اختر إضافة واحدة على الأقل."
+                        : "Choose at least one add-on.";
+                }
+                const first = surface.querySelector("input[data-extra-field]");
+                if (first) first.focus({ preventScroll: true });
                 return;
             }
-            const changed = [];
-            FIELDS.forEach(item => {
-                const value = chosen.has(item.fieldname) ? 1 : 0;
-                if (Number(row[item.fieldname] || 0) === value) return;
-                row[item.fieldname] = value;
-                changed.push(item.fieldname);
-            });
-            if (changed.length) {
-                frm.dirty();
-                triggerFields(frm, row, changed);
-            }
-            const needsNotes = !String(row.notes || "").trim();
+
             closeSurface(frm);
-            rerender(frm);
-            if (needsNotes) {
+            const currentRow = commitPieceType(frm, tableRow, TYPE);
+            if (!currentRow) return;
+            applySelection(frm, currentRow, chosen);
+            refreshPieceTypeVisual(frm, tableRow, currentRow);
+            if (!String(currentRow.notes || "").trim()) {
                 frappe.show_alert({
                     message: isArabic()
                         ? "تم اختيار الإضافات — أكمل ملاحظات التنفيذ."
                         : "Add-ons selected — complete the implementation notes.",
                     indicator: "blue",
                 });
-                focusNotes(frm, row);
+                focusNotes(frm, currentRow);
             }
         });
-        const first = surface.querySelector("input[data-extra-field]");
-        if (first) first.focus({ preventScroll: true });
+
+        const currentType = (row && row.piece_type) || "Regular";
+        if (currentType === TYPE) setExtraSubmenu(active, true);
+        else placeSurface(active);
+        const currentOption = surface.querySelector(`[data-piece-type-option="${cssEscape(currentType)}"]`)
+            || surface.querySelector("[data-piece-type-option]");
+        if (currentOption) currentOption.focus({ preventScroll: true });
     }
 
     function reconcilePieceType(frm, row) {
@@ -260,14 +459,23 @@
         if (root.__almdinaExtraAddonsBound) return true;
         root.__almdinaExtraAddonsBound = true;
         root.addEventListener("click", event => {
-            const trigger = event.target.closest(".dco-extra-addons-trigger");
+            const trigger = event.target.closest(".dco-piece-type-trigger");
             if (!trigger || !root.contains(trigger) || trigger.disabled) return;
             event.preventDefault();
             event.stopPropagation();
             const currentFrm = root.__almdinaExtraAddonsForm;
             const tableRow = trigger.closest("tr[data-row-name]");
             const row = rowByName(currentFrm, tableRow && tableRow.dataset.rowName);
-            if (row) openSurface(currentFrm, row, trigger);
+            openSurface(currentFrm, row, trigger, tableRow);
+        });
+        root.addEventListener("keydown", event => {
+            const trigger = event.target.closest(".dco-piece-type-trigger");
+            if (!trigger || !root.contains(trigger) || trigger.disabled || event.key !== "ArrowDown") return;
+            event.preventDefault();
+            const currentFrm = root.__almdinaExtraAddonsForm;
+            const tableRow = trigger.closest("tr[data-row-name]");
+            const row = rowByName(currentFrm, tableRow && tableRow.dataset.rowName);
+            openSurface(currentFrm, row, trigger, tableRow);
         });
         const context = window.AlmdinaDocumentContext;
         if (context && typeof context.registerCleanup === "function") {
@@ -283,8 +491,9 @@
         });
         if (!invalid) return true;
         const missingAddon = !selectedFields(invalid).length;
-        rerender(frm);
-        if (missingAddon) focusAddonTrigger(frm, invalid);
+        const performance = window.AlmdinaTablePerformanceUX;
+        if (performance && typeof performance.refreshAll === "function") performance.refreshAll(frm);
+        if (missingAddon) focusTypeTrigger(frm, invalid);
         else focusNotes(frm, invalid);
         frappe.throw(
             isArabic()
@@ -300,10 +509,14 @@
 
     window.AlmdinaExtraDoorAddonsUX = Object.freeze({
         TYPE,
+        PIECE_TYPES,
         FIELDS,
         selectedFields,
-        renderControl,
+        pieceTypeLabel,
+        renderTypePicker,
+        renderMenu,
         notesCueHtml,
+        syncRowPresentation,
         reconcilePieceType,
         bindTable,
         validateRows,

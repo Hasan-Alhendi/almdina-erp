@@ -379,15 +379,19 @@
         const shapeTitle = isClipped
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
             : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
+        const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
+            <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
+            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
+            <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
+            <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
+        </select>`;
+        const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
+            ? extraAddons.renderTypePicker(data, { editable, virtual })
+            : nativePieceTypeSelect;
         return `
             <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""} ${isExtra ? "dco-extra-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
-                <td class="dco-col-type" data-label="${labels.type}"><select class="dco-fast-select" data-field="piece_type" ${disabled}>
-                    <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
-                    <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
-                    <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
-                    <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
-                </select>${extraAddons && typeof extraAddons.renderControl === "function" ? extraAddons.renderControl(data, { editable, virtual }) : ""}</td>
+                <td class="dco-col-type" data-label="${labels.type}">${pieceTypeControl}</td>
                 <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
