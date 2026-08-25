@@ -148,7 +148,7 @@ jobs:
           bench --site test.localhost install-app erpnext 2>&1 | tee "$RUNNER_TEMP/install-erpnext.log"
           bench --site test.localhost install-app almdina_erp 2>&1 | tee "$RUNNER_TEMP/install-almdina.log"
 
-      - name: Verify retired Standard Page cleanup across install and migrate
+      - name: Run migrate twice for idempotency
         run: |
           set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
