@@ -84,23 +84,43 @@ def test_pricing_math_stays_server_side_and_customer_invoice_is_itemized() -> No
     assert "extra_liner_unit_price_usd" in documents
 
 
-def test_extra_selection_invalidates_cost_only_and_ui_is_lifecycle_safe() -> None:
+def test_extra_selection_uses_native_type_select_and_owned_addon_flyout() -> None:
     mutation = MUTATION.read_text(encoding="utf-8")
     ux = UX.read_text(encoding="utf-8")
     css = CSS.read_text(encoding="utf-8")
     assets = ASSETS.read_text(encoding="utf-8")
+
     assert "PIECE_COST_ONLY_FIELDS" in mutation
     assert 'recordImpact(frm, ["cost"]' in mutation
     assert "extra_double" not in mutation.split("const PIECE_PLAN_COST_FIELDS", 1)[1].split("];", 1)[0]
-    assert "registerCleanup" in ux
-    assert 'event.key !== "Escape"' in ux
-    assert 'aria-haspopup="menu"' in ux
-    assert 'data-piece-type-option="${esc(item.value)}"' in ux
-    assert "pointerover" in ux
+
+    # The piece type remains a real select. Extra owns only its nested multi-select.
+    assert '<select class="dco-fast-select dco-piece-type-select"' in ux
+    assert 'data-field="piece_type"' in ux
+    assert "dco-piece-type-trigger" not in ux
+    assert "data-piece-type-option" not in ux
+    assert "pointerover" not in ux
+    assert "dco-extra-open-button" in ux
+    assert "renderSubmenu" in ux
     assert "لاينر" in ux
     assert "دبل" in ux
     assert "مسكة غطس" in ux
-    assert ".dco-piece-type-flyout.is-extra-open .dco-extra-submenu" in css
+    assert "dco-extra-apply" not in ux
+    assert "dco-extra-cancel" not in ux
+
+    # Extra selection opens after the existing in-place table mutation and the
+    # floating child remains tied to document/scroll lifecycle ownership.
+    assert 'formWrapper.addEventListener("change"' in ux
+    assert "scheduleOpenForSelection" in ux
+    assert "registerCleanup" in ux
+    assert 'event.key !== "Escape"' in ux
+    assert 'document.addEventListener("scroll", active.onScroll, true)' in ux
+    assert 'window.addEventListener("resize", active.onResize)' in ux
+    assert 'aria-haspopup="menu"' in ux
+
+    assert ".dco-extra-submenu-flyout" in css
+    assert ".dco-extra-open-button" in css
+    assert ".dco-piece-type-flyout" not in css
     assert "@media (max-width: 720px)" in css
     assert "prefers-reduced-motion" in css
     assert "door_cutting_order_extra_addons_ux.js" in assets
