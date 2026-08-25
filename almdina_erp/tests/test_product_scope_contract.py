@@ -260,6 +260,27 @@ class TestProductScopeContract(unittest.TestCase):
                         f"{target} is exposed through Workspace content",
                     )
 
+    def test_factory_stock_settings_surface_and_navigation_are_removed(self) -> None:
+        page_root = ROOT / "almdina_erp" / "page" / "factory_stock_settings"
+        for filename in (
+            "__init__.py",
+            "factory_stock_settings.js",
+            "factory_stock_settings.json",
+        ):
+            self.assertFalse((page_root / filename).exists(), filename)
+
+        navigation_owners = (
+            ROOT / "public" / "js" / "shared_shell.js",
+            ROOT / "almdina_erp" / "application" / "security" / "surface_access.py",
+            ROOT / "almdina_erp" / "application" / "security" / "workspace_visibility.py",
+            *sorted((ROOT / "almdina_erp" / "workspace").rglob("*.json")),
+        )
+        for path in navigation_owners:
+            source = path.read_text(encoding="utf-8")
+            for token in ("factory-stock-settings", "factory_stock_settings"):
+                with self.subTest(path=path.relative_to(ROOT), token=token):
+                    self.assertNotIn(token, source)
+
     def test_new_install_does_not_create_stock_item_customizations(self) -> None:
         source = (ROOT / "install.py").read_text(encoding="utf-8")
         for token in (
@@ -320,6 +341,32 @@ class TestProductScopeContract(unittest.TestCase):
             fields["prefer_remnants_before_full_boards"].get("default"),
             "0",
         )
+
+    def test_optimizer_free_area_settings_survive_stock_surface_retirement(self) -> None:
+        payload = json.loads(
+            (
+                ROOT
+                / "almdina_erp"
+                / "doctype"
+                / "almdina_erp_settings"
+                / "almdina_erp_settings.json"
+            ).read_text(encoding="utf-8")
+        )
+        fields = {row["fieldname"]: row for row in payload["fields"]}
+        optimizer_source = (
+            ROOT / "almdina_erp" / "domain" / "cutting" / "optimizer.py"
+        ).read_text(encoding="utf-8")
+
+        expected = {
+            "min_remnant_width_mm": "min_remnant_width_cm",
+            "min_remnant_length_mm": "min_remnant_length_cm",
+            "min_remnant_area_m2": "min_remnant_area_m2",
+        }
+        for fieldname, optimizer_name in expected.items():
+            with self.subTest(fieldname=fieldname):
+                self.assertIn(fieldname, fields)
+                self.assertEqual(fields[fieldname].get("hidden"), 1)
+                self.assertIn(optimizer_name, optimizer_source)
 
     def test_operational_reports_use_free_text_board_identity(self) -> None:
         report_root = ROOT / "almdina_erp" / "report"

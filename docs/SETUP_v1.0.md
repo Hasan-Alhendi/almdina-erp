@@ -7,9 +7,6 @@
 1. تأكد من وجود Company صحيحة في ERPNext.
 2. أنشئ Warehouse المواد الخام الذي ستخرج منه ألواح MDF والقشاط.
 3. تأكد أن Warehouse مربوط بالـCompany الصحيحة.
-4. من صفحة **Factory Stock Settings** عيّن `Default Warehouse`.
-
-لا تبدأ Approval/Production قبل هذه الخطوة؛ خدمات المخزون ترفض العمل دون Warehouse واضح.
 
 ## 2. Units of Measure
 
@@ -58,28 +55,12 @@
 
 لا تعتمد طلبًا يستخدم Edge Type مخزنيًا بلا Item/UOM صحيحين.
 
-## 5. Factory Stock Settings
+## 5. إعدادات المخزون التاريخية في v1.1
 
-اضبط:
-
-- Default Warehouse.
-- Reserve Stock On Approval:
-  - ON: حجز Stock Items عند الاعتماد.
-  - OFF: إعادة فحص واستهلاك المادة عند نقطة التنفيذ.
-- Stock Consumption Point:
-  - Cutting Start.
-  - Cutting Finish.
-- Prefer Matching Remnants Before Full Boards.
-- Minimum Remnant Width MM.
-- Minimum Remnant Length MM.
-- Minimum Remnant Area M2.
-- Remnant Cost Policy:
-  - Zero.
-  - Average Valuation.
-  - Configured Rate.
-- Configured Remnant Rate USD / M2 عند استخدام السياسة المناسبة.
-
-بعد تغيير Policy، نفّذ سيناريو UAT جديد؛ لا تفترض أن طلبات قيد الإنتاج ستتغير تاريخيًا.
+أزيلت واجهة إعدادات المخزون من المنتج النشط؛ إدارة Warehouse والحجز والاستهلاك
+وبقايا الألواح خارج `Product Scope v1.1`. تبقى القيم التاريخية محفوظة للقراءة فقط
+في إعدادات التشغيل لحماية المواقع القائمة. كما تبقى حدود `min_remnant_*` لأنها
+تستخدم هندسيًا لتصنيف المساحات الحرة في optimizer، ولا تعيد تشغيل مخزون البقايا.
 
 ## 6. Cutting Defaults
 

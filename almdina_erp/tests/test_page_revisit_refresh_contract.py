@@ -28,7 +28,6 @@ DATA_DRIVEN_PAGES = (
     "factory_approval_queue",
     "factory_plan_archive",
     "factory_production_settings",
-    "factory_stock_settings",
 )
 
 

@@ -377,7 +377,7 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 | Factory Master Data | PAGE | Certified | synchronous bootstrap، activation/read invalidation، dirty editor preservation، visit-generation mutation reconciliation، transient-child ownership، وremount مثبتة runtime |
 | Factory Plan Archive | PAGE | Keep; lifecycle migration pending | feature نشطة لأرشفة PDF الرسمي للخطة المعتمدة؛ تبقى ضمن estate وتُعتمد لاحقًا بتغيير محدود |
 | Factory Approval Queue | PAGE | Temporary migration utility | Review/Approve القديم متقاعد؛ تبقى مؤقتًا فقط لمعالجة سجلات `Pending Review` التاريخية حتى يثبت runtime/data audit عدم الحاجة إليها |
-| Factory Stock Settings | PAGE | Retirement planned; removal pending | surface orphaned لسياسات stock/remnant خارج Active Product Scope، وendpoints التاريخية fail-closed؛ لا تُصرف عليها lifecycle migration |
+| Factory Stock Settings | PAGE | Retired / Removed | أزيل Page source بعد إثبات أنها orphaned وخارج Active Product Scope؛ بقيت endpoints التاريخية fail-closed وحقول optimizer المشتركة دون تغيير |
 | Factory System Preflight | PAGE | Retirement planned; removal pending | الصفحة تستدعي endpoint تاريخية متقاعدة/fail-closed؛ لا تُصرف عليها lifecycle migration قبل أي Product Decision جديد للتشخيص |
 | Factory Performance Benchmark | PAGE | Retirement planned; removal pending | الصفحة تستدعي benchmark endpoint تاريخية متقاعدة/fail-closed؛ لا تُصرف عليها lifecycle migration |
 | Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |
@@ -393,6 +393,7 @@ Certified يحتاج PR مستقلًا يذكر contract المغلقة واخت
 
 - **Keep** يعني أن الـsurface جزء من المنتج الحالي، لذلك يمكن جدولة lifecycle certification لها عند أولوية مناسبة.
 - **Temporary migration utility** ليست feature استثمارية جديدة؛ تبقى فقط لحماية بيانات/حالات تاريخية معروفة، وتُزال بعد runtime/data proof يثبت عدم وجود سجلات تحتاجها.
+- **Retired / Removed** يعني أن Page source أزيلت، وأن `bench migrate` يزيل سجل Standard Page اليتيم؛ لا تُعاد إلى lifecycle inventory النشط ولا تُبنى لها replacement وهمية.
 - **Retirement planned; removal pending** يعني أن الـsurface ليست مرشحًا للـlifecycle certification. الإزالة الفعلية تتم في Change مستقل بعد إثبات callers/navigation/Page-record/data migration ومتطلبات rollback، مع إبقاء أي compatibility endpoint لازمة fail-closed حتى يثبت إمكان حذفها أيضًا.
 - لا تُحذف Page source أو Frappe Page record لمجرد أن الرابط غير ظاهر في Workspace؛ retirement يحتاج إثباتًا إيجابيًا مثل بقية legacy boundaries.
 

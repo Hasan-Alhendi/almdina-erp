@@ -152,8 +152,12 @@ jobs:
         run: |
           set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_factory_stock_settings_page_absent
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.seed_retired_factory_stock_settings_page
           bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-first.log"
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_factory_stock_settings_page_absent
           bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-second.log"
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_factory_stock_settings_page_absent
 
       - name: Verify installed apps and schema
         run: |
