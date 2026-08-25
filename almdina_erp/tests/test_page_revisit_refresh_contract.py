@@ -52,6 +52,17 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
             page_source = (PAGES / page / f"{page}.js").read_text(encoding="utf-8")
             controller_path = PAGE_LOCAL_CONTROLLERS.get(page)
             if controller_path is None:
+                if page == "factory_master_data":
+                    for marker in (
+                        "bindActivationLifecycle(this.wrapper",
+                        "deactivatePage()",
+                        "this.readGate.invalidate()",
+                        "isCurrentGeneration(generation)",
+                        "reconciliationPending",
+                    ):
+                        self.assertIn(marker, page_source, page)
+                    self.assertNotIn("refreshOnRevisit(wrapper", page_source, page)
+                    continue
                 self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", page_source, page)
                 continue
 

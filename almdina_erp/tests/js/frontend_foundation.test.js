@@ -169,3 +169,4 @@ require("./shop_floor_page_lifecycle.test.js");
 require("./shop_floor_quick_actions_lifecycle.test.js");
 require("./shop_floor_dialogs_lifecycle.test.js");
 require("./shop_floor_interactions_lifecycle.test.js");
+require("./factory_master_data_page_lifecycle.test.js");

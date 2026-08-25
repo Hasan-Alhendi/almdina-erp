@@ -374,7 +374,7 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 | Factory Permissions | PAGE | Certified | read/preview/import/export guards، dirty-aware revisit، save reconciliation، confirmation ownership، وremount مثبتة runtime |
 | Factory Production Settings | PAGE | Certified | read/activation، visit-generation mutation reconciliation، edit/audit child ownership، وremount مثبتة runtime |
 | Shop Floor Inbox | PAGE | Certified | synchronous first-load، activation/read invalidation، visit-generation mutation reconciliation، caller-owned QuickActions children، UI-state preservation، وremount مثبتة runtime |
-| Factory Master Data | PAGE | Migration pending | revisit compatibility ليست certification |
+| Factory Master Data | PAGE | Certified | synchronous bootstrap، activation/read invalidation، dirty editor preservation، visit-generation mutation reconciliation، transient-child ownership، وremount مثبتة runtime |
 | Factory Plan Archive | PAGE | Migration pending | read request id وrevisit compatibility موجودان؛ activation/mutation/transient-child contract غير معتمدة |
 | Factory Approval Queue | PAGE | Migration pending | revisit compatibility موجودة؛ approve/reject mutation وprompt ownership غير معتمدين |
 | Factory Stock Settings | PAGE | Retirement decision pending | surface تاريخية مرتبطة بالـstock المستبعد من Active Product Scope؛ لا تمنح certification قبل قرار الإبقاء أو الإزالة |

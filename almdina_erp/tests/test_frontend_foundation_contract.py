@@ -14,6 +14,7 @@ PAGE_ENTRIES = (
     ROOT / "almdina_erp" / "page" / "factory_permissions" / "factory_permissions.js",
     ROOT / "almdina_erp" / "page" / "factory_workforce" / "factory_workforce.js",
     ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js",
+    ROOT / "almdina_erp" / "page" / "factory_master_data" / "factory_master_data.js",
 )
 
 
