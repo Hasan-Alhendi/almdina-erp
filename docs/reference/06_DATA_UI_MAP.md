@@ -88,6 +88,13 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 
 لا تخلط Internal Financial داخل payload تشغيلية عامة فقط لتسهيل الـfrontend.
 
+### Extra door add-ons
+
+- اختيار `Double` / `Liner` / تفريغ المسكة المخفية هو Customer requirement محفوظ على `Door Cutting Order Detail`.
+- أسعار الوحدة والإجماليات حقول مالية محمية وتُحفظ كلقطة تاريخية على السطر، بينما الإجمالي التجاري يُعرض في Cost/فاتورة الزبون.
+- `Almdina ERP Settings` هو مصدر أسعار المصنع للطلبات/الإضافات الجديدة؛ تعديل السعر لا يعيد تسعير اختيار محفوظ سابقًا.
+- `Special + Liner` لا يستخدم مسار Extra: يكتب Liner في الملاحظات/الرسم ويظل السعر الخاص الشامل هو مصدر السعر.
+
 ## 6. Snapshots
 
 Snapshot ليس cache عشوائيًا. له معنى تاريخي/تشغيلي:

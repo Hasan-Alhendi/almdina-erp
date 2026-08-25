@@ -33,6 +33,7 @@ ORDER_COST_FIELDS = (
     "special_shapes_baseline_cost_usd",
     "special_shapes_estimated_total_usd",
     "special_shapes_final_total_usd",
+    "extra_addons_total_usd",
     "customer_quote_total_usd",
     "customer_quote_status",
     "material_variance_cost_usd",
@@ -58,6 +59,13 @@ PIECE_COST_FIELDS = (
     "clipped_corner_edge_price_note",
     "clipped_corner_edge_price_set_by",
     "clipped_corner_edge_price_set_on",
+    "extra_double_unit_price_usd",
+    "extra_double_total_usd",
+    "extra_liner_unit_price_usd",
+    "extra_liner_total_usd",
+    "extra_recessed_handle_cutout_unit_price_usd",
+    "extra_recessed_handle_cutout_total_usd",
+    "extra_addons_total_usd",
 )
 
 

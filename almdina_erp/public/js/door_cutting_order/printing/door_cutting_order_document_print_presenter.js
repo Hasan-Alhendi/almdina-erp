@@ -81,6 +81,7 @@
     function pieceTypeLabel(value) {
         if (value === "Special") return "خاصة";
         if (value === "Clipped Corner") return "زاوية مقصوصة";
+        if (value === "Extra") return "إضافية";
         return "عادية";
     }
 
@@ -89,14 +90,26 @@
         return Boolean(renderer && renderer.hasVisual(row));
     }
 
+    function extraAddonLabels(row) {
+        if (!row || (row.piece_type || "Regular") !== "Extra") return [];
+        return [
+            ["extra_double", "Double"],
+            ["extra_liner", "Liner"],
+            ["extra_recessed_handle_cutout", "تفريغ مسكة مخفية"],
+        ].filter(([fieldname]) => Number(row[fieldname] || 0)).map(([, label]) => label);
+    }
+
     function notesCellHtml(row) {
         const renderer = shapePrintApi();
+        const addons = extraAddonLabels(row);
+        const summary = addons.length ? `إضافات: ${addons.join("، ")}` : "";
+        const notes = summary && row.notes ? `${summary} — ${row.notes}` : (summary || row.notes);
         return renderer
-            ? renderer.notesCell(row, row.notes, {
+            ? renderer.notesCell(row, notes, {
                 label: `رسمة الدرفة رقم ${row.index}`,
                 caption: `رسمة الدرفة ${row.index}`,
             })
-            : esc(row.notes || "—");
+            : esc(notes || "—");
     }
 
     function shapePrintCss() {

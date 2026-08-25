@@ -7,6 +7,7 @@ coverage.
 
 app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
+    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css",
 ]
 
 app_include_js = [
@@ -54,6 +55,9 @@ doctype_js = {
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
+        # Extra-door selection owns only customer requirements and cost impact;
+        # it is evaluated before the operator renderer consumes its type-cell API.
+        "public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_extra_addons_ux.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         # Presentation-only owner for the native Order tab fields. It does not
         # duplicate document state or save commands; it only arranges the existing

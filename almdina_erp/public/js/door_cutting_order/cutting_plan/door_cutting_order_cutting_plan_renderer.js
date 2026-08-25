@@ -98,10 +98,13 @@
         const clipped = piece.piece_type === "Clipped Corner"
             ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#8a5700;color:#fff;font-size:9px;font-weight:900">⌑ زاوية مقصوصة</span><br>`
             : "";
+        const extra = piece.piece_type === "Extra"
+            ? `<span class="dco-piece-kind-badge" style="display:inline-block;margin-bottom:2px;padding:2px 6px;border-radius:999px;background:#2459a6;color:#fff;font-size:9px;font-weight:900">＋ درفة Extra</span><br>`
+            : "";
         const piece_number = print_piece_number(piece.label);
         return `
             <div class="dco-piece-label" style="position:relative;z-index:4;direction:ltr;text-align:center;">
-                ${special}${clipped}
+                ${special}${clipped}${extra}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
             </div>
@@ -155,7 +158,9 @@
         rows.forEach((row, index) => {
             const typeLabel = row.piece_type === "Special"
                 ? " · ✦ خاصة (خام CNC)"
-                : (row.piece_type === "Clipped Corner" ? " · ⌑ زاوية مقصوصة" : "");
+                : (row.piece_type === "Clipped Corner"
+                    ? " · ⌑ زاوية مقصوصة"
+                    : (row.piece_type === "Extra" ? " · ＋ Extra" : ""));
             html += `
                 <span style="display:inline-block;margin-left:16px;white-space:nowrap;">
                     ${index + 1}- ${round(row.width_cm, 1)}*${round(row.length_cm, 1)} عدد ${Math.max(0, Math.floor(num(row.qty)))}${typeLabel}

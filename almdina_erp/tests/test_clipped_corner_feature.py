@@ -38,8 +38,8 @@ def _fields(path: Path) -> dict[str, dict]:
 def test_measurement_and_immutable_plan_schemas_store_clipped_corner_geometry():
     detail = _fields(DETAIL_JSON)
     placed = _fields(PLAN_PIECE_JSON)
-    assert detail["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial"
-    assert placed["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial"
+    assert detail["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial\nExtra"
+    assert placed["piece_type"]["options"] == "Regular\nClipped Corner\nSpecial\nExtra"
 
     for fields in (detail, placed):
         assert fields["clipped_corner_position"]["options"] == (

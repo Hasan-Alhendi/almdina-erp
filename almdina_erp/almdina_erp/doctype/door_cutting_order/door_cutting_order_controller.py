@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from almdina_erp.almdina_erp.application.orders.process_order_save import process_order_save
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    refresh_order_commercial_totals,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.orders import FrappeDoorCuttingOrderSaveGateway
 from almdina_erp.almdina_erp.services.cutting_plan_invalidation_service import invalidate_stale_draft_plans
 
@@ -22,6 +25,9 @@ class DoorCuttingOrderController(DoorCuttingOrder):
 
     def on_update(self) -> None:
         invalidate_stale_draft_plans(self)
+        # Extra add-ons are order-owned commercial inputs. Refresh the quote after
+        # persistence without creating, recalculating, or mutating Cutting Plan.
+        refresh_order_commercial_totals(self)
 
     def ensure_special_shapes_documented(self) -> None:
         self._gateway().ensure_special_shapes_documented()

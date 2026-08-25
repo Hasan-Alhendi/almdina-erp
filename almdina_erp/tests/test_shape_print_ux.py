@@ -68,7 +68,7 @@ def test_measurement_print_places_drawing_inside_notes_without_adding_a_column()
     assert "window.AlmdinaOrderDocumentPrint" in actions
     assert "return Promise.resolve(documents.printMeasurements(frm))" in actions
     assert "...source" in source
-    assert "renderer.notesCell(row, row.notes" in source
+    assert "renderer.notesCell(row, notes" in source
     assert "rowHasDrawing(row)" in source
     assert "notes-with-drawing" in source
     assert "shapePrintCss()" in source
@@ -81,7 +81,7 @@ def test_customer_invoice_reuses_the_canonical_measurement_and_shape_renderer():
     financial = text(FINANCIAL)
     edge_color = text(EDGE_COLOR)
 
-    assert "renderer.notesCell(row, row.notes" in presenter
+    assert "renderer.notesCell(row, notes" in presenter
     assert '${measurementDocumentBody(frm)}' in presenter
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
     assert "shapePrintCss()" in presenter

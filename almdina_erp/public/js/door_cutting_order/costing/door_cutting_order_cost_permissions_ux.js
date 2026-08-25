@@ -403,7 +403,7 @@
 
     function inlinePriceLabel(piece) {
         if (piece && piece.piece_type === "Special") {
-            return __("إجمالي تكلفة قشاط الدرفة الخاصة");
+            return __("السعر الخاص الشامل للدرفة");
         }
         if (piece && piece.piece_type === "Clipped Corner") {
             return __("تكلفة معالجة قشاط الزاوية المقصوصة");
