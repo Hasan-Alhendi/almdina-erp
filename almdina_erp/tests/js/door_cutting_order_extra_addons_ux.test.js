@@ -85,6 +85,39 @@ assert.doesNotMatch(submenu, /data-piece-type-option/);
 assert.doesNotMatch(submenu, /تطبيق/);
 assert.doesNotMatch(submenu, /إلغاء/);
 
+// In-place type refresh must preserve the actual native select node so the
+// table-performance owner can restore keyboard focus after changing the type.
+const nativeSelect = { value: "Regular", disabled: false };
+const nativeShell = {
+    dataset: {},
+    querySelector(selector) {
+        return selector === "select.dco-piece-type-select[data-field='piece_type']"
+            ? nativeSelect
+            : null;
+    },
+    querySelectorAll() { return []; },
+};
+const typeCell = {
+    querySelector(selector) {
+        return selector === ".dco-piece-type-native" ? nativeShell : null;
+    },
+};
+const tableRow = {
+    classList: { toggle() {} },
+    querySelector(selector) {
+        if (selector === ".dco-col-type") return typeCell;
+        if (selector === ".dco-col-notes") return null;
+        return null;
+    },
+};
+api.syncRowPresentation({}, tableRow, { piece_type: "Special" }, { editable: true });
+assert.strictEqual(
+    nativeShell.querySelector("select.dco-piece-type-select[data-field='piece_type']"),
+    nativeSelect
+);
+assert.equal(nativeSelect.value, "Special");
+assert.equal(nativeSelect.disabled, false);
+
 assert.match(api.notesCueHtml({ piece_type: "Extra", notes: "" }), /اكتب تفاصيل التنفيذ/);
 assert.equal(api.notesCueHtml({ piece_type: "Extra", notes: "تم" }), "");
 
