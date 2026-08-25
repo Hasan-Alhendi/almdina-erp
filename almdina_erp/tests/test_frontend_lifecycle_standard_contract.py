@@ -132,11 +132,11 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             "| Factory Production Settings | PAGE | Certified |",
             "| Shop Floor Inbox | PAGE | Certified |",
             "| Factory Master Data | PAGE | Certified |",
-            "| Factory Plan Archive | PAGE | Migration pending |",
-            "| Factory Approval Queue | PAGE | Migration pending |",
-            "| Factory Stock Settings | PAGE | Retirement decision pending |",
-            "| Factory System Preflight | PAGE | Lifecycle migration pending |",
-            "| Factory Performance Benchmark | PAGE | Lifecycle migration pending |",
+            "| Factory Plan Archive | PAGE | Keep; lifecycle migration pending |",
+            "| Factory Approval Queue | PAGE | Temporary migration utility |",
+            "| Factory Stock Settings | PAGE | Retirement planned; removal pending |",
+            "| Factory System Preflight | PAGE | Retirement planned; removal pending |",
+            "| Factory Performance Benchmark | PAGE | Retirement planned; removal pending |",
             "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
             "| Door Cutting Order List | LIST | Certification pending |",
             "| Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required |",
@@ -149,6 +149,14 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
         self.assertIn("إثبات read/activation lifecycle فقط", self.standard)
         self.assertIn("لا يكفي لـFull Certification", self.standard)
         self.assertIn("وجود helper أو `requestId` منفرد لا يمنح certification", self.standard)
+
+    def test_estate_policy_does_not_spend_lifecycle_work_on_retired_pages(self) -> None:
+        self.assertIn("### 8.1 Frontend estate policy", self.standard)
+        self.assertIn("**Temporary migration utility**", self.standard)
+        self.assertIn("**Retirement planned; removal pending**", self.standard)
+        self.assertIn("ليست مرشحًا للـlifecycle certification", self.standard)
+        self.assertIn("runtime/data proof", self.standard)
+        self.assertIn("Page-record", self.standard)
 
     def test_existing_foundation_remains_the_shared_primitive_owner(self) -> None:
         foundation = FOUNDATION.read_text(encoding="utf-8")
