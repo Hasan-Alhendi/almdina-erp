@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT.parent / "docs" / "reference"
 STANDARD = REFERENCE / "15_FRONTEND_LIFECYCLE_STANDARD.md"
+DATA_UI_MAP = REFERENCE / "06_DATA_UI_MAP.md"
 REFERENCE_INDEX = REFERENCE / "README.md"
 FRONTEND_ARCHITECTURE = REFERENCE / "13_FRONTEND_ARCHITECTURE.md"
 REFACTOR_CLOSURE = REFERENCE / "14_FRONTEND_REFACTOR_CLOSURE.md"
@@ -70,6 +71,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.standard = STANDARD.read_text(encoding="utf-8")
+        cls.data_ui_map = DATA_UI_MAP.read_text(encoding="utf-8")
 
     def test_standard_is_canonical_and_discoverable(self) -> None:
         self.assertTrue(STANDARD.is_file())
@@ -157,6 +159,15 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
         self.assertIn("ليست مرشحًا للـlifecycle certification", self.standard)
         self.assertIn("runtime/data proof", self.standard)
         self.assertIn("Page-record", self.standard)
+
+        for entry in (
+            "`factory_approval_queue`: **Temporary migration utility**",
+            "`factory_stock_settings`: **Retirement planned; removal pending**",
+            "`factory_system_preflight`: **Retirement planned; removal pending**",
+            "`factory_performance_benchmark`: **Retirement planned; removal pending**",
+        ):
+            with self.subTest(entry=entry):
+                self.assertIn(entry, self.data_ui_map)
 
     def test_existing_foundation_remains_the_shared_primitive_owner(self) -> None:
         foundation = FOUNDATION.read_text(encoding="utf-8")
