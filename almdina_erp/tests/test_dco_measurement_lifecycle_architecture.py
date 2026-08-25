@@ -14,6 +14,7 @@ ASSETS = ROOT / "frontend_assets.py"
 LIFECYCLE = MEASUREMENTS / "door_cutting_order_measurement_lifecycle.js"
 
 LIFECYCLE_OWNED_REFRESH_MODULES = {
+    "door_cutting_order_bulk_rows_ux.js": "bulk-rows",
     "door_cutting_order_compact_measurements_ux.js": "compact-measurements",
     "door_cutting_order_keyboard_columns_ux.js": "keyboard-columns",
     "door_cutting_order_measurement_actions_ux.js": "measurement-actions",
@@ -61,11 +62,13 @@ def test_lifecycle_owner_uses_shared_foundation_and_document_identity_guard():
     source = LIFECYCLE.read_text(encoding="utf-8")
     assert "AlmdinaFrontend" in source
     assert "createLifecycleScope" in source
+    assert "AlmdinaDocumentContext" in source
     assert "const scopesByForm = new WeakMap()" in source
     assert "scope.dispose()" in source
     assert "requestAnimationFrame" in source
     assert "cancelAnimationFrame" in source
-    assert 'String((frm.doc && frm.doc.name) || "") === documentName' in source
+    assert "documentContext.capture(frm)" in source
+    assert "documentContext.isCurrent(frm, documentToken)" in source
     assert "window.AlmdinaMeasurementLifecycle = Object.freeze" in source
 
 

@@ -22,6 +22,7 @@ function deferred() {
 const handlers = {};
 const calls = [];
 const databaseCalls = [];
+const edgeTypeCalls = [];
 const setValues = [];
 
 const fakeWindow = {
@@ -64,6 +65,11 @@ const fakeFrappe = {
             databaseCalls.push(pending);
             return pending.promise;
         },
+        get_list() {
+            const pending = deferred();
+            edgeTypeCalls.push(pending);
+            return pending.promise;
+        },
     },
 };
 
@@ -87,6 +93,7 @@ const context = vm.createContext({
 });
 vm.runInContext(source("door_cutting_order/core/door_cutting_order_document_context.js"), context);
 vm.runInContext(source("door_cutting_order/order_entry/door_cutting_order_defaults.js"), context);
+vm.runInContext(source("door_cutting_order/order_entry/door_cutting_order_operator_ux.js"), context);
 vm.runInContext(source("door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"), context);
 
 function trigger(event, frm) {
@@ -176,6 +183,31 @@ async function flushPromises() {
     stageCall.resolve({ message: { active_stage_type: "Drawing" } });
     assert.equal(await stageLookup, false);
     assert.equal(frm.__almdina_stage_type, null);
+
+    // A late edge-type lookup may populate only the document generation that
+    // started it. The next order starts its own request and remains authoritative.
+    delete frm._dco_edge_types;
+    delete frm._dco_edge_types_loaded;
+    frm.doc.name = "DCO-EDGE-A";
+    fakeWindow.AlmdinaDocumentContext.synchronize(frm);
+    const edgeTypesA = fakeWindow.AlmdinaDoorCuttingFastEntry.loadEdgeTypes(frm);
+    assert.equal(edgeTypeCalls.length, 1);
+
+    frm.doc.name = "DCO-EDGE-B";
+    fakeWindow.AlmdinaDocumentContext.synchronize(frm);
+    const edgeTypesB = fakeWindow.AlmdinaDoorCuttingFastEntry.loadEdgeTypes(frm);
+    assert.equal(edgeTypeCalls.length, 2);
+
+    edgeTypeCalls[0].resolve([{ name: "EDGE-A", edge_type_name: "Edge A" }]);
+    assert.equal(await edgeTypesA, false);
+    assert.equal(frm._dco_edge_types, undefined);
+
+    edgeTypeCalls[1].resolve([{ name: "EDGE-B", edge_type_name: "Edge B" }]);
+    assert.equal(await edgeTypesB, true);
+    assert.deepEqual(
+        frm._dco_edge_types.map(row => row.name),
+        ["EDGE-B"]
+    );
 
     console.log("Door cutting order asynchronous identity guards passed");
 })().catch(error => {

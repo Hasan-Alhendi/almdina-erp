@@ -33,6 +33,8 @@
         "_almdina_secure_dxf_observer",
     ]);
     const EFFECT_STATE_FIELD = "__almdinaDocumentEffects";
+    const IDENTITY_ALIASES_FIELD = "__almdinaDocumentContextIdentityAliases";
+    const PENDING_INSERT_FIELD = "__almdinaDocumentContextPendingInsert";
 
     function formIdentity(frm) {
         const doc = frm && frm.doc;
@@ -62,19 +64,29 @@
         return Number.isFinite(generation) ? generation : null;
     }
 
+    function identityAliases(frm) {
+        const aliases = frm && frm[IDENTITY_ALIASES_FIELD];
+        return aliases instanceof Set ? aliases : null;
+    }
+
     // Identity guard for *data*: the response still describes the document the
     // request was issued for. It deliberately ignores which form is on screen so
     // that a reply arriving during a route transition is still stored instead of
     // being dropped, which previously forced the user to refresh again.
     function isSameDocument(frm, token) {
         const identity = tokenIdentity(token);
-        if (!identity || formIdentity(frm) !== identity) return false;
+        const currentIdentity = formIdentity(frm);
+        if (!identity || !currentIdentity) return false;
 
         const generation = tokenGeneration(token);
-        return (
-            generation === null
-            || Number(frm._almdinaDocumentContextGeneration || 0) === generation
-        );
+        if (generation === null) return currentIdentity === identity;
+        if (Number(frm._almdinaDocumentContextGeneration || 0) !== generation) {
+            return false;
+        }
+
+        const aliases = identityAliases(frm);
+        if (!aliases) return currentIdentity === identity;
+        return aliases.has(identity) && aliases.has(currentIdentity);
     }
 
     // Identity guard for *rendering*: additionally requires the form to be the
@@ -264,6 +276,10 @@
         TIMER_MAP_FIELDS.forEach(fieldname => clearTimerMap(frm, fieldname));
         OBSERVER_FIELDS.forEach(fieldname => disconnectObserver(frm, fieldname));
         clearRegisteredEffects(frm);
+        const measurementLifecycle = window.AlmdinaMeasurementLifecycle;
+        if (measurementLifecycle && typeof measurementLifecycle.cancelAll === "function") {
+            measurementLifecycle.cancelAll(frm);
+        }
     }
 
     function resetDocumentState(frm) {
@@ -656,13 +672,82 @@
             return false;
         }
 
+        if (promotePendingInsert(frm, identity)) return false;
+
         frm._almdinaDocumentContextIdentity = identity;
         frm._almdinaDocumentContextGeneration = (
             Number(frm._almdinaDocumentContextGeneration || 0) + 1
         );
+        frm[IDENTITY_ALIASES_FIELD] = new Set([identity]);
+        frm[PENDING_INSERT_FIELD] = null;
         resetDocumentState(frm);
         clearDocumentHtml(frm);
         return true;
+    }
+
+    function beginSave(frm) {
+        if (!frm || !frm.doc) return false;
+        synchronize(frm);
+        if (typeof frm.is_new !== "function" || !frm.is_new()) {
+            frm[PENDING_INSERT_FIELD] = null;
+            return false;
+        }
+
+        const token = capture(frm);
+        if (!token) return false;
+        frm[PENDING_INSERT_FIELD] = Object.freeze({
+            token,
+            doctype: String(frm.doc.doctype || frm.doctype || "").trim(),
+            localName: String(frm.doc.name || "").trim(),
+        });
+        return true;
+    }
+
+    function mappedPermanentName(localName) {
+        const names = frappe && frappe.model && frappe.model.new_names;
+        return String((names && names[localName]) || "").trim();
+    }
+
+    function promotePendingInsert(frm, currentIdentity = formIdentity(frm)) {
+        const pending = frm && frm[PENDING_INSERT_FIELD];
+        if (!pending || !pending.token || !currentIdentity) return false;
+        if (
+            Number(frm._almdinaDocumentContextGeneration || 0)
+            !== tokenGeneration(pending.token)
+        ) {
+            return false;
+        }
+        if (frm._almdinaDocumentContextIdentity !== pending.token.identity) return false;
+
+        const doc = frm.doc || {};
+        const localName = String(pending.localName || "").trim();
+        const responseLocalName = String(doc.localname || "").trim();
+        const permanentName = mappedPermanentName(localName)
+            || (responseLocalName === localName ? String(doc.name || "").trim() : "");
+        const promotedIdentity = permanentName
+            ? `${pending.doctype}::${permanentName}`
+            : "";
+        if (!promotedIdentity || currentIdentity !== promotedIdentity) return false;
+
+        const aliases = identityAliases(frm) || new Set([pending.token.identity]);
+        aliases.add(pending.token.identity);
+        aliases.add(promotedIdentity);
+        frm[IDENTITY_ALIASES_FIELD] = aliases;
+        frm._almdinaDocumentContextIdentity = promotedIdentity;
+        return true;
+    }
+
+    function reconcileAfterSave(frm) {
+        const pending = frm && frm[PENDING_INSERT_FIELD];
+        if (!pending) {
+            synchronize(frm);
+            return false;
+        }
+
+        const promoted = promotePendingInsert(frm);
+        frm[PENDING_INSERT_FIELD] = null;
+        if (!promoted) synchronize(frm);
+        return promoted;
     }
 
     window.AlmdinaDocumentContext = Object.freeze({
@@ -696,13 +781,17 @@
     frappe.ui.form.on("Door Cutting Order", {
         before_load(frm) { synchronize(frm); },
         onload(frm) { synchronize(frm); },
+        before_save(frm) { beginSave(frm); },
         refresh(frm) {
             synchronize(frm);
             ensureStageContext(frm);
             scheduleSettle(frm, 0);
         },
         onload_post_render(frm) { scheduleSettle(frm, 0); },
-        after_save(frm) { scheduleSettle(frm, 0); },
+        after_save(frm) {
+            reconcileAfterSave(frm);
+            scheduleSettle(frm, 0);
+        },
     });
 
     if (typeof window.addEventListener === "function") {

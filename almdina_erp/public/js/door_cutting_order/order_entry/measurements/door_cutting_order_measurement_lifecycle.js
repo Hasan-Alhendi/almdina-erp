@@ -5,6 +5,14 @@
     if (!frontend || typeof frontend.createLifecycleScope !== "function") {
         throw new Error("AlmdinaFrontend.createLifecycleScope is required before measurement lifecycle");
     }
+    const documentContext = window.AlmdinaDocumentContext;
+    if (
+        !documentContext
+        || typeof documentContext.capture !== "function"
+        || typeof documentContext.isCurrent !== "function"
+    ) {
+        throw new Error("AlmdinaDocumentContext is required before measurement lifecycle");
+    }
 
     const scopesByForm = new WeakMap();
 
@@ -37,11 +45,11 @@
         cancel(frm, resolvedKey);
         const scope = frontend.createLifecycleScope();
         featureScopes(frm).set(resolvedKey, scope);
-        const documentName = String((frm.doc && frm.doc.name) || "");
+        const documentToken = documentContext.capture(frm);
 
         function isCurrent() {
             return !scope.isDisposed()
-                && String((frm.doc && frm.doc.name) || "") === documentName;
+                && documentContext.isCurrent(frm, documentToken);
         }
 
         return { scope, isCurrent, key: resolvedKey };
