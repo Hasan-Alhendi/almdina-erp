@@ -42,6 +42,7 @@
     function pieceTypeLabel(value) {
         if (value === "Special") return "خاصة";
         if (value === "Clipped Corner") return "زاوية مقصوصة";
+        if (value === "Extra") return "إضافية";
         return "عادية";
     }
 
@@ -71,6 +72,26 @@
             clippedPosition: source.clipped_corner_position || "",
             clippedWidth: number(source.clipped_corner_width_cm),
             clippedLength: number(source.clipped_corner_length_cm),
+            extraAddons: [
+                {
+                    selected: Boolean(number(source.extra_double)),
+                    label: "Double",
+                    rate: number(source.extra_double_unit_price_usd),
+                    amount: number(source.extra_double_total_usd),
+                },
+                {
+                    selected: Boolean(number(source.extra_liner)),
+                    label: "Liner",
+                    rate: number(source.extra_liner_unit_price_usd),
+                    amount: number(source.extra_liner_total_usd),
+                },
+                {
+                    selected: Boolean(number(source.extra_recessed_handle_cutout)),
+                    label: "تفريغ مسكة مخفية",
+                    rate: number(source.extra_recessed_handle_cutout_unit_price_usd),
+                    amount: number(source.extra_recessed_handle_cutout_total_usd),
+                },
+            ],
         }));
     }
 
@@ -163,7 +184,7 @@
                     rate: ready ? row.approvedUnit : null,
                     amount: ready ? row.approvedUnit * row.qty : 0,
                     pending: !ready,
-                    note: ready ? row.priceNote : "بانتظار إدخال سعر قشاط الدرفة الخاصة",
+                    note: ready ? row.priceNote : "بانتظار إدخال السعر الخاص الشامل",
                 });
                 return;
             }
@@ -179,6 +200,20 @@
                     pending: !ready,
                     note: ready ? row.clippedEdgeNote : "بانتظار إدخال سعر معالجة قشاط الزاوية المقصوصة",
                 });
+                return;
+            }
+            if (row.pieceType === "Extra") {
+                row.extraAddons
+                    .filter(addon => addon.selected || addon.amount > 0)
+                    .forEach(addon => result.push({
+                        type: "extra_addon",
+                        description: `إضافة ${addon.label} — درفة رقم ${row.index}`,
+                        quantity: row.qty,
+                        unit: "درفة",
+                        rate: addon.rate,
+                        amount: addon.amount || addon.rate * row.qty,
+                        note: row.notes,
+                    }));
             }
         });
 
@@ -357,7 +392,7 @@
         const specialRows = rows(frm).filter(row => row.pieceType === "Special");
         if (!specialRows.length) return "";
         return `<div class="dco-cost-section"><div class="dco-cost-section-title">
-            <h4>تسعير قشط الدرفات الخاصة</h4><span>عدّل سعر القشاط مباشرة في الحقل أثناء وضع التعديل</span>
+            <h4>تسعير الدرفات الخاصة</h4><span>أدخل السعر الخاص الشامل لكل درفة أثناء وضع التعديل</span>
         </div><div class="dco-special-price-list">${specialRows.map(row => {
             const doorLabel = specialDoorLabel(row);
             const priced = specialPriceReady(row);
@@ -369,7 +404,7 @@
                 <div class="dco-special-price-id">${esc(doorLabel)}<small>${quantity(row.length)} × ${quantity(row.width)} سم — عدد ${row.qty}</small></div>
                 <div class="dco-special-price-cell"><span>${__("الطول × العرض")}</span><b>${quantity(row.length)} × ${quantity(row.width)} سم</b></div>
                 <div class="dco-special-price-cell ${priced ? "" : "is-unpriced"}">
-                    <span>${__("سعر القشاط ($)")}</span>
+                    <span>${__("السعر الخاص الشامل ($)")}</span>
                     <input type="number" class="dco-inline-price-input" data-price-kind="special" data-piece-name="${esc(row.name)}" min="0" step="0.01" value="${priceValue || ""}" disabled readonly inputmode="decimal">
                     ${priced ? "" : `<small style="display:block;margin-top:4px;color:var(--text-muted,#8a939c)">${__("غير مسعّر")}</small>`}
                 </div>
@@ -449,7 +484,7 @@
             <div class="dco-cost-section"><div class="dco-cost-section-title"><h4>جدول قياسات الطلب</h4><span>القياسات والكميات والملاحظات</span></div>${measurementRowsHtml(frm)}</div>
             ${specialPricingHtml(frm)}
             ${cutCornerPricingHtml(frm)}
-            <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
+            <div class="dco-cost-section dco-cost-invoice-section"><div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات Extra</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}</div>
         </div>`);
         bindViewDrawing(frm, field.$wrapper);
         return true;
@@ -461,7 +496,7 @@
         const section = field.$wrapper.find(".dco-cost-invoice-section");
         if (!section.length) return render(frm);
         section.html(
-            `<div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}`
+            `<div class="dco-cost-section-title"><h4>تفاصيل عرض السعر</h4><span>الألواح والقص والقشاط والدرف الخاصة وإضافات Extra</span></div>${invoiceRowsHtml(frm)}${invoiceTotalCardHtml(frm)}`
         );
         return true;
     }

@@ -53,6 +53,9 @@ _SETTINGS_FIELDS = (
     "default_special_cnc_fee_usd",
     "default_special_manual_edge_fee_usd",
     "default_special_margin_percent",
+    "default_extra_double_unit_price_usd",
+    "default_extra_liner_unit_price_usd",
+    "default_extra_recessed_handle_cutout_unit_price_usd",
     "default_production_routing",
     "allow_stage_override",
     "allow_unplaced_approval",
@@ -173,6 +176,17 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     for fieldname, label in numeric_non_negative.items():
         if fieldname in payload:
             settings.set(fieldname, flt(_finite_non_negative(payload[fieldname], label)))
+
+    extra_addon_prices = {
+        "default_extra_double_unit_price_usd": _("Extra Double Price USD / Door"),
+        "default_extra_liner_unit_price_usd": _("Extra Liner Price USD / Door"),
+        "default_extra_recessed_handle_cutout_unit_price_usd": _(
+            "Extra Recessed Handle Cutout Price USD / Door"
+        ),
+    }
+    for fieldname, label in extra_addon_prices.items():
+        if fieldname in payload:
+            settings.set(fieldname, flt(_finite_positive(payload[fieldname], label)))
 
     if "default_optimization_time_limit_sec" in payload:
         settings.default_optimization_time_limit_sec = flt(

@@ -39,8 +39,21 @@ def _piece_type_label(value: Any) -> str:
     return {
         "Special": "خاصة",
         "Clipped Corner": "زاوية مقصوصة",
+        "Extra": "إضافية",
         "Regular": "عادية",
     }.get(_text(value, "Regular"), "عادية")
+
+
+def _extra_addon_labels(piece: Mapping[str, Any]) -> list[str]:
+    return [
+        label
+        for fieldname, label in (
+            ("extra_double", "Double"),
+            ("extra_liner", "Liner"),
+            ("extra_recessed_handle_cutout", "تفريغ مسكة مخفية"),
+        )
+        if _number(_value(piece, fieldname))
+    ]
 
 
 def _price_status_label(value: Any) -> str:
@@ -63,6 +76,11 @@ def _quote_status_label(value: Any) -> str:
 def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for index, piece in enumerate(pieces, start=1):
+        notes = _text(_value(piece, "notes"), "")
+        extra_labels = _extra_addon_labels(piece)
+        if extra_labels:
+            extra_summary = f"إضافات: {'، '.join(extra_labels)}"
+            notes = f"{extra_summary} — {notes}" if notes else extra_summary
         rows.append(
             {
                 "index": index,
@@ -72,7 +90,7 @@ def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
                 "length_cm": _metric(_value(piece, "length_cm")),
                 "quantity": _quantity(_value(piece, "qty")),
                 "edge_type": _text(_value(piece, "edge_type"), "—"),
-                "notes": _text(_value(piece, "notes"), "—"),
+                "notes": notes or "—",
             }
         )
     return rows
@@ -212,6 +230,43 @@ def _customer_invoice_lines(
                     "note": _text(_value(piece, "clipped_corner_edge_price_note")),
                 }
             )
+        elif piece_type == "Extra":
+            specs = (
+                (
+                    "extra_double",
+                    "extra_double_unit_price_usd",
+                    "extra_double_total_usd",
+                    "Double",
+                ),
+                (
+                    "extra_liner",
+                    "extra_liner_unit_price_usd",
+                    "extra_liner_total_usd",
+                    "Liner",
+                ),
+                (
+                    "extra_recessed_handle_cutout",
+                    "extra_recessed_handle_cutout_unit_price_usd",
+                    "extra_recessed_handle_cutout_total_usd",
+                    "تفريغ مسكة مخفية",
+                ),
+            )
+            for flag_field, rate_field, amount_field, label in specs:
+                amount = _number(_value(piece, amount_field))
+                if not _number(_value(piece, flag_field)) and amount <= 0:
+                    continue
+                rate = _number(_value(piece, rate_field))
+                lines.append(
+                    {
+                        "type": "extra_addon",
+                        "description": f"إضافة {label} — درفة رقم {index}",
+                        "quantity": quantity,
+                        "unit": "درفة",
+                        "rate_usd": _money(rate),
+                        "amount_usd": _money(amount or (rate * quantity)),
+                        "note": _text(_value(piece, "notes")),
+                    }
+                )
 
     return lines
 
