@@ -64,26 +64,30 @@
         return `<span class="dco-extra-selection-summary">${esc(labels.join("، "))}</span>`;
     }
 
+    function renderExtraOpenButton(row, editable = true) {
+        if (!row || (row.piece_type || "Regular") !== TYPE) return "";
+        const selectedCount = selectedFields(row).length;
+        const disabled = editable ? "" : "disabled";
+        return `<button type="button" class="dco-extra-open-button" aria-haspopup="menu" aria-expanded="false" aria-label="${isArabic() ? "تعديل إضافات Extra" : "Edit Extra add-ons"}" title="${isArabic() ? "تعديل إضافات Extra" : "Edit Extra add-ons"}" ${disabled}>
+                    ${selectedCount ? `<b class="dco-extra-open-count">${selectedCount}</b>` : ""}
+                    <span aria-hidden="true">${isArabic() ? "‹" : "›"}</span>
+                </button>`;
+    }
+
     function renderTypePicker(row, options = {}) {
         const pieceType = (row && row.piece_type) || "Regular";
-        const disabled = options.editable ? "" : "disabled";
-        const selectedCount = pieceType === TYPE ? selectedFields(row).length : 0;
+        const editable = options.editable === true;
+        const disabled = editable ? "" : "disabled";
         const typeOptions = PIECE_TYPES.map(item => {
             const label = isArabic() ? item.labelAr : item.labelEn;
             return `<option value="${esc(item.value)}" ${pieceType === item.value ? "selected" : ""}>${esc(label)}</option>`;
         }).join("");
-        const addonsButton = pieceType === TYPE
-            ? `<button type="button" class="dco-extra-open-button" aria-haspopup="menu" aria-expanded="false" aria-label="${isArabic() ? "تعديل إضافات Extra" : "Edit Extra add-ons"}" title="${isArabic() ? "تعديل إضافات Extra" : "Edit Extra add-ons"}" ${disabled}>
-                    ${selectedCount ? `<b class="dco-extra-open-count">${selectedCount}</b>` : ""}
-                    <span aria-hidden="true">${isArabic() ? "‹" : "›"}</span>
-               </button>`
-            : "";
         return `
             <div class="dco-piece-type-native" data-piece-type="${esc(pieceType)}">
                 <select class="dco-fast-select dco-piece-type-select" data-field="piece_type" aria-label="${isArabic() ? "نوع الدرفة" : "Piece type"}" ${disabled}>
                     ${typeOptions}
                 </select>
-                ${addonsButton}
+                ${renderExtraOpenButton(row, editable)}
                 ${renderSelectedAddons(row)}
             </div>
         `;
@@ -133,16 +137,58 @@
         });
     }
 
-    function syncRowPresentation(frm, tableRow, row, options = {}) {
-        if (!tableRow || !row) return false;
-        tableRow.classList.toggle("dco-extra-row", (row.piece_type || "Regular") === TYPE);
-        const typeCell = tableRow.querySelector(".dco-col-type");
-        if (typeCell) {
+    function ensureNativeTypeShell(typeCell) {
+        if (!typeCell) return null;
+        let shell = typeCell.querySelector(".dco-piece-type-native");
+        let select = shell && shell.querySelector("select.dco-piece-type-select[data-field='piece_type']");
+        if (shell && select) return { shell, select };
+
+        select = typeCell.querySelector("select.dco-fast-select[data-field='piece_type']");
+        if (!select) return null;
+        select.classList.add("dco-piece-type-select");
+
+        shell = document.createElement("div");
+        shell.className = "dco-piece-type-native";
+        select.replaceWith(shell);
+        shell.appendChild(select);
+        return { shell, select };
+    }
+
+    function syncTypeCell(frm, tableRow, typeCell, row, options = {}) {
+        const native = ensureNativeTypeShell(typeCell);
+        if (!native) {
             typeCell.innerHTML = renderTypePicker(row, {
                 editable: options.editable !== false,
                 virtual: Boolean(options.virtual),
             });
+            return;
         }
+
+        const pieceType = (row && row.piece_type) || "Regular";
+        const editable = options.editable !== false;
+        native.shell.dataset.pieceType = pieceType;
+        native.select.value = pieceType;
+        native.select.disabled = !editable;
+        native.shell.querySelectorAll(
+            ".dco-extra-open-button,.dco-extra-selection-summary,.dco-extra-required"
+        ).forEach(node => node.remove());
+
+        if (pieceType !== TYPE) return;
+        native.select.insertAdjacentHTML("afterend", renderExtraOpenButton(row, editable));
+        native.shell.insertAdjacentHTML("beforeend", renderSelectedAddons(row));
+
+        const active = frm && frm.__almdinaExtraAddonsSurface;
+        if (active && active.tableRow === tableRow) {
+            const button = native.shell.querySelector(".dco-extra-open-button");
+            if (button) button.setAttribute("aria-expanded", "true");
+        }
+    }
+
+    function syncRowPresentation(frm, tableRow, row, options = {}) {
+        if (!tableRow || !row) return false;
+        tableRow.classList.toggle("dco-extra-row", (row.piece_type || "Regular") === TYPE);
+        const typeCell = tableRow.querySelector(".dco-col-type");
+        if (typeCell) syncTypeCell(frm, tableRow, typeCell, row, options);
         const notesCell = tableRow.querySelector(".dco-col-notes");
         if (notesCell) {
             notesCell.querySelectorAll(".dco-extra-notes-cue").forEach(cue => cue.remove());
@@ -234,7 +280,7 @@
         else if (leftSide >= margin) left = leftSide;
         else left = Math.min(Math.max(margin, rect.left), window.innerWidth - width - margin);
 
-        let top = rect.top;
+        let top = Math.max(margin, rect.top);
         if (top + height > window.innerHeight - margin) {
             top = Math.max(margin, window.innerHeight - height - margin);
         }
