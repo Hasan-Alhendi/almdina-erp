@@ -73,15 +73,14 @@ class TestPermissionSurfacePolicy(unittest.TestCase):
 
     def test_control_center_pages_follow_their_exact_capabilities(self) -> None:
         incidents = build_surface_access({Capability.VIEW_PRODUCTION_INCIDENTS})
-        self.assertFalse(incidents[Surface.APPROVAL_QUEUE])
         self.assertFalse(incidents[Surface.PLAN_ARCHIVE])
 
         review = build_surface_access({Capability.REJECT_ORDER})
-        self.assertTrue(review[Surface.APPROVAL_QUEUE])
+        self.assertNotIn("approval_queue", review)
         self.assertFalse(review[Surface.PLAN_ARCHIVE])
 
         archive = build_surface_access({Capability.ARCHIVE_APPROVED_PLAN})
-        self.assertFalse(archive[Surface.APPROVAL_QUEUE])
+        self.assertNotIn("approval_queue", archive)
         self.assertTrue(archive[Surface.PLAN_ARCHIVE])
 
     def test_workforce_and_permission_admin_surfaces_are_explicit(self) -> None:

@@ -119,7 +119,12 @@ class TestWhitelistedEndpointAuthorization(unittest.TestCase):
                 if contract == EndpointAuthorizationContract.FAIL_CLOSED
             },
             {
+                "almdina_erp.almdina_erp.services.approval_queue_service.approve_order_safely",
+                "almdina_erp.almdina_erp.services.approval_queue_service.get_approval_queue_context",
+                "almdina_erp.almdina_erp.services.approval_queue_service.get_pending_review_orders",
+                "almdina_erp.almdina_erp.services.approval_queue_service.reject_order_safely",
                 "almdina_erp.almdina_erp.services.legacy_endpoint_service.retired_product_endpoint",
+                "almdina_erp.almdina_erp.services.order_review_service.reject_order",
                 "almdina_erp.almdina_erp.services.production_service.pause_stage",
                 "almdina_erp.almdina_erp.services.production_service.resume_stage",
             },

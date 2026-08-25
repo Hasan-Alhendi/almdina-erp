@@ -25,7 +25,6 @@ DATA_DRIVEN_PAGES = (
     "factory_workforce",
     "factory_permissions",
     "factory_master_data",
-    "factory_approval_queue",
     "factory_plan_archive",
     "factory_production_settings",
 )

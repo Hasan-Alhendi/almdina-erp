@@ -13,7 +13,6 @@
         { surface: "production_stages", routes: ["production-stage"] },
         { surface: "production_incidents", routes: ["production-incident"] },
         { surface: "replacements", routes: ["replacement-piece"] },
-        { surface: "approval_queue", routes: ["factory-approval-queue"] },
         { surface: "plan_archive", routes: ["factory-plan-archive"] },
         { surface: "factory_master_data", routes: ["factory-master-data"] },
         { surface: "production_routings", routes: ["production-routing"] },

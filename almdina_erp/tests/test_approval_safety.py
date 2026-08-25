@@ -32,7 +32,7 @@ def test_core_approve_locks_order_row_before_status_check(monkeypatch):
     assert calls[1] == "get_doc"
 
 
-def test_core_reject_locks_order_row_before_status_check(monkeypatch):
+def test_core_reject_is_fail_closed_before_database_access(monkeypatch):
     calls: list[str] = []
     monkeypatch.setattr(cutting_plan_service, "require_any_role", lambda *roles: None)
 
@@ -40,18 +40,12 @@ def test_core_reject_locks_order_row_before_status_check(monkeypatch):
         calls.append(query.lower())
         return []
 
-    def fake_get_doc(doctype, name):
-        calls.append("get_doc")
-        return SimpleNamespace(name=name, status="Approved")
-
     monkeypatch.setattr(cutting_plan_service.frappe.db, "sql", fake_sql)
-    monkeypatch.setattr(cutting_plan_service.frappe, "get_doc", fake_get_doc)
 
     with pytest.raises(frappe.ValidationError):
         cutting_plan_service.reject_order("DCO-TEST", "test")
 
-    assert "for update" in calls[0]
-    assert calls[1] == "get_doc"
+    assert calls == []
 
 
 def test_unplaced_piece_always_blocks_plan_snapshot(monkeypatch):

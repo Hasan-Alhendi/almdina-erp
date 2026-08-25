@@ -135,10 +135,10 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             "| Shop Floor Inbox | PAGE | Certified |",
             "| Factory Master Data | PAGE | Certified |",
             "| Factory Plan Archive | PAGE | Keep; lifecycle migration pending |",
-            "| Factory Approval Queue | PAGE | Temporary migration utility |",
+            "| Factory Approval Queue | PAGE | Retired / Removed |",
             "| Factory Stock Settings | PAGE | Retired / Removed |",
-            "| Factory System Preflight | PAGE | Retirement planned; removal pending |",
-            "| Factory Performance Benchmark | PAGE | Retirement planned; removal pending |",
+            "| Factory System Preflight | PAGE | Retired / Removed |",
+            "| Factory Performance Benchmark | PAGE | Retired / Removed |",
             "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
             "| Door Cutting Order List | LIST | Certification pending |",
             "| Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required |",
@@ -162,24 +162,22 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
         self.assertIn("Page-record", self.standard)
 
         for entry in (
-            "`factory_approval_queue`: **Temporary migration utility**",
-            "`factory_stock_settings`: **Retired / Removed**",
-            "`factory_system_preflight`: **Retirement planned; removal pending**",
-            "`factory_performance_benchmark`: **Retirement planned; removal pending**",
+            "`factory_approval_queue`: أزيل Page source",
+            "`factory_stock_settings`: أزيل Page source",
+            "`factory_system_preflight`: أزيل Page source",
+            "`factory_performance_benchmark`: أزيل Page source",
         ):
             with self.subTest(entry=entry):
                 self.assertIn(entry, self.data_ui_map)
 
     def test_retirement_audit_keeps_static_and_runtime_proof_separate(self) -> None:
         for marker in (
-            "## 10. Frontend Estate Retirement Audit",
-            "static repository proof",
-            "RETIRE-SAFE — High",
-            "TEMPORARY-MIGRATION-UTILITY / RETIRE-AFTER-DATA-PROOF",
-            "Runtime data proof المطلوب",
-            "frappe.client.get_count",
+            "## 10. Frontend Estate Retirement Closure",
+            "Pending Review` يساوي **0**",
+            "Caller matrix النهائي",
+            "reject_retired_approval_workflow",
             "remove_orphan_entities()",
-            "Plan Archive ليست deletion candidate",
+            "`factory_plan_archive` تبقى مطلوبة",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.data_ui_map)

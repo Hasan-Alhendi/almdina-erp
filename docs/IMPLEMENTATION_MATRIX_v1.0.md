@@ -154,6 +154,5 @@ The following cannot be honestly marked Pass from source code review alone:
 - Concurrent reservation/approval tests using simultaneous transactions.
 - AutoCAD/Illustrator/CNC DXF tests and real mm scale.
 - Browser/RTL/wkhtmltopdf print tests.
-- 200-piece performance benchmark on reference server.
 - Backup/Restore including attachments, Stock Ledger and remnant lineage.
 - Signed Go-Live checklist in `UAT_v1.0.md`.
