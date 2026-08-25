@@ -50,31 +50,42 @@ assert.deepEqual(
 );
 
 const regularPicker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
-assert.match(regularPicker, /dco-piece-type-trigger/);
-assert.match(regularPicker, /aria-haspopup="menu"/);
-assert.match(regularPicker, /عادية/);
+assert.match(regularPicker, /<select class="dco-fast-select dco-piece-type-select"/);
+assert.match(regularPicker, /data-field="piece_type"/);
+assert.match(regularPicker, />عادية<\/option>/);
+assert.doesNotMatch(regularPicker, /dco-piece-type-trigger/);
+assert.doesNotMatch(regularPicker, /dco-extra-open-button/);
+
+const specialIndex = regularPicker.indexOf(">خاصة</option>");
+const cornerIndex = regularPicker.indexOf(">زاوية</option>");
+const extraIndex = regularPicker.indexOf(">Extra</option>");
+assert.ok(specialIndex > regularPicker.indexOf(">عادية</option>"));
+assert.ok(cornerIndex > specialIndex);
+assert.ok(extraIndex > cornerIndex);
 
 const emptyExtra = api.renderTypePicker({ piece_type: "Extra" }, { editable: true });
-assert.match(emptyExtra, /إضافية/);
+assert.match(emptyExtra, /dco-piece-type-select/);
+assert.match(emptyExtra, /dco-extra-open-button/);
 assert.match(emptyExtra, /اختر إضافة واحدة على الأقل/);
 
 const selectedExtra = api.renderTypePicker(
     { piece_type: "Extra", extra_liner: 1, extra_double: 1 },
     { editable: true }
 );
-assert.match(selectedExtra, /لاينر/);
-assert.match(selectedExtra, /دبل/);
-assert.match(selectedExtra, />2<\/b>/);
+assert.match(selectedExtra, /لاينر، دبل/);
+assert.match(selectedExtra, /dco-extra-open-count">2<\/b>/);
 
-const menu = api.renderMenu({ piece_type: "Regular" });
-assert.match(menu, /role="menuitemradio"/);
-assert.match(menu, /data-piece-type-option="Extra"/);
-assert.match(menu, /aria-haspopup="menu" aria-expanded="false"/);
-assert.match(menu, /لاينر/);
-assert.match(menu, /دبل/);
-assert.match(menu, /مسكة غطس/);
-assert.match(menu, /يمكن اختيار أكثر من خيار/);
+const submenu = api.renderSubmenu({ piece_type: "Extra" });
+assert.match(submenu, /إضافات Extra/);
+assert.match(submenu, /لاينر/);
+assert.match(submenu, /دبل/);
+assert.match(submenu, /مسكة غطس/);
+assert.match(submenu, /يمكن اختيار أكثر من خيار/);
+assert.doesNotMatch(submenu, /data-piece-type-option/);
+assert.doesNotMatch(submenu, /تطبيق/);
+assert.doesNotMatch(submenu, /إلغاء/);
+
 assert.match(api.notesCueHtml({ piece_type: "Extra", notes: "" }), /اكتب تفاصيل التنفيذ/);
 assert.equal(api.notesCueHtml({ piece_type: "Extra", notes: "تم" }), "");
 
-console.log("Extra door add-ons UX simulation passed");
+console.log("Extra door add-ons native-select UX simulation passed");
