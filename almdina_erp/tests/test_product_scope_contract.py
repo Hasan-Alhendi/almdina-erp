@@ -207,6 +207,15 @@ class TestProductScopeContract(unittest.TestCase):
         )
 
     def test_workspaces_do_not_expose_inventory_or_retired_utilities(self) -> None:
+        def string_values(value: object) -> list[str]:
+            if isinstance(value, str):
+                return [value]
+            if isinstance(value, list):
+                return [text for child in value for text in string_values(child)]
+            if isinstance(value, dict):
+                return [text for child in value.values() for text in string_values(child)]
+            return []
+
         banned_targets = (
             "Warehouse",
             "Stock Reconciliation",
@@ -230,8 +239,26 @@ class TestProductScopeContract(unittest.TestCase):
                 for row in payload.get(section, [])
                 if row.get("link_to")
             }
+            content = json.loads(payload.get("content") or "[]")
+            rendered_values = tuple(
+                value.lower()
+                for value in string_values(content)
+            )
             with self.subTest(workspace=path.relative_to(workspace_root)):
                 self.assertTrue(targets.isdisjoint(banned_targets), targets)
+                for target in banned_targets:
+                    tokens = {
+                        target.lower(),
+                        target.lower().replace(" ", "-"),
+                    }
+                    self.assertFalse(
+                        any(
+                            token in value
+                            for token in tokens
+                            for value in rendered_values
+                        ),
+                        f"{target} is exposed through Workspace content",
+                    )
 
     def test_new_install_does_not_create_stock_item_customizations(self) -> None:
         source = (ROOT / "install.py").read_text(encoding="utf-8")
