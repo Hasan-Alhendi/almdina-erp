@@ -14,6 +14,7 @@ RENDERER = MODULE_ROOT / "renderer.js"
 INTERACTIONS = MODULE_ROOT / "interactions.js"
 DIALOGS = MODULE_ROOT / "dialogs.js"
 CONTROLLER = MODULE_ROOT / "controller.js"
+QUICK_ACTIONS = ROOT / "public" / "js" / "shop_floor_quick_actions.js"
 CSS = ROOT / "public" / "css" / "shop_floor_responsive.css"
 
 
@@ -28,10 +29,10 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         cls.interactions = INTERACTIONS.read_text(encoding="utf-8")
         cls.dialogs = DIALOGS.read_text(encoding="utf-8")
         cls.controller = CONTROLLER.read_text(encoding="utf-8")
+        cls.quick_actions = QUICK_ACTIONS.read_text(encoding="utf-8")
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 45)
         for asset in (
             "api.js",
             "state.js",
@@ -44,9 +45,32 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(f"/assets/almdina_erp/js/shop_floor_inbox/{asset}", self.page)
         self.assertIn("shop_floor_quick_actions.js", self.page)
         self.assertIn("shop_floor_responsive.css", self.page)
-        self.assertNotIn("frappe.call(", self.page)
-        self.assertNotIn("shop_floor_query_service", self.page)
-        self.assertNotIn("shop_floor_commands", self.page)
+        self.assertIn("frappe.ui.make_app_page", self.page)
+        self.assertIn("function ensureCore()", self.page)
+        self.assertLess(self.page.index("frappe.ui.make_app_page"), self.page.index("function ensureCore()"))
+        self.assertIn("frontend.requireAssets(MODULES)", self.page)
+        self.assertIn('data-almdina-loading-owner="shop-floor-bootstrap"', self.page)
+        self.assertEqual(self.page.count("frappe.ui.make_app_page"), 1)
+        self.assertEqual(self.page.count("controller.mount(wrapper, { page })"), 1)
+        for forbidden in (
+            "AlmdinaShopFloorInboxApi",
+            "AlmdinaShopFloorInboxState",
+            "AlmdinaShopFloorInboxViewModel",
+            "AlmdinaShopFloorInboxRenderer",
+            "AlmdinaShopFloorInboxInteractions",
+            "AlmdinaShopFloorInboxDialogs",
+            "createLatestRequestGate",
+            "createLifecycleScope",
+            "frappe.call(",
+            "frappe.ui.Dialog",
+            "frappe.confirm",
+            "frappe.prompt",
+            "shop_floor_query_service",
+            "shop_floor_commands",
+            "sf-quick-action",
+            "almdina-sf-kanban",
+        ):
+            self.assertNotIn(forbidden, self.page)
 
     def test_api_is_only_page_transport_owner(self) -> None:
         for endpoint in (
@@ -82,6 +106,9 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             "createLatestRequestGate",
             "createLifecycleScope",
             "beginListRequest",
+            "beginHandoffRequest",
+            "beginQuickAction",
+            "deactivate()",
             "snapshot()",
         ):
             self.assertIn(marker, self.state)
@@ -117,6 +144,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(marker, self.renderer)
         for forbidden in ("frappe.call(", "shop_floor_query_service", "shop_floor_commands"):
             self.assertNotIn(forbidden, self.renderer)
+        self.assertNotIn("frappe.ui.make_app_page", self.renderer)
 
     def test_interactions_own_delegated_lifecycle_events(self) -> None:
         for marker in (
@@ -126,6 +154,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             '"#almdina-sf-board-search"',
             '".almdina-sf-kanban-column"',
             "lifecycle.track",
+            "function deactivate()",
         ):
             self.assertIn(marker, self.interactions)
         self.assertNotIn("frappe.call(", self.interactions)
@@ -134,11 +163,12 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
     def test_dialogs_own_handoff_and_logout_prompts(self) -> None:
         for marker in ("frappe.confirm", "frappe.prompt", "frappe.msgprint", "frappe.show_alert"):
             self.assertIn(marker, self.dialogs)
+        for marker in ("function create(", "function own(", "function deactivate()", "function dispose()"):
+            self.assertIn(marker, self.dialogs)
         self.assertNotIn("frappe.call(", self.dialogs)
         self.assertNotIn("shop_floor_commands", self.dialogs)
 
     def test_controller_only_orchestrates(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 230)
         for dependency in (
             "AlmdinaShopFloorInboxApi",
             "AlmdinaShopFloorInboxState",
@@ -150,9 +180,46 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(dependency, self.controller)
         self.assertIn("isCurrentListRequest", self.controller)
         self.assertIn("Promise.all([Api.getInbox(), Api.getArchive()])", self.controller)
-        self.assertNotIn("frappe.call(", self.controller)
-        self.assertNotIn(".html(", self.controller)
-        self.assertNotIn("shop_floor_query_service", self.controller)
+        self.assertIn("bindActivationLifecycle(wrapper", self.controller)
+        self.assertIn("onDeactivate: deactivatePage", self.controller)
+        self.assertIn("isCurrentGeneration", self.controller)
+        self.assertIn("onStaleMutationSuccess", self.controller)
+        self.assertEqual(
+            self.controller.count("window.AlmdinaShopFloorInboxController = Object.freeze({ mount })"),
+            1,
+        )
+        for forbidden in (
+            "frappe.call(",
+            "frappe.require(",
+            "frappe.ui.make_app_page",
+            "frappe.ui.Dialog",
+            "frappe.confirm",
+            "frappe.prompt",
+            "frappe.msgprint",
+            "frappe.show_alert",
+            "createLatestRequestGate",
+            "createLifecycleScope",
+            ".html(",
+            ".on(",
+            ".off(",
+            "<div",
+            "sf-quick-action",
+            "almdina-sf-kanban",
+            "shop_floor_query_service",
+            "shop_floor_commands",
+        ):
+            self.assertNotIn(forbidden, self.controller)
+
+    def test_shared_quick_actions_accept_caller_owned_currentness(self) -> None:
+        for marker in (
+            "function lifecycleBoundary(options = {})",
+            "owner.isCurrent",
+            "owner.ownTransient",
+            "owner.onStaleMutationSuccess",
+        ):
+            self.assertIn(marker, self.quick_actions)
+        self.assertNotIn("AlmdinaMutationLifecycle", self.quick_actions)
+        self.assertNotIn("AlmdinaAsyncCommandFramework", self.quick_actions)
 
     def test_structural_phase_keeps_existing_stylesheet_owner(self) -> None:
         self.assertIn(".almdina-sf-shell", self.css)

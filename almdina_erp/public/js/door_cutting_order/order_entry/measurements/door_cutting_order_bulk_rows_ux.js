@@ -422,15 +422,29 @@
         updateSelectionUI(frm, root);
     }
 
+    function schedule(frm) {
+        const lifecycle = window.AlmdinaMeasurementLifecycle;
+        if (!lifecycle) {
+            requestAnimationFrame(() => enhance(frm));
+            return;
+        }
+        lifecycle.schedule(
+            frm,
+            "bulk-rows",
+            () => enhance(frm),
+            { immediate: false }
+        );
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) {
-            requestAnimationFrame(() => enhance(frm));
+            schedule(frm);
         },
         refresh(frm) {
-            requestAnimationFrame(() => enhance(frm));
+            schedule(frm);
         },
         almdina_edit_session_changed(frm) {
-            requestAnimationFrame(() => enhance(frm));
+            schedule(frm);
         },
     });
 })();

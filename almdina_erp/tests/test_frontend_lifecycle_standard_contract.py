@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT.parent / "docs" / "reference"
 STANDARD = REFERENCE / "15_FRONTEND_LIFECYCLE_STANDARD.md"
+DATA_UI_MAP = REFERENCE / "06_DATA_UI_MAP.md"
 REFERENCE_INDEX = REFERENCE / "README.md"
 FRONTEND_ARCHITECTURE = REFERENCE / "13_FRONTEND_ARCHITECTURE.md"
 REFACTOR_CLOSURE = REFERENCE / "14_FRONTEND_REFACTOR_CLOSURE.md"
@@ -70,6 +71,7 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.standard = STANDARD.read_text(encoding="utf-8")
+        cls.data_ui_map = DATA_UI_MAP.read_text(encoding="utf-8")
 
     def test_standard_is_canonical_and_discoverable(self) -> None:
         self.assertTrue(STANDARD.is_file())
@@ -130,8 +132,13 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
             "| Factory Workforce | PAGE | Certified |",
             "| Factory Permissions | PAGE | Certified |",
             "| Factory Production Settings | PAGE | Certified |",
-            "| Shop Floor Inbox | PAGE | Migration pending |",
-            "| Factory Master Data | PAGE | Migration pending |",
+            "| Shop Floor Inbox | PAGE | Certified |",
+            "| Factory Master Data | PAGE | Certified |",
+            "| Factory Plan Archive | PAGE | Keep; lifecycle migration pending |",
+            "| Factory Approval Queue | PAGE | Retired / Removed |",
+            "| Factory Stock Settings | PAGE | Retired / Removed |",
+            "| Factory System Preflight | PAGE | Retired / Removed |",
+            "| Factory Performance Benchmark | PAGE | Retired / Removed |",
             "| Door Cutting Order | FORM | Specialized lifecycle exists; certification pending |",
             "| Door Cutting Order List | LIST | Certification pending |",
             "| Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required |",
@@ -144,6 +151,36 @@ class TestFrontendLifecycleStandardContract(unittest.TestCase):
         self.assertIn("إثبات read/activation lifecycle فقط", self.standard)
         self.assertIn("لا يكفي لـFull Certification", self.standard)
         self.assertIn("وجود helper أو `requestId` منفرد لا يمنح certification", self.standard)
+
+    def test_estate_policy_does_not_spend_lifecycle_work_on_retired_pages(self) -> None:
+        self.assertIn("### 8.1 Frontend estate policy", self.standard)
+        self.assertIn("**Temporary migration utility**", self.standard)
+        self.assertIn("**Retired / Removed**", self.standard)
+        self.assertIn("**Retirement planned; removal pending**", self.standard)
+        self.assertIn("ليست مرشحًا للـlifecycle certification", self.standard)
+        self.assertIn("runtime/data proof", self.standard)
+        self.assertIn("Page-record", self.standard)
+
+        for entry in (
+            "`factory_approval_queue`: أزيل Page source",
+            "`factory_stock_settings`: أزيل Page source",
+            "`factory_system_preflight`: أزيل Page source",
+            "`factory_performance_benchmark`: أزيل Page source",
+        ):
+            with self.subTest(entry=entry):
+                self.assertIn(entry, self.data_ui_map)
+
+    def test_retirement_audit_keeps_static_and_runtime_proof_separate(self) -> None:
+        for marker in (
+            "## 10. Frontend Estate Retirement Closure",
+            "Pending Review` يساوي **0**",
+            "Caller matrix النهائي",
+            "reject_retired_approval_workflow",
+            "remove_orphan_entities()",
+            "`factory_plan_archive` تبقى مطلوبة",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.data_ui_map)
 
     def test_existing_foundation_remains_the_shared_primitive_owner(self) -> None:
         foundation = FOUNDATION.read_text(encoding="utf-8")

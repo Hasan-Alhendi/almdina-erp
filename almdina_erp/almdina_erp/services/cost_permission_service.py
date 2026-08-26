@@ -17,6 +17,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
     authoritative_cost_values,
     overlay_authoritative_costs,
+    refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_editable
 
@@ -32,6 +33,7 @@ ORDER_COST_FIELDS = (
     "special_shapes_baseline_cost_usd",
     "special_shapes_estimated_total_usd",
     "special_shapes_final_total_usd",
+    "extra_addons_total_usd",
     "customer_quote_total_usd",
     "customer_quote_status",
     "material_variance_cost_usd",
@@ -57,6 +59,13 @@ PIECE_COST_FIELDS = (
     "clipped_corner_edge_price_note",
     "clipped_corner_edge_price_set_by",
     "clipped_corner_edge_price_set_on",
+    "extra_double_unit_price_usd",
+    "extra_double_total_usd",
+    "extra_liner_unit_price_usd",
+    "extra_liner_total_usd",
+    "extra_recessed_handle_cutout_unit_price_usd",
+    "extra_recessed_handle_cutout_total_usd",
+    "extra_addons_total_usd",
 )
 
 
@@ -263,6 +272,12 @@ def approve_special_piece_price(
     piece.special_shape_price_approved_on = now_datetime()
     order.flags.special_price_approval_action = True
     order.save(ignore_permissions=True)
+
+    # Ordinary DCO save intentionally does not orchestrate Cutting Plan or
+    # commercial pricing. This focused pricing command therefore refreshes the
+    # canonical per-piece final price and customer quote projections explicitly
+    # after the approved input has been persisted.
+    refresh_order_commercial_totals(order)
 
     return {
         "order_name": order.name,

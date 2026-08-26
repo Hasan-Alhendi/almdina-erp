@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 
-PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "Special"})
+PIECE_TYPES = frozenset({"Regular", "Clipped Corner", "Special", "Extra"})
 CLIPPED_CORNER_POSITIONS = frozenset(
     {"Top Right", "Top Left", "Bottom Right", "Bottom Left"}
 )

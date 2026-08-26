@@ -206,29 +206,109 @@ class TestProductScopeContract(unittest.TestCase):
             source,
         )
 
-    def test_primary_workspaces_do_not_expose_inventory(self) -> None:
+    def test_workspaces_do_not_expose_inventory_or_retired_utilities(self) -> None:
+        def string_values(value: object) -> list[str]:
+            if isinstance(value, str):
+                return [value]
+            if isinstance(value, list):
+                return [text for child in value for text in string_values(child)]
+            if isinstance(value, dict):
+                return [text for child in value.values() for text in string_values(child)]
+            return []
+
         banned_targets = (
-            '"link_to":"Warehouse"',
-            '"link_to":"Stock Reconciliation"',
-            '"link_to":"Board Remnant"',
-            '"link_to":"Material Reservation"',
-            '"link_to":"Material Consumption Log"',
-            '"link_to":"Order Stock Availability"',
-            '"link_to":"Remnant Inventory"',
-            '"link_to":"factory-stock-settings"',
+            "Warehouse",
+            "Stock Reconciliation",
+            "Board Remnant",
+            "Material Reservation",
+            "Material Consumption Log",
+            "Order Stock Availability",
+            "Remnant Inventory",
+            "factory-stock-settings",
+            "factory-system-preflight",
+            "factory-performance-benchmark",
+            "factory-approval-queue",
+            "Approval Queue",
+            "Safe Approval Queue",
         )
         workspace_root = ROOT / "almdina_erp" / "workspace"
-        for name in (
-            "almdina_erp/almdina_erp.json",
-            "almdina_reports/almdina_reports.json",
-            "almdina_settings/almdina_settings.json",
-            "almdina_control_center/almdina_control_center.json",
-            "almdina_go_live/almdina_go_live.json",
+        workspace_files = sorted(workspace_root.rglob("*.json"))
+        self.assertTrue(workspace_files)
+        for path in workspace_files:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            targets = {
+                row.get("link_to")
+                for section in ("links", "shortcuts")
+                for row in payload.get(section, [])
+                if row.get("link_to")
+            }
+            content = json.loads(payload.get("content") or "[]")
+            rendered_values = tuple(
+                value.lower()
+                for value in string_values(content)
+            )
+            with self.subTest(workspace=path.relative_to(workspace_root)):
+                self.assertTrue(targets.isdisjoint(banned_targets), targets)
+                for target in banned_targets:
+                    tokens = {
+                        target.lower(),
+                        target.lower().replace(" ", "-"),
+                    }
+                    self.assertFalse(
+                        any(
+                            token in value
+                            for token in tokens
+                            for value in rendered_values
+                        ),
+                        f"{target} is exposed through Workspace content",
+                    )
+
+    def test_retired_legacy_page_sources_and_navigation_are_removed(self) -> None:
+        retired_pages = {
+            "factory_stock_settings": "factory-stock-settings",
+            "factory_system_preflight": "factory-system-preflight",
+            "factory_performance_benchmark": "factory-performance-benchmark",
+            "factory_approval_queue": "factory-approval-queue",
+        }
+        for page_dir, route in retired_pages.items():
+            page_root = ROOT / "almdina_erp" / "page" / page_dir
+            for filename in ("__init__.py", f"{page_dir}.js", f"{page_dir}.json"):
+                with self.subTest(page=route, filename=filename):
+                    self.assertFalse((page_root / filename).exists(), filename)
+
+        navigation_owners = (
+            ROOT / "public" / "js" / "shared_shell.js",
+            ROOT / "public" / "js" / "arabic_operator_ui.js",
+            ROOT / "almdina_erp" / "application" / "security" / "surface_access.py",
+            ROOT / "almdina_erp" / "application" / "security" / "workspace_visibility.py",
+            *sorted((ROOT / "almdina_erp" / "workspace").rglob("*.json")),
+        )
+        for path in navigation_owners:
+            source = path.read_text(encoding="utf-8")
+            for page_dir, route in retired_pages.items():
+                for token in (route, page_dir):
+                    with self.subTest(path=path.relative_to(ROOT), token=token):
+                        self.assertNotIn(token, source)
+
+    def test_factory_plan_archive_source_and_navigation_are_preserved(self) -> None:
+        page_root = ROOT / "almdina_erp" / "page" / "factory_plan_archive"
+        for filename in (
+            "__init__.py",
+            "factory_plan_archive.js",
+            "factory_plan_archive.json",
         ):
-            source = (workspace_root / name).read_text(encoding="utf-8")
-            for target in banned_targets:
-                with self.subTest(workspace=name, target=target):
-                    self.assertNotIn(target, source)
+            self.assertTrue((page_root / filename).exists(), filename)
+
+        navigation_owners = (
+            ROOT / "public" / "js" / "shared_shell.js",
+            ROOT / "almdina_erp" / "application" / "security" / "surface_access.py",
+            ROOT / "almdina_erp" / "application" / "security" / "workspace_visibility.py",
+            ROOT / "almdina_erp" / "workspace" / "almdina_control_center" / "almdina_control_center.json",
+            ROOT / "almdina_erp" / "workspace" / "almdina_go_live" / "almdina_go_live.json",
+        )
+        for path in navigation_owners:
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertIn("factory-plan-archive", path.read_text(encoding="utf-8"))
 
     def test_new_install_does_not_create_stock_item_customizations(self) -> None:
         source = (ROOT / "install.py").read_text(encoding="utf-8")
@@ -290,6 +370,32 @@ class TestProductScopeContract(unittest.TestCase):
             fields["prefer_remnants_before_full_boards"].get("default"),
             "0",
         )
+
+    def test_optimizer_free_area_settings_survive_stock_surface_retirement(self) -> None:
+        payload = json.loads(
+            (
+                ROOT
+                / "almdina_erp"
+                / "doctype"
+                / "almdina_erp_settings"
+                / "almdina_erp_settings.json"
+            ).read_text(encoding="utf-8")
+        )
+        fields = {row["fieldname"]: row for row in payload["fields"]}
+        optimizer_source = (
+            ROOT / "almdina_erp" / "domain" / "cutting" / "optimizer.py"
+        ).read_text(encoding="utf-8")
+
+        expected = {
+            "min_remnant_width_mm": "min_remnant_width_cm",
+            "min_remnant_length_mm": "min_remnant_length_cm",
+            "min_remnant_area_m2": "min_remnant_area_m2",
+        }
+        for fieldname, optimizer_name in expected.items():
+            with self.subTest(fieldname=fieldname):
+                self.assertIn(fieldname, fields)
+                self.assertEqual(fields[fieldname].get("hidden"), 1)
+                self.assertIn(optimizer_name, optimizer_source)
 
     def test_operational_reports_use_free_text_board_identity(self) -> None:
         report_root = ROOT / "almdina_erp" / "report"

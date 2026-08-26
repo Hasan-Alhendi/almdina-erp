@@ -350,6 +350,8 @@
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
         const isClipped = pieceType === "Clipped Corner";
+        const isExtra = pieceType === "Extra";
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
         const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
         const toggle = (field,label,extra="") => `
             <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
@@ -377,14 +379,19 @@
         const shapeTitle = isClipped
             ? `${isArabic() ? "ضبط الزاوية المقصوصة" : "Configure clipped corner"}${cornerSummary ? ` — ${cornerSummary}` : ""}`
             : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
+        const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
+            <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
+            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
+            <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
+            <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
+        </select>`;
+        const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
+            ? extraAddons.renderTypePicker(data, { editable, virtual })
+            : nativePieceTypeSelect;
         return `
-            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
+            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""} ${isExtra ? "dco-extra-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
-                <td class="dco-col-type" data-label="${labels.type}"><select class="dco-fast-select" data-field="piece_type" ${disabled}>
-                    <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
-                    <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "زاوية مقصوصة" : "Clipped corner"}</option>
-                    <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
-                </select></td>
+                <td class="dco-col-type" data-label="${labels.type}">${pieceTypeControl}</td>
                 <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
                 <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
@@ -402,7 +409,7 @@
                 </button></td>
                 <td class="dco-col-calc" data-label="${labels.area}" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-label="${labels.edgeMeters}" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
-                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
+                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}>${extraAddons && typeof extraAddons.notesCueHtml === "function" ? extraAddons.notesCueHtml(data) : ""}</td>
                 <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${isArabic() ? "حذف السطر" : "Delete row"}">×</button>` : ""}</td>
             </tr>`;
     }
@@ -419,6 +426,7 @@
                         <span class="dco-keyboard-flow">${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
                         <span class="dco-help-secondary">${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
                         <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط مبدئية وتدخل مباشرة في التكلفة التقديرية." : "For a special door, selected edge sides are preliminary and feed the estimate."}</span>
+                        <span class="dco-help-secondary">${isArabic() ? "الخاصة مع Liner: اكتب Liner في الملاحظات، وثّق الشكل، وأدخل السعر الخاص الشامل من التكلفة." : "Special + Liner: note Liner, document the shape, and use the inclusive custom price in Cost."}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
                 </div>
@@ -466,21 +474,56 @@
         });
     }
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
     function loadEdgeTypes(frm) {
-        if (frm._dco_edge_types_loaded || frm._dco_edge_types_loading) return;
+        if (frm._dco_edge_types_loaded) return Promise.resolve(true);
+        const context = documentContext();
+        const token = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
+        const active = frm.__almdinaEdgeTypesRequest;
+        if (
+            active
+            && (
+                !context
+                || typeof context.isSameDocument !== "function"
+                || context.isSameDocument(frm, active.token)
+            )
+        ) {
+            return active.promise;
+        }
+
+        const requestState = { token, promise: null };
+        frm.__almdinaEdgeTypesRequest = requestState;
         frm._dco_edge_types_loading = true;
-        frappe.db.get_list("Edge Banding Type", {
+        const request = Promise.resolve(frappe.db.get_list("Edge Banding Type", {
             fields:["name","edge_type_name"],
             filters:{ disabled:0 },
             order_by:"width_cm asc, edge_type_name asc",
             limit:100,
-        }).then(rows => {
+        })).then(rows => {
+            if (frm.__almdinaEdgeTypesRequest !== requestState) return false;
+            if (context && !context.isCurrent(frm, token)) return false;
             frm._dco_edge_types = rows || [];
             frm._dco_edge_types_loaded = true;
             refreshEdgeSelects(frm);
-        }).catch(error => console.error("Failed to load edge types", error)).finally(() => {
-            frm._dco_edge_types_loading = false;
+            return true;
+        }).catch(error => {
+            if (!context || context.isCurrent(frm, token)) {
+                console.error("Failed to load edge types", error);
+            }
+            return false;
+        }).finally(() => {
+            if (frm.__almdinaEdgeTypesRequest === requestState) {
+                frm.__almdinaEdgeTypesRequest = null;
+                frm._dco_edge_types_loading = false;
+            }
         });
+        requestState.promise = request;
+        return request;
     }
 
     function renderFastMeasurements(frm) {
@@ -505,6 +548,10 @@
             if (root) root._dcoFastEntryHtml = html;
         }
         bindFastMeasurements(frm);
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        if (extraAddons && typeof extraAddons.bindTable === "function") {
+            extraAddons.bindTable(frm, root);
+        }
         loadEdgeTypes(frm);
     }
 
@@ -616,7 +663,13 @@
             const row = syncInputToModel(currentFrm, control, false);
             if (row) {
                 triggerChildField(currentFrm, row, control.dataset.field, 0);
-                if (control.dataset.field === "piece_type") renderFastMeasurements(currentFrm);
+                if (control.dataset.field === "piece_type") {
+                    const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+                    if (extraAddons && typeof extraAddons.reconcilePieceType === "function") {
+                        extraAddons.reconcilePieceType(currentFrm, row);
+                    }
+                    renderFastMeasurements(currentFrm);
+                }
             }
         });
 
@@ -730,6 +783,6 @@
 
     window.AlmdinaDoorCuttingFastEntry = Object.assign(
         window.AlmdinaDoorCuttingFastEntry || {},
-        { render: renderFastMeasurements }
+        { render: renderFastMeasurements, loadEdgeTypes }
     );
 })();

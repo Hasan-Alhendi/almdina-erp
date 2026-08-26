@@ -163,12 +163,82 @@ def persist_plan_cost_snapshot(plan: Any) -> dict[str, float | int]:
     return values
 
 
-def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
-    """Refresh only DCO-owned quote totals that depend on Plan financials.
+def _persist_special_piece_pricing_projection(order: Any, summary: Any) -> None:
+    """Persist the per-piece commercial projection produced by the Domain.
+
+    The approved custom price is the user-owned input; ``final`` is the canonical
+    derived price consumed by customer documents. Keeping this projection beside
+    the order commercial totals prevents Desk and print surfaces from observing
+    different prices after one focused pricing command.
+    """
+
+    for piece, result in zip(order.pieces or [], summary.pieces):
+        if not result.applicable:
+            continue
+        values = {
+            "special_shape_estimated_unit_price_usd": result.estimated_unit_price_usd,
+            "special_shape_final_unit_price_usd": result.final_unit_price_usd,
+            "special_shape_price_status": result.price_status,
+        }
+        for fieldname, value in values.items():
+            setattr(piece, fieldname, value)
+        piece_name = str(getattr(piece, "name", None) or "").strip()
+        if piece_name:
+            frappe.db.set_value(
+                "Door Cutting Order Detail",
+                piece_name,
+                values,
+                update_modified=False,
+            )
+
+
+def _persist_extra_addon_pricing_projection(order: Any) -> None:
+    """Persist only server-derived Extra price snapshots after the child save."""
+
+    fields = (
+        "extra_double_unit_price_usd",
+        "extra_double_total_usd",
+        "extra_liner_unit_price_usd",
+        "extra_liner_total_usd",
+        "extra_recessed_handle_cutout_unit_price_usd",
+        "extra_recessed_handle_cutout_total_usd",
+        "extra_addons_total_usd",
+    )
+    for piece in order.pieces or []:
+        if not bool(getattr(piece, "_extra_addon_snapshot_required", False)):
+            continue
+        piece_name = str(getattr(piece, "name", None) or "").strip()
+        if not piece_name:
+            continue
+        frappe.db.set_value(
+            "Door Cutting Order Detail",
+            piece_name,
+            {
+                fieldname: flt(getattr(piece, fieldname, 0))
+                for fieldname in fields
+            },
+            update_modified=False,
+        )
+
+
+def _commercial_cost_basis(order: Any, plan: Any | None) -> tuple[float, float]:
+    """Resolve Plan-owned cost inputs without leaking ownership into DCO projection."""
+
+    costs = authoritative_cost_values(order, plan=plan)
+    return (
+        flt(costs["mdf_cost_usd"]) + flt(costs["cutting_cost_usd"]),
+        flt(costs["total_cost_usd"]),
+    )
+
+
+def refresh_order_commercial_totals(order: Any, plan: Any | None = None) -> dict[str, Any]:
+    """Refresh DCO-owned per-piece and aggregate commercial projections.
 
     Cutting Plan remains the sole owner of board/cutting/edge financial fields.
-    The order stores only customer-facing commercial aggregates that belong to
-    the order lifecycle itself.
+    The order stores customer-facing commercial projections. When no canonical
+    plan exists yet, the existing authoritative-cost compatibility bridge is used
+    only as a read source; ordinary DCO save still never creates or recalculates
+    Cutting Plan state.
     """
 
     settings = frappe.get_cached_doc("Almdina ERP Settings")
@@ -178,6 +248,7 @@ def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
         manual_edge_fee_usd=flt(settings.default_special_manual_edge_fee_usd),
         margin_percent=flt(settings.default_special_margin_percent),
     )
+    board_and_cutting_cost_usd, total_cost_usd = _commercial_cost_basis(order, plan)
     try:
         summary = calculate_special_pricing(
             (
@@ -194,20 +265,26 @@ def refresh_order_commercial_totals(order: Any, plan: Any) -> dict[str, Any]:
             ),
             settings=pricing_settings,
             total_area_m2=flt(order.total_area_m2),
-            board_and_cutting_cost_usd=(
-                flt(plan.mdf_cost_usd) + flt(plan.cutting_cost_usd)
+            board_and_cutting_cost_usd=board_and_cutting_cost_usd,
+            total_cost_usd=total_cost_usd,
+            extra_addons_total_usd=flt(
+                getattr(order, "extra_addons_total_usd", 0)
             ),
-            total_cost_usd=flt(plan.total_cost_usd),
         )
     except CostingError as error:
         if str(error) == "special_shape_defaults_negative":
             frappe.throw(_("Special shape estimate defaults cannot be negative."))
         raise
 
+    _persist_special_piece_pricing_projection(order, summary)
+    _persist_extra_addon_pricing_projection(order)
     values = {
         "special_shapes_baseline_cost_usd": summary.baseline_cost_usd,
         "special_shapes_estimated_total_usd": summary.estimated_total_usd,
         "special_shapes_final_total_usd": summary.final_total_usd,
+        "extra_addons_total_usd": flt(
+            getattr(order, "extra_addons_total_usd", 0)
+        ),
         "customer_quote_total_usd": summary.customer_quote_total_usd,
         "customer_quote_status": summary.customer_quote_status,
     }

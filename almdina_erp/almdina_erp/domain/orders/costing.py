@@ -270,6 +270,7 @@ def calculate_special_pricing(
     total_area_m2: float,
     board_and_cutting_cost_usd: float,
     total_cost_usd: float,
+    extra_addons_total_usd: float = 0,
 ) -> SpecialPricingSummary:
     piece_list = tuple(pieces)
     fees = (
@@ -280,6 +281,9 @@ def calculate_special_pricing(
     )
     if min(fees) < 0:
         raise CostingError("special_shape_defaults_negative")
+    extra_addons_total = _finite(extra_addons_total_usd)
+    if extra_addons_total < 0:
+        raise CostingError("extra_addons_total_negative")
 
     special_indexes = [
         index for index, piece in enumerate(piece_list) if (piece.piece_type or "Regular") == "Special"
@@ -299,7 +303,10 @@ def calculate_special_pricing(
             baseline_cost_usd=0,
             estimated_total_usd=0,
             final_total_usd=0,
-            customer_quote_total_usd=round_value(total_cost_usd, 3),
+            customer_quote_total_usd=round_value(
+                _finite(total_cost_usd) + extra_addons_total,
+                3,
+            ),
             customer_quote_status="Automatic",
         )
 
@@ -374,7 +381,10 @@ def calculate_special_pricing(
         baseline_cost_usd=round_value(baseline_total, 3),
         estimated_total_usd=round_value(estimated_total, 3),
         final_total_usd=round_value(final_total, 3),
-        customer_quote_total_usd=round_value(invoice_base_total + final_total, 3),
+        customer_quote_total_usd=round_value(
+            invoice_base_total + final_total + extra_addons_total,
+            3,
+        ),
         customer_quote_status=quote_status,
     )
 

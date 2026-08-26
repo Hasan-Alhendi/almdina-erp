@@ -30,6 +30,13 @@ const SPECS = Object.freeze([
         stylesheet: "/assets/almdina_erp/css/factory_production_settings.css",
         loadingMarker: "جاري تحميل إعدادات المعمل",
     },
+    {
+        route: "shop-floor-inbox",
+        source: "shop_floor_inbox/shop_floor_inbox.js",
+        controller: "AlmdinaShopFloorInboxController",
+        stylesheet: "/assets/almdina_erp/css/shop_floor_responsive.css",
+        loadingMarker: "جاري تجهيز صالة الإنتاج",
+    },
 ]);
 
 function pageSource(spec) {

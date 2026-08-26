@@ -31,6 +31,9 @@ const current = {
         default_special_cnc_fee_usd: 2,
         default_special_manual_edge_fee_usd: 4,
         default_special_margin_percent: 10,
+        default_extra_double_unit_price_usd: 4,
+        default_extra_liner_unit_price_usd: 2.5,
+        default_extra_recessed_handle_cutout_unit_price_usd: 1.25,
         default_production_routing: "Drawing",
         allow_stage_override: 0,
         allow_unplaced_approval: 1,
@@ -43,6 +46,7 @@ const current = {
         sections: {
             cutting: { editable: true },
             costing: { editable: false },
+            extra_addons: { editable: false },
             production: { editable: true },
             print_identity: { editable: false },
         },
@@ -70,21 +74,23 @@ assert.equal(model.display(null), "—");
 assert.equal(model.values(current).default_kerf_mm, 5);
 
 const sections = model.sections(current);
-assert.equal(sections.length, 4);
+assert.equal(sections.length, 5);
 assert.deepEqual(
     JSON.parse(JSON.stringify(sections.map(section => [section.key, section.editable]))),
     [
         ["cutting", true],
         ["costing", false],
+        ["extra_addons", false],
         ["production", true],
         ["print_identity", false],
     ]
 );
 assert.equal(sections[0].rows[0].value, 5);
 assert.equal(sections[1].rows[0].value, "3 USD");
-assert.equal(sections[2].rows[1].value, "غير مسموح");
-assert.equal(sections[2].rows[2].value, "مسموح");
-assert.equal(sections[3].rows[3].multiline, true);
+assert.equal(sections[2].rows[1].value, "2.5 USD");
+assert.equal(sections[3].rows[1].value, "غير مسموح");
+assert.equal(sections[3].rows[2].value, "مسموح");
+assert.equal(sections[4].rows[3].multiline, true);
 
 const legacy = model.legacy(current);
 assert.equal(legacy.length, 10);
@@ -94,7 +100,7 @@ assert.equal(legacy[9].value, "5 USD");
 
 const page = model.page(current);
 assert.equal(page.hasLegacy, true);
-assert.equal(page.sections.length, 4);
+assert.equal(page.sections.length, 5);
 assert.equal(page.legacy.length, 10);
 
 const noLegacy = model.page({ values: {}, permissions: { sections: {} } });

@@ -111,7 +111,11 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertNotIn("frappe.user_roles", settings_surface)
 
         master = MASTER_PAGE.read_text(encoding="utf-8")
-        self.assertIn("requestId", master)
+        self.assertIn("createLatestRequestGate", master)
+        self.assertIn("bindActivationLifecycle", master)
+        self.assertIn("isCurrentGeneration", master)
+        self.assertIn("reconciliationPending", master)
+        self.assertNotIn("requestId", master)
         self.assertNotIn("frappe.user_roles", master)
         css = ROUTING_WORKFLOW_CSS.read_text(encoding="utf-8")
         self.assertIn("get_production_routing_console", master)
@@ -132,10 +136,30 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("{resetStyle: true}", master)
         self.assertNotIn("Promise.resolve(frappe.require(STYLE_ASSET))", master)
         self.assertNotIn(".catch(() => null)", master)
-        self.assertLess(
-            master.index("ensureStylesheet(STYLE_ASSET"),
-            master.rindex("workflowPage.init()"),
-        )
+        self.assertLess(master.index("frappe.ui.make_app_page"), master.index("function ensureCore()"))
+        self.assertLess(master.index("bootstrapLoadingHtml()"), master.index("function ensureCore()"))
+        self.assertIn("workflowPage.mount(core.frontend, core.lifecycle)", master)
+        self.assertIn("workflowPage.completeBootstrap()", master)
+
+    def test_routing_workflow_owns_full_page_lifecycle_without_a_parallel_framework(self) -> None:
+        master = MASTER_PAGE.read_text(encoding="utf-8")
+
+        for marker in (
+            "deactivatePage()",
+            "this.readGate.invalidate()",
+            "this.closeTransientSurfaces()",
+            "this.clearDragState()",
+            "this.reconciliationPending",
+            "this.completedSave",
+            "workingId",
+            "revision",
+            "dispose()",
+        ):
+            self.assertIn(marker, master)
+        self.assertIn("this.state.editor && this.state.editor.dirty", master)
+        self.assertIn("previous.dispose()", master)
+        self.assertNotIn("AlmdinaMutationLifecycle", master)
+        self.assertNotIn("AlmdinaLifecycle", master)
 
     def test_settings_workspace_uses_consoles_not_raw_single_doctype(self) -> None:
         metadata = json.loads(WORKSPACE.read_text(encoding="utf-8"))

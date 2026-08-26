@@ -10,6 +10,7 @@ business-logic rewrites.
 - `order_entry/`: order defaults and data-entry behavior.
   - `measurements/`: row entry, keyboard flow, measurement toolbar/resilience/performance.
   - `edge_banding/`: edge selection, profiles, colors and derived cut dimensions.
+  - `extra_addons/`: Extra-door requirement selection and accessible presentation; no pricing formulas.
 - `cutting_plan/`: plan rendering, controls, tabs/surface, drawing-plan and DXF approval/export coordination.
 - `costing/`: cost presentation, cost capabilities and customer financial actions.
 - `printing/`: print identity/theme/presenters and printable shape/document composition.
@@ -56,6 +57,28 @@ contracts and responsibilities:
 Do not reconstruct manufacturing geometry from documentation strokes, templates,
 images, canvas pixels or presentation state.
 
+### Extra-door commercial boundary
+
+`Extra` is a rectangular customer requirement, not a special-shape geometry type.
+Its three fixed selections (`Double`, `Liner`, and recessed-handle cutout) invalidate
+Cost only; changing the piece type itself retains the normal Plan + Cost impact.
+Pricing is calculated by the server Domain from factory settings and quantity. The
+child row stores protected unit/total snapshots so later factory-price changes do
+not rewrite historical orders. A `Special` door never carries Extra flags: e.g. a
+special door with Liner records Liner in notes/drawing and uses its inclusive custom
+special price.
+
+The measurement type cell remains the native HTML `select` used by the table. The
+visible Arabic order is `عادية / خاصة / زاوية / Extra`; the persisted values remain
+`Regular / Special / Clipped Corner / Extra` according to the existing DocType
+contract. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
+to that row for `Liner`, `Double`, and recessed-handle cutout. A compact Extra-only
+button reopens the flyout for an existing Extra row. The add-on module does not own or
+reimplement the general piece-type menu. It owns only Extra add-on presentation,
+document cleanup, focus, and flyout positioning; `AlmdinaTablePerformanceUX` remains
+the owner of in-place row materialization/model mutation so changing a type never
+rebuilds the table.
+
 ## Frontend asset manifest
 
 `almdina_erp/frontend_assets.py` is the single owner of global frontend assets,
@@ -85,7 +108,7 @@ reason, idempotency where applicable, and a contract update.
 
 ## Approved public entry points outside the feature tree
 
-- `public/css/door_cutting_order_responsive.css` is the global responsive style entry point and remains intentionally outside the JavaScript feature folders.
+- `public/css/door_cutting_order_responsive.css` and `public/css/door_cutting_order_extra_addons.css` are scoped global style entries and remain intentionally outside the JavaScript feature folders.
 - Shared application-wide JavaScript such as `permission_context.js`, `input_stability.js`, `responsive_device.js`, and the shared shell remains at `public/js/` because it is not owned only by Door Cutting Order.
 
 There are no active root-level `public/js/door_cutting_order_*.js` entry points after

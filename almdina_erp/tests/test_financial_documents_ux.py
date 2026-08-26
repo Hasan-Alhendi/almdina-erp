@@ -88,7 +88,7 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "dco-cost-hero" not in presenter
     assert "dco-cost-actions-bar" in presenter
     assert '<div class="dco-cost-kpis">' not in presenter
-    assert "تسعير قشط الدرفات الخاصة" in presenter
+    assert "تسعير الدرفات الخاصة" in presenter
     assert "تسعير قشاط درف الزاوية المقصوصة" in presenter
     assert "specialPricingHtml(frm)" in presenter
     assert "cutCornerPricingHtml(frm)" in presenter
@@ -106,10 +106,10 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "pending: !ready" in presenter
     assert "عرض الرسم" in presenter
     assert "غير مسعّر" in presenter
-    assert "سعر القشاط" in presenter
+    assert "السعر الخاص الشامل" in presenter
     assert "dco-view-cut-corner-sketch" in presenter
     assert '__("تعديل السعر")' in permissions
-    assert "إجمالي تكلفة قشاط الدرفة الخاصة" in permissions
+    assert "السعر الخاص الشامل للدرفة" in permissions
     assert "update_clipped_corner_edge_price" in permissions
     assert "تكلفة معالجة قشاط الزاوية المقصوصة" in permissions
     assert "orderIsEditable(frm)" in permissions

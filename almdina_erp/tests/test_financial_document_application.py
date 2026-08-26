@@ -119,6 +119,45 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertNotIn("عدد الألواح", summary)
         self.assertTrue(all("edge_meters" not in row for row in payload["measurements"]))
 
+    def test_extra_addons_are_itemized_from_the_historical_price_snapshot(self) -> None:
+        pieces = [
+            {
+                "piece_no": 4,
+                "piece_type": "Extra",
+                "width_cm": 50,
+                "length_cm": 90,
+                "qty": 2,
+                "notes": "تنفيذ إضافي",
+                "extra_double": 1,
+                "extra_double_unit_price_usd": 4,
+                "extra_double_total_usd": 8,
+                "extra_liner": 1,
+                "extra_liner_unit_price_usd": 2.5,
+                "extra_liner_total_usd": 5,
+            }
+        ]
+
+        payload = build_customer_invoice_document(
+            {
+                **self.order,
+                "required_boards": 0,
+                "mdf_cost_usd": 0,
+                "cutting_cost_usd": 0,
+                "edge_cost_usd": 0,
+                "total_cost_usd": 0,
+            },
+            pieces,
+        )
+
+        self.assertEqual(
+            [line["description"] for line in payload["lines"]],
+            ["إضافة Double — درفة رقم 1", "إضافة Liner — درفة رقم 1"],
+        )
+        self.assertEqual([line["rate_usd"] for line in payload["lines"]], [4.0, 2.5])
+        self.assertEqual(payload["totals"][0]["value_usd"], 13.0)
+        self.assertEqual(payload["measurements"][0]["piece_type"], "إضافية")
+        self.assertIn("إضافات: Double، Liner", payload["measurements"][0]["notes"])
+
     def test_internal_report_calculates_margin_and_special_price_variance(self) -> None:
         payload = build_internal_cost_report_document(self.order, self.pieces)
         self.assertEqual(payload["kind"], "internal_cost_report")

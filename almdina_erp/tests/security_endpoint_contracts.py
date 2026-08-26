@@ -24,7 +24,7 @@ S = EndpointAuthorizationContract.SELF_CONTEXT
 _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.api", C, ("get_approved_cutting_plan_snapshot", "preview_door_cutting_order")),
     ("almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order", D, ("recalculate_order",)),
-    ("almdina_erp.almdina_erp.services.approval_queue_service", C, ("approve_order_safely", "get_approval_queue_context", "get_pending_review_orders", "reject_order_safely")),
+    ("almdina_erp.almdina_erp.services.approval_queue_service", F, ("approve_order_safely", "get_approval_queue_context", "get_pending_review_orders", "reject_order_safely")),
     ("almdina_erp.almdina_erp.services.archive_service", C, ("archive_approved_plan_pdf", "get_archive_context")),
     ("almdina_erp.almdina_erp.services.cost_document_service", C, ("get_customer_invoice_document", "get_internal_cost_report_document")),
     ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "update_clipped_corner_edge_price", "update_order_cost_settings")),
@@ -49,7 +49,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.order_lifecycle_service", C, ("cancel_order", "return_order_to_draft")),
     ("almdina_erp.almdina_erp.services.order_plan_permission_service", C, ("recalculate_order", "simulate_optimizer_plan")),
     ("almdina_erp.almdina_erp.services.plan_settings_edit_service", C, ("save_plan_settings",)),
-    ("almdina_erp.almdina_erp.services.order_review_service", C, ("reject_order",)),
+    ("almdina_erp.almdina_erp.services.order_review_service", F, ("reject_order",)),
     ("almdina_erp.almdina_erp.services.order_revision_service", C, ("create_order_revision", "return_order_to_draft")),
     ("almdina_erp.almdina_erp.services.permission_context_service", S, ("get_permission_context",)),
     ("almdina_erp.almdina_erp.services.permission_management_service", C, ("export_permission_bundle", "export_role_permissions", "get_permission_audit", "get_permission_console", "get_role_permissions", "import_permission_bundle", "preview_permission_bundle_import", "preview_permission_import", "preview_role_permissions", "update_role_permissions")),

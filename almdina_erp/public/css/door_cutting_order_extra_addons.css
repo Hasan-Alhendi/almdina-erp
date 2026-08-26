@@ -1,0 +1,216 @@
+.dco-operator-form .dco-col-type {
+    width: 176px !important;
+}
+
+.dco-piece-type-native {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px;
+}
+
+.dco-piece-type-native .dco-piece-type-select {
+    min-width: 0;
+    width: 100%;
+}
+
+.dco-extra-open-button {
+    width: 34px;
+    min-width: 34px;
+    height: 38px;
+    padding: 0 5px;
+    border: 1px solid var(--border-color, #ccd3da);
+    border-radius: 8px;
+    background: var(--control-bg, #fff);
+    color: var(--text-muted, #66727e);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.dco-extra-open-button:hover,
+.dco-extra-open-button:focus-visible,
+.dco-extra-open-button[aria-expanded="true"] {
+    border-color: var(--primary, #2490ef);
+    color: var(--primary, #1769aa);
+    outline: 0;
+    box-shadow: 0 0 0 2px rgba(36, 144, 239, .12);
+}
+
+.dco-extra-open-button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.dco-extra-open-count {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--primary, #2490ef);
+    color: #fff;
+    display: inline-grid;
+    place-items: center;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+.dco-extra-selection-summary,
+.dco-extra-required {
+    grid-column: 1 / -1;
+    display: block;
+    min-width: 0;
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.dco-extra-selection-summary {
+    color: var(--primary, #1769aa);
+}
+
+.dco-extra-required,
+.dco-extra-notes-cue {
+    color: #9a5b00;
+}
+
+.dco-extra-notes-cue {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.4;
+}
+
+.dco-operator-form .dco-extra-row {
+    background: rgba(37, 99, 235, .022);
+}
+
+.dco-operator-form .dco-extra-row .dco-col-type {
+    background: linear-gradient(135deg, rgba(37, 99, 235, .035), rgba(14, 165, 233, .015));
+}
+
+.dco-extra-submenu-flyout {
+    --dco-extra-top: 20px;
+    --dco-extra-left: 20px;
+    --dco-extra-width: 236px;
+    position: fixed;
+    z-index: 1060;
+    top: var(--dco-extra-top);
+    left: var(--dco-extra-left);
+    width: var(--dco-extra-width);
+    max-height: min(360px, calc(100vh - 20px));
+    overflow: auto;
+    direction: rtl;
+    padding: 9px;
+    border: 1px solid var(--border-color, #d8dee6);
+    border-radius: 11px;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, .18);
+}
+
+.dco-extra-submenu-head {
+    padding: 2px 3px 8px;
+    border-bottom: 1px solid var(--border-color, #e4e8ed);
+}
+
+.dco-extra-submenu-head b,
+.dco-extra-submenu-head span {
+    display: block;
+}
+
+.dco-extra-submenu-head b {
+    font-size: 13px;
+}
+
+.dco-extra-submenu-head span {
+    margin-top: 2px;
+    color: var(--text-muted, #66727e);
+    font-size: 9px;
+}
+
+.dco-extra-options {
+    display: grid;
+    gap: 4px;
+    padding: 7px 0 3px;
+}
+
+.dco-extra-options label {
+    min-height: 38px;
+    margin: 0;
+    padding: 6px 7px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.dco-extra-options label:hover,
+.dco-extra-options label:focus-within {
+    border-color: rgba(37, 99, 235, .28);
+    background: rgba(37, 99, 235, .035);
+}
+
+.dco-extra-options label:has(input:checked) {
+    border-color: rgba(37, 99, 235, .38);
+    background: rgba(37, 99, 235, .055);
+    color: #174ea6;
+}
+
+.dco-extra-options input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex: 0 0 auto;
+    accent-color: var(--primary, #2563eb);
+}
+
+.dco-extra-options input:focus-visible {
+    outline: 2px solid var(--primary, #2490ef);
+    outline-offset: 2px;
+}
+
+.dco-extra-error {
+    min-height: 15px;
+    padding: 2px 3px 0;
+    color: #b42318;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+@media (max-width: 720px) {
+    .dco-operator-form .dco-col-type {
+        width: 168px !important;
+    }
+
+    .dco-extra-submenu-flyout {
+        max-width: calc(100vw - 16px);
+        max-height: min(320px, calc(100vh - 16px));
+        padding: 10px;
+    }
+
+    .dco-extra-options label {
+        min-height: 42px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dco-extra-open-button {
+        transition: none;
+    }
+}

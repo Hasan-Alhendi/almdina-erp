@@ -25,10 +25,8 @@ DATA_DRIVEN_PAGES = (
     "factory_workforce",
     "factory_permissions",
     "factory_master_data",
-    "factory_approval_queue",
     "factory_plan_archive",
     "factory_production_settings",
-    "factory_stock_settings",
 )
 
 
@@ -52,6 +50,17 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
             page_source = (PAGES / page / f"{page}.js").read_text(encoding="utf-8")
             controller_path = PAGE_LOCAL_CONTROLLERS.get(page)
             if controller_path is None:
+                if page == "factory_master_data":
+                    for marker in (
+                        "bindActivationLifecycle(this.wrapper",
+                        "deactivatePage()",
+                        "this.readGate.invalidate()",
+                        "isCurrentGeneration(generation)",
+                        "reconciliationPending",
+                    ):
+                        self.assertIn(marker, page_source, page)
+                    self.assertNotIn("refreshOnRevisit(wrapper", page_source, page)
+                    continue
                 self.assertIn("AlmdinaPageRevisit.refreshOnRevisit(", page_source, page)
                 continue
 
@@ -59,6 +68,7 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
             controller_asset = f'/assets/almdina_erp/js/{controller_path.parent.name}/controller.js'
             self.assertIn(controller_asset, page_source, page)
             if page in {
+                "shop_floor_inbox",
                 "factory_permissions",
                 "factory_workforce",
                 "factory_production_settings",
@@ -84,11 +94,15 @@ class TestPageRevisitRefreshContract(unittest.TestCase):
                     page,
                 )
             elif page == "shop_floor_inbox":
-                self.assertIn(
-                    "AlmdinaPageRevisit.refreshOnRevisit(wrapper, refresh)",
-                    controller_source,
-                    page,
-                )
+                for marker in (
+                    "onActivate: activatePage",
+                    "onDeactivate: deactivatePage",
+                    "state.deactivate()",
+                    "isCurrentGeneration",
+                    "scheduleMutationReconciliation",
+                ):
+                    self.assertIn(marker, controller_source, page)
+                self.assertNotIn("refreshOnRevisit(wrapper", controller_source, page)
 
     def test_inbox_opens_the_canonical_order_form_instead_of_loading_a_panel(self) -> None:
         page_source = (PAGES / "shop_floor_inbox" / "shop_floor_inbox.js").read_text(

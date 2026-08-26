@@ -19,6 +19,47 @@ EXPECTED_EDGE_RATES = {
     "قشاط 4سم لميع يدوي": 4.0,
 }
 
+RETIRED_STANDARD_PAGES = {
+    "factory-stock-settings": "Factory Stock Settings",
+    "factory-system-preflight": "Factory System Preflight",
+    "factory-performance-benchmark": "Factory Performance Benchmark",
+    "factory-approval-queue": "Factory Approval Queue",
+}
+
+
+def assert_retired_standard_pages_absent() -> None:
+    existing = sorted(
+        page_name
+        for page_name in RETIRED_STANDARD_PAGES
+        if frappe.db.exists("Page", page_name)
+    )
+    if existing:
+        raise AssertionError(f"Retired Standard Pages still exist: {existing}")
+
+
+def seed_retired_standard_pages() -> None:
+    assert_retired_standard_pages_absent()
+    for page_name, title in RETIRED_STANDARD_PAGES.items():
+        page = frappe.get_doc(
+            {
+                "doctype": "Page",
+                "name": page_name,
+                "page_name": page_name,
+                "module": "Almdina ERP",
+                "standard": "Yes",
+                "title": title,
+            }
+        )
+        page.db_insert()
+    frappe.db.commit()
+    missing = sorted(
+        page_name
+        for page_name in RETIRED_STANDARD_PAGES
+        if not frappe.db.exists("Page", page_name)
+    )
+    if missing:
+        raise AssertionError(f"Failed to seed retired Standard Page fixtures: {missing}")
+
 
 class TestAlmdinaSchemaInstall(FrappeTestCase):
     def test_required_doctypes_exist(self):
@@ -42,13 +83,34 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
     def test_required_pages_exist(self):
         required = {
             "factory-production-settings",
-            "factory-approval-queue",
             "factory-plan-archive",
-            "factory-system-preflight",
-            "factory-performance-benchmark",
         }
         missing = sorted(name for name in required if not frappe.db.exists("Page", name))
         self.assertEqual(missing, [])
+
+    def test_retired_standard_pages_are_absent(self):
+        assert_retired_standard_pages_absent()
+
+    def test_retired_approval_endpoints_fail_closed(self):
+        from almdina_erp.almdina_erp.services import (
+            approval_queue_service,
+            order_review_service,
+        )
+
+        calls = (
+            approval_queue_service.get_approval_queue_context,
+            approval_queue_service.get_pending_review_orders,
+            lambda: approval_queue_service.approve_order_safely("DCO-RETIRED"),
+            lambda: approval_queue_service.reject_order_safely(
+                "DCO-RETIRED",
+                "retired",
+            ),
+            lambda: order_review_service.reject_order("DCO-RETIRED", "retired"),
+        )
+        for call in calls:
+            with self.subTest(endpoint=getattr(call, "__name__", repr(call))):
+                with self.assertRaises(frappe.ValidationError):
+                    call()
 
     def test_required_workspaces_exist(self):
         required = {

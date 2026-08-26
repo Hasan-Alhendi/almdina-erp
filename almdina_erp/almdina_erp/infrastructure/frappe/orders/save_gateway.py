@@ -61,6 +61,9 @@ class FrappeDoorCuttingOrderSaveGateway:
     def calculate_piece_costs(self) -> None:
         self.costing.calculate_piece_rows()
 
+    def calculate_extra_addon_prices(self) -> None:
+        self.costing.calculate_extra_addon_prices()
+
     def ensure_special_shapes_documented(self) -> None:
         self.piece_policy.ensure_documented()
 

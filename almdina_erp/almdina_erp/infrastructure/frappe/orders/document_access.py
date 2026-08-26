@@ -37,6 +37,12 @@ _OLD_PIECE_FIELDS = [
     "special_shape_price_note",
     "special_shape_price_approved_by",
     "special_shape_price_approved_on",
+    "extra_double",
+    "extra_double_unit_price_usd",
+    "extra_liner",
+    "extra_liner_unit_price_usd",
+    "extra_recessed_handle_cutout",
+    "extra_recessed_handle_cutout_unit_price_usd",
 ]
 
 

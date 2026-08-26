@@ -63,6 +63,7 @@
     {"default":"0","fieldname":"special_shapes_baseline_cost_usd","fieldtype":"Currency","hidden":1,"label":"Special Shapes Automatic Baseline Cost USD","read_only":1,"permlevel":1},
     {"default":"0","fieldname":"special_shapes_estimated_total_usd","fieldtype":"Currency","hidden":1,"label":"Special Shapes Estimated Total USD","read_only":1,"permlevel":1},
     {"default":"0","fieldname":"special_shapes_final_total_usd","fieldtype":"Currency","hidden":1,"label":"Special Shapes Final Total USD","read_only":1,"permlevel":1},
+    {"default":"0","fieldname":"extra_addons_total_usd","fieldtype":"Currency","hidden":1,"label":"Extra Door Add-ons Total USD","read_only":1,"permlevel":1},
     {"default":"0","fieldname":"customer_quote_total_usd","fieldtype":"Currency","hidden":1,"label":"Customer Quote Total USD","read_only":1,"permlevel":1},
     {"default":"Automatic","fieldname":"customer_quote_status","fieldtype":"Select","hidden":1,"label":"Customer Quote Status","options":"Automatic\nEstimated\nPartially Approved\nApproved","read_only":1,"permlevel":1},
     {"default":"0","fieldname":"material_variance_cost_usd","fieldtype":"Currency","hidden":1,"label":"Legacy Material Variance Cost USD","read_only":1,"permlevel":1},

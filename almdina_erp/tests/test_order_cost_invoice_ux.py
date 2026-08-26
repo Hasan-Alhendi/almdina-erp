@@ -117,7 +117,7 @@ def test_invoice_has_secure_customer_action_and_shared_a4_print_layout():
     assert 'const invoice = mode === "invoice";' in presenter
     assert '${measurementDocumentBody(frm)}' in presenter
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
-    assert "renderer.notesCell(row, row.notes" in presenter
+    assert "renderer.notesCell(row, notes" in presenter
     assert '<th>ملاحظات</th>' in presenter
 
 

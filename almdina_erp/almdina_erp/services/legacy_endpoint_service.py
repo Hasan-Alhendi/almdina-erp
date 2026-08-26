@@ -14,12 +14,23 @@ _REMOVED_ROLE_GATE_MESSAGE = _(
     "This legacy role-based authorization path has been removed. "
     "Use the capability-protected Almdina service."
 )
+_RETIRED_APPROVAL_MESSAGE = _(
+    "The legacy order review and approval workflow has been retired. "
+    "Send orders directly to production through the supported workflow."
+)
 
 
 def reject_legacy_role_gate(*_roles: str) -> NoReturn:
     """Fail closed when historical Python code reaches a removed role gate."""
 
     frappe.throw(_REMOVED_ROLE_GATE_MESSAGE, frappe.PermissionError)
+    raise AssertionError("frappe.throw must interrupt execution")
+
+
+def reject_retired_approval_workflow(*_args: Any, **_kwargs: Any) -> NoReturn:
+    """Fail closed for every historical review/approval compatibility route."""
+
+    frappe.throw(_RETIRED_APPROVAL_MESSAGE, frappe.ValidationError)
     raise AssertionError("frappe.throw must interrupt execution")
 
 
@@ -92,6 +103,7 @@ __all__ = [
     "cancel_legacy_replacement",
     "finish_legacy_stage",
     "reject_legacy_role_gate",
+    "reject_retired_approval_workflow",
     "retired_product_endpoint",
     "start_legacy_stage",
 ]

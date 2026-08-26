@@ -30,9 +30,13 @@ def test_piece_type_change_is_intercepted_before_legacy_full_table_render():
     source = _source()
     assert "handlePieceTypeChange(frm, root, control, event)" in source
     assert "event.stopImmediatePropagation()" in source
-    assert 'row.piece_type = control.value || "Regular"' in source
+    assert 'setPieceType(frm, tr, control.value || "Regular"' in source
+    assert "function setPieceType(frm, tr, pieceType" in source
+    assert "window.AlmdinaTablePerformanceUX = Object.freeze" in source
     assert "updatePieceTypeVisual(frm, tr, row)" in source
-    assert "control.focus({ preventScroll: true })" in source
+    assert "options.focusTarget.focus({ preventScroll: true })" in source
+    assert "extraAddons.reconcilePieceType(frm, row)" in source
+    assert "extraAddons.syncRowPresentation(frm, tr, row" in source
     assert "renderFastMeasurements(frm)" not in source
 
 
@@ -53,6 +57,8 @@ def test_virtual_piece_type_change_materializes_one_row_without_rebuilding_table
     assert "resetVirtualClone(frm, clone)" in source
     assert 'tbody.appendChild(clone)' in source
     assert 'frm.script_manager.trigger("pieces_add", row.doctype, row.name)' in source
+    assert 'extraAddons.renderTypePicker(' in source
+    assert 'clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-extra-row"' in source
 
 
 def test_expensive_class_mutation_observer_is_replaced_by_direct_child_list_observer():

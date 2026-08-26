@@ -373,8 +373,13 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 | Factory Workforce | PAGE | Certified | read/activation، visit-generation mutation completion، transient-child ownership، revisit reconciliation، وremount مثبتة runtime |
 | Factory Permissions | PAGE | Certified | read/preview/import/export guards، dirty-aware revisit، save reconciliation، confirmation ownership، وremount مثبتة runtime |
 | Factory Production Settings | PAGE | Certified | read/activation، visit-generation mutation reconciliation، edit/audit child ownership، وremount مثبتة runtime |
-| Shop Floor Inbox | PAGE | Migration pending | request gates موجودة؛ full page activation contract غير معتمدة بعد |
-| Factory Master Data | PAGE | Migration pending | revisit compatibility ليست certification |
+| Shop Floor Inbox | PAGE | Certified | synchronous first-load، activation/read invalidation، visit-generation mutation reconciliation، caller-owned QuickActions children، UI-state preservation، وremount مثبتة runtime |
+| Factory Master Data | PAGE | Certified | synchronous bootstrap، activation/read invalidation، dirty editor preservation، visit-generation mutation reconciliation، transient-child ownership، وremount مثبتة runtime |
+| Factory Plan Archive | PAGE | Keep; lifecycle migration pending | feature نشطة لأرشفة PDF الرسمي للخطة المعتمدة؛ تبقى ضمن estate وتُعتمد لاحقًا بتغيير محدود |
+| Factory Approval Queue | PAGE | Retired / Removed | أزيل Page source وروابطها بعد إثبات runtime أن `Pending Review = 0`؛ بقيت capability grants، وأصبحت API التاريخية fail-closed |
+| Factory Stock Settings | PAGE | Retired / Removed | أزيل Page source بعد إثبات أنها orphaned وخارج Active Product Scope؛ بقيت endpoints التاريخية fail-closed وحقول optimizer المشتركة دون تغيير |
+| Factory System Preflight | PAGE | Retired / Removed | أزيل Page source؛ بقي alias التاريخي fail-closed، ولم تتغير routing/master-data/security tests المشتركة |
+| Factory Performance Benchmark | PAGE | Retired / Removed | أزيل Page source؛ بقي alias التاريخي fail-closed، ولم يتغير cutting engine أو performance regressions المشتركة |
 | Door Cutting Order | FORM | Specialized lifecycle exists; certification pending | Document Context وmeasurement/workspace owners موجودة؛ project-wide FORM certification لم تُغلق |
 | Door Cutting Order List | LIST | Certification pending | list-specific identity/refresh contract لم تُعتمد runtime بعد |
 | Current Query Reports | REPORT | Frappe-owned/declarative; custom lifecycle not currently required | التقارير الحالية filters declarative ولا تملك custom async lifecycle |
@@ -383,6 +388,14 @@ Architecture/asset contracts ذات الصلة خضراء. إثبات read/activ
 
 هذه القائمة status inventory وليست migration plan تلقائية. تغيير أي status إلى
 Certified يحتاج PR مستقلًا يذكر contract المغلقة واختبارات الإثبات.
+
+### 8.1 Frontend estate policy
+
+- **Keep** يعني أن الـsurface جزء من المنتج الحالي، لذلك يمكن جدولة lifecycle certification لها عند أولوية مناسبة.
+- **Temporary migration utility** ليست feature استثمارية جديدة؛ تبقى فقط لحماية بيانات/حالات تاريخية معروفة، وتُزال بعد runtime/data proof يثبت عدم وجود سجلات تحتاجها.
+- **Retired / Removed** يعني أن Page source أزيلت، وأن `bench migrate` يزيل سجل Standard Page اليتيم؛ لا تُعاد إلى lifecycle inventory النشط ولا تُبنى لها replacement وهمية.
+- **Retirement planned; removal pending** يعني أن الـsurface ليست مرشحًا للـlifecycle certification. الإزالة الفعلية تتم في Change مستقل بعد إثبات callers/navigation/Page-record/data migration ومتطلبات rollback، مع إبقاء أي compatibility endpoint لازمة fail-closed حتى يثبت إمكان حذفها أيضًا.
+- لا تُحذف Page source أو Frappe Page record لمجرد أن الرابط غير ظاهر في Workspace؛ retirement يحتاج إثباتًا إيجابيًا مثل بقية legacy boundaries.
 
 ## 9. Enforcement model
 

@@ -45,16 +45,14 @@ Visibility يجب أن يأتي من permission context/capabilities، لا من
 
 ### مساندة/تشخيص
 
-- `factory_system_preflight`.
-- `factory_performance_benchmark`.
 - Go-live workspace.
 
-هذه ليست جزءًا من رحلة العامل اليومية.
+### Retired / Removed
 
-### Compatibility / scope caution
-
-- `factory_approval_queue`: قد يبقى لآثار Review/Approve، لكنه ليس دليلًا أن Review/Approve mandatory في المسار الحالي.
-- `factory_stock_settings`: وجود الصفحة/الكود تاريخيًا لا يعيد المخزون إلى Active Scope v1.1.
+- `factory_stock_settings`: أزيل Page source؛ بقيت aliases التاريخية fail-closed وبيانات optimizer المشتركة.
+- `factory_system_preflight`: أزيل Page source؛ بقي alias التاريخي fail-closed.
+- `factory_performance_benchmark`: أزيل Page source؛ بقي alias التاريخي fail-closed، بينما cutting engine واختبارات الأداء المشتركة بقيت.
+- `factory_approval_queue`: أزيل Page source وروابطه بعد إثبات أن عدد طلبات `Pending Review` على الموقع الحي يساوي صفرًا؛ بقيت capability constants/grants، وأغلقت API القديمة دون حذف بيانات صلاحيات.
 
 ## 4. أين توجد الحقيقة لكل نوع بيانات؟
 
@@ -88,6 +86,14 @@ Capability catalog + authorization/application policy + Frappe/document scope.
 
 لا تخلط Internal Financial داخل payload تشغيلية عامة فقط لتسهيل الـfrontend.
 
+### Extra door add-ons
+
+- اختيار `Double` / `Liner` / تفريغ المسكة المخفية هو Customer requirement محفوظ على `Door Cutting Order Detail`.
+- نوع الدرفة يبقى Native dropdown بالقيم `عادية / خاصة / زاوية / Extra`. اختيار `Extra` يفتح Flyout صغيرًا ملاصقًا للسطر لاختيار `Liner` / `Double` / `مسكة غطس` بشكل متعدد، مع زر صغير لإعادة فتح الإضافات لاحقًا؛ لا تُستبدل قائمة نوع الدرفة بقائمة مخصصة مستقلة.
+- أسعار الوحدة والإجماليات حقول مالية محمية وتُحفظ كلقطة تاريخية على السطر، بينما الإجمالي التجاري يُعرض في Cost/فاتورة الزبون.
+- `Almdina ERP Settings` هو مصدر أسعار المصنع للطلبات/الإضافات الجديدة؛ تعديل السعر لا يعيد تسعير اختيار محفوظ سابقًا.
+- `Special + Liner` لا يستخدم مسار Extra: يكتب Liner في الملاحظات/الرسم ويظل السعر الخاص الشامل هو مصدر السعر.
+
 ## 6. Snapshots
 
 Snapshot ليس cache عشوائيًا. له معنى تاريخي/تشغيلي:
@@ -114,3 +120,47 @@ DocTypes مثل Permission/User/Master Data audits موجودة لتتبع تغ�
 - عامل يرى طلبًا أجنبيًا: افحص query repository + document scope + assignment.
 - Cost ظهر لغير المالي: افحص serializer/snapshot/API وpermlevel.
 - DXF لا يطابق الطلب: افحص geometry/units/matching، لا renderer فقط.
+
+## 10. Frontend Estate Retirement Closure
+
+أُغلق التدقيق النهائي بعد دمج PR #287 وإثبات runtime على
+`almadina-2.horizontechco.com` أن عدد `Door Cutting Order` بالحالة
+`Pending Review` يساوي **0**. هذا الدليل يخص إزالة Approval Queue فقط؛ لم تُحذف
+capability constants أو grants المخزنة.
+
+### 10.1 Caller matrix النهائي
+
+| Surface | Caller / navigation result | Backend compatibility | القرار |
+|---|---|---|---|
+| `factory_stock_settings` | لا Page source أو navigation/workspace/shell caller. | aliases التاريخية إلى `retired_product_endpoint`. | **Retired / Removed** |
+| `factory_system_preflight` | لا Page source أو navigation/workspace/shell caller. | alias التاريخي إلى `retired_product_endpoint`. | **Retired / Removed** |
+| `factory_performance_benchmark` | لا Page source أو navigation/workspace/shell caller. | alias التاريخي إلى `retired_product_endpoint`؛ cutting engine واختبارات الأداء المشتركة باقية. | **Retired / Removed** |
+| `factory_approval_queue` | أزيل Page source وروابط Control Center/Go-Live وshared-shell وsurface/workspace mappings. | أسماء `approval_queue_service` و`order_review_service.reject_order` باقية للتوافق لكنها تفشل عبر `reject_retired_approval_workflow` قبل أي قراءة أو كتابة. submit/approve القديمة تبقى محكومة بسياسة lifecycle التي ترفض الفعل دائمًا. | **Retired / Removed** |
+| `factory_plan_archive` | Page source وروابط Control Center/Go-Live وshared-shell وsurface mappings باقية. | `archive_service` نشطة ومحمية بـ`ARCHIVE_APPROVED_PLAN` وdocument scope. | **KEEP** |
+
+البحث النهائي شمل `factory-approval-queue` و`approval_queue_service` و
+`approve_order_safely` و`reject_order_safely` و`get_pending_review_orders` و
+`APPROVE_ORDER` و`REJECT_ORDER` و`Pending Review`. البقايا المقصودة ليست caller لصفحة:
+capabilities/grants محفوظة، والحالات التاريخية المشتركة مع editability/revision/dispatch
+بقيت، وأسماء API القديمة أصبحت fail-closed. لم يتغير DCO أو production workflow.
+
+### 10.2 Endpoint retirement policy
+
+| Boundary | الحالة الحالية |
+|---|---|
+| stock settings + preflight + benchmark historical method names | تبقى aliases fail-closed إلى `retired_product_endpoint`. |
+| `approval_queue_service` + `order_review_service.reject_order` | تبقى الأسماء العامة للتوافق فقط؛ كل استدعاء يفشل قبل DB عبر `reject_retired_approval_workflow`. |
+| submit/approve compatibility routes | تبقى الأسماء وcapabilities؛ `lifecycle_permissions.py` يرفض `SUBMIT_FOR_REVIEW` و`APPROVE` دائمًا، لذلك لا تعيد API القديمة تشغيل المسار. |
+| `archive_service` | active؛ لم يتغير. |
+
+### 10.3 Frappe v16 Page-record removal
+
+الصفحات المحذوفة Standard Pages. في Frappe v16 ينفذ `bench migrate`:
+
+1. `sync_all()` لمصادر Standard Page الموجودة.
+2. `post_schema_updates()` ثم `remove_orphan_entities()`.
+3. حذف Page records القياسية التي لم يعد لها JSON مصدر.
+
+لا يوجد `delete_doc` patch مخصص. اختبار التكامل يثبت fresh absence، ثم يزرع سجلات
+Standard Page تاريخية للصفحات المتقاعدة، ويشغل migrate مرتين مع فحص الغياب بعد كل
+مرة. `factory_plan_archive` تبقى مطلوبة في schema/navigation tests.

@@ -12,9 +12,7 @@ APP = ROOT / "almdina_erp"
 class TestControlCenterArchitecture(unittest.TestCase):
     def test_active_control_center_services_have_no_role_gates(self) -> None:
         paths = [
-            APP / "services" / "approval_queue_service.py",
             APP / "services" / "archive_service.py",
-            APP / "services" / "order_review_service.py",
             APP / "services" / "replacement_creation_service.py",
             APP / "services" / "replacement_approval.py",
             APP / "services" / "replacement_execution.py",
@@ -46,7 +44,6 @@ class TestControlCenterArchitecture(unittest.TestCase):
 
     def test_pages_reports_and_replacement_doctype_have_no_fixed_roles(self) -> None:
         paths = [
-            APP / "page" / "factory_approval_queue" / "factory_approval_queue.json",
             APP / "page" / "factory_plan_archive" / "factory_plan_archive.json",
             APP / "report" / "factory_operations_summary" / "factory_operations_summary.json",
             APP / "report" / "production_incidents_and_replacements" / "production_incidents_and_replacements.json",
@@ -97,18 +94,20 @@ class TestControlCenterArchitecture(unittest.TestCase):
         self.assertIn("ARCHIVE_APPROVED_PLAN", source)
         self.assertNotIn("frappe.get_all", source)
 
-    def test_approval_queue_separates_approve_and_reject(self) -> None:
-        service = (APP / "services" / "approval_queue_service.py").read_text(
+    def test_retired_approval_endpoints_are_thin_fail_closed_compatibility(self) -> None:
+        queue = (APP / "services" / "approval_queue_service.py").read_text(
             encoding="utf-8"
         )
-        page = (
-            APP / "page" / "factory_approval_queue" / "factory_approval_queue.js"
-        ).read_text(encoding="utf-8")
-        self.assertIn("APPROVE_ORDER", service)
-        self.assertIn("REJECT_ORDER", service)
-        self.assertIn("can_approve", page)
-        self.assertIn("can_reject", page)
-        self.assertNotIn("frappe.user_roles", page)
+        review = (APP / "services" / "order_review_service.py").read_text(
+            encoding="utf-8"
+        )
+        combined = f"{queue}\n{review}"
+        self.assertEqual(queue.count("reject_retired_approval_workflow("), 4)
+        self.assertEqual(review.count("reject_retired_approval_workflow("), 1)
+        self.assertNotIn("frappe.db", combined)
+        self.assertNotIn("frappe.get_list", combined)
+        self.assertNotIn("frappe.get_doc", combined)
+        self.assertNotIn("set_value", combined)
 
     def test_legacy_review_routes_and_document_scopes_are_registered(self) -> None:
         hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")

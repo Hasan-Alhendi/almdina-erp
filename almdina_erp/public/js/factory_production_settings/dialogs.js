@@ -81,6 +81,13 @@
                     { fieldname: "default_special_margin_percent", fieldtype: "Percent", label: t("هامش الدرف الخاصة"), default: values.default_special_margin_percent, reqd: 1 },
                 ];
             }
+            if (section === "extra_addons") {
+                return [
+                    { fieldname: "default_extra_double_unit_price_usd", fieldtype: "Currency", label: t("سعر Double لكل درفة (USD)"), description: t("سعر بيع يضاف تلقائيًا لكل درفة Extra مختارة."), default: values.default_extra_double_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_liner_unit_price_usd", fieldtype: "Currency", label: t("سعر Liner لكل درفة (USD)"), description: t("لا يستخدم للدرفة الخاصة؛ لاينر الدرفة الخاصة يبقى ضمن سعرها الخاص الشامل."), default: values.default_extra_liner_unit_price_usd, reqd: 1 },
+                    { fieldname: "default_extra_recessed_handle_cutout_unit_price_usd", fieldtype: "Currency", label: t("سعر تفريغ المسكة المخفية لكل درفة (USD)"), default: values.default_extra_recessed_handle_cutout_unit_price_usd, reqd: 1 },
+                ];
+            }
             if (section === "print_identity") {
                 return [
                     { fieldname: "print_factory_name", fieldtype: "Data", label: t("اسم المعمل"), default: values.print_factory_name, reqd: 1 },
@@ -99,6 +106,7 @@
         function sectionTitle(section) {
             if (section === "cutting") return t("تعديل القص والمحسّن");
             if (section === "costing") return t("تعديل التكلفة الافتراضية");
+            if (section === "extra_addons") return t("تعديل أسعار إضافات Extra");
             if (section === "print_identity") return t("تعديل هوية أوراق الطباعة");
             return t("تعديل ضوابط الإنتاج");
         }
