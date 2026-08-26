@@ -13,6 +13,7 @@ from almdina_erp.almdina_erp.application.security.workforce_management import (
     audit_snapshot,
     normalize_role_selection,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.factory_user_scope import ALMDINA_APP
 from almdina_erp.almdina_erp.infrastructure.frappe.system_role_policy import (
     PROTECTED_SYSTEM_ROLES,
 )
@@ -278,6 +279,7 @@ class FrappeWorkforceRepository:
                 "user_type": "System User",
                 "language": identity.language,
                 "enabled": 1,
+                "default_app": ALMDINA_APP,
                 MEMBERSHIP_FIELD: 1,
             }
         )
