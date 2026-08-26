@@ -252,6 +252,7 @@
             )
         ) || element;
     }
+
     function setPermissionVisibility(element, allowed) {
         if (!element || !element.style) return;
         if (!allowed) {
