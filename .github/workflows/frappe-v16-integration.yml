@@ -153,11 +153,15 @@ jobs:
           set -o pipefail
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_retired_standard_pages_absent
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_retired_standard_reports_absent
           bench --site test.localhost execute almdina_erp.tests.test_schema_install.seed_retired_standard_pages
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.seed_retired_standard_reports
           bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-first.log"
           bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_retired_standard_pages_absent
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_retired_standard_reports_absent
           bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate-second.log"
           bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_retired_standard_pages_absent
+          bench --site test.localhost execute almdina_erp.tests.test_schema_install.assert_retired_standard_reports_absent
 
       - name: Verify installed apps and schema
         run: |
