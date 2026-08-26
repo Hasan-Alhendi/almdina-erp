@@ -11,6 +11,10 @@
         return Boolean(context && context.personal_inbox);
     }
 
+    function canViewHistory(context) {
+        return Boolean(context && context.can_view_history === true);
+    }
+
     function isMyOperationalStage(row) {
         return Boolean(row && row.actor_holds_current_stage_role === true);
     }
@@ -24,15 +28,17 @@
         const assigned = showsPersonalHistory(context)
             ? asRows(activeRows).filter(isMyOperationalStage)
             : asRows(activeRows).slice();
-        const seen = new Set(assigned.map(row => row && row.door_cutting_order).filter(Boolean));
         const completed = [];
-        asRows(historyRows).forEach(row => {
-            const order = row && row.door_cutting_order;
-            if (!order || seen.has(order)) return;
-            seen.add(order);
-            completed.push(row);
-        });
-        return { assigned, completed };
+        if (canViewHistory(context)) {
+            const seen = new Set(assigned.map(row => row && row.door_cutting_order).filter(Boolean));
+            asRows(historyRows).forEach(row => {
+                const order = row && row.door_cutting_order;
+                if (!order || seen.has(order)) return;
+                seen.add(order);
+                completed.push(row);
+            });
+        }
+        return { assigned, completed, canViewHistory: canViewHistory(context) };
     }
 
     function routeKey(row) {
@@ -169,6 +175,7 @@
     const exported = Object.freeze({
         UNCONFIGURED_ROUTE,
         showsPersonalHistory,
+        canViewHistory,
         isMyOperationalStage,
         workerBoardRows,
         mergeVisibleList,
