@@ -95,6 +95,7 @@ class TestPermissionTypeIntegration(unittest.TestCase):
             Capability.REVERT_DEPARTMENT,
             Capability.MARK_DELIVERED,
             Capability.REASSIGN_WORKER,
+            Capability.VIEW_SHOP_FLOOR_HISTORY,
             Capability.RECALCULATE_PLAN,
             Capability.EXPORT_DXF,
             Capability.UPLOAD_DXF,

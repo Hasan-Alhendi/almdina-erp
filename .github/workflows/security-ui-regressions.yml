@@ -43,6 +43,7 @@ jobs:
             almdina_erp.tests.test_capability_execution_contract \
             almdina_erp.tests.test_shop_floor_data_policy \
             almdina_erp.tests.test_shop_floor_plan_loading_policy \
+            almdina_erp.tests.test_shop_floor_history_permission \
             almdina_erp.tests.test_workforce_service_authorization_order \
             almdina_erp.tests.test_customer_invoice_permission_surface \
             almdina_erp.tests.test_v16_desk_navigation \
@@ -67,8 +68,13 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/secure_dxf_export.js
+          node --check almdina_erp/public/js/shop_floor_inbox/view_model.js
+          node --check almdina_erp/public/js/shop_floor_inbox/renderer.js
+          node --check almdina_erp/tests/js/shop_floor_history_renderer.test.js
           node almdina_erp/tests/js/order_list_cards.test.js
           node almdina_erp/tests/js/plan_surface_isolation.test.js
           node almdina_erp/tests/js/approved_plan_navigation.test.js
           node almdina_erp/tests/js/permission_context_jquery_thenable.test.js
           node almdina_erp/tests/js/order_navigation_surfaces.test.js
+          node almdina_erp/tests/js/shop_floor_inbox_view_model.test.js
+          node almdina_erp/tests/js/shop_floor_history_renderer.test.js

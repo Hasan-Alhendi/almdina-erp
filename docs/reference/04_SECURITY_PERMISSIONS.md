@@ -79,6 +79,16 @@ flowchart LR
 
 `dispatch_order`, `start_assigned_stage`, `handoff_assigned_stage`, `revert_department`, `return_order_to_draft`, `mark_delivered`, `reassign_worker`.
 
+### Shop Floor visibility
+
+`view_shop_floor_history` يتحكم فقط بعرض سجل الطلبات المنتهية داخل صالة الإنتاج.
+
+العقد ثابت:
+
+- لا يمنح دخول Shop Floor بمفرده؛ الدخول يبقى محكومًا بـ`SHOP_FLOOR_ACCESS_CAPABILITIES`.
+- لا يمنح `view_orders` أو `view_all_orders` ولا يوسّع Document scope.
+- لا يمنح أي Production action. صف `Ready for Delivery` الحالي قد يبقى ضمن بيانات اللوحة التشغيلية لأنه حالة عمل حية، وليس سجلًا تاريخيًا.
+
 ### Incidents & replacements
 
 `archive_approved_plan`, `view_production_incidents`, `record_incident`, `create_replacement`, `view_replacements`, `approve_replacement`, `start_replacement`, `complete_replacement`, `cancel_replacement`.

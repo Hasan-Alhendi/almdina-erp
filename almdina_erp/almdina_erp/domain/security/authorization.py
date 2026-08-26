@@ -55,6 +55,10 @@ class Capability:
     MARK_DELIVERED = "mark_delivered"
     REASSIGN_WORKER = "reassign_worker"
 
+    # Shop-floor visibility. This is intentionally not a production action and
+    # must never become a Shop Floor entry capability by itself.
+    VIEW_SHOP_FLOOR_HISTORY = "view_shop_floor_history"
+
     # Control center and quality
     ARCHIVE_APPROVED_PLAN = "archive_approved_plan"
     VIEW_PRODUCTION_INCIDENTS = "view_production_incidents"
@@ -186,6 +190,12 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.RETURN_ORDER_TO_DRAFT, Capability.RETURN_ORDER_TO_DRAFT, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.MARK_DELIVERED, Capability.MARK_DELIVERED, _ORDER_DOCTYPE, "production"),
     CapabilityDefinition(Capability.REASSIGN_WORKER, Capability.REASSIGN_WORKER, _ORDER_DOCTYPE, "production"),
+    CapabilityDefinition(
+        Capability.VIEW_SHOP_FLOOR_HISTORY,
+        Capability.VIEW_SHOP_FLOOR_HISTORY,
+        _ORDER_DOCTYPE,
+        "shop_floor",
+    ),
     CapabilityDefinition(Capability.ARCHIVE_APPROVED_PLAN, Capability.ARCHIVE_APPROVED_PLAN, CUTTING_PLAN_DOCTYPE, "control_center"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_INCIDENTS, "read", _INCIDENT_DOCTYPE, "control_center", False),
     CapabilityDefinition(Capability.RECORD_INCIDENT, Capability.RECORD_INCIDENT, _ORDER_DOCTYPE, "control_center"),
