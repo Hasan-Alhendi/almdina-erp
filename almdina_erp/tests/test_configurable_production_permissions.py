@@ -13,7 +13,6 @@ ORDER_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "order_t
 STAGE_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "production_stage_repository.py"
 ROUTING_CONTROLLER = ROOT / "almdina_erp" / "doctype" / "production_routing" / "production_routing.py"
 MASTER_DATA = ROOT / "almdina_erp" / "services" / "master_data_service.py"
-FACTORY_SCOPE = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "factory_user_scope.py"
 DISPATCH_SERVICE = ROOT / "almdina_erp" / "services" / "order_dispatch_service.py"
 COMMAND_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_commands.py"
 QUERY_SERVICE = ROOT / "almdina_erp" / "services" / "shop_floor_query_service.py"
@@ -81,13 +80,17 @@ class TestConfigurableProductionPermissions(unittest.TestCase):
 
     def test_operational_workers_are_factory_scoped_and_role_qualified(self) -> None:
         source = AUTHORIZATION.read_text(encoding="utf-8")
-        scope = FACTORY_SCOPE.read_text(encoding="utf-8")
         self.assertIn("assert_enabled_user_has_role", source)
         self.assertIn("get_users_for_role", source)
-        self.assertIn("is_almdina_user", source)
-        self.assertIn("ALMDINA_APP", source)
-        self.assertIn("coalesce(u.default_app, '') = %s", source)
-        self.assertIn('ALMDINA_APP = "almdina_erp"', scope)
+        self.assertIn("MEMBERSHIP_FIELD", source)
+        self.assertIn("user_row.get(MEMBERSHIP_FIELD)", source)
+        self.assertIn("coalesce(u.`{MEMBERSHIP_FIELD}`, 0) = 1", source)
+        self.assertIn("hr.role = %s", source)
+        self.assertIn("u.enabled = 1", source)
+        self.assertIn("u.user_type = 'System User'", source)
+        self.assertNotIn("default_app", source)
+        self.assertNotIn("ALMDINA_APP", source)
+        self.assertNotIn("is_almdina_user", source)
         for forbidden in (
             "STAGE_ROLE_BY_TYPE",
             "عامل شريون",

@@ -4,9 +4,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
-from almdina_erp.almdina_erp.infrastructure.frappe.factory_user_scope import (
-    ALMDINA_APP,
-    is_almdina_user,
+from almdina_erp.almdina_erp.infrastructure.frappe.workforce_membership import (
+    MEMBERSHIP_FIELD,
 )
 
 
@@ -40,14 +39,14 @@ def assert_enabled_user_has_role(user: str, role: str) -> None:
     user_row = frappe.db.get_value(
         "User",
         resolved_user,
-        ["enabled", "user_type", "default_app"],
+        ["enabled", "user_type", MEMBERSHIP_FIELD],
         as_dict=True,
     )
     if not user_row or not cint(user_row.enabled):
         frappe.throw(_("المستخدم {0} غير مفعّل.").format(resolved_user))
     if str(user_row.user_type or "") != "System User":
         frappe.throw(_("يمكن إسناد مراحل الإنتاج إلى مستخدمي النظام فقط."))
-    if not is_almdina_user(str(user_row.default_app or "")):
+    if not cint(user_row.get(MEMBERSHIP_FIELD)):
         frappe.throw(
             _("المستخدم {0} غير مضاف إلى مستخدمي معمل Almdina.").format(
                 resolved_user
@@ -69,18 +68,18 @@ def get_users_for_role(role: str) -> list[dict[str, str]]:
     if not resolved_role or not frappe.db.exists("Role", resolved_role):
         return []
     rows = frappe.db.sql(
-        """
+        f"""
         select u.name, u.full_name
           from `tabUser` u
           inner join `tabHas Role` hr on hr.parent = u.name
          where hr.role = %s
            and u.enabled = 1
            and u.user_type = 'System User'
-           and coalesce(u.default_app, '') = %s
+           and coalesce(u.`{MEMBERSHIP_FIELD}`, 0) = 1
            and u.name not in ('Guest', 'Administrator')
          order by u.full_name asc, u.name asc
         """,
-        (resolved_role, ALMDINA_APP),
+        (resolved_role,),
         as_dict=True,
     )
     return [

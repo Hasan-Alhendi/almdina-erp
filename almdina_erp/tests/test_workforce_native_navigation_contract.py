@@ -23,6 +23,22 @@ class TestWorkforceNativeNavigationContract(unittest.TestCase):
         self.assertNotIn('"default_workspace": "Almdina ERP"', source)
         self.assertIn("MEMBERSHIP_FIELD", source)
 
+    def test_shop_floor_assignees_use_workforce_membership_not_navigation(self) -> None:
+        source = (
+            APP_ROOT
+            / "almdina_erp"
+            / "infrastructure"
+            / "frappe"
+            / "shop_floor_authorization.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("MEMBERSHIP_FIELD", source)
+        self.assertIn("user_row.get(MEMBERSHIP_FIELD)", source)
+        self.assertIn("coalesce(u.`{MEMBERSHIP_FIELD}`, 0) = 1", source)
+        self.assertNotIn("default_app", source)
+        self.assertNotIn("ALMDINA_APP", source)
+        self.assertNotIn("is_almdina_user", source)
+
     def test_app_card_uses_the_workspace_slug_route(self) -> None:
         hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
         self.assertIn('"route": "/desk/almdina-erp"', hooks)
