@@ -22,6 +22,7 @@ CATEGORY_ORDER = (
     "cutting_plan",
     "drawing",
     "production",
+    "shop_floor",
     "control_center",
     "reports",
     "workforce",
@@ -37,6 +38,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "cutting_plan": {"label": "خطة القص", "description": "عرض تبويبات الخطة (نظام / مرفوعة / معتمدة) وحسابها وتعديل إعدادات المحسّن واعتمادها وطباعتها.", "icon": "organization"},
     "drawing": {"label": "الرسم وDXF", "description": "الرسم الخاص وتصدير ملفات DXF ورفعها واستبدالها.", "icon": "image-view"},
     "production": {"label": "الإنتاج والإسناد", "description": "إرسال الطلب وبدء المراحل وتسليمها والرجوع وإعادة الإسناد.", "icon": "tool"},
+    "shop_floor": {"label": "صالة الإنتاج", "description": "صلاحيات العرض الإضافية داخل صالة الإنتاج دون منح دخول أو إجراءات إنتاجية بحد ذاتها.", "icon": "list"},
     "control_center": {"label": "مركز التحكم والجودة", "description": "أرشفة الخطط وعرض حوادث الإنتاج وتسجيلها وإدارة قطع التعويض.", "icon": "dashboard"},
     "reports": {"label": "التقارير", "description": "عرض تقارير التشغيل والأداء والتكلفة والخسائر الداخلية.", "icon": "chart"},
     "workforce": {"label": "المستخدمون والقوى العاملة", "description": "عرض حسابات المعمل وإنشاؤها وتعديلها وتفعيلها وإدارة أدوارها.", "icon": "users"},
@@ -92,6 +94,10 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.RETURN_ORDER_TO_DRAFT: _presentation("إعادة الطلب للمسودة", "إعادة نفس الطلب إلى المسودة بعد إلغاء مراحل الإنتاج النشطة، دون إنشاء نسخة جديدة.", "critical"),
     Capability.MARK_DELIVERED: _presentation("تأكيد التسليم", "تغيير حالة الطلب إلى تم التسليم.", "critical"),
     Capability.REASSIGN_WORKER: _presentation("تغيير العامل", "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.", "sensitive"),
+    Capability.VIEW_SHOP_FLOOR_HISTORY: _presentation(
+        "عرض سجل صالة الإنتاج",
+        "عرض الطلبات المنتهية التي تقع أصلًا ضمن نطاق المستخدم. لا تمنح دخول صالة الإنتاج ولا أي إجراء أو نطاق طلبات إضافي.",
+    ),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),
     Capability.VIEW_PRODUCTION_INCIDENTS: _presentation("عرض أخطاء الإنتاج", "عرض قائمة حوادث وأخطاء الإنتاج المسجلة ومتابعة تفاصيلها."),
     Capability.RECORD_INCIDENT: _presentation("تسجيل حادث إنتاج", "تسجيل قطعة متضررة أو مشكلة أثناء التنفيذ.", "sensitive"),
@@ -201,12 +207,18 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
     if state[Capability.RECALCULATE_PLAN]:
         state[Capability.VIEW_SYSTEM_CUTTING_PLAN] = True
 
+    # History is read-only Shop Floor visibility. It is deliberately excluded
+    # from transactional dependencies so granting it alone cannot promote
+    # VIEW_ORDERS or widen native Door Cutting Order scope.
     transactional_actions = {
         capability
         for capability, enabled in state.items()
         if enabled
         and CAPABILITY_CATALOG[capability].applies_to in {"Door Cutting Order", CUTTING_PLAN_DOCTYPE}
-        and capability not in {Capability.VIEW_ORDERS}
+        and capability not in {
+            Capability.VIEW_ORDERS,
+            Capability.VIEW_SHOP_FLOOR_HISTORY,
+        }
     }
     if transactional_actions:
         state[Capability.VIEW_ORDERS] = True
