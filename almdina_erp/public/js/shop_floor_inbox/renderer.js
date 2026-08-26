@@ -278,25 +278,35 @@
     function renderList(shell, model, mode = "inbox") {
         let sections = "";
         const title = __("الطلبات المسندة");
-        if (model.assigned.length || model.completed.length) {
+        const canViewHistory = model.canViewHistory === true;
+        if (model.assigned.length || (canViewHistory && model.completed.length)) {
             sections = model.assigned.length
                 ? listSection(title, model.assigned, mode)
                 : `<section class="almdina-sf-list-section"><div class="almdina-sf-list-title"><div><span class="almdina-sf-list-dot" aria-hidden="true"></span>${esc(title)}</div></div>${emptyState(__("لا توجد طلبات مسندة"), __("ستظهر هنا الطلبات التي أصبحت ضمن دورك التشغيلي."))}</section>`;
-            sections += listSection(__("الطلبات المنتهية"), model.completed, mode, { completed: true });
+            if (canViewHistory) {
+                sections += listSection(__("الطلبات المنتهية"), model.completed, mode, { completed: true });
+            }
         }
+        const description = canViewHistory
+            ? __("ابدأ بالطلبات المسندة، ثم راجع ما أنهيته في القسم السفلي.")
+            : __("تابع الطلبات المسندة إليك ونفّذ الإجراء المتاح لكل طلب.");
+        const stats = [heroStat(__("مسندة"), model.assigned.length, "active")];
+        if (canViewHistory) {
+            stats.push(heroStat(__("منتهية"), model.completed.length, "ready"));
+        }
+        const emptyDescription = canViewHistory
+            ? __("لا يوجد عمل مسند أو سجل منتهٍ ضمن هذا القسم.")
+            : __("لا يوجد عمل مسند إليك حاليًا.");
         shell.$content.html(`
             <div class="almdina-sf-shell">
                 ${pageHero(
                     __("قائمة العمل"),
                     __("طلباتك التشغيلية"),
-                    __("ابدأ بالطلبات المسندة، ثم راجع ما أنهيته في القسم السفلي."),
-                    [
-                        heroStat(__("مسندة"), model.assigned.length, "active"),
-                        heroStat(__("منتهية"), model.completed.length, "ready"),
-                    ].join("")
+                    description,
+                    stats.join("")
                 )}
                 <div class="almdina-sf-overview">
-                    ${sections || emptyState(__("لا توجد طلبات حاليًا"), __("لا يوجد عمل مسند أو سجل منتهٍ ضمن هذا القسم."))}
+                    ${sections || emptyState(__("لا توجد طلبات حاليًا"), emptyDescription)}
                 </div>
             </div>`);
     }
