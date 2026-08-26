@@ -99,14 +99,17 @@ def test_worker_list_keeps_assigned_work_first_and_completed_history_last() -> N
     css = source(CSS_PATH)
 
     # The worker sees only their actionable current-stage assignments. Completed
-    # history follows at the bottom and never exposes a production quick action.
+    # history follows at the bottom only when the backend history capability says
+    # it is visible, and it never exposes a production quick action.
     assert "function showsPersonalHistory(context)" in view_model
     assert "context && context.personal_inbox" in view_model
+    assert "function canViewHistory(context)" in view_model
+    assert "context && context.can_view_history === true" in view_model
     assert "function isMyOperationalStage(row)" in view_model
     assert "actor_holds_current_stage_role === true" in view_model
     assert "function mergeVisibleList(activeRows, historyRows, context)" in view_model
     assert "? asRows(activeRows).filter(isMyOperationalStage)" in view_model
-    assert "return { assigned, completed };" in view_model
+    assert "return { assigned, completed, canViewHistory: canViewHistory(context) };" in view_model
     assert "function workerBoardRows(activeRows, context)" in view_model
     assert 'listSection(__("الطلبات المنتهية"), model.completed, mode, { completed: true })' in renderer
     assert 'terminal || completed ? "" : quickActionHtml(row, mode)' in renderer
