@@ -20,6 +20,10 @@ from almdina_erp.almdina_erp.application.shop_floor.queries import (
     ShopFloorPermissionDenied,
     get_my_archive,
 )
+from almdina_erp.almdina_erp.domain.orders.production_routing import (
+    ProductionRoute,
+    RoutingStage,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     PRODUCTION_OPERATOR_CAPABILITIES,
@@ -35,6 +39,23 @@ class _HistoryOnlyRepository:
 
     def global_capabilities(self) -> frozenset[str]:
         return frozenset({Capability.VIEW_SHOP_FLOOR_HISTORY})
+
+
+def _production_route() -> ProductionRoute:
+    return ProductionRoute(
+        name="route-a",
+        label="المسار أ",
+        stages=(
+            RoutingStage(1, "Cutting", "القص", "Cutting Operator"),
+            RoutingStage(2, "Edge", "القشاط", "Edge Operator"),
+        ),
+    )
+
+
+def _route_resolver(route_name: str) -> ProductionRoute:
+    if route_name != "route-a":
+        raise ValueError("Unknown route")
+    return _production_route()
 
 
 class TestShopFloorHistoryPermission(unittest.TestCase):
@@ -64,36 +85,74 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
         with self.assertRaises(ShopFloorPermissionDenied):
             get_my_archive(_HistoryOnlyRepository())
 
-    def test_history_filter_preserves_only_current_ready_for_delivery_row(self) -> None:
+    def test_history_filter_preserves_only_terminal_ready_for_delivery_row(self) -> None:
         rows = [
             {
-                "name": "stage-current",
-                "current_production_stage": "stage-current",
+                "name": "stage-terminal",
+                "current_production_stage": None,
                 "door_cutting_order": "DCO-READY",
                 "order_status": "Ready for Delivery",
+                "production_path": "route-a",
+                "stage_type": "Edge",
             },
             {
-                "name": "stage-old",
-                "current_production_stage": "stage-current",
+                "name": "stage-previous",
+                "current_production_stage": None,
                 "door_cutting_order": "DCO-READY",
                 "order_status": "Ready for Delivery",
+                "production_path": "route-a",
+                "stage_type": "Cutting",
             },
             {
-                "name": "stage-completed",
+                "name": "stage-non-ready",
                 "current_production_stage": "stage-next",
                 "door_cutting_order": "DCO-HISTORY",
                 "order_status": "In Production",
+                "production_path": "route-a",
+                "stage_type": "Edge",
             },
         ]
 
-        denied = visible_archive_rows(rows, set())
-        self.assertEqual([row["name"] for row in denied], ["stage-current"])
+        denied = visible_archive_rows(
+            rows,
+            set(),
+            route_resolver=_route_resolver,
+        )
+        self.assertEqual([row["name"] for row in denied], ["stage-terminal"])
 
         allowed = visible_archive_rows(
             rows,
             {Capability.VIEW_SHOP_FLOOR_HISTORY},
+            route_resolver=_route_resolver,
         )
         self.assertEqual(allowed, rows)
+
+    def test_history_filter_fails_closed_for_missing_or_invalid_routing(self) -> None:
+        rows = [
+            {
+                "name": "missing-route",
+                "order_status": "Ready for Delivery",
+                "production_path": "",
+                "stage_type": "Edge",
+            },
+            {
+                "name": "unknown-route",
+                "order_status": "Ready for Delivery",
+                "production_path": "route-missing",
+                "stage_type": "Edge",
+            },
+            {
+                "name": "unknown-stage",
+                "order_status": "Ready for Delivery",
+                "production_path": "route-a",
+                "stage_type": "Unknown",
+            },
+        ]
+        self.assertEqual(
+            visible_archive_rows(rows, set(), route_resolver=_route_resolver),
+            [],
+        )
+        self.assertEqual(visible_archive_rows(rows, set()), [])
 
     def test_legacy_migration_is_minimal_and_idempotent(self) -> None:
         states = {
