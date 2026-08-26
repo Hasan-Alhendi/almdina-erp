@@ -50,7 +50,7 @@ class FrappeWorkforceRepository:
         )
 
     @staticmethod
-    def _is_almdina_user(*, member: object) -> bool:
+    def _is_workforce_member(*, member: object) -> bool:
         return bool(cint(member))
 
     def lock_user(self, user: str) -> None:
@@ -129,7 +129,7 @@ class FrappeWorkforceRepository:
             "default_app": str(user.default_app or ""),
             "last_active": str(user.last_active or ""),
             "active_assignments": self.active_assignment_count(user.name),
-            "is_almdina": self._is_almdina_user(
+            "is_almdina": self._is_workforce_member(
                 member=getattr(user, MEMBERSHIP_FIELD, 0),
             ),
         }
@@ -241,7 +241,7 @@ class FrappeWorkforceRepository:
         user = frappe.get_doc("User", resolved)
         if str(user.user_type or "") != "System User":
             raise ValueError("يمكن إضافة مستخدمي النظام فقط إلى مستخدمي معمل Almdina.")
-        if self._is_almdina_user(member=getattr(user, MEMBERSHIP_FIELD, 0)):
+        if self._is_workforce_member(member=getattr(user, MEMBERSHIP_FIELD, 0)):
             return self.get_user(resolved)
 
         retained_roles = tuple(
