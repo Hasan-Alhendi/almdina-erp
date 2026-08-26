@@ -5,6 +5,7 @@ from typing import Any, Callable, TypeVar
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.application.shop_floor import history_policy
 from almdina_erp.almdina_erp.application.shop_floor import order_list_query
 from almdina_erp.almdina_erp.application.shop_floor import queries
 from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
@@ -43,7 +44,11 @@ def _current_capabilities() -> frozenset[str]:
 
 @frappe.whitelist()
 def get_shop_floor_context() -> dict[str, Any]:
-    return _execute(queries.get_shop_floor_context)
+    result = _execute(queries.get_shop_floor_context)
+    result["can_view_history"] = history_policy.can_view_shop_floor_history(
+        _current_capabilities()
+    )
+    return result
 
 
 @frappe.whitelist()
@@ -79,7 +84,9 @@ def get_my_inbox() -> list[dict[str, Any]]:
 @frappe.whitelist()
 def get_my_archive() -> list[dict[str, Any]]:
     rows = _execute(queries.get_my_archive)
-    return sanitize_shop_floor_summary(rows, _current_capabilities())
+    capabilities = _current_capabilities()
+    visible_rows = history_policy.visible_archive_rows(rows, capabilities)
+    return sanitize_shop_floor_summary(visible_rows, capabilities)
 
 
 @frappe.whitelist()
