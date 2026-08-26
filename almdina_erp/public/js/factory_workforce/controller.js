@@ -48,11 +48,10 @@
         const dialogs = dialogsModule.create({ translate: __ });
         let activation = null;
         let initialLoadPending = true;
-
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");
+        syncPrimaryAction();
         page.add_inner_button(__("تحديث"), load, null, "refresh");
-
         interactionsModule.bind({
             $main,
             lifecycle: store.lifecycle,
@@ -137,7 +136,6 @@
         function can(capability) {
             return viewModel.can(state, capability);
         }
-
         function actionAllowed(user, action) {
             return viewModel.actionAllowed(user, action);
         }
@@ -152,6 +150,8 @@
 
         function load() {
             if (!activation || !activation.isActive()) return Promise.resolve(null);
+            state.permissions = {};
+            syncPrimaryAction();
             const isInitialLoad = initialLoadPending;
             initialLoadPending = false;
             const token = store.requests.console.begin({
