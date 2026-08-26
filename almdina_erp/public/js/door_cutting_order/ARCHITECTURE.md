@@ -68,11 +68,16 @@ not rewrite historical orders. A `Special` door never carries Extra flags: e.g. 
 special door with Liner records Liner in notes/drawing and uses its inclusive custom
 special price.
 
-The type cell is an accessible custom menu because a native HTML `select` cannot own
-a multi-select submenu. Hover/focus/click on `Extra` opens the add-on submenu; mobile
-uses the same semantic menu as a stacked bottom sheet. The add-on module owns menu
-presentation and document cleanup, while `AlmdinaTablePerformanceUX` owns in-place
-row materialization/model mutation so changing a type never rebuilds the table.
+The measurement type cell remains the native HTML `select` used by the table. The
+visible Arabic order is `عادية / خاصة / زاوية / Extra`; the persisted values remain
+`Regular / Special / Clipped Corner / Extra` according to the existing DocType
+contract. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
+to that row for `Liner`, `Double`, and recessed-handle cutout. A compact Extra-only
+button reopens the flyout for an existing Extra row. The add-on module does not own or
+reimplement the general piece-type menu. It owns only Extra add-on presentation,
+document cleanup, focus, and flyout positioning; `AlmdinaTablePerformanceUX` remains
+the owner of in-place row materialization/model mutation so changing a type never
+rebuilds the table.
 
 ## Frontend asset manifest
 
