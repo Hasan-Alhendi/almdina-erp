@@ -25,9 +25,7 @@ Factory Reports,تقارير المعمل
 Almdina Reports,تقارير المعمل
 Factory Order Analysis,تحليل طلبات القص
 Production Stage Performance,أداء مراحل الإنتاج
-Remnant Inventory,مخزون بقايا الألواح
 Production Incidents and Replacements,أخطاء الإنتاج والقطع التعويضية
-Order Stock Availability,توفر مواد الطلبات
 Board Usage Analysis,تحليل استهلاك الألواح
 Piece Size Usage Analysis,تحليل المقاسات الأكثر استخدامًا
 Almdina Control Center,مركز متابعة المعمل
@@ -198,7 +196,7 @@ Accounts Management,الإدارة المالية
 
 Cutting Defaults,إعدادات القص الافتراضية
 Default Kerf MM,سماكة خط المنشار الافتراضية (مم)
-Default Trim Margin MM,هامش تسوية حواف اللوح الافتراضي (مم)
+Default Trim Margin MM,هامش تسوية حواف اللوح الافتراضية (مم)
 Default Cutting Cost / Board USD,تكلفة قص اللوح الافتراضية بالدولار
 Default Packing Mode,طريقة ترتيب القطع الافتراضية
 Stock Policy,سياسة صرف وحجز المواد
@@ -447,7 +445,7 @@ Processing replacement...,جاري تنفيذ القطعة التعويضية...
 Confirm,تأكيد
 Continue,متابعة
 Record Actual Consumption,تسجيل الاستهلاك الفعلي
-No planned stock materials are available for reconciliation.,لا توجد مواد مخططة يمكن تسوية استهلاكها.
+No planned stock materials are available for reconciliation.,لا توجد مواد مخزنية مطلوبة يمكن تسوية استهلاكها.
 Differences above plan will issue extra stock; differences below plan will return stock to the warehouse. Continue?,أي زيادة عن المخطط ستُصرف من المخزون وأي نقص سيُعاد إلى المستودع. هل تريد المتابعة؟
 Reconciling actual consumption...,جاري تسوية الاستهلاك الفعلي...
 Reconcile,تسوية
