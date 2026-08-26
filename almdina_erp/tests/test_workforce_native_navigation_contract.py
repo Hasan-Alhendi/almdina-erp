@@ -8,7 +8,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestWorkforceNativeNavigationContract(unittest.TestCase):
-    def test_workforce_repository_does_not_write_frappe_navigation_defaults(self) -> None:
+    def test_new_workforce_users_get_almdina_default_app_only(self) -> None:
         source = (
             APP_ROOT
             / "almdina_erp"
@@ -17,11 +17,18 @@ class TestWorkforceNativeNavigationContract(unittest.TestCase):
             / "workforce_repository.py"
         ).read_text(encoding="utf-8")
 
-        self.assertNotIn('user.default_app = "almdina_erp"', source)
-        self.assertNotIn('user.default_workspace = "Almdina ERP"', source)
-        self.assertNotIn('"default_app": "almdina_erp"', source)
-        self.assertNotIn('"default_workspace": "Almdina ERP"', source)
-        self.assertIn("MEMBERSHIP_FIELD", source)
+        create_source = source.split("def create_user", 1)[1].split(
+            "def update_identity", 1
+        )[0]
+        adopt_source = source.split("def adopt_user", 1)[1].split(
+            "def create_user", 1
+        )[0]
+
+        self.assertIn("ALMDINA_APP", source)
+        self.assertIn('"default_app": ALMDINA_APP', create_source)
+        self.assertIn("MEMBERSHIP_FIELD", create_source)
+        self.assertNotIn("default_workspace", create_source)
+        self.assertNotIn("default_app", adopt_source)
 
     def test_app_card_uses_the_workspace_slug_route(self) -> None:
         hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
