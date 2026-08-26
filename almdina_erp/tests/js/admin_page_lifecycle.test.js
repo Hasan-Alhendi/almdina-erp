@@ -58,11 +58,15 @@ function createHarness() {
     const messages = [];
     const confirms = [];
     let primaryAction = null;
+    let primaryActionVisible = false;
     const wrapper = {
         page: {
-            btn_primary: { toggle() {} },
+            btn_primary: { toggle(visible) { primaryActionVisible = Boolean(visible); } },
             clear_inner_toolbar() { innerButtons.length = 0; },
-            set_primary_action(label, callback) { primaryAction = { label, callback }; },
+            set_primary_action(label, callback) {
+                primaryAction = { label, callback };
+                primaryActionVisible = true;
+            },
             add_inner_button(label, callback) { innerButtons.push({ label, callback }); },
         },
     };
@@ -200,6 +204,7 @@ function createHarness() {
         wrapper,
         listenerCount: () => wrapperEvents.size,
         primaryAction: () => primaryAction,
+        primaryActionVisible: () => primaryActionVisible,
         hide() {
             frappe.container.page = otherPage;
             trigger("hide");
@@ -226,6 +231,76 @@ function evaluate(harness, relativePath) {
 async function flush() {
     await Promise.resolve();
     await new Promise(resolve => setImmediate(resolve));
+}
+
+async function testWorkforcePrimaryActionFailsClosed() {
+    const harness = createHarness();
+    const consoleQueue = endpointQueue();
+    let createDialogOpens = 0;
+
+    harness.fakeWindow.AlmdinaFactoryWorkforceApi = {
+        getConsole: () => consoleQueue.call(),
+    };
+    harness.fakeWindow.AlmdinaFactoryWorkforceRenderer = {
+        create: () => ({
+            renderLoading() {},
+            renderError() {},
+            render() {},
+            auditHtml: () => "audit",
+        }),
+    };
+    harness.fakeWindow.AlmdinaFactoryWorkforceInteractions = { bind: () => true };
+    harness.fakeWindow.AlmdinaFactoryWorkforceDialogs = {
+        create: () => ({
+            openCreate() { createDialogOpens += 1; },
+            deactivate() {},
+            dispose() {},
+        }),
+    };
+
+    evaluate(harness, "factory_workforce/state.js");
+    evaluate(harness, "factory_workforce/view_model.js");
+    evaluate(harness, "factory_workforce/controller.js");
+    harness.fakeWindow.AlmdinaFactoryWorkforceController.mount(harness.wrapper);
+
+    assert.equal(consoleQueue.requests.length, 1);
+    assert.equal(
+        harness.primaryActionVisible(),
+        false,
+        "unknown create_users capability must hide the primary action synchronously"
+    );
+    harness.primaryAction().callback();
+    assert.equal(createDialogOpens, 0, "unknown capability must not open the Create User child surface");
+
+    consoleQueue.requests[0].resolve({ permissions: { create_users: false } });
+    await flush();
+    assert.equal(harness.primaryActionVisible(), false, "create_users=false must keep the action hidden");
+    harness.primaryAction().callback();
+    assert.equal(createDialogOpens, 0, "the callback must remain fail-closed when create_users is absent");
+
+    harness.innerButtons[0].callback();
+    assert.equal(consoleQueue.requests.length, 2);
+    assert.equal(harness.primaryActionVisible(), false, "refresh must deny while capabilities are pending");
+    consoleQueue.requests[1].resolve({ permissions: { create_users: true } });
+    await flush();
+    assert.equal(harness.primaryActionVisible(), true, "create_users=true must reveal the action");
+    harness.primaryAction().callback();
+    assert.equal(createDialogOpens, 1);
+
+    harness.hide();
+    harness.show();
+    assert.equal(consoleQueue.requests.length, 3, "revisit must request current authoritative capabilities");
+    assert.equal(harness.primaryActionVisible(), false, "revisit must remain fail-closed while loading");
+    consoleQueue.requests[2].resolve({ permissions: { create_users: true } });
+    await flush();
+    assert.equal(harness.primaryActionVisible(), true, "current revisit data may reveal the action once");
+
+    harness.innerButtons[0].callback();
+    assert.equal(consoleQueue.requests.length, 4);
+    assert.equal(harness.primaryActionVisible(), false, "a later refresh must not reuse an old allow decision");
+    consoleQueue.requests[3].resolve({ permissions: { create_users: false } });
+    await flush();
+    assert.equal(harness.primaryActionVisible(), false, "a current revocation must keep the action hidden");
 }
 
 async function testWorkforceLifecycle() {
@@ -944,6 +1019,7 @@ async function testDialogModulesOwnTransientSurfaces() {
 }
 
 (async () => {
+    await testWorkforcePrimaryActionFailsClosed();
     await testWorkforceLifecycle();
     await testProductionSettingsLifecycle();
     await testPermissionsLifecycle();
