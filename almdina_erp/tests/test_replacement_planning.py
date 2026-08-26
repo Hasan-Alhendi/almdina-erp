@@ -184,17 +184,9 @@ class TestReplacementPlanning(unittest.TestCase):
         self.assertIn("released_material_reservations=()", source)
         self.assertIn("released_remnants=()", source)
 
-    def test_stock_availability_report_is_permission_guarded_and_fail_closed(self) -> None:
-        source = (
-            RUNTIME_ROOT
-            / "report"
-            / "order_stock_availability"
-            / "order_stock_availability.py"
-        ).read_text(encoding="utf-8")
-        execute = source.split("def execute", 1)[1].split("def get_columns", 1)[0]
-        self.assertIn("require_operational_report_access()", execute)
-        self.assertIn("retired_product_endpoint", execute)
-        self.assertNotIn("stock_service", source)
+    def test_stock_availability_report_is_fully_retired(self) -> None:
+        report_dir = RUNTIME_ROOT / "report" / "order_stock_availability"
+        self.assertFalse(report_dir.exists())
 
 
 if __name__ == "__main__":
