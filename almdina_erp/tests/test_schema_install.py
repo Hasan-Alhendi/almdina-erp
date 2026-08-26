@@ -25,10 +25,10 @@ RETIRED_STANDARD_PAGES = {
     "factory-performance-benchmark": "Factory Performance Benchmark",
     "factory-approval-queue": "Factory Approval Queue",
 }
-RETIRED_STANDARD_REPORTS = (
-    "Order Stock Availability",
-    "Remnant Inventory",
-)
+RETIRED_STANDARD_REPORTS = {
+    "Order Stock Availability": "Door Cutting Order",
+    "Remnant Inventory": "Board Remnant",
+}
 
 
 def assert_retired_standard_pages_absent() -> None:
@@ -77,14 +77,14 @@ def assert_retired_standard_reports_absent() -> None:
 
 def seed_retired_standard_reports() -> None:
     assert_retired_standard_reports_absent()
-    for report_name in RETIRED_STANDARD_REPORTS:
+    for report_name, ref_doctype in RETIRED_STANDARD_REPORTS.items():
         report = frappe.get_doc(
             {
                 "doctype": "Report",
                 "name": report_name,
                 "report_name": report_name,
                 "module": "Almdina ERP",
-                "ref_doctype": "Door Cutting Order",
+                "ref_doctype": ref_doctype,
                 "report_type": "Script Report",
                 "is_standard": "Yes",
             }
