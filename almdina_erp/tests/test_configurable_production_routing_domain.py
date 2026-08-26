@@ -168,8 +168,9 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertNotIn("department_for_stage_type", repository)
         self.assertIn('getattr(row, "operational_role", None)', repository)
         self.assertIn("is_protected_system_role", controller)
-        self.assertIn("ALMDINA_APP", authorization)
-        self.assertIn("default_app", authorization)
+        self.assertIn("MEMBERSHIP_FIELD", authorization)
+        self.assertNotIn("ALMDINA_APP", authorization)
+        self.assertNotIn("default_app", authorization)
 
     def test_migrations_preserve_legacy_data_without_seeding_clean_sites(self) -> None:
         root = Path(__file__).resolve().parents[1]

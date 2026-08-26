@@ -6,6 +6,7 @@ const viewModel = require("../../public/js/shop_floor_inbox/view_model.js");
 
 const context = {
     personal_inbox: true,
+    can_view_history: true,
     production_routes: [{
         name: "route-a",
         label: "المسار أ",
@@ -54,8 +55,24 @@ assert.deepEqual(
 );
 
 const merged = viewModel.mergeVisibleList(active, archive, context);
+assert.equal(merged.canViewHistory, true);
 assert.deepEqual(merged.assigned.map(row => row.door_cutting_order), ["DCO-1"]);
 assert.deepEqual(merged.completed.map(row => row.door_cutting_order), ["DCO-3"]);
+
+const withoutHistory = viewModel.mergeVisibleList(
+    active,
+    archive,
+    { ...context, can_view_history: false }
+);
+assert.equal(withoutHistory.canViewHistory, false);
+assert.deepEqual(withoutHistory.assigned.map(row => row.door_cutting_order), ["DCO-1"]);
+assert.deepEqual(withoutHistory.completed, []);
+
+const missingHistoryFlag = viewModel.mergeVisibleList(active, archive, {
+    personal_inbox: true,
+});
+assert.equal(missingHistoryFlag.canViewHistory, false);
+assert.deepEqual(missingHistoryFlag.completed, []);
 
 const board = viewModel.board({
     mode: "board",
@@ -70,6 +87,17 @@ assert.equal(board.routeModels.length, 1);
 assert.equal(board.routeModels[0].routeRows.length, 1);
 assert.equal(board.routeModels[0].readyRows.length, 2);
 assert.deepEqual(board.counts, { pending: 1, progress: 0, paused: 0, ready: 2 });
+
+const boardWithoutHistory = viewModel.board({
+    mode: "board",
+    sessionContext: { ...context, can_view_history: false },
+    boardRows: active,
+    archiveRows: archive,
+    routeFilter: "",
+    search: "",
+});
+assert.equal(boardWithoutHistory.routeModels[0].readyRows.length, 2);
+assert.equal(boardWithoutHistory.counts.ready, 2);
 
 const searched = viewModel.board({
     mode: "board",
