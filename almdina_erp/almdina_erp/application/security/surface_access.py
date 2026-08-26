@@ -40,8 +40,6 @@ class Surface:
     REPORT_PRODUCTION_INCIDENTS = "report_production_incidents_and_replacements"
     REPORT_BOARD_USAGE = "report_board_usage_analysis"
     REPORT_PIECE_SIZE_USAGE = "report_piece_size_usage_analysis"
-    REPORT_ORDER_STOCK_AVAILABILITY = "report_order_stock_availability"
-    REPORT_REMNANT_INVENTORY = "report_remnant_inventory"
 
 
 REPORT_SURFACES = frozenset(
@@ -52,8 +50,6 @@ REPORT_SURFACES = frozenset(
         Surface.REPORT_PRODUCTION_INCIDENTS,
         Surface.REPORT_BOARD_USAGE,
         Surface.REPORT_PIECE_SIZE_USAGE,
-        Surface.REPORT_ORDER_STOCK_AVAILABILITY,
-        Surface.REPORT_REMNANT_INVENTORY,
     }
 )
 FINANCIAL_REPORT_SURFACES = frozenset({Surface.REPORT_FACTORY_ORDER_ANALYSIS})
@@ -177,8 +173,6 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
         Surface.REPORT_PRODUCTION_INCIDENTS: ("production-incidents-and-replacements",),
         Surface.REPORT_BOARD_USAGE: ("board-usage-analysis",),
         Surface.REPORT_PIECE_SIZE_USAGE: ("piece-size-usage-analysis",),
-        Surface.REPORT_ORDER_STOCK_AVAILABILITY: ("order-stock-availability",),
-        Surface.REPORT_REMNANT_INVENTORY: ("remnant-inventory",),
     }
 )
 

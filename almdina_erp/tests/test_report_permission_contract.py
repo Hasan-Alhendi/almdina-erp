@@ -6,6 +6,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "almdina_erp" / "report"
+ACTIVE_OPERATIONAL_REPORTS = (
+    "factory_operations_summary",
+    "production_stage_performance",
+    "production_incidents_and_replacements",
+    "board_usage_analysis",
+    "piece_size_usage_analysis",
+)
+RETIRED_STOCK_REPORTS = (
+    "order_stock_availability",
+    "remnant_inventory",
+)
 
 
 class TestReportPermissionContract(unittest.TestCase):
@@ -32,17 +43,13 @@ class TestReportPermissionContract(unittest.TestCase):
         self.assertNotIn("require_operational_report_access()", source)
 
     def test_operational_reports_use_operational_guard(self) -> None:
-        for report in (
-            "factory_operations_summary",
-            "production_stage_performance",
-            "production_incidents_and_replacements",
-            "board_usage_analysis",
-            "piece_size_usage_analysis",
-            "order_stock_availability",
-            "remnant_inventory",
-        ):
+        for report in ACTIVE_OPERATIONAL_REPORTS:
             source = (REPORTS / report / f"{report}.py").read_text(encoding="utf-8")
             self.assertIn("require_operational_report_access()", source, report)
+
+    def test_retired_stock_reports_have_no_active_source_directory(self) -> None:
+        for report in RETIRED_STOCK_REPORTS:
+            self.assertFalse((REPORTS / report).exists(), report)
 
 
 if __name__ == "__main__":

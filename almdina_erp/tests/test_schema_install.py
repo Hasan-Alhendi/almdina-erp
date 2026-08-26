@@ -25,6 +25,10 @@ RETIRED_STANDARD_PAGES = {
     "factory-performance-benchmark": "Factory Performance Benchmark",
     "factory-approval-queue": "Factory Approval Queue",
 }
+RETIRED_STANDARD_REPORTS = {
+    "Order Stock Availability": "Door Cutting Order",
+    "Remnant Inventory": "Board Remnant",
+}
 
 
 def assert_retired_standard_pages_absent() -> None:
@@ -61,6 +65,41 @@ def seed_retired_standard_pages() -> None:
         raise AssertionError(f"Failed to seed retired Standard Page fixtures: {missing}")
 
 
+def assert_retired_standard_reports_absent() -> None:
+    existing = sorted(
+        report_name
+        for report_name in RETIRED_STANDARD_REPORTS
+        if frappe.db.exists("Report", report_name)
+    )
+    if existing:
+        raise AssertionError(f"Retired Standard Reports still exist: {existing}")
+
+
+def seed_retired_standard_reports() -> None:
+    assert_retired_standard_reports_absent()
+    for report_name, ref_doctype in RETIRED_STANDARD_REPORTS.items():
+        report = frappe.get_doc(
+            {
+                "doctype": "Report",
+                "name": report_name,
+                "report_name": report_name,
+                "module": "Almdina ERP",
+                "ref_doctype": ref_doctype,
+                "report_type": "Script Report",
+                "is_standard": "Yes",
+            }
+        )
+        report.db_insert()
+    frappe.db.commit()
+    missing = sorted(
+        report_name
+        for report_name in RETIRED_STANDARD_REPORTS
+        if not frappe.db.exists("Report", report_name)
+    )
+    if missing:
+        raise AssertionError(f"Failed to seed retired Standard Report fixtures: {missing}")
+
+
 class TestAlmdinaSchemaInstall(FrappeTestCase):
     def test_required_doctypes_exist(self):
         required = {
@@ -90,6 +129,9 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
 
     def test_retired_standard_pages_are_absent(self):
         assert_retired_standard_pages_absent()
+
+    def test_retired_standard_reports_are_absent(self):
+        assert_retired_standard_reports_absent()
 
     def test_retired_approval_endpoints_fail_closed(self):
         from almdina_erp.almdina_erp.services import (

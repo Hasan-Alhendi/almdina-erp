@@ -55,11 +55,6 @@
             surface: "report_piece_size_usage_analysis",
             routes: ["piece-size-usage-analysis"],
         },
-        {
-            surface: "report_order_stock_availability",
-            routes: ["order-stock-availability"],
-        },
-        { surface: "report_remnant_inventory", routes: ["remnant-inventory"] },
     ]);
     const ALMDINA_WORKSPACE_ROUTES = Object.freeze(
         new Set([

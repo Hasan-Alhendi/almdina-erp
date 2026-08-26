@@ -82,8 +82,10 @@ consumer:
 Historical Stock/Remnant routes remain fail-closed through
 `legacy_endpoint_service.retired_product_endpoint`. Revision activation keeps the
 material-activity safety gate but no longer mutates retired stock/remnant
-reservations. The historical Order Stock Availability report preserves its
-permission guard and then fails closed.
+reservations. The historical `Order Stock Availability` and `Remnant Inventory`
+Standard Report surfaces are fully retired: their source directories are absent,
+fresh installs do not create their `Report` records, and migration removes
+historical orphaned Standard Report records without a destructive data patch.
 
 ## Batch 7 — Historical Order Creation implementation
 
