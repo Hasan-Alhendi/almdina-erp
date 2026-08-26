@@ -47,7 +47,6 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         self.assertNotIn("frappe.user_roles", source)
 
     def test_workspace_labels_are_mapped_to_exact_permission_surfaces(self) -> None:
-        source = (PUBLIC / "permission_action_visibility_guard.js").read_text(encoding="utf-8")
         workspace = json.loads(WORKSPACE.read_text(encoding="utf-8"))
         expected = {
             "أنواع القشاط وأسعاره": "edge_banding_types",
@@ -71,28 +70,7 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
         configured_labels = {row["label"] for row in workspace.get("shortcuts", [])}
         self.assertEqual(configured_labels, set(expected))
         for label, surface in expected.items():
-            self.assertIn(f'"{label}": "{surface}"', source)
             self.assertEqual(WORKSPACE_ENTRY_SURFACES[label], surface)
-
-        self.assertIn("WORKSPACE_LABELS_LONGEST_FIRST", source)
-        self.assertIn("right.length - left.length", source)
-        self.assertIn('element.getAttribute("data-widget-name")', source)
-        self.assertIn("element.textContent", source)
-        self.assertIn("guardWorkspaceItems", source)
-
-    def test_empty_workspace_sections_are_hidden_by_surface_policy(self) -> None:
-        source = (PUBLIC / "permission_action_visibility_guard.js").read_text(encoding="utf-8")
-        for label in (
-            "الإعدادات الأساسية",
-            "إدارة النظام ومسارات العمل",
-            "التشغيل اليومي",
-            "التقارير التشغيلية والتكلفة",
-        ):
-            self.assertIn(f'"{label}"', source)
-        self.assertIn("WORKSPACE_SECTION_SURFACES", source)
-        self.assertIn("guardWorkspaceSections", source)
-        self.assertIn("almdinaPermissionSectionHidden", source)
-        self.assertIn(".some(surfaceAllowed)", source)
 
     def test_server_projects_order_only_workspace_before_render(self) -> None:
         workspace = json.loads(WORKSPACE.read_text(encoding="utf-8"))
@@ -171,16 +149,14 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             endpoint.index("filter_desktop_page_payload(payload"),
         )
 
-    def test_workforce_create_action_flash_is_guarded(self) -> None:
-        source = (PUBLIC / "permission_action_visibility_guard.js").read_text(encoding="utf-8")
-        self.assertIn('state.route === "factory-workforce"', source)
-        self.assertIn('if (mode === "workforce") guardWorkforceActions(root);', source)
-        self.assertIn('can("create_users")', source)
-        self.assertIn("MutationObserver", source)
-        self.assertIn("startTransientObserver", source)
-        self.assertIn('window.addEventListener("almdina:permissions-updated", refreshSurface)', source)
+    def test_workforce_create_action_is_page_owned_and_guard_is_retired(self) -> None:
+        controller = (PUBLIC / "factory_workforce" / "controller.js").read_text(encoding="utf-8")
         manifest = MANIFEST.read_text(encoding="utf-8")
-        self.assertIn("permission_action_visibility_guard.js", manifest)
+        self.assertIn('page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");', controller)
+        self.assertIn('if (!can("create_users")) return;', controller)
+        self.assertIn("syncPrimaryAction();", controller)
+        self.assertFalse((PUBLIC / "permission_action_visibility_guard.js").exists())
+        self.assertNotIn("permission_action_visibility_guard.js", manifest)
 
     def test_active_permission_services_do_not_use_english_denial_fallbacks(self) -> None:
         paths = (

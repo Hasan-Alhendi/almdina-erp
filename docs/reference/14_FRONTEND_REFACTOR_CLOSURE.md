@@ -19,7 +19,8 @@
 |---|---|---|
 | Frontend primitives | `public/js/frontend_foundation.js` | lifecycle scopes, latest-request gates, RPC helpers والأساس المشترك للـfrontend |
 | Permission context | `public/js/permission_context.js` | سياق الصلاحيات القابل للاستهلاك من الواجهة؛ ليس بديلًا عن server authorization |
-| Action visibility guard | `public/js/permission_action_visibility_guard.js` | إظهار/إخفاء/تعطيل actions بحسب capability contract المرسل من الخادم |
+| Workspace entry visibility | `application/security/workspace_visibility.py` + `boot.py` + `workspace_api.py` | إسقاط shortcuts/sections/links غير المسموحة من payload الخادم قبل render |
+| Workforce primary action visibility | `public/js/factory_workforce/controller.js` | fail-closed محليًا أثناء mount/refresh ثم يتبع `create_users` من console payload الحالي |
 | DCO document freshness | `door_cutting_order/core/door_cutting_order_document_context.js` | هوية الوثيقة، generation/freshness، timers/frames/observers المرتبطة بعمر الوثيقة |
 | DCO permission refresh | `door_cutting_order/core/door_cutting_order_permission_refresh_ux.js` | إعادة مزامنة واجهة DCO عند تغيّر permission context |
 | Production settings | `public/js/production_routing_ux.js` | إعدادات وتحرير production routing فقط |
