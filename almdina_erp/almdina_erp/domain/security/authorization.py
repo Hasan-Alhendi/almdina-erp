@@ -257,7 +257,6 @@ COSTING_CAPABILITIES = _category_capabilities("costing", "documents")
 PLANNING_CAPABILITIES = _category_capabilities("cutting_plan")
 DRAWING_CAPABILITIES = _category_capabilities("drawing")
 PRODUCTION_CAPABILITIES = _category_capabilities("production")
-SHOP_FLOOR_HISTORY_CAPABILITIES = _category_capabilities("shop_floor")
 CONTROL_CENTER_CAPABILITIES = _category_capabilities("control_center") | frozenset(
     {Capability.APPROVE_ORDER, Capability.REJECT_ORDER}
 )
@@ -355,7 +354,6 @@ __all__ = [
     "PRODUCTION_SUPERVISOR_CAPABILITIES",
     "REPORTING_CAPABILITIES",
     "SHOP_FLOOR_ACCESS_CAPABILITIES",
-    "SHOP_FLOOR_HISTORY_CAPABILITIES",
     "WORKFORCE_CAPABILITIES",
     "Capability",
     "CapabilityDefinition",
