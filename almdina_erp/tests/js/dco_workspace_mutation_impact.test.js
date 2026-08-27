@@ -109,9 +109,9 @@ assert.deepEqual(invalidations[0], {
     assert.deepEqual(refreshes, [
         {
             resources: ["plan", "cost"],
-            options: { force: false, reason: "order_saved" },
+            options: { force: false, activeOnly: true, reason: "order_saved" },
         },
-    ]);
+    ], "Order save must not reload hidden Plan/Cost workspaces");
     assert.deepEqual(invalidations.at(-1), {
         resources: ["cost"],
         reason: "plan_recalculation_required",

@@ -218,7 +218,7 @@
         const context = documentContext();
         const run = () => {
             load(frm, { force }).catch(() => {
-                // Store owns the error state. Existing presenters keep their current UX in A5.1.
+                // Store owns the error state. Presenters own only loading/error UI.
             });
         };
         if (context && typeof context.scheduleFrame === "function") {
@@ -227,16 +227,6 @@
         }
         window.requestAnimationFrame(run);
     }
-
-    frappe.ui.form.on("Door Cutting Order", {
-        onload_post_render(frm) { schedule(frm); },
-        refresh(frm) { schedule(frm); },
-    });
-
-    window.addEventListener("almdina:permissions-updated", () => {
-        const frm = window.cur_frm;
-        if (frm && frm.doctype === "Door Cutting Order") schedule(frm, true);
-    });
 
     const owner = Object.freeze({
         canView,
@@ -253,6 +243,7 @@
     const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
     if (coordinator && typeof coordinator.register === "function") {
         coordinator.register("plan", {
+            activationField: "results_tab",
             canLoad: canView,
             invalidate,
             load,

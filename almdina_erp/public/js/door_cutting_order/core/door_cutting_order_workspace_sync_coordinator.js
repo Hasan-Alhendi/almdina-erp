@@ -19,6 +19,17 @@
         return `${frm.doctype || frm.doc.doctype || ""}::${frm.doc.name || "__new__"}`;
     }
 
+    function currentTabFieldname(frm) {
+        return String(
+            frm
+            && frm.layout
+            && frm.layout.current_tab
+            && frm.layout.current_tab.df
+            && frm.layout.current_tab.df.fieldname
+            || ""
+        );
+    }
+
     function register(name, descriptor) {
         const normalized = String(name || "").trim();
         if (!normalized || !descriptor) return false;
@@ -30,12 +41,56 @@
         return resources.get(String(name || "").trim()) || null;
     }
 
+    function activationField(descriptor) {
+        return String(descriptor && descriptor.activationField || "").trim();
+    }
+
+    function descriptorIsActive(frm, descriptor) {
+        const fieldname = activationField(descriptor);
+        if (!fieldname) return true;
+        return currentTabFieldname(frm) === fieldname;
+    }
+
+    function isActive(frm, name) {
+        const descriptor = descriptorFor(name);
+        return Boolean(descriptor && descriptorIsActive(frm, descriptor));
+    }
+
+    function activeResourceNames(frm) {
+        const names = [];
+        resources.forEach((descriptor, name) => {
+            if (!activationField(descriptor)) return;
+            if (descriptorIsActive(frm, descriptor)) names.push(name);
+        });
+        return names;
+    }
+
+    function activationFields() {
+        const fields = [];
+        resources.forEach((descriptor) => {
+            const fieldname = activationField(descriptor);
+            if (fieldname && !fields.includes(fieldname)) fields.push(fieldname);
+        });
+        return fields;
+    }
+
     function dispatch(frm, detail) {
         window.dispatchEvent(new CustomEvent("almdina:workspace-freshness-changed", {
             detail: {
                 identity: formIdentity(frm),
                 orderName: frm && frm.doc ? frm.doc.name : null,
                 ...(detail || {}),
+            },
+        }));
+    }
+
+    function dispatchActivation(frm, names) {
+        window.dispatchEvent(new CustomEvent("almdina:workspace-activated", {
+            detail: {
+                frm,
+                identity: formIdentity(frm),
+                orderName: frm && frm.doc ? frm.doc.name : null,
+                resources: normalizeNames(names),
             },
         }));
     }
@@ -65,6 +120,9 @@
         for (const name of normalizeNames(names)) {
             const descriptor = descriptorFor(name);
             if (!descriptor || typeof descriptor.load !== "function") continue;
+            if (options.activeOnly === true && !descriptorIsActive(frm, descriptor)) {
+                continue;
+            }
             if (
                 typeof descriptor.canLoad === "function"
                 && !descriptor.canLoad(frm)
@@ -82,6 +140,32 @@
             });
         }
         return refreshed;
+    }
+
+    async function activateCurrent(frm, options = {}) {
+        if (!frm || !frm.doc) return [];
+        const names = activeResourceNames(frm);
+        if (!names.length) return [];
+
+        // Surface owners can start their lightweight skeleton/module work in
+        // parallel with the canonical data read. The workspace store remains the
+        // only mutable owner and presenters remain render-only.
+        dispatchActivation(frm, names);
+
+        const loaded = [];
+        for (const name of names) {
+            const descriptor = descriptorFor(name);
+            if (!descriptor || typeof descriptor.load !== "function") continue;
+            if (
+                typeof descriptor.canLoad === "function"
+                && !descriptor.canLoad(frm)
+            ) {
+                continue;
+            }
+            await descriptor.load(frm, { force: options.force === true });
+            loaded.push(name);
+        }
+        return loaded;
     }
 
     function documentIsDirty(frm) {
@@ -113,7 +197,11 @@
         if (invalidated.length) invalidate(frm, invalidated, reason);
         if (changed.length) {
             invalidate(frm, changed, reason);
-            await refresh(frm, changed, { force: true, reason });
+            await refresh(frm, changed, {
+                force: true,
+                activeOnly: options.activeOnly === true,
+                reason,
+            });
         }
         return {
             changed,
@@ -136,5 +224,9 @@
         reconcile,
         syncDocumentModified,
         snapshot,
+        isActive,
+        activeResourceNames,
+        activationFields,
+        activateCurrent,
     });
 })();

@@ -45,6 +45,10 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js",
+        # Frappe tab activation is a DCO lifecycle concern, not a responsibility
+        # of the reusable workspace coordinator. Load this adapter only after both
+        # derived workspace states have registered their activation fields.
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js",
         # DCO-specific dependency policy is deliberately separate from the shared
         # freshness primitive: only this feature knows which inputs affect Plan,
         # Cost, or the special-price basis.
