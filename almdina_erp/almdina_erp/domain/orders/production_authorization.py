@@ -30,6 +30,7 @@ class ProductionActionDecision:
     allowed: bool
     code: str
     reason: str
+    transition_event: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +59,8 @@ def _decision(
     allowed: bool,
     code: str,
     reason: str,
+    *,
+    transition_event: str | None = None,
 ) -> ProductionActionDecision:
     return ProductionActionDecision(
         action=action,
@@ -65,6 +68,7 @@ def _decision(
         allowed=allowed,
         code=code,
         reason=reason,
+        transition_event=transition_event,
     )
 
 
@@ -190,20 +194,44 @@ def decide_production_action(
                 "stage_not_startable",
                 "يمكن بدء المرحلة فقط عندما تكون بحالة بحاجة للعمل.",
             )
-        return _decision(action, True, "allowed", "")
+        return _decision(
+            action,
+            True,
+            "allowed",
+            "",
+            transition_event="start",
+        )
 
     if action == Capability.HANDOFF_ASSIGNED_STAGE:
-        if not facts.stage_status or not can_transition_stage(
+        if facts.stage_status and can_transition_stage(
             facts.stage_status,
             "finish",
         ):
             return _decision(
                 action,
-                False,
-                "stage_not_handoff_ready",
-                "ابدأ المرحلة أولًا قبل تسليمها إلى القسم التالي.",
+                True,
+                "allowed",
+                "",
+                transition_event="finish",
             )
-        return _decision(action, True, "allowed", "")
+        if (
+            Capability.START_ASSIGNED_STAGE not in granted
+            and facts.stage_status
+            and can_transition_stage(facts.stage_status, "direct_handoff")
+        ):
+            return _decision(
+                action,
+                True,
+                "allowed",
+                "",
+                transition_event="direct_handoff",
+            )
+        return _decision(
+            action,
+            False,
+            "stage_not_handoff_ready",
+            "ابدأ المرحلة أولًا قبل تسليمها إلى القسم التالي.",
+        )
 
     raise AssertionError(f"إجراء إنتاج غير معالج: {action}")
 
