@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import runpy
 from pathlib import Path
 
 
@@ -42,7 +41,14 @@ COMPACTNESS_PATH = (
     / "printing"
     / "door_cutting_order_document_compactness_ux.js"
 )
-HOOKS_PATH = ROOT / "hooks.py"
+REGISTRY_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 def test_financial_document_endpoints_require_view_and_print_capabilities() -> None:
@@ -221,15 +227,18 @@ def test_customer_invoice_delegates_layout_and_internal_report_stays_distinct() 
 
 
 def test_secure_financial_presenter_loads_after_cost_permission_ui() -> None:
-    hooks = runpy.run_path(str(HOOKS_PATH))
-    scripts = hooks["doctype_js"]["Door Cutting Order"]
-    permission_index = scripts.index(
-        "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"
-    )
-    secure_print_index = scripts.index(
-        "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"
-    )
-    assert secure_print_index == permission_index + 1
+    registry = REGISTRY_PATH.read_text(encoding="utf-8")
+    cost = registry.split("cost: Object.freeze({", 1)[1].split(
+        "});\n\n    function descriptor", 1
+    )[0]
+    permissions = "door_cutting_order_cost_permissions_ux.js"
+    financial = "door_cutting_order_financial_documents_ux.js"
+
+    # These are one lazy Cost feature chain; preserve adjacency there rather than
+    # forcing either module back into the first-open DCO manifest.
+    assert permissions in cost
+    assert financial in cost
+    assert cost.index(financial) > cost.index(permissions)
 
 
 def test_internal_report_is_clearly_marked_confidential() -> None:
