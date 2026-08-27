@@ -273,36 +273,45 @@ function makeFormRoot() {
         context,
         { filename: "door_cutting_order_cost_workspace_presenter_adapter.js" }
     );
+    vm.runInContext(
+        source("public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js"),
+        context,
+        { filename: "door_cutting_order_workspace_activation_lifecycle.js" }
+    );
 
     const planState = fakeWindow.AlmdinaPlanWorkspaceState;
     const costState = fakeWindow.AlmdinaCostWorkspaceState;
     const coordinator = fakeWindow.AlmdinaWorkspaceSyncCoordinator;
+    const lifecycle = fakeWindow.AlmdinaDcoWorkspaceActivationLifecycle;
 
-    // Opening the Order tab is now the critical path. Form lifecycle activation
-    // must not issue Plan or Cost RPCs before the operator visits those workspaces.
-    const coordinatorHook = formHooks.find(entry =>
+    // Opening the Order tab is now the critical path. Frappe lifecycle is adapted
+    // through the dedicated DCO lifecycle owner and must not issue Plan or Cost
+    // RPCs before the operator visits those workspaces.
+    const lifecycleHook = formHooks.find(entry =>
         entry.doctype === "Door Cutting Order"
         && entry.handlers
         && typeof entry.handlers.onload_post_render === "function"
         && typeof entry.handlers.refresh === "function"
     );
-    assert.ok(coordinatorHook, "workspace coordinator form hook should be registered");
-    coordinatorHook.handlers.onload_post_render(frm);
-    coordinatorHook.handlers.refresh(frm);
+    assert.ok(lifecycleHook, "DCO workspace lifecycle adapter hook should be registered");
+    assert.ok(lifecycle, "DCO workspace lifecycle adapter should be available");
+    lifecycleHook.handlers.onload_post_render(frm);
+    lifecycleHook.handlers.refresh(frm);
     await flushPromises();
     assert.equal(planCalls, 0, "Order tab must not eagerly load Plan");
     assert.equal(costCalls, 0, "Order tab must not eagerly load Cost");
 
-    // Plan activation starts exactly one Plan read and no Cost read.
+    // Plan activation through the lifecycle adapter starts exactly one Plan read
+    // and no Cost read.
     frm.layout.current_tab.df.fieldname = "results_tab";
-    const firstPlan = coordinator.activateCurrent(frm);
+    const firstPlan = lifecycle.activate(frm);
     await flushPromises();
     assert.equal(planCalls, 1, "Plan tab should start one canonical Plan request");
     assert.equal(costCalls, 0, "Plan tab must not load Cost");
 
     // Cost activation is independent and starts exactly one Cost read.
     frm.layout.current_tab.df.fieldname = "cost_tab";
-    const firstCost = coordinator.activateCurrent(frm);
+    const firstCost = lifecycle.activate(frm);
     await flushPromises();
     assert.equal(planCalls, 1);
     assert.equal(costCalls, 1, "Cost tab should start one canonical Cost request");
@@ -389,7 +398,7 @@ function makeFormRoot() {
     await edgeRetry;
     assert.equal(frm._almdina_safe_edge_options_loading, null);
 
-    assert.ok(formHooks.length >= 2, "coordinator and Order defaults lifecycle hooks should be registered");
+    assert.ok(formHooks.length >= 2, "lifecycle adapter and Order defaults hooks should be registered");
     console.log("DCO workspace lifecycle simulation passed");
 })().catch(error => {
     console.error(error);
