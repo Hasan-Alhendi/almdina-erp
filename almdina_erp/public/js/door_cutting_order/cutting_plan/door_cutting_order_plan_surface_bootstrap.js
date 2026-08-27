@@ -278,7 +278,7 @@
     async function recover(frm) {
         if (!isOrderForm(frm)) return false;
         // The Plan surface is intentionally lazy. Hidden workspaces must not
-        // compete with Order Entry for CPU, module loading, or server reads.
+        // compete with the visible order workspace for CPU, module loading, or server reads.
         if (!workspaceActive(frm)) return true;
         const identity = documentIdentity(frm);
 
@@ -366,6 +366,6 @@
 
     // This file can be lazy-loaded after the current Form refresh already ran.
     // Recover only when Plan is the active workspace; hidden tabs are intentionally
-    // excluded from the initial Order Entry critical path.
+    // excluded from the initial order-workspace critical path.
     window.setTimeout(() => schedule(window.cur_frm), 0);
 })();
