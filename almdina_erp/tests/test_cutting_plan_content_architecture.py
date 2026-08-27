@@ -6,15 +6,22 @@ CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 CONTENT = CUTTING_PLAN / "door_cutting_order_plan_content_ux.js"
 STYLES = CUTTING_PLAN / "door_cutting_order_plan_content_styles.js"
 PRESENTER = CUTTING_PLAN / "door_cutting_order_plan_board_presenter.js"
-ASSETS = ROOT / "frontend_assets.py"
+ASSET_REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 def test_plan_content_runtime_order_keeps_local_owners_adjacent_to_orchestrator():
-    source = ASSETS.read_text(encoding="utf-8")
-    styles = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_styles.js"'
-    presenter = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js"'
-    content = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js"'
-    tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
+    source = ASSET_REGISTRY.read_text(encoding="utf-8")
+    styles = "door_cutting_order_plan_content_styles.js"
+    presenter = "door_cutting_order_plan_board_presenter.js"
+    content = "door_cutting_order_plan_content_ux.js"
+    tabs = "door_cutting_order_plan_tabs_ux.js"
     for asset in (styles, presenter, content, tabs):
         assert asset in source
     assert source.index(styles) < source.index(presenter) < source.index(content) < source.index(tabs)
