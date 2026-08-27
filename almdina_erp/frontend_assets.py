@@ -130,6 +130,7 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js",
         "public/js/door_cutting_order/responsive/door_cutting_order_header_ux.js",
         "public/js/door_cutting_order/production/shop_floor_order_ux.js",
+        "public/js/door_cutting_order/production/shop_floor_production_surface_guard.js",
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_approval_ux.js",
         "public/js/door_cutting_order/cutting_plan/secure_dxf_export.js",
         "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
