@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DCO = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json"
 CUTTING_PLAN_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.py"
 MANIFEST = ROOT / "frontend_assets.py"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 CONTEXT = CUTTING_PLAN / "door_cutting_order_plan_context_actions_ux.js"
 TABS = CUTTING_PLAN / "door_cutting_order_plan_tabs_ux.js"
@@ -43,17 +44,16 @@ class TestPlanContextualActionsUI(unittest.TestCase):
 
     def test_context_actions_load_before_tabs_and_live_between_tabs_and_plan(self) -> None:
         manifest = source(MANIFEST)
+        registry = source(REGISTRY)
         tabs = source(TABS)
-        context_asset = (
-            '"public/js/door_cutting_order/cutting_plan/'
-            'door_cutting_order_plan_context_actions_ux.js"'
-        )
-        tabs_asset = (
-            '"public/js/door_cutting_order/cutting_plan/'
-            'door_cutting_order_plan_tabs_ux.js"'
-        )
+        context_asset = "door_cutting_order_plan_context_actions_ux.js"
+        tabs_asset = "door_cutting_order_plan_tabs_ux.js"
 
-        self.assertLess(manifest.index(context_asset), manifest.index(tabs_asset))
+        self.assertNotIn(context_asset, manifest)
+        self.assertNotIn(tabs_asset, manifest)
+        self.assertEqual(registry.count(context_asset), 1)
+        self.assertEqual(registry.count(tabs_asset), 1)
+        self.assertLess(registry.index(context_asset), registry.index(tabs_asset))
         self.assertIn('class="dco-plan-context-actions-host"', tabs)
         self.assertIn("renderContextActions(frm, wrapper)", tabs)
         self.assertLess(
