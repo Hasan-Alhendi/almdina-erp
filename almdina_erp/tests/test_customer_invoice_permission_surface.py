@@ -24,6 +24,14 @@ FINANCIAL = (
 )
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
 MANIFEST = ROOT / "frontend_assets.py"
+REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 class TestCustomerInvoicePermissionSurface(unittest.TestCase):
@@ -73,15 +81,16 @@ class TestCustomerInvoicePermissionSurface(unittest.TestCase):
         self.assertIn("isCurrent(frm, identity)", source)
         self.assertIn("persisted server calculation", source)
 
-    def test_order_form_loads_customer_invoice_toolbar_from_source(self) -> None:
-        source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
+    def test_order_form_loads_customer_invoice_toolbar_from_cost_workspace(self) -> None:
+        permissions = PERMISSION_CONTEXT.read_text(encoding="utf-8")
         manifest = MANIFEST.read_text(encoding="utf-8")
+        registry = REGISTRY.read_text(encoding="utf-8")
+        asset = "door_cutting_order_customer_invoice_toolbar_ux.js"
 
-        self.assertIn(
-            '"public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js"',
-            manifest,
-        )
-        self.assertIn("AlmdinaCustomerInvoiceToolbarUX", source)
+        self.assertNotIn(asset, manifest)
+        self.assertNotIn("AlmdinaCustomerInvoiceToolbarUX", permissions)
+        self.assertEqual(registry.count(asset), 1)
+        self.assertIn('activationField: "cost_tab"', registry)
 
 
 if __name__ == "__main__":
