@@ -82,7 +82,7 @@ def test_customer_invoice_reuses_the_canonical_measurement_and_shape_renderer():
     edge_color = text(EDGE_COLOR)
 
     assert "renderer.notesCell(row, notes" in presenter
-    assert '${measurementDocumentBody(frm)}' in presenter
+    assert "measurementDocumentBodyWithPayload(frm, quotePayload)" in presenter
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in presenter
     assert "shapePrintCss()" in presenter
     assert "async function printAuthorizedInvoice(frm, payload)" in presenter
@@ -100,5 +100,6 @@ def test_print_css_keeps_drawn_piece_row_together_and_preserves_long_notes():
     assert "page-break-inside:avoid" in source
     assert "break-inside:avoid" in source
     assert "overflow-wrap:anywhere" in source
-    assert ".dco-piece-sketch svg" in source
+    assert ".dco-piece-sketch>svg" in source
+    assert ".dco-piece-sketch .dco-reference-crop{overflow:hidden}" in source
     assert "height:68px" in source

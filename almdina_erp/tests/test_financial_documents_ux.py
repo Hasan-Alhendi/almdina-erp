@@ -216,6 +216,7 @@ def test_customer_invoice_delegates_layout_and_internal_report_stays_distinct() 
     # Customer invoice inherits the exact measurement print theme/body.
     assert 'theme.css("measurements", shapePrintCss())' in customer_print
     assert "function measurementDocumentBody(frm)" in customer_print
+    assert "function measurementDocumentBodyWithPayload(frm, payload)" in customer_print
     assert "function quoteDetailsHtml(payload)" in customer_print
 
 

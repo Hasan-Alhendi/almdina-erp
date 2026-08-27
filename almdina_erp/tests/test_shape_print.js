@@ -94,6 +94,13 @@ const croppedReferenceSvg = renderer.svg(croppedReferencePiece);
 assert.match(croppedReferenceSvg, /data-reference-crop="1"/);
 assert.match(croppedReferenceSvg, /overflow="hidden"/);
 assert.match(croppedReferenceSvg, /href="\/private\/files\/a4-scan\.jpg"/);
+assert.match(renderer.css, /\.dco-piece-sketch>svg\{/);
+assert.doesNotMatch(
+    renderer.css,
+    /\.dco-piece-sketch svg\{/,
+    "The outer sketch style must not force nested crop SVG overflow to visible"
+);
+assert.match(renderer.css, /\.dco-reference-crop\{overflow:hidden\}/);
 
 const freeWorkspacePiece = JSON.parse(JSON.stringify(classicPiece));
 const freeWorkspaceDrawing = JSON.parse(freeWorkspacePiece.special_shape_drawing_json);
@@ -151,5 +158,69 @@ assert.equal(renderer.notesCell(regularPiece, "درفة عادية"), "درفة 
 
 assert.match(renderer.css, /page-break-inside:avoid/);
 assert.match(renderer.css, /tr\.dco-row-with-sketch/);
+
+global.__ = value => value;
+global.document = {
+    addEventListener() {},
+    getElementById() { return null; },
+};
+global.frappe = {
+    datetime: { now_datetime() { return "2026-08-27 12:00:00"; } },
+    utils: {
+        escape_html(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        },
+    },
+    ui: { form: { on() {} } },
+};
+window.AlmdinaMultiEdgeBanding = { details() { return []; } };
+window.AlmdinaOrderDocumentPrintTheme = {
+    headerHtml() { return "<header>Test</header>"; },
+    css(_mode, extra) { return extra; },
+};
+window.AlmdinaFactoryPrintIdentity = { fallback() { return {}; } };
+
+require(path.resolve(
+    __dirname,
+    "../public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
+));
+
+const staleFullDrawing = JSON.parse(croppedReferencePiece.special_shape_drawing_json);
+staleFullDrawing.reference.crop = { x: 0, y: 0, width: 1, height: 1 };
+const staleFullPiece = {
+    ...croppedReferencePiece,
+    name: "ROW-SPECIAL-1",
+    special_shape_drawing_json: JSON.stringify(staleFullDrawing),
+};
+const invoiceHtml = window.AlmdinaOrderDocumentPrint.html(
+    {
+        doc: {
+            name: "DCO-CROP-PRINT-1",
+            pieces: [staleFullPiece],
+        },
+    },
+    "invoice",
+    {},
+    {
+        kind: "customer_invoice",
+        order_name: "DCO-CROP-PRINT-1",
+        measurements: [{
+            piece_name: "ROW-SPECIAL-1",
+            special_shape_drawing_json: croppedReferencePiece.special_shape_drawing_json,
+        }],
+        lines: [],
+        totals: [],
+    }
+);
+assert.match(
+    invoiceHtml,
+    /data-reference-crop="1"/,
+    "Customer invoice must prefer the authoritative saved crop over stale form documentation"
+);
 
 console.log("Printable door drawing SVG, fallback geometry, and safe notes checks passed");

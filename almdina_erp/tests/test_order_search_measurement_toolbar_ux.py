@@ -103,9 +103,13 @@ def test_measurement_print_is_the_shared_base_and_invoice_only_appends_quote():
     assert "function measurementDocumentBody(frm)" in source
     assert 'printHtml(documentHtml(frm, "measurements", printIdentity))' in source
     assert "function quoteDetailsHtml(payload)" in source
-    assert "${measurementDocumentBody(frm)}" in source
+    measurement_body = (
+        "${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) "
+        ": measurementDocumentBody(frm)}"
+    )
+    assert measurement_body in source
     assert '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}' in source
-    assert source.index("${measurementDocumentBody(frm)}") < source.index(
+    assert source.index(measurement_body) < source.index(
         '${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'
     )
     assert "function invoiceSummary" not in source

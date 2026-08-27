@@ -67,6 +67,7 @@ PIECE_DOCUMENT_FIELDS = (
     "edge_rate_usd",
     "edge_cost_usd",
     "notes",
+    "special_shape_drawing_json",
     "special_shape_estimated_unit_price_usd",
     "special_shape_custom_unit_price_usd",
     "special_shape_final_unit_price_usd",
