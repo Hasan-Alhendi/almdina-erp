@@ -213,21 +213,28 @@
     }
 
     async function ensureModules() {
-        if (MODULES.every(module => Boolean(window[module.global]))) return true;
+        const missing = MODULES.filter(module => !window[module.global]);
+        if (!missing.length) return true;
         if (modulePromise) return modulePromise;
 
-        modulePromise = (async () => {
-            for (const module of MODULES) {
-                if (window[module.global]) continue;
-                await frappe.require(module.asset);
-                if (!window[module.global]) {
-                    throw new Error(`Cutting-plan module did not initialize: ${module.global}`);
-                }
-            }
-            return true;
-        })().finally(() => {
-            modulePromise = null;
-        });
+        const assets = missing.map(module => module.asset);
+        const frontend = window.AlmdinaFrontend;
+        const load = frontend && typeof frontend.requireAssets === "function"
+            ? frontend.requireAssets(assets)
+            : frappe.require(assets);
+
+        modulePromise = Promise.resolve(load)
+            .then(() => {
+                missing.forEach(module => {
+                    if (!window[module.global]) {
+                        throw new Error(`Cutting-plan module did not initialize: ${module.global}`);
+                    }
+                });
+                return true;
+            })
+            .finally(() => {
+                modulePromise = null;
+            });
 
         return modulePromise;
     }
