@@ -55,6 +55,38 @@ def test_image_only_documentation_is_accepted():
     assert validate_special_shape_drawing(documentation) == documentation
 
 
+def test_non_destructive_reference_crop_is_accepted():
+    documentation = _documentation()
+    documentation["reference"].update({
+        "crop": {"x": 0.2, "y": 0.15, "width": 0.55, "height": 0.7},
+        "imageSize": {"widthPx": 2480, "heightPx": 3508},
+    })
+    assert validate_special_shape_drawing(documentation) == documentation
+
+
+@pytest.mark.parametrize(
+    "crop",
+    [
+        {"x": -0.1, "y": 0, "width": 0.5, "height": 0.5},
+        {"x": 0.8, "y": 0, "width": 0.3, "height": 0.5},
+        {"x": 0, "y": 0, "width": 0.01, "height": 0.5},
+    ],
+)
+def test_invalid_reference_crop_is_rejected(crop):
+    documentation = _documentation()
+    documentation["reference"]["crop"] = crop
+    documentation["reference"]["imageSize"] = {"widthPx": 2480, "heightPx": 3508}
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(documentation)
+
+
+def test_cropped_reference_requires_original_image_dimensions():
+    documentation = _documentation()
+    documentation["reference"]["crop"] = {"x": 0.1, "y": 0.1, "width": 0.8, "height": 0.8}
+    with pytest.raises(frappe.ValidationError):
+        validate_special_shape_drawing(documentation)
+
+
 def test_element_only_documentation_is_accepted():
     documentation = _documentation()
     documentation["reference"] = None

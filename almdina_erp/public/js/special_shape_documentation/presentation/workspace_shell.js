@@ -33,6 +33,7 @@
                     <section class="ald-doc-source ald-doc-templates"><strong>شكل جاهز</strong><div class="ald-doc-template-grid">${templates(readOnly)}</div></section>
                     <button type="button" class="ald-doc-source" data-tool="pen" ${readOnly ? "disabled" : ""}><span class="ald-doc-source-icon">✎</span><strong>رسم بالقلم</strong><small>تنظيف وتثبيت تلقائي</small></button>
                     <section class="ald-doc-reference-controls" data-reference-controls hidden><div class="ald-doc-section-head"><strong>الصورة المرجعية</strong><span data-reference-lock-label>مقفلة</span></div>
+                        <div class="ald-doc-reference-crop-actions"><button type="button" class="ald-doc-crop-start" data-action="start-crop" ${readOnly ? "disabled" : ""}>اقتصاص الصورة</button><button type="button" data-action="reset-reference-crop" data-reference-crop-reset hidden ${readOnly ? "disabled" : ""}>إعادة الصورة كاملة</button></div>
                         <label><span>تدوير</span><span class="ald-doc-inline"><button type="button" data-action="rotate-left" ${readOnly ? "disabled" : ""}>↶</button><bdi data-rotation>0°</bdi><button type="button" data-action="rotate-right" ${readOnly ? "disabled" : ""}>↷</button></span></label>
                         <label><span>الشفافية</span><span class="ald-doc-inline"><output data-opacity-output>72%</output><input type="range" min="10" max="100" value="72" data-opacity ${readOnly ? "disabled" : ""}></span></label>
                         <label><span>قفل الصورة</span><input type="checkbox" checked data-reference-lock ${readOnly ? "disabled" : ""}></label>
@@ -40,6 +41,7 @@
                     </section>
                 </aside>
                 <main class="ald-doc-stage"><canvas class="ald-doc-canvas" tabindex="0" aria-label="لوحة توثيق الدرفة"></canvas><div class="ald-doc-hint" data-hint>اختر صورة أو شكلًا جاهزًا أو ابدأ بالقلم الذكي</div>
+                    <div class="ald-doc-crop-toolbar" data-crop-toolbar hidden role="toolbar" aria-label="أدوات اقتصاص الصورة"><strong>اقتصاص الصورة</strong><span>اسحب الإطار أو مقابضه</span><button type="button" data-action="auto-crop">اقتصاص تلقائي</button><button type="button" data-action="reset-crop">إعادة ضبط</button><button type="button" data-action="cancel-crop">إلغاء</button><button type="button" class="ald-doc-primary" data-action="apply-crop">تطبيق</button></div>
                     <div class="ald-doc-toolbar" role="toolbar" aria-label="أدوات التوثيق">
                         ${tool("select", "↖", "تحديد", "V")}${tool("pen", "✎", "قلم ذكي", "P", readOnly)}${tool("line", "╱", "خط", "L", readOnly)}${tool("rect", "□", "مستطيل", "R", readOnly)}${tool("ellipse", "○", "دائرة", "O", readOnly)}${tool("dimension", "↔", "قياس", "D", readOnly)}${tool("text", "T", "ملاحظة", "T", readOnly)}
                         <span class="ald-doc-toolbar-separator"></span><button type="button" class="ald-doc-tool" data-action="undo" title="تراجع Ctrl+Z"><span>↶</span><small>تراجع</small></button><button type="button" class="ald-doc-tool" data-action="redo" title="إعادة Ctrl+Y أو Ctrl+Shift+Z"><span>↷</span><small>إعادة</small></button>
@@ -54,6 +56,24 @@
             </div>
         </section>`;
         const workspace = container.querySelector(".ald-doc-workspace");
+        let cropActive = false;
+        function setCropMode(active, canReset = true) {
+            const next = Boolean(active);
+            if (next) {
+                workspace.querySelectorAll("button, input, textarea, select").forEach(control => {
+                    if (control.closest("[data-crop-toolbar]") || control.dataset.action === "back") return;
+                    if (!Object.prototype.hasOwnProperty.call(control.dataset, "cropWasDisabled")) control.dataset.cropWasDisabled = control.disabled ? "1" : "0";
+                    control.disabled = true;
+                });
+            } else if (cropActive) {
+                workspace.querySelectorAll("[data-crop-was-disabled]").forEach(control => { control.disabled = control.dataset.cropWasDisabled === "1"; delete control.dataset.cropWasDisabled; });
+            }
+            cropActive = next;
+            workspace.dataset.cropMode = next ? "1" : "0";
+            workspace.querySelector("[data-crop-toolbar]").hidden = !next;
+            workspace.querySelector('[data-action="reset-crop"]').disabled = !canReset;
+            workspace.querySelector(".ald-doc-canvas").setAttribute("aria-label", next ? "اقتصاص الصورة المرجعية" : "لوحة توثيق الدرفة");
+        }
         return Object.freeze({
             workspace,
             canvas: workspace.querySelector(".ald-doc-canvas"),
@@ -72,7 +92,7 @@
             setHint(value) { const node = workspace.querySelector("[data-hint]"); node.textContent = value || ""; node.hidden = !value; },
             render(document, state = {}) {
                 const reference = document.reference; const controls = workspace.querySelector("[data-reference-controls]"); controls.hidden = !reference;
-                const download = workspace.querySelector("[data-reference-download]"); download.hidden = !reference; if (reference) { download.href = reference.fileUrl; workspace.querySelector("[data-rotation]").textContent = `${reference.rotationDeg}°`; const opacity = Math.round(reference.opacity * 100); workspace.querySelector("[data-opacity]").value = opacity; workspace.querySelector("[data-opacity-output]").textContent = `${opacity}%`; workspace.querySelector("[data-reference-lock]").checked = reference.locked; workspace.querySelector("[data-reference-lock-label]").textContent = reference.locked ? "مقفلة" : "غير مقفلة"; }
+                const cropContract = root.ReferenceCrop; const download = workspace.querySelector("[data-reference-download]"); download.hidden = !reference; if (reference) { download.href = reference.fileUrl; workspace.querySelector("[data-rotation]").textContent = `${reference.rotationDeg}°`; const opacity = Math.round(reference.opacity * 100); workspace.querySelector("[data-opacity]").value = opacity; workspace.querySelector("[data-opacity-output]").textContent = `${opacity}%`; workspace.querySelector("[data-reference-lock]").checked = reference.locked; workspace.querySelector("[data-reference-lock-label]").textContent = reference.locked ? "مقفلة" : "غير مقفلة"; workspace.querySelector("[data-reference-crop-reset]").hidden = !cropContract || cropContract.isFull(reference.crop); }
                 workspace.querySelector("[data-notes]").value = document.notes;
                 const labels = { stroke: "رسم بالقلم", line: "خط", rect: "مستطيل", ellipse: "دائرة", arrow: "سهم", dimension: "قياس", text: "ملاحظة" };
                 const layers = workspace.querySelector("[data-layers]"); const items = [];
@@ -85,6 +105,7 @@
                 workspace.querySelector("[data-summary-dimensions]").textContent = String(document.elements.filter(item => item.type === "dimension").length);
                 workspace.querySelector("[data-summary-notes]").textContent = document.notes.trim() ? "موجودة" : "لا يوجد";
                 workspace.querySelector('[data-action="undo"]').disabled = !state.canUndo; workspace.querySelector('[data-action="redo"]').disabled = !state.canRedo;
+                setCropMode(Boolean(state.cropMode), state.cropCanReset !== false);
             },
             destroy() { container.innerHTML = ""; },
         });

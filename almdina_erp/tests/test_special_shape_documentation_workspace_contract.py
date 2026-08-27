@@ -51,6 +51,7 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("infrastructure/scanner_bridge.js", page)
         self.assertIn("application/element_clipboard.js", page)
         self.assertIn("application/keyboard_shortcuts.js", page)
+        self.assertIn("domain/reference_crop.js", page)
         self.assertIn("presentation/canvas_viewport.js", page)
 
     def test_legacy_editor_directories_and_styles_are_deleted(self) -> None:
@@ -106,6 +107,11 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("renderer.zoomAt", controller)
         self.assertIn("Ctrl+Z", shell)
         self.assertIn("Ctrl+Y", shell)
+        for label in ("اقتصاص الصورة", "اقتصاص تلقائي", "إعادة ضبط", "إلغاء", "تطبيق"):
+            self.assertIn(label, shell)
+        self.assertIn("renderer.cropRegion", controller)
+        self.assertIn("renderer.suggestReferenceCrop", controller)
+        self.assertIn("renderer.referenceImageSize", controller)
 
 
 if __name__ == "__main__":
