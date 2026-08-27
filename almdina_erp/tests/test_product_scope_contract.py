@@ -38,11 +38,25 @@ class TestProductScopeContract(unittest.TestCase):
         for script in (
             "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js",
             "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js",
-            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
-            "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js",
-            "public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js",
         ):
             self.assertIn(script, scripts)
+
+        registry = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "core"
+            / "door_cutting_order_workspace_asset_registry.js"
+        ).read_text(encoding="utf-8")
+        for script in (
+            "door_cutting_order_multi_edge_documents_ux.js",
+            "door_cutting_order_cost_permissions_ux.js",
+            "door_cutting_order_financial_documents_ux.js",
+        ):
+            self.assertIn(script, registry)
+            self.assertFalse(any(asset.endswith(script) for asset in scripts))
+        self.assertIn('activationField: "cost_tab"', registry)
         self.assertNotIn(
             "public/js/door_cutting_order_cost_invoice_ux.js",
             scripts,
