@@ -8,8 +8,8 @@ public sealed class BridgeOptions
     private static readonly string[] DefaultAllowedOrigins =
     [
         "https://almadina-2.horizontechco.com",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
+        "https://almadina-b2.horizontechco.com",
+        "https://almadina.horizontechco.com",
     ];
 
     public BridgeOptions(int port = DefaultPort, IEnumerable<string>? allowedOrigins = null)

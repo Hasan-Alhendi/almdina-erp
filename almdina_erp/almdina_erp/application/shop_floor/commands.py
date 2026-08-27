@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.orders.planning_handoff_policy import (
     decide_planning_handoff,
 )
 from almdina_erp.almdina_erp.domain.orders.production_authorization import (
+    ProductionActionDecision,
     ProductionActionFacts,
     decide_production_action,
 )
@@ -261,7 +262,7 @@ def _assert_action_allowed(
     stage: StageState | None = None,
     actor: str | None = None,
     route_starts_with_planning: bool = False,
-) -> None:
+) -> ProductionActionDecision:
     decision = decide_production_action(
         action,
         capabilities=repository.capabilities_for_order(order.name),
@@ -274,7 +275,7 @@ def _assert_action_allowed(
         ),
     )
     if decision.allowed:
-        return
+        return decision
     if decision.code == "missing_capability":
         raise ShopFloorPermissionDenied(decision.reason)
     raise ShopFloorCommandError(decision.reason)
@@ -481,16 +482,18 @@ def handoff_to_next(
 ) -> dict[str, Any]:
     stage, order = _locked_stage_scope(repository, stage_name)
     actor = repository.current_user()
-    _assert_action_allowed(
+    decision = _assert_action_allowed(
         repository,
         Capability.HANDOFF_ASSIGNED_STAGE,
         order,
         stage=stage,
         actor=actor,
     )
+    if decision.transition_event not in {"finish", "direct_handoff"}:
+        raise ShopFloorCommandError("تعذر تحديد انتقال المرحلة المصرح به.")
     target_status = _transition(
         stage.status,
-        "finish",
+        decision.transition_event,
         "ابدأ المرحلة أولًا قبل تسليمها إلى القسم التالي.",
     )
     path = order.production_path

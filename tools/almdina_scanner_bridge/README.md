@@ -25,7 +25,7 @@ AlmdinaScannerBridgeSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ## العقد الأمني
 
 - يستمع عبر `TcpListener` على `127.0.0.1:17831` فقط؛ لا يستخدم HTTP.sys ولا يحتاج `netsh` أو URL ACL.
-- يسمح فقط بالـOrigins المحددة، وأهمها `https://almadina-2.horizontechco.com`.
+- يسمح فقط بالـOrigins الإنتاجية المحددة: `https://almadina-2.horizontechco.com` و`https://almadina-b2.horizontechco.com` و`https://almadina.horizontechco.com`.
 - يتطلب Origin مسموحًا لـ`POST /scan`، ويعيد رؤوس CORS وPrivate Network Access اللازمة.
 - لا يملك بيانات دخول Frappe ولا يحفظ صورًا دائمة ولا يكتب JSON.
 - الصورة المؤقتة تُحذف فور قراءتها. يحوّل الجسر ناتج WIA الفعلي (BMP/TIFF/PNG/JPEG) إلى JPEG حقيقي ويضغطه تكيفيًا ضمن حد الرفع، ثم ترفعه واجهة ERP عبر خدمة `private File` المقيدة بالطلب والدرفة.

@@ -51,6 +51,33 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         ):
             self.assertNotIn(legacy_field, plan + cost)
 
+    def test_workspace_loaders_install_single_flight_before_observable_loading(self) -> None:
+        paths = (
+            PUBLIC
+            / "cutting_plan"
+            / "door_cutting_order_plan_workspace_state.js",
+            PUBLIC
+            / "costing"
+            / "door_cutting_order_cost_workspace_state.js",
+        )
+
+        for path in paths:
+            source = path.read_text(encoding="utf-8")
+            barrier = source.index("frm[LOAD_PROMISE_KEY] = promise;")
+            begin_load = source.index("store.beginLoad(currentIdentity)", barrier)
+            loading_dispatch = source.index(
+                "dispatch(frm, store.snapshot());",
+                begin_load,
+            )
+            transport_start = source.index("transport = api.load(orderName);", loading_dispatch)
+            self.assertLess(barrier, begin_load, path.name)
+            self.assertLess(begin_load, loading_dispatch, path.name)
+            self.assertLess(loading_dispatch, transport_start, path.name)
+            self.assertIn("const pending = frm[LOAD_PROMISE_KEY];", source)
+            self.assertIn("await pending;", source)
+            self.assertIn("return load(frm, { force: true });", source)
+            self.assertIn("function createFlight(frm)", source)
+
     def test_plan_query_is_capability_scoped_and_contains_no_money(self) -> None:
         path = APP / "services" / "cutting_plan_workspace_query_service.py"
         source = path.read_text(encoding="utf-8")
@@ -209,6 +236,31 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertNotIn("frappe.call", plan + cost)
         self.assertNotIn("get_approved_cutting_plan_snapshot", plan)
         self.assertNotIn("ignore_permissions", plan + cost)
+
+    def test_a52_pending_renderers_do_not_start_workspace_reads(self) -> None:
+        plan = (
+            PUBLIC
+            / "cutting_plan"
+            / "door_cutting_order_plan_workspace_presenter_adapter.js"
+        ).read_text(encoding="utf-8")
+        cost = (
+            PUBLIC
+            / "costing"
+            / "door_cutting_order_cost_workspace_presenter_adapter.js"
+        ).read_text(encoding="utf-8")
+
+        plan_pending = plan[
+            plan.index("function renderPending(frm)"):
+            plan.index("function ready(frm)")
+        ]
+        cost_pending = cost[
+            cost.index("function renderPending(frm)"):
+            cost.index("function install()")
+        ]
+        self.assertNotIn("ensureLoad(frm)", plan_pending)
+        self.assertNotIn(".load(", plan_pending)
+        self.assertNotIn("ensureLoad", cost)
+        self.assertNotIn(".load(", cost_pending)
 
     def test_a52_legacy_plan_tabs_are_visual_only(self) -> None:
         source = (
