@@ -3,8 +3,6 @@
 
     if (window.AlmdinaWorkspaceSyncCoordinator) return;
 
-    const DOCTYPE = "Door Cutting Order";
-    const ACTIVATION_CLEANUP_KEY = "workspace-sync-tab-activation";
     const resources = new Map();
 
     function normalizeNames(value) {
@@ -19,11 +17,6 @@
         }
         if (!frm || !frm.doc) return "";
         return `${frm.doctype || frm.doc.doctype || ""}::${frm.doc.name || "__new__"}`;
-    }
-
-    function formRoot(frm) {
-        const wrapper = frm && frm.wrapper;
-        return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
     }
 
     function currentTabFieldname(frm) {
@@ -73,10 +66,10 @@
     }
 
     function activationFields() {
-        const fields = new Set();
+        const fields = [];
         resources.forEach((descriptor) => {
             const fieldname = activationField(descriptor);
-            if (fieldname) fields.add(fieldname);
+            if (fieldname && !fields.includes(fieldname)) fields.push(fieldname);
         });
         return fields;
     }
@@ -150,7 +143,7 @@
     }
 
     async function activateCurrent(frm, options = {}) {
-        if (!frm || !frm.doc || frm.doctype !== DOCTYPE) return [];
+        if (!frm || !frm.doc) return [];
         const names = activeResourceNames(frm);
         if (!names.length) return [];
 
@@ -173,63 +166,6 @@
             loaded.push(name);
         }
         return loaded;
-    }
-
-    function scheduleActivation(frm, options = {}) {
-        if (!frm || !frm.doc || frm.doctype !== DOCTYPE) return null;
-        const context = window.AlmdinaDocumentContext;
-        const run = () => {
-            activateCurrent(frm, options).catch((error) => {
-                console.error("DCO active workspace load failed", error);
-            });
-        };
-        if (context && typeof context.scheduleFrame === "function") {
-            return context.scheduleFrame(frm, "workspace-sync-active-tab", run);
-        }
-        return window.requestAnimationFrame(run);
-    }
-
-    function installActivationListener(frm) {
-        if (!frm || !frm.doc || frm.doctype !== DOCTYPE) return false;
-        const root = formRoot(frm);
-        if (!root || typeof root.addEventListener !== "function") return false;
-        if (frm.__almdinaWorkspaceActivationRoot === root && frm.__almdinaWorkspaceActivationHandler) {
-            return true;
-        }
-
-        const previousRoot = frm.__almdinaWorkspaceActivationRoot;
-        const previousHandler = frm.__almdinaWorkspaceActivationHandler;
-        if (previousRoot && previousHandler && typeof previousRoot.removeEventListener === "function") {
-            previousRoot.removeEventListener("click", previousHandler);
-        }
-
-        const handler = (event) => {
-            const target = event && event.target && typeof event.target.closest === "function"
-                ? event.target.closest("[data-fieldname]")
-                : null;
-            const fieldname = String(target && target.getAttribute("data-fieldname") || "");
-            if (!fieldname || !activationFields().has(fieldname)) return;
-            // Let Frappe finish switching current_tab first, then resolve the one
-            // workspace that became visible. Keyboard activation also emits click.
-            scheduleActivation(frm);
-        };
-        root.addEventListener("click", handler);
-        frm.__almdinaWorkspaceActivationRoot = root;
-        frm.__almdinaWorkspaceActivationHandler = handler;
-
-        const context = window.AlmdinaDocumentContext;
-        if (context && typeof context.registerCleanup === "function") {
-            context.registerCleanup(frm, ACTIVATION_CLEANUP_KEY, () => {
-                if (typeof root.removeEventListener === "function") {
-                    root.removeEventListener("click", handler);
-                }
-                if (frm.__almdinaWorkspaceActivationRoot === root) {
-                    frm.__almdinaWorkspaceActivationRoot = null;
-                    frm.__almdinaWorkspaceActivationHandler = null;
-                }
-            });
-        }
-        return true;
     }
 
     function documentIsDirty(frm) {
@@ -290,24 +226,7 @@
         snapshot,
         isActive,
         activeResourceNames,
+        activationFields,
         activateCurrent,
-        scheduleActivation,
-        installActivationListener,
-    });
-
-    frappe.ui.form.on(DOCTYPE, {
-        onload_post_render(frm) {
-            installActivationListener(frm);
-            scheduleActivation(frm);
-        },
-        refresh(frm) {
-            installActivationListener(frm);
-            scheduleActivation(frm);
-        },
-    });
-
-    window.addEventListener("almdina:permissions-updated", () => {
-        const frm = window.cur_frm;
-        if (frm && frm.doctype === DOCTYPE) scheduleActivation(frm, { force: true });
     });
 })();
