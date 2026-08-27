@@ -25,6 +25,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
 )
 
 
+# Keep the revision scan lightweight. Geometry snapshots can be large, so they are
+# fetched only for the at-most-three rows that survive capability/lifecycle selection.
 _PLAN_FIELDS = (
     "name",
     "source_type",
@@ -68,7 +70,6 @@ _PLAN_FIELDS = (
     "dxf_status",
     "dxf_uploaded_by",
     "dxf_uploaded_on",
-    "snapshot_json",
     "modified",
 )
 
@@ -112,8 +113,7 @@ def _plan_settings(plan: Any) -> dict[str, Any]:
     }
 
 
-def _plan_row(plan: Any) -> dict[str, Any]:
-    snapshot_json = sanitize_plan_snapshot_json(str(plan.get("snapshot_json") or ""))
+def _plan_row(plan: Any, snapshot_json: str = "") -> dict[str, Any]:
     return {
         "name": plan.get("name"),
         "source_type": str(plan.get("source_type") or ""),
@@ -165,7 +165,7 @@ def _plan_row(plan: Any) -> dict[str, Any]:
             "uploaded_by": plan.get("dxf_uploaded_by"),
             "uploaded_on": plan.get("dxf_uploaded_on"),
         },
-        "snapshot_json": snapshot_json,
+        "snapshot_json": sanitize_plan_snapshot_json(str(snapshot_json or "")),
         "modified": plan.get("modified"),
     }
 
@@ -216,6 +216,29 @@ def _calculation_settings(rows: list[Any]) -> dict[str, Any]:
     }
 
 
+def _selected_snapshot_json(rows: list[Any | None]) -> dict[str, str]:
+    names = list(
+        dict.fromkeys(
+            str(row.get("name") or "").strip()
+            for row in rows
+            if row and str(row.get("name") or "").strip()
+        )
+    )
+    if not names:
+        return {}
+
+    snapshots = frappe.get_all(
+        "Cutting Plan",
+        filters={"name": ["in", names]},
+        fields=["name", "snapshot_json"],
+    )
+    return {
+        str(row.get("name") or ""): str(row.get("snapshot_json") or "")
+        for row in snapshots
+        if row.get("name")
+    }
+
+
 @frappe.whitelist()
 def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
     """Return a plan-only read model for the unified order workspace.
@@ -249,6 +272,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         if capabilities["recalculate"] or capabilities["edit_settings"]
         else None
     )
+    snapshot_json = _selected_snapshot_json([system, uploaded, approved])
 
     return {
         "order_name": order.name,
@@ -261,9 +285,18 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "calculation_settings": calculation_settings,
         "editable_settings": calculation_settings if capabilities["edit_settings"] else None,
         "plans": {
-            "system_draft": _plan_row(system) if system else None,
-            "uploaded_draft": _plan_row(uploaded) if uploaded else None,
-            "approved": _plan_row(approved) if approved else None,
+            "system_draft": (
+                _plan_row(system, snapshot_json.get(str(system.get("name") or ""), ""))
+                if system else None
+            ),
+            "uploaded_draft": (
+                _plan_row(uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
+                if uploaded else None
+            ),
+            "approved": (
+                _plan_row(approved, snapshot_json.get(str(approved.get("name") or ""), ""))
+                if approved else None
+            ),
         },
     }
 

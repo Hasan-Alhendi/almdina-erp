@@ -32,11 +32,15 @@ jobs:
         run: |
           set -euo pipefail
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_document_context.js
+          node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js
+          node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js
+          node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_presenter_adapter.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js
+          node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_lifecycle.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_bulk_rows_ux.js
@@ -51,6 +55,7 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js
           node --check almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+          node --check almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
@@ -92,8 +97,14 @@ jobs:
       - name: Enforce A5 workspace ownership contracts
         run: python -m unittest almdina_erp.tests.test_a5_workspace_state_foundation
 
-      - name: Simulate DCO workspace lifecycle reentrancy and transport compatibility
+      - name: Enforce DCO performance contracts
+        run: python -m unittest almdina_erp.tests.test_dco_performance_contract
+
+      - name: Simulate DCO workspace lifecycle reentrancy and lazy activation
         run: node almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+
+      - name: Simulate DCO post-save workspace invalidation
+        run: node almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
 
       - name: Simulate measurement lifecycle cancellation and freshness
         run: node almdina_erp/tests/js/measurement_lifecycle.test.js
