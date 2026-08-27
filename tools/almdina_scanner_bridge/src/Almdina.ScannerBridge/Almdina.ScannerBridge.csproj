@@ -20,4 +20,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Almdina.ScannerBridge.Core\Almdina.ScannerBridge.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Almdina.ScannerBridge.Windows.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

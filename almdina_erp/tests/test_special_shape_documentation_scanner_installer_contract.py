@@ -10,6 +10,7 @@ BRIDGE = REPOSITORY_ROOT / "tools" / "almdina_scanner_bridge"
 APP_PROJECT = BRIDGE / "src" / "Almdina.ScannerBridge" / "Almdina.ScannerBridge.csproj"
 SERVER = BRIDGE / "src" / "Almdina.ScannerBridge" / "Infrastructure" / "LoopbackHttpServer.cs"
 WIA = BRIDGE / "src" / "Almdina.ScannerBridge" / "Infrastructure" / "WiaScanner.cs"
+NORMALIZER = BRIDGE / "src" / "Almdina.ScannerBridge" / "Infrastructure" / "ScannerImageNormalizer.cs"
 CORE = BRIDGE / "src" / "Almdina.ScannerBridge.Core"
 INSTALLER = BRIDGE / "installer" / "AlmdinaScannerBridge.iss"
 WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "scanner-bridge-windows.yml"
@@ -33,6 +34,8 @@ class TestSpecialShapeDocumentationScannerInstallerContract(unittest.TestCase):
         self.assertNotIn("IPAddress.Any", server)
         self.assertNotIn("HttpListener", server, "HTTP.sys URL ACLs would reintroduce administrator setup")
         self.assertIn('"WIA.CommonDialog"', scanner)
+        self.assertTrue(NORMALIZER.is_file())
+        self.assertIn("ScannerImageNormalizer", scanner)
         self.assertIn("StringComparer.OrdinalIgnoreCase", origin)
         self.assertNotIn("frappe", (CORE / "BridgeRequestDispatcher.cs").read_text(encoding="utf-8").lower())
 
@@ -49,6 +52,7 @@ class TestSpecialShapeDocumentationScannerInstallerContract(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("windows-2025", workflow)
         self.assertIn("Almdina.ScannerBridge.Core.Tests", workflow)
+        self.assertIn("Almdina.ScannerBridge.Windows.Tests", workflow)
         self.assertIn("dotnet publish", workflow)
         self.assertIn("signtool", workflow.lower())
         self.assertIn("AlmdinaScannerBridgeSetup.exe", workflow)

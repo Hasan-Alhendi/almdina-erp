@@ -11,6 +11,7 @@ internal sealed class WiaScanner : IScanner, IDisposable
 
     private readonly Control _uiDispatcher;
     private readonly FileLogger _logger;
+    private readonly ScannerImageNormalizer _imageNormalizer = new();
     private int _busy;
     private bool _disposed;
 
@@ -95,12 +96,18 @@ internal sealed class WiaScanner : IScanner, IDisposable
                 return ScanOutcome.Cancel();
             }
 
-            temporaryPath = Path.Combine(Path.GetTempPath(), $"almadina-scan-{Guid.NewGuid():N}.jpg");
+            temporaryPath = Path.Combine(Path.GetTempPath(), $"almadina-scan-{Guid.NewGuid():N}.wia");
             dynamic acquiredImage = image;
             acquiredImage.SaveFile(temporaryPath);
             var bytes = File.ReadAllBytes(temporaryPath);
-            _logger.Info($"Scanner returned {bytes.Length} bytes.");
-            return ScanOutcome.Success(bytes);
+            var normalized = _imageNormalizer.Normalize(bytes, BridgeOptions.MaxImageBytes);
+            _logger.Info(
+                $"Scanner returned {normalized.SourceBytes} bytes "
+                + $"({normalized.SourceFormat}, {normalized.SourceWidth}x{normalized.SourceHeight}); "
+                + $"normalized to JPEG {normalized.JpegBytes.Length} bytes "
+                + $"({normalized.OutputWidth}x{normalized.OutputHeight}, quality {normalized.JpegQuality})."
+            );
+            return ScanOutcome.Success(normalized.JpegBytes);
         }
         catch (ScannerUnavailableException)
         {
@@ -108,10 +115,12 @@ internal sealed class WiaScanner : IScanner, IDisposable
         }
         catch (COMException error)
         {
+            _logger.Error("WIA scanner acquisition failed.", error);
             throw new ScannerAcquisitionException("WIA scanner acquisition failed.", error);
         }
         catch (Exception error)
         {
+            _logger.Error("Scanner image acquisition or normalization failed.", error);
             throw new ScannerAcquisitionException("Scanner acquisition failed.", error);
         }
         finally

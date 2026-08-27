@@ -84,6 +84,8 @@
         function scannerErrorMessage(error) {
             if (error && error.code === Scanner.ERROR_CODES.FORBIDDEN) return "هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.";
             if (error && error.code === Scanner.ERROR_CODES.BUSY) return "السكانر مشغول بعملية أخرى. انتظر انتهاءها ثم أعد المحاولة.";
+            if (error && error.code === Scanner.ERROR_CODES.NO_SCANNER) return "لم يتم العثور على سكانر متوافق. تأكد من توصيله وأن Windows يتعرف عليه ثم أعد المحاولة.";
+            if (error && error.code === Scanner.ERROR_CODES.INVALID_IMAGE) return "أعاد السكانر صورة غير مدعومة وتعذر تحويلها. أرسل سجل Scanner Bridge لمسؤول النظام.";
             if (error && error.code === Scanner.ERROR_CODES.SCAN_FAILED) return "تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.";
             if (error && error.code === Scanner.ERROR_CODES.IMAGE_TOO_LARGE) return "الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.";
             if (error && error.code === Scanner.ERROR_CODES.INVALID_RESPONSE) return "استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.";

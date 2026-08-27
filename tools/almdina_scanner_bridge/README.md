@@ -28,7 +28,7 @@ AlmdinaScannerBridgeSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 - يسمح فقط بالـOrigins المحددة، وأهمها `https://almadina-2.horizontechco.com`.
 - يتطلب Origin مسموحًا لـ`POST /scan`، ويعيد رؤوس CORS وPrivate Network Access اللازمة.
 - لا يملك بيانات دخول Frappe ولا يحفظ صورًا دائمة ولا يكتب JSON.
-- الصورة المؤقتة تُحذف فور قراءتها، ثم ترفعها واجهة ERP عبر خدمة `private File` المقيدة بالطلب والدرفة.
+- الصورة المؤقتة تُحذف فور قراءتها. يحوّل الجسر ناتج WIA الفعلي (BMP/TIFF/PNG/JPEG) إلى JPEG حقيقي ويضغطه تكيفيًا ضمن حد الرفع، ثم ترفعه واجهة ERP عبر خدمة `private File` المقيدة بالطلب والدرفة.
 - الحد الأقصى للصورة 8 MB، والاستجابة المقبولة JPEG فقط.
 
 ## نقاط الاتصال
@@ -43,8 +43,9 @@ AlmdinaScannerBridgeSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 ```text
 src/Almdina.ScannerBridge.Core     origin policy + request dispatcher + scanner port
-src/Almdina.ScannerBridge          tray UI + loopback TCP adapter + WIA adapter
+src/Almdina.ScannerBridge          tray UI + loopback TCP adapter + WIA adapter + JPEG normalization
 tests/Almdina.ScannerBridge.Core.Tests
+tests/Almdina.ScannerBridge.Windows.Tests
 installer/AlmdinaScannerBridge.iss
 ```
 
@@ -52,10 +53,11 @@ installer/AlmdinaScannerBridge.iss
 
 ```text
 dotnet run --project tools/almdina_scanner_bridge/tests/Almdina.ScannerBridge.Core.Tests/Almdina.ScannerBridge.Core.Tests.csproj --configuration Release
+dotnet run --project tools/almdina_scanner_bridge/tests/Almdina.ScannerBridge.Windows.Tests/Almdina.ScannerBridge.Windows.Tests.csproj --configuration Release
 dotnet publish tools/almdina_scanner_bridge/src/Almdina.ScannerBridge/Almdina.ScannerBridge.csproj --configuration Release --runtime win-x64 --self-contained true --output tools/almdina_scanner_bridge/build/publish
 ```
 
-Workflow باسم `Windows Scanner Bridge` يبني التطبيق على Windows، يشغل اختبارات البروتوكول والسياسة، ينشئ المثبت، ويصدر SHA-256. Artifact غير الموقّع مخصص لـUAT فقط. إصدار production من tag بالشكل `scanner-bridge-v*` لا يُنشر ما لم تكن أسرار شهادة Authenticode التالية مضبوطة:
+Workflow باسم `Windows Scanner Bridge` يبني التطبيق على Windows، يشغل اختبارات البروتوكول والسياسة وتحويل الصور الفعلي، ينشئ المثبت، ويصدر SHA-256. Artifact غير الموقّع مخصص لـUAT فقط. إصدار production من tag بالشكل `scanner-bridge-v*` لا يُنشر ما لم تكن أسرار شهادة Authenticode التالية مضبوطة:
 
 - `WINDOWS_SIGNING_CERTIFICATE_BASE64`
 - `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`

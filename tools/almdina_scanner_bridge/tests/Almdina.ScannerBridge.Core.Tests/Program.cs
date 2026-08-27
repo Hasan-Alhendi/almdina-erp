@@ -38,7 +38,7 @@ if (failures.Count > 0)
 return;
 
 static BridgeRequestDispatcher Dispatcher(IScanner scanner) =>
-    new(scanner, new BridgeOptions(allowedOrigins: [TestData.AllowedOrigin]), "2.0.0-test");
+    new(scanner, new BridgeOptions(allowedOrigins: [TestData.AllowedOrigin]), "2.1.0-test");
 
 static BridgeRequest Request(string method, string path, string? origin = null)
 {
