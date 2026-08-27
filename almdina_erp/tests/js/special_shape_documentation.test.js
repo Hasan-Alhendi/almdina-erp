@@ -125,6 +125,10 @@ history.redo();
 assert.ok(history.get().elements.length);
 history.markSaved();
 assert.equal(history.state().dirty, false);
+const submittedSnapshot = history.get();
+history.commit(api.Document.setNotes(history.get(), "تعديل أثناء الحفظ"));
+history.markSaved(submittedSnapshot);
+assert.equal(history.state().dirty, true, "an edit made while a save is pending must remain unsaved after the older request completes");
 
 const image = api.Document.setReference(initial, { fileUrl: "/private/files/reference.jpg", opacity: 0.72, rotationDeg: 0, locked: true });
 assert.equal(api.Document.hasContent(image), true);

@@ -60,7 +60,7 @@
             if (!D.hasContent(document)) { frappe.msgprint("أضف صورة مرجعية أو عنصرًا توضيحيًا قبل الحفظ."); return; }
             saving = true; shell.setSaving(true); shell.setSaveState("جار الحفظ…", "saving");
             try {
-                const result = await Api.save(context.order.name, context.piece.name, D.toStored(document)); context = { ...context, piece: result.piece }; history.markSaved();
+                const result = await Api.save(context.order.name, context.piece.name, D.toStored(document)); context = { ...context, piece: result.piece }; history.markSaved(document);
                 const removals = [...pendingFileRemovals]; pendingFileRemovals.clear(); await Promise.all(removals.map(url => Api.removeImage(context.order.name, context.piece.name, url).catch(error => console.warn("Deferred reference cleanup failed", error))));
                 frappe.show_alert({ message: "تم حفظ توثيق الدرفة.", indicator: "green" }, 3); render();
             } catch (error) { console.error("Documentation save failed", error); shell.setSaveState("فشل الحفظ", "error"); frappe.msgprint("تعذر حفظ التوثيق. تحقق من البيانات والصلاحيات ثم حاول مرة أخرى."); }
