@@ -31,6 +31,17 @@
         return Boolean(window.cur_frm === frm && capture(frm) === identity);
     }
 
+    function currentTabFieldname(frm) {
+        return String(
+            frm
+            && frm.layout
+            && frm.layout.current_tab
+            && frm.layout.current_tab.df
+            && frm.layout.current_tab.df.fieldname
+            || ""
+        );
+    }
+
     function permissionSignature(permissions) {
         const snapshot = permissions && typeof permissions.snapshot === "function"
             ? permissions.snapshot()
@@ -49,14 +60,17 @@
                 ? permissions.canDocument(frm, capability)
                 : permissions.can(capability)
         );
+        const activeTab = currentTabFieldname(frm);
 
-        if (can("view_costs")) {
+        // Plan and Cost are lazy workspaces. Their empty hidden HTML containers are
+        // intentional and must never make the visible Order workspace look broken.
+        if (activeTab === "cost_tab" && can("view_costs")) {
             const field = frm.fields_dict.order_cost_invoice_html;
             const wrapper = field && field.$wrapper;
             if (!wrapper || !wrapper.find(".dco-cost-shell").length) return true;
         }
 
-        if (can("view_cutting_plan")) {
+        if (activeTab === "results_tab" && can("view_cutting_plan")) {
             const field = frm.fields_dict.cutting_plan_html;
             const wrapper = field && field.$wrapper;
             if (!wrapper || !wrapper.children().length) return true;
