@@ -10,6 +10,7 @@ from ...domain.security.authorization import Capability, normalize_capabilities
 
 _READY_FOR_DELIVERY = "Ready for Delivery"
 RouteResolver = Callable[[str], ProductionRoute]
+OrderCapabilityResolver = Callable[[Mapping[str, Any] | Any], Iterable[str] | None]
 
 
 def can_view_shop_floor_history(capabilities: Iterable[str] | None) -> bool:
@@ -78,6 +79,26 @@ def ready_for_delivery_rows(
     ]
 
 
+def rows_with_order_capability(
+    rows: Sequence[Mapping[str, Any] | Any] | None,
+    capability: str,
+    *,
+    capability_resolver: OrderCapabilityResolver,
+) -> list[Any]:
+    """Keep only rows whose underlying order grants ``capability``.
+
+    The resolver belongs to the infrastructure adapter so native document scope
+    (including Frappe User Permissions) remains authoritative. This policy is
+    intentionally fail-closed when the resolver returns no capabilities.
+    """
+
+    return [
+        row
+        for row in list(rows or ())
+        if capability in normalize_capabilities(capability_resolver(row))
+    ]
+
+
 def visible_archive_rows(
     rows: Sequence[Mapping[str, Any] | Any] | None,
     capabilities: Iterable[str] | None,
@@ -98,8 +119,10 @@ def visible_archive_rows(
 
 
 __all__ = [
+    "OrderCapabilityResolver",
     "RouteResolver",
     "can_view_shop_floor_history",
     "ready_for_delivery_rows",
+    "rows_with_order_capability",
     "visible_archive_rows",
 ]
