@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.shop_floor import history_policy
 from almdina_erp.almdina_erp.application.shop_floor import order_list_query
 from almdina_erp.almdina_erp.application.shop_floor import queries
 from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
 )
@@ -89,7 +90,11 @@ def get_my_archive() -> list[dict[str, Any]]:
 
 @frappe.whitelist()
 def get_ready_for_delivery() -> list[dict[str, Any]]:
-    rows = _execute(queries.get_ready_for_delivery)
+    rows = history_policy.rows_with_order_capability(
+        _execute(queries.get_ready_for_delivery),
+        Capability.MARK_DELIVERED,
+        capability_resolver=_repository.capabilities_for_order,
+    )
     return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
