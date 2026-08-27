@@ -64,16 +64,19 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         for path in paths:
             source = path.read_text(encoding="utf-8")
             barrier = source.index("frm[LOAD_PROMISE_KEY] = promise;")
-            begin_load = source.index("requestId = store.beginLoad(currentIdentity);")
+            begin_load = source.index("store.beginLoad(currentIdentity)", barrier)
             loading_dispatch = source.index(
                 "dispatch(frm, store.snapshot());",
                 begin_load,
             )
+            transport_start = source.index("transport = api.load(orderName);", loading_dispatch)
             self.assertLess(barrier, begin_load, path.name)
             self.assertLess(begin_load, loading_dispatch, path.name)
+            self.assertLess(loading_dispatch, transport_start, path.name)
             self.assertIn("const pending = frm[LOAD_PROMISE_KEY];", source)
             self.assertIn("await pending;", source)
             self.assertIn("return load(frm, { force: true });", source)
+            self.assertIn("function createFlight(frm)", source)
 
     def test_plan_query_is_capability_scoped_and_contains_no_money(self) -> None:
         path = APP / "services" / "cutting_plan_workspace_query_service.py"
