@@ -22,12 +22,6 @@
         return Boolean(owner && typeof owner.canView === "function" && owner.canView(frm));
     }
 
-    function ensureLoad(frm) {
-        const owner = stateOwner();
-        if (!owner || typeof owner.load !== "function") return Promise.resolve(null);
-        return Promise.resolve(owner.load(frm)).catch(() => null);
-    }
-
     function ready(frm) {
         const state = snapshot(frm);
         return Boolean(state && state.status === "ready" && state.data);
@@ -96,7 +90,8 @@
                 <div class="dco-cost-empty">${frappe.utils.escape_html(pendingMessage(frm))}</div>
             </div>
         `);
-        ensureLoad(frm);
+        // Rendering is intentionally side-effect free. Form/document lifecycle
+        // hooks own workspace loading through AlmdinaCostWorkspaceState.schedule().
         return true;
     }
 
@@ -117,26 +112,17 @@
                 return legacy.refreshInvoiceSection(frm);
             },
             invoiceLines(frm) {
-                if (canView(frm) && !ready(frm)) {
-                    ensureLoad(frm);
-                    return [];
-                }
+                if (canView(frm) && !ready(frm)) return [];
                 if (ready(frm)) project(frm);
                 return legacy.invoiceLines(frm);
             },
             invoiceTotal(frm) {
-                if (canView(frm) && !ready(frm)) {
-                    ensureLoad(frm);
-                    return 0;
-                }
+                if (canView(frm) && !ready(frm)) return 0;
                 if (ready(frm)) project(frm);
                 return legacy.invoiceTotal(frm);
             },
             quoteTotal(frm) {
-                if (canView(frm) && !ready(frm)) {
-                    ensureLoad(frm);
-                    return 0;
-                }
+                if (canView(frm) && !ready(frm)) return 0;
                 if (ready(frm)) project(frm);
                 return legacy.quoteTotal(frm);
             },
