@@ -38,7 +38,12 @@ function htmlWrapper(initial = "") {
     };
 }
 
-function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion = 1 }) {
+function buildHarness({
+    canViewPlan,
+    asyncPresenter = false,
+    permissionVersion = 1,
+    activeTab = "results_tab",
+}) {
     const actions = htmlWrapper();
     const layout = htmlWrapper();
     const requiredAssets = [];
@@ -49,6 +54,11 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
     const frm = {
         doctype: "Door Cutting Order",
         doc: { name: "DCO-TEST-0001" },
+        layout: {
+            current_tab: {
+                df: { fieldname: activeTab },
+            },
+        },
         fields_dict: {
             plan_control_actions: {
                 df: { hidden: 1, permlevel: 1, hidden_due_to_dependency: 1 },
@@ -135,8 +145,10 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
         Object,
         String,
         Boolean,
+        Array,
         Promise,
         Error,
+        __: value => String(value),
     });
     vm.runInContext(source, context, {
         filename: "door_cutting_order_plan_surface_bootstrap.js",
@@ -155,6 +167,19 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
 }
 
 (async () => {
+    const hidden = buildHarness({ canViewPlan: true, activeTab: "order_tab" });
+    const hiddenRecovered = await hidden.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(
+        hidden.frm
+    );
+    assert.equal(hiddenRecovered, true);
+    assert.deepEqual(
+        hidden.requiredAssets,
+        [],
+        "a hidden Plan workspace must not load Plan presentation modules"
+    );
+    assert.equal(hidden.actions.content, "");
+    assert.equal(hidden.layout.content, "");
+
     const authorized = buildHarness({ canViewPlan: true });
     const recovered = await authorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.recover(
         authorized.frm
@@ -163,7 +188,7 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
     assert.equal(recovered, true);
     assert.ok(
         authorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.surfaceReady(authorized.frm),
-        "authorized plan surface must recover even when plan modules were initially absent"
+        "authorized active Plan surface must recover even when Plan modules were initially absent"
     );
     assert.match(authorized.actions.content, /dco-plan-actions-shell/);
     assert.match(authorized.actions.content, /dco-recalculate-plan/);
@@ -171,7 +196,7 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
     assert.deepEqual(
         authorized.frm.fields_dict.plan_control_actions.df,
         { hidden: 0, permlevel: 0, hidden_due_to_dependency: 0 },
-        "authorized plan commands must recover from stale hidden/permlevel metadata"
+        "authorized Plan commands must recover from stale hidden/permlevel metadata"
     );
     assert.deepEqual(
         authorized.requiredAssets,
@@ -208,7 +233,7 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
         asyncAuthorized.fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap.surfaceReady(
             asyncAuthorized.frm
         ),
-        "surface recovery must wait for stage context before checking action readiness"
+        "active Plan surface recovery must wait for asynchronous presentation before readiness"
     );
 
     const denied = buildHarness({ canViewPlan: false });
@@ -233,10 +258,10 @@ function buildHarness({ canViewPlan, asyncPresenter = false, permissionVersion =
     assert.match(
         pending.actions.content,
         /READY/,
-        "an unresolved permission request must not erase an already-rendered surface"
+        "an unresolved permission request must not erase an already-rendered active Plan surface"
     );
 
-    console.log("cutting plan surface isolation simulation passed");
+    console.log("cutting plan surface isolation and lazy activation simulation passed");
 })().catch(error => {
     console.error(error);
     process.exitCode = 1;

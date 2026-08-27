@@ -47,6 +47,22 @@
         return typeof api.can === "function" && Boolean(api.can("view_cutting_plan"));
     }
 
+    function workspaceActive(frm) {
+        const coordinator = window.AlmdinaWorkspaceSyncCoordinator;
+        if (coordinator && typeof coordinator.isActive === "function") {
+            return coordinator.isActive(frm, "plan");
+        }
+        const fieldname = String(
+            frm
+            && frm.layout
+            && frm.layout.current_tab
+            && frm.layout.current_tab.df
+            && frm.layout.current_tab.df.fieldname
+            || ""
+        );
+        return fieldname === "results_tab";
+    }
+
     function permissionVersion() {
         const api = permissions();
         return api && typeof api.version === "function" ? Number(api.version() || 0) : 0;
@@ -261,6 +277,9 @@
 
     async function recover(frm) {
         if (!isOrderForm(frm)) return false;
+        // The Plan surface is intentionally lazy. Hidden workspaces must not
+        // compete with the visible order workspace for CPU, module loading, or server reads.
+        if (!workspaceActive(frm)) return true;
         const identity = documentIdentity(frm);
 
         if (!canViewPlan(frm)) {
@@ -295,7 +314,9 @@
         if (!isOrderForm(frm)) return;
         if (frm.__almdinaPlanSurfaceTimer) {
             window.clearTimeout(frm.__almdinaPlanSurfaceTimer);
+            frm.__almdinaPlanSurfaceTimer = null;
         }
+        if (!workspaceActive(frm)) return;
         frm.__almdinaPlanSurfaceTimer = window.setTimeout(() => {
             frm.__almdinaPlanSurfaceTimer = null;
             recover(frm).catch(error => {
@@ -314,8 +335,16 @@
         schedule(window.cur_frm);
     });
 
+    window.addEventListener("almdina:workspace-activated", (event) => {
+        const detail = event && event.detail || {};
+        const names = Array.isArray(detail.resources) ? detail.resources : [];
+        if (!names.includes("plan")) return;
+        schedule(detail.frm || window.cur_frm);
+    });
+
     window.AlmdinaCuttingPlanSurfaceBootstrap = Object.freeze({
         canViewPlan,
+        workspaceActive,
         ensureModules,
         recover,
         renderSurface,
@@ -328,7 +357,7 @@
     if (documentContext && typeof documentContext.registerSurface === "function") {
         documentContext.registerSurface("cutting-plan", {
             isReady(frm) {
-                if (!isOrderForm(frm) || !canViewPlan(frm)) return true;
+                if (!isOrderForm(frm) || !canViewPlan(frm) || !workspaceActive(frm)) return true;
                 return surfaceReady(frm);
             },
             recover(frm) { return recover(frm); },
@@ -336,6 +365,7 @@
     }
 
     // This file can be lazy-loaded after the current Form refresh already ran.
-    // Recover the active order immediately instead of waiting for another event.
+    // Recover only when Plan is the active workspace; hidden tabs are intentionally
+    // excluded from the initial order-workspace critical path.
     window.setTimeout(() => schedule(window.cur_frm), 0);
 })();
