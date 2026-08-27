@@ -84,13 +84,13 @@ def get_my_inbox() -> list[dict[str, Any]]:
 @frappe.whitelist()
 def get_my_archive() -> list[dict[str, Any]]:
     rows = _execute(queries.get_my_archive)
-    capabilities = _current_capabilities()
-    visible_rows = history_policy.visible_archive_rows(
-        rows,
-        capabilities,
-        route_resolver=_repository.get_production_route,
-    )
-    return sanitize_shop_floor_summary(visible_rows, capabilities)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
+
+
+@frappe.whitelist()
+def get_ready_for_delivery() -> list[dict[str, Any]]:
+    rows = _execute(queries.get_ready_for_delivery)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
 @frappe.whitelist()
@@ -110,6 +110,7 @@ __all__ = [
     "get_my_archive",
     "get_my_inbox",
     "get_order_operational_role_flags",
+    "get_ready_for_delivery",
     "get_revert_targets",
     "get_shop_floor_context",
 ]
