@@ -43,6 +43,15 @@ def _current_capabilities() -> frozenset[str]:
     return granted_capabilities(user=frappe.session.user)
 
 
+def _shop_floor_row_order_capabilities(row: dict[str, Any]) -> frozenset[str]:
+    """Resolve an enriched stage row back to its Door Cutting Order."""
+
+    order_name = str(row.get("door_cutting_order") or "").strip()
+    if not order_name:
+        return frozenset()
+    return _repository.capabilities_for_order({"name": order_name})
+
+
 @frappe.whitelist()
 def get_shop_floor_context() -> dict[str, Any]:
     result = _execute(queries.get_shop_floor_context)
@@ -93,7 +102,7 @@ def get_ready_for_delivery() -> list[dict[str, Any]]:
     rows = history_policy.rows_with_order_capability(
         _execute(queries.get_ready_for_delivery),
         Capability.MARK_DELIVERED,
-        capability_resolver=_repository.capabilities_for_order,
+        capability_resolver=_shop_floor_row_order_capabilities,
     )
     return sanitize_shop_floor_summary(rows, _current_capabilities())
 
