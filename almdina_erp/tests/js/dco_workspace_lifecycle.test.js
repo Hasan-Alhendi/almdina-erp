@@ -55,6 +55,20 @@ function makeWrapper() {
     };
 }
 
+function makeFormRoot() {
+    const listeners = new Map();
+    return {
+        nodeType: 1,
+        addEventListener(name, handler) {
+            if (!listeners.has(name)) listeners.set(name, new Set());
+            listeners.get(name).add(handler);
+        },
+        removeEventListener(name, handler) {
+            if (listeners.has(name)) listeners.get(name).delete(handler);
+        },
+    };
+}
+
 (async () => {
     const listeners = new Map();
     const formHooks = [];
@@ -65,6 +79,12 @@ function makeWrapper() {
             name: "DCO-TEST-0001",
             pieces: [],
         },
+        layout: {
+            current_tab: {
+                df: { fieldname: "order_tab" },
+            },
+        },
+        wrapper: makeFormRoot(),
         fields_dict: {
             plan_controls_intro: { $wrapper: makeWrapper() },
             cutting_plan_html: { $wrapper: makeWrapper() },
@@ -119,6 +139,9 @@ function makeWrapper() {
                 callback();
                 return 1;
             },
+            registerCleanup() {
+                return true;
+            },
         },
     };
 
@@ -171,6 +194,11 @@ function makeWrapper() {
         source("public/js/door_cutting_order/core/door_cutting_order_workspace_store.js"),
         context,
         { filename: "door_cutting_order_workspace_store.js" }
+    );
+    vm.runInContext(
+        source("public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js"),
+        context,
+        { filename: "door_cutting_order_workspace_sync_coordinator.js" }
     );
 
     const planFlights = [deferred(), deferred(), deferred()];
@@ -248,22 +276,43 @@ function makeWrapper() {
 
     const planState = fakeWindow.AlmdinaPlanWorkspaceState;
     const costState = fakeWindow.AlmdinaCostWorkspaceState;
+    const coordinator = fakeWindow.AlmdinaWorkspaceSyncCoordinator;
 
-    // Loading state is dispatched synchronously. The presenters therefore run
-    // during load() itself; this used to recurse into load() before the in-flight
-    // promise existed and ended with Maximum call stack size exceeded.
-    const firstPlan = planState.load(frm);
-    const firstCost = costState.load(frm);
+    // Opening the Order tab is now the critical path. Form lifecycle activation
+    // must not issue Plan or Cost RPCs before the operator visits those workspaces.
+    const coordinatorHook = formHooks.find(entry =>
+        entry.doctype === "Door Cutting Order"
+        && entry.handlers
+        && typeof entry.handlers.onload_post_render === "function"
+        && typeof entry.handlers.refresh === "function"
+    );
+    assert.ok(coordinatorHook, "workspace coordinator form hook should be registered");
+    coordinatorHook.handlers.onload_post_render(frm);
+    coordinatorHook.handlers.refresh(frm);
     await flushPromises();
-    assert.equal(planCalls, 1, "plan loading render must not create a second request");
-    assert.equal(costCalls, 1, "cost loading render must not create a second request");
+    assert.equal(planCalls, 0, "Order tab must not eagerly load Plan");
+    assert.equal(costCalls, 0, "Order tab must not eagerly load Cost");
 
-    // A permission/lifecycle refresh while the same request is slow must join the
-    // current flight instead of creating a duplicate network request.
+    // Plan activation starts exactly one Plan read and no Cost read.
+    frm.layout.current_tab.df.fieldname = "results_tab";
+    const firstPlan = coordinator.activateCurrent(frm);
+    await flushPromises();
+    assert.equal(planCalls, 1, "Plan tab should start one canonical Plan request");
+    assert.equal(costCalls, 0, "Plan tab must not load Cost");
+
+    // Cost activation is independent and starts exactly one Cost read.
+    frm.layout.current_tab.df.fieldname = "cost_tab";
+    const firstCost = coordinator.activateCurrent(frm);
+    await flushPromises();
+    assert.equal(planCalls, 1);
+    assert.equal(costCalls, 1, "Cost tab should start one canonical Cost request");
+
+    // A permission refresh while Cost is active must join its slow in-flight read;
+    // the hidden Plan workspace stays untouched.
     fakeWindow.dispatchEvent(new CustomEvent("almdina:permissions-updated", { detail: {} }));
     await flushPromises();
-    assert.equal(planCalls, 1, "forced plan refresh must join a current fresh flight");
-    assert.equal(costCalls, 1, "forced cost refresh must join a current fresh flight");
+    assert.equal(planCalls, 1, "hidden Plan must remain lazy on permission refresh");
+    assert.equal(costCalls, 1, "forced Cost refresh must join the current flight");
 
     planFlights[0].resolve({
         plans: { system_draft: null, uploaded_draft: null, approved: null },
@@ -340,7 +389,7 @@ function makeWrapper() {
     await edgeRetry;
     assert.equal(frm._almdina_safe_edge_options_loading, null);
 
-    assert.ok(formHooks.length >= 3, "form lifecycle hooks should remain registered");
+    assert.ok(formHooks.length >= 2, "coordinator and Order defaults lifecycle hooks should be registered");
     console.log("DCO workspace lifecycle simulation passed");
 })().catch(error => {
     console.error(error);
