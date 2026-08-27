@@ -94,6 +94,30 @@
         return true;
     }
 
+    function isFreshReady(frm, store, currentIdentity) {
+        const current = store.snapshot();
+        return Boolean(
+            frm[LOADED_IDENTITY_KEY] === currentIdentity
+            && current.identity === currentIdentity
+            && current.status === "ready"
+            && current.freshness !== "stale"
+        );
+    }
+
+    function createFlight(frm) {
+        let resolveFlight;
+        let rejectFlight;
+        const flight = new Promise((resolve, reject) => {
+            resolveFlight = resolve;
+            rejectFlight = reject;
+        });
+        let promise = null;
+        promise = flight.finally(() => {
+            if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
+        });
+        return { promise, resolveFlight, rejectFlight };
+    }
+
     async function load(frm, options = {}) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return null;
         const store = storeFor(frm);
@@ -106,21 +130,48 @@
             return settleUnavailable(frm, store, currentIdentity);
         }
 
-        const current = store.snapshot();
-        if (
-            !options.force
-            && frm[LOADED_IDENTITY_KEY] === currentIdentity
-            && current.status === "ready"
-            && current.freshness !== "stale"
-        ) {
-            return current;
+        if (!options.force && isFreshReady(frm, store, currentIdentity)) {
+            return store.snapshot();
         }
-        if (!options.force && frm[LOAD_PROMISE_KEY]) return frm[LOAD_PROMISE_KEY];
 
+        const pending = frm[LOAD_PROMISE_KEY];
+        if (pending) {
+            if (!options.force) return pending;
+
+            // A forced lifecycle refresh must not race a still-current read. Wait
+            // for that flight first; only start a follow-up when invalidation or an
+            // error left the workspace non-fresh after the original request settled.
+            try {
+                await pending;
+            } catch (error) {
+                // The store owns the error state. Force below decides whether a
+                // retry is still valid for the same live document identity.
+            }
+            if (identity(frm) !== currentIdentity) return store.snapshot();
+            if (isFreshReady(frm, store, currentIdentity)) return store.snapshot();
+            return load(frm, { force: true });
+        }
+
+        const { promise, resolveFlight, rejectFlight } = createFlight(frm);
+
+        // Install the single-flight barrier before beginLoad()/dispatch(). Both
+        // are observable synchronously, so listeners must see an owned in-flight
+        // request before they can re-enter this loader.
+        frm[LOAD_PROMISE_KEY] = promise;
         const requestId = store.beginLoad(currentIdentity);
         dispatch(frm, store.snapshot());
 
-        const promise = api.load(orderName)
+        // Keep the established transport timing: callers that invoke load() see
+        // the request start in the same tick. The ownership barrier above makes
+        // this safe without deferring transport to another microtask.
+        let transport;
+        try {
+            transport = api.load(orderName);
+        } catch (error) {
+            transport = Promise.reject(error);
+        }
+
+        Promise.resolve(transport)
             .then((payload) => {
                 if (rejectIdentityTransition(frm, store, currentIdentity)) {
                     return store.snapshot();
@@ -141,10 +192,8 @@
                 dispatch(frm, snapshot);
                 throw error;
             })
-            .finally(() => {
-                if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
-            });
-        frm[LOAD_PROMISE_KEY] = promise;
+            .then(resolveFlight, rejectFlight);
+
         return promise;
     }
 
