@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
 ASSETS = ROOT / "frontend_assets.py"
+PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
 
 
 class TestDcoPerformanceContract(unittest.TestCase):
@@ -43,17 +44,105 @@ class TestDcoPerformanceContract(unittest.TestCase):
         self.assertIn("frappe.ui.form.on(DOCTYPE", lifecycle)
         self.assertIn('addEventListener("almdina:permissions-updated"', lifecycle)
         self.assertIn("registerCleanup(frm, ACTIVATION_CLEANUP_KEY", lifecycle)
-        self.assertIn("owner.activateCurrent(frm, options)", lifecycle)
+        self.assertIn("await registry.ensureForTab(fieldname);", lifecycle)
+        self.assertLess(
+            lifecycle.index("await registry.ensureForTab(fieldname);"),
+            lifecycle.index("return owner.activateCurrent(frm, options);"),
+        )
+        self.assertIn("activationStillCurrent", lifecycle)
 
-    def test_activation_adapter_loads_after_both_workspace_states(self) -> None:
+    def test_heavy_plan_and_cost_ui_are_not_in_dco_critical_manifest(self) -> None:
+        source = ASSETS.read_text(encoding="utf-8")
+        app_include, doctype_section = source.split("doctype_js =", 1)
+        dco = doctype_section.split('"Door Cutting Order": [', 1)[1].split(
+            '],\n    "Edge Banding Type"', 1
+        )[0]
+
+        # Lightweight application state remains deterministic and eager.
+        for asset in (
+            "door_cutting_order_plan_workspace_api.js",
+            "door_cutting_order_plan_workspace_state.js",
+            "door_cutting_order_cost_workspace_api.js",
+            "door_cutting_order_cost_workspace_state.js",
+            "door_cutting_order_workspace_asset_registry.js",
+            "door_cutting_order_workspace_asset_status_ux.js",
+            "door_cutting_order_workspace_activation_lifecycle.js",
+        ):
+            self.assertIn(asset, dco)
+
+        # Heavy presentation/actions must not regress into first-open execution.
+        for asset in (
+            "door_cutting_order_cutting_plan_renderer.js",
+            "door_cutting_order_plan_controls_ux.js",
+            "door_cutting_order_plan_content_ux.js",
+            "door_cutting_order_plan_workspace_presenter_adapter.js",
+            "door_cutting_order_plan_surface_bootstrap.js",
+            "door_cutting_order_plan_edit_session_ux.js",
+            "secure_dxf_upload.js",
+            "secure_dxf_export.js",
+            "door_cutting_order_cost_presenter.js",
+            "door_cutting_order_cost_workspace_presenter_adapter.js",
+            "door_cutting_order_cost_permissions_ux.js",
+            "door_cutting_order_financial_documents_ux.js",
+            "door_cutting_order_customer_invoice_toolbar_ux.js",
+            "door_cutting_order_cost_edit_session_ux.js",
+        ):
+            self.assertNotIn(asset, dco)
+
+        self.assertNotIn("secure_dxf_export.js", app_include)
+        self.assertNotIn("door_cutting_order_drawing_plan_ux.js", app_include)
+
+    def test_workspace_asset_registry_owns_batched_feature_loading(self) -> None:
+        source = (
+            PUBLIC / "core" / "door_cutting_order_workspace_asset_registry.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('activationField: "results_tab"', source)
+        self.assertIn('activationField: "cost_tab"', source)
+        self.assertIn("frontend.requireAssets(assets)", source)
+        self.assertIn("const pending = new Map()", source)
+        self.assertIn('emit(name, "loading")', source)
+        self.assertIn('emit(name, "loaded")', source)
+        self.assertIn('emit(name, "failed", error)', source)
+        self.assertIn("door_cutting_order_plan_surface_bootstrap.js", source)
+        self.assertIn("door_cutting_order_cost_presenter.js", source)
+
+    def test_permission_recovery_does_not_pull_lazy_features(self) -> None:
+        source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
+
+        self.assertIn("ORDER_CORE_GLOBALS", source)
+        self.assertIn('"AlmdinaOrderPermissionRefreshUX"', source)
+        self.assertIn('"AlmdinaOrderTabPermissionsUX"', source)
+        self.assertNotIn("AlmdinaOrderCostUX", source)
+        self.assertNotIn("AlmdinaCustomerInvoiceToolbarUX", source)
+        self.assertNotIn("PLAN_SURFACE_MODULE", source)
+        self.assertNotIn("waitForGlobal", source)
+        self.assertNotIn("setInterval", source)
+        self.assertNotIn("frappe.require", source)
+
+    def test_hidden_lazy_surfaces_are_not_permission_readiness_failures(self) -> None:
+        source = (
+            PUBLIC / "core" / "door_cutting_order_permission_refresh_ux.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("const activeTab = currentTabFieldname(frm);", source)
+        self.assertIn('activeTab === "cost_tab"', source)
+        self.assertIn('activeTab === "results_tab"', source)
+        self.assertIn("Hidden Plan", source)
+
+    def test_activation_adapter_loads_after_workspace_state_and_asset_registry(self) -> None:
         source = ASSETS.read_text(encoding="utf-8")
         plan_state = source.index("door_cutting_order_plan_workspace_state.js")
         cost_state = source.index("door_cutting_order_cost_workspace_state.js")
+        registry = source.index("door_cutting_order_workspace_asset_registry.js")
+        status = source.index("door_cutting_order_workspace_asset_status_ux.js")
         lifecycle = source.index("door_cutting_order_workspace_activation_lifecycle.js")
         mutation_policy = source.index("door_cutting_order_mutation_impact_policy.js")
 
-        self.assertLess(plan_state, lifecycle)
-        self.assertLess(cost_state, lifecycle)
+        self.assertLess(plan_state, registry)
+        self.assertLess(cost_state, registry)
+        self.assertLess(registry, status)
+        self.assertLess(status, lifecycle)
         self.assertLess(lifecycle, mutation_policy)
 
     def test_hidden_plan_surface_is_not_a_readiness_blocker(self) -> None:
