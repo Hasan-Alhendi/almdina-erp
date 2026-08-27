@@ -161,7 +161,7 @@
             if (!geometry) return;
 
             context.save();
-            context.globalAlpha = editing ? Math.max(0.82, document.reference.opacity) : document.reference.opacity;
+            context.globalAlpha = 1;
             context.translate(geometry.center.x, geometry.center.y);
             context.rotate(geometry.angle);
             context.drawImage(

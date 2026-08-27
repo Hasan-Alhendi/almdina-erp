@@ -23,11 +23,70 @@
         if (element.type === "text") { const position = point(element.position); const fontSize = clampPrintedNoteFontSize(element.font_size || element.fontSize || 24); return position ? `<text data-dco-readable-note="1" x="${position.x}" y="${position.y}" direction="rtl" unicode-bidi="plaintext" text-anchor="end" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="700" fill="${color(element.style && element.style.color, "#9a4b00")}" paint-order="stroke" stroke="#fff" stroke-width="3">${esc(element.text)}</text>` : ""; }
         return "";
     }
-    function referenceMarkup(reference, width, height) {
-        if (!reference || !String(reference.fileUrl || "").startsWith("/private/files/")) return ""; const opacity = Math.max(.1, Math.min(1, finite(reference.opacity, .72))), rotation = Math.max(-360, Math.min(360, finite(reference.rotationDeg)));
-        const rawCrop = reference.crop && typeof reference.crop === "object" ? reference.crop : {}; const x = Math.max(0, Math.min(.98, finite(rawCrop.x))), y = Math.max(0, Math.min(.98, finite(rawCrop.y))), cropWidth = Math.max(.02, Math.min(1 - x, finite(rawCrop.width, 1))), cropHeight = Math.max(.02, Math.min(1 - y, finite(rawCrop.height, 1))); const cropped = x > .000001 || y > .000001 || cropWidth < .999999 || cropHeight < .999999;
-        if (cropped && reference.imageSize) { const pixelWidth = Math.max(1, finite(reference.imageSize.widthPx)), pixelHeight = Math.max(1, finite(reference.imageSize.heightPx)), aspect = pixelWidth / pixelHeight; const viewX = x * aspect, viewWidth = cropWidth * aspect; return `<svg class="dco-reference-crop" data-reference-crop="1" x="0" y="0" width="${width}" height="${height}" viewBox="${viewX} ${y} ${viewWidth} ${cropHeight}" preserveAspectRatio="xMidYMid meet" overflow="hidden" style="overflow:hidden" opacity="${opacity}" transform="rotate(${rotation} ${width / 2} ${height / 2})"><image href="${esc(reference.fileUrl)}" x="0" y="0" width="${aspect}" height="1" preserveAspectRatio="none"/></svg>`; }
-        return `<image href="${esc(reference.fileUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}" transform="rotate(${rotation} ${width / 2} ${height / 2})"/>`;
+    function referenceCrop(reference) {
+        const raw = reference && reference.crop && typeof reference.crop === "object" ? reference.crop : {};
+        const x = Math.max(0, Math.min(.98, finite(raw.x)));
+        const y = Math.max(0, Math.min(.98, finite(raw.y)));
+        return {
+            x,
+            y,
+            width: Math.max(.02, Math.min(1 - x, finite(raw.width, 1))),
+            height: Math.max(.02, Math.min(1 - y, finite(raw.height, 1))),
+        };
+    }
+    function referenceLayout(reference, width, height) {
+        if (!reference) return null;
+        const crop = referenceCrop(reference);
+        const rawSize = reference.imageSize && typeof reference.imageSize === "object" ? reference.imageSize : {};
+        const pixelWidth = finite(rawSize.widthPx);
+        const pixelHeight = finite(rawSize.heightPx);
+        const hasImageSize = pixelWidth > 0 && pixelHeight > 0;
+        let destinationWidth = width;
+        let destinationHeight = height;
+        if (hasImageSize) {
+            const sourceWidth = pixelWidth * crop.width;
+            const sourceHeight = pixelHeight * crop.height;
+            const ratio = Math.min(width / sourceWidth, height / sourceHeight);
+            destinationWidth = sourceWidth * ratio;
+            destinationHeight = sourceHeight * ratio;
+        }
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const x = centerX - destinationWidth / 2;
+        const y = centerY - destinationHeight / 2;
+        const rotation = Math.max(-360, Math.min(360, finite(reference.rotationDeg)));
+        const angle = rotation * Math.PI / 180;
+        const rotatedWidth = Math.abs(destinationWidth * Math.cos(angle)) + Math.abs(destinationHeight * Math.sin(angle));
+        const rotatedHeight = Math.abs(destinationWidth * Math.sin(angle)) + Math.abs(destinationHeight * Math.cos(angle));
+        return {
+            crop,
+            imageSize: hasImageSize ? { widthPx: pixelWidth, heightPx: pixelHeight } : null,
+            destination: { x, y, width: destinationWidth, height: destinationHeight },
+            rotation,
+            center: { x: centerX, y: centerY },
+            bounds: {
+                minX: centerX - rotatedWidth / 2,
+                minY: centerY - rotatedHeight / 2,
+                maxX: centerX + rotatedWidth / 2,
+                maxY: centerY + rotatedHeight / 2,
+            },
+        };
+    }
+    function referenceMarkup(reference, width, height, layout = referenceLayout(reference, width, height)) {
+        if (!layout || !String(reference.fileUrl || "").startsWith("/private/files/")) return "";
+        const crop = layout.crop;
+        const destination = layout.destination;
+        const transform = `rotate(${layout.rotation} ${layout.center.x} ${layout.center.y})`;
+        const cropped = crop.x > .000001 || crop.y > .000001 || crop.width < .999999 || crop.height < .999999;
+        if (cropped && layout.imageSize) {
+            const viewX = crop.x * layout.imageSize.widthPx;
+            const viewY = crop.y * layout.imageSize.heightPx;
+            const viewWidth = crop.width * layout.imageSize.widthPx;
+            const viewHeight = crop.height * layout.imageSize.heightPx;
+            return `<svg class="dco-reference-crop" data-reference-crop="1" data-reference-fit="visible-content" x="${destination.x}" y="${destination.y}" width="${destination.width}" height="${destination.height}" viewBox="${viewX} ${viewY} ${viewWidth} ${viewHeight}" preserveAspectRatio="xMidYMid meet" overflow="hidden" style="overflow:hidden" opacity="1" transform="${transform}"><image href="${esc(reference.fileUrl)}" x="0" y="0" width="${layout.imageSize.widthPx}" height="${layout.imageSize.heightPx}" preserveAspectRatio="none"/></svg>`;
+        }
+        const fitAttribute = layout.imageSize ? ' data-reference-fit="visible-content"' : "";
+        return `<image href="${esc(reference.fileUrl)}" x="${destination.x}" y="${destination.y}" width="${destination.width}" height="${destination.height}" preserveAspectRatio="xMidYMid meet" opacity="1"${fitAttribute} transform="${transform}"/>`;
     }
     function elementBounds(element) {
         if (!element || typeof element !== "object") return null; let points = [];
@@ -41,9 +100,9 @@
         const valid = points.map(point).filter(Boolean); if (!valid.length) return null;
         return { minX: Math.min(...valid.map(item => item.x)), maxX: Math.max(...valid.map(item => item.x)), minY: Math.min(...valid.map(item => item.y)), maxY: Math.max(...valid.map(item => item.y)) };
     }
-    function documentationBounds(payload, width, height) {
+    function documentationBounds(payload, width, height, layout = referenceLayout(payload.reference, width, height)) {
         const values = (payload.elements || []).map(elementBounds).filter(Boolean);
-        if (payload.reference) values.push({ minX: 0, minY: 0, maxX: width, maxY: height });
+        if (layout) values.push(layout.bounds);
         if (!values.length) values.push({ minX: 0, minY: 0, maxX: width, maxY: height });
         const bounds = {
             minX: Math.min(...values.map(value => value.minX)), maxX: Math.max(...values.map(value => value.maxX)),
@@ -53,9 +112,9 @@
         return { x: bounds.minX - padding, y: bounds.minY - padding, width: Math.max(1, bounds.maxX - bounds.minX) + padding * 2, height: Math.max(1, bounds.maxY - bounds.minY) + padding * 2 };
     }
     function documentationSvg(payload, label) {
-        const width = Math.max(1, finite(payload.canvas && payload.canvas.widthMm, 800)), height = Math.max(1, finite(payload.canvas && payload.canvas.heightMm, 2100)), view = documentationBounds(payload, width, height); sequence += 1; const markerId = `dco-doc-arrow-${sequence}`;
+        const width = Math.max(1, finite(payload.canvas && payload.canvas.widthMm, 800)), height = Math.max(1, finite(payload.canvas && payload.canvas.heightMm, 2100)), layout = referenceLayout(payload.reference, width, height), view = documentationBounds(payload, width, height, layout); sequence += 1; const markerId = `dco-doc-arrow-${sequence}`;
         const elements = (payload.elements || []).map(item => documentationElement(item, markerId)).join("");
-        return `<svg viewBox="${view.x} ${view.y} ${view.width} ${view.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><defs>${arrowHead(markerId, "#173c75")}</defs><rect x="${view.x}" y="${view.y}" width="${view.width}" height="${view.height}" fill="#fff"/>${referenceMarkup(payload.reference, width, height)}${elements}</svg>`;
+        return `<svg viewBox="${view.x} ${view.y} ${view.width} ${view.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><defs>${arrowHead(markerId, "#173c75")}</defs><rect x="${view.x}" y="${view.y}" width="${view.width}" height="${view.height}" fill="#fff"/>${referenceMarkup(payload.reference, width, height, layout)}${elements}</svg>`;
     }
     function geometrySvg(payload, label) {
         const width = Math.max(0, finite(payload.blank_width_cm)), height = Math.max(0, finite(payload.blank_length_cm)); const points = (payload.points || []).filter(item => Array.isArray(item) && item.length >= 2).map(item => `${finite(item[0])},${finite(item[1])}`).join(" "); if (!width || !height || !points) return ""; const padding = Math.max(width, height) * .06;

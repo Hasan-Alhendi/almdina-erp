@@ -121,7 +121,7 @@
             .dco-piece-notes{gap:1.1mm}
             .dco-piece-notes-text{font-size:${measurements ? "7.6pt" : "7.9pt"};font-weight:650;line-height:1.4}
             .dco-piece-sketch{padding:1mm 1.2mm .7mm;border:.7pt solid #aeb7bf;border-radius:1.8mm;background:#fff}
-            .dco-piece-sketch svg{width:100%;height:${sketchHeight};max-width:${sketchWidth};margin:0 auto;overflow:visible}
+            .dco-piece-sketch>svg{width:100%;height:${sketchHeight};max-width:${sketchWidth};margin:0 auto;overflow:visible}
             .dco-piece-sketch figcaption{margin-top:.5mm;color:#5e6974;font-size:6.7pt;font-weight:800;line-height:1.2}
             @media print{a{color:inherit;text-decoration:none}}
         `;

@@ -90,6 +90,7 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
     def test_ui_contains_required_intake_and_designer_handoff(self) -> None:
         shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
+        renderer = (DOCUMENTATION / "presentation" / "canvas_renderer.js").read_text(encoding="utf-8")
         for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "قلم ذكي", "ملاحظات المصمم", "حفظ التوثيق"):
             self.assertIn(label, shell)
         self.assertIn("تنزيل الصورة الأصلية للمصمم", shell)
@@ -112,6 +113,12 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("renderer.cropRegion", controller)
         self.assertIn("renderer.suggestReferenceCrop", controller)
         self.assertIn("renderer.referenceImageSize", controller)
+        self.assertNotIn("data-opacity", shell)
+        self.assertNotIn("الشفافية", shell)
+        self.assertNotIn("data-opacity", controller)
+        self.assertNotIn("opacity: 0.72", controller)
+        self.assertIn("context.globalAlpha = 1", renderer)
+        self.assertNotIn("document.reference.opacity", renderer)
 
 
 if __name__ == "__main__":

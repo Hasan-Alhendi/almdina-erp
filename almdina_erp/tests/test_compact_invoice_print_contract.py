@@ -197,6 +197,8 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn(
             'const sketchHeight = measurements ? "27mm" : "31mm"', source
         )
+        self.assertIn(".dco-piece-sketch>svg", source)
+        self.assertNotIn(".dco-piece-sketch svg", source)
         self.assertIn("${headerCss()}", source)
         self.assertNotIn("body{font-size:7.4px", source)
 
