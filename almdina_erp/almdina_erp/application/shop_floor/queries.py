@@ -7,6 +7,10 @@ from typing import Any, Protocol
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     build_navigation_context,
 )
+from almdina_erp.almdina_erp.application.shop_floor.history_policy import (
+    ready_for_delivery_rows,
+    visible_archive_rows,
+)
 from almdina_erp.almdina_erp.domain.orders.lifecycle import (
     department_for_stage_type,
     department_status_for_stage_status,
@@ -138,6 +142,15 @@ def _assert_shop_floor_access(repository: ShopFloorQueryPort) -> frozenset[str]:
         SHOP_FLOOR_ACCESS_CAPABILITIES
     ):
         raise ShopFloorPermissionDenied("لا تملك صلاحية الدخول إلى صالة الإنتاج.")
+    return capabilities
+
+
+def _assert_shop_floor_history_access(
+    repository: ShopFloorQueryPort,
+) -> frozenset[str]:
+    capabilities = _assert_shop_floor_access(repository)
+    if Capability.VIEW_SHOP_FLOOR_HISTORY not in capabilities:
+        raise ShopFloorPermissionDenied("لا تملك صلاحية عرض سجل الطلبات المنجزة.")
     return capabilities
 
 
@@ -357,7 +370,7 @@ def get_my_inbox(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
 
 
 def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
-    _assert_shop_floor_access(repository)
+    capabilities = _assert_shop_floor_history_access(repository)
     user = repository.current_user()
     is_admin = repository.is_admin()
     stages = repository.list_archive_stages(user=user, is_admin=is_admin)
@@ -369,7 +382,21 @@ def get_my_archive(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
             if normalize_order_status(row.get("order_status"))
             not in PRE_PRODUCTION_ORDER_STATUSES
         ]
-    return rows
+    return visible_archive_rows(rows, capabilities)
+
+
+def get_ready_for_delivery(repository: ShopFloorQueryPort) -> list[dict[str, Any]]:
+    capabilities = _assert_shop_floor_access(repository)
+    if Capability.MARK_DELIVERED not in capabilities:
+        raise ShopFloorPermissionDenied("لا تملك صلاحية عرض الطلبات الجاهزة للتسليم.")
+    user = repository.current_user()
+    is_admin = repository.is_admin()
+    stages = repository.list_archive_stages(user=user, is_admin=is_admin)
+    rows = _enrich_stage_rows(repository, stages)
+    return ready_for_delivery_rows(
+        rows,
+        route_resolver=repository.get_production_route,
+    )
 
 
 def _normalize_order_names(order_names: Any) -> list[str]:
@@ -885,6 +912,7 @@ __all__ = [
     "get_my_archive",
     "get_my_inbox",
     "get_order_detail",
+    "get_ready_for_delivery",
     "get_revert_targets",
     "get_shop_floor_context",
 ]

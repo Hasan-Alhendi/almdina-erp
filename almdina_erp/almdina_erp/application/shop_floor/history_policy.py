@@ -10,6 +10,7 @@ from ...domain.security.authorization import Capability, normalize_capabilities
 
 _READY_FOR_DELIVERY = "Ready for Delivery"
 RouteResolver = Callable[[str], ProductionRoute]
+OrderCapabilityResolver = Callable[[Mapping[str, Any] | Any], Iterable[str] | None]
 
 
 def can_view_shop_floor_history(capabilities: Iterable[str] | None) -> bool:
@@ -43,7 +44,7 @@ def _is_terminal_route_stage(
     try:
         route = route_resolver(route_name)
         return route.next_stage(stage_type) is None
-    except (ValueError, AttributeError):
+    except (KeyError, ValueError, AttributeError):
         return False
 
 
@@ -51,13 +52,7 @@ def _is_operational_ready_row(
     row: Mapping[str, Any] | Any,
     route_resolver: RouteResolver | None,
 ) -> bool:
-    """Keep only the terminal row required by the Ready-for-Delivery board.
-
-    Completing the final production stage clears ``current_production_stage``.
-    Therefore terminality must come from the canonical Production Routing, not
-    from the order's current-stage pointer. This preserves delivery work without
-    exposing earlier completed-stage history.
-    """
+    """Return whether the row is the terminal operational delivery row."""
 
     return bool(
         normalize_order_status(_value(row, "order_status")) == _READY_FOR_DELIVERY
@@ -65,26 +60,69 @@ def _is_operational_ready_row(
     )
 
 
-def visible_archive_rows(
+def ready_for_delivery_rows(
     rows: Sequence[Mapping[str, Any] | Any] | None,
-    capabilities: Iterable[str] | None,
     *,
     route_resolver: RouteResolver | None = None,
 ) -> list[Any]:
-    """Return history rows allowed by the actor's explicit visibility grant."""
+    """Return only terminal rows needed by the delivery-ready board.
 
-    materialized = list(rows or ())
-    if can_view_shop_floor_history(capabilities):
-        return materialized
+    Ready-for-delivery is operational data, not completed-history data. Keeping
+    this policy separate prevents the history permission from becoming a hidden
+    dependency of the delivery workflow.
+    """
+
     return [
         row
-        for row in materialized
+        for row in list(rows or ())
         if _is_operational_ready_row(row, route_resolver)
     ]
 
 
+def rows_with_order_capability(
+    rows: Sequence[Mapping[str, Any] | Any] | None,
+    capability: str,
+    *,
+    capability_resolver: OrderCapabilityResolver,
+) -> list[Any]:
+    """Keep only rows whose underlying order grants ``capability``.
+
+    The resolver belongs to the infrastructure adapter so native document scope
+    (including Frappe User Permissions) remains authoritative. This policy is
+    intentionally fail-closed when the resolver returns no capabilities.
+    """
+
+    return [
+        row
+        for row in list(rows or ())
+        if capability in normalize_capabilities(capability_resolver(row))
+    ]
+
+
+def visible_archive_rows(
+    rows: Sequence[Mapping[str, Any] | Any] | None,
+    capabilities: Iterable[str] | None,
+) -> list[Any]:
+    """Return true completed history allowed by the explicit history grant.
+
+    The function intentionally excludes ``Ready for Delivery`` because those
+    rows belong to the operational delivery query, not the history surface.
+    """
+
+    if not can_view_shop_floor_history(capabilities):
+        return []
+    return [
+        row
+        for row in list(rows or ())
+        if normalize_order_status(_value(row, "order_status")) != _READY_FOR_DELIVERY
+    ]
+
+
 __all__ = [
+    "OrderCapabilityResolver",
     "RouteResolver",
     "can_view_shop_floor_history",
+    "ready_for_delivery_rows",
+    "rows_with_order_capability",
     "visible_archive_rows",
 ]

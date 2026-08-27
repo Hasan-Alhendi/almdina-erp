@@ -17,7 +17,9 @@ class FakeRepository:
         self.user = "drawing@example.com"
         self.admin = False
         self.capabilities = set(queries.SHOP_FLOOR_DETAIL_CAPABILITIES)
-        self.global_grants = set(self.capabilities)
+        self.global_grants = set(self.capabilities) | {
+            Capability.VIEW_SHOP_FLOOR_HISTORY
+        }
         self.inbox: list[Any] = []
         self.archive: list[Any] = []
         self.current: dict[str, str | None] = {}

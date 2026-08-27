@@ -10,6 +10,7 @@
         context: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_shop_floor_context",
         inbox: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_inbox",
         archive: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_my_archive",
+        readyForDelivery: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_ready_for_delivery",
         handoffContext: "almdina_erp.almdina_erp.services.shop_floor_commands.get_handoff_context",
         handoff: "almdina_erp.almdina_erp.services.shop_floor_commands.handoff_to_next",
         logout: "logout",
@@ -25,6 +26,10 @@
 
     function getArchive() {
         return Frontend.rpc(METHODS.archive, {}, { freeze: false });
+    }
+
+    function getReadyForDelivery() {
+        return Frontend.rpc(METHODS.readyForDelivery, {}, { freeze: false });
     }
 
     function getHandoffContext(stageName) {
@@ -49,6 +54,7 @@
         getSessionContext,
         getInbox,
         getArchive,
+        getReadyForDelivery,
         getHandoffContext,
         handoffStage,
         logout,

@@ -35,6 +35,10 @@ _SUPERVISOR_CAPABILITIES = (
     Capability.REVERT_DEPARTMENT,
     Capability.MARK_DELIVERED,
 )
+_GLOBAL_ORDER_SCOPE_CAPABILITIES = (
+    Capability.VIEW_ALL_ORDERS,
+    *_SUPERVISOR_CAPABILITIES,
+)
 
 
 def _order_name(order: Any) -> str:
@@ -139,7 +143,7 @@ class FrappeShopFloorQueryRepository:
     def is_admin(self) -> bool:
         return any(
             doctype_has_capability(capability)
-            for capability in _SUPERVISOR_CAPABILITIES
+            for capability in _GLOBAL_ORDER_SCOPE_CAPABILITIES
         )
 
     def capabilities_for_order(self, order: Any) -> frozenset[str]:
