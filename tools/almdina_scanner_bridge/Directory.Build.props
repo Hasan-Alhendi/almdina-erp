@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <ScannerBridgeVersion>2.0.0</ScannerBridgeVersion>
+    <ScannerBridgeVersion>2.1.0</ScannerBridgeVersion>
     <Version>$(ScannerBridgeVersion)</Version>
     <Company>Almdina ERP</Company>
     <Product>Almdina Scanner Bridge</Product>

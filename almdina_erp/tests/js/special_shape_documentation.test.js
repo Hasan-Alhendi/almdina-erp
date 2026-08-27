@@ -160,6 +160,21 @@ async function verifyScannerBridge() {
         error => error.code === api.ScannerBridge.ERROR_CODES.IMAGE_TOO_LARGE,
     );
     await assert.rejects(
+        () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(
+            JSON.stringify({ ok: false, code: "invalid_scanner_image", message: "Scanner did not return a valid JPEG image." }),
+            { status: 500, headers: { "content-type": "application/json" } },
+        ) }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.INVALID_IMAGE && error.bridgeCode === "invalid_scanner_image",
+        "the browser must preserve the bridge error instead of collapsing every HTTP 500 into scan-failed",
+    );
+    await assert.rejects(
+        () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(
+            JSON.stringify({ ok: false, code: "scanner_unavailable", message: "Windows cannot find a compatible scanner." }),
+            { status: 503, headers: { "content-type": "application/json" } },
+        ) }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.NO_SCANNER && error.bridgeCode === "scanner_unavailable",
+    );
+    await assert.rejects(
         () => api.ScannerBridge.health({ timeoutMs: 250, fetchImpl: async () => { throw new Error("offline"); } }),
         error => error.code === api.ScannerBridge.ERROR_CODES.UNAVAILABLE,
     );

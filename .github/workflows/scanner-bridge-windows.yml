@@ -38,6 +38,12 @@ jobs:
           --project tools/almdina_scanner_bridge/tests/Almdina.ScannerBridge.Core.Tests/Almdina.ScannerBridge.Core.Tests.csproj
           --configuration Release
 
+      - name: Test Windows scanner image normalization
+        run: >-
+          dotnet run
+          --project tools/almdina_scanner_bridge/tests/Almdina.ScannerBridge.Windows.Tests/Almdina.ScannerBridge.Windows.Tests.csproj
+          --configuration Release
+
       - name: Publish self-contained Windows tray app
         run: >-
           dotnet publish
