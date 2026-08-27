@@ -63,6 +63,7 @@ class TestDirectHandoffWithoutStart(unittest.TestCase):
             assigned_to=repository.actor,
             sequence=sequence,
         )
+        repository._counter = 1
         return repository
 
     def test_lifecycle_has_explicit_pending_direct_handoff_transition(self) -> None:
