@@ -82,7 +82,7 @@
                     return false;
                 }
                 if (previous && previous.fileUrl !== result.file_url) pendingFileRemovals.add(previous.fileUrl);
-                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 0.72, locked: true, crop: Crop.FULL })); frappe.show_alert({ message: options.successMessage || "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3); return true;
+                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 1, locked: true, crop: Crop.FULL })); frappe.show_alert({ message: options.successMessage || "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3); return true;
             } catch (error) { console.error("Reference upload failed", error); frappe.msgprint("تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB."); render(); return false; }
             finally { if (shell) { shell.referenceInput.value = ""; shell.cameraInput.value = ""; } }
         }
@@ -299,7 +299,6 @@
             });
             shell.referenceInput.addEventListener("change", () => upload(shell.referenceInput.files && shell.referenceInput.files[0]));
             shell.cameraInput.addEventListener("change", () => upload(shell.cameraInput.files && shell.cameraInput.files[0], { successMessage: "تم التقاط الصورة وإضافتها إلى التوثيق." }));
-            workspace.querySelector("[data-opacity]").addEventListener("change", event => updateReference({ opacity: Number(event.target.value) / 100 }));
             workspace.querySelector("[data-reference-lock]").addEventListener("change", event => updateReference({ locked: Boolean(event.target.checked) }));
             workspace.querySelector("[data-notes]").addEventListener("change", event => commit(D.setNotes(history.get(), event.target.value)));
             shell.canvas.addEventListener("pointerdown", pointerDown); shell.canvas.addEventListener("pointermove", pointerMove); shell.canvas.addEventListener("pointerup", pointerUp); shell.canvas.addEventListener("pointercancel", pointerUp); shell.canvas.addEventListener("wheel", wheel, { passive: false });

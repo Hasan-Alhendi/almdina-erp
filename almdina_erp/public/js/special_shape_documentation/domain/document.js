@@ -35,7 +35,9 @@
         return {
             fileUrl: String(value.fileUrl),
             rotationDeg: Math.max(-360, Math.min(360, number(value.rotationDeg))),
-            opacity: Math.max(0.1, Math.min(1, number(value.opacity, 0.72))),
+            // Keep the field for backward-compatible stored JSON, but reference
+            // images are always presented at full opacity.
+            opacity: 1,
             locked: value.locked !== false,
             crop: cropContract.normalize(value.crop),
             imageSize: widthPx > 0 && heightPx > 0 ? { widthPx, heightPx } : null,
