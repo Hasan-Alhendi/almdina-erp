@@ -92,12 +92,12 @@
         return configured.concat(Array.from(unknown.values()));
     }
 
-    function terminalRows(route, archiveRows, search) {
+    function terminalRows(route, readyRows, search) {
         const stages = Array.isArray(route && route.stages) ? route.stages : [];
         const last = stages[stages.length - 1];
         if (!last) return [];
         const seen = new Set();
-        return asRows(archiveRows).filter(row => {
+        return asRows(readyRows).filter(row => {
             const matchesRoute = routeKey(row) === route.name;
             const ready = row.order_status === "Ready for Delivery";
             const isLastStage = row.stage_type === last.stage_type;
@@ -127,7 +127,7 @@
             return {
                 route,
                 routeRows,
-                readyRows: terminalRows(route, snapshot.archiveRows, snapshot.search),
+                readyRows: terminalRows(route, snapshot.readyRows, snapshot.search),
             };
         });
         const readyCount = routeModels.reduce((total, item) => total + item.readyRows.length, 0);

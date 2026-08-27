@@ -95,7 +95,7 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.MARK_DELIVERED: _presentation("تأكيد التسليم", "تغيير حالة الطلب إلى تم التسليم.", "critical"),
     Capability.REASSIGN_WORKER: _presentation("تغيير العامل", "إعادة إسناد المرحلة الحالية إلى عامل مؤهل آخر.", "sensitive"),
     Capability.VIEW_SHOP_FLOOR_HISTORY: _presentation(
-        "عرض سجل صالة الإنتاج",
+        "عرض سجل الطلبات المنجزة",
         "عرض الطلبات المنتهية التي تقع أصلًا ضمن نطاق المستخدم. لا تمنح دخول صالة الإنتاج ولا أي إجراء أو نطاق طلبات إضافي.",
     ),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("أرشفة الخطة المعتمدة", "إنشاء وحفظ PDF رسمي خاص بالخطة المعتمدة.", "sensitive"),

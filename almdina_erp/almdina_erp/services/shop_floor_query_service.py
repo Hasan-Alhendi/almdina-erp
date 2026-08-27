@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.shop_floor import history_policy
 from almdina_erp.almdina_erp.application.shop_floor import order_list_query
 from almdina_erp.almdina_erp.application.shop_floor import queries
 from almdina_erp.almdina_erp.domain.orders.lifecycle import department_for_stage_type
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
 )
@@ -40,6 +41,15 @@ def _execute(function: Callable[..., _Result], *args: Any) -> _Result:
 
 def _current_capabilities() -> frozenset[str]:
     return granted_capabilities(user=frappe.session.user)
+
+
+def _shop_floor_row_order_capabilities(row: dict[str, Any]) -> frozenset[str]:
+    """Resolve an enriched stage row back to its Door Cutting Order."""
+
+    order_name = str(row.get("door_cutting_order") or "").strip()
+    if not order_name:
+        return frozenset()
+    return _repository.capabilities_for_order({"name": order_name})
 
 
 @frappe.whitelist()
@@ -84,13 +94,17 @@ def get_my_inbox() -> list[dict[str, Any]]:
 @frappe.whitelist()
 def get_my_archive() -> list[dict[str, Any]]:
     rows = _execute(queries.get_my_archive)
-    capabilities = _current_capabilities()
-    visible_rows = history_policy.visible_archive_rows(
-        rows,
-        capabilities,
-        route_resolver=_repository.get_production_route,
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
+
+
+@frappe.whitelist()
+def get_ready_for_delivery() -> list[dict[str, Any]]:
+    rows = history_policy.rows_with_order_capability(
+        _execute(queries.get_ready_for_delivery),
+        Capability.MARK_DELIVERED,
+        capability_resolver=_shop_floor_row_order_capabilities,
     )
-    return sanitize_shop_floor_summary(visible_rows, capabilities)
+    return sanitize_shop_floor_summary(rows, _current_capabilities())
 
 
 @frappe.whitelist()
@@ -110,6 +124,7 @@ __all__ = [
     "get_my_archive",
     "get_my_inbox",
     "get_order_operational_role_flags",
+    "get_ready_for_delivery",
     "get_revert_targets",
     "get_shop_floor_context",
 ]

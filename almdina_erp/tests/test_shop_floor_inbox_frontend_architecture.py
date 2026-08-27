@@ -77,6 +77,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             "get_shop_floor_context",
             "get_my_inbox",
             "get_my_archive",
+            "get_ready_for_delivery",
             "get_handoff_context",
             "handoff_to_next",
         ):
@@ -101,6 +102,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
             "sessionContext: null",
             "boardRows: []",
             "archiveRows: []",
+            "readyRows: []",
             "routeFilter:",
             "search:",
             "createLatestRequestGate",
@@ -179,7 +181,11 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         ):
             self.assertIn(dependency, self.controller)
         self.assertIn("isCurrentListRequest", self.controller)
-        self.assertIn("Promise.all([Api.getInbox(), Api.getArchive()])", self.controller)
+        self.assertIn("context.can_view_history === true", self.controller)
+        self.assertIn("Api.getArchive()", self.controller)
+        self.assertIn("canLoadReadyForDelivery(context)", self.controller)
+        self.assertIn("Api.getReadyForDelivery()", self.controller)
+        self.assertIn("const [rows, archiveRows, readyRows] = await Promise.all([", self.controller)
         self.assertIn("bindActivationLifecycle(wrapper", self.controller)
         self.assertIn("onDeactivate: deactivatePage", self.controller)
         self.assertIn("isCurrentGeneration", self.controller)

@@ -15,6 +15,14 @@
             : (error && error.message ? error.message : fallback);
     }
 
+    function canLoadReadyForDelivery(context) {
+        return Boolean(
+            context
+            && context.capabilities
+            && context.capabilities.mark_delivered === true
+        );
+    }
+
     function mount(wrapper, options = {}) {
         if (!wrapper) throw new Error("Shop Floor Inbox wrapper is required");
         const previous = wrapper.__almdinaShopFloorInboxController;
@@ -161,7 +169,18 @@
                 ) {
                     return null;
                 }
-                const [rows, archiveRows] = await Promise.all([Api.getInbox(), Api.getArchive()]);
+
+                const archiveRequest = context.can_view_history === true
+                    ? Api.getArchive()
+                    : Promise.resolve([]);
+                const readyRequest = canLoadReadyForDelivery(context)
+                    ? Api.getReadyForDelivery()
+                    : Promise.resolve([]);
+                const [rows, archiveRows, readyRows] = await Promise.all([
+                    Api.getInbox(),
+                    archiveRequest,
+                    readyRequest,
+                ]);
                 if (
                     !isActive()
                     || !state.isCurrentListRequest(token)
@@ -169,7 +188,7 @@
                 ) {
                     return null;
                 }
-                state.setRows(rows || [], archiveRows || []);
+                state.setRows(rows || [], archiveRows || [], readyRows || []);
                 renderCurrent();
                 return state.snapshot();
             } catch (error) {

@@ -17,6 +17,7 @@
             sessionContext: null,
             boardRows: [],
             archiveRows: [],
+            readyRows: [],
             routeFilter: "",
             search: "",
         };
@@ -41,9 +42,10 @@
                 current.sessionContext = value && typeof value === "object" ? value : {};
                 return current.sessionContext;
             },
-            setRows(activeRows, archiveRows) {
+            setRows(activeRows, archiveRows, readyRows) {
                 current.boardRows = Array.isArray(activeRows) ? activeRows : [];
                 current.archiveRows = Array.isArray(archiveRows) ? archiveRows : [];
+                current.readyRows = Array.isArray(readyRows) ? readyRows : [];
             },
             setRouteFilter(value) {
                 current.routeFilter = String(value || "");
@@ -68,6 +70,7 @@
                     sessionContext: current.sessionContext,
                     boardRows: current.boardRows.slice(),
                     archiveRows: current.archiveRows.slice(),
+                    readyRows: current.readyRows.slice(),
                     routeFilter: current.routeFilter,
                     search: current.search,
                 });
