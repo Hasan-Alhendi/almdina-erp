@@ -56,16 +56,31 @@ class _ArchiveRepository:
         return frozenset(self.capabilities)
 
     def is_admin(self) -> bool:
-        return Capability.MARK_DELIVERED in self.capabilities
+        return bool(
+            self.capabilities.intersection(
+                {
+                    Capability.VIEW_ALL_ORDERS,
+                    Capability.MARK_DELIVERED,
+                }
+            )
+        )
 
     def list_archive_stages(self, *, user: str, is_admin: bool):
-        return [
+        rows = [
             {
                 "name": "stage-history",
                 "door_cutting_order": "DCO-HISTORY",
                 "stage_type": "Edge",
                 "status": "Completed",
                 "assigned_to": self.user,
+                "operational_role": "Edge Operator",
+            },
+            {
+                "name": "stage-history-foreign",
+                "door_cutting_order": "DCO-HISTORY-FOREIGN",
+                "stage_type": "Edge",
+                "status": "Completed",
+                "assigned_to": "other@example.com",
                 "operational_role": "Edge Operator",
             },
             {
@@ -85,11 +100,20 @@ class _ArchiveRepository:
                 "operational_role": "Edge Operator",
             },
         ]
+        if not is_admin:
+            rows = [row for row in rows if row["assigned_to"] == user]
+        return rows
 
     def order_summaries(self, order_names):
         return {
             "DCO-HISTORY": {
                 "name": "DCO-HISTORY",
+                "status": "Delivered",
+                "production_path": "route-a",
+                "current_production_stage": None,
+            },
+            "DCO-HISTORY-FOREIGN": {
+                "name": "DCO-HISTORY-FOREIGN",
                 "status": "Delivered",
                 "production_path": "route-a",
                 "current_production_stage": None,
@@ -171,6 +195,28 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
         repository.capabilities.add(Capability.VIEW_SHOP_FLOOR_HISTORY)
         rows = get_my_archive(repository)
         self.assertEqual([row["name"] for row in rows], ["stage-history"])
+
+    def test_history_permission_respects_view_all_orders_scope(self) -> None:
+        repository = _ArchiveRepository(
+            {
+                Capability.START_ASSIGNED_STAGE,
+                Capability.VIEW_SHOP_FLOOR_HISTORY,
+            }
+        )
+        self.assertEqual(
+            [row["name"] for row in get_my_archive(repository)],
+            ["stage-history"],
+        )
+
+        repository.capabilities.add(Capability.VIEW_ALL_ORDERS)
+        self.assertEqual(
+            [row["name"] for row in get_my_archive(repository)],
+            ["stage-history", "stage-history-foreign"],
+        )
+
+        repository.capabilities.remove(Capability.VIEW_SHOP_FLOOR_HISTORY)
+        with self.assertRaisesRegex(ShopFloorPermissionDenied, "سجل الطلبات المنجزة"):
+            get_my_archive(repository)
 
     def test_ready_for_delivery_is_independent_operational_query(self) -> None:
         repository = _ArchiveRepository(
