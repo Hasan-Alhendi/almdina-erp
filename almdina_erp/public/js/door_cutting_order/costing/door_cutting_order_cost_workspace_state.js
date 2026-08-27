@@ -121,6 +121,20 @@
         );
     }
 
+    function createFlight(frm) {
+        let resolveFlight;
+        let rejectFlight;
+        const flight = new Promise((resolve, reject) => {
+            resolveFlight = resolve;
+            rejectFlight = reject;
+        });
+        let promise = null;
+        promise = flight.finally(() => {
+            if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
+        });
+        return { promise, resolveFlight, rejectFlight };
+    }
+
     async function load(frm, options = {}) {
         if (!frm || !frm.doc || frm.doctype !== "Door Cutting Order") return null;
         const store = storeFor(frm);
@@ -155,14 +169,26 @@
             return load(frm, { force: true });
         }
 
-        let requestId = null;
-        let promise = null;
+        const { promise, resolveFlight, rejectFlight } = createFlight(frm);
 
         // Install the single-flight barrier before beginLoad()/dispatch(). Both
         // are observable synchronously, so listeners must see an owned in-flight
         // request before they can re-enter this loader.
-        promise = Promise.resolve()
-            .then(() => api.load(orderName))
+        frm[LOAD_PROMISE_KEY] = promise;
+        const requestId = store.beginLoad(currentIdentity);
+        dispatch(frm, store.snapshot());
+
+        // Keep the established transport timing: callers that invoke load() see
+        // the request start in the same tick. The ownership barrier above makes
+        // this safe without deferring transport to another microtask.
+        let transport;
+        try {
+            transport = api.load(orderName);
+        } catch (error) {
+            transport = Promise.reject(error);
+        }
+
+        Promise.resolve(transport)
             .then((payload) => {
                 if (rejectIdentityTransition(frm, store, currentIdentity)) {
                     return store.snapshot();
@@ -185,13 +211,8 @@
                 dispatch(frm, state);
                 throw error;
             })
-            .finally(() => {
-                if (frm[LOAD_PROMISE_KEY] === promise) frm[LOAD_PROMISE_KEY] = null;
-            });
-        frm[LOAD_PROMISE_KEY] = promise;
+            .then(resolveFlight, rejectFlight);
 
-        requestId = store.beginLoad(currentIdentity);
-        dispatch(frm, store.snapshot());
         return promise;
     }
 
