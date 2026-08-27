@@ -7,6 +7,7 @@ from almdina_erp.almdina_erp.application.security.navigation_context import (
     build_navigation_context,
 )
 from almdina_erp.almdina_erp.application.security.permission_matrix import (
+    CAPABILITY_PRESENTATION,
     normalize_capability_state,
     standard_permission_projection,
 )
@@ -135,6 +136,13 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
         self.assertNotIn(Capability.VIEW_SHOP_FLOOR_HISTORY, SHOP_FLOOR_ACCESS_CAPABILITIES)
         self.assertNotIn(Capability.VIEW_SHOP_FLOOR_HISTORY, PRODUCTION_OPERATOR_CAPABILITIES)
         self.assertNotIn(Capability.VIEW_SHOP_FLOOR_HISTORY, PRODUCTION_SUPERVISOR_CAPABILITIES)
+
+    def test_history_permission_keeps_stable_key_and_requested_arabic_label(self) -> None:
+        self.assertEqual(Capability.VIEW_SHOP_FLOOR_HISTORY, "view_shop_floor_history")
+        self.assertEqual(
+            CAPABILITY_PRESENTATION[Capability.VIEW_SHOP_FLOOR_HISTORY]["label"],
+            "عرض سجل الطلبات المنجزة",
+        )
 
     def test_history_only_does_not_promote_order_scope_or_shop_floor_entry(self) -> None:
         state = normalize_capability_state({Capability.VIEW_SHOP_FLOOR_HISTORY: True})
