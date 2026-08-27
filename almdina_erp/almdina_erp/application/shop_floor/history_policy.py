@@ -43,7 +43,7 @@ def _is_terminal_route_stage(
     try:
         route = route_resolver(route_name)
         return route.next_stage(stage_type) is None
-    except (ValueError, AttributeError):
+    except (KeyError, ValueError, AttributeError):
         return False
 
 
