@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
     WORKSPACE_SHOP_FLOOR,
@@ -249,7 +249,7 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
 
         self.assertEqual([row["name"] for row in scoped], ["visible"])
 
-    def test_ready_service_applies_document_scope_before_return(self) -> None:
+    def test_ready_service_resolves_stage_rows_to_document_scope_before_return(self) -> None:
         service_path = (
             Path(__file__).resolve().parents[1]
             / "almdina_erp"
@@ -257,16 +257,25 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
             / "shop_floor_query_service.py"
         )
         source = service_path.read_text(encoding="utf-8")
-        start = source.index("def get_ready_for_delivery()")
-        end = source.index("\n\n@frappe.whitelist()", start)
-        body = source[start:end]
 
-        self.assertIn("rows_with_order_capability", body)
-        self.assertIn("Capability.MARK_DELIVERED", body)
-        self.assertIn("_repository.capabilities_for_order", body)
+        helper_start = source.index("def _shop_floor_row_order_capabilities")
+        helper_end = source.index("\n\n@frappe.whitelist()", helper_start)
+        helper_body = source[helper_start:helper_end]
+        self.assertIn('row.get("door_cutting_order")', helper_body)
+        self.assertIn("_repository.capabilities_for_order", helper_body)
+
+        endpoint_start = source.index("def get_ready_for_delivery()")
+        endpoint_end = source.index("\n\n@frappe.whitelist()", endpoint_start)
+        endpoint_body = source[endpoint_start:endpoint_end]
+        self.assertIn("rows_with_order_capability", endpoint_body)
+        self.assertIn("Capability.MARK_DELIVERED", endpoint_body)
+        self.assertIn(
+            "capability_resolver=_shop_floor_row_order_capabilities",
+            endpoint_body,
+        )
         self.assertLess(
-            body.index("rows_with_order_capability"),
-            body.index("sanitize_shop_floor_summary"),
+            endpoint_body.index("rows_with_order_capability"),
+            endpoint_body.index("sanitize_shop_floor_summary"),
         )
 
     def test_history_policy_never_falls_back_to_delivery_ready_rows(self) -> None:
