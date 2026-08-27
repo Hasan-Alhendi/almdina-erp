@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
+ASSETS = ROOT / "frontend_assets.py"
 
 
 class TestDcoPerformanceContract(unittest.TestCase):
@@ -20,6 +21,9 @@ class TestDcoPerformanceContract(unittest.TestCase):
         coordinator = (
             PUBLIC / "core" / "door_cutting_order_workspace_sync_coordinator.js"
         ).read_text(encoding="utf-8")
+        lifecycle = (
+            PUBLIC / "core" / "door_cutting_order_workspace_activation_lifecycle.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn('activationField: "results_tab"', plan)
         self.assertIn('activationField: "cost_tab"', cost)
@@ -30,9 +34,27 @@ class TestDcoPerformanceContract(unittest.TestCase):
 
         self.assertIn("function activateCurrent(frm, options = {})", coordinator)
         self.assertIn("activeResourceNames(frm)", coordinator)
+        self.assertIn("activationFields", coordinator)
         self.assertIn('new CustomEvent("almdina:workspace-activated"', coordinator)
         self.assertIn("options.activeOnly === true", coordinator)
-        self.assertIn("registerCleanup(frm, ACTIVATION_CLEANUP_KEY", coordinator)
+        self.assertNotIn("frappe.", coordinator)
+        self.assertNotIn("registerCleanup", coordinator)
+
+        self.assertIn("frappe.ui.form.on(DOCTYPE", lifecycle)
+        self.assertIn('addEventListener("almdina:permissions-updated"', lifecycle)
+        self.assertIn("registerCleanup(frm, ACTIVATION_CLEANUP_KEY", lifecycle)
+        self.assertIn("owner.activateCurrent(frm, options)", lifecycle)
+
+    def test_activation_adapter_loads_after_both_workspace_states(self) -> None:
+        source = ASSETS.read_text(encoding="utf-8")
+        plan_state = source.index("door_cutting_order_plan_workspace_state.js")
+        cost_state = source.index("door_cutting_order_cost_workspace_state.js")
+        lifecycle = source.index("door_cutting_order_workspace_activation_lifecycle.js")
+        mutation_policy = source.index("door_cutting_order_mutation_impact_policy.js")
+
+        self.assertLess(plan_state, lifecycle)
+        self.assertLess(cost_state, lifecycle)
+        self.assertLess(lifecycle, mutation_policy)
 
     def test_hidden_plan_surface_is_not_a_readiness_blocker(self) -> None:
         source = (
