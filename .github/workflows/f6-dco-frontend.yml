@@ -33,6 +33,7 @@ jobs:
           set -euo pipefail
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_document_context.js
           node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js
+          node --check almdina_erp/public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
