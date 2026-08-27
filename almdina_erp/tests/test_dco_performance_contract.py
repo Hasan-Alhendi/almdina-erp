@@ -126,9 +126,8 @@ class TestDcoPerformanceContract(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("const activeTab = currentTabFieldname(frm);", source)
-        self.assertIn('activeTab === "cost_tab"', source)
-        self.assertIn('activeTab === "results_tab"', source)
-        self.assertIn("Hidden Plan", source)
+        self.assertIn('activeTab === "cost_tab" && can("view_costs")', source)
+        self.assertIn('activeTab === "results_tab" && can("view_cutting_plan")', source)
 
     def test_activation_adapter_loads_after_workspace_state_and_asset_registry(self) -> None:
         source = ASSETS.read_text(encoding="utf-8")
