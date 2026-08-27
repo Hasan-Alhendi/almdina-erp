@@ -15,6 +15,14 @@ COST_PERMISSIONS = (
     / "door_cutting_order_cost_permissions_ux.js"
 )
 PERMISSION_CONTEXT = ROOT / "public" / "js" / "permission_context.js"
+ASSET_REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 PLAN_BOOTSTRAP = (
     ROOT
     / "public"
@@ -59,32 +67,37 @@ class TestOrderTabPermissionsUX(unittest.TestCase):
         self.assertNotIn("Accounts Management", source)
         self.assertNotIn("System Manager", source)
 
-    def test_compatibility_modules_still_wait_for_source_registered_globals(self) -> None:
+    def test_protected_core_recovery_uses_source_registered_globals_without_polling(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
         manifest = MANIFEST.read_text(encoding="utf-8")
 
-        self.assertIn('global: "AlmdinaOrderTabPermissionsUX"', source)
-        self.assertIn("function waitForGlobal", source)
-        self.assertIn("return waitForGlobal(module.global)", source)
+        self.assertIn("ORDER_CORE_GLOBALS", source)
+        self.assertIn('"AlmdinaOrderTabPermissionsUX"', source)
+        self.assertIn('"AlmdinaOrderPermissionRefreshUX"', source)
+        self.assertNotIn("function waitForGlobal", source)
+        self.assertNotIn("setInterval", source)
+        self.assertNotIn("frappe.require", source)
         self.assertIn('"public/js/door_cutting_order/core/door_cutting_order_tab_permissions_ux.js"', manifest)
+        self.assertIn('"public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"', manifest)
 
     def test_cutting_plan_surface_loads_independently_from_cost_chain(self) -> None:
-        source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
+        permission_source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
+        registry = ASSET_REGISTRY.read_text(encoding="utf-8")
         bootstrap = PLAN_BOOTSTRAP.read_text(encoding="utf-8")
 
-        self.assertIn('global: "AlmdinaCuttingPlanSurfaceBootstrap"', source)
-        self.assertIn(
-            'asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"',
-            source,
-        )
-        self.assertIn("loadPlanSurfaceModule();", source)
-        self.assertLess(
-            source.index("loadPlanSurfaceModule();"),
-            source.index("modulesPromise = ORDER_MODULES.reduce"),
-        )
+        self.assertIn('plan: Object.freeze({', registry)
+        self.assertIn('activationField: "results_tab"', registry)
+        self.assertIn("door_cutting_order_plan_surface_bootstrap.js", registry)
+        self.assertIn('cost: Object.freeze({', registry)
+        self.assertIn('activationField: "cost_tab"', registry)
+        self.assertNotIn("AlmdinaCuttingPlanSurfaceBootstrap", permission_source)
+        self.assertNotIn("AlmdinaOrderCostUX", permission_source)
+        self.assertNotIn("AlmdinaCustomerInvoiceToolbarUX", permission_source)
         self.assertIn('api.canDocument(frm, "view_cutting_plan")', bootstrap)
         self.assertNotIn('"view_costs"', bootstrap)
-        self.assertIn("await frappe.require(module.asset)", bootstrap)
+        self.assertIn("frontend.requireAssets(assets)", bootstrap)
+        self.assertIn("frappe.require(assets)", bootstrap)
+        self.assertNotIn("await frappe.require(module.asset)", bootstrap)
         self.assertIn("presenter.refresh(frm)", bootstrap)
         self.assertIn("tabs.afterRender(frm)", bootstrap)
 
