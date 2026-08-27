@@ -131,7 +131,19 @@ class StatefulFactoryRepository:
         return tuple(self._profile(user)["roles"])
 
     def is_admin(self, user: str | None = None) -> bool:
-        return (user or self.actor) == "Administrator"
+        actor = user or self.actor
+        if actor == "Administrator":
+            return True
+        capabilities = set(self._profile(actor)["capabilities"])
+        return bool(
+            capabilities.intersection(
+                {
+                    Capability.REASSIGN_WORKER,
+                    Capability.REVERT_DEPARTMENT,
+                    Capability.MARK_DELIVERED,
+                }
+            )
+        )
 
     def session_identity(self) -> dict[str, Any]:
         return {"user": self.actor, "full_name": self.actor, "roles": list(self.actor_roles())}
