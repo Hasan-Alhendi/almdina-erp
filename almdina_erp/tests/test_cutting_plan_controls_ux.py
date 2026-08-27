@@ -10,6 +10,7 @@ PLAN_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan
 DETAIL_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order_detail" / "door_cutting_order_detail.json"
 HOOKS = ROOT / "frontend_assets.py"
 CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 PLAN_UX = CUTTING_PLAN / "door_cutting_order_plan_ux.js"
 CONTROLS_UX = CUTTING_PLAN / "door_cutting_order_plan_controls_ux.js"
 PLAN_WORKSPACE_API = CUTTING_PLAN / "door_cutting_order_plan_workspace_api.js"
@@ -43,15 +44,22 @@ def test_advanced_algorithms_remain_in_the_canonical_plan_optimization_select():
 
 def test_duplicate_algorithm_palette_is_removed_and_simple_controls_load_last():
     hooks = source(HOOKS)
-    plan = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
-    text_board = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_text_board_plan_ux.js"'
-    fast_save = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js"'
-    controls = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js"'
+    registry = source(REGISTRY)
+    plan = "door_cutting_order_plan_ux.js"
+    text_board = "door_cutting_order_text_board_plan_ux.js"
+    fast_save = "door_cutting_order_fast_save_ux.js"
+    controls = "door_cutting_order_plan_controls_ux.js"
 
     assert not REMOVED_PALETTE.exists()
     assert "door_cutting_order_algorithm_palette_ux.js" not in hooks
-    assert controls in hooks
-    assert hooks.index(plan) < hooks.index(text_board) < hooks.index(fast_save) < hooks.index(controls)
+    assert "door_cutting_order_algorithm_palette_ux.js" not in registry
+
+    # P2 keeps the whole presentation chain lazy. Preserve its established
+    # dependency order inside the Plan feature bundle instead of the form manifest.
+    for asset in (plan, text_board, fast_save, controls):
+        assert asset in registry
+        assert asset not in hooks
+    assert registry.index(plan) < registry.index(text_board) < registry.index(fast_save) < registry.index(controls)
 
 
 def test_simple_controls_keep_only_current_settings_recalculation_action():
