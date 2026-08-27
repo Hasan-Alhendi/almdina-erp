@@ -55,6 +55,7 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_content_ux.js
           node --check almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+          node --check almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node --check almdina_erp/tests/js/measurement_lifecycle.test.js
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
@@ -101,6 +102,9 @@ jobs:
 
       - name: Simulate DCO workspace lifecycle reentrancy and lazy activation
         run: node almdina_erp/tests/js/dco_workspace_lifecycle.test.js
+
+      - name: Simulate DCO post-save workspace invalidation
+        run: node almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
 
       - name: Simulate measurement lifecycle cancellation and freshness
         run: node almdina_erp/tests/js/measurement_lifecycle.test.js
