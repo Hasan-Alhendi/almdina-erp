@@ -80,6 +80,7 @@ STAGE_TRANSITIONS: dict[str, tuple[frozenset[str], str]] = {
     "pause": (frozenset({"In Progress"}), "Paused"),
     "resume": (frozenset({"Paused"}), "In Progress"),
     "finish": (frozenset({"In Progress", "Paused"}), "Completed"),
+    "direct_handoff": (frozenset({"Pending"}), "Completed"),
     "cancel": (frozenset({"Pending", "In Progress", "Paused", "Completed"}), "Cancelled"),
     "reopen": (frozenset({"Pending", "In Progress", "Paused", "Completed", "Cancelled"}), "Pending"),
 }

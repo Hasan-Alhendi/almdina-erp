@@ -61,9 +61,13 @@ stateDiagram-v2
 
 ### Handoff / Finish
 
-العامل يحتاج `HANDOFF_ASSIGNED_STAGE` ونفس شروط ownership. المرحلة يجب أن تكون قابلة للإنهاء (`In Progress` أو حالة يسمح بها Domain).
+العامل يحتاج `HANDOFF_ASSIGNED_STAGE` ونفس شروط ownership. المسار الطبيعي للإنهاء يبقى من `In Progress` أو `Paused` إلى `Completed`.
 
-إذا كانت المرحلة Planning Stage، توجد Gate إضافية: Production plan يجب أن يكون Approved وحديثًا.
+يوجد استثناء مقصود للمرحلة `Pending`: إذا كانت المرحلة هي Current Stage ومسندة لنفس العامل، وكان العامل يملك `HANDOFF_ASSIGNED_STAGE` **ولا يملك** `START_ASSIGNED_STAGE`، يمكنه تنفيذ Handoff يدوي مباشر من `Pending` إلى `Completed` دون إنشاء Start وهمي. هذا لا يحدث تلقائيًا.
+
+إذا كان العامل يملك الصلاحيتين `START_ASSIGNED_STAGE` و`HANDOFF_ASSIGNED_STAGE` معًا، فلا يجوز له تجاوز Start: في `Pending` يظهر/يُسمح Start أولًا، وبعد دخول المرحلة في حالة `In Progress` يصبح Handoff متاحًا.
+
+إذا كانت المرحلة Planning Stage، تبقى Gate الإضافية كما هي: Production plan يجب أن يكون Approved وحديثًا حتى عند استخدام Handoff المباشر.
 
 ### Next stage
 
@@ -95,11 +99,11 @@ Supervisor capability لا تلغي كل قواعد البنية تلقائيً�
 
 إذا كان أول Stage `is_planning_stage=True`:
 
-1. العامل يبدأ المرحلة.
+1. إذا كان العامل يملك `START_ASSIGNED_STAGE` يبدأ المرحلة؛ أما Handoff-only فيخضع لاستثناء `Pending` الموثق أعلاه.
 2. يراجع System plan أو Uploaded/Custom plan حسب الصلاحيات.
 3. يعالج Special Drawing/DXF إن كان مطلوبًا.
 4. يعتمد Production Cutting Plan المختارة.
-5. عند handoff فقط ينتقل الطلب للمرحلة التالية.
+5. عند handoff فقط ينتقل الطلب للمرحلة التالية، مع بقاء Planning Handoff Gate إلزامية في الحالتين.
 
 ## 9. Revision
 
