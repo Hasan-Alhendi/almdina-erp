@@ -79,6 +79,22 @@ assert.doesNotMatch(classicSvg, /fill="#fff8c9"/);
 assert.doesNotMatch(classicSvg, /<script>/);
 assert.doesNotMatch(classicSvg, /url\(javascript:/);
 
+const croppedReferencePiece = JSON.parse(JSON.stringify(classicPiece));
+const croppedReferenceDrawing = JSON.parse(croppedReferencePiece.special_shape_drawing_json);
+croppedReferenceDrawing.reference = {
+    fileUrl: "/private/files/a4-scan.jpg",
+    opacity: 0.72,
+    rotationDeg: 0,
+    locked: true,
+    crop: { x: 0.2, y: 0.1, width: 0.5, height: 0.6 },
+    imageSize: { widthPx: 2480, heightPx: 3508 },
+};
+croppedReferencePiece.special_shape_drawing_json = JSON.stringify(croppedReferenceDrawing);
+const croppedReferenceSvg = renderer.svg(croppedReferencePiece);
+assert.match(croppedReferenceSvg, /data-reference-crop="1"/);
+assert.match(croppedReferenceSvg, /overflow="hidden"/);
+assert.match(croppedReferenceSvg, /href="\/private\/files\/a4-scan\.jpg"/);
+
 const freeWorkspacePiece = JSON.parse(JSON.stringify(classicPiece));
 const freeWorkspaceDrawing = JSON.parse(freeWorkspacePiece.special_shape_drawing_json);
 freeWorkspaceDrawing.elements.push({

@@ -25,6 +25,8 @@
     }
     function referenceMarkup(reference, width, height) {
         if (!reference || !String(reference.fileUrl || "").startsWith("/private/files/")) return ""; const opacity = Math.max(.1, Math.min(1, finite(reference.opacity, .72))), rotation = Math.max(-360, Math.min(360, finite(reference.rotationDeg)));
+        const rawCrop = reference.crop && typeof reference.crop === "object" ? reference.crop : {}; const x = Math.max(0, Math.min(.98, finite(rawCrop.x))), y = Math.max(0, Math.min(.98, finite(rawCrop.y))), cropWidth = Math.max(.02, Math.min(1 - x, finite(rawCrop.width, 1))), cropHeight = Math.max(.02, Math.min(1 - y, finite(rawCrop.height, 1))); const cropped = x > .000001 || y > .000001 || cropWidth < .999999 || cropHeight < .999999;
+        if (cropped && reference.imageSize) { const pixelWidth = Math.max(1, finite(reference.imageSize.widthPx)), pixelHeight = Math.max(1, finite(reference.imageSize.heightPx)), aspect = pixelWidth / pixelHeight; const viewX = x * aspect, viewWidth = cropWidth * aspect; return `<svg data-reference-crop="1" x="0" y="0" width="${width}" height="${height}" viewBox="${viewX} ${y} ${viewWidth} ${cropHeight}" preserveAspectRatio="xMidYMid meet" overflow="hidden" opacity="${opacity}" transform="rotate(${rotation} ${width / 2} ${height / 2})"><image href="${esc(reference.fileUrl)}" x="0" y="0" width="${aspect}" height="1" preserveAspectRatio="none"/></svg>`; }
         return `<image href="${esc(reference.fileUrl)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" opacity="${opacity}" transform="rotate(${rotation} ${width / 2} ${height / 2})"/>`;
     }
     function elementBounds(element) {
