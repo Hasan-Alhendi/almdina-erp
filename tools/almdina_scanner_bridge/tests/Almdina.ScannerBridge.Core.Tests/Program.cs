@@ -4,6 +4,7 @@ using System.Text;
 var tests = new (string Name, Func<Task> Run)[]
 {
     ("health without browser origin", HealthWithoutOrigin),
+    ("default production origins allow scanning", DefaultProductionOriginsAllowScanning),
     ("allowed CORS health", AllowedCorsHealth),
     ("forbidden browser origin", ForbiddenOrigin),
     ("private-network preflight", PrivateNetworkPreflight),
@@ -38,7 +39,10 @@ if (failures.Count > 0)
 return;
 
 static BridgeRequestDispatcher Dispatcher(IScanner scanner) =>
-    new(scanner, new BridgeOptions(allowedOrigins: [TestData.AllowedOrigin]), "2.1.0-test");
+    new(scanner, new BridgeOptions(allowedOrigins: [TestData.AllowedOrigin]), "2.2.0-test");
+
+static BridgeRequestDispatcher DefaultDispatcher(IScanner scanner) =>
+    new(scanner, new BridgeOptions(), "2.2.0-test");
 
 static BridgeRequest Request(string method, string path, string? origin = null)
 {
@@ -56,6 +60,25 @@ static async Task HealthWithoutOrigin()
     Contains("\"startup\":\"windows-login\"", response.Body);
     Equal("no-store", response.Headers["Cache-Control"]);
     False(response.Headers.ContainsKey("Access-Control-Allow-Origin"), "Address-bar diagnostics must not invent an origin.");
+}
+
+static async Task DefaultProductionOriginsAllowScanning()
+{
+    var dispatcher = DefaultDispatcher(FakeScanner.Success());
+    foreach (var origin in TestData.ProductionOrigins)
+    {
+        var response = await dispatcher.DispatchAsync(Request("OPTIONS", "/scan", origin), CancellationToken.None);
+        Equal(204, response.StatusCode);
+        Equal(origin, response.Headers["Access-Control-Allow-Origin"]);
+        Equal("true", response.Headers["Access-Control-Allow-Private-Network"]);
+    }
+
+    foreach (var origin in TestData.ForbiddenOrigins)
+    {
+        var response = await dispatcher.DispatchAsync(Request("POST", "/scan", origin), CancellationToken.None);
+        Equal(403, response.StatusCode);
+        False(response.Headers.ContainsKey("Access-Control-Allow-Origin"), $"Forbidden origin '{origin}' must not receive CORS permission.");
+    }
 }
 
 static async Task AllowedCorsHealth()
@@ -166,4 +189,18 @@ internal sealed class FakeScanner : IScanner
 internal static class TestData
 {
     public const string AllowedOrigin = "https://almadina-2.horizontechco.com";
+
+    public static readonly string[] ProductionOrigins =
+    [
+        AllowedOrigin,
+        "https://almadina-b2.horizontechco.com",
+        "https://almadina.horizontechco.com",
+    ];
+
+    public static readonly string[] ForbiddenOrigins =
+    [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://evil.example",
+    ];
 }
