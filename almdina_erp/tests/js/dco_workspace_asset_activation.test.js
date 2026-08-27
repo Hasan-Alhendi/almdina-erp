@@ -133,7 +133,7 @@ function deferred() {
     await Promise.resolve();
     frm.layout.current_tab.df.fieldname = "order_tab";
     staleAssets.resolve(true);
-    assert.deepEqual(await staleActivation, []);
+    assert.deepEqual(Array.from(await staleActivation), []);
     assert.deepEqual(order, ["assets:results_tab"], "stale tab must not start a Plan RPC");
 
     assert.ok(formHooks.some(entry => entry.doctype === "Door Cutting Order"));
