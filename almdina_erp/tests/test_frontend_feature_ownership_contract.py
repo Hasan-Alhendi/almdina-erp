@@ -4,6 +4,14 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
+REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 CORE_SCRIPTS = (
     "public/js/door_cutting_order/core/door_cutting_order_document_context.js",
@@ -85,6 +93,33 @@ OLD_PRINTING_PATHS = tuple(
 
 
 class TestFrontendFeatureOwnershipContract(unittest.TestCase):
+    def _assert_lazy_batch(self, scripts, label):
+        hooks = HOOKS.read_text(encoding="utf-8")
+        registry = REGISTRY.read_text(encoding="utf-8")
+        positions = []
+
+        for script in scripts:
+            source = ROOT / script
+            filename = Path(script).name
+            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
+            self.assertNotIn(
+                f'"{script}"',
+                hooks,
+                f"{script} must stay outside the DCO first-open manifest",
+            )
+            self.assertEqual(
+                registry.count(filename),
+                1,
+                f"{script} must have one canonical lazy workspace owner",
+            )
+            positions.append(registry.index(filename))
+
+        self.assertEqual(
+            positions,
+            sorted(positions),
+            f"{label} lazy load order changed during migration",
+        )
+
     def test_first_core_batch_is_loaded_once_in_stable_order(self):
         hooks = HOOKS.read_text(encoding="utf-8")
         positions = []
@@ -175,67 +210,25 @@ class TestFrontendFeatureOwnershipContract(unittest.TestCase):
             )
 
     def test_cutting_plan_batch_has_canonical_feature_paths(self):
+        self._assert_lazy_batch(CUTTING_PLAN_SCRIPTS, "Cutting Plan")
         hooks = HOOKS.read_text(encoding="utf-8")
-        positions = []
-
-        for script in CUTTING_PLAN_SCRIPTS:
-            source = ROOT / script
-            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
-            self.assertEqual(
-                hooks.count(f'"{script}"'),
-                1,
-                f"{script} must have one canonical Door Cutting Order asset owner",
-            )
-            positions.append(hooks.index(f'"{script}"'))
-
-        self.assertEqual(
-            positions,
-            sorted(positions),
-            "Cutting Plan load order changed during migration",
-        )
+        registry = REGISTRY.read_text(encoding="utf-8")
 
         for old_path in OLD_CUTTING_PLAN_PATHS:
-            self.assertNotIn(
-                f'"{old_path}"',
-                hooks,
-                f"Retired root cutting-plan asset path still loaded: {old_path}",
-            )
+            self.assertNotIn(f'"{old_path}"', hooks)
+            self.assertNotIn(f'"{old_path}"', registry)
 
-        self.assertIn(
-            '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js"',
-            hooks,
-        )
-        self.assertIn(
-            '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
-            hooks,
-        )
+        self.assertIn("secure_dxf_export.js", registry)
+        self.assertIn("door_cutting_order_drawing_plan_ux.js", registry)
 
     def test_costing_batch_has_canonical_feature_paths(self):
+        self._assert_lazy_batch(COSTING_SCRIPTS, "Costing")
         hooks = HOOKS.read_text(encoding="utf-8")
-        positions = []
-
-        for script in COSTING_SCRIPTS:
-            source = ROOT / script
-            self.assertTrue(source.exists(), f"Missing migrated asset: {script}")
-            self.assertEqual(
-                hooks.count(f'"{script}"'),
-                1,
-                f"{script} must have one canonical Door Cutting Order asset owner",
-            )
-            positions.append(hooks.index(f'"{script}"'))
-
-        self.assertEqual(
-            positions,
-            sorted(positions),
-            "Costing load order changed during migration",
-        )
+        registry = REGISTRY.read_text(encoding="utf-8")
 
         for old_path in OLD_COSTING_PATHS:
-            self.assertNotIn(
-                f'"{old_path}"',
-                hooks,
-                f"Retired root costing asset path still loaded: {old_path}",
-            )
+            self.assertNotIn(f'"{old_path}"', hooks)
+            self.assertNotIn(f'"{old_path}"', registry)
 
     def test_printing_batch_has_canonical_feature_paths(self):
         hooks = HOOKS.read_text(encoding="utf-8")
