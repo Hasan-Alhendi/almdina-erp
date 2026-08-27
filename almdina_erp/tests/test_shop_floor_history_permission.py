@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 import unittest
 
 from almdina_erp.almdina_erp.application.security.navigation_context import (
@@ -16,6 +17,7 @@ from almdina_erp.almdina_erp.application.security.shop_floor_history_migration i
 )
 from almdina_erp.almdina_erp.application.shop_floor.history_policy import (
     ready_for_delivery_rows,
+    rows_with_order_capability,
     visible_archive_rows,
 )
 from almdina_erp.almdina_erp.application.shop_floor.queries import (
@@ -228,6 +230,44 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
         repository.capabilities.remove(Capability.MARK_DELIVERED)
         with self.assertRaisesRegex(ShopFloorPermissionDenied, "الجاهزة للتسليم"):
             get_ready_for_delivery(repository)
+
+    def test_delivery_document_scope_filters_rows_per_order_capability(self) -> None:
+        rows = [
+            {"name": "visible"},
+            {"name": "blocked"},
+        ]
+        grants = {
+            "visible": {Capability.MARK_DELIVERED},
+            "blocked": set(),
+        }
+
+        scoped = rows_with_order_capability(
+            rows,
+            Capability.MARK_DELIVERED,
+            capability_resolver=lambda row: grants[row["name"]],
+        )
+
+        self.assertEqual([row["name"] for row in scoped], ["visible"])
+
+    def test_ready_service_applies_document_scope_before_return(self) -> None:
+        service_path = (
+            Path(__file__).resolve().parents[1]
+            / "almdina_erp"
+            / "services"
+            / "shop_floor_query_service.py"
+        )
+        source = service_path.read_text(encoding="utf-8")
+        start = source.index("def get_ready_for_delivery()")
+        end = source.index("\n\n@frappe.whitelist()", start)
+        body = source[start:end]
+
+        self.assertIn("rows_with_order_capability", body)
+        self.assertIn("Capability.MARK_DELIVERED", body)
+        self.assertIn("_repository.capabilities_for_order", body)
+        self.assertLess(
+            body.index("rows_with_order_capability"),
+            body.index("sanitize_shop_floor_summary"),
+        )
 
     def test_history_policy_never_falls_back_to_delivery_ready_rows(self) -> None:
         rows = [
