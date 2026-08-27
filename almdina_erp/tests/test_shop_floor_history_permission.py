@@ -14,11 +14,13 @@ from almdina_erp.almdina_erp.application.security.shop_floor_history_migration i
     legacy_history_state_updates,
 )
 from almdina_erp.almdina_erp.application.shop_floor.history_policy import (
+    ready_for_delivery_rows,
     visible_archive_rows,
 )
 from almdina_erp.almdina_erp.application.shop_floor.queries import (
     ShopFloorPermissionDenied,
     get_my_archive,
+    get_ready_for_delivery,
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
@@ -39,6 +41,74 @@ class _HistoryOnlyRepository:
 
     def global_capabilities(self) -> frozenset[str]:
         return frozenset({Capability.VIEW_SHOP_FLOOR_HISTORY})
+
+
+class _ArchiveRepository:
+    def __init__(self, capabilities: set[str]) -> None:
+        self.capabilities = set(capabilities)
+        self.user = "worker@example.com"
+
+    def current_user(self) -> str:
+        return self.user
+
+    def global_capabilities(self) -> frozenset[str]:
+        return frozenset(self.capabilities)
+
+    def is_admin(self) -> bool:
+        return Capability.MARK_DELIVERED in self.capabilities
+
+    def list_archive_stages(self, *, user: str, is_admin: bool):
+        return [
+            {
+                "name": "stage-history",
+                "door_cutting_order": "DCO-HISTORY",
+                "stage_type": "Edge",
+                "status": "Completed",
+                "assigned_to": self.user,
+                "operational_role": "Edge Operator",
+            },
+            {
+                "name": "stage-ready-previous",
+                "door_cutting_order": "DCO-READY",
+                "stage_type": "Cutting",
+                "status": "Completed",
+                "assigned_to": self.user,
+                "operational_role": "Cutting Operator",
+            },
+            {
+                "name": "stage-ready-terminal",
+                "door_cutting_order": "DCO-READY",
+                "stage_type": "Edge",
+                "status": "Completed",
+                "assigned_to": self.user,
+                "operational_role": "Edge Operator",
+            },
+        ]
+
+    def order_summaries(self, order_names):
+        return {
+            "DCO-HISTORY": {
+                "name": "DCO-HISTORY",
+                "status": "Delivered",
+                "production_path": "route-a",
+                "current_production_stage": None,
+            },
+            "DCO-READY": {
+                "name": "DCO-READY",
+                "status": "Ready for Delivery",
+                "production_path": "route-a",
+                "current_production_stage": None,
+            },
+        }
+
+    def capabilities_for_order(self, order):
+        return frozenset()
+
+    def get_stage_summary(self, stage_name: str):
+        return None
+
+    def get_production_route(self, route_name: str) -> ProductionRoute:
+        return _route_resolver(route_name)
 
 
 def _production_route() -> ProductionRoute:
@@ -85,49 +155,87 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
         with self.assertRaises(ShopFloorPermissionDenied):
             get_my_archive(_HistoryOnlyRepository())
 
-    def test_history_filter_preserves_only_terminal_ready_for_delivery_row(self) -> None:
+    def test_archive_endpoint_requires_history_capability(self) -> None:
+        repository = _ArchiveRepository({Capability.START_ASSIGNED_STAGE})
+        with self.assertRaisesRegex(ShopFloorPermissionDenied, "سجل الطلبات المنجزة"):
+            get_my_archive(repository)
+
+        repository.capabilities.add(Capability.VIEW_SHOP_FLOOR_HISTORY)
+        rows = get_my_archive(repository)
+        self.assertEqual([row["name"] for row in rows], ["stage-history"])
+
+    def test_ready_for_delivery_is_independent_operational_query(self) -> None:
+        repository = _ArchiveRepository(
+            {Capability.START_ASSIGNED_STAGE, Capability.MARK_DELIVERED}
+        )
+        rows = get_ready_for_delivery(repository)
+        self.assertEqual([row["name"] for row in rows], ["stage-ready-terminal"])
+
+        repository.capabilities.remove(Capability.MARK_DELIVERED)
+        with self.assertRaisesRegex(ShopFloorPermissionDenied, "الجاهزة للتسليم"):
+            get_ready_for_delivery(repository)
+
+    def test_history_policy_never_falls_back_to_delivery_ready_rows(self) -> None:
         rows = [
             {
                 "name": "stage-terminal",
-                "current_production_stage": None,
-                "door_cutting_order": "DCO-READY",
+                "order_status": "Ready for Delivery",
+                "production_path": "route-a",
+                "stage_type": "Edge",
+            },
+            {
+                "name": "stage-history",
+                "order_status": "Delivered",
+                "production_path": "route-a",
+                "stage_type": "Edge",
+            },
+        ]
+
+        self.assertEqual(visible_archive_rows(rows, set()), [])
+        self.assertEqual(
+            [
+                row["name"]
+                for row in visible_archive_rows(
+                    rows,
+                    {Capability.VIEW_SHOP_FLOOR_HISTORY},
+                )
+            ],
+            ["stage-history"],
+        )
+
+    def test_ready_policy_preserves_only_terminal_delivery_row(self) -> None:
+        rows = [
+            {
+                "name": "stage-terminal",
                 "order_status": "Ready for Delivery",
                 "production_path": "route-a",
                 "stage_type": "Edge",
             },
             {
                 "name": "stage-previous",
-                "current_production_stage": None,
-                "door_cutting_order": "DCO-READY",
                 "order_status": "Ready for Delivery",
                 "production_path": "route-a",
                 "stage_type": "Cutting",
             },
             {
                 "name": "stage-non-ready",
-                "current_production_stage": "stage-next",
-                "door_cutting_order": "DCO-HISTORY",
-                "order_status": "In Production",
+                "order_status": "Delivered",
                 "production_path": "route-a",
                 "stage_type": "Edge",
             },
         ]
-
-        denied = visible_archive_rows(
-            rows,
-            set(),
-            route_resolver=_route_resolver,
+        self.assertEqual(
+            [
+                row["name"]
+                for row in ready_for_delivery_rows(
+                    rows,
+                    route_resolver=_route_resolver,
+                )
+            ],
+            ["stage-terminal"],
         )
-        self.assertEqual([row["name"] for row in denied], ["stage-terminal"])
 
-        allowed = visible_archive_rows(
-            rows,
-            {Capability.VIEW_SHOP_FLOOR_HISTORY},
-            route_resolver=_route_resolver,
-        )
-        self.assertEqual(allowed, rows)
-
-    def test_history_filter_fails_closed_for_missing_or_invalid_routing(self) -> None:
+    def test_ready_policy_fails_closed_for_missing_or_invalid_routing(self) -> None:
         rows = [
             {
                 "name": "missing-route",
@@ -149,10 +257,10 @@ class TestShopFloorHistoryPermission(unittest.TestCase):
             },
         ]
         self.assertEqual(
-            visible_archive_rows(rows, set(), route_resolver=_route_resolver),
+            ready_for_delivery_rows(rows, route_resolver=_route_resolver),
             [],
         )
-        self.assertEqual(visible_archive_rows(rows, set()), [])
+        self.assertEqual(ready_for_delivery_rows(rows), [])
 
     def test_legacy_migration_is_minimal_and_idempotent(self) -> None:
         states = {
