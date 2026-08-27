@@ -94,6 +94,8 @@ const croppedReferenceSvg = renderer.svg(croppedReferencePiece);
 assert.match(croppedReferenceSvg, /data-reference-crop="1"/);
 assert.match(croppedReferenceSvg, /overflow="hidden"/);
 assert.match(croppedReferenceSvg, /href="\/private\/files\/a4-scan\.jpg"/);
+assert.match(croppedReferenceSvg, /opacity="1"/);
+assert.doesNotMatch(croppedReferenceSvg, /opacity="0\.72"/);
 assert.match(renderer.css, /\.dco-piece-sketch>svg\{/);
 assert.doesNotMatch(
     renderer.css,
@@ -101,6 +103,41 @@ assert.doesNotMatch(
     "The outer sketch style must not force nested crop SVG overflow to visible"
 );
 assert.match(renderer.css, /\.dco-reference-crop\{overflow:hidden\}/);
+
+const imageOnlyPiece = {
+    piece_type: "Special",
+    special_shape_drawing_json: JSON.stringify({
+        schema: "almdina.special-shape-documentation",
+        version: 1,
+        canvas: { widthMm: 200, heightMm: 700 },
+        reference: {
+            fileUrl: "/private/files/a4-scan.jpg",
+            opacity: 0.72,
+            rotationDeg: 0,
+            locked: true,
+            crop: { x: 0.2, y: 0.1, width: 0.5, height: 0.6 },
+            imageSize: { widthPx: 2480, heightPx: 3508 },
+        },
+        elements: [],
+        notes: "",
+        source: "image",
+        templateId: null,
+    }),
+};
+const imageOnlySvg = renderer.svg(imageOnlyPiece);
+const imageOnlyViewBox = imageOnlySvg.match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+assert.ok(imageOnlyViewBox[2] > 239 && imageOnlyViewBox[2] < 241, "the visible crop must use the available door width plus print padding");
+assert.ok(imageOnlyViewBox[3] > 379 && imageOnlyViewBox[3] < 381, "the print view must fit the cropped image height rather than the 700 mm door height");
+assert.ok(imageOnlyViewBox[2] / imageOnlyViewBox[3] > 0.6, "a cropped reference must no longer inherit the narrow door aspect ratio");
+assert.match(imageOnlySvg, /data-reference-fit="visible-content"/);
+
+const rotatedImageOnlyPiece = JSON.parse(JSON.stringify(imageOnlyPiece));
+const rotatedDrawing = JSON.parse(rotatedImageOnlyPiece.special_shape_drawing_json);
+rotatedDrawing.reference.rotationDeg = 90;
+rotatedImageOnlyPiece.special_shape_drawing_json = JSON.stringify(rotatedDrawing);
+const rotatedViewBox = renderer.svg(rotatedImageOnlyPiece).match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+assert.ok(rotatedViewBox[2] > 379 && rotatedViewBox[2] < 381, "print bounds must include the rotated crop width");
+assert.ok(rotatedViewBox[3] > 239 && rotatedViewBox[3] < 241, "print bounds must include the rotated crop height");
 
 const freeWorkspacePiece = JSON.parse(JSON.stringify(classicPiece));
 const freeWorkspaceDrawing = JSON.parse(freeWorkspacePiece.special_shape_drawing_json);

@@ -130,9 +130,15 @@ history.commit(api.Document.setNotes(history.get(), "تعديل أثناء ال�
 history.markSaved(submittedSnapshot);
 assert.equal(history.state().dirty, true, "an edit made while a save is pending must remain unsaved after the older request completes");
 
-const image = api.Document.setReference(initial, { fileUrl: "/private/files/reference.jpg", opacity: 0.72, rotationDeg: 0, locked: true });
+const image = api.Document.setReference(initial, { fileUrl: "/private/files/reference.jpg", opacity: 0.35, rotationDeg: 0, locked: true });
 assert.equal(api.Document.hasContent(image), true);
 assert.equal(api.Document.fromStored(api.Document.toStored(image), piece).reference.fileUrl, "/private/files/reference.jpg");
+assert.equal(image.reference.opacity, 1, "reference images must always render at full opacity");
+assert.equal(
+    api.Document.fromStored(JSON.stringify({ ...image, reference: { ...image.reference, opacity: 0.2 } }), piece).reference.opacity,
+    1,
+    "legacy saved opacity must normalize to 100% without a migration",
+);
 assert.deepEqual(image.reference.crop, { x: 0, y: 0, width: 1, height: 1 });
 
 const crop = api.ReferenceCrop;
