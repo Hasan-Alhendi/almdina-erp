@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 RENDERER = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
 MEASUREMENT_ACTIONS = (
@@ -33,15 +34,30 @@ def text(path: Path) -> str:
 
 def test_shared_shape_print_renderer_loads_before_every_active_print_surface():
     hooks = text(HOOKS)
-    renderer = '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"'
-    measurements = '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"'
-    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
-    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
-    edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
-    for script in (renderer, measurements, presenter, financial, edge_color):
+    registry = text(REGISTRY)
+    renderer = "door_cutting_order_shape_print.js"
+    measurements = "door_cutting_order_measurement_actions_ux.js"
+    presenter = "door_cutting_order_document_print_presenter.js"
+    financial = "door_cutting_order_financial_documents_ux.js"
+    edge_color = "door_cutting_order_edge_color_ux.js"
+
+    # Measurement/customer print primitives remain eager and ordered because the
+    # Order workspace needs them without activating Cost.
+    for script in (renderer, measurements, presenter, edge_color):
         assert script in hooks
     assert hooks.index(renderer) < hooks.index(measurements)
-    assert hooks.index(renderer) < hooks.index(presenter) < hooks.index(financial) < hooks.index(edge_color)
+    assert hooks.index(renderer) < hooks.index(presenter)
+    assert hooks.index(renderer) < hooks.index(edge_color)
+
+    # Financial printing is Cost-only, but consumes the already initialized
+    # shared presenter/shape renderer after Cost bundle activation.
+    assert financial not in hooks
+    cost = registry.split("cost: Object.freeze({", 1)[1].split(
+        "});\n\n    function descriptor", 1
+    )[0]
+    assert financial in cost
+    assert "door_cutting_order_cost_permissions_ux.js" in cost
+    assert cost.index("door_cutting_order_cost_permissions_ux.js") < cost.index(financial)
     assert '"public/js/door_cutting_order_cost_invoice_ux.js"' not in hooks
 
 
