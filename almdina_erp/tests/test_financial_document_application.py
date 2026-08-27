@@ -58,6 +58,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "edge_cost_usd": 3,
             },
             {
+                "name": "ROW-SPECIAL-2",
                 "piece_no": 2,
                 "piece_type": "Special",
                 "width_cm": 40,
@@ -72,6 +73,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
                 "special_shape_final_unit_price_usd": 29,
                 "special_shape_price_status": "Approved",
                 "special_shape_price_approved_by": "accounts@example.com",
+                "special_shape_drawing_json": '{"schema":"almdina.special-shape-documentation","version":1,"reference":{"crop":{"x":0.2,"y":0.1,"width":0.5,"height":0.6}},"elements":[]}',
             },
             {
                 "piece_no": 3,
@@ -118,6 +120,13 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(summary["عدد الدرف"], 4)
         self.assertNotIn("عدد الألواح", summary)
         self.assertTrue(all("edge_meters" not in row for row in payload["measurements"]))
+
+    def test_customer_measurement_snapshot_carries_saved_special_shape_documentation(self) -> None:
+        payload = build_customer_invoice_document(self.order, self.pieces)
+        special = payload["measurements"][1]
+
+        self.assertEqual(special["piece_name"], "ROW-SPECIAL-2")
+        self.assertIn('"width":0.5', special["special_shape_drawing_json"])
 
     def test_extra_addons_are_itemized_from_the_historical_price_snapshot(self) -> None:
         pieces = [

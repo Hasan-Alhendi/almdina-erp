@@ -9,17 +9,20 @@
         UNAVAILABLE: "bridge-unavailable",
         FORBIDDEN: "bridge-forbidden",
         BUSY: "scanner-busy",
+        NO_SCANNER: "scanner-unavailable",
         SCAN_FAILED: "scan-failed",
+        INVALID_IMAGE: "invalid-image",
         INVALID_RESPONSE: "invalid-response",
         IMAGE_TOO_LARGE: "image-too-large",
     });
 
     class ScannerBridgeError extends Error {
-        constructor(code, message, cause = null) {
+        constructor(code, message, cause = null, bridgeCode = "") {
             super(message);
             this.name = "ScannerBridgeError";
             this.code = code;
             this.cause = cause;
+            this.bridgeCode = bridgeCode;
         }
     }
 
@@ -85,10 +88,7 @@
             throw new ScannerBridgeError(ERROR_CODES.UNAVAILABLE, "Scanner bridge is unavailable", error);
         }
         if (response.status === 204) return null;
-        if (response.status === 403) throw new ScannerBridgeError(ERROR_CODES.FORBIDDEN, "Scanner bridge rejected this origin");
-        if (response.status === 409) throw new ScannerBridgeError(ERROR_CODES.BUSY, "Scanner is already busy");
-        if (response.status === 413) throw new ScannerBridgeError(ERROR_CODES.IMAGE_TOO_LARGE, "Scanned image is too large");
-        if (!response.ok) throw new ScannerBridgeError(ERROR_CODES.SCAN_FAILED, `Scanner acquisition failed (${response.status})`);
+        if (!response.ok) throw await scanResponseError(response);
 
         const contentType = String(response.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
         if (contentType !== "image/jpeg") throw new ScannerBridgeError(ERROR_CODES.INVALID_RESPONSE, "Scanner did not return a JPEG image");
@@ -102,6 +102,34 @@
         if (typeof FileConstructor !== "function") throw new ScannerBridgeError(ERROR_CODES.INVALID_RESPONSE, "File API is unavailable");
         const stamp = new Date().toISOString().replace(/[:.]/g, "-");
         return new FileConstructor([blob], `scan-${stamp}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+    }
+
+    async function scanResponseError(response) {
+        let payload = null;
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        if (contentType.includes("application/json")) {
+            try { payload = await response.json(); }
+            catch (error) { payload = null; }
+        }
+        const bridgeCode = String(payload && payload.code || "");
+        const codeByBridgeError = {
+            origin_not_allowed: ERROR_CODES.FORBIDDEN,
+            origin_required: ERROR_CODES.FORBIDDEN,
+            scanner_busy: ERROR_CODES.BUSY,
+            scanner_unavailable: ERROR_CODES.NO_SCANNER,
+            scan_failed: ERROR_CODES.SCAN_FAILED,
+            invalid_scanner_image: ERROR_CODES.INVALID_IMAGE,
+            image_too_large: ERROR_CODES.IMAGE_TOO_LARGE,
+        };
+        const codeByStatus = {
+            403: ERROR_CODES.FORBIDDEN,
+            409: ERROR_CODES.BUSY,
+            413: ERROR_CODES.IMAGE_TOO_LARGE,
+            503: ERROR_CODES.NO_SCANNER,
+        };
+        const code = codeByBridgeError[bridgeCode] || codeByStatus[response.status] || ERROR_CODES.SCAN_FAILED;
+        const message = String(payload && payload.message || `Scanner acquisition failed (${response.status})`);
+        return new ScannerBridgeError(code, message, null, bridgeCode);
     }
 
     root.ScannerBridge = Object.freeze({ DEFAULT_BASE_URL, INSTALLER_URL, ERROR_CODES, ScannerBridgeError, health, scan });

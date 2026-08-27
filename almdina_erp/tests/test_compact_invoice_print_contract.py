@@ -122,10 +122,15 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("function quoteDetailsHtml", presenter)
         self.assertIn("function printAuthorizedInvoice", presenter)
         self.assertIn('theme.css("measurements", shapePrintCss())', presenter)
-        self.assertIn("${measurementDocumentBody(frm)}", presenter)
+        self.assertIn(
+            "${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) : measurementDocumentBody(frm)}",
+            presenter,
+        )
         self.assertIn('${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}', presenter)
         self.assertLess(
-            presenter.index("${measurementDocumentBody(frm)}"),
+            presenter.index(
+                "${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) : measurementDocumentBody(frm)}"
+            ),
             presenter.index('${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}'),
         )
         self.assertNotIn("function invoiceSummary", presenter)

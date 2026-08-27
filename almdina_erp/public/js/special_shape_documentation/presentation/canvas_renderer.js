@@ -5,12 +5,14 @@
 
     function create(canvas) {
         const Viewport = root.CanvasViewport;
-        if (!Viewport) throw new Error("Special-shape canvas viewport is unavailable");
+        const Crop = root.ReferenceCrop;
+        if (!Viewport || !Crop) throw new Error("Special-shape canvas contracts are unavailable");
 
         const context = canvas.getContext("2d");
         let document = null;
         let selectedId = null;
         let preview = null;
+        let cropSession = null;
         let image = null;
         let imageUrl = "";
         let viewport = null;
@@ -101,21 +103,142 @@
             image.src = url;
         }
 
-        function reference() {
-            if (!image || !document.reference) return;
+        function referenceGeometry(editing = false) {
+            if (!image || !document.reference) return null;
             const width = Number(document.canvas.widthMm) * viewport.scale;
             const height = Number(document.canvas.heightMm) * viewport.scale;
             const origin = toScreen({ xMm: 0, yMm: 0 });
-            const ratio = Math.min(width / image.width, height / image.height);
-            const imageWidth = image.width * ratio;
-            const imageHeight = image.height * ratio;
+            const naturalWidth = Math.max(1, Number(image.naturalWidth || image.width));
+            const naturalHeight = Math.max(1, Number(image.naturalHeight || image.height));
+            const crop = editing ? Crop.FULL : Crop.normalize(document.reference.crop);
+            const sourceWidth = naturalWidth * crop.width;
+            const sourceHeight = naturalHeight * crop.height;
+            const ratio = Math.min(width / sourceWidth, height / sourceHeight);
+            return {
+                center: { x: origin.x + width / 2, y: origin.y + height / 2 },
+                angle: document.reference.rotationDeg * Math.PI / 180,
+                naturalWidth,
+                naturalHeight,
+                crop,
+                source: { x: naturalWidth * crop.x, y: naturalHeight * crop.y, width: sourceWidth, height: sourceHeight },
+                destination: { width: sourceWidth * ratio, height: sourceHeight * ratio },
+            };
+        }
+
+        function cropOverlay(geometry, value) {
+            const crop = Crop.normalize(value);
+            const fullWidth = geometry.destination.width, fullHeight = geometry.destination.height;
+            const left = -fullWidth / 2 + crop.x * fullWidth;
+            const top = -fullHeight / 2 + crop.y * fullHeight;
+            const width = crop.width * fullWidth;
+            const height = crop.height * fullHeight;
+            context.globalAlpha = 1;
+            context.fillStyle = "rgba(15,23,42,.58)";
+            context.fillRect(-fullWidth / 2, -fullHeight / 2, fullWidth, Math.max(0, top + fullHeight / 2));
+            context.fillRect(-fullWidth / 2, top + height, fullWidth, Math.max(0, fullHeight / 2 - top - height));
+            context.fillRect(-fullWidth / 2, top, Math.max(0, left + fullWidth / 2), height);
+            context.fillRect(left + width, top, Math.max(0, fullWidth / 2 - left - width), height);
+            context.strokeStyle = "#fff";
+            context.lineWidth = 2;
+            context.setLineDash([]);
+            context.strokeRect(left, top, width, height);
+            context.strokeStyle = "rgba(255,255,255,.72)";
+            context.lineWidth = 1;
+            context.beginPath();
+            context.moveTo(left + width / 3, top); context.lineTo(left + width / 3, top + height);
+            context.moveTo(left + width * 2 / 3, top); context.lineTo(left + width * 2 / 3, top + height);
+            context.moveTo(left, top + height / 3); context.lineTo(left + width, top + height / 3);
+            context.moveTo(left, top + height * 2 / 3); context.lineTo(left + width, top + height * 2 / 3);
+            context.stroke();
+            const handles = [[left, top], [left + width / 2, top], [left + width, top], [left + width, top + height / 2], [left + width, top + height], [left + width / 2, top + height], [left, top + height], [left, top + height / 2]];
+            handles.forEach(([x, y]) => { context.fillStyle = "#fff"; context.strokeStyle = "#0b5fff"; context.lineWidth = 2; context.fillRect(x - 5, y - 5, 10, 10); context.strokeRect(x - 5, y - 5, 10, 10); });
+        }
+
+        function reference() {
+            if (!image || !document.reference) return;
+            const editing = Boolean(cropSession && cropSession.active);
+            const geometry = referenceGeometry(editing);
+            if (!geometry) return;
 
             context.save();
-            context.globalAlpha = document.reference.opacity;
-            context.translate(origin.x + width / 2, origin.y + height / 2);
-            context.rotate(document.reference.rotationDeg * Math.PI / 180);
-            context.drawImage(image, -imageWidth / 2, -imageHeight / 2, imageWidth, imageHeight);
+            context.globalAlpha = editing ? Math.max(0.82, document.reference.opacity) : document.reference.opacity;
+            context.translate(geometry.center.x, geometry.center.y);
+            context.rotate(geometry.angle);
+            context.drawImage(
+                image,
+                geometry.source.x, geometry.source.y, geometry.source.width, geometry.source.height,
+                -geometry.destination.width / 2, -geometry.destination.height / 2,
+                geometry.destination.width, geometry.destination.height,
+            );
+            if (editing) cropOverlay(geometry, cropSession.value);
             context.restore();
+        }
+
+        function cropCoordinates(event) {
+            const geometry = referenceGeometry(true);
+            if (!geometry) return null;
+            const point = screenPoint(event);
+            const dx = point.x - geometry.center.x, dy = point.y - geometry.center.y;
+            const cosine = Math.cos(geometry.angle), sine = Math.sin(geometry.angle);
+            const localX = dx * cosine + dy * sine;
+            const localY = -dx * sine + dy * cosine;
+            return {
+                geometry,
+                local: { x: localX, y: localY },
+                normalized: {
+                    x: (localX + geometry.destination.width / 2) / geometry.destination.width,
+                    y: (localY + geometry.destination.height / 2) / geometry.destination.height,
+                },
+            };
+        }
+
+        function cropPoint(event) {
+            const resolved = cropCoordinates(event);
+            return resolved ? resolved.normalized : null;
+        }
+
+        function cropRegion(event, value) {
+            const resolved = cropCoordinates(event);
+            if (!resolved) return null;
+            const crop = Crop.normalize(value);
+            const { geometry, local } = resolved;
+            const left = -geometry.destination.width / 2 + crop.x * geometry.destination.width;
+            const top = -geometry.destination.height / 2 + crop.y * geometry.destination.height;
+            const right = left + crop.width * geometry.destination.width;
+            const bottom = top + crop.height * geometry.destination.height;
+            const handles = [
+                ["nw", left, top], ["n", (left + right) / 2, top], ["ne", right, top], ["e", right, (top + bottom) / 2],
+                ["se", right, bottom], ["s", (left + right) / 2, bottom], ["sw", left, bottom], ["w", left, (top + bottom) / 2],
+            ];
+            const handle = handles.find(([, x, y]) => Math.hypot(local.x - x, local.y - y) <= 22);
+            if (handle) return handle[0];
+            return local.x >= left && local.x <= right && local.y >= top && local.y <= bottom ? "move" : null;
+        }
+
+        function suggestReferenceCrop() {
+            if (!image || !image.complete) return null;
+            const naturalWidth = Math.max(1, Number(image.naturalWidth || image.width));
+            const naturalHeight = Math.max(1, Number(image.naturalHeight || image.height));
+            const scale = Math.min(1, 900 / Math.max(naturalWidth, naturalHeight));
+            const width = Math.max(1, Math.round(naturalWidth * scale));
+            const height = Math.max(1, Math.round(naturalHeight * scale));
+            const sampler = window.document.createElement("canvas");
+            sampler.width = width; sampler.height = height;
+            const samplerContext = sampler.getContext("2d", { willReadFrequently: true });
+            try {
+                samplerContext.drawImage(image, 0, 0, width, height);
+                return Crop.detectContentBounds(samplerContext.getImageData(0, 0, width, height));
+            } catch (error) {
+                console.warn("Reference auto-crop analysis failed", error);
+                return null;
+            }
+        }
+
+        function referenceImageSize() {
+            if (!image || !image.complete) return null;
+            const widthPx = Math.round(Number(image.naturalWidth || image.width));
+            const heightPx = Math.round(Number(image.naturalHeight || image.height));
+            return widthPx > 0 && heightPx > 0 ? { widthPx, heightPx } : null;
         }
 
         function style(element, selected = false) {
@@ -264,6 +387,7 @@
             document = nextDocument;
             selectedId = options.selectedId || null;
             preview = options.preview || null;
+            cropSession = options.cropSession || null;
             loadReference();
             draw();
         }
@@ -349,6 +473,10 @@
             fitToContent,
             zoomPercentage,
             screenDeltaToMm,
+            cropPoint,
+            cropRegion,
+            suggestReferenceCrop,
+            referenceImageSize,
         });
     }
 

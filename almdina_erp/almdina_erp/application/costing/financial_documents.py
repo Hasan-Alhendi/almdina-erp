@@ -83,6 +83,7 @@ def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
             notes = f"{extra_summary} — {notes}" if notes else extra_summary
         rows.append(
             {
+                "piece_name": _text(_value(piece, "name")),
                 "index": index,
                 "piece_no": int(_number(_value(piece, "piece_no")) or index),
                 "piece_type": _piece_type_label(_value(piece, "piece_type")),
@@ -91,6 +92,9 @@ def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
                 "quantity": _quantity(_value(piece, "qty")),
                 "edge_type": _text(_value(piece, "edge_type"), "—"),
                 "notes": notes or "—",
+                "special_shape_drawing_json": _text(
+                    _value(piece, "special_shape_drawing_json")
+                ),
             }
         )
     return rows

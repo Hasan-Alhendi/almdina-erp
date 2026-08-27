@@ -117,21 +117,46 @@
         return renderer ? renderer.css : "";
     }
 
-    function rows(frm) {
+    function authoritativeDocumentation(payload) {
+        const result = new Map();
+        const measurements = Array.isArray(payload && payload.measurements)
+            ? payload.measurements
+            : [];
+        measurements.forEach(row => {
+            const pieceName = String(row && row.piece_name || "").trim();
+            if (!pieceName) return;
+            result.set(pieceName, String(row.special_shape_drawing_json || ""));
+        });
+        return result;
+    }
+
+    function rows(frm, payload = null) {
         const module = edgeBandingApi();
-        return (frm.doc.pieces || []).map((source, index) => ({
-            ...source,
-            index: index + 1,
-            source,
-            pieceType: source.piece_type || "Regular",
-            width: number(source.width_cm),
-            length: number(source.length_cm),
-            qty: Math.max(1, Math.trunc(number(source.qty) || 1)),
-            notes: source.notes || "",
-            details: module && typeof module.details === "function"
-                ? module.details(frm, source)
-                : [],
-        }));
+        const documentation = authoritativeDocumentation(payload);
+        return (frm.doc.pieces || []).map((source, index) => {
+            const pieceName = String(source && source.name || "").trim();
+            const hasAuthoritativeDocumentation = pieceName && documentation.has(pieceName);
+            const printable = hasAuthoritativeDocumentation
+                ? {
+                    ...source,
+                    special_shape_drawing_json: documentation.get(pieceName),
+                    drawing_json: documentation.get(pieceName),
+                }
+                : source;
+            return {
+                ...printable,
+                index: index + 1,
+                source,
+                pieceType: source.piece_type || "Regular",
+                width: number(source.width_cm),
+                length: number(source.length_cm),
+                qty: Math.max(1, Math.trunc(number(source.qty) || 1)),
+                notes: source.notes || "",
+                details: module && typeof module.details === "function"
+                    ? module.details(frm, source)
+                    : [],
+            };
+        });
     }
 
     function customEdgeGroups(details) {
@@ -172,8 +197,8 @@
         return `<span class="dimension"><b>${quantity(value)}</b><span class="dimension-lines dimension-lines-${safeCount}">${lines}</span></span>`;
     }
 
-    function measurementRowsHtml(frm) {
-        return rows(frm).map(row => {
+    function measurementRowsHtmlWithPayload(frm, payload) {
+        return rows(frm, payload).map(row => {
             const longCount = Number(Boolean(row.source.edge_long_right))
                 + Number(Boolean(row.source.edge_long_left));
             const widthCount = Number(Boolean(row.source.edge_width_top))
@@ -189,6 +214,10 @@
                 <td class="right notes-cell ${drawing ? "notes-with-drawing" : ""}">${notesCellHtml(row)}</td>
             </tr>`;
         }).join("");
+    }
+
+    function measurementRowsHtml(frm) {
+        return measurementRowsHtmlWithPayload(frm, null);
     }
 
     function sharedHeader(frm, printIdentity) {
@@ -219,11 +248,15 @@
         </div>`;
     }
 
-    function measurementTable(frm) {
+    function measurementTableWithPayload(frm, payload) {
         return `<table class="table measurements">
             <thead><tr><th>#</th><th>النوع</th><th>العرض</th><th>الطول</th><th>العدد</th><th>القشاط المخصص</th><th>ملاحظات</th></tr></thead>
-            <tbody>${measurementRowsHtml(frm)}</tbody>
+            <tbody>${measurementRowsHtmlWithPayload(frm, payload)}</tbody>
         </table>`;
+    }
+
+    function measurementTable(frm) {
+        return measurementTableWithPayload(frm, null);
     }
 
     function orderNotesHtml(frm) {
@@ -232,12 +265,16 @@
             : "";
     }
 
-    function measurementDocumentBody(frm) {
+    function measurementDocumentBodyWithPayload(frm, payload) {
         return `
             ${sharedInfo(frm)}
             <div class="title">جدول القياسات</div>
-            ${measurementTable(frm)}
+            ${measurementTableWithPayload(frm, payload)}
             ${orderNotesHtml(frm)}`;
+    }
+
+    function measurementDocumentBody(frm) {
+        return measurementDocumentBodyWithPayload(frm, null);
     }
 
     function quoteLineNote(line) {
@@ -297,7 +334,7 @@
         const generated = frappe.datetime ? frappe.datetime.now_datetime() : new Date().toISOString();
         return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>${invoice ? "فاتورة الزبون" : "قياسات"} الطلب ${esc(frm.doc.name || "")}</title><style>${printCss()}</style></head><body>
             ${sharedHeader(frm, identity)}
-            ${measurementDocumentBody(frm)}
+            ${invoice ? measurementDocumentBodyWithPayload(frm, quotePayload) : measurementDocumentBody(frm)}
             ${invoice ? quoteDetailsHtml(quotePayload || {}) : ""}
             <div class="footer"><span>رقم الطلب: ${esc(frm.doc.name || "مسودة")}</span><span>تاريخ الطباعة: ${esc(generated)}</span></div>
         </body></html>`;

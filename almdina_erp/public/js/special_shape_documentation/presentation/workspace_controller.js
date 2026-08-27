@@ -21,13 +21,13 @@
         return null;
     }
     function mount(wrapper) {
-        const D = root.Document, H = root.History, T = root.Templates, Pen = root.SmartPen, Transform = root.ElementTransform, Clipboard = root.ElementClipboard, Shortcuts = root.KeyboardShortcuts, Api = root.WorkspaceApi, Scanner = root.ScannerBridge;
+        const D = root.Document, Crop = root.ReferenceCrop, H = root.History, T = root.Templates, Pen = root.SmartPen, Transform = root.ElementTransform, Clipboard = root.ElementClipboard, Shortcuts = root.KeyboardShortcuts, Api = root.WorkspaceApi, Scanner = root.ScannerBridge;
         const Shell = root.WorkspaceShell, Canvas = root.CanvasRenderer;
-        if (![D, H, T, Pen, Transform, Clipboard, Shortcuts, Api, Scanner, Shell, Canvas].every(Boolean)) throw new Error("Special-shape documentation dependencies are incomplete");
+        if (![D, Crop, H, T, Pen, Transform, Clipboard, Shortcuts, Api, Scanner, Shell, Canvas].every(Boolean)) throw new Error("Special-shape documentation dependencies are incomplete");
         const main = wrapper.querySelector(".layout-main-section");
         if (!main) throw new Error("Documentation page main section is missing");
         let generation = 0, suspended = false, shell = null, renderer = null, context = null, history = null;
-        let tool = "select", selectedId = null, draft = null, dragging = false, saving = false, scanning = false, pendingFileRemovals = new Set();
+        let tool = "select", selectedId = null, draft = null, cropSession = null, dragging = false, saving = false, scanning = false, pendingFileRemovals = new Set();
         const clipboard = Clipboard.create(D, Transform);
         let spacePressed = false, panning = false, panPoint = null;
         const resizeHandler = () => { if (renderer) { renderer.draw(); syncZoom(); } };
@@ -37,35 +37,40 @@
             if (!panning && shell) shell.setPanMode(false);
         };
         const beforeUnloadHandler = event => {
-            if (!history || !history.isDirty()) return;
+            if (!history || (!history.isDirty() && !cropSession)) return;
             event.preventDefault();
             event.returnValue = "";
         };
 
-        function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); window.removeEventListener("keyup", keyupHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; scanning = false; clipboard.clear(); spacePressed = false; panning = false; panPoint = null; }
+        function cleanup() { window.removeEventListener("resize", resizeHandler); window.removeEventListener("beforeunload", beforeUnloadHandler); window.removeEventListener("keyup", keyupHandler); if (shell) shell.destroy(); shell = null; renderer = null; history = null; context = null; cropSession = null; draft = null; dragging = false; scanning = false; clipboard.clear(); spacePressed = false; panning = false; panPoint = null; }
         function showMessage(message, error = false) { main.innerHTML = `<div class="ald-doc-message ${error ? "is-error" : ""}">${frappe.utils.escape_html(String(message))}</div>`; }
         function back() { if (context) frappe.set_route("Form", "Door Cutting Order", context.order.name); else frappe.set_route("List", "Door Cutting Order"); }
         function render() {
             if (!history || !shell || !renderer) return; const state = history.state();
-            shell.render(state.document, { ...state, selectedId }); shell.setActiveTool(tool); shell.setHint(TOOL_HINTS[tool]); shell.setSaveState(state.dirty ? "غير محفوظ" : "محفوظ", state.dirty ? "dirty" : "saved");
-            renderer.render(draft && draft.previewDocument || state.document, { selectedId, preview: draft && draft.points });
+            shell.render(state.document, { ...state, selectedId, cropMode: Boolean(cropSession), cropCanReset: cropSession ? !Crop.isFull(cropSession.value) : false }); shell.setActiveTool(tool); shell.setHint(cropSession ? "اسحب داخل الإطار لتحريكه، أو اسحب أحد المقابض لتحديد الجزء المطلوب." : TOOL_HINTS[tool]); shell.setSaveState(cropSession ? "اقتصاص قيد التعديل" : (state.dirty ? "غير محفوظ" : "محفوظ"), cropSession || state.dirty ? "dirty" : "saved");
+            renderer.render(draft && draft.previewDocument || state.document, { selectedId, preview: draft && draft.points, cropSession: cropSession ? { active: true, value: cropSession.value } : null });
             syncZoom();
         }
         function syncZoom() { if (shell && renderer) shell.setZoom(renderer.zoomPercentage()); }
         function commit(next) { history.commit(next); render(); }
-        function chooseTool(next) { if (!context.permissions.can_edit && next !== "select") return; tool = next; draft = null; dragging = false; render(); }
+        function chooseTool(next) { if (cropSession || (!context.permissions.can_edit && next !== "select")) return; tool = next; draft = null; dragging = false; render(); }
         async function save() {
             if (saving || !context.permissions.can_edit) return; const document = history.get();
+            if (cropSession) { frappe.msgprint("طبّق الاقتصاص أو ألغِه قبل حفظ التوثيق."); return; }
             if (!D.hasContent(document)) { frappe.msgprint("أضف صورة مرجعية أو عنصرًا توضيحيًا قبل الحفظ."); return; }
             saving = true; shell.setSaving(true); shell.setSaveState("جار الحفظ…", "saving");
             try {
-                const result = await Api.save(context.order.name, context.piece.name, D.toStored(document)); context = { ...context, piece: result.piece }; history.markSaved();
+                const result = await Api.save(context.order.name, context.piece.name, D.toStored(document)); context = { ...context, piece: result.piece }; history.markSaved(document);
                 const removals = [...pendingFileRemovals]; pendingFileRemovals.clear(); await Promise.all(removals.map(url => Api.removeImage(context.order.name, context.piece.name, url).catch(error => console.warn("Deferred reference cleanup failed", error))));
                 frappe.show_alert({ message: "تم حفظ توثيق الدرفة.", indicator: "green" }, 3); render();
             } catch (error) { console.error("Documentation save failed", error); shell.setSaveState("فشل الحفظ", "error"); frappe.msgprint("تعذر حفظ التوثيق. تحقق من البيانات والصلاحيات ثم حاول مرة أخرى."); }
             finally { saving = false; if (shell) shell.setSaving(false); }
         }
-        async function requestBack() { if (!history || !history.isDirty()) { back(); return; } if (await confirmAsync("لديك تعديلات غير محفوظة. هل تريد الرجوع دون حفظ؟")) back(); }
+        async function requestBack() {
+            if (cropSession && !await confirmAsync("لم يُطبّق الاقتصاص بعد. هل تريد الرجوع وإلغاء الاقتصاص؟")) return;
+            if (!history || !history.isDirty()) { back(); return; }
+            if (await confirmAsync("لديك تعديلات غير محفوظة. هل تريد الرجوع دون حفظ؟")) back();
+        }
         async function upload(file, options = {}) {
             if (!file || !context || !context.permissions.can_edit) return false; if (file.size > 8 * 1024 * 1024) { frappe.msgprint("حجم الصورة يتجاوز 8 MB."); return false; }
             const token = generation, activeContext = context;
@@ -77,13 +82,15 @@
                     return false;
                 }
                 if (previous && previous.fileUrl !== result.file_url) pendingFileRemovals.add(previous.fileUrl);
-                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 0.72, locked: true })); frappe.show_alert({ message: options.successMessage || "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3); return true;
+                commit(D.setReference(history.get(), { fileUrl: result.file_url, rotationDeg: 0, opacity: 0.72, locked: true, crop: Crop.FULL })); frappe.show_alert({ message: options.successMessage || "تم رفع الصورة وإضافتها إلى التوثيق.", indicator: "green" }, 3); return true;
             } catch (error) { console.error("Reference upload failed", error); frappe.msgprint("تعذر رفع الصورة. استخدم JPG أو PNG أو WEBP بحجم لا يتجاوز 8 MB."); render(); return false; }
             finally { if (shell) { shell.referenceInput.value = ""; shell.cameraInput.value = ""; } }
         }
         function scannerErrorMessage(error) {
             if (error && error.code === Scanner.ERROR_CODES.FORBIDDEN) return "هذا الموقع غير مضاف إلى المواقع المسموحة في جسر السكانر. اطلب من مسؤول النظام إضافته ثم إعادة تشغيل الجسر.";
             if (error && error.code === Scanner.ERROR_CODES.BUSY) return "السكانر مشغول بعملية أخرى. انتظر انتهاءها ثم أعد المحاولة.";
+            if (error && error.code === Scanner.ERROR_CODES.NO_SCANNER) return "لم يتم العثور على سكانر متوافق. تأكد من توصيله وأن Windows يتعرف عليه ثم أعد المحاولة.";
+            if (error && error.code === Scanner.ERROR_CODES.INVALID_IMAGE) return "أعاد السكانر صورة غير مدعومة وتعذر تحويلها. أرسل سجل Scanner Bridge لمسؤول النظام.";
             if (error && error.code === Scanner.ERROR_CODES.SCAN_FAILED) return "تعذر إتمام المسح. تحقق من أن Windows يرى السكانر وأنه غير مستخدم من برنامج آخر.";
             if (error && error.code === Scanner.ERROR_CODES.IMAGE_TOO_LARGE) return "الصورة الناتجة من السكانر تتجاوز 8 MB. خفّض دقة المسح ثم حاول مرة أخرى.";
             if (error && error.code === Scanner.ERROR_CODES.INVALID_RESPONSE) return "استجابة السكانر غير صالحة. أعد تشغيل Almdina Scanner Bridge ثم حاول مرة أخرى.";
@@ -109,7 +116,34 @@
             }
         }
         async function removeImage() { if (!context.permissions.can_edit) return; const reference = history.get().reference; if (!reference || !await confirmAsync("هل تريد مسح الصورة المرجعية من التوثيق؟")) return; pendingFileRemovals.add(reference.fileUrl); commit(D.setReference(history.get(), null)); }
-        function updateReference(changes) { if (!context.permissions.can_edit) return; const current = history.get(); if (!current.reference) return; commit(D.setReference(current, { ...current.reference, ...changes })); }
+        function updateReference(changes) { if (!context.permissions.can_edit || cropSession) return; const current = history.get(); if (!current.reference) return; commit(D.setReference(current, { ...current.reference, ...changes })); }
+        function startCrop() {
+            const reference = history.get().reference;
+            if (!context.permissions.can_edit || !reference || cropSession) return;
+            tool = "select"; selectedId = null; draft = null; dragging = false;
+            cropSession = { value: Crop.normalize(reference.crop) };
+            render();
+        }
+        function cancelCrop() { if (!cropSession) return; cropSession = null; draft = null; dragging = false; render(); }
+        function applyCrop() {
+            if (!cropSession || !context.permissions.can_edit) return;
+            const crop = Crop.normalize(cropSession.value); const imageSize = renderer.referenceImageSize();
+            cropSession = null; draft = null; dragging = false;
+            const current = history.get();
+            commit(D.setReference(current, { ...current.reference, crop, imageSize: imageSize || current.reference.imageSize }));
+        }
+        function resetCrop() { if (!cropSession) return; cropSession = { value: Crop.normalize(Crop.FULL) }; draft = null; dragging = false; render(); }
+        function resetReferenceCrop() {
+            const current = history.get();
+            if (!context.permissions.can_edit || !current.reference || Crop.isFull(current.reference.crop)) return;
+            commit(D.setReference(current, { ...current.reference, crop: Crop.FULL }));
+        }
+        function autoCrop() {
+            if (!cropSession) return;
+            const suggested = renderer.suggestReferenceCrop();
+            if (!suggested || Crop.isFull(suggested)) { frappe.show_alert({ message: "لم نتمكن من تمييز هوامش بيضاء واضحة. عدّل الإطار يدويًا.", indicator: "orange" }, 4); return; }
+            cropSession = { value: suggested }; draft = null; dragging = false; render();
+        }
         async function finishPen() {
             if (!draft || !draft.points || draft.points.length < 2) { draft = null; render(); return; }
             const cleaned = Pen.clean(draft.points, { toleranceMm: Math.max(3, history.get().canvas.widthMm * 0.006), joinToleranceMm: Math.max(18, history.get().canvas.widthMm * 0.025) }); let points = cleaned.points, closed = false;
@@ -127,6 +161,14 @@
                 return;
             }
             if (event.button !== 0 || (!context.permissions.can_edit && tool !== "select")) return;
+            if (cropSession) {
+                const region = renderer.cropRegion(event, cropSession.value);
+                const point = renderer.cropPoint(event);
+                if (!region || !point) return;
+                shell.canvas.setPointerCapture(event.pointerId); dragging = true;
+                draft = { mode: "crop", region, start: point, originalCrop: Crop.normalize(cropSession.value) };
+                return;
+            }
             shell.canvas.setPointerCapture(event.pointerId); const point = renderer.screenToMm(event);
             if (tool === "select") { const hit = renderer.hitTest(event); selectedId = hit && hit.id || null; if (hit && context.permissions.can_edit) { dragging = true; draft = { mode: renderer.selectionRegion(event, hit), start: point, original: D.clone(hit), previewDocument: history.get() }; } render(); return; }
             if (tool === "text") { promptText().then(text => { if (text) commit(D.addElement(history.get(), { id: D.id("text"), type: "text", position: point, text, style: { color: "#9a4b00" } })); }); return; }
@@ -139,6 +181,11 @@
                 return;
             }
             if (!dragging || !draft) return;
+            if (draft.mode === "crop") {
+                const point = renderer.cropPoint(event); if (!point) return;
+                cropSession = { value: Crop.transform(draft.originalCrop, draft.region, { x: point.x - draft.start.x, y: point.y - draft.start.y }) };
+                render(); return;
+            }
             const point = renderer.screenToMm(event); draft.end = point;
             if (tool === "select" && draft.original) {
                 const transformed = draft.mode === "move"
@@ -161,19 +208,20 @@
                 return;
             }
             if (!dragging || !draft) return; dragging = false;
+            if (draft.mode === "crop") { draft = null; render(); return; }
             if (tool === "select" && draft.previewDocument) { const next = draft.previewDocument; draft = null; commit(next); return; }
             if (tool === "pen") { finishPen(); return; }
             const element = makeElement(tool, draft.start, draft.end); draft = null; if (element && distance(element.start || { xMm: element.xMm, yMm: element.yMm }, element.end || { xMm: element.xMm + element.widthMm, yMm: element.yMm + element.heightMm }) > 3) commit(D.addElement(history.get(), element)); else render();
         }
-        function undo() { history.undo(); selectedId = null; render(); }
-        function redo() { history.redo(); selectedId = null; render(); }
+        function undo() { if (cropSession) return; history.undo(); selectedId = null; render(); }
+        function redo() { if (cropSession) return; history.redo(); selectedId = null; render(); }
         function copySelection() {
             const selected = history.get().elements.find(element => element.id === selectedId);
-            if (!selected) return false;
+            if (!selected || cropSession) return false;
             return clipboard.copy(selected);
         }
         function pasteSelection() {
-            if (!clipboard.canPaste() || !context.permissions.can_edit) return false;
+            if (cropSession || !clipboard.canPaste() || !context.permissions.can_edit) return false;
             const offsetMm = renderer.screenDeltaToMm(24);
             const pasted = clipboard.paste(offsetMm);
             selectedId = pasted.id;
@@ -181,13 +229,14 @@
             return true;
         }
         function deleteSelection() {
-            if (!selectedId || !context.permissions.can_edit) return false;
+            if (cropSession || !selectedId || !context.permissions.can_edit) return false;
             const next = D.removeElement(history.get(), selectedId);
             selectedId = null;
             commit(next);
             return true;
         }
         function escapeInteraction() {
+            if (cropSession) { cancelCrop(); return; }
             draft = null;
             dragging = false;
             selectedId = null;
@@ -209,6 +258,7 @@
         }
         function keydown(event) {
             if (!history || Shortcuts.isEditableTarget(event.target)) return;
+            if (cropSession && event.code === "Enter") { event.preventDefault(); applyCrop(); return; }
             const command = Shortcuts.resolve(event);
             if (command && executeShortcut(command)) event.preventDefault();
         }
@@ -236,6 +286,12 @@
                 else if (target.dataset.action === "zoom-out") { renderer.zoomBy(0.8); syncZoom(); }
                 else if (target.dataset.action === "zoom-in") { renderer.zoomBy(1.25); syncZoom(); }
                 else if (target.dataset.action === "fit-view") { renderer.fitToContent(); syncZoom(); }
+                else if (target.dataset.action === "start-crop") startCrop();
+                else if (target.dataset.action === "auto-crop") autoCrop();
+                else if (target.dataset.action === "reset-crop") resetCrop();
+                else if (target.dataset.action === "cancel-crop") cancelCrop();
+                else if (target.dataset.action === "apply-crop") applyCrop();
+                else if (target.dataset.action === "reset-reference-crop") resetReferenceCrop();
                 else if (target.dataset.action === "rotate-left") updateReference({ rotationDeg: history.get().reference.rotationDeg - 90 });
                 else if (target.dataset.action === "rotate-right") updateReference({ rotationDeg: history.get().reference.rotationDeg + 90 });
                 else if (target.dataset.action === "remove-image") removeImage();

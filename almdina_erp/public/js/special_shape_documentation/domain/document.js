@@ -27,11 +27,18 @@
     }
     function normalizeReference(value) {
         if (!value || !String(value.fileUrl || "").startsWith("/private/files/")) return null;
+        const cropContract = root.ReferenceCrop;
+        if (!cropContract) throw new Error("Reference crop contract is unavailable");
+        const rawSize = value.imageSize && typeof value.imageSize === "object" ? value.imageSize : {};
+        const widthPx = Math.round(number(rawSize.widthPx));
+        const heightPx = Math.round(number(rawSize.heightPx));
         return {
             fileUrl: String(value.fileUrl),
             rotationDeg: Math.max(-360, Math.min(360, number(value.rotationDeg))),
             opacity: Math.max(0.1, Math.min(1, number(value.opacity, 0.72))),
             locked: value.locked !== false,
+            crop: cropContract.normalize(value.crop),
+            imageSize: widthPx > 0 && heightPx > 0 ? { widthPx, heightPx } : null,
         };
     }
     function normalize(raw, piece = {}) {

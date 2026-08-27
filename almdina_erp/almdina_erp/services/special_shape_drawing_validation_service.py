@@ -26,6 +26,8 @@ MAX_NOTES_LENGTH = 2_000
 MAX_TEXT_LENGTH = 300
 MAX_STROKE_POINTS = 500
 MAX_REFERENCE_URL_LENGTH = 500
+MAX_REFERENCE_IMAGE_PIXELS_PER_SIDE = 100_000
+MIN_REFERENCE_CROP_SIZE = 0.02
 
 
 def _parse(raw_documentation: str | dict[str, Any]) -> dict[str, Any]:
@@ -89,6 +91,51 @@ def _validate_reference(reference: Any) -> None:
         frappe.throw(_("شفافية الصورة يجب أن تكون بين 10% و100%."))
     if not isinstance(reference.get("locked", True), bool):
         frappe.throw(_("حالة قفل الصورة غير صالحة."))
+    crop = reference.get("crop")
+    if crop is None:
+        return
+    if not isinstance(crop, dict):
+        frappe.throw(_("بيانات اقتصاص الصورة غير صالحة."))
+    try:
+        x = float(crop.get("x"))
+        y = float(crop.get("y"))
+        width = float(crop.get("width"))
+        height = float(crop.get("height"))
+    except (TypeError, ValueError):
+        frappe.throw(_("بيانات اقتصاص الصورة غير صالحة."))
+    values = (x, y, width, height)
+    if (
+        not all(math.isfinite(value) for value in values)
+        or x < 0
+        or y < 0
+        or width < MIN_REFERENCE_CROP_SIZE
+        or height < MIN_REFERENCE_CROP_SIZE
+        or x + width > 1.000001
+        or y + height > 1.000001
+    ):
+        frappe.throw(_("حدود اقتصاص الصورة خارج نطاق الصورة الأصلية."))
+    image_size = reference.get("imageSize")
+    is_full_crop = x <= 0.000001 and y <= 0.000001 and width >= 0.999999 and height >= 0.999999
+    if image_size is None and is_full_crop:
+        return
+    if not isinstance(image_size, dict):
+        frappe.throw(_("أبعاد الصورة الأصلية مطلوبة لحفظ الاقتصاص."))
+    try:
+        width_px = float(image_size.get("widthPx"))
+        height_px = float(image_size.get("heightPx"))
+    except (TypeError, ValueError):
+        frappe.throw(_("أبعاد الصورة الأصلية غير صالحة."))
+    if (
+        not math.isfinite(width_px)
+        or not math.isfinite(height_px)
+        or width_px <= 0
+        or height_px <= 0
+        or width_px > MAX_REFERENCE_IMAGE_PIXELS_PER_SIDE
+        or height_px > MAX_REFERENCE_IMAGE_PIXELS_PER_SIDE
+        or not width_px.is_integer()
+        or not height_px.is_integer()
+    ):
+        frappe.throw(_("أبعاد الصورة الأصلية غير صالحة."))
 
 
 def _validate_element(element: Any, index: int, identifiers: set[str]) -> None:

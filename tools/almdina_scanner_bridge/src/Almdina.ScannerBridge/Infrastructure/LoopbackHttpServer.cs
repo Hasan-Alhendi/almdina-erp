@@ -71,6 +71,14 @@ internal sealed class LoopbackHttpServer : IDisposable
 
                 var request = await ReadRequestAsync(stream, headerTimeout.Token).ConfigureAwait(false);
                 var response = await _dispatcher.DispatchAsync(request, cancellationToken).ConfigureAwait(false);
+                if (string.Equals(request.Method, "POST", StringComparison.Ordinal)
+                    && string.Equals(request.Path.TrimEnd('/'), "/scan", StringComparison.Ordinal))
+                {
+                    _logger.Info(
+                        $"Scanner HTTP response {response.StatusCode}, "
+                        + $"{response.ContentType ?? "no content type"}, {response.Body.Length} bytes."
+                    );
+                }
                 await WriteResponseAsync(stream, response, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

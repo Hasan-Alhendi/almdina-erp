@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 global.window = global;
 const root = path.resolve(__dirname, "../../public/js/special_shape_documentation");
+require(path.join(root, "domain/reference_crop.js"));
 require(path.join(root, "domain/document.js"));
 require(path.join(root, "application/history.js"));
 require(path.join(root, "application/templates.js"));
@@ -20,7 +21,7 @@ const api = global.AlmdinaSpecialShapeDocumentation;
 const runtimeFiles = [
     "presentation/workspace_controller.js", "presentation/workspace_shell.js", "presentation/canvas_renderer.js", "presentation/canvas_viewport.js",
     "infrastructure/scanner_bridge.js", "infrastructure/workspace_api.js", "application/element_transform.js",
-    "application/element_clipboard.js", "application/keyboard_shortcuts.js", "application/smart_pen.js", "application/templates.js", "application/history.js", "domain/document.js",
+    "application/element_clipboard.js", "application/keyboard_shortcuts.js", "application/smart_pen.js", "application/templates.js", "application/history.js", "domain/document.js", "domain/reference_crop.js",
 ];
 const parallelSandbox = { console, setTimeout, clearTimeout, AbortController, fetch, File, Blob, Response };
 parallelSandbox.window = parallelSandbox;
@@ -124,10 +125,37 @@ history.redo();
 assert.ok(history.get().elements.length);
 history.markSaved();
 assert.equal(history.state().dirty, false);
+const submittedSnapshot = history.get();
+history.commit(api.Document.setNotes(history.get(), "تعديل أثناء الحفظ"));
+history.markSaved(submittedSnapshot);
+assert.equal(history.state().dirty, true, "an edit made while a save is pending must remain unsaved after the older request completes");
 
 const image = api.Document.setReference(initial, { fileUrl: "/private/files/reference.jpg", opacity: 0.72, rotationDeg: 0, locked: true });
 assert.equal(api.Document.hasContent(image), true);
 assert.equal(api.Document.fromStored(api.Document.toStored(image), piece).reference.fileUrl, "/private/files/reference.jpg");
+assert.deepEqual(image.reference.crop, { x: 0, y: 0, width: 1, height: 1 });
+
+const crop = api.ReferenceCrop;
+assert.deepEqual(crop.normalize({ x: -1, y: 0.9, width: 2, height: 0.5 }), { x: 0, y: 0.9, width: 1, height: 0.1 });
+assert.deepEqual(crop.transform({ x: 0.2, y: 0.2, width: 0.5, height: 0.5 }, "move", { x: 0.6, y: -0.4 }), { x: 0.5, y: 0, width: 0.5, height: 0.5 });
+assert.deepEqual(crop.transform({ x: 0.2, y: 0.2, width: 0.5, height: 0.5 }, "nw", { x: 0.1, y: 0.1 }), { x: 0.3, y: 0.3, width: 0.4, height: 0.4 });
+const croppedImage = api.Document.setReference(image, {
+    ...image.reference,
+    crop: { x: 0.2, y: 0.1, width: 0.5, height: 0.6 },
+    imageSize: { widthPx: 2480, heightPx: 3508 },
+});
+const storedCrop = api.Document.fromStored(api.Document.toStored(croppedImage), piece).reference;
+assert.deepEqual(storedCrop.crop, { x: 0.2, y: 0.1, width: 0.5, height: 0.6 });
+assert.deepEqual(storedCrop.imageSize, { widthPx: 2480, heightPx: 3508 });
+
+const pixels = new Uint8ClampedArray(100 * 100 * 4);
+for (let index = 0; index < pixels.length; index += 4) { pixels[index] = 250; pixels[index + 1] = 250; pixels[index + 2] = 250; pixels[index + 3] = 255; }
+for (let y = 30; y < 70; y += 1) for (let x = 25; x < 75; x += 1) { const offset = (y * 100 + x) * 4; pixels[offset] = 35; pixels[offset + 1] = 35; pixels[offset + 2] = 35; }
+const detectedCrop = crop.detectContentBounds({ width: 100, height: 100, data: pixels });
+assert.ok(detectedCrop.x < 0.25 && detectedCrop.x > 0.15);
+assert.ok(detectedCrop.y < 0.3 && detectedCrop.y > 0.2);
+assert.ok(detectedCrop.width > 0.5 && detectedCrop.width < 0.65);
+assert.ok(detectedCrop.height > 0.4 && detectedCrop.height < 0.55);
 
 async function verifyScannerBridge() {
     const calls = [];
@@ -158,6 +186,21 @@ async function verifyScannerBridge() {
     await assert.rejects(
         () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(null, { status: 413 }) }),
         error => error.code === api.ScannerBridge.ERROR_CODES.IMAGE_TOO_LARGE,
+    );
+    await assert.rejects(
+        () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(
+            JSON.stringify({ ok: false, code: "invalid_scanner_image", message: "Scanner did not return a valid JPEG image." }),
+            { status: 500, headers: { "content-type": "application/json" } },
+        ) }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.INVALID_IMAGE && error.bridgeCode === "invalid_scanner_image",
+        "the browser must preserve the bridge error instead of collapsing every HTTP 500 into scan-failed",
+    );
+    await assert.rejects(
+        () => api.ScannerBridge.scan({ fetchImpl: async () => new Response(
+            JSON.stringify({ ok: false, code: "scanner_unavailable", message: "Windows cannot find a compatible scanner." }),
+            { status: 503, headers: { "content-type": "application/json" } },
+        ) }),
+        error => error.code === api.ScannerBridge.ERROR_CODES.NO_SCANNER && error.bridgeCode === "scanner_unavailable",
     );
     await assert.rejects(
         () => api.ScannerBridge.health({ timeoutMs: 250, fetchImpl: async () => { throw new Error("offline"); } }),
