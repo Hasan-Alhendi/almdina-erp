@@ -143,10 +143,10 @@
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return false;
 
-        // Saving Order Entry must not immediately pay the hidden Plan/Cost read
-        // cost. Their stores are already invalidated above; refresh only a derived
-        // workspace that is actually visible, and let tab activation resolve the
-        // rest later from the canonical server state.
+        // Saving the order workspace must not immediately pay the hidden Plan/Cost
+        // read cost. Their stores are already invalidated above; refresh only a
+        // derived workspace that is actually visible, and let tab activation
+        // resolve the rest later from the canonical server state.
         await coordinator.refresh(frm, impact.resources, {
             force: false,
             activeOnly: true,
