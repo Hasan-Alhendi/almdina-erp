@@ -173,7 +173,8 @@
                     ${frappe.utils.escape_html(pendingMessage(frm))}
                 </div>
             `);
-        ensureLoad(frm);
+        // Rendering is intentionally side-effect free. Form/document lifecycle
+        // hooks own workspace loading through AlmdinaPlanWorkspaceState.schedule().
         return true;
     }
 
