@@ -117,10 +117,14 @@
             || context.isCurrent(frm, identity)
         );
 
-        const request = frappe.call({
-            method: EDGE_PROFILE_LOOKUP_METHOD,
-            args: { order_name: orderLookupName(frm) },
-        }).then(response => {
+        // Frappe may return a jqXHR-like thenable rather than a native Promise.
+        // Normalize at this boundary before using native Promise.finally().
+        const request = Promise.resolve(
+            frappe.call({
+                method: EDGE_PROFILE_LOOKUP_METHOD,
+                args: { order_name: orderLookupName(frm) },
+            })
+        ).then(response => {
             if (!isCurrent()) return safeEdgeOptions(frm);
             return applySafeEdgeOptions(frm, (response && response.message) || {});
         }).catch(error => {
@@ -144,9 +148,11 @@
         const context = documentContext();
         const identity = context.capture(frm);
 
-        return frappe.call({
-            method: "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults",
-        }).then(r => {
+        return Promise.resolve(
+            frappe.call({
+                method: "almdina_erp.almdina_erp.services.order_defaults_service.get_order_defaults",
+            })
+        ).then(r => {
             if (!context.isCurrent(frm, identity)) return;
             const values = r.message || {};
             const updates = {};
