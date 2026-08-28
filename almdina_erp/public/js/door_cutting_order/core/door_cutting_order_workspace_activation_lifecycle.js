@@ -71,6 +71,24 @@
         }
     }
 
+    function initializeLoadedFeature(frm, fieldname) {
+        if (fieldname !== "cost_tab") return;
+
+        // Cost-only modules are evaluated after the form's original refresh hooks.
+        // Initialize their runtime owners explicitly before the first Cost state
+        // activation so the initial render already has secure print actions and
+        // their observers/presenter wrappers installed.
+        const financialDocuments = window.AlmdinaFinancialDocuments;
+        if (financialDocuments && typeof financialDocuments.apply === "function") {
+            financialDocuments.apply(frm);
+        }
+
+        const invoiceToolbar = window.AlmdinaCustomerInvoiceToolbarUX;
+        if (invoiceToolbar && typeof invoiceToolbar.install === "function") {
+            invoiceToolbar.install(frm);
+        }
+    }
+
     async function activate(frm, options = {}) {
         const owner = coordinator();
         if (!isOrderForm(frm) || !owner || typeof owner.activateCurrent !== "function") {
@@ -86,6 +104,7 @@
             // Keep the cached assets, but never activate stale workspace data.
             if (!activationStillCurrent(frm, identity, fieldname)) return [];
             reconcileLoadedFeature(frm);
+            initializeLoadedFeature(frm, fieldname);
         }
 
         return owner.activateCurrent(frm, options);
