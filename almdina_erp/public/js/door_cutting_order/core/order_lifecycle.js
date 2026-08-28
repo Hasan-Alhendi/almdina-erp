@@ -301,10 +301,12 @@
 
         const identity = contextApi.capture(frm);
         frm.__almdinaLifecycleContextPending = true;
-        const request = frappe.call({
-            method: "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context",
-            args: { order_name: frm.doc.name },
-        }).then(response => {
+        const request = Promise.resolve(
+            frappe.call({
+                method: "almdina_erp.almdina_erp.services.order_lifecycle_permission_service.get_order_lifecycle_context",
+                args: { order_name: frm.doc.name },
+            })
+        ).then(response => {
             if (!contextApi.isCurrent(frm, identity)) return frm.__almdina_lifecycle_context;
             const context = response.message || null;
             if (!context || context.order_name !== frm.doc.name) {
