@@ -15,7 +15,6 @@
                 `${ASSET_ROOT}/cutting_plan/secure_dxf_upload.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_ux.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_text_board_plan_ux.js`,
-                `${ASSET_ROOT}/cutting_plan/door_cutting_order_fast_save_ux.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_controls_ux.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_content_styles.js`,
                 `${ASSET_ROOT}/cutting_plan/door_cutting_order_plan_board_presenter.js`,
