@@ -35,6 +35,7 @@
             readyGlobals: Object.freeze([
                 "AlmdinaPlanWorkspacePresenterAdapter",
                 "AlmdinaCuttingPlanSurfaceBootstrap",
+                "AlmdinaPlanEditSessionUX",
                 "AlmdinaPlanFieldAccessAdapter",
             ]),
         }),
