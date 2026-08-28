@@ -10,6 +10,7 @@ COST_SESSION = PUBLIC / "costing" / "door_cutting_order_cost_edit_session_ux.js"
 PLAN_SESSION = PUBLIC / "cutting_plan" / "door_cutting_order_plan_edit_session_ux.js"
 PLAN_FIELD_ACCESS = PUBLIC / "cutting_plan" / "door_cutting_order_plan_field_access_adapter.js"
 MANIFEST = ROOT / "frontend_assets.py"
+REGISTRY = PUBLIC / "core" / "door_cutting_order_workspace_asset_registry.js"
 
 
 def source(path: Path) -> str:
@@ -23,47 +24,50 @@ def _dco_assets() -> str:
     )[0]
 
 
-def test_contextual_edit_action_preserves_final_plan_field_owner() -> None:
-    assets = _dco_assets()
-    coordinator = (
-        '"public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js"'
-    )
-    plan_session = (
-        '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js"'
-    )
-    plan_access = (
-        '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js"'
-    )
-    cost_session = (
-        '"public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js"'
-    )
+def _feature_assets(name: str) -> str:
+    registry = source(REGISTRY)
+    marker = f"{name}: Object.freeze({{"
+    section = registry.split(marker, 1)[1]
+    if name == "plan":
+        return section.split("cost: Object.freeze({", 1)[0]
+    return section.split("});\n\n    function descriptor", 1)[0]
 
-    assert assets.count(coordinator) == 1
-    assert assets.count(cost_session) == 1
-    assert assets.index(cost_session) < assets.index(plan_session)
-    assert assets.index(plan_session) < assets.index(coordinator)
-    assert assets.index(coordinator) < assets.index(plan_access)
-    # The tab-local coordinator owns visible edit affordances only. Preserve the
-    # established final PlanFieldAccessAdapter contract so no later layer can
-    # reopen retired/native Plan inputs.
-    assert assets.rstrip().endswith(plan_access + ",")
+
+def test_contextual_edit_action_preserves_final_plan_field_owner() -> None:
+    eager = _dco_assets()
+    plan = _feature_assets("plan")
+    cost = _feature_assets("cost")
+    coordinator = "door_cutting_order_page_edit_action_ux.js"
+    plan_session = "door_cutting_order_plan_edit_session_ux.js"
+    plan_access = "door_cutting_order_plan_field_access_adapter.js"
+    cost_session = "door_cutting_order_cost_edit_session_ux.js"
+
+    # The page-level affordance remains eager; workspace mutation owners remain
+    # tab-local and must not return to the DCO first-open critical path.
+    assert eager.count(coordinator) == 1
+    assert plan_session not in eager
+    assert plan_access not in eager
+    assert cost_session not in eager
+
+    assert plan.count(plan_session) == 1
+    assert plan.count(plan_access) == 1
+    assert plan.index(plan_session) < plan.index(plan_access)
+    assert cost.count(cost_session) == 1
+
+    # Preserve the established final PlanFieldAccessAdapter contract so no later
+    # Plan layer can reopen retired/native Plan inputs.
+    assert plan.rfind(plan_access) > plan.rfind("door_cutting_order_plan_settings_summary_ux.js")
 
 
 def test_financial_presenter_keeps_its_existing_owner_chain() -> None:
-    assets = _dco_assets()
-    permissions = (
-        '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
-    )
-    financial = (
-        '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
-    )
-    cost_session = (
-        '"public/js/door_cutting_order/costing/door_cutting_order_cost_edit_session_ux.js"'
-    )
+    cost = _feature_assets("cost")
+    permissions = "door_cutting_order_cost_permissions_ux.js"
+    financial = "door_cutting_order_financial_documents_ux.js"
+    cost_session = "door_cutting_order_cost_edit_session_ux.js"
 
-    # The existing financial-doc contract separately verifies exact adjacency.
-    # This feature only adds the cost edit-session after that protected chain.
-    assert assets.index(permissions) < assets.index(financial) < assets.index(cost_session)
+    # Cost presentation remains one ordered lazy feature bundle. The edit session
+    # still follows the protected permission + financial-document chain.
+    assert cost.index(permissions) < cost.index(financial) < cost.index(cost_session)
 
 
 def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:

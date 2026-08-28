@@ -12,6 +12,7 @@ INVOICE_TOOLBAR = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "d
 FINANCIAL_DOCUMENTS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
 HEADER_UX = ROOT / "public" / "js" / "door_cutting_order" / "responsive" / "door_cutting_order_header_ux.js"
 HOOKS = ROOT / "frontend_assets.py"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 
 
 def _source(path: Path) -> str:
@@ -133,18 +134,28 @@ def test_invoice_printing_uses_isolated_iframe_not_popup_window():
 
 def test_legacy_cost_invoice_is_deleted_and_secure_financial_layers_are_loaded():
     hooks = HOOKS.read_text(encoding="utf-8")
+    registry = REGISTRY.read_text(encoding="utf-8")
+    cost = registry.split("cost: Object.freeze({", 1)[1].split(
+        "});\n\n    function descriptor", 1
+    )[0]
     legacy_path = ROOT / "public" / "js" / "door_cutting_order_cost_invoice_ux.js"
     assert not legacy_path.exists()
 
-    legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
-    cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
-    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
-    toolbar = '"public/js/door_cutting_order/costing/door_cutting_order_customer_invoice_toolbar_ux.js"'
+    legacy = "door_cutting_order_cost_invoice_ux.js"
+    presenter = "door_cutting_order_document_print_presenter.js"
+    cost_permissions = "door_cutting_order_cost_permissions_ux.js"
+    financial = "door_cutting_order_financial_documents_ux.js"
+    toolbar = "door_cutting_order_customer_invoice_toolbar_ux.js"
     assert legacy not in hooks
-    for script in (presenter, cost_permissions, financial, toolbar):
-        assert script in hooks
-    assert hooks.index(presenter) < hooks.index(cost_permissions) < hooks.index(financial) < hooks.index(toolbar)
+    assert legacy not in registry
+
+    # The unified customer print presenter stays eager because measurements also
+    # use it. Cost-only financial surfaces are loaded together on Cost activation.
+    assert presenter in hooks
+    for script in (cost_permissions, financial, toolbar):
+        assert script not in hooks
+        assert script in cost
+    assert cost.index(cost_permissions) < cost.index(financial) < cost.index(toolbar)
 
     # The financial layer delegates customer invoices to the canonical unified
     # document presenter instead of maintaining a second print renderer.

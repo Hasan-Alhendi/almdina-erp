@@ -7,6 +7,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS_PATH = ROOT / "hooks.py"
+REGISTRY_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 PRESENTER_PATH = (
     ROOT
     / "public"
@@ -61,6 +69,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
     def test_one_presenter_owns_both_customer_prints_with_shared_theme(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
+        registry = REGISTRY_PATH.read_text(encoding="utf-8")
 
         shape = scripts.index(
             "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"
@@ -71,13 +80,14 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         presenter = scripts.index(
             "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
         )
-        documents = scripts.index(
-            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js"
-        )
 
         self.assertLess(shape, theme)
         self.assertLess(theme, presenter)
-        self.assertLess(presenter, documents)
+        self.assertNotIn(
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
+            scripts,
+        )
+        self.assertIn("door_cutting_order_multi_edge_documents_ux.js", registry)
         self.assertNotIn(
             "public/js/door_cutting_order_cost_invoice_ux.js",
             scripts,

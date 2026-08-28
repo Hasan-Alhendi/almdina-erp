@@ -7,6 +7,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "frontend_assets.py"
 PUBLIC_JS = ROOT / "public" / "js"
+REGISTRY = (
+    PUBLIC_JS
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 def _normalize_global_asset(path: str) -> str:
@@ -29,12 +35,21 @@ def test_door_cutting_order_dual_loads_are_an_explicit_small_allowlist():
         for path in manifest["doctype_js"]["Door Cutting Order"]
     }
 
+    # P2 removes heavy Plan modules from both global and form-eager ownership.
+    # Only the two established shared bootstrap compatibility assets remain dual.
     assert global_assets & order_assets == {
         "permission_context.js",
         "input_stability.js",
+    }
+
+    registry = REGISTRY.read_text(encoding="utf-8")
+    for lazy_plan_asset in (
         "door_cutting_order/cutting_plan/secure_dxf_export.js",
         "door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js",
-    }
+    ):
+        assert lazy_plan_asset not in global_assets
+        assert lazy_plan_asset not in order_assets
+        assert Path(lazy_plan_asset).name in registry
 
 
 def test_global_drawing_primitives_are_not_re_evaluated_by_doctype_js():
@@ -53,7 +68,7 @@ def test_global_drawing_primitives_are_not_re_evaluated_by_doctype_js():
     assert primitives.isdisjoint(order_assets)
 
 
-def test_feature_dual_loads_are_idempotent():
+def test_lazy_feature_reload_guards_remain_idempotent():
     secure_dxf = (
         PUBLIC_JS
         / "door_cutting_order"

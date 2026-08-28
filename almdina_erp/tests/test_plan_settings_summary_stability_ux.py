@@ -10,14 +10,24 @@ def source(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_plan_settings_summary_has_dedicated_owner_after_page_edit_coordinator() -> None:
+def test_plan_settings_summary_has_dedicated_lazy_owner_after_page_bootstrap() -> None:
     manifest = source("frontend_assets.py")
-    page_owner = "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js"
-    summary_owner = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_settings_summary_ux.js"
+    registry = source(
+        "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
+    )
+    page_owner = "door_cutting_order_page_edit_action_ux.js"
+    summary_owner = "door_cutting_order_plan_settings_summary_ux.js"
 
+    # The shared page edit affordance is available on first open. The Plan-only
+    # summary is intentionally initialized only when the Plan bundle activates.
     assert page_owner in manifest
-    assert summary_owner in manifest
-    assert manifest.index(page_owner) < manifest.index(summary_owner)
+    assert summary_owner not in manifest
+    plan = registry.split("plan: Object.freeze({", 1)[1].split(
+        "cost: Object.freeze({", 1
+    )[0]
+    assert summary_owner in plan
+    assert plan.index("door_cutting_order_plan_preview_edit_ux.js") < plan.index(summary_owner)
+    assert plan.index(summary_owner) < plan.index("door_cutting_order_plan_field_access_adapter.js")
 
 
 def test_readonly_summary_is_anchored_outside_plan_command_surface() -> None:

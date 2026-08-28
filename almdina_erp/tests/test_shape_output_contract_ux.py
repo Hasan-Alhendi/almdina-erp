@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "frontend_assets.py"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 CONTRACT = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_shape_output_contract.js"
 SHAPE_PRINT = ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_shape_print.js"
 EDITOR = ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
@@ -59,13 +60,12 @@ def test_shape_output_contract_is_pure_immutable_and_version_aware():
 
 def test_contract_loads_before_active_shape_output_consumers():
     hooks = _source(HOOKS)
+    registry = _source(REGISTRY)
     geometry = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"'
     contract = '"/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"'
-    secure_dxf = '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_export.js"'
-    assert hooks.index(geometry) < hooks.index(contract) < hooks.index(secure_dxf)
+    assert hooks.index(geometry) < hooks.index(contract)
 
-    consumers = (
-        '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"',
+    eager_consumers = (
         '"public/js/door_cutting_order/printing/door_cutting_order_shape_print.js"',
         '"public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js"',
         '"public/js/door_cutting_order/drawing/special_shape_facade.js"',
@@ -73,23 +73,36 @@ def test_contract_loads_before_active_shape_output_consumers():
         '"public/js/door_cutting_order/order_entry/measurements/door_cutting_order_measurement_actions_ux.js"',
         '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
     )
-    for consumer in consumers:
+    for consumer in eager_consumers:
         assert consumer in hooks
         assert hooks.index(contract) < hooks.index(consumer)
+
+    # Plan renderer and DXF export consume the same already-loaded global shape
+    # contract, but are intentionally withheld until the Plan tab activates.
+    plan = registry.split("plan: Object.freeze({", 1)[1].split(
+        "cost: Object.freeze({", 1
+    )[0]
+    for lazy_consumer in (
+        "door_cutting_order_cutting_plan_renderer.js",
+        "secure_dxf_export.js",
+    ):
+        assert lazy_consumer not in hooks
+        assert lazy_consumer in plan
+
     assert '"public/js/door_cutting_order_workflow.js"' not in hooks
     assert '"public/js/door_cutting_order_cost_invoice_ux.js"' not in hooks
 
 
 def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
     hooks = runpy.run_path(str(HOOKS))
+    registry = _source(REGISTRY)
     global_scripts = hooks["app_include_js"]
     form_scripts = hooks["doctype_js"]["Door Cutting Order"]
     geometry_global = "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
     contract_global = "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
     geometry_form = "public/js/door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js"
     contract_form = "public/js/door_cutting_order/drawing/door_cutting_order_shape_output_contract.js"
-    consumers = (
-        "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
+    eager_consumers = (
         "public/js/door_cutting_order/printing/door_cutting_order_shape_print.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js",
         "public/js/door_cutting_order/drawing/special_shape_facade.js",
@@ -102,8 +115,14 @@ def test_order_form_uses_global_shape_dependencies_without_re_evaluating_them():
     assert global_scripts.index(geometry_global) < global_scripts.index(contract_global)
     assert geometry_form not in form_scripts
     assert contract_form not in form_scripts
-    for consumer in consumers:
+    for consumer in eager_consumers:
         assert consumer in form_scripts
+
+    plan = registry.split("plan: Object.freeze({", 1)[1].split(
+        "cost: Object.freeze({", 1
+    )[0]
+    assert "door_cutting_order_cutting_plan_renderer.js" in plan
+    assert "door_cutting_order_cutting_plan_renderer.js" not in "\n".join(form_scripts)
 
 
 def test_special_shape_button_resolves_documentation_workspace_at_click_time():

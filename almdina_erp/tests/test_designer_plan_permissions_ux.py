@@ -22,6 +22,14 @@ DOCUMENT_CONTEXT = (
     / "door_cutting_order_document_context.js"
 )
 MANIFEST = ROOT / "frontend_assets.py"
+REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 def source(path: Path) -> str:
@@ -31,6 +39,13 @@ def source(path: Path) -> str:
 def _door_cutting_order_assets(manifest: str) -> str:
     return manifest.split('"Door Cutting Order": [', 1)[1].split(
         '],\n    "Edge Banding Type"', 1
+    )[0]
+
+
+def _plan_assets() -> str:
+    registry = source(REGISTRY)
+    return registry.split("plan: Object.freeze({", 1)[1].split(
+        "cost: Object.freeze({", 1
     )[0]
 
 
@@ -129,24 +144,24 @@ def test_approved_plan_can_be_revised_at_planning_without_unlocking_later_stages
     assert "ignore_permissions=True" not in legacy_recalculation
 
 
-def test_plan_field_status_adapter_is_the_final_dco_runtime_owner() -> None:
+def test_plan_field_status_adapter_is_the_final_lazy_plan_runtime_owner() -> None:
     manifest = source(MANIFEST)
     dco_assets = _door_cutting_order_assets(manifest)
+    plan_assets = _plan_assets()
+    adapter = "door_cutting_order_plan_field_access_adapter.js"
 
-    adapter = (
-        '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_field_access_adapter.js"'
-    )
-    revision = '"public/js/door_cutting_order/core/door_cutting_order_revision_ux.js"'
-    lifecycle = '"public/js/door_cutting_order/core/order_lifecycle.js"'
-    stability = '"public/js/input_stability.js"'
-    mobile = '"public/js/door_cutting_order/responsive/door_cutting_order_mobile_cards_ux.js"'
+    # P2 intentionally removes the focused field owner from first-open work.
+    assert adapter not in dco_assets
+    assert plan_assets.count(adapter) == 1
 
-    assert dco_assets.count(adapter) == 1
-    assert dco_assets.index(revision) < dco_assets.index(adapter)
-    assert dco_assets.index(lifecycle) < dco_assets.index(adapter)
-    assert dco_assets.index(stability) < dco_assets.index(adapter)
-    assert dco_assets.index(mobile) < dco_assets.index(adapter)
-    assert dco_assets.rstrip().endswith(adapter + ",")
+    # It remains the final Plan feature owner after all Plan edit/presentation
+    # modules, so no later lazy layer can reopen protected native fields.
+    for predecessor in (
+        "door_cutting_order_plan_edit_session_ux.js",
+        "door_cutting_order_plan_preview_edit_ux.js",
+        "door_cutting_order_plan_settings_summary_ux.js",
+    ):
+        assert plan_assets.index(predecessor) < plan_assets.index(adapter)
 
 
 def test_kerf_and_trim_follow_optimizer_command_not_order_save_checkpoint() -> None:
@@ -164,6 +179,7 @@ def test_secure_dxf_owner_is_private_unattached_and_form_scoped_before_plan_ui()
     manifest = source(MANIFEST)
     dco_assets = _door_cutting_order_assets(manifest)
     global_assets = manifest.split("app_include_js = [", 1)[1].split("]\n\ndoctype_js", 1)[0]
+    plan_assets = _plan_assets()
 
     config = uploader.split("new frappe.ui.FileUploader({", 1)[1].split(
         "on_success(file)", 1
@@ -180,12 +196,11 @@ def test_secure_dxf_owner_is_private_unattached_and_form_scoped_before_plan_ui()
     assert "__secureDxfUploadInstalled" in uploader
     assert 'frappe.almdina.upload_production_dxf = uploadProductionDxf' in uploader
 
-    global_secure = (
-        '"/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"'
-    )
-    form_secure = '"public/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"'
-    plan_ui = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js"'
+    global_secure = "/assets/almdina_erp/js/door_cutting_order/cutting_plan/secure_dxf_upload.js"
+    form_secure = "door_cutting_order/cutting_plan/secure_dxf_upload.js"
+    plan_ui = "door_cutting_order_plan_ux.js"
 
     assert global_secure not in global_assets
-    assert dco_assets.count(form_secure) == 1
-    assert dco_assets.index(form_secure) < dco_assets.index(plan_ui)
+    assert form_secure not in dco_assets
+    assert plan_assets.count("secure_dxf_upload.js") == 1
+    assert plan_assets.index("secure_dxf_upload.js") < plan_assets.index(plan_ui)

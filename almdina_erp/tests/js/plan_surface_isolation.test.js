@@ -103,37 +103,40 @@ function buildHarness({
                 },
             },
         },
-        require(asset) {
-            requiredAssets.push(asset);
-            if (asset.endsWith("door_cutting_order_cutting_plan_renderer.js")) {
-                fakeWindow.AlmdinaCuttingPlanRender = {};
-            } else if (asset.endsWith("door_cutting_order_plan_ux.js")) {
-                fakeWindow.AlmdinaDoorCuttingPlanUX = {
-                    refresh() {
-                        const render = () => {
-                            actions.html('<div class="dco-plan-actions-shell"><button class="dco-recalculate-plan">recalc</button></div>');
+        require(assetOrAssets) {
+            const assets = Array.isArray(assetOrAssets) ? assetOrAssets : [assetOrAssets];
+            requiredAssets.push(...assets);
+            assets.forEach(asset => {
+                if (asset.endsWith("door_cutting_order_cutting_plan_renderer.js")) {
+                    fakeWindow.AlmdinaCuttingPlanRender = {};
+                } else if (asset.endsWith("door_cutting_order_plan_ux.js")) {
+                    fakeWindow.AlmdinaDoorCuttingPlanUX = {
+                        refresh() {
+                            const render = () => {
+                                actions.html('<div class="dco-plan-actions-shell"><button class="dco-recalculate-plan">recalc</button></div>');
+                                return true;
+                            };
+                            return asyncPresenter ? Promise.resolve().then(render) : render();
+                        },
+                    };
+                } else if (asset.endsWith("door_cutting_order_plan_controls_ux.js")) {
+                    fakeWindow.AlmdinaPlanControlsUX = { apply() {} };
+                } else if (asset.endsWith("door_cutting_order_plan_tabs_ux.js")) {
+                    fakeWindow.AlmdinaPlanTabsUX = {
+                        afterRender() {
+                            layout.html('<div class="dco-plan-tabs"><div class="dco-plan-tab-content">PLAN</div></div>');
                             return true;
-                        };
-                        return asyncPresenter ? Promise.resolve().then(render) : render();
-                    },
-                };
-            } else if (asset.endsWith("door_cutting_order_plan_controls_ux.js")) {
-                fakeWindow.AlmdinaPlanControlsUX = { apply() {} };
-            } else if (asset.endsWith("door_cutting_order_plan_tabs_ux.js")) {
-                fakeWindow.AlmdinaPlanTabsUX = {
-                    afterRender() {
-                        layout.html('<div class="dco-plan-tabs"><div class="dco-plan-tab-content">PLAN</div></div>');
-                        return true;
-                    },
-                };
-            } else if (asset.endsWith("door_cutting_order_plan_content_ux.js")) {
-                fakeWindow.AlmdinaPlanContentUX = {
-                    apply() {},
-                    isReady() {
-                        return layout.attr("data-almdina-order") === frm.doc.name;
-                    },
-                };
-            }
+                        },
+                    };
+                } else if (asset.endsWith("door_cutting_order_plan_content_ux.js")) {
+                    fakeWindow.AlmdinaPlanContentUX = {
+                        apply() {},
+                        isReady() {
+                            return layout.attr("data-almdina-order") === frm.doc.name;
+                        },
+                    };
+                }
+            });
             return Promise.resolve();
         },
     };

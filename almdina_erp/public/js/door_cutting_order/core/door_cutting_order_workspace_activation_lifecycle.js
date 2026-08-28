@@ -11,6 +11,10 @@
         return window.AlmdinaWorkspaceSyncCoordinator || null;
     }
 
+    function assetRegistry() {
+        return window.AlmdinaDcoWorkspaceAssetRegistry || null;
+    }
+
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
     }
@@ -24,18 +28,86 @@
         return wrapper && (wrapper.nodeType ? wrapper : wrapper[0]);
     }
 
+    function currentTabFieldname(frm) {
+        return String(
+            frm
+            && frm.layout
+            && frm.layout.current_tab
+            && frm.layout.current_tab.df
+            && frm.layout.current_tab.df.fieldname
+            || ""
+        );
+    }
+
     function activationFields() {
+        const registry = assetRegistry();
+        if (registry && typeof registry.activationFields === "function") {
+            return new Set(registry.activationFields());
+        }
         const owner = coordinator();
         if (!owner || typeof owner.activationFields !== "function") return new Set();
         return new Set(owner.activationFields());
     }
 
-    function activate(frm, options = {}) {
+    function capture(frm) {
+        const context = documentContext();
+        if (context && typeof context.capture === "function") return context.capture(frm);
+        return null;
+    }
+
+    function activationStillCurrent(frm, identity, fieldname) {
+        if (!isOrderForm(frm) || currentTabFieldname(frm) !== fieldname) return false;
+        const context = documentContext();
+        if (identity && context && typeof context.isCurrent === "function") {
+            return context.isCurrent(frm, identity);
+        }
+        return window.cur_frm === frm;
+    }
+
+    function reconcileLoadedFeature(frm) {
+        const permissionOwner = window.AlmdinaOrderPermissionRefreshUX;
+        if (permissionOwner && typeof permissionOwner.applySurfaces === "function") {
+            permissionOwner.applySurfaces(frm);
+        }
+    }
+
+    function initializeLoadedFeature(frm, fieldname) {
+        if (fieldname !== "cost_tab") return;
+
+        // Cost-only modules are evaluated after the form's original refresh hooks.
+        // Initialize their runtime owners explicitly before the first Cost state
+        // activation so the initial render already has secure print actions and
+        // their observers/presenter wrappers installed.
+        const financialDocuments = window.AlmdinaFinancialDocuments;
+        if (financialDocuments && typeof financialDocuments.apply === "function") {
+            financialDocuments.apply(frm);
+        }
+
+        const invoiceToolbar = window.AlmdinaCustomerInvoiceToolbarUX;
+        if (invoiceToolbar && typeof invoiceToolbar.install === "function") {
+            invoiceToolbar.install(frm);
+        }
+    }
+
+    async function activate(frm, options = {}) {
         const owner = coordinator();
         if (!isOrderForm(frm) || !owner || typeof owner.activateCurrent !== "function") {
-            return Promise.resolve([]);
+            return [];
         }
-        return Promise.resolve(owner.activateCurrent(frm, options));
+
+        const fieldname = currentTabFieldname(frm);
+        const identity = capture(frm);
+        const registry = assetRegistry();
+        if (registry && typeof registry.ensureForTab === "function") {
+            await registry.ensureForTab(fieldname);
+            // Downloading a feature may outlive the tab click or even the document.
+            // Keep the cached assets, but never activate stale workspace data.
+            if (!activationStillCurrent(frm, identity, fieldname)) return [];
+            reconcileLoadedFeature(frm);
+            initializeLoadedFeature(frm, fieldname);
+        }
+
+        return owner.activateCurrent(frm, options);
     }
 
     function schedule(frm, options = {}) {
@@ -82,8 +154,7 @@
             if (!fieldname || !activationFields().has(fieldname)) return;
 
             // Frappe updates layout.current_tab as part of the same click. Schedule
-            // the derived workspace read on the next frame so activation observes
-            // the final tab identity and never races the native tab transition.
+            // feature loading on the next frame so it observes the final tab identity.
             schedule(frm);
         };
 
