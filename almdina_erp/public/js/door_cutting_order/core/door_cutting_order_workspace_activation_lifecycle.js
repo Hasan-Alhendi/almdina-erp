@@ -64,10 +64,20 @@
         return window.cur_frm === frm;
     }
 
-    function reconcileLoadedFeature(frm) {
+    function reconcileLoadedFeature(frm, fieldname) {
         const permissionOwner = window.AlmdinaOrderPermissionRefreshUX;
         if (permissionOwner && typeof permissionOwner.applySurfaces === "function") {
             permissionOwner.applySurfaces(frm);
+        }
+
+        if (fieldname === "results_tab") {
+            // The page-level edit toolbar is eager, while the Plan edit-session API
+            // is lazy. Re-evaluate the toolbar immediately after the Plan bundle
+            // becomes ready so a first visit cannot retain the pre-load disabled state.
+            const editActions = window.AlmdinaPageEditActionUX;
+            if (editActions && typeof editActions.sync === "function") {
+                editActions.sync(frm);
+            }
         }
     }
 
@@ -103,7 +113,7 @@
             // Downloading a feature may outlive the tab click or even the document.
             // Keep the cached assets, but never activate stale workspace data.
             if (!activationStillCurrent(frm, identity, fieldname)) return [];
-            reconcileLoadedFeature(frm);
+            reconcileLoadedFeature(frm, fieldname);
             initializeLoadedFeature(frm, fieldname);
         }
 
