@@ -74,6 +74,16 @@ function deferred() {
                 return Promise.resolve(false);
             },
         },
+        AlmdinaPageEditActionUX: {
+            sync() {
+                assert.ok(
+                    fakeWindow.AlmdinaPlanEditSessionUX,
+                    "Plan toolbar sync must run only after the lazy edit-session API exists"
+                );
+                order.push("edit:sync");
+                return true;
+            },
+        },
         AlmdinaWorkspaceSyncCoordinator: {
             activationFields() {
                 return ["results_tab", "cost_tab"];
@@ -117,9 +127,21 @@ function deferred() {
     await Promise.resolve();
     assert.deepEqual(order, ["assets:results_tab"], "Plan data must wait for its UI bundle");
 
+    // Simulate the Plan edit-session global appearing when the cold lazy bundle
+    // finishes evaluating. The eager page toolbar must then be re-evaluated before
+    // normal Plan workspace activation continues.
+    fakeWindow.AlmdinaPlanEditSessionUX = {
+        canEditPlanSettings() {
+            return true;
+        },
+    };
     planAssets.resolve(true);
     assert.deepEqual(await activation, ["plan"]);
-    assert.deepEqual(order, ["assets:results_tab", "workspace:activate"]);
+    assert.deepEqual(order, [
+        "assets:results_tab",
+        "edit:sync",
+        "workspace:activate",
+    ]);
 
     // A Cost bundle is evaluated after the form's initial Frappe refresh hooks.
     // Its secure financial actions therefore need an explicit first-activation
@@ -175,7 +197,7 @@ function deferred() {
     frm.layout.current_tab.df.fieldname = "order_tab";
     staleAssets.resolve(true);
     assert.deepEqual(Array.from(await staleActivation), []);
-    assert.deepEqual(order, ["assets:results_tab"], "stale tab must not start a Plan RPC");
+    assert.deepEqual(order, ["assets:results_tab"], "stale tab must not start a Plan RPC or toolbar sync");
 
     assert.ok(formHooks.some(entry => entry.doctype === "Door Cutting Order"));
     console.log("DCO workspace asset activation simulation passed");

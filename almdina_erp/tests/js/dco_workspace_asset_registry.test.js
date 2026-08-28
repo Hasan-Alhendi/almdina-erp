@@ -79,11 +79,21 @@ class CustomEvent {
     assert.ok(calls[0].length > 10, "Plan bundle should batch its presentation modules");
     assert.ok(calls[0].every(asset => asset.includes("/cutting_plan/")));
     assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_surface_bootstrap.js")));
+    assert.ok(calls[0].some(asset => asset.endsWith("door_cutting_order_plan_edit_session_ux.js")));
     assert.ok(calls[0].some(asset => asset.endsWith("secure_dxf_export.js")));
 
     fakeWindow.AlmdinaPlanWorkspacePresenterAdapter = {};
     fakeWindow.AlmdinaCuttingPlanSurfaceBootstrap = {};
     fakeWindow.AlmdinaPlanFieldAccessAdapter = {};
+    assert.equal(
+        registry.isLoaded("plan"),
+        false,
+        "Plan readiness must not settle before the lazy edit-session API exists"
+    );
+
+    // The edit-session module is part of the same cold Plan bundle. A Plan feature
+    // becomes ready only after that module has evaluated as well.
+    fakeWindow.AlmdinaPlanEditSessionUX = {};
     flights[0].resolve(calls[0]);
     assert.equal(await planOne, true);
     assert.equal(await registry.ensure("plan"), true);
