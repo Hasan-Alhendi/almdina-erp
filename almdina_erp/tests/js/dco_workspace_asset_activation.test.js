@@ -78,9 +78,10 @@ function deferred() {
             activationFields() {
                 return ["results_tab", "cost_tab"];
             },
-            activateCurrent() {
+            activateCurrent(currentForm) {
                 order.push("workspace:activate");
-                return Promise.resolve(["plan"]);
+                const fieldname = currentForm.layout.current_tab.df.fieldname;
+                return Promise.resolve([fieldname === "cost_tab" ? "cost" : "plan"]);
             },
         },
     };
@@ -119,6 +120,46 @@ function deferred() {
     planAssets.resolve(true);
     assert.deepEqual(await activation, ["plan"]);
     assert.deepEqual(order, ["assets:results_tab", "workspace:activate"]);
+
+    // A Cost bundle is evaluated after the form's initial Frappe refresh hooks.
+    // Its secure financial actions therefore need an explicit first-activation
+    // initialization before the Cost state/presenter starts rendering.
+    order.length = 0;
+    const costAssets = deferred();
+    fakeWindow.AlmdinaDcoWorkspaceAssetRegistry.ensureForTab = fieldname => {
+        order.push(`assets:${fieldname}`);
+        return costAssets.promise;
+    };
+    fakeWindow.AlmdinaOrderPermissionRefreshUX = {
+        applySurfaces() {
+            order.push("surfaces:apply");
+        },
+    };
+    frm.layout.current_tab.df.fieldname = "cost_tab";
+    const costActivation = lifecycle.activate(frm);
+    await Promise.resolve();
+    assert.deepEqual(order, ["assets:cost_tab"]);
+
+    // Simulate the globals appearing only when the cold bundle finishes evaluating.
+    fakeWindow.AlmdinaFinancialDocuments = {
+        apply() {
+            order.push("financial:apply");
+        },
+    };
+    fakeWindow.AlmdinaCustomerInvoiceToolbarUX = {
+        install() {
+            order.push("invoice:install");
+        },
+    };
+    costAssets.resolve(true);
+    assert.deepEqual(await costActivation, ["cost"]);
+    assert.deepEqual(order, [
+        "assets:cost_tab",
+        "surfaces:apply",
+        "financial:apply",
+        "invoice:install",
+        "workspace:activate",
+    ]);
 
     // If the user switches tabs while a cold bundle is downloading, keep the
     // downloaded files cached but reject the stale workspace activation.
