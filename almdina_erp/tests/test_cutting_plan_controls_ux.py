@@ -54,12 +54,15 @@ def test_duplicate_algorithm_palette_is_removed_and_simple_controls_load_last():
     assert "door_cutting_order_algorithm_palette_ux.js" not in hooks
     assert "door_cutting_order_algorithm_palette_ux.js" not in registry
 
-    # P2 keeps the whole presentation chain lazy. Preserve its established
-    # dependency order inside the Plan feature bundle instead of the form manifest.
-    for asset in (plan, text_board, fast_save, controls):
+    # The persistence/staleness tracker must observe measurement changes before
+    # the first Plan visit. Keep it eager, while the actual Plan presentation
+    # chain remains lazy and preserves its established dependency order.
+    assert fast_save in hooks
+    assert fast_save not in registry
+    for asset in (plan, text_board, controls):
         assert asset in registry
         assert asset not in hooks
-    assert registry.index(plan) < registry.index(text_board) < registry.index(fast_save) < registry.index(controls)
+    assert registry.index(plan) < registry.index(text_board) < registry.index(controls)
 
 
 def test_simple_controls_keep_only_current_settings_recalculation_action():
