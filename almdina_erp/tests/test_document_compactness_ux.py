@@ -7,6 +7,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS_PATH = ROOT / "hooks.py"
+REGISTRY_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 POLICY_PATH = (
     ROOT
     / "public"
@@ -18,9 +26,10 @@ POLICY_PATH = (
 
 
 class TestDocumentCompactnessUX(unittest.TestCase):
-    def test_policy_loads_after_print_and_cost_presenters(self) -> None:
+    def test_policy_loads_after_print_presenter_and_before_lazy_cost_documents(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
+        registry = REGISTRY_PATH.read_text(encoding="utf-8")
 
         theme = scripts.index(
             "public/js/door_cutting_order/printing/door_cutting_order_document_print_theme.js"
@@ -28,16 +37,17 @@ class TestDocumentCompactnessUX(unittest.TestCase):
         presenter = scripts.index(
             "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
         )
-        documents = scripts.index(
-            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js"
-        )
         compactness = scripts.index(
             "public/js/door_cutting_order/printing/door_cutting_order_document_compactness_ux.js"
         )
 
         self.assertLess(theme, presenter)
-        self.assertLess(presenter, documents)
-        self.assertLess(documents, compactness)
+        self.assertLess(presenter, compactness)
+        self.assertNotIn(
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
+            scripts,
+        )
+        self.assertIn("door_cutting_order_multi_edge_documents_ux.js", registry)
 
     def test_customer_header_hides_duplicate_financial_strip(self) -> None:
         source = POLICY_PATH.read_text(encoding="utf-8")

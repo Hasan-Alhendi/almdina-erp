@@ -13,6 +13,14 @@ VISUAL = (
     / "door_cutting_order_plan_cost_workspace_visual_ux.js"
 )
 MANIFEST = ROOT / "frontend_assets.py"
+REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 def source(path: Path) -> str:
@@ -26,8 +34,9 @@ def dco_assets() -> str:
     )[0]
 
 
-def test_a53_visual_layer_loads_after_edit_coordinator_before_final_field_owner() -> None:
+def test_a53_visual_layer_loads_after_edit_coordinator_before_lazy_plan_field_owner() -> None:
     assets = dco_assets()
+    registry = source(REGISTRY)
     visual = (
         '"public/js/door_cutting_order/core/'
         'door_cutting_order_plan_cost_workspace_visual_ux.js"'
@@ -35,14 +44,23 @@ def test_a53_visual_layer_loads_after_edit_coordinator_before_final_field_owner(
     coordinator = (
         '"public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js"'
     )
-    field_owner = (
-        '"public/js/door_cutting_order/cutting_plan/'
-        'door_cutting_order_plan_field_access_adapter.js"'
-    )
+    field_owner = "door_cutting_order_plan_field_access_adapter.js"
 
+    # A5.3 remains an eager, transport-free document visual decorator and still
+    # follows the page edit coordinator on the first-open path.
     assert assets.count(visual) == 1
-    assert assets.index(coordinator) < assets.index(visual) < assets.index(field_owner)
-    assert assets.rstrip().endswith(field_owner + ",")
+    assert assets.index(coordinator) < assets.index(visual)
+
+    # The final Plan field-access owner is deliberately lazy in P2. It must not
+    # return to the critical path, and it remains the final Plan feature asset.
+    assert field_owner not in assets
+    assert registry.count(field_owner) == 1
+    plan_bundle = registry.split("plan: Object.freeze({", 1)[1].split(
+        "cost: Object.freeze({", 1
+    )[0]
+    assert plan_bundle.rfind(field_owner) > plan_bundle.rfind(
+        "door_cutting_order_plan_settings_summary_ux.js"
+    )
 
 
 def test_a53_visual_layer_is_snapshot_only_and_transport_free() -> None:

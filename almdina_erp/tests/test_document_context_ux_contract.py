@@ -14,6 +14,14 @@ DOCUMENT_CONTEXT = (
     / "core"
     / "door_cutting_order_document_context.js"
 )
+WORKSPACE_ASSET_REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 DEFAULTS = (
     ROOT
     / "public"
@@ -68,18 +76,39 @@ CUTTING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
 class TestDocumentContextUxContract(unittest.TestCase):
     def test_document_context_loads_before_every_active_order_feature(self) -> None:
         manifest = MANIFEST.read_text(encoding="utf-8")
+        registry = WORKSPACE_ASSET_REGISTRY.read_text(encoding="utf-8")
         context = '"public/js/door_cutting_order/core/door_cutting_order_document_context.js"'
 
         self.assertIn(context, manifest)
         for feature in (
             '"public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js"',
             '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"',
-            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
             '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
             '"public/js/door_cutting_order/core/order_lifecycle.js"',
             '"public/js/input_stability.js"',
         ):
             self.assertLess(manifest.index(context), manifest.index(feature))
+
+        # Heavy Plan UI is active product code but no longer part of the first-open
+        # form manifest. The eager document context and feature registry establish
+        # lifecycle ownership before the Plan bundle can ever be activated.
+        drawing_plan = "door_cutting_order_drawing_plan_ux.js"
+        self.assertIn(drawing_plan, registry)
+        self.assertNotIn(drawing_plan, manifest)
+        self.assertLess(
+            manifest.index(context),
+            manifest.index(
+                '"public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"'
+            ),
+        )
+        self.assertLess(
+            manifest.index(
+                '"public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"'
+            ),
+            manifest.index(
+                '"public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js"'
+            ),
+        )
 
         # The context owns the surface-readiness registry that the permission
         # bundle registers into.

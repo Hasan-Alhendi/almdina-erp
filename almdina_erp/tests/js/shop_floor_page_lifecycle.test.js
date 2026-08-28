@@ -94,6 +94,7 @@ function createHarness() {
         context: queue(),
         inbox: queue(),
         archive: queue(),
+        ready: queue(),
         handoffContext: queue(),
         handoff: queue(),
         logout: queue(),
@@ -173,6 +174,7 @@ function createHarness() {
             getSessionContext: () => queues.context.call(),
             getInbox: () => queues.inbox.call(),
             getArchive: () => queues.archive.call(),
+            getReadyForDelivery: () => queues.ready.call(),
             getHandoffContext: () => queues.handoffContext.call(),
             handoffStage: () => queues.handoff.call(),
             logout: () => queues.logout.call(),
@@ -302,16 +304,27 @@ async function flush() {
     await new Promise(resolve => setImmediate(resolve));
 }
 
-async function resolveBoardRefresh(harness, context = {}, rows = [], archiveRows = []) {
+async function resolveBoardRefresh(harness, context = {}, rows = [], archiveRows = [], readyRows = []) {
     const contextRequest = harness.queues.context.pending();
     assert.ok(contextRequest, "a current activation must own one context request");
     contextRequest.resolve(context);
     await flush();
+
     const inboxRequest = harness.queues.inbox.pending();
-    const archiveRequest = harness.queues.archive.pending();
-    assert.ok(inboxRequest && archiveRequest, "the current context must start one inbox/archive batch");
+    assert.ok(inboxRequest, "the current context must start one inbox request");
     inboxRequest.resolve(rows);
-    archiveRequest.resolve(archiveRows);
+
+    if (context.can_view_history === true) {
+        const archiveRequest = harness.queues.archive.pending();
+        assert.ok(archiveRequest, "history capability must start one archive request");
+        archiveRequest.resolve(archiveRows);
+    }
+
+    if (context.capabilities && context.capabilities.mark_delivered === true) {
+        const readyRequest = harness.queues.ready.pending();
+        assert.ok(readyRequest, "delivery capability must start one ready-for-delivery request");
+        readyRequest.resolve(readyRows);
+    }
     await flush();
 }
 
@@ -333,7 +346,6 @@ async function testReadInvalidationAndFreshRevisit() {
     assert.equal(harness.queues.inbox.requests.length, 1);
     harness.hide();
     harness.queues.inbox.requests[0].resolve([{ id: "A" }]);
-    harness.queues.archive.requests[0].resolve([]);
     await flush();
     assert.equal(harness.renders.board.length, 0, "list work from an inactive visit must not render");
 
@@ -354,6 +366,35 @@ async function testMountWhileInactiveWaitsForCurrentShow() {
     await resolveBoardRefresh(harness, { visit: "first-current-show" }, [{ id: "fresh" }], []);
     assert.equal(harness.renders.board.length, 1);
     assert.equal(harness.renders.loading, 0, "the preserved bootstrap surface owns loading until the first current render");
+}
+
+async function testHistoryAndDeliveryReadsFollowCapabilities() {
+    const deliveryHarness = createHarness();
+    deliveryHarness.controller.mount(deliveryHarness.wrapper, { page: deliveryHarness.wrapper.page });
+    await resolveBoardRefresh(
+        deliveryHarness,
+        { can_view_history: false, capabilities: { mark_delivered: true } },
+        [],
+        [],
+        [{ id: "ready" }]
+    );
+    assert.equal(deliveryHarness.queues.archive.requests.length, 0, "history must not be requested without its capability");
+    assert.equal(deliveryHarness.queues.ready.requests.length, 1, "delivery-ready data remains independently operational");
+    assert.equal(deliveryHarness.renders.board.at(-1).model.snapshot.archiveRows.length, 0);
+    assert.equal(deliveryHarness.renders.board.at(-1).model.snapshot.readyRows.length, 1);
+
+    const historyHarness = createHarness();
+    historyHarness.controller.mount(historyHarness.wrapper, { page: historyHarness.wrapper.page });
+    await resolveBoardRefresh(
+        historyHarness,
+        { can_view_history: true, capabilities: { mark_delivered: false } },
+        [],
+        [{ id: "history" }],
+        []
+    );
+    assert.equal(historyHarness.queues.archive.requests.length, 1, "history capability must request the archive");
+    assert.equal(historyHarness.queues.ready.requests.length, 0, "history alone must not request delivery-ready data");
+    assert.equal(historyHarness.renders.board.at(-1).model.snapshot.archiveRows.length, 1);
 }
 
 async function testMutationCompletionAndGenerationReconciliation() {
@@ -435,7 +476,6 @@ async function testInteractionStateAndAccountModeSurviveRevisit() {
     harness.actions().setMode("inbox");
     await flush();
     harness.queues.inbox.pending().resolve([{ id: "inbox" }]);
-    harness.queues.archive.pending().resolve([]);
     await flush();
     harness.hide();
     harness.show();
@@ -445,7 +485,6 @@ async function testInteractionStateAndAccountModeSurviveRevisit() {
     harness.actions().setMode("board");
     await flush();
     harness.queues.inbox.pending().resolve([]);
-    harness.queues.archive.pending().resolve([]);
     await flush();
     const board = harness.renders.board.at(-1);
     assert.equal(board.search, "door 42");
@@ -505,6 +544,7 @@ async function testLogoutConfirmationRemainsPageOwned() {
 (async () => {
     await testReadInvalidationAndFreshRevisit();
     await testMountWhileInactiveWaitsForCurrentShow();
+    await testHistoryAndDeliveryReadsFollowCapabilities();
     await testMutationCompletionAndGenerationReconciliation();
     await testHandoffReadAndTransientChildInvalidation();
     await testInteractionStateAndAccountModeSurviveRevisit();

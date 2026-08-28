@@ -66,6 +66,7 @@ class StatefulFactoryRepository:
                     Capability.UPLOAD_DXF,
                     Capability.START_ASSIGNED_STAGE,
                     Capability.HANDOFF_ASSIGNED_STAGE,
+                    Capability.VIEW_SHOP_FLOOR_HISTORY,
                 },
             },
             "cnc@example.com": {
@@ -75,6 +76,7 @@ class StatefulFactoryRepository:
                     Capability.VIEW_CUTTING_PLAN,
                     Capability.START_ASSIGNED_STAGE,
                     Capability.HANDOFF_ASSIGNED_STAGE,
+                    Capability.VIEW_SHOP_FLOOR_HISTORY,
                 },
             },
             "edge@example.com": {
@@ -83,6 +85,7 @@ class StatefulFactoryRepository:
                     Capability.VIEW_ORDERS,
                     Capability.START_ASSIGNED_STAGE,
                     Capability.HANDOFF_ASSIGNED_STAGE,
+                    Capability.VIEW_SHOP_FLOOR_HISTORY,
                 },
             },
             "financial@example.com": {
@@ -128,7 +131,19 @@ class StatefulFactoryRepository:
         return tuple(self._profile(user)["roles"])
 
     def is_admin(self, user: str | None = None) -> bool:
-        return (user or self.actor) == "Administrator"
+        actor = user or self.actor
+        if actor == "Administrator":
+            return True
+        capabilities = set(self._profile(actor)["capabilities"])
+        return bool(
+            capabilities.intersection(
+                {
+                    Capability.REASSIGN_WORKER,
+                    Capability.REVERT_DEPARTMENT,
+                    Capability.MARK_DELIVERED,
+                }
+            )
+        )
 
     def session_identity(self) -> dict[str, Any]:
         return {"user": self.actor, "full_name": self.actor, "roles": list(self.actor_roles())}
@@ -474,15 +489,22 @@ class TestStage14EndToEndRegression(unittest.TestCase):
         self.assertTrue(final["ready_for_delivery"])
         self.assertEqual(repository.orders["DCO-E2E-1"].status, "Ready for Delivery")
         self.assertEqual(queries.get_my_inbox(repository), [])
-        self.assertEqual(
-            [row["name"] for row in queries.get_my_archive(repository)], [edge_stage]
-        )
+        self.assertEqual(queries.get_my_archive(repository), [])
 
         repository.as_actor("supervisor@example.com")
+        self.assertEqual(
+            [row["name"] for row in queries.get_ready_for_delivery(repository)],
+            [edge_stage],
+        )
         commands.mark_delivered(repository, "DCO-E2E-1")
         self.assertEqual(repository.orders["DCO-E2E-1"].status, "Delivered")
         self.assertEqual(
             [event[1] for event in repository.events].count("Finish"), 3
+        )
+
+        repository.as_actor("edge@example.com")
+        self.assertEqual(
+            [row["name"] for row in queries.get_my_archive(repository)], [edge_stage]
         )
 
     def test_finance_permission_admin_and_system_manager_cannot_enter_production_by_role_name(self) -> None:

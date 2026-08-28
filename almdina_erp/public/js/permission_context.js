@@ -2,8 +2,8 @@
     "use strict";
 
     // Registered from both entry points: this file ships in `app_include_js`
-    // (before the document context exists) and again in the order's `doctype_js`
-    // bundle, where the document context is available.
+    // before the document context exists and again in the DCO DocType bundle,
+    // where the document context can own protected-surface recovery.
     function registerProtectedModuleSurface(api) {
         const documentContext = window.AlmdinaDocumentContext;
         if (
@@ -23,10 +23,6 @@
 
     if (window.AlmdinaPermissions) {
         registerProtectedModuleSurface(window.AlmdinaPermissions);
-        // This source is present in both the Desk bundle and the DocType bundle.
-        // The form-level permission owner refreshes the matrix exactly once.
-        // Re-running it here used to emit a second update event and repaint the
-        // complete order page after it was already visible.
         return;
     }
 
@@ -64,22 +60,13 @@
         delete_edge_banding_types: "delete",
     });
 
-    // Protected form modules normally arrive through Frappe's DocType source
-    // bundle. Keep this compatibility loader for the permission/security layer.
-    const ORDER_MODULES = Object.freeze([
-        Object.freeze({ global: "AlmdinaOrderCostUX" }),
-        Object.freeze({ global: "AlmdinaOrderPermissionRefreshUX" }),
-        Object.freeze({ global: "AlmdinaOrderTabPermissionsUX" }),
-        Object.freeze({ global: "AlmdinaCustomerInvoiceToolbarUX" }),
+    // Only security/navigation owners belong to the protected DCO bootstrap.
+    // Plan and Cost presentation are feature assets and are loaded exclusively
+    // by AlmdinaDcoWorkspaceAssetRegistry when their tabs become active.
+    const ORDER_CORE_GLOBALS = Object.freeze([
+        "AlmdinaOrderPermissionRefreshUX",
+        "AlmdinaOrderTabPermissionsUX",
     ]);
-
-    // Cutting-plan presentation is intentionally loaded independently from the
-    // cost/financial chain. A failure or delay in an unrelated protected module
-    // must never leave an authorized cutting-plan surface empty.
-    const PLAN_SURFACE_MODULE = Object.freeze({
-        global: "AlmdinaCuttingPlanSurfaceBootstrap",
-        asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js",
-    });
 
     function normalizeNavigation(raw) {
         if (!raw || typeof raw !== "object") return EMPTY_NAVIGATION;
@@ -156,8 +143,6 @@
 
     let context = normalize(frappe.boot && frappe.boot.almdina_permissions);
     let refreshPromise = null;
-    let modulesPromise = null;
-    let planSurfacePromise = null;
 
     function emitUpdatedContext() {
         window.dispatchEvent(
@@ -190,40 +175,8 @@
         return refreshPromise;
     }
 
-    function globalExists(name) {
-        return Boolean(name && window[name]);
-    }
-
-    function waitForGlobal(name, timeoutMs = 12000) {
-        if (globalExists(name)) return Promise.resolve(window[name]);
-        return new Promise((resolve, reject) => {
-            const started = Date.now();
-            const timer = window.setInterval(() => {
-                if (globalExists(name)) {
-                    window.clearInterval(timer);
-                    resolve(window[name]);
-                    return;
-                }
-                if (Date.now() - started >= timeoutMs) {
-                    window.clearInterval(timer);
-                    reject(new Error(`Timed out loading ${name}`));
-                }
-            }, 50);
-        });
-    }
-
-    function requireModule(module) {
-        if (globalExists(module.global)) return Promise.resolve(window[module.global]);
-        if (module.asset && window.frappe && typeof frappe.require === "function") {
-            return Promise.resolve(frappe.require(module.asset))
-                .then(() => {
-                    if (!globalExists(module.global)) {
-                        throw new Error(`Module did not initialize: ${module.global}`);
-                    }
-                    return window[module.global];
-                });
-        }
-        return waitForGlobal(module.global);
+    function orderModulesLoaded() {
+        return ORDER_CORE_GLOBALS.every(name => Boolean(window[name]));
     }
 
     function recoverCurrentOrderSurface() {
@@ -240,71 +193,14 @@
         return Promise.resolve(recovery.refreshPermissions(frm));
     }
 
-    function loadPlanSurfaceModule() {
-        if (
-            !window.cur_frm
-            || window.cur_frm.doctype !== "Door Cutting Order"
-            || !window.frappe
-            || typeof frappe.require !== "function"
-        ) {
+    function ensureOrderModules() {
+        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
             return Promise.resolve(false);
         }
-        if (planSurfacePromise) return planSurfacePromise;
-
-        planSurfacePromise = requireModule(PLAN_SURFACE_MODULE)
-            .then(module => {
-                const frm = window.cur_frm;
-                if (
-                    !frm
-                    || frm.doctype !== "Door Cutting Order"
-                    || !module
-                    || typeof module.recover !== "function"
-                ) {
-                    return false;
-                }
-                return module.recover(frm);
-            })
-            .catch(error => {
-                console.error("Failed to load Almdina cutting-plan surface", error);
-                return false;
-            })
-            .finally(() => {
-                planSurfacePromise = null;
-            });
-
-        return planSurfacePromise;
-    }
-
-    function loadOrderModules() {
-        if (modulesPromise) {
-            loadPlanSurfaceModule();
-            return modulesPromise;
-        }
-        if (
-            !window.cur_frm
-            || window.cur_frm.doctype !== "Door Cutting Order"
-            || !window.frappe
-            || !frappe.ui
-            || !frappe.ui.form
-            || typeof frappe.ui.form.on !== "function"
-        ) {
-            return null;
-        }
-
-        // Start the plan surface independently. Do not put it behind the serial
-        // cost/permission compatibility chain below.
-        loadPlanSurfaceModule();
-
-        modulesPromise = ORDER_MODULES.reduce(
-            (promise, module) => promise.then(() => requireModule(module)),
-            Promise.resolve()
-        ).then(() => recoverCurrentOrderSurface())
-            .catch(error => {
-                modulesPromise = null;
-                console.error("Failed to load Almdina protected order modules", error);
-                throw error;
-            });
-        return modulesPromise;
+        // The DCO DocType manifest owns these core modules. Do not poll or load
+        // Plan/Cost compatibility assets from the global permission layer.
+        if (!orderModulesLoaded()) return Promise.resolve(false);
+        return recoverCurrentOrderSurface();
     }
 
     const permissions = Object.freeze({
@@ -313,9 +209,6 @@
         },
         canDocument(frm, capability) {
             const key = String(capability || "");
-            // The factory matrix is the sole authority source. Native Frappe
-            // permissions may only narrow standard document rights; they can
-            // never widen an absent Almdina business capability.
             if (context.capabilities[key] !== true) return false;
             return nativeDocumentNarrowingAllows(frm, key);
         },
@@ -357,7 +250,7 @@
             return refreshContext();
         },
         loadOrderModules() {
-            return loadOrderModules();
+            return ensureOrderModules();
         },
         orderModulesLoaded() {
             return orderModulesLoaded();
@@ -371,21 +264,11 @@
     frappe.provide("frappe.almdina");
     frappe.almdina.permissions = permissions;
 
-    function orderModulesLoaded() {
-        return ORDER_MODULES.every(module => globalExists(module.global));
-    }
+    registerProtectedModuleSurface(permissions);
 
-    function ensureOrderModules() {
-        if (!window.cur_frm || window.cur_frm.doctype !== "Door Cutting Order") {
-            return null;
-        }
-        return loadOrderModules();
-    }
-
-    // The protected modules must be available on every visit to an order, not
-    // only when one happens to be open shortly after the desk booted. Without a
-    // router hook a later navigation would leave their surfaces unrendered until
-    // the user reloaded the page.
+    // A later visit to DCO may happen long after Desk boot. The router only asks
+    // the already-loaded DCO core to reconcile permissions; it never imports a
+    // feature bundle and never polls for globals.
     if (
         window.frappe
         && frappe.router
@@ -398,12 +281,5 @@
         });
     }
 
-    registerProtectedModuleSurface(permissions);
-
-    // One boot-time attempt is enough. Future order visits are owned by the
-    // router hook above, while an order whose DocType bundle is already loading
-    // registers the DocumentContext recovery surface at the top of this file.
-    // The previous 100ms interval woke the Desk up for as long as ten seconds
-    // when no order was open.
     window.setTimeout(ensureOrderModules, 0);
 })();

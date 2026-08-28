@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parent
 ASSETS = ROOT / "frontend_assets.py"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 CLOSURE_DOC = REPO / "docs" / "reference" / "14_FRONTEND_REFACTOR_CLOSURE.md"
 
 ORDER_ENTRY = ROOT / "public" / "js" / "door_cutting_order" / "order_entry"
@@ -34,6 +35,7 @@ class FrontendRefactorClosureTest(unittest.TestCase):
         cls.manifest = asset_manifest()
         cls.dco_assets = cls.manifest["doctype_js"]["Door Cutting Order"]
         cls.app_assets = cls.manifest["app_include_js"]
+        cls.lazy_assets = REGISTRY.read_text(encoding="utf-8")
         cls.doc = CLOSURE_DOC.read_text(encoding="utf-8")
 
     def test_frontend_asset_registrations_have_no_duplicates(self) -> None:
@@ -61,23 +63,27 @@ class FrontendRefactorClosureTest(unittest.TestCase):
             self.assertTrue(path.is_file(), str(path))
 
     def test_runtime_order_preserves_final_owner_dependencies(self) -> None:
-        def index(suffix: str) -> int:
+        def eager_index(suffix: str) -> int:
             matches = [i for i, asset in enumerate(self.dco_assets) if asset.endswith(suffix)]
             self.assertEqual(len(matches), 1, suffix)
             return matches[0]
 
-        self.assertLess(index("door_cutting_order_operator_ux.js"), index("door_cutting_order_fast_entry_keyboard_ux.js"))
-        self.assertLess(index("door_cutting_order_fast_entry_keyboard_ux.js"), index("door_cutting_order_measurement_lifecycle.js"))
+        def lazy_index(suffix: str) -> int:
+            self.assertEqual(self.lazy_assets.count(suffix), 1, suffix)
+            return self.lazy_assets.index(suffix)
 
-        self.assertLess(index("door_cutting_order_multi_edge_ux.js"), index("door_cutting_order_edge_profile_controls_ux.js"))
-        self.assertLess(index("door_cutting_order_edge_profile_controls_ux.js"), index("door_cutting_order_edge_profile_double_click_guard.js"))
-        self.assertLess(index("door_cutting_order_edge_profile_double_click_guard.js"), index("door_cutting_order_edge_render_owner.js"))
-        self.assertLess(index("door_cutting_order_edge_render_owner.js"), index("door_cutting_order_cut_dimensions_ux.js"))
+        self.assertLess(eager_index("door_cutting_order_operator_ux.js"), eager_index("door_cutting_order_fast_entry_keyboard_ux.js"))
+        self.assertLess(eager_index("door_cutting_order_fast_entry_keyboard_ux.js"), eager_index("door_cutting_order_measurement_lifecycle.js"))
 
-        self.assertLess(index("door_cutting_order_plan_controls_ux.js"), index("door_cutting_order_plan_content_styles.js"))
-        self.assertLess(index("door_cutting_order_plan_content_styles.js"), index("door_cutting_order_plan_board_presenter.js"))
-        self.assertLess(index("door_cutting_order_plan_board_presenter.js"), index("door_cutting_order_plan_content_ux.js"))
-        self.assertLess(index("door_cutting_order_plan_content_ux.js"), index("door_cutting_order_plan_tabs_ux.js"))
+        self.assertLess(eager_index("door_cutting_order_multi_edge_ux.js"), eager_index("door_cutting_order_edge_profile_controls_ux.js"))
+        self.assertLess(eager_index("door_cutting_order_edge_profile_controls_ux.js"), eager_index("door_cutting_order_edge_profile_double_click_guard.js"))
+        self.assertLess(eager_index("door_cutting_order_edge_profile_double_click_guard.js"), eager_index("door_cutting_order_edge_render_owner.js"))
+        self.assertLess(eager_index("door_cutting_order_edge_render_owner.js"), eager_index("door_cutting_order_cut_dimensions_ux.js"))
+
+        self.assertLess(lazy_index("door_cutting_order_plan_controls_ux.js"), lazy_index("door_cutting_order_plan_content_styles.js"))
+        self.assertLess(lazy_index("door_cutting_order_plan_content_styles.js"), lazy_index("door_cutting_order_plan_board_presenter.js"))
+        self.assertLess(lazy_index("door_cutting_order_plan_board_presenter.js"), lazy_index("door_cutting_order_plan_content_ux.js"))
+        self.assertLess(lazy_index("door_cutting_order_plan_content_ux.js"), lazy_index("door_cutting_order_plan_tabs_ux.js"))
 
     def test_measurement_lifecycle_is_explicit_and_immutable(self) -> None:
         source = MEASUREMENT_LIFECYCLE.read_text(encoding="utf-8")

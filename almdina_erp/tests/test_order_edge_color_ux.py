@@ -49,6 +49,7 @@ MEASUREMENT_UX = (
     / "door_cutting_order_measurement_actions_ux.js"
 )
 HOOKS = ROOT / "frontend_assets.py"
+REGISTRY = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"
 
 
 def _source(path: Path) -> str:
@@ -163,13 +164,24 @@ def test_edge_profile_lists_are_custom_and_scrollable():
     assert 'select = document.createElement("select")' not in controls
 
 
-def test_edge_color_layer_loads_after_secure_financial_presenters():
+def test_edge_color_eager_layer_is_independent_from_lazy_financial_presenters():
     hooks = HOOKS.read_text(encoding="utf-8")
-    legacy = '"public/js/door_cutting_order_cost_invoice_ux.js"'
-    presenter = '"public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"'
-    financial = '"public/js/door_cutting_order/costing/door_cutting_order_financial_documents_ux.js"'
-    edge_color = '"public/js/door_cutting_order/order_entry/edge_banding/door_cutting_order_edge_color_ux.js"'
+    registry = REGISTRY.read_text(encoding="utf-8")
+    legacy = "door_cutting_order_cost_invoice_ux.js"
+    presenter = "door_cutting_order_document_print_presenter.js"
+    financial = "door_cutting_order_financial_documents_ux.js"
+    edge_color = "door_cutting_order_edge_color_ux.js"
+
     assert legacy not in hooks
-    for script in (presenter, financial, edge_color):
-        assert script in hooks
-    assert hooks.index(presenter) < hooks.index(financial) < hooks.index(edge_color)
+    assert legacy not in registry
+    assert presenter in hooks
+    assert edge_color in hooks
+    assert hooks.index(presenter) < hooks.index(edge_color)
+
+    # Financial documents are Cost-only and activate later. Edge-color entry and
+    # measurement UX must not pull that bundle onto the initial Order path.
+    assert financial not in hooks
+    cost = registry.split("cost: Object.freeze({", 1)[1].split(
+        "});\n\n    function descriptor", 1
+    )[0]
+    assert financial in cost

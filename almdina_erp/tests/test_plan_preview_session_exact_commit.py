@@ -8,6 +8,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 PUBLIC = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan"
+REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 class TestPlanPreviewSessionExactCommit(unittest.TestCase):
@@ -130,9 +138,6 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
             encoding="utf-8"
         )
 
-        # The first persisted System Plan is an explicit bootstrap command and
-        # must not require an optimizer edit session. Once a System Draft exists,
-        # recalculation returns to Preview -> review -> exact commit semantics.
         self.assertIn("(firstPlan || workspaceEditing(frm))", controls)
         self.assertIn('typeof transport.bootstrapPlan === "function"', controls)
         self.assertIn("await transport.bootstrapPlan(frm.doc.name, settings)", controls)
@@ -152,21 +157,23 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
 
     def test_preview_assets_load_at_the_correct_architecture_boundaries(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
+        registry = REGISTRY.read_text(encoding="utf-8")
         api = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"
         state = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"
-        preview = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js"
-        edit = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js"
-        presenter = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_presenter.js"
-        preview_edit = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_edit_ux.js"
+        preview = "door_cutting_order_plan_preview_session.js"
+        edit = "door_cutting_order_plan_edit_session_ux.js"
+        presenter = "door_cutting_order_plan_preview_presenter.js"
+        preview_edit = "door_cutting_order_plan_preview_edit_ux.js"
         page = "public/js/door_cutting_order/core/door_cutting_order_page_edit_action_ux.js"
 
-        for asset in (preview, presenter, preview_edit):
-            self.assertEqual(manifest.count(asset), 1)
         self.assertLess(manifest.index(api), manifest.index(state))
-        self.assertLess(manifest.index(state), manifest.index(preview))
-        self.assertLess(manifest.index(edit), manifest.index(presenter))
-        self.assertLess(manifest.index(presenter), manifest.index(preview_edit))
-        self.assertLess(manifest.index(preview_edit), manifest.index(page))
+        self.assertIn(page, manifest)
+        for asset in (preview, edit, presenter, preview_edit):
+            self.assertNotIn(f'public/js/door_cutting_order/cutting_plan/{asset}', manifest)
+            self.assertEqual(registry.count(asset), 1)
+        self.assertLess(registry.index(preview), registry.index(edit))
+        self.assertLess(registry.index(edit), registry.index(presenter))
+        self.assertLess(registry.index(presenter), registry.index(preview_edit))
 
 
 if __name__ == "__main__":

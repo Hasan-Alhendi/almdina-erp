@@ -7,6 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
 APP = ROOT / "almdina_erp"
+ASSET_REGISTRY = (
+    PUBLIC / "core" / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
@@ -181,12 +184,14 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
 
     def test_asset_order_keeps_generic_core_before_feature_policy_and_late_ux(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
+        registry = ASSET_REGISTRY.read_text(encoding="utf-8")
         store = "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js"
         coordinator = "public/js/door_cutting_order/core/door_cutting_order_workspace_sync_coordinator.js"
         plan_state = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"
         cost_state = "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js"
+        asset_owner = "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
         policy = "public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js"
-        presenter = "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"
+        presenter = "door_cutting_order_cost_presenter.js"
         visual = "public/js/door_cutting_order/core/door_cutting_order_plan_cost_workspace_visual_ux.js"
         freshness_ux = "public/js/door_cutting_order/core/door_cutting_order_workspace_freshness_ux.js"
 
@@ -195,6 +200,7 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
             coordinator,
             plan_state,
             cost_state,
+            asset_owner,
             policy,
             freshness_ux,
         ):
@@ -202,9 +208,14 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertLess(manifest.index(store), manifest.index(coordinator))
         self.assertLess(manifest.index(coordinator), manifest.index(plan_state))
         self.assertLess(manifest.index(coordinator), manifest.index(cost_state))
-        self.assertLess(manifest.index(cost_state), manifest.index(policy))
-        self.assertLess(manifest.index(policy), manifest.index(presenter))
+        self.assertLess(manifest.index(cost_state), manifest.index(asset_owner))
+        self.assertLess(manifest.index(asset_owner), manifest.index(policy))
         self.assertLess(manifest.index(visual), manifest.index(freshness_ux))
+
+        # The cost presenter is deliberately outside the critical manifest but
+        # remains owned by the Cost feature bundle.
+        self.assertNotIn(presenter, manifest)
+        self.assertEqual(registry.count(presenter), 1)
 
 
 if __name__ == "__main__":

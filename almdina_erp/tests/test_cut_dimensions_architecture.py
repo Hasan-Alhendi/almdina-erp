@@ -106,6 +106,14 @@ DOCUMENT_UX_PATH = (
 )
 EDGE_UX_PATH = ROOT / "public" / "js" / "edge_banding_type_ux.js"
 HOOKS_PATH = ROOT / "hooks.py"
+REGISTRY_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 class TestCutDimensionsArchitecture(unittest.TestCase):
@@ -206,6 +214,7 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
     def test_live_ux_aligns_edge_controls_and_uses_one_print_presenter(self) -> None:
         hooks = runpy.run_path(str(HOOKS_PATH))
         scripts = hooks["doctype_js"]["Door Cutting Order"]
+        registry = REGISTRY_PATH.read_text(encoding="utf-8")
         performance_index = scripts.index(
             "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_table_performance_ux.js"
         )
@@ -224,16 +233,17 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         print_index = scripts.index(
             "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
         )
-        documents_index = scripts.index(
-            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js"
-        )
 
         self.assertGreater(side_edge_index, performance_index)
         self.assertGreater(controls_index, side_edge_index)
         self.assertGreater(cut_index, controls_index)
         self.assertGreater(theme_index, cut_index)
         self.assertGreater(print_index, theme_index)
-        self.assertGreater(documents_index, print_index)
+        self.assertNotIn(
+            "public/js/door_cutting_order/costing/door_cutting_order_multi_edge_documents_ux.js",
+            scripts,
+        )
+        self.assertEqual(registry.count("door_cutting_order_multi_edge_documents_ux.js"), 1)
         self.assertNotIn(
             "public/js/door_cutting_order_cost_invoice_ux.js",
             scripts,
@@ -349,9 +359,6 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         self.assertNotIn("rate_usd_per_meter *", print_source)
 
-        # Edge/customization UX may decorate the invoice, but persisted server
-        # costing is the only monetary authority. Never rebuild invoice money from
-        # the asynchronous Edge Banding Type browser cache.
         self.assertIn("const costing = window.AlmdinaOrderCostUX", document_source)
         self.assertIn("costing.invoiceLines(frm)", document_source)
         self.assertIn("persisted server-cost snapshot", document_source)

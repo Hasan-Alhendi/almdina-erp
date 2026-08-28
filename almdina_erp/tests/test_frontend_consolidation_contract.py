@@ -7,6 +7,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 MANIFEST = ROOT / "frontend_assets.py"
+WORKSPACE_ASSET_REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 CANONICAL_FORM = (
     ROOT
     / "almdina_erp"
@@ -145,28 +153,56 @@ class TestFrontendConsolidationContract(unittest.TestCase):
 
     def test_focused_renderer_loads_before_every_active_plan_consumer(self) -> None:
         manifest = MANIFEST.read_text(encoding="utf-8")
-        renderer = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"'
+        registry = WORKSPACE_ASSET_REGISTRY.read_text(encoding="utf-8")
+        renderer = "door_cutting_order_cutting_plan_renderer.js"
 
-        self.assertIn(renderer, manifest)
+        # Renderer and its Plan consumers belong to one lazy feature bundle. Their
+        # dependency order is therefore a registry contract, not a first-open
+        # DocType manifest contract.
+        self.assertIn(renderer, registry)
+        self.assertNotIn(renderer, manifest)
         for consumer in (
-            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"',
-            '"public/js/door_cutting_order/cutting_plan/door_cutting_order_drawing_plan_ux.js"',
-            '"public/js/door_cutting_order/production/shop_floor_order_ux.js"',
+            "door_cutting_order_plan_tabs_ux.js",
+            "door_cutting_order_drawing_plan_ux.js",
         ):
-            self.assertLess(manifest.index(renderer), manifest.index(consumer))
+            self.assertIn(consumer, registry)
+            self.assertLess(registry.index(renderer), registry.index(consumer))
+
+        # Production remains eager and independent from the Plan renderer; it must
+        # not drag the visual Plan bundle back onto the Order critical path.
+        self.assertIn("door_cutting_order/production/shop_floor_order_ux.js", manifest)
 
     def test_protected_surfaces_have_deterministic_form_load_order(self) -> None:
         hooks = HOOKS.read_text(encoding="utf-8")
         manifest = MANIFEST.read_text(encoding="utf-8")
-        cost_presenter = '"public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"'
-        cost_permissions = '"public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"'
-        plan_tabs = '"public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"'
-        permission_refresh = '"public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"'
+        registry = WORKSPACE_ASSET_REGISTRY.read_text(encoding="utf-8")
+        cost_presenter = "door_cutting_order_cost_presenter.js"
+        cost_permissions = "door_cutting_order_cost_permissions_ux.js"
+        plan_tabs = "door_cutting_order_plan_tabs_ux.js"
+        permission_refresh = (
+            '"public/js/door_cutting_order/core/door_cutting_order_permission_refresh_ux.js"'
+        )
+        asset_registry = (
+            '"public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"'
+        )
 
         self.assertIn('"route": "/desk/almdina-erp"', hooks)
         self.assertNotIn('"route": "/desk",', hooks)
-        self.assertLess(manifest.index(cost_presenter), manifest.index(cost_permissions))
-        self.assertLess(manifest.index(plan_tabs), manifest.index(permission_refresh))
+
+        # Cost presentation dependencies remain deterministic inside the lazy Cost
+        # bundle instead of being forced onto every DCO form opening.
+        self.assertIn(cost_presenter, registry)
+        self.assertIn(cost_permissions, registry)
+        self.assertLess(registry.index(cost_presenter), registry.index(cost_permissions))
+        self.assertNotIn(cost_presenter, manifest)
+        self.assertNotIn(cost_permissions, manifest)
+
+        # Permission recovery and the feature registry are eager bootstrap owners;
+        # Plan tabs themselves are activated later from the Plan feature bundle.
+        self.assertIn(plan_tabs, registry)
+        self.assertNotIn(plan_tabs, manifest)
+        self.assertIn(permission_refresh, manifest)
+        self.assertLess(manifest.index(asset_registry), manifest.index(permission_refresh))
 
     def test_duplicate_legacy_form_controllers_are_not_loaded(self) -> None:
         manifest = MANIFEST.read_text(encoding="utf-8")

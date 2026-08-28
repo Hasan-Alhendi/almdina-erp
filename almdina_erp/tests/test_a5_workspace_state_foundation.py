@@ -8,6 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "almdina_erp"
 PUBLIC = ROOT / "public" / "js" / "door_cutting_order"
+ASSET_REGISTRY = (
+    PUBLIC / "core" / "door_cutting_order_workspace_asset_registry.js"
+)
 
 
 class TestA5WorkspaceStateFoundation(unittest.TestCase):
@@ -114,25 +117,34 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         ):
             self.assertNotIn(financial_field, source)
 
-    def test_workspace_assets_load_before_existing_plan_and_cost_presenters(self) -> None:
+    def test_workspace_bootstrap_precedes_lazy_plan_and_cost_presenters(self) -> None:
         manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
+        registry = ASSET_REGISTRY.read_text(encoding="utf-8")
         store = "public/js/door_cutting_order/core/door_cutting_order_workspace_store.js"
         editor = "public/js/door_cutting_order/core/door_cutting_order_workspace_field_editor.js"
         plan_api = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_api.js"
         plan_state = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js"
         cost_api = "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js"
         cost_state = "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js"
-        plan_renderer = "public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"
-        cost_presenter = "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"
+        asset_owner = "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
+        plan_renderer = "door_cutting_order_cutting_plan_renderer.js"
+        cost_presenter = "door_cutting_order_cost_presenter.js"
 
-        for asset in (store, editor, plan_api, plan_state, cost_api, cost_state):
+        for asset in (store, editor, plan_api, plan_state, cost_api, cost_state, asset_owner):
             self.assertEqual(manifest.count(asset), 1)
         self.assertLess(manifest.index(store), manifest.index(editor))
         self.assertLess(manifest.index(editor), manifest.index(plan_api))
         self.assertLess(manifest.index(plan_api), manifest.index(plan_state))
-        self.assertLess(manifest.index(plan_state), manifest.index(plan_renderer))
+        self.assertLess(manifest.index(plan_state), manifest.index(asset_owner))
         self.assertLess(manifest.index(cost_api), manifest.index(cost_state))
-        self.assertLess(manifest.index(cost_state), manifest.index(cost_presenter))
+        self.assertLess(manifest.index(cost_state), manifest.index(asset_owner))
+
+        # Presenters/renderers are no longer initial DocType assets. Their order is
+        # protected inside the feature registry that loads them on tab activation.
+        self.assertNotIn(plan_renderer, manifest)
+        self.assertNotIn(cost_presenter, manifest)
+        self.assertIn(plan_renderer, registry)
+        self.assertIn(cost_presenter, registry)
 
     def test_api_adapters_are_transport_only(self) -> None:
         plan_api = (
@@ -276,20 +288,27 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertIn("pure visual owner", source)
 
     def test_a52_presenter_adapter_order_preserves_existing_visual_owners(self) -> None:
-        manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
-        cost_presenter = "public/js/door_cutting_order/costing/door_cutting_order_cost_presenter.js"
-        cost_adapter = "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_presenter_adapter.js"
-        cost_permissions = "public/js/door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js"
-        plan_tabs = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"
-        plan_adapter = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_presenter_adapter.js"
-        plan_bootstrap = "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js"
+        registry = ASSET_REGISTRY.read_text(encoding="utf-8")
+        cost_presenter = "door_cutting_order_cost_presenter.js"
+        cost_adapter = "door_cutting_order_cost_workspace_presenter_adapter.js"
+        cost_permissions = "door_cutting_order_cost_permissions_ux.js"
+        plan_tabs = "door_cutting_order_plan_tabs_ux.js"
+        plan_adapter = "door_cutting_order_plan_workspace_presenter_adapter.js"
+        plan_bootstrap = "door_cutting_order_plan_surface_bootstrap.js"
 
-        for asset in (cost_adapter, plan_adapter):
-            self.assertEqual(manifest.count(asset), 1)
-        self.assertLess(manifest.index(cost_presenter), manifest.index(cost_adapter))
-        self.assertLess(manifest.index(cost_adapter), manifest.index(cost_permissions))
-        self.assertLess(manifest.index(plan_tabs), manifest.index(plan_adapter))
-        self.assertLess(manifest.index(plan_adapter), manifest.index(plan_bootstrap))
+        for asset in (
+            cost_presenter,
+            cost_adapter,
+            cost_permissions,
+            plan_tabs,
+            plan_adapter,
+            plan_bootstrap,
+        ):
+            self.assertEqual(registry.count(asset), 1)
+        self.assertLess(registry.index(cost_presenter), registry.index(cost_adapter))
+        self.assertLess(registry.index(cost_adapter), registry.index(cost_permissions))
+        self.assertLess(registry.index(plan_tabs), registry.index(plan_adapter))
+        self.assertLess(registry.index(plan_adapter), registry.index(plan_bootstrap))
 
     def test_a52_detached_editor_does_not_use_frappe_model_mutation(self) -> None:
         source = (
