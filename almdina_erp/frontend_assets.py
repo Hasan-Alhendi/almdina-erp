@@ -46,6 +46,10 @@ doctype_js = {
         # freshness primitive: only this feature knows which inputs affect Plan,
         # Cost, or the special-price basis.
         "public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js",
+        # This tracker must be present before the operator edits board/piece inputs.
+        # Recalculation reads those inputs from the persisted order, so a later
+        # Plan-tab activation must know whether an edit checkpoint is required.
+        "public/js/door_cutting_order/cutting_plan/door_cutting_order_fast_save_ux.js",
         "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js",
         "public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js",
         "public/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js",
