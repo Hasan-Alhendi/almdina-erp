@@ -58,7 +58,10 @@ class TestDcoPerformanceContract(unittest.TestCase):
             '],\n    "Edge Banding Type"', 1
         )[0]
 
-        # Lightweight application state remains deterministic and eager.
+        # Lightweight application state remains deterministic and eager. The fast
+        # save owner is also eager because it must observe Order measurements before
+        # the user's first Plan-tab visit and decide whether a save checkpoint is
+        # required before recalculation.
         for asset in (
             "door_cutting_order_plan_workspace_api.js",
             "door_cutting_order_plan_workspace_state.js",
@@ -67,6 +70,7 @@ class TestDcoPerformanceContract(unittest.TestCase):
             "door_cutting_order_workspace_asset_registry.js",
             "door_cutting_order_workspace_asset_status_ux.js",
             "door_cutting_order_workspace_activation_lifecycle.js",
+            "door_cutting_order_fast_save_ux.js",
         ):
             self.assertIn(asset, dco)
 
@@ -106,6 +110,7 @@ class TestDcoPerformanceContract(unittest.TestCase):
         self.assertIn('emit(name, "failed", error)', source)
         self.assertIn("door_cutting_order_plan_surface_bootstrap.js", source)
         self.assertIn("door_cutting_order_cost_presenter.js", source)
+        self.assertNotIn("door_cutting_order_fast_save_ux.js", source)
 
     def test_permission_recovery_does_not_pull_lazy_features(self) -> None:
         source = PERMISSION_CONTEXT.read_text(encoding="utf-8")
@@ -137,12 +142,14 @@ class TestDcoPerformanceContract(unittest.TestCase):
         status = source.index("door_cutting_order_workspace_asset_status_ux.js")
         lifecycle = source.index("door_cutting_order_workspace_activation_lifecycle.js")
         mutation_policy = source.index("door_cutting_order_mutation_impact_policy.js")
+        fast_save = source.index("door_cutting_order_fast_save_ux.js")
 
         self.assertLess(plan_state, registry)
         self.assertLess(cost_state, registry)
         self.assertLess(registry, status)
         self.assertLess(status, lifecycle)
         self.assertLess(lifecycle, mutation_policy)
+        self.assertLess(mutation_policy, fast_save)
 
     def test_hidden_plan_surface_is_not_a_readiness_blocker(self) -> None:
         source = (
