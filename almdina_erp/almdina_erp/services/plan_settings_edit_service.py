@@ -7,9 +7,9 @@ from frappe import _
 from frappe.utils import flt
 
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
-    engine_mode_for_request,
-    is_known_optimization_mode,
+    UnsupportedOptimizationModeError,
     is_machine_type,
+    persisted_mode_value,
 )
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
 from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
@@ -125,20 +125,13 @@ def _packing_mode(value: Any, label: str) -> str:
             _("يجب تحديد قيمة «{0}».").format(label),
             frappe.ValidationError,
         )
-    engine_mode = engine_mode_for_request(normalized)
-    if engine_mode:
-        return engine_mode
-    if is_known_optimization_mode(normalized):
+    try:
+        return persisted_mode_value(normalized)
+    except UnsupportedOptimizationModeError:
         frappe.throw(
-            _(
-                "الخوارزمية «{0}» موجودة في الكتالوج لكنها غير منفذة في محرك القص الحالي بعد."
-            ).format(normalized),
+            _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
             frappe.ValidationError,
         )
-    frappe.throw(
-        _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
-        frappe.ValidationError,
-    )
     raise AssertionError("unreachable")
 
 
