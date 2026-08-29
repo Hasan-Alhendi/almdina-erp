@@ -226,7 +226,7 @@ class TestPlanSettingsEditService(TestCase):
         save_command.assert_called_once_with(
             doc,
             {
-                "packing_mode": "Auto Pro",
+                "packing_mode": "auto_pro",
                 "cutting_machine_type": "Panel Saw",
                 "kerf_mm": 4.0,
                 "trim_margin_mm": 5.0,
