@@ -9,6 +9,11 @@ from frappe.utils import cint, flt
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot_json,
 )
+from almdina_erp.almdina_erp.domain.cutting.catalog import (
+    machine_type_catalog,
+    optimization_catalog,
+    public_mode_value,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
@@ -105,7 +110,7 @@ def _capabilities(order: Any) -> dict[str, bool]:
 
 def _plan_settings(plan: Any) -> dict[str, Any]:
     return {
-        "packing_mode": str(plan.get("optimization_mode") or "Auto Pro"),
+        "packing_mode": public_mode_value(plan.get("optimization_mode")),
         "cutting_machine_type": str(plan.get("machine_type") or "Auto"),
         "optimization_time_limit_sec": flt(plan.get("optimization_time_limit_sec")),
         "kerf_mm": flt(plan.get("kerf_mm")),
@@ -208,7 +213,7 @@ def _calculation_settings(rows: list[Any]) -> dict[str, Any]:
 
     defaults = factory_default_plan_settings()
     return {
-        "packing_mode": defaults.optimization_mode,
+        "packing_mode": public_mode_value(defaults.optimization_mode),
         "cutting_machine_type": defaults.machine_type,
         "optimization_time_limit_sec": flt(defaults.optimization_time_limit_sec),
         "kerf_mm": flt(defaults.kerf_mm),
@@ -282,6 +287,8 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "production_path": getattr(order, "production_path", None),
         "approved_plan": getattr(order, "approved_plan", None),
         "capabilities": capabilities,
+        "optimization_catalog": optimization_catalog(),
+        "machine_type_catalog": machine_type_catalog(),
         "calculation_settings": calculation_settings,
         "editable_settings": calculation_settings if capabilities["edit_settings"] else None,
         "plans": {
