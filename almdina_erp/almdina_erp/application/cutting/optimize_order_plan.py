@@ -60,8 +60,15 @@ class BoardGeometry:
         return self.full_length_cm - (self.trim_cm * 2)
 
 
-# Compatibility export for callers that imported the pre-ALMADINA-138 name.
-AppliedMargins = AppliedTrim
+@dataclass(frozen=True, slots=True)
+class AppliedMargins(AppliedTrim):
+    """Compatibility surface for callers using the pre-ALMADINA-138 API."""
+
+    def usable_width_cm(self, board: BoardGeometry) -> float:
+        return super().usable_width_cm(full_width_cm=board.full_width_cm)
+
+    def usable_length_cm(self, board: BoardGeometry) -> float:
+        return super().usable_length_cm(full_length_cm=board.full_length_cm)
 
 
 @dataclass(frozen=True, slots=True)
