@@ -29,6 +29,21 @@
     }
 
     function currentTabFieldname(frm) {
+        // Frappe v16 can leave layout.current_tab pointing at the previously
+        // activated tab while get_active_tab() already reflects the tab that is
+        // actually selected in the form. Prefer the host's canonical active-tab
+        // API and keep layout.current_tab only as a compatibility fallback.
+        const activeTab = frm && typeof frm.get_active_tab === "function"
+            ? frm.get_active_tab()
+            : null;
+        const activeFieldname = String(
+            activeTab
+            && activeTab.df
+            && activeTab.df.fieldname
+            || ""
+        ).trim();
+        if (activeFieldname) return activeFieldname;
+
         return String(
             frm
             && frm.layout
@@ -36,7 +51,7 @@
             && frm.layout.current_tab.df
             && frm.layout.current_tab.df.fieldname
             || ""
-        );
+        ).trim();
     }
 
     function activationFields() {
@@ -163,8 +178,9 @@
             const fieldname = String(target && target.getAttribute("data-fieldname") || "");
             if (!fieldname || !activationFields().has(fieldname)) return;
 
-            // Frappe updates layout.current_tab as part of the same click. Schedule
-            // feature loading on the next frame so it observes the final tab identity.
+            // Frappe updates its active-tab state as part of the same click. Schedule
+            // feature loading on the next frame so get_active_tab() observes the
+            // final tab identity instead of a transitional/stale layout.current_tab.
             schedule(frm);
         };
 
