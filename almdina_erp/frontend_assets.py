@@ -39,6 +39,13 @@ doctype_js = {
         "public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_workspace_state.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_api.js",
         "public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js",
+        # Recovery is a bounded overlay: projections/application state do not own
+        # the form or workspaces, and browser storage stays behind repositories.
+        "public/js/door_cutting_order/recovery/application/door_cutting_order_recovery_projection.js",
+        "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_indexeddb.js",
+        "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_draft_repository.js",
+        "public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_asset_repository.js",
+        "public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_status_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_workspace_activation_lifecycle.js",
@@ -98,6 +105,10 @@ doctype_js = {
         "public/js/door_cutting_order/production/shop_floor_order_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_toolbar_stability_ux.js",
         "public/js/door_cutting_order/core/door_cutting_order_revision_ux.js",
+        # Integration runs only after the existing Edit Session owner is present.
+        # It batches local IndexedDB writes through DocumentContext frames and
+        # never calls the official Save path.
+        "public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js",
         # Explicit Order-save intent must win over any transient plan-checkpoint
         # preserve marker before Frappe evaluates after_save.
         "public/js/door_cutting_order/core/door_cutting_order_edit_save_intent_ux.js",

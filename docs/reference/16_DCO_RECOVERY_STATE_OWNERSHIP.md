@@ -469,12 +469,16 @@ these rules:
 
 These are known boundaries, not R1 implementation tasks:
 
-1. No local or remote recovery store exists yet.
+1. ALMADINA-128 now provides the versioned local IndexedDB draft/asset repositories
+   and behavior-neutral checkpoint overlay described in
+   [17_DCO_LOCAL_RECOVERY_INFRASTRUCTURE.md](17_DCO_LOCAL_RECOVERY_INFRASTRUCTURE.md).
+   Restore/hydration UX and every remote recovery store remain deferred.
 2. Normal NEW promotion is response-bound; lost-response idempotency requires a
    later server reconciliation mechanism.
-3. DCO `expected_server_modified` is not yet an explicit recovery-session value;
-   native Frappe `modified` and focused API `expected_modified` are the current
-   enforcement mechanisms.
+3. The local checkpoint session now records distinct `session_origin_modified` and
+   `expected_server_modified` values. Restore/conflict enforcement is still
+   deferred; native Frappe `modified` and focused API `expected_modified` remain
+   the current server-write enforcement mechanisms.
 4. Special Shape Documentation saves the child row directly and currently does
    not return/advance a parent-DCO modified token. Main-form recovery must reload
    that bounded workspace rather than assume the DCO token detects child-only

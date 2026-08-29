@@ -17,6 +17,9 @@ business-logic rewrites.
 - `production/`: shop-floor behavior owned by the order form.
 - `responsive/`: order header/mobile-card adaptations.
 - `drawing/`: facade/integration for special-shape drawing and clipped-corner behavior.
+- `recovery/`: bounded local recovery overlay split into application projections/session,
+  IndexedDB repositories, and presentation integration. It reads existing owners and
+  never becomes a document/workspace/save authority.
 - `list_view/`: Door Cutting Order list presentation, search, status/stage presentation and list quick actions.
 
 ### A5 aggregate workspace state
@@ -41,6 +44,27 @@ The active special-shape documentation workspace is separately layered under
 annotations, dimensions, templates and smart-pen strokes. The
 `drawing/special_shape_facade.js` integration entry point routes to the standalone
 workspace. Legacy V3/V4 editor assets have been removed.
+
+### Local recovery overlay
+
+ALMADINA-128 adds versioned, site/user/DCO-namespaced local checkpoints without
+changing canonical persistence. `AlmdinaDocumentContext` remains the document
+identity/freshness owner; `AlmdinaOrderRevisionUX` remains the EDIT-session owner;
+Plan and Cost drafts remain in their existing `WorkspaceStore` instances and
+`WorkspaceSyncCoordinator` remains the derived-workspace coordinator.
+
+Recovery application modules create only the explicit v1 projections and own a
+small status/revision state machine. Infrastructure modules alone access IndexedDB:
+the draft store holds lightweight versioned envelopes and a separate asset store
+holds Blob bytes referenced by asset ID. The presentation adapter registers exact
+DCO field events, observes existing Plan/Cost store update events, batches local
+writes through `AlmdinaDocumentContext.scheduleFrame()`, and requests a best-effort
+local flush on `visibilitychange`/`pagehide`.
+
+This overlay never calls `frm.save()`, never uses arbitrary timeout readiness,
+never restores data, and never changes the current scanner, Plan, Cost, Save, Cancel,
+or first-insert behavior. Restore/reconciliation remains a later-story consumer of
+the repositories.
 
 ### Special-shape manufacturing boundary
 
