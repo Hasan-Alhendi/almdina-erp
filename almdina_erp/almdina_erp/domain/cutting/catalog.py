@@ -24,14 +24,17 @@ class OptimizationMode:
     engine_mode: str | None
 
     @property
-    def available(self) -> bool:
+    def implemented(self) -> bool:
         return self.engine_mode is not None
 
     def as_public_dict(self) -> dict[str, Any]:
+        # All 16 story modes are valid/selectable product choices. ``implemented``
+        # reports whether the current engine can execute the choice in this build.
         return {
             "id": self.id,
             "label": self.label,
-            "available": self.available,
+            "available": True,
+            "implemented": self.implemented,
         }
 
 
