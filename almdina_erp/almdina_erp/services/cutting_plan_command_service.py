@@ -21,6 +21,11 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettingsValidationError,
+    canonical_default_plan_settings,
+    normalize_plan_settings,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
@@ -61,6 +66,13 @@ _NUMERIC_SETTING_FIELDS = frozenset(
 _DXF_COMMAND_CAPABILITIES = frozenset({Capability.UPLOAD_DXF, Capability.REPLACE_DXF})
 
 
+def _settings_validation_error() -> None:
+    frappe.throw(
+        _("إحدى قيم إعدادات خطة القص غير صالحة."),
+        frappe.ValidationError,
+    )
+
+
 def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> PlanSettings:
     values = updates or {}
 
@@ -70,13 +82,17 @@ def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> Pla
             return values[dco_field]
         return getattr(plan, plan_field, None)
 
-    return PlanSettings(
-        optimization_mode=str(value("packing_mode") or "Auto Pro"),
-        machine_type=str(value("cutting_machine_type") or "Auto"),
-        optimization_time_limit_sec=flt(value("optimization_time_limit_sec")) or 10,
-        kerf_mm=flt(value("kerf_mm")),
-        trim_margin_mm=flt(value("trim_margin_mm")),
-    )
+    try:
+        return normalize_plan_settings(
+            optimization_mode=value("packing_mode"),
+            machine_type=value("cutting_machine_type"),
+            optimization_time_limit_sec=value("optimization_time_limit_sec"),
+            kerf_mm=value("kerf_mm"),
+            preferred_trim_mm=value("trim_margin_mm"),
+        )
+    except PlanSettingsValidationError:
+        _settings_validation_error()
+        raise AssertionError("unreachable")
 
 
 def _same_value(fieldname: str, left: Any, right: Any) -> bool:
@@ -106,40 +122,50 @@ def _requested_updates(
     trim_margin_mm: float | None,
     optimization_time_limit_sec: float | None,
 ) -> dict[str, Any]:
-    raw = {
-        "packing_mode": packing_mode,
-        "cutting_machine_type": cutting_machine_type,
-        "kerf_mm": kerf_mm,
-        "trim_margin_mm": trim_margin_mm,
-        "optimization_time_limit_sec": optimization_time_limit_sec,
+    provided = {
+        fieldname: value
+        for fieldname, value in {
+            "packing_mode": packing_mode,
+            "cutting_machine_type": cutting_machine_type,
+            "kerf_mm": kerf_mm,
+            "trim_margin_mm": trim_margin_mm,
+            "optimization_time_limit_sec": optimization_time_limit_sec,
+        }.items()
+        if value is not None
     }
-    updates: dict[str, Any] = {}
-    for fieldname, value in raw.items():
-        if value is None:
-            continue
-        if fieldname in _NUMERIC_SETTING_FIELDS:
-            try:
-                normalized = float(value)
-            except (TypeError, ValueError):
-                frappe.throw(
-                    _("إحدى قيم إعدادات خطة القص غير صالحة."),
-                    frappe.ValidationError,
-                )
-            if normalized < 0:
-                frappe.throw(
-                    _("لا يمكن أن تكون إعدادات خطة القص الرقمية سالبة."),
-                    frappe.ValidationError,
-                )
-            updates[fieldname] = flt(normalized)
-        else:
-            normalized = str(value or "").strip()
-            if not normalized:
-                frappe.throw(
-                    _("يجب تحديد قيمة صالحة لإعدادات خطة القص."),
-                    frappe.ValidationError,
-                )
-            updates[fieldname] = normalized
-    return updates
+    if not provided:
+        return {}
+
+    defaults = canonical_default_plan_settings()
+    try:
+        normalized = normalize_plan_settings(
+            optimization_mode=provided.get("packing_mode", defaults.optimization_mode),
+            machine_type=provided.get(
+                "cutting_machine_type",
+                defaults.machine_type,
+            ),
+            optimization_time_limit_sec=provided.get(
+                "optimization_time_limit_sec",
+                defaults.optimization_time_limit_sec,
+            ),
+            kerf_mm=provided.get("kerf_mm", defaults.kerf_mm),
+            preferred_trim_mm=provided.get(
+                "trim_margin_mm",
+                defaults.preferred_trim_mm,
+            ),
+        )
+    except PlanSettingsValidationError:
+        _settings_validation_error()
+        raise AssertionError("unreachable")
+
+    canonical = {
+        "packing_mode": normalized.optimization_mode,
+        "cutting_machine_type": normalized.machine_type,
+        "kerf_mm": normalized.kerf_mm,
+        "trim_margin_mm": normalized.preferred_trim_mm,
+        "optimization_time_limit_sec": normalized.optimization_time_limit_sec,
+    }
+    return {fieldname: canonical[fieldname] for fieldname in provided}
 
 
 def _assert_recalculation_state(order: Any) -> None:
