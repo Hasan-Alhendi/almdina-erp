@@ -32,6 +32,16 @@
             return value === undefined || value === null || value === "" ? fallback : value;
         }
 
+        function catalogLabel(current, catalogName, value) {
+            const normalized = String(value || "").trim();
+            if (!normalized) return "—";
+            const catalog = Array.isArray(current && current[catalogName])
+                ? current[catalogName]
+                : [];
+            const entry = catalog.find(item => String(item && item.id || "").trim() === normalized);
+            return entry ? String(entry.label || entry.id || normalized) : normalized;
+        }
+
         function section(key, title, description, rows, current) {
             return {
                 key,
@@ -52,8 +62,8 @@
                 section("cutting", t("القص والمحسّن"), t("الهندسة الافتراضية وخوارزمية التوزيع وحدود البحث."), [
                     [t("Kerf الافتراضي (مم)"), source.default_kerf_mm],
                     [t("هامش التشذيب (مم)"), source.default_trim_margin_mm],
-                    [t("الخوارزمية"), t(source.default_packing_mode || "—")],
-                    [t("نوع آلة القص"), t(source.default_cutting_machine_type || "—")],
+                    [t("الخوارزمية"), t(catalogLabel(current, "optimization_catalog", source.default_packing_mode))],
+                    [t("نوع آلة القص"), t(catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type))],
                     [t("مهلة التحسين (ث)"), source.default_optimization_time_limit_sec],
                     [t("حد القطع للبحث الأمثل"), source.optimal_search_piece_limit],
                 ], current),
@@ -113,6 +123,7 @@
             sectionEditable,
             yesNo,
             display,
+            catalogLabel,
             sections,
             legacy,
             page,
