@@ -24,6 +24,7 @@ WORKSPACE = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cutting_plan_w
 PLAN_EDIT_SERVICE = ROOT / "almdina_erp" / "services" / "plan_settings_edit_service.py"
 PRODUCTION_SETTINGS = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 PREVIEW_SERVICE = ROOT / "almdina_erp" / "services" / "cutting_plan_preview_service.py"
+CUTTING_PLAN_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "cutting_plan" / "cutting_plan.py"
 
 
 def source(path: Path) -> str:
@@ -160,11 +161,14 @@ def test_all_plan_settings_entry_paths_use_the_canonical_domain_validator() -> N
     factory_backend = source(PRODUCTION_SETTINGS)
     workspace_backend = source(WORKSPACE)
     preview_backend = source(PREVIEW_SERVICE)
+    doctype_backend = source(CUTTING_PLAN_DOCTYPE)
 
     assert "normalize_plan_settings(" in edit_backend
     assert "normalize_plan_settings(" in factory_backend
     assert "normalize_plan_settings(" in workspace_backend
     assert "normalize_plan_settings_updates(" in preview_backend
+    assert "normalize_plan_settings(" in doctype_backend
+    assert "for fieldname, label in (" not in doctype_backend
 
 
 def test_final_calculation_does_not_replace_zero_with_falsy_defaults() -> None:
