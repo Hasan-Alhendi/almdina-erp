@@ -146,6 +146,30 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             self.assertIn(f'"{field}"', plan_edit)
             self.assertIn(field, contract)
 
+    def test_workspace_load_precedes_draft_restore_and_no_reload_follows(self) -> None:
+        store = source(
+            PUBLIC
+            / "door_cutting_order"
+            / "core"
+            / "door_cutting_order_workspace_store.js"
+        )
+        contract = source(RECOVERY_CONTRACT)
+        restore = contract.split("### Capture and restore rules", 1)[1].split(
+            "## 4. NEW lifecycle contract", 1
+        )[0]
+
+        load_position = restore.index("fully load those")
+        draft_position = restore.index("WorkspaceStore.beginEdit()")
+        self.assertLess(load_position, draft_position)
+        self.assertIn(
+            "perform no forced workspace load or refresh after a recovered Plan/Cost draft",
+            restore,
+        )
+        self.assertIn("state.baseline = null;", store)
+        self.assertIn("state.draft = null;", store)
+        self.assertIn("state.dirty = false;", store)
+        self.assertIn("state.editing = false;", store)
+
     def test_cutting_plan_fingerprint_is_deterministic_versioned_input(self) -> None:
         workspace = source(
             APP_ROOT

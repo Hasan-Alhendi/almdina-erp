@@ -60,6 +60,7 @@ RecoveryEnvelope v1
   schema_version: 1
   draft_id: UUID
   mode: NEW | EDIT
+  dirty_scope: DCO | PLAN | COST | SPECIAL_SHAPE
   target_name: null | existing DCO name
   session_origin_modified: null | server modified token
   expected_server_modified: null | latest acknowledged server modified token
@@ -81,6 +82,14 @@ draft is reconciled with a successfully inserted DCO.
 Only fields that the current actor may see and edit may be captured. Recovery
 records are scoped at least by site, authenticated user, doctype, and `draft_id`.
 They must not leak permlevel-1 cost data, another user's draft, or another site.
+
+`dirty_scope` identifies the one mutable owner that was dirty at capture time.
+The existing UI does not allow a dirty DCO form and a Plan/Cost edit draft at
+the same time, so recovery MUST preserve that single-owner invariant. The DCO
+projection may still be present as clean baseline context for a PLAN, COST, or
+SPECIAL_SHAPE record; it must match the freshly loaded server DCO and must not be
+rehydrated as a second dirty owner. A record claiming incompatible simultaneous
+dirty owners is invalid and must be blocked rather than merged.
 
 ### 3.2 `DcoInputProjection v1`
 
@@ -170,12 +179,24 @@ canonical save. Restore follows this order:
 
 1. wait for the current `AlmdinaDocumentContext` identity/generation;
 2. fetch current server state and capabilities;
-3. run the NEW/EDIT conflict and reconciliation rules below;
-4. hydrate DCO inputs through the existing form model;
-5. after normal workspace activation/load, hydrate dirty Plan/Cost drafts through
-   their existing `WorkspaceStore` owners;
-6. invalidate/reload derived Plan then Cost through `WorkspaceSyncCoordinator`;
-7. leave the form dirty and the existing explicit Save/Cancel actions intact.
+3. when the captured scope needs Plan or Cost, activate and fully load those
+   canonical workspaces before touching any recovered workspace draft;
+4. run the NEW/EDIT token check, capability check, single-owner check, and every
+   required DCO/Plan/Cost baseline comparison against those fresh snapshots;
+5. restore only the captured `dirty_scope` through its current owner:
+   - **DCO:** hydrate the existing form model, then use
+     `WorkspaceSyncCoordinator` to invalidate affected Plan before Cost. Do not
+     force-refresh derived workspaces while the restored DCO inputs are still
+     unpersisted; the existing post-Save/checkpoint lifecycle owns reconciliation.
+   - **PLAN/COST:** keep the DCO form clean and call the existing
+     `WorkspaceStore.beginEdit()`/draft mutation path only after the canonical
+     load and baseline checks have settled.
+   - **SPECIAL_SHAPE:** restore only after that bounded workspace has loaded and
+     confirmed its DCO/piece identity and capability.
+6. perform no forced workspace load or refresh after a recovered Plan/Cost draft
+   is installed: current `resolveLoad()` intentionally clears `baseline`,
+   `draft`, `dirty`, and `editing` and would discard the recovered intent;
+7. leave persistence to the existing explicit Save/Cancel action of that owner.
 
 No timer delay is evidence that a document or workspace is ready.
 
