@@ -151,6 +151,8 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         self.assertIn('"thickness_mm"', repository)
         self.assertIn('"rate_usd_per_meter"', repository)
         self.assertIn("_order_edge_profiles_loaded", repository)
+        for retired_field in ("edge_color", "finish_type", "application_method"):
+            self.assertNotIn(retired_field, repository)
 
         self.assertIn("FrappeEdgeProfileRepository(document)", gateway)
         self.assertIn("self.edge_profiles", gateway)
