@@ -27,6 +27,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     persist_plan_cost_snapshot,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    plan_settings as read_plan_settings,
     seed_plan_settings,
 )
 
@@ -50,13 +51,7 @@ class FrappeCuttingPlanCommandRepository:
 
     @staticmethod
     def _settings(plan: Any) -> PlanSettings:
-        return PlanSettings(
-            optimization_mode=str(plan.optimization_mode or "Auto Pro"),
-            machine_type=str(plan.machine_type or "Auto"),
-            optimization_time_limit_sec=flt(plan.optimization_time_limit_sec),
-            kerf_mm=flt(plan.kerf_mm),
-            trim_margin_mm=flt(plan.trim_margin_mm),
-        )
+        return read_plan_settings(plan)
 
     @classmethod
     def _record(cls, plan: Any) -> PlanRecord:
@@ -142,7 +137,7 @@ class FrappeCuttingPlanCommandRepository:
         plan.machine_type = settings.machine_type
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
         plan.kerf_mm = settings.kerf_mm
-        plan.trim_margin_mm = settings.trim_margin_mm
+        plan.trim_margin_mm = settings.preferred_trim_mm
         for fieldname, value in initial_plan_cost_values(
             order_name,
             based_on_plan=based_on_plan,
@@ -158,7 +153,7 @@ class FrappeCuttingPlanCommandRepository:
         plan.machine_type = settings.machine_type
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
         plan.kerf_mm = settings.kerf_mm
-        plan.trim_margin_mm = settings.trim_margin_mm
+        plan.trim_margin_mm = settings.preferred_trim_mm
         plan.plan_needs_recalculation = 1
         self._run_persist(plan, "save")
         return self._record(plan)
