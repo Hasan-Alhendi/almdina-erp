@@ -23,6 +23,13 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
+async function flushPromises() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+}
+
 (async () => {
     const order = [];
     const formHooks = [];
@@ -130,15 +137,27 @@ function deferred() {
 
     const lifecycle = fakeWindow.AlmdinaDcoWorkspaceActivationLifecycle;
     assert.ok(lifecycle);
+    const lifecycleHook = formHooks.find(entry =>
+        entry.doctype === "Door Cutting Order"
+        && entry.handlers
+        && typeof entry.handlers.on_tab_change === "function"
+    );
+    assert.ok(
+        lifecycleHook,
+        "DCO lazy workspace lifecycle must subscribe to Frappe v16 on_tab_change"
+    );
     assert.equal(frm.layout.current_tab.df.fieldname, "cost_tab");
     assert.equal(frm.get_active_tab().df.fieldname, "results_tab");
 
-    const activation = lifecycle.activate(frm);
-    await Promise.resolve();
+    // Frappe v16 set_active_tab() updates active_tab_map, then emits on_tab_change.
+    // The lazy Plan bundle must start from that official host lifecycle hook without
+    // requiring a delegated DOM click to reach the DCO adapter.
+    lifecycleHook.handlers.on_tab_change(frm);
+    await flushPromises();
     assert.deepEqual(
         order,
         ["assets:results_tab"],
-        "Plan activation must follow get_active_tab(), not stale layout.current_tab"
+        "Plan tab change must request Plan assets using get_active_tab(), not stale layout.current_tab"
     );
 
     // Simulate the Plan edit-session global appearing when the cold lazy bundle
@@ -150,16 +169,16 @@ function deferred() {
         },
     };
     planAssets.resolve(true);
-    assert.deepEqual(await activation, ["plan"]);
+    await flushPromises();
     assert.deepEqual(order, [
         "assets:results_tab",
         "edit:sync",
         "workspace:activate",
     ]);
 
-    // A Cost bundle is evaluated after the form's initial Frappe refresh hooks.
-    // Its secure financial actions therefore need an explicit first-activation
-    // initialization before the Cost state/presenter starts rendering.
+    // Reproduce the production Cost failure: Frappe has already selected cost_tab,
+    // but no delegated DOM click reaches the lifecycle adapter. The official
+    // on_tab_change hook alone must cold-load Cost and initialize its lazy owners.
     order.length = 0;
     const costAssets = deferred();
     fakeWindow.AlmdinaDcoWorkspaceAssetRegistry.ensureForTab = fieldname => {
@@ -173,12 +192,12 @@ function deferred() {
     };
     activeFieldname = "cost_tab";
     frm.layout.current_tab.df.fieldname = "results_tab";
-    const costActivation = lifecycle.activate(frm);
-    await Promise.resolve();
+    lifecycleHook.handlers.on_tab_change(frm);
+    await flushPromises();
     assert.deepEqual(
         order,
         ["assets:cost_tab"],
-        "Cost activation must also ignore a stale Plan layout.current_tab"
+        "Cost on_tab_change must start its lazy bundle without a manual lifecycle.activate() call"
     );
 
     // Simulate the globals appearing only when the cold bundle finishes evaluating.
@@ -193,7 +212,7 @@ function deferred() {
         },
     };
     costAssets.resolve(true);
-    assert.deepEqual(await costActivation, ["cost"]);
+    await flushPromises();
     assert.deepEqual(order, [
         "assets:cost_tab",
         "surfaces:apply",
@@ -213,13 +232,17 @@ function deferred() {
     };
     activeFieldname = "results_tab";
     frm.layout.current_tab.df.fieldname = "cost_tab";
-    const staleActivation = lifecycle.activate(frm);
-    await Promise.resolve();
+    lifecycleHook.handlers.on_tab_change(frm);
+    await flushPromises();
     activeFieldname = "order_tab";
     frm.layout.current_tab.df.fieldname = "results_tab";
     staleAssets.resolve(true);
-    assert.deepEqual(Array.from(await staleActivation), []);
-    assert.deepEqual(order, ["assets:results_tab"], "stale tab must not start a Plan RPC or toolbar sync");
+    await flushPromises();
+    assert.deepEqual(
+        order,
+        ["assets:results_tab"],
+        "stale tab must not start a Plan RPC or toolbar sync"
+    );
 
     assert.ok(formHooks.some(entry => entry.doctype === "Door Cutting Order"));
     console.log("DCO workspace asset activation simulation passed");
