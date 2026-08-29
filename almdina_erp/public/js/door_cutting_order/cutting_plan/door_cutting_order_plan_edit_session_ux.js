@@ -31,39 +31,13 @@
             fieldname: "packing_mode",
             label: "خوارزمية توزيع القطع",
             fieldtype: "Select",
-            options: Object.freeze([
-                Object.freeze({ value: "Auto", label: "تلقائي" }),
-                Object.freeze({ value: "Auto Pro", label: "تلقائي متقدم (موصى به)" }),
-                Object.freeze({ value: "Deep Search", label: "بحث معمق" }),
-                Object.freeze({ value: "Optimal Search", label: "بحث أمثل" }),
-                Object.freeze({ value: "MaxRects Best Short Side", label: "MaxRects Best Short Side" }),
-                Object.freeze({ value: "MaxRects Best Area", label: "MaxRects Best Area" }),
-                Object.freeze({ value: "MaxRects Bottom Left", label: "MaxRects Bottom Left" }),
-                Object.freeze({ value: "MaxRects Contact Point", label: "MaxRects Contact Point" }),
-                Object.freeze({ value: "MaxRects Width", label: "MaxRects Width" }),
-                Object.freeze({ value: "MaxRects Length", label: "MaxRects Length" }),
-                Object.freeze({ value: "Shelf Horizontal", label: "Shelf Horizontal" }),
-                Object.freeze({ value: "Shelf Vertical", label: "Shelf Vertical" }),
-                Object.freeze({ value: "Shelf First Fit", label: "Shelf First Fit" }),
-                Object.freeze({ value: "Shelf Next Fit", label: "Shelf Next Fit" }),
-                Object.freeze({ value: "Guillotine Short Axis", label: "Guillotine Short Axis" }),
-                Object.freeze({ value: "Guillotine Long Axis", label: "Guillotine Long Axis" }),
-                Object.freeze({ value: "Guillotine Best Area Fit", label: "Guillotine Best Area Fit" }),
-                Object.freeze({ value: "Guillotine Best Short Side Fit", label: "Guillotine Best Short Side Fit" }),
-                Object.freeze({ value: "Guillotine Best Long Side Fit", label: "Guillotine Best Long Side Fit" }),
-                Object.freeze({ value: "Skyline Bottom Left", label: "Skyline Bottom Left" }),
-                Object.freeze({ value: "Skyline Best Fit", label: "Skyline Best Fit" }),
-            ]),
+            catalog: "optimization_catalog",
         }),
         Object.freeze({
             fieldname: "cutting_machine_type",
             label: "نوع آلة القص",
             fieldtype: "Select",
-            options: Object.freeze([
-                Object.freeze({ value: "Auto", label: "تلقائي" }),
-                Object.freeze({ value: "CNC Router", label: "CNC Router" }),
-                Object.freeze({ value: "Panel Saw", label: "منشار ألواح" }),
-            ]),
+            catalog: "machine_type_catalog",
         }),
         Object.freeze({
             fieldname: "optimization_time_limit_sec",
@@ -109,6 +83,44 @@
     function workspaceSnapshot(frm) {
         const store = storeFor(frm);
         return store ? store.snapshot() : null;
+    }
+
+    function workspaceData(frm) {
+        const state = workspaceSnapshot(frm);
+        return state && state.status === "ready" && state.data ? state.data : null;
+    }
+
+    function catalogOptions(frm, catalogName, selectedValue) {
+        const data = workspaceData(frm);
+        const catalog = data && Array.isArray(data[catalogName]) ? data[catalogName] : [];
+        const options = catalog
+            .map((entry) => ({
+                value: String(entry && entry.id || "").trim(),
+                label: String(entry && entry.label || entry && entry.id || "").trim(),
+                available: entry && entry.available !== false,
+            }))
+            .filter((entry) => entry.value);
+
+        const selected = String(selectedValue ?? "").trim();
+        if (selected && !options.some((entry) => entry.value === selected)) {
+            options.push({
+                value: selected,
+                label: selected,
+                available: true,
+                compatibility: true,
+            });
+        }
+        return options;
+    }
+
+    function planSettingSpecs(frm, values = {}) {
+        return PLAN_SETTING_SPECS.map((spec) => {
+            if (spec.fieldtype !== "Select") return spec;
+            return {
+                ...spec,
+                options: catalogOptions(frm, spec.catalog, values[spec.fieldname]),
+            };
+        });
     }
 
     function approvedPlanName(frm) {
@@ -359,7 +371,9 @@
     function selectOptions(spec, value) {
         return (spec.options || []).map((option) => {
             const selected = String(option.value) === String(value ?? "") ? " selected" : "";
-            return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(translate(option.label))}</option>`;
+            const disabled = option.available === false ? " disabled" : "";
+            const suffix = option.available === false ? " — غير متاح حاليًا" : "";
+            return `<option value="${escapeHtml(option.value)}"${selected}${disabled}>${escapeHtml(translate(option.label))}${escapeHtml(translate(suffix))}</option>`;
         }).join("");
     }
 
@@ -412,11 +426,13 @@
         host.find(EDITOR_SELECTOR).toggleClass("is-dirty", Boolean(dirty));
     }
 
-    function patchFromControl(store, control) {
+    function patchFromControl(store, control, frm) {
         const input = $(control);
         const fieldname = String(input.attr("data-almdina-plan-setting") || "");
         if (!PLAN_SETTING_FIELDS.includes(fieldname)) return;
-        const spec = PLAN_SETTING_SPECS.find((entry) => entry.fieldname === fieldname);
+        const state = store.snapshot();
+        const spec = planSettingSpecs(frm, state && state.draft || {})
+            .find((entry) => entry.fieldname === fieldname);
         if (!spec) return;
         const raw = input.val();
         const value = spec.fieldtype === "Float"
@@ -433,7 +449,8 @@
 
         installEditorStyles();
         host.find(EDITOR_SELECTOR).remove();
-        const fields = PLAN_SETTING_SPECS
+        const specs = planSettingSpecs(frm, state.draft || {});
+        const fields = specs
             .map((spec) => fieldMarkup(spec, (state.draft || {})[spec.fieldname]))
             .join("");
         host.prepend(`
@@ -452,7 +469,7 @@
         editor.find("[data-almdina-plan-setting]")
             .off("input.almdinaPlanEdit change.almdinaPlanEdit")
             .on("input.almdinaPlanEdit change.almdinaPlanEdit", function onSettingChanged() {
-                patchFromControl(store, this);
+                patchFromControl(store, this, frm);
                 const current = store.snapshot();
                 markEditorDirty(host, Boolean(current && current.dirty));
             });
@@ -476,14 +493,14 @@
         return true;
     }
 
-    function validateDraft(draft) {
+    function validateDraft(draft, frm = window.cur_frm) {
         const values = draft || {};
-        for (const spec of PLAN_SETTING_SPECS) {
+        for (const spec of planSettingSpecs(frm, values)) {
             const value = values[spec.fieldname];
             if (spec.fieldtype === "Select") {
                 const normalized = String(value ?? "").trim();
-                const allowed = (spec.options || []).some((option) => option.value === normalized);
-                if (!normalized || !allowed) {
+                const selected = (spec.options || []).find((option) => option.value === normalized);
+                if (!normalized || !selected || selected.available === false) {
                     return translate("يجب تحديد قيمة صالحة للحقل «{0}».").replace("{0}", translate(spec.label));
                 }
                 continue;
@@ -567,15 +584,19 @@
         const api = window.AlmdinaPlanWorkspaceAPI;
         if (!store || !state || !api || typeof api.saveSettings !== "function") return false;
 
-        const validationMessage = validateDraft(state.draft || {});
+        const validationMessage = validateDraft(state.draft || {}, frm);
         if (validationMessage) {
             frappe.msgprint(validationMessage);
+            const specs = planSettingSpecs(frm, state.draft || {});
             focusDraftControl(
                 frm,
-                PLAN_SETTING_SPECS.find((spec) => {
+                specs.find((spec) => {
                     const value = (state.draft || {})[spec.fieldname];
                     if (spec.fieldtype === "Select") {
-                        return !(spec.options || []).some((option) => option.value === String(value ?? "").trim());
+                        const selected = (spec.options || []).find(
+                            (option) => option.value === String(value ?? "").trim()
+                        );
+                        return !selected || selected.available === false;
                     }
                     return value === null || value === undefined || value === ""
                         || !Number.isFinite(Number(value)) || Number(value) < Number(spec.min || 0);
@@ -662,6 +683,7 @@
     window.AlmdinaPlanEditSessionUX = Object.freeze({
         PLAN_SETTING_FIELDS,
         PLAN_SETTING_SPECS,
+        planSettingSpecs,
         canEditPlanSettings,
         isEditing,
         planSettingsMayWrite,
