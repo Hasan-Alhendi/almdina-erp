@@ -30,6 +30,7 @@
 
     function storageError(error, fallback, message) {
         if (error instanceof RecoveryStorageError) return error;
+        if (error && typeof error.code === "string" && error.code.trim()) return error;
         return new RecoveryStorageError(errorCode(error, fallback), message, error || null);
     }
 

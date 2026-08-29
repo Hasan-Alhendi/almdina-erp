@@ -17,6 +17,23 @@ let officialSaveCalls = 0;
 let planSnapshot = null;
 let costSnapshot = null;
 
+function workspaceStore(readSnapshot) {
+    const listeners = new Set();
+    return {
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        emit(snapshot) {
+            listeners.forEach((listener) => listener(snapshot));
+        },
+        snapshot: readSnapshot,
+    };
+}
+
+const planStore = workspaceStore(() => planSnapshot);
+const costStore = workspaceStore(() => costSnapshot);
+
 const repository = {
     createIdentity() {
         uuidSequence += 1;
@@ -63,10 +80,12 @@ const fakeWindow = {
         isEditSessionActive(frm) { return !frm.is_new() && frm.editSessionActive !== false; },
     },
     AlmdinaPlanWorkspaceState: {
+        storeFor() { return planStore; },
         snapshot() { return planSnapshot; },
         activePlan() { return { name: "PLAN-001", modified: "2026-08-29 07:30:00.000000" }; },
     },
     AlmdinaCostWorkspaceState: {
+        storeFor() { return costStore; },
         snapshot() { return costSnapshot; },
     },
     addEventListener(name, callback) { windowListeners.set(name, callback); },
@@ -248,6 +267,9 @@ function runFrame(frm) {
     fakeWindow.cur_frm = workspaceForm;
     handlers["Door Cutting Order"].onload(workspaceForm);
     assert.equal(fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(workspaceForm), null);
+    planSnapshot = { editing: true, dirty: false };
+    costSnapshot = null;
+    handlers["Door Cutting Order"].almdina_edit_session_changed(workspaceForm);
     planSnapshot = {
         editing: true,
         dirty: true,
@@ -266,8 +288,7 @@ function runFrame(frm) {
             trim_margin_mm: 6,
         },
     };
-    costSnapshot = null;
-    handlers["Door Cutting Order"].almdina_edit_session_changed(workspaceForm);
+    planStore.emit(planSnapshot);
     runFrame(workspaceForm);
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(workspaceForm);
     const planWrite = writes.at(-1);
@@ -282,12 +303,17 @@ function runFrame(frm) {
     planSnapshot = { editing: false, dirty: false };
     costSnapshot = {
         editing: true,
+        dirty: false,
+    };
+    handlers["Door Cutting Order"].almdina_edit_session_changed(workspaceForm);
+    costSnapshot = {
+        editing: true,
         dirty: true,
         data: { cutting_plan: "PLAN-001" },
         baseline: { board_rate_usd: 20, cutting_cost_per_board_usd: 3 },
         draft: { board_rate_usd: 22, cutting_cost_per_board_usd: 4 },
     };
-    handlers["Door Cutting Order"].almdina_edit_session_changed(workspaceForm);
+    costStore.emit(costSnapshot);
     runFrame(workspaceForm);
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(workspaceForm);
     const costWrite = writes.at(-1);

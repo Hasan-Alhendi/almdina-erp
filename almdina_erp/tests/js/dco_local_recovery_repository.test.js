@@ -120,6 +120,31 @@ async function verifiesDatabaseOpenFailuresAreExplicit() {
     );
 }
 
+async function verifiesCodedOperationFailuresRemainExplicit() {
+    const transaction = {
+        objectStore() { return {}; },
+        abort() { queueMicrotask(() => this.onabort()); },
+    };
+    const database = {
+        objectStoreNames: { contains: () => true },
+        transaction() { return transaction; },
+        close() {},
+    };
+    const indexedDB = {
+        open() {
+            const request = { result: database };
+            queueMicrotask(() => request.onsuccess());
+            return request;
+        },
+    };
+    const gateway = Recovery.IndexedDb.createGateway({ indexedDB, crypto: crypto.webcrypto, TextEncoder });
+    const conflict = Object.assign(new Error("same revision differs"), { code: "revision_conflict" });
+    await assert.rejects(
+        gateway.transaction(["dco_recovery_drafts"], "readwrite", () => { throw conflict; }),
+        (error) => error === conflict && error.code === "revision_conflict"
+    );
+}
+
 function memoryGateway() {
     const records = {
         dco_recovery_drafts: new Map(),
@@ -189,6 +214,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
 (async () => {
     await verifiesDatabaseInitialization();
     await verifiesDatabaseOpenFailuresAreExplicit();
+    await verifiesCodedOperationFailuresRemainExplicit();
 
     const gateway = memoryGateway();
     const clockValues = [

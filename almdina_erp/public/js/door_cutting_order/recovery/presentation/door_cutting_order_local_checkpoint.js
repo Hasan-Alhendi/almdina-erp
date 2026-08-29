@@ -6,7 +6,9 @@
 
     const CHECKPOINT_EFFECT = "dco-local-recovery-checkpoint";
     const CLEANUP_EFFECT = "dco-local-recovery-cleanup";
+    const WORKSPACE_SUBSCRIPTIONS_EFFECT = "dco-local-recovery-workspace-subscriptions";
     const states = new WeakMap();
+    const workspaceSubscriptions = new WeakMap();
     let draftRepository = null;
     let assetRepository = null;
     let persistenceRequested = false;
@@ -266,6 +268,34 @@
         markDirty(frm, dirtyScope);
     }
 
+    function ensureWorkspaceSubscriptions(frm) {
+        if (!frm || workspaceSubscriptions.has(frm)) return Boolean(frm);
+        const unsubscribers = [
+            ["PLAN", window.AlmdinaPlanWorkspaceState],
+            ["COST", window.AlmdinaCostWorkspaceState],
+        ].flatMap(([dirtyScope, owner]) => {
+            const store = owner && typeof owner.storeFor === "function" ? owner.storeFor(frm) : null;
+            if (!store || typeof store.subscribe !== "function") return [];
+            return [store.subscribe((snapshot) => {
+                if (!snapshot || snapshot.editing !== true || snapshot.dirty !== true) return;
+                markDirty(frm, dirtyScope);
+            })];
+        });
+        if (!unsubscribers.length) return false;
+        workspaceSubscriptions.set(frm, unsubscribers);
+        const context = documentContext();
+        if (context && typeof context.registerCleanup === "function") {
+            context.registerCleanup(frm, WORKSPACE_SUBSCRIPTIONS_EFFECT, () => {
+                const current = workspaceSubscriptions.get(frm) || [];
+                current.forEach((unsubscribe) => {
+                    if (typeof unsubscribe === "function") unsubscribe();
+                });
+                workspaceSubscriptions.delete(frm);
+            });
+        }
+        return true;
+    }
+
     function captureDirtyWorkspace(frm) {
         const candidates = [
             ["PLAN", window.AlmdinaPlanWorkspaceState],
@@ -309,7 +339,10 @@
     const orderHandlers = {
         onload(frm) { ensureState(frm); },
         refresh(frm) { ensureState(frm); },
-        almdina_edit_session_changed(frm) { captureDirtyWorkspace(frm); },
+        almdina_edit_session_changed(frm) {
+            ensureWorkspaceSubscriptions(frm);
+            captureDirtyWorkspace(frm);
+        },
         before_save: beforeSave,
         after_save: afterSave,
     };
