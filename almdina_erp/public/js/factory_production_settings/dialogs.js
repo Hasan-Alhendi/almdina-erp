@@ -79,6 +79,15 @@
                 .filter((entry) => entry.id && entry.label);
         }
 
+        function catalogWithCurrent(catalog, value) {
+            const normalized = String(value || "").trim();
+            if (!normalized || catalog.some((entry) => entry.id === normalized)) return catalog;
+            return [
+                ...catalog,
+                { id: normalized, label: normalized, available: true, compatibility: true },
+            ];
+        }
+
         function catalogLabel(catalog, value) {
             const normalized = String(value || "").trim();
             const entry = catalog.find((item) => item.id === normalized);
@@ -88,8 +97,14 @@
         function sectionFields(section, current = {}) {
             const values = current.values || current;
             if (section === "cutting") {
-                const algorithms = optimizationCatalog(current);
-                const machines = machineCatalog(current);
+                const algorithms = catalogWithCurrent(
+                    optimizationCatalog(current),
+                    values.default_packing_mode
+                );
+                const machines = catalogWithCurrent(
+                    machineCatalog(current),
+                    values.default_cutting_machine_type
+                );
                 return [
                     { fieldname: "default_packing_mode", fieldtype: "Select", label: t("خوارزمية التوزيع"), options: algorithms.map(entry => entry.label).join("\n"), default: catalogLabel(algorithms, values.default_packing_mode), reqd: 1 },
                     { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("نوع آلة القص"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
@@ -140,8 +155,15 @@
 
         function normalizeSectionPayload(section, current, payload = {}) {
             if (section !== "cutting") return payload;
-            const algorithms = optimizationCatalog(current);
-            const machines = machineCatalog(current);
+            const values = current.values || current;
+            const algorithms = catalogWithCurrent(
+                optimizationCatalog(current),
+                values.default_packing_mode
+            );
+            const machines = catalogWithCurrent(
+                machineCatalog(current),
+                values.default_cutting_machine_type
+            );
             const algorithm = algorithms.find(entry => entry.label === payload.default_packing_mode);
             const machine = machines.find(entry => entry.label === payload.default_cutting_machine_type);
             return {
