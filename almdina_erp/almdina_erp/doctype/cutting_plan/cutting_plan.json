@@ -88,7 +88,7 @@
     {"fieldname":"placed_pieces_section","fieldtype":"Section Break","label":"Placed Pieces"},
     {"fieldname":"placed_pieces","fieldtype":"Table","label":"Placed Pieces","options":"Cutting Plan Piece","read_only":1},
     {"fieldname":"snapshot_section","fieldtype":"Section Break","label":"Plan Snapshot"},
-    {"fieldname":"snapshot_json","fieldtype":"Long Text","label":"Plan Snapshot","read_only":1}
+    {"fieldname":"snapshot_json","fieldtype":"Long Text","label":"Snapshot JSON","read_only":1}
   ],
   "links": [],
   "module":"Almdina ERP",
