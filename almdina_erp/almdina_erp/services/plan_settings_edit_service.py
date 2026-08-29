@@ -4,12 +4,11 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt
 
-from almdina_erp.almdina_erp.domain.cutting.catalog import (
-    UnsupportedOptimizationModeError,
-    is_machine_type,
-    persisted_mode_value,
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettingsValidationError,
+    canonical_default_plan_settings,
+    normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
 from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
@@ -37,9 +36,6 @@ _PLAN_META_FIELDS = {
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
 }
-_NUMERIC_FIELDS = frozenset(
-    {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
-)
 _ACTIVE_ROUTED_ORDER_STATUSES = frozenset(SHOP_FLOOR_ORDER_STATUSES.values())
 
 
@@ -97,77 +93,68 @@ def assert_plan_settings_edit_lifecycle(doc: Any) -> None:
         )
 
 
-def _number(value: Any, field_label: str) -> float:
-    try:
-        normalized = float(value)
-    except (TypeError, ValueError):
-        frappe.throw(
-            _("القيمة المدخلة في «{0}» غير صالحة.").format(field_label),
-            frappe.ValidationError,
-        )
-    if normalized < 0:
-        frappe.throw(
-            _("لا يمكن أن تكون قيمة «{0}» سالبة.").format(field_label),
-            frappe.ValidationError,
-        )
-    return flt(normalized)
-
-
 def _canonical_field(meta: Any, workspace_fieldname: str) -> Any:
     canonical = _PLAN_META_FIELDS[workspace_fieldname]
     return meta.get_field(canonical) if meta else None
 
 
-def _packing_mode(value: Any, label: str) -> str:
-    normalized = str(value or "").strip()
-    if not normalized:
-        frappe.throw(
-            _("يجب تحديد قيمة «{0}».").format(label),
-            frappe.ValidationError,
-        )
-    try:
-        return persisted_mode_value(normalized)
-    except UnsupportedOptimizationModeError:
-        frappe.throw(
-            _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
-            frappe.ValidationError,
-        )
-    raise AssertionError("unreachable")
-
-
 def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
-    """Validate workspace input against domain contracts, not Frappe Select options."""
+    """Validate a partial edit through the canonical Domain PlanSettings contract.
+
+    Frappe metadata is consulted only for the field mapping/presentation boundary;
+    Select options and metadata constraints never act as business-rule authority.
+    Defaults fill fields omitted from this patch only and are never returned as
+    updates, so an explicit numeric zero remains zero.
+    """
+
+    provided = {
+        fieldname: values[fieldname]
+        for fieldname in PLAN_SETTING_FIELDS
+        if fieldname in values and values[fieldname] is not None
+    }
+    if not provided:
+        return {}
 
     plan_meta = frappe.get_meta("Cutting Plan")
-    updates: dict[str, Any] = {}
-    for fieldname in PLAN_SETTING_FIELDS:
-        if fieldname not in values or values[fieldname] is None:
-            continue
+    for fieldname in provided:
+        _canonical_field(plan_meta, fieldname)
 
-        field = _canonical_field(plan_meta, fieldname)
-        label = str(getattr(field, "label", None) or fieldname)
-        value = values[fieldname]
+    defaults = canonical_default_plan_settings()
+    try:
+        normalized = normalize_plan_settings(
+            optimization_mode=provided.get(
+                "packing_mode",
+                defaults.optimization_mode,
+            ),
+            machine_type=provided.get(
+                "cutting_machine_type",
+                defaults.machine_type,
+            ),
+            optimization_time_limit_sec=provided.get(
+                "optimization_time_limit_sec",
+                defaults.optimization_time_limit_sec,
+            ),
+            kerf_mm=provided.get("kerf_mm", defaults.kerf_mm),
+            preferred_trim_mm=provided.get(
+                "trim_margin_mm",
+                defaults.preferred_trim_mm,
+            ),
+        )
+    except PlanSettingsValidationError:
+        frappe.throw(
+            _("إحدى قيم إعدادات خطة القص غير صالحة."),
+            frappe.ValidationError,
+        )
+        raise AssertionError("unreachable")
 
-        if fieldname in _NUMERIC_FIELDS:
-            updates[fieldname] = _number(value, label)
-            continue
-
-        normalized = str(value or "").strip()
-        if not normalized:
-            frappe.throw(
-                _("يجب تحديد قيمة «{0}».").format(label),
-                frappe.ValidationError,
-            )
-        if fieldname == "packing_mode":
-            updates[fieldname] = _packing_mode(normalized, label)
-            continue
-        if fieldname == "cutting_machine_type" and not is_machine_type(normalized):
-            frappe.throw(
-                _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
-                frappe.ValidationError,
-            )
-        updates[fieldname] = normalized
-    return updates
+    canonical_values = {
+        "packing_mode": normalized.optimization_mode,
+        "cutting_machine_type": normalized.machine_type,
+        "optimization_time_limit_sec": normalized.optimization_time_limit_sec,
+        "kerf_mm": normalized.kerf_mm,
+        "trim_margin_mm": normalized.preferred_trim_mm,
+    }
+    return {fieldname: canonical_values[fieldname] for fieldname in provided}
 
 
 @frappe.whitelist()
