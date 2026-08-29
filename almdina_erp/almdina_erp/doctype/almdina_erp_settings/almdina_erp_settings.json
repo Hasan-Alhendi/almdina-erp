@@ -5,7 +5,7 @@
   "field_order": [
     "cutting_defaults_section","default_kerf_mm","default_trim_margin_mm","default_cutting_cost_per_board_usd","default_packing_mode","default_cutting_machine_type","default_optimization_time_limit_sec","optimal_search_piece_limit",
     "stock_section","enforce_stock_control","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
-    "remnant_section","prefer_remnants_before_full_boards","min_remnant_length_mm","min_remnant_width_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
+    "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
     "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
     "extra_door_pricing_section","default_extra_double_unit_price_usd","default_extra_liner_unit_price_usd","default_extra_recessed_handle_cutout_unit_price_usd",
     "production_section","default_production_routing","allow_stage_override","allow_unplaced_approval",
