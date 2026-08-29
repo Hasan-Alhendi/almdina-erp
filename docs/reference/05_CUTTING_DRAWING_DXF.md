@@ -58,7 +58,27 @@ flowchart LR
 
 المستخدم يحتاج Capabilities مختلفة للعرض/إعادة الحساب/الرفع/الاعتماد. اعتماد الخطة هو نقطة تثبيت لما سيغادر مرحلة التخطيط إلى الإنتاج.
 
-## 7. Plan immutability
+## 7. Canonical Plan Settings
+
+إعدادات خطة القص لها عقد Domain واحد تحت `domain/cutting/plan_settings.py`. القيم الأساسية هي:
+
+- `optimization_mode`
+- `machine_type`
+- `optimization_time_limit_sec`
+- `kerf_mm`
+- `preferred_trim_mm`
+
+القواعد:
+
+- `kerf_mm >= 0`، والقيمة `0` قيمة صحيحة وتبقى `0` حتى محرك القص.
+- `preferred_trim_mm >= 0`، والقيمة `0` قيمة صحيحة وتعني عدم تطبيق هامش التشذيب المفضل.
+- `optimization_time_limit_sec` يجب أن يكون رقمًا finite وأكبر من `0`.
+- لا يجوز استخدام falsy fallback من نوع `value or default` لاستبدال صفر صحيح بقيمة افتراضية.
+- Factory Production Settings هي **defaults لأول Cutting Plan بلا lineage فقط**. بعد وجود Plan تصبح إعداداتها وإعدادات revisions اللاحقة مملوكة للـPlan lineage ولا تتغير عند تعديل defaults المصنع.
+- Preview والحساب النهائي يستهلكان نفس `PlanSettings` validated contract؛ لا يملك أي منهما قواعد normalization مستقلة.
+- Frappe metadata ليست سلطة Business Validation. حقل التخزين التاريخي `trim_margin_mm` يمثل `preferred_trim_mm` عند حدود Frappe فقط ولا يغيّر معنى العقد في Domain.
+
+## 8. Plan immutability
 
 بعد اعتماد Production plan:
 
@@ -67,7 +87,7 @@ flowchart LR
 - أي تغيير Geometry جوهري لاحق يجب أن يعلّم الخطة بحاجة لإعادة حساب/اعتماد وفق workflow.
 - Operational snapshots لا تستخدم كقناة لتسريب التكلفة الداخلية.
 
-## 8. DXF layers والعقد الهندسي
+## 9. DXF layers والعقد الهندسي
 
 العقد الحالي يستخدم طبقات واضحة مثل:
 
@@ -87,7 +107,7 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 
 لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
 
-## 9. Drawing/DXF authorization
+## 10. Drawing/DXF authorization
 
 لأفعال عامل الرسم لا تكفي Capability وحدها دائمًا. العقد الحالي يجمع:
 
@@ -99,11 +119,11 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 
 Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم لمجرد معرفته بالطلب.
 
-## 10. Files ليست سلطة
+## 11. Files ليست سلطة
 
 أي File/DXF مرتبط بالطلب يجب التحقق من parent/order scope وprivate/attachment behavior المعتمد. لا تنشئ endpoint يأخذ `file_url` أو `file_name` ثم يقرأه بدون إثبات علاقته بالـDCO المسموح للمستخدم.
 
-## 11. أين أعدل؟
+## 12. أين أعدل؟
 
 | نوع التغيير | المكان المفضل |
 |---|---|
@@ -114,7 +134,7 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 | Endpoint/auth wiring | `services/dxf_*`, `drawing_*`, plan services |
 | Canvas/UI behavior | presentation/JS بعد تثبيت contract server-side |
 
-## 12. اختبارات مطلوبة عادة
+## 13. اختبارات مطلوبة عادة
 
 أي تغيير في هذه المنطقة يجب أن يفكر في:
 
