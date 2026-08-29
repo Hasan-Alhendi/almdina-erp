@@ -15,16 +15,14 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import (
     LEGACY_ENGINE_MODES,
     MACHINE_TYPES,
     OPTIMIZATION_MODES,
+    OptimizationModeUnavailableError,
     engine_mode_for_request,
     machine_type_catalog,
     optimization_catalog,
     public_mode_value,
+    require_engine_mode,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
-    DRAFT,
-    SYSTEM,
-    CuttingPlanLifecycleError,
-)
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
 
 
 EXPECTED_IDS = (
@@ -45,7 +43,7 @@ EXPECTED_IDS = (
     "genetic",
     "simulated_annealing",
 )
-EXPECTED_AVAILABLE_MAPPINGS = {
+EXPECTED_IMPLEMENTED_MAPPINGS = {
     "auto": "Auto",
     "auto_pro": "Auto Pro",
     "deep_search": "Deep Search",
@@ -55,7 +53,7 @@ EXPECTED_AVAILABLE_MAPPINGS = {
     "shelf": "Shelf Horizontal",
     "skyline": "Skyline Bottom Left",
 }
-EXPECTED_UNAVAILABLE_IDS = {
+EXPECTED_UNIMPLEMENTED_IDS = {
     "cp_sat_ortools",
     "mip_cbc",
     "scip",
@@ -83,6 +81,7 @@ PLAN_CONTROLS = (
     / "door_cutting_order_plan_controls_ux.js"
 )
 FACTORY_DIALOGS = ROOT / "public" / "js" / "factory_production_settings" / "dialogs.js"
+ENGINE_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "cutting" / "domain_engine.py"
 
 
 class FakePlanRepository:
@@ -139,7 +138,8 @@ def test_canonical_catalog_contains_exactly_the_sixteen_story_ids() -> None:
 
     catalog = optimization_catalog()
     assert [entry["id"] for entry in catalog] == list(EXPECTED_IDS)
-    assert {entry["id"] for entry in catalog if not entry["available"]} == EXPECTED_UNAVAILABLE_IDS
+    assert all(entry["available"] for entry in catalog)
+    assert {entry["id"] for entry in catalog if not entry["implemented"]} == EXPECTED_UNIMPLEMENTED_IDS
 
 
 def test_current_engine_paths_are_mapped_without_optimizer_changes() -> None:
@@ -148,12 +148,13 @@ def test_current_engine_paths_are_mapped_without_optimizer_changes() -> None:
         for mode in OPTIMIZATION_MODES
         if mode.engine_mode is not None
     }
-    assert actual == EXPECTED_AVAILABLE_MAPPINGS
+    assert actual == EXPECTED_IMPLEMENTED_MAPPINGS
 
-    for public_id, engine_mode in EXPECTED_AVAILABLE_MAPPINGS.items():
+    for public_id, engine_mode in EXPECTED_IMPLEMENTED_MAPPINGS.items():
         assert engine_mode_for_request(public_id) == engine_mode
         assert engine_mode_for_request(engine_mode) == engine_mode
         assert public_mode_value(engine_mode) == public_id
+        assert require_engine_mode(public_id) == engine_mode
 
 
 def test_advanced_modes_are_canonical_not_legacy() -> None:
@@ -168,6 +169,7 @@ def test_historical_low_level_variant_is_preserved_exactly() -> None:
     assert historical in LEGACY_ENGINE_MODES
     assert public_mode_value(historical) == historical
     assert engine_mode_for_request(historical) == historical
+    assert require_engine_mode(historical) == historical
 
     repository = FakePlanRepository(historical)
     result = update_settings(
@@ -182,7 +184,7 @@ def test_historical_low_level_variant_is_preserved_exactly() -> None:
     assert result.settings.optimization_mode == historical
 
 
-def test_canonical_public_id_is_persisted_as_existing_engine_value() -> None:
+def test_public_id_is_persisted_as_canonical_identifier() -> None:
     repository = FakePlanRepository()
     result = update_settings(
         UpdatePlanSettingsCommand(
@@ -192,24 +194,28 @@ def test_canonical_public_id_is_persisted_as_existing_engine_value() -> None:
         repository,
     )
     assert repository.saved is not None
-    assert repository.saved.optimization_mode == "Auto Pro"
-    assert result.settings.optimization_mode == "Auto Pro"
+    assert repository.saved.optimization_mode == "auto_pro"
+    assert result.settings.optimization_mode == "auto_pro"
 
 
-def test_known_but_unimplemented_mode_fails_closed_before_optimizer() -> None:
+def test_unimplemented_story_mode_is_selectable_and_persisted_but_fails_at_engine_boundary() -> None:
     repository = FakePlanRepository()
+    result = update_settings(
+        UpdatePlanSettingsCommand(
+            plan_name=repository.plan.name,
+            settings=_settings("scip"),
+        ),
+        repository,
+    )
+    assert repository.saved is not None
+    assert repository.saved.optimization_mode == "scip"
+    assert result.settings.optimization_mode == "scip"
+
     with pytest.raises(
-        CuttingPlanLifecycleError,
+        OptimizationModeUnavailableError,
         match="optimization_mode_not_implemented:scip",
     ):
-        update_settings(
-            UpdatePlanSettingsCommand(
-                plan_name=repository.plan.name,
-                settings=_settings("scip"),
-            ),
-            repository,
-        )
-    assert repository.saved is None
+        require_engine_mode("scip")
 
 
 def test_machine_types_share_one_domain_contract() -> None:
@@ -229,12 +235,14 @@ def test_frontend_consumes_payload_catalog_instead_of_hardcoded_algorithm_list()
     edit_source = PLAN_EDIT_SESSION.read_text(encoding="utf-8")
     controls_source = PLAN_CONTROLS.read_text(encoding="utf-8")
     factory_source = FACTORY_DIALOGS.read_text(encoding="utf-8")
+    adapter_source = ENGINE_ADAPTER.read_text(encoding="utf-8")
 
     assert 'catalog: "optimization_catalog"' in edit_source
     assert 'catalog: "machine_type_catalog"' in edit_source
     assert "data[catalogName]" in edit_source
     assert "optimization_catalog" in factory_source
     assert "machine_type_catalog" in factory_source
+    assert "require_engine_mode(selected_mode)" in adapter_source
 
     # The old post-render patch was a duplicate catalog and a lifecycle race.
     assert "ADVANCED_MODES" not in controls_source
