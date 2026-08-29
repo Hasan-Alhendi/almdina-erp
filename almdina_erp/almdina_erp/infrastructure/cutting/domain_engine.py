@@ -7,6 +7,7 @@ from almdina_erp.almdina_erp.domain.cutting import (
     optimize_plan,
     validate_plan,
 )
+from almdina_erp.almdina_erp.domain.cutting.catalog import require_engine_mode
 
 
 class DomainCuttingEngineAdapter:
@@ -35,7 +36,7 @@ class DomainCuttingEngineAdapter:
             board_width_cm,
             board_length_cm,
             kerf_cm,
-            selected_mode=selected_mode,
+            selected_mode=require_engine_mode(selected_mode),
             machine_type=machine_type,
             time_limit_sec=time_limit_sec,
             exact_piece_limit=exact_piece_limit,
