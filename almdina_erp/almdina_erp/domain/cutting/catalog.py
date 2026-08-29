@@ -131,17 +131,18 @@ def public_mode_value(stored_mode: str | None) -> str:
 
 
 def engine_mode_for_request(mode_value: str) -> str | None:
-    """Resolve a public ID or a preserved historical engine value.
+    """Resolve a public ID or a preserved current/historical engine value.
 
     Returning None means the ID is known by the product contract but has no
-    independent implementation in the current optimizer yet.
+    independent implementation in the current optimizer yet, or the input is
+    unknown.
     """
 
     normalized = str(mode_value or "").strip()
     mode = _OPTIMIZATION_BY_ID.get(normalized)
     if mode:
         return mode.engine_mode
-    if normalized in LEGACY_ENGINE_MODES:
+    if normalized in _ENGINE_TO_PUBLIC_ID or normalized in LEGACY_ENGINE_MODES:
         return normalized
     return None
 
