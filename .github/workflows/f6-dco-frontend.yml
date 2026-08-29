@@ -43,6 +43,12 @@ jobs:
           node --check almdina_erp/public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_surface_bootstrap.js
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_state.js
           node --check almdina_erp/public/js/door_cutting_order/costing/door_cutting_order_cost_workspace_presenter_adapter.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/application/door_cutting_order_recovery_projection.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_recovery_indexeddb.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_draft_repository.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/infrastructure/door_cutting_order_local_asset_repository.js
+          node --check almdina_erp/public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_defaults.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_mutation_impact_policy.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js
@@ -67,6 +73,9 @@ jobs:
           node --check almdina_erp/tests/js/plan_board_presenter.test.js
           node --check almdina_erp/tests/js/operator_edge_ownership.test.js
           node --check almdina_erp/tests/js/surface_settle_guard.test.js
+          node --check almdina_erp/tests/js/dco_recovery_projection.test.js
+          node --check almdina_erp/tests/js/dco_local_recovery_repository.test.js
+          node --check almdina_erp/tests/js/dco_local_checkpoint.test.js
 
       - name: Enforce targeted DCO architecture and UX contracts
         shell: bash
@@ -104,6 +113,9 @@ jobs:
       - name: Enforce A5 workspace ownership contracts
         run: python -m unittest almdina_erp.tests.test_a5_workspace_state_foundation
 
+      - name: Enforce DCO local recovery architecture
+        run: python -m unittest almdina_erp.tests.test_dco_local_recovery_architecture
+
       - name: Enforce DCO performance contracts
         run: python -m unittest almdina_erp.tests.test_dco_performance_contract
 
@@ -121,6 +133,12 @@ jobs:
 
       - name: Simulate DCO post-save workspace invalidation
         run: node almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
+
+      - name: Simulate DCO local recovery infrastructure
+        run: |
+          node almdina_erp/tests/js/dco_recovery_projection.test.js
+          node almdina_erp/tests/js/dco_local_recovery_repository.test.js
+          node almdina_erp/tests/js/dco_local_checkpoint.test.js
 
       - name: Simulate measurement lifecycle cancellation and freshness
         run: node almdina_erp/tests/js/measurement_lifecycle.test.js

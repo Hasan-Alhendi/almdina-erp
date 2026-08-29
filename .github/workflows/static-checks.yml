@@ -53,7 +53,8 @@ jobs:
             almdina_erp.tests.test_frontend_lifecycle_standard_contract \
             almdina_erp.tests.test_frontend_foundation_contract \
             almdina_erp.tests.test_a5_workspace_state_foundation \
-            almdina_erp.tests.test_workspace_freshness_architecture
+            almdina_erp.tests.test_workspace_freshness_architecture \
+            almdina_erp.tests.test_dco_local_recovery_architecture
 
       - name: Run existing refactor and CI contract tests
         run: |
@@ -216,6 +217,9 @@ jobs:
           node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/workspace_store.test.js
           node almdina_erp/tests/js/workspace_sync_coordinator.test.js
+          node almdina_erp/tests/js/dco_recovery_projection.test.js
+          node almdina_erp/tests/js/dco_local_recovery_repository.test.js
+          node almdina_erp/tests/js/dco_local_checkpoint.test.js
           node almdina_erp/tests/js/dco_workspace_mutation_impact.test.js
           node almdina_erp/tests/js/cost_workspace_document_version.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js
