@@ -3,10 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from almdina_erp.almdina_erp.domain.cutting.catalog import (
-    UnsupportedOptimizationModeError,
-    persisted_mode_value,
-)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
@@ -15,15 +11,11 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     normalize_source_type,
     revision_from_approved,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class PlanSettings:
-    optimization_mode: str
-    machine_type: str
-    optimization_time_limit_sec: float
-    kerf_mm: float
-    trim_margin_mm: float
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettings,
+    PlanSettingsValidationError,
+    normalize_plan_settings,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,29 +79,22 @@ def create_revision(
     )
 
 
-def _persisted_optimization_mode(value: str | None) -> str:
-    try:
-        return persisted_mode_value(value)
-    except UnsupportedOptimizationModeError as error:
-        raise CuttingPlanLifecycleError(str(error)) from error
-
-
 def update_settings(
     command: UpdatePlanSettingsCommand,
     repository: CuttingPlanRepository,
 ) -> PlanRecord:
     plan = repository.get(command.plan_name)
     ensure_draft_editable(plan.status)
-    normalized = PlanSettings(
-        optimization_mode=_persisted_optimization_mode(command.settings.optimization_mode),
-        machine_type=str(command.settings.machine_type or "Auto").strip() or "Auto",
-        optimization_time_limit_sec=max(
-            0.0,
-            float(command.settings.optimization_time_limit_sec),
-        ),
-        kerf_mm=max(0.0, float(command.settings.kerf_mm)),
-        trim_margin_mm=max(0.0, float(command.settings.trim_margin_mm)),
-    )
+    try:
+        normalized = normalize_plan_settings(
+            optimization_mode=command.settings.optimization_mode,
+            machine_type=command.settings.machine_type,
+            optimization_time_limit_sec=command.settings.optimization_time_limit_sec,
+            kerf_mm=command.settings.kerf_mm,
+            preferred_trim_mm=command.settings.preferred_trim_mm,
+        )
+    except PlanSettingsValidationError as error:
+        raise CuttingPlanLifecycleError(str(error)) from error
     return repository.save_settings(plan.name, normalized)
 
 

@@ -4,10 +4,18 @@ from dataclasses import dataclass
 from typing import Any
 
 import frappe
-from frappe.utils import cint, flt
+from frappe.utils import cint
 
-from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
+from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    DEFAULT_KERF_MM,
+    DEFAULT_MACHINE_TYPE,
+    DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+    DEFAULT_PREFERRED_TRIM_MM,
+    PlanSettings,
+    normalize_plan_settings,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     plan_input_fingerprint,
 )
@@ -50,31 +58,69 @@ def current_working_plan(order_name: str) -> Any | None:
     return latest_plan(order_name, status=APPROVED) or latest_plan(order_name)
 
 
+def _numeric_or_default(value: Any, default: float) -> Any:
+    return default if value is None else value
+
+
 def factory_default_plan_settings() -> PlanSettings:
-    """Return the canonical defaults for a plan that has no revision lineage yet."""
+    """Return defaults only for a plan that has no revision lineage yet.
+
+    Zero is an explicit valid value for kerf and preferred trim, so defaults are
+    applied only when Frappe returns ``None`` for a genuinely missing numeric
+    value. Factory settings never rewrite an existing Cutting Plan lineage.
+    """
 
     settings = frappe.get_cached_doc("Almdina ERP Settings")
-    return PlanSettings(
-        optimization_mode=str(settings.default_packing_mode or "Auto Pro"),
-        machine_type=str(settings.default_cutting_machine_type or "Auto"),
-        optimization_time_limit_sec=flt(settings.default_optimization_time_limit_sec) or 10,
-        kerf_mm=flt(settings.default_kerf_mm) or 3,
-        trim_margin_mm=flt(settings.default_trim_margin_mm) or 5,
+    return normalize_plan_settings(
+        optimization_mode=(
+            str(settings.default_packing_mode or "").strip()
+            or DEFAULT_OPTIMIZATION_MODE_ID
+        ),
+        machine_type=(
+            str(settings.default_cutting_machine_type or "").strip()
+            or DEFAULT_MACHINE_TYPE
+        ),
+        optimization_time_limit_sec=_numeric_or_default(
+            settings.default_optimization_time_limit_sec,
+            DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+        ),
+        kerf_mm=_numeric_or_default(settings.default_kerf_mm, DEFAULT_KERF_MM),
+        preferred_trim_mm=_numeric_or_default(
+            settings.default_trim_margin_mm,
+            DEFAULT_PREFERRED_TRIM_MM,
+        ),
     )
 
 
 def plan_settings(plan: Any) -> PlanSettings:
-    return PlanSettings(
-        optimization_mode=str(plan.optimization_mode or "Auto Pro"),
-        machine_type=str(plan.machine_type or "Auto"),
-        optimization_time_limit_sec=flt(plan.optimization_time_limit_sec) or 10,
-        kerf_mm=flt(plan.kerf_mm),
-        trim_margin_mm=flt(plan.trim_margin_mm),
+    """Read one plan's own settings without reapplying current factory defaults."""
+
+    return normalize_plan_settings(
+        optimization_mode=(
+            str(getattr(plan, "optimization_mode", None) or "").strip()
+            or DEFAULT_OPTIMIZATION_MODE_ID
+        ),
+        machine_type=(
+            str(getattr(plan, "machine_type", None) or "").strip()
+            or DEFAULT_MACHINE_TYPE
+        ),
+        optimization_time_limit_sec=_numeric_or_default(
+            getattr(plan, "optimization_time_limit_sec", None),
+            DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
+        ),
+        kerf_mm=_numeric_or_default(
+            getattr(plan, "kerf_mm", None),
+            DEFAULT_KERF_MM,
+        ),
+        preferred_trim_mm=_numeric_or_default(
+            getattr(plan, "trim_margin_mm", None),
+            DEFAULT_PREFERRED_TRIM_MM,
+        ),
     )
 
 
 def seed_plan_settings(order_name: str) -> PlanSettings:
-    """Seed a new revision from canonical plan lineage, then factory defaults."""
+    """Seed from plan lineage first; use factory defaults only for the first plan."""
 
     existing = latest_plan(order_name)
     return plan_settings(existing) if existing else factory_default_plan_settings()

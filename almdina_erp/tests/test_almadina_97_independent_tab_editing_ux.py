@@ -96,8 +96,8 @@ def test_plan_backend_validates_workspace_aliases_against_domain_contracts():
     assert 'frappe.get_meta("Cutting Plan")' in source
     assert '"packing_mode": "optimization_mode"' in source
     assert '"cutting_machine_type": "machine_type"' in source
-    assert "persisted_mode_value(normalized)" in source
-    assert "is_machine_type(normalized)" in source
+    assert "normalize_plan_settings(" in source
+    assert "canonical_default_plan_settings()" in source
     assert "_allowed_select_values" not in source
     assert "doc.meta.get_field(fieldname)" not in source
     assert "save_system_plan_settings(doc, updates)" in source
