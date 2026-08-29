@@ -9,11 +9,11 @@ from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
     MACHINE_TYPES as CANONICAL_MACHINE_TYPES,
-    engine_mode_for_request,
-    is_known_optimization_mode,
+    UnsupportedOptimizationModeError,
     is_machine_type,
     machine_type_catalog,
     optimization_catalog,
+    persisted_mode_value,
     public_mode_value,
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -171,17 +171,12 @@ def _validate_routing(name: Any) -> str:
     return routing_name
 
 
-def _validated_engine_mode(value: Any) -> str:
+def _validated_packing_mode(value: Any) -> str:
     requested = str(value or "").strip()
-    engine_mode = engine_mode_for_request(requested)
-    if engine_mode:
-        return engine_mode
-    if is_known_optimization_mode(requested):
-        frappe.throw(
-            _("Optimization mode {0} is defined in the catalog but is not implemented by the current cutting engine yet.").format(requested),
-            frappe.ValidationError,
-        )
-    frappe.throw(_("Unsupported Packing Mode: {0}").format(requested), frappe.ValidationError)
+    try:
+        return persisted_mode_value(requested)
+    except UnsupportedOptimizationModeError:
+        frappe.throw(_("Unsupported Packing Mode: {0}").format(requested), frappe.ValidationError)
     raise AssertionError("unreachable")
 
 
@@ -221,7 +216,7 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
         settings.optimal_search_piece_limit = limit
 
     if "default_packing_mode" in payload:
-        settings.default_packing_mode = _validated_engine_mode(payload["default_packing_mode"])
+        settings.default_packing_mode = _validated_packing_mode(payload["default_packing_mode"])
     if "default_cutting_machine_type" in payload:
         machine_type = str(payload["default_cutting_machine_type"] or "").strip()
         if not is_machine_type(machine_type):
@@ -335,8 +330,8 @@ def get_production_settings() -> dict[str, Any]:
         "permissions": context,
         "optimization_catalog": catalog,
         "machine_type_catalog": machines,
-        # Compatibility projections for callers that have not moved to the richer catalog yet.
-        "packing_options": [item["id"] for item in catalog if item["available"]],
+        # Compatibility projections retain the complete public contract.
+        "packing_options": [item["id"] for item in catalog],
         "machine_options": [item["id"] for item in machines],
         "routing_options": routing_options,
     }
