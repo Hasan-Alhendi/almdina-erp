@@ -22,12 +22,14 @@ class PlanSettingsValidationError(ValueError):
     """Raised when optimizer settings violate the canonical product contract."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class PlanSettings:
-    """Canonical validated settings consumed by every Cutting Plan path.
+    """Canonical Cutting Plan settings value.
 
-    ``preferred_trim_mm`` is the product/domain name. Frappe currently persists
-    the same value in ``trim_margin_mm``; that storage alias belongs in adapters.
+    ``preferred_trim_mm`` is the product/domain name. Frappe still persists the
+    same value as ``trim_margin_mm``; the constructor/property alias keeps that
+    storage vocabulary compatible while callers migrate to the canonical name.
+    Validation is owned exclusively by ``normalize_plan_settings``.
     """
 
     optimization_mode: str
@@ -35,6 +37,31 @@ class PlanSettings:
     optimization_time_limit_sec: float
     kerf_mm: float
     preferred_trim_mm: float
+
+    def __init__(
+        self,
+        optimization_mode: str,
+        machine_type: str,
+        optimization_time_limit_sec: float,
+        kerf_mm: float,
+        preferred_trim_mm: float | None = None,
+        *,
+        trim_margin_mm: float | None = None,
+    ) -> None:
+        resolved_trim = preferred_trim_mm
+        if resolved_trim is None:
+            resolved_trim = trim_margin_mm
+        object.__setattr__(self, "optimization_mode", optimization_mode)
+        object.__setattr__(self, "machine_type", machine_type)
+        object.__setattr__(self, "optimization_time_limit_sec", optimization_time_limit_sec)
+        object.__setattr__(self, "kerf_mm", kerf_mm)
+        object.__setattr__(self, "preferred_trim_mm", resolved_trim)  # type: ignore[arg-type]
+
+    @property
+    def trim_margin_mm(self) -> float:
+        """Compatibility alias for the current Frappe storage field name."""
+
+        return self.preferred_trim_mm
 
 
 def _finite_number(value: Any, fieldname: str) -> float:
