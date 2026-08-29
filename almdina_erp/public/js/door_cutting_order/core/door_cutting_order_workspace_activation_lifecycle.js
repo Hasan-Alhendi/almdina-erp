@@ -178,9 +178,10 @@
             const fieldname = String(target && target.getAttribute("data-fieldname") || "");
             if (!fieldname || !activationFields().has(fieldname)) return;
 
-            // Frappe updates its active-tab state as part of the same click. Schedule
-            // feature loading on the next frame so get_active_tab() observes the
-            // final tab identity instead of a transitional/stale layout.current_tab.
+            // Compatibility fallback only. Frappe v16's authoritative activation
+            // signal is the form-level on_tab_change hook below; keep this delegated
+            // listener for hosts/custom markup that bypass set_active_tab(). Both
+            // paths converge on the same keyed frame, so they cannot duplicate work.
             schedule(frm);
         };
 
@@ -214,6 +215,12 @@
         },
         refresh(frm) {
             activateOnLifecycle(frm);
+        },
+        on_tab_change(frm) {
+            // Frappe v16 updates frm.active_tab_map first, then emits this hook from
+            // set_active_tab(). This is the canonical signal for lazy workspace
+            // activation and also covers programmatic tab changes.
+            schedule(frm);
         },
     });
 
