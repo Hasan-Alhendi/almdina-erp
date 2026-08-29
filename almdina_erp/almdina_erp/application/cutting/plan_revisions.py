@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from almdina_erp.almdina_erp.domain.cutting.catalog import (
+    UnsupportedOptimizationModeError,
+    persisted_mode_value,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
@@ -83,6 +87,13 @@ def create_revision(
     )
 
 
+def _persisted_optimization_mode(value: str | None) -> str:
+    try:
+        return persisted_mode_value(value)
+    except UnsupportedOptimizationModeError as error:
+        raise CuttingPlanLifecycleError(str(error)) from error
+
+
 def update_settings(
     command: UpdatePlanSettingsCommand,
     repository: CuttingPlanRepository,
@@ -90,8 +101,7 @@ def update_settings(
     plan = repository.get(command.plan_name)
     ensure_draft_editable(plan.status)
     normalized = PlanSettings(
-        optimization_mode=str(command.settings.optimization_mode or "Auto Pro").strip()
-        or "Auto Pro",
+        optimization_mode=_persisted_optimization_mode(command.settings.optimization_mode),
         machine_type=str(command.settings.machine_type or "Auto").strip() or "Auto",
         optimization_time_limit_sec=max(
             0.0,
