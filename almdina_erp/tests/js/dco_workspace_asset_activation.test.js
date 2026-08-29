@@ -26,10 +26,17 @@ function deferred() {
 (async () => {
     const order = [];
     const formHooks = [];
+    let activeFieldname = "results_tab";
     const frm = {
         doctype: "Door Cutting Order",
         doc: { name: "DCO-TEST-0001" },
-        layout: { current_tab: { df: { fieldname: "results_tab" } } },
+        // Reproduce Frappe v16 runtime behavior seen in production: the canonical
+        // form API already reports Plan while layout.current_tab still points to
+        // the previously visited Cost tab.
+        get_active_tab() {
+            return { df: { fieldname: activeFieldname } };
+        },
+        layout: { current_tab: { df: { fieldname: "cost_tab" } } },
         wrapper: {
             nodeType: 1,
             addEventListener() {},
@@ -90,7 +97,7 @@ function deferred() {
             },
             activateCurrent(currentForm) {
                 order.push("workspace:activate");
-                const fieldname = currentForm.layout.current_tab.df.fieldname;
+                const fieldname = currentForm.get_active_tab().df.fieldname;
                 return Promise.resolve([fieldname === "cost_tab" ? "cost" : "plan"]);
             },
         },
@@ -123,9 +130,16 @@ function deferred() {
 
     const lifecycle = fakeWindow.AlmdinaDcoWorkspaceActivationLifecycle;
     assert.ok(lifecycle);
+    assert.equal(frm.layout.current_tab.df.fieldname, "cost_tab");
+    assert.equal(frm.get_active_tab().df.fieldname, "results_tab");
+
     const activation = lifecycle.activate(frm);
     await Promise.resolve();
-    assert.deepEqual(order, ["assets:results_tab"], "Plan data must wait for its UI bundle");
+    assert.deepEqual(
+        order,
+        ["assets:results_tab"],
+        "Plan activation must follow get_active_tab(), not stale layout.current_tab"
+    );
 
     // Simulate the Plan edit-session global appearing when the cold lazy bundle
     // finishes evaluating. The eager page toolbar must then be re-evaluated before
@@ -157,10 +171,15 @@ function deferred() {
             order.push("surfaces:apply");
         },
     };
-    frm.layout.current_tab.df.fieldname = "cost_tab";
+    activeFieldname = "cost_tab";
+    frm.layout.current_tab.df.fieldname = "results_tab";
     const costActivation = lifecycle.activate(frm);
     await Promise.resolve();
-    assert.deepEqual(order, ["assets:cost_tab"]);
+    assert.deepEqual(
+        order,
+        ["assets:cost_tab"],
+        "Cost activation must also ignore a stale Plan layout.current_tab"
+    );
 
     // Simulate the globals appearing only when the cold bundle finishes evaluating.
     fakeWindow.AlmdinaFinancialDocuments = {
@@ -184,17 +203,20 @@ function deferred() {
     ]);
 
     // If the user switches tabs while a cold bundle is downloading, keep the
-    // downloaded files cached but reject the stale workspace activation.
+    // downloaded files cached but reject the stale workspace activation using the
+    // canonical active-tab API even if layout.current_tab still says Plan.
     order.length = 0;
     const staleAssets = deferred();
     fakeWindow.AlmdinaDcoWorkspaceAssetRegistry.ensureForTab = fieldname => {
         order.push(`assets:${fieldname}`);
         return staleAssets.promise;
     };
-    frm.layout.current_tab.df.fieldname = "results_tab";
+    activeFieldname = "results_tab";
+    frm.layout.current_tab.df.fieldname = "cost_tab";
     const staleActivation = lifecycle.activate(frm);
     await Promise.resolve();
-    frm.layout.current_tab.df.fieldname = "order_tab";
+    activeFieldname = "order_tab";
+    frm.layout.current_tab.df.fieldname = "results_tab";
     staleAssets.resolve(true);
     assert.deepEqual(Array.from(await staleActivation), []);
     assert.deepEqual(order, ["assets:results_tab"], "stale tab must not start a Plan RPC or toolbar sync");

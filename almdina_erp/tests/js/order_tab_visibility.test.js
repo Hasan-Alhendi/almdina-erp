@@ -91,7 +91,12 @@ let layoutMutationCount = 0;
 const frm = {
     doctype: "Door Cutting Order",
     wrapper: [root],
-    layout: { current_tab: { df: { fieldname: "results_tab" } } },
+    // Reproduce the production mismatch: Plan is visibly selected through the
+    // canonical Frappe API while layout.current_tab still points at hidden Cost.
+    get_active_tab() {
+        return { df: { fieldname: "results_tab" } };
+    },
+    layout: { current_tab: { df: { fieldname: "cost_tab" } } },
     fields_dict: {
         cutting_plan_html: {
             $wrapper: {
@@ -106,7 +111,7 @@ const frm = {
         throw new Error("Tab visibility must never rebuild the Frappe layout");
     },
     set_active_tab() {
-        throw new Error("The visible cutting-plan tab must stay active");
+        throw new Error("The visible cutting-plan tab must stay active even when layout.current_tab is stale");
     },
 };
 
