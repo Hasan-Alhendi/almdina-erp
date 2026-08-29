@@ -57,9 +57,9 @@ Recovery application modules create only the explicit v1 projections and own a
 small status/revision state machine. Infrastructure modules alone access IndexedDB:
 the draft store holds lightweight versioned envelopes and a separate asset store
 holds Blob bytes referenced by asset ID. The presentation adapter registers exact
-DCO field events, observes existing Plan/Cost store update events, batches local
-writes through `AlmdinaDocumentContext.scheduleFrame()`, and requests a best-effort
-local flush on `visibilitychange`/`pagehide`.
+DCO field events, subscribes to the existing Plan/Cost `WorkspaceStore` mutation
+notifications, batches local writes through `AlmdinaDocumentContext.scheduleFrame()`,
+and requests a best-effort local flush on `visibilitychange`/`pagehide`.
 
 This overlay never calls `frm.save()`, never uses arbitrary timeout readiness,
 never restores data, and never changes the current scanner, Plan, Cost, Save, Cancel,

@@ -90,7 +90,7 @@ and `blob:`/Data URLs.
 The current integration checkpoints:
 
 - DCO requirement mutations for NEW forms and active EDIT sessions;
-- a dirty Plan `WorkspaceStore` draft when its existing update event reports
+- a dirty Plan `WorkspaceStore` draft when its existing store subscription reports
   `editing && dirty`;
 - a dirty Cost `WorkspaceStore` draft under the same rule.
 

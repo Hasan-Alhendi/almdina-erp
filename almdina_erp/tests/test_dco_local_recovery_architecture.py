@@ -89,6 +89,16 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn('"visibilitychange"', source)
         self.assertIn('"pagehide"', source)
 
+    def test_workspace_recovery_observes_the_existing_store_owner(self) -> None:
+        integration = (
+            RECOVERY
+            / "presentation"
+            / "door_cutting_order_local_checkpoint.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('typeof owner.storeFor === "function"', integration)
+        self.assertIn('typeof store.subscribe !== "function"', integration)
+        self.assertIn("store.subscribe((snapshot)", integration)
+
     def test_projection_allowlist_matches_current_doctype_fields(self) -> None:
         order = json.loads(
             (
