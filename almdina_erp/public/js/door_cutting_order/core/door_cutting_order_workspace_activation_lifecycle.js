@@ -29,6 +29,21 @@
     }
 
     function currentTabFieldname(frm) {
+        // Frappe v16 can leave layout.current_tab pointing at the previously
+        // activated tab while get_active_tab() already reflects the tab that is
+        // actually selected in the form. Prefer the host's canonical active-tab
+        // API and keep layout.current_tab only as a compatibility fallback.
+        const activeTab = frm && typeof frm.get_active_tab === "function"
+            ? frm.get_active_tab()
+            : null;
+        const activeFieldname = String(
+            activeTab
+            && activeTab.df
+            && activeTab.df.fieldname
+            || ""
+        ).trim();
+        if (activeFieldname) return activeFieldname;
+
         return String(
             frm
             && frm.layout
@@ -36,7 +51,7 @@
             && frm.layout.current_tab.df
             && frm.layout.current_tab.df.fieldname
             || ""
-        );
+        ).trim();
     }
 
     function activationFields() {
@@ -64,10 +79,20 @@
         return window.cur_frm === frm;
     }
 
-    function reconcileLoadedFeature(frm) {
+    function reconcileLoadedFeature(frm, fieldname) {
         const permissionOwner = window.AlmdinaOrderPermissionRefreshUX;
         if (permissionOwner && typeof permissionOwner.applySurfaces === "function") {
             permissionOwner.applySurfaces(frm);
+        }
+
+        if (fieldname === "results_tab") {
+            // The page-level edit toolbar is eager, while the Plan edit-session API
+            // is lazy. Re-evaluate the toolbar immediately after the Plan bundle
+            // becomes ready so a first visit cannot retain the pre-load disabled state.
+            const editActions = window.AlmdinaPageEditActionUX;
+            if (editActions && typeof editActions.sync === "function") {
+                editActions.sync(frm);
+            }
         }
     }
 
@@ -103,7 +128,7 @@
             // Downloading a feature may outlive the tab click or even the document.
             // Keep the cached assets, but never activate stale workspace data.
             if (!activationStillCurrent(frm, identity, fieldname)) return [];
-            reconcileLoadedFeature(frm);
+            reconcileLoadedFeature(frm, fieldname);
             initializeLoadedFeature(frm, fieldname);
         }
 
@@ -153,8 +178,9 @@
             const fieldname = String(target && target.getAttribute("data-fieldname") || "");
             if (!fieldname || !activationFields().has(fieldname)) return;
 
-            // Frappe updates layout.current_tab as part of the same click. Schedule
-            // feature loading on the next frame so it observes the final tab identity.
+            // Frappe updates its active-tab state as part of the same click. Schedule
+            // feature loading on the next frame so get_active_tab() observes the
+            // final tab identity instead of a transitional/stale layout.current_tab.
             schedule(frm);
         };
 
