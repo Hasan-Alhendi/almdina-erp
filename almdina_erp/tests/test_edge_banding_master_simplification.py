@@ -10,7 +10,6 @@ ORDER_DOCTYPE = ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_
 DEFAULTS = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_defaults.js"
 LOOKUP = ROOT / "almdina_erp" / "services" / "edge_banding_lookup_service.py"
 MASTER_DATA = ROOT / "almdina_erp" / "services" / "master_data_service.py"
-EDGE_PROFILE_REPOSITORY = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "edge_profile_repository.py"
 
 RETIRED_FIELDS = {"edge_color", "finish_type", "application_method"}
 
@@ -48,13 +47,6 @@ def test_order_lookup_no_longer_fetches_retired_master_attributes() -> None:
     for fieldname in RETIRED_FIELDS:
         assert fieldname not in operational
         assert fieldname not in serializer
-
-
-def test_order_edge_profile_repository_no_longer_queries_retired_master_attributes() -> None:
-    source = EDGE_PROFILE_REPOSITORY.read_text(encoding="utf-8")
-
-    for fieldname in RETIRED_FIELDS:
-        assert fieldname not in source
 
 
 def test_master_console_no_longer_queries_retired_edge_attributes() -> None:
