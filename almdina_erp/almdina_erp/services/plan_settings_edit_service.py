@@ -130,7 +130,9 @@ def _packing_mode(value: Any, label: str) -> str:
         return engine_mode
     if is_known_optimization_mode(normalized):
         frappe.throw(
-            _("الخوارزمية «{0}» موجودة في الكتالوج لكنها غير منفذة في محرك القص الحالي بعد.").format(label),
+            _(
+                "الخوارزمية «{0}» موجودة في الكتالوج لكنها غير منفذة في محرك القص الحالي بعد."
+            ).format(normalized),
             frappe.ValidationError,
         )
     frappe.throw(
