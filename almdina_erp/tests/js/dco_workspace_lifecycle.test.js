@@ -72,6 +72,7 @@ function makeFormRoot() {
 (async () => {
     const listeners = new Map();
     const formHooks = [];
+    let activeFieldname = "order_tab";
     const frm = {
         doctype: "Door Cutting Order",
         doc: {
@@ -79,9 +80,15 @@ function makeFormRoot() {
             name: "DCO-TEST-0001",
             pieces: [],
         },
+        // Canonical Frappe API for the visibly selected tab.
+        get_active_tab() {
+            return { df: { fieldname: activeFieldname } };
+        },
+        // Deliberately stale to reproduce the production regression where
+        // layout.current_tab remains on Cost while the user is on Order/Plan.
         layout: {
             current_tab: {
-                df: { fieldname: "order_tab" },
+                df: { fieldname: "cost_tab" },
             },
         },
         wrapper: makeFormRoot(),
@@ -284,9 +291,9 @@ function makeFormRoot() {
     const coordinator = fakeWindow.AlmdinaWorkspaceSyncCoordinator;
     const lifecycle = fakeWindow.AlmdinaDcoWorkspaceActivationLifecycle;
 
-    // Opening the Order tab is now the critical path. Frappe lifecycle is adapted
-    // through the dedicated DCO lifecycle owner and must not issue Plan or Cost
-    // RPCs before the operator visits those workspaces.
+    // Opening the Order tab is now the critical path. Even if layout.current_tab
+    // is stale and says Cost, the canonical get_active_tab() identity must keep
+    // both heavy workspaces lazy.
     const lifecycleHook = formHooks.find(entry =>
         entry.doctype === "Door Cutting Order"
         && entry.handlers
@@ -295,29 +302,37 @@ function makeFormRoot() {
     );
     assert.ok(lifecycleHook, "DCO workspace lifecycle adapter hook should be registered");
     assert.ok(lifecycle, "DCO workspace lifecycle adapter should be available");
+    assert.equal(frm.get_active_tab().df.fieldname, "order_tab");
+    assert.equal(frm.layout.current_tab.df.fieldname, "cost_tab");
     lifecycleHook.handlers.onload_post_render(frm);
     lifecycleHook.handlers.refresh(frm);
     await flushPromises();
     assert.equal(planCalls, 0, "Order tab must not eagerly load Plan");
-    assert.equal(costCalls, 0, "Order tab must not eagerly load Cost");
+    assert.equal(costCalls, 0, "stale layout.current_tab must not eagerly load Cost");
 
-    // Plan activation through the lifecycle adapter starts exactly one Plan read
-    // and no Cost read.
-    frm.layout.current_tab.df.fieldname = "results_tab";
+    // Reproduce the real failure exactly: the user is visibly on Plan while the
+    // legacy layout pointer still says Cost. Both the asset lifecycle and the
+    // coordinator must follow get_active_tab() and start Plan only.
+    activeFieldname = "results_tab";
+    frm.layout.current_tab.df.fieldname = "cost_tab";
+    assert.deepEqual(Array.from(coordinator.activeResourceNames(frm)), ["plan"]);
     const firstPlan = lifecycle.activate(frm);
     await flushPromises();
     assert.equal(planCalls, 1, "Plan tab should start one canonical Plan request");
-    assert.equal(costCalls, 0, "Plan tab must not load Cost");
+    assert.equal(costCalls, 0, "stale Cost layout identity must not load Cost");
 
-    // Cost activation is independent and starts exactly one Cost read.
-    frm.layout.current_tab.df.fieldname = "cost_tab";
+    // Cost activation is independent and must also follow get_active_tab() when
+    // layout.current_tab lags behind on Plan.
+    activeFieldname = "cost_tab";
+    frm.layout.current_tab.df.fieldname = "results_tab";
+    assert.deepEqual(Array.from(coordinator.activeResourceNames(frm)), ["cost"]);
     const firstCost = lifecycle.activate(frm);
     await flushPromises();
     assert.equal(planCalls, 1);
     assert.equal(costCalls, 1, "Cost tab should start one canonical Cost request");
 
     // A permission refresh while Cost is active must join its slow in-flight read;
-    // the hidden Plan workspace stays untouched.
+    // the hidden Plan workspace stays untouched even with the stale layout pointer.
     fakeWindow.dispatchEvent(new CustomEvent("almdina:permissions-updated", { detail: {} }));
     await flushPromises();
     assert.equal(planCalls, 1, "hidden Plan must remain lazy on permission refresh");
