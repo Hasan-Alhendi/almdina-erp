@@ -20,6 +20,20 @@
     }
 
     function currentTabFieldname(frm) {
+        // Use the same active-tab authority as the DCO Frappe lifecycle adapter.
+        // In Frappe v16 layout.current_tab may lag behind the visibly selected tab,
+        // while get_active_tab() already exposes the canonical host state.
+        const activeTab = frm && typeof frm.get_active_tab === "function"
+            ? frm.get_active_tab()
+            : null;
+        const activeFieldname = String(
+            activeTab
+            && activeTab.df
+            && activeTab.df.fieldname
+            || ""
+        ).trim();
+        if (activeFieldname) return activeFieldname;
+
         return String(
             frm
             && frm.layout
@@ -27,7 +41,7 @@
             && frm.layout.current_tab.df
             && frm.layout.current_tab.df.fieldname
             || ""
-        );
+        ).trim();
     }
 
     function register(name, descriptor) {
