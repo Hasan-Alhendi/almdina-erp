@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
-    engine_mode_for_request,
-    is_known_optimization_mode,
+    UnsupportedOptimizationModeError,
+    persisted_mode_value,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
@@ -88,15 +88,10 @@ def create_revision(
 
 
 def _persisted_optimization_mode(value: str | None) -> str:
-    requested = str(value or "auto_pro").strip() or "auto_pro"
-    engine_mode = engine_mode_for_request(requested)
-    if engine_mode:
-        return engine_mode
-    if is_known_optimization_mode(requested):
-        raise CuttingPlanLifecycleError(
-            f"optimization_mode_not_implemented:{requested}"
-        )
-    raise CuttingPlanLifecycleError(f"unsupported_optimization_mode:{requested}")
+    try:
+        return persisted_mode_value(value)
+    except UnsupportedOptimizationModeError as error:
+        raise CuttingPlanLifecycleError(str(error)) from error
 
 
 def update_settings(
