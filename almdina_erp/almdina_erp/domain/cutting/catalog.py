@@ -7,6 +7,14 @@ from typing import Any
 DEFAULT_OPTIMIZATION_MODE_ID = "auto_pro"
 
 
+class UnsupportedOptimizationModeError(ValueError):
+    """Raised when a value is outside the public and historical contracts."""
+
+
+class OptimizationModeUnavailableError(ValueError):
+    """Raised when a canonical mode has no current engine implementation."""
+
+
 @dataclass(frozen=True, slots=True)
 class OptimizationMode:
     """Public optimization-mode contract kept separate from engine internals."""
@@ -130,12 +138,29 @@ def public_mode_value(stored_mode: str | None) -> str:
     return _ENGINE_TO_PUBLIC_ID.get(normalized, normalized)
 
 
+def persisted_mode_value(mode_value: str | None) -> str:
+    """Return the canonical persisted ID while preserving exact historical modes."""
+
+    normalized = str(mode_value or "").strip()
+    if not normalized:
+        return DEFAULT_OPTIMIZATION_MODE_ID
+    public_value = public_mode_value(normalized)
+    if public_value in _OPTIMIZATION_BY_ID:
+        return public_value
+    if normalized in LEGACY_ENGINE_MODES:
+        return normalized
+    raise UnsupportedOptimizationModeError(
+        f"unsupported_optimization_mode:{normalized}"
+    )
+
+
 def engine_mode_for_request(mode_value: str) -> str | None:
     """Resolve a public ID or a preserved current/historical engine value.
 
     Returning None means the ID is known by the product contract but has no
     independent implementation in the current optimizer yet, or the input is
-    unknown.
+    unknown. New execution code should prefer ``require_engine_mode`` so these
+    two cases cannot be confused.
     """
 
     normalized = str(mode_value or "").strip()
@@ -145,6 +170,20 @@ def engine_mode_for_request(mode_value: str) -> str | None:
     if normalized in _ENGINE_TO_PUBLIC_ID or normalized in LEGACY_ENGINE_MODES:
         return normalized
     return None
+
+
+def require_engine_mode(mode_value: str | None) -> str:
+    """Translate a persisted public ID to the existing engine at execution time."""
+
+    persisted = persisted_mode_value(mode_value)
+    mode = _OPTIMIZATION_BY_ID.get(persisted)
+    if mode is None:
+        return persisted
+    if mode.engine_mode is None:
+        raise OptimizationModeUnavailableError(
+            f"optimization_mode_not_implemented:{mode.id}"
+        )
+    return mode.engine_mode
 
 
 def is_legacy_engine_mode(mode_value: str) -> bool:
@@ -162,6 +201,8 @@ __all__ = [
     "OPTIMIZATION_MODES",
     "MachineType",
     "OptimizationMode",
+    "OptimizationModeUnavailableError",
+    "UnsupportedOptimizationModeError",
     "engine_mode_for",
     "engine_mode_for_request",
     "is_known_optimization_mode",
@@ -170,5 +211,7 @@ __all__ = [
     "machine_type_catalog",
     "optimization_catalog",
     "optimization_mode",
+    "persisted_mode_value",
     "public_mode_value",
+    "require_engine_mode",
 ]
