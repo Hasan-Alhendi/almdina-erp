@@ -23,6 +23,12 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
+async function flushPromises() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+}
+
 (async () => {
     const order = [];
     const formHooks = [];
@@ -129,7 +135,13 @@ function deferred() {
     });
 
     const lifecycle = fakeWindow.AlmdinaDcoWorkspaceActivationLifecycle;
+    const lifecycleHook = formHooks.find(entry =>
+        entry.doctype === "Door Cutting Order"
+        && entry.handlers
+        && typeof entry.handlers.on_tab_change === "function"
+    );
     assert.ok(lifecycle);
+    assert.ok(lifecycleHook, "DCO workspace lifecycle must subscribe to Frappe on_tab_change");
     assert.equal(frm.layout.current_tab.df.fieldname, "cost_tab");
     assert.equal(frm.get_active_tab().df.fieldname, "results_tab");
 
@@ -157,9 +169,9 @@ function deferred() {
         "workspace:activate",
     ]);
 
-    // A Cost bundle is evaluated after the form's initial Frappe refresh hooks.
-    // Its secure financial actions therefore need an explicit first-activation
-    // initialization before the Cost state/presenter starts rendering.
+    // Production regression: delegated DOM click handling did not reliably see
+    // Cost tab activation even though Frappe had already updated get_active_tab().
+    // The host's official on_tab_change hook must start the lazy Cost bundle.
     order.length = 0;
     const costAssets = deferred();
     fakeWindow.AlmdinaDcoWorkspaceAssetRegistry.ensureForTab = fieldname => {
@@ -172,13 +184,13 @@ function deferred() {
         },
     };
     activeFieldname = "cost_tab";
-    frm.layout.current_tab.df.fieldname = "results_tab";
-    const costActivation = lifecycle.activate(frm);
+    frm.layout.current_tab.df.fieldname = "cost_tab";
+    lifecycleHook.handlers.on_tab_change(frm);
     await Promise.resolve();
     assert.deepEqual(
         order,
         ["assets:cost_tab"],
-        "Cost activation must also ignore a stale Plan layout.current_tab"
+        "Frappe on_tab_change must start the Cost lazy bundle without manual activation"
     );
 
     // Simulate the globals appearing only when the cold bundle finishes evaluating.
@@ -193,7 +205,7 @@ function deferred() {
         },
     };
     costAssets.resolve(true);
-    assert.deepEqual(await costActivation, ["cost"]);
+    await flushPromises();
     assert.deepEqual(order, [
         "assets:cost_tab",
         "surfaces:apply",
