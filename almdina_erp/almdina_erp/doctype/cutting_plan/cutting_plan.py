@@ -14,6 +14,10 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     CuttingPlanLifecycleError,
     normalize_source_type,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettingsValidationError,
+    normalize_plan_settings,
+)
 
 
 # Float fields are stored as decimal(21,9); engine scores must stay inside it.
@@ -87,14 +91,25 @@ class CuttingPlan(Document):
             frappe.throw(_("The new Cutting Plan revision must be newer than its source revision."))
 
     def _validate_working_settings(self) -> None:
-        for fieldname, label in (
-            ("kerf_mm", _("Kerf MM")),
-            ("trim_margin_mm", _("Trim Margin MM")),
-            ("optimization_time_limit_sec", _("Optimization Time Limit Sec")),
-        ):
-            value = flt(getattr(self, fieldname, 0))
-            if value < 0:
-                frappe.throw(_("{0} cannot be negative.").format(label))
+        """Enforce the same PlanSettings contract for every Frappe save path."""
+
+        try:
+            settings = normalize_plan_settings(
+                optimization_mode=self.optimization_mode,
+                machine_type=self.machine_type,
+                optimization_time_limit_sec=self.optimization_time_limit_sec,
+                kerf_mm=self.kerf_mm,
+                preferred_trim_mm=self.trim_margin_mm,
+            )
+        except PlanSettingsValidationError:
+            frappe.throw(_("Invalid Cutting Plan settings."), frappe.ValidationError)
+            raise AssertionError("unreachable")
+
+        self.optimization_mode = settings.optimization_mode
+        self.machine_type = settings.machine_type
+        self.optimization_time_limit_sec = settings.optimization_time_limit_sec
+        self.kerf_mm = settings.kerf_mm
+        self.trim_margin_mm = settings.preferred_trim_mm
 
     def _populate_source_identity_snapshots(self) -> None:
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)
