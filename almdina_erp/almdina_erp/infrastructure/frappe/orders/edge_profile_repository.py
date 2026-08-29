@@ -51,7 +51,6 @@ class EdgeProfile:
     name: str
     thickness_mm: float
     rate_usd_per_meter: float
-    edge_color: str
 
 
 class FrappeEdgeProfileRepository:
@@ -138,7 +137,6 @@ class FrappeEdgeProfileRepository:
                 "name",
                 "thickness_mm",
                 "rate_usd_per_meter",
-                "edge_color",
                 "disabled",
             ],
         )
@@ -173,7 +171,6 @@ class FrappeEdgeProfileRepository:
                 name=name,
                 thickness_mm=thickness,
                 rate_usd_per_meter=rate,
-                edge_color=str(row.edge_color or ""),
             )
 
         flags._order_edge_profiles = profiles
