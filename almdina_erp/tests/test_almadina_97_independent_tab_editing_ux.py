@@ -90,13 +90,15 @@ def test_plan_save_and_cancel_are_workspace_scoped_without_broad_order_save():
         assert forbidden not in api_source
 
 
-def test_plan_backend_validates_workspace_aliases_against_canonical_cutting_plan_schema():
+def test_plan_backend_validates_workspace_aliases_against_domain_contracts():
     source = PLAN_SERVICE.read_text(encoding="utf-8")
 
     assert 'frappe.get_meta("Cutting Plan")' in source
     assert '"packing_mode": "optimization_mode"' in source
     assert '"cutting_machine_type": "machine_type"' in source
-    assert "_allowed_select_values(plan_meta, fieldname)" in source
+    assert "persisted_mode_value(normalized)" in source
+    assert "is_machine_type(normalized)" in source
+    assert "_allowed_select_values" not in source
     assert "doc.meta.get_field(fieldname)" not in source
     assert "save_system_plan_settings(doc, updates)" in source
     assert "doc.save(" not in source
