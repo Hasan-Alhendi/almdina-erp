@@ -6,6 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from almdina_erp.almdina_erp.domain.cutting.catalog import (
+    engine_mode_for_request,
+    is_known_optimization_mode,
+    is_machine_type,
+)
 from almdina_erp.almdina_erp.domain.orders.editability import DRAFT_LIKE_STATUSES
 from almdina_erp.almdina_erp.domain.orders.lifecycle import SHOP_FLOOR_ORDER_STATUSES
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -35,7 +40,6 @@ _PLAN_META_FIELDS = {
 _NUMERIC_FIELDS = frozenset(
     {"kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"}
 )
-_SELECT_FIELDS = frozenset({"packing_mode", "cutting_machine_type"})
 _ACTIVE_ROUTED_ORDER_STATUSES = frozenset(SHOP_FLOOR_ORDER_STATUSES.values())
 
 
@@ -114,17 +118,30 @@ def _canonical_field(meta: Any, workspace_fieldname: str) -> Any:
     return meta.get_field(canonical) if meta else None
 
 
-def _allowed_select_values(meta: Any, workspace_fieldname: str) -> set[str]:
-    field = _canonical_field(meta, workspace_fieldname)
-    return {
-        line.strip()
-        for line in str(getattr(field, "options", "") or "").splitlines()
-        if line.strip()
-    }
+def _packing_mode(value: Any, label: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        frappe.throw(
+            _("يجب تحديد قيمة «{0}».").format(label),
+            frappe.ValidationError,
+        )
+    engine_mode = engine_mode_for_request(normalized)
+    if engine_mode:
+        return engine_mode
+    if is_known_optimization_mode(normalized):
+        frappe.throw(
+            _("الخوارزمية «{0}» موجودة في الكتالوج لكنها غير منفذة في محرك القص الحالي بعد.").format(label),
+            frappe.ValidationError,
+        )
+    frappe.throw(
+        _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
+        frappe.ValidationError,
+    )
+    raise AssertionError("unreachable")
 
 
 def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
-    """Validate workspace aliases against the canonical Cutting Plan schema."""
+    """Validate workspace input against domain contracts, not Frappe Select options."""
 
     plan_meta = frappe.get_meta("Cutting Plan")
     updates: dict[str, Any] = {}
@@ -146,13 +163,14 @@ def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
                 _("يجب تحديد قيمة «{0}».").format(label),
                 frappe.ValidationError,
             )
-        if fieldname in _SELECT_FIELDS:
-            allowed = _allowed_select_values(plan_meta, fieldname)
-            if not allowed or normalized not in allowed:
-                frappe.throw(
-                    _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
-                    frappe.ValidationError,
-                )
+        if fieldname == "packing_mode":
+            updates[fieldname] = _packing_mode(normalized, label)
+            continue
+        if fieldname == "cutting_machine_type" and not is_machine_type(normalized):
+            frappe.throw(
+                _("القيمة المحددة في «{0}» غير معتمدة.").format(label),
+                frappe.ValidationError,
+            )
         updates[fieldname] = normalized
     return updates
 
