@@ -4,6 +4,12 @@ from pathlib import Path
 
 import pytest
 
+from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+    BoardGeometry,
+    OptimizeOrderPlanCommand,
+    OptimizerOptions,
+    optimize_order_plan,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     normalize_plan_settings,
@@ -42,6 +48,85 @@ def test_zero_kerf_and_trim_are_preserved_exactly() -> None:
     assert settings.kerf_mm == 0
     assert settings.preferred_trim_mm == 0
     assert settings.trim_margin_mm == 0
+
+
+class _CapturingEngine:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, float]] = []
+
+    def expand_pieces(self, rows):
+        return list(rows)
+
+    def optimize(
+        self,
+        pieces,
+        board_width_cm,
+        board_length_cm,
+        kerf_cm,
+        **kwargs,
+    ):
+        self.calls.append(
+            {
+                "board_width_cm": board_width_cm,
+                "board_length_cm": board_length_cm,
+                "kerf_cm": kerf_cm,
+                "time_limit_sec": kwargs["time_limit_sec"],
+            }
+        )
+        return {
+            "sheets": [{"sheet_no": 1, "pieces": []}],
+            "used_area_m2": 0,
+            "total_board_area_m2": 2,
+            "waste_area_m2": 2,
+            "method_label": "test",
+            "industrial_metrics": {},
+        }
+
+    def validate(self, plan, pieces, board_width_cm, board_length_cm):
+        return []
+
+
+def test_zero_kerf_and_trim_reach_optimizer_without_fallback() -> None:
+    settings = valid_settings(
+        optimization_mode="auto",
+        kerf_mm=0,
+        preferred_trim_mm=0,
+        optimization_time_limit_sec=7,
+    )
+    engine = _CapturingEngine()
+
+    optimize_order_plan(
+        OptimizeOrderPlanCommand(
+            engine_version="test",
+            input_fingerprint="fingerprint",
+            board=BoardGeometry(
+                full_width_cm=100,
+                full_length_cm=200,
+                trim_cm=settings.preferred_trim_mm / 10,
+                kerf_cm=settings.kerf_mm / 10,
+            ),
+            optimizer=OptimizerOptions(
+                selected_mode=settings.optimization_mode,
+                machine_type=settings.machine_type,
+                time_limit_sec=settings.optimization_time_limit_sec,
+                exact_piece_limit=40,
+                min_remnant_width_cm=0,
+                min_remnant_length_cm=0,
+                min_remnant_area_m2=0,
+            ),
+            piece_rows=(),
+        ),
+        engine=engine,
+    )
+
+    assert engine.calls == [
+        {
+            "board_width_cm": 100,
+            "board_length_cm": 200,
+            "kerf_cm": 0,
+            "time_limit_sec": 7,
+        }
+    ]
 
 
 @pytest.mark.parametrize("time_limit", [0, -1, float("nan"), float("inf")])
@@ -88,6 +173,9 @@ def test_final_calculation_does_not_replace_zero_with_falsy_defaults() -> None:
     assert "flt(plan.optimization_time_limit_sec) or 10" not in backend
     assert "flt(plan.kerf_mm) or" not in backend
     assert "flt(plan.trim_margin_mm) or" not in backend
+    assert "trim_cm=plan_settings.preferred_trim_mm / 10" in backend
+    assert "kerf_cm=plan_settings.kerf_mm / 10" in backend
+    assert "time_limit_sec=plan_settings.optimization_time_limit_sec" in backend
 
 
 def test_preview_and_final_calculation_share_validated_plan_setting_names() -> None:
