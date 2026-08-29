@@ -27,7 +27,7 @@
     {"fieldname":"approved_by","fieldtype":"Link","label":"Approved By","options":"User","read_only":1},
     {"fieldname":"approved_on","fieldtype":"Datetime","label":"Approved On","read_only":1},
     {"fieldname":"engine_section","fieldtype":"Section Break","label":"Optimization Engine"},
-    {"default":"auto_pro","fieldname":"optimization_mode","fieldtype":"Data","label":"Optimization Mode","read_only":1,"reqd":1},
+    {"default":"auto_pro","fieldname":"optimization_mode","fieldtype":"Select","label":"Optimization Mode","options":"auto\nauto_pro\ndeep_search\noptimal\ncp_sat_ortools\nmip_cbc\nscip\nhighs\ngecode\nchuffed\nmaxrects\nguillotine\nshelf\nskyline\ngenetic\nsimulated_annealing\nAuto\nAuto Pro\nDeep Search\nOptimal Search\nMaxRects Best Short Side\nMaxRects Best Area\nMaxRects Bottom Left\nMaxRects Contact Point\nMaxRects Width\nMaxRects Length\nShelf Horizontal\nShelf Vertical\nShelf First Fit\nShelf Next Fit\nGuillotine Short Axis\nGuillotine Long Axis\nGuillotine Best Area Fit\nGuillotine Best Short Side Fit\nGuillotine Best Long Side Fit\nSkyline Bottom Left\nSkyline Best Fit","read_only":1,"reqd":1},
     {"default":"Auto","fieldname":"machine_type","fieldtype":"Select","label":"Cutting Machine Type","options":"Auto\nCNC Router\nPanel Saw","read_only":1,"reqd":1},
     {"default":"10","fieldname":"optimization_time_limit_sec","fieldtype":"Float","label":"Optimization Time Limit Sec","non_negative":1,"read_only":1,"reqd":1},
     {"fieldname":"engine_column","fieldtype":"Column Break"},
@@ -88,7 +88,7 @@
     {"fieldname":"placed_pieces_section","fieldtype":"Section Break","label":"Placed Pieces"},
     {"fieldname":"placed_pieces","fieldtype":"Table","label":"Placed Pieces","options":"Cutting Plan Piece","read_only":1},
     {"fieldname":"snapshot_section","fieldtype":"Section Break","label":"Plan Snapshot"},
-    {"fieldname":"snapshot_json","fieldtype":"Long Text","label":"Snapshot JSON","read_only":1}
+    {"fieldname":"snapshot_json","fieldtype":"Long Text","label":"Plan Snapshot","read_only":1}
   ],
   "links": [],
   "module":"Almdina ERP",
