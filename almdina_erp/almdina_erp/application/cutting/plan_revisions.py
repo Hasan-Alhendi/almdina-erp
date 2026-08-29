@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from almdina_erp.almdina_erp.domain.cutting.catalog import (
+    engine_mode_for_request,
+    is_known_optimization_mode,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
@@ -83,6 +87,18 @@ def create_revision(
     )
 
 
+def _persisted_optimization_mode(value: str | None) -> str:
+    requested = str(value or "auto_pro").strip() or "auto_pro"
+    engine_mode = engine_mode_for_request(requested)
+    if engine_mode:
+        return engine_mode
+    if is_known_optimization_mode(requested):
+        raise CuttingPlanLifecycleError(
+            f"optimization_mode_not_implemented:{requested}"
+        )
+    raise CuttingPlanLifecycleError(f"unsupported_optimization_mode:{requested}")
+
+
 def update_settings(
     command: UpdatePlanSettingsCommand,
     repository: CuttingPlanRepository,
@@ -90,8 +106,7 @@ def update_settings(
     plan = repository.get(command.plan_name)
     ensure_draft_editable(plan.status)
     normalized = PlanSettings(
-        optimization_mode=str(command.settings.optimization_mode or "Auto Pro").strip()
-        or "Auto Pro",
+        optimization_mode=_persisted_optimization_mode(command.settings.optimization_mode),
         machine_type=str(command.settings.machine_type or "Auto").strip() or "Auto",
         optimization_time_limit_sec=max(
             0.0,
