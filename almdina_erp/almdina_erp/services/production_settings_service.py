@@ -7,7 +7,15 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from almdina_erp.almdina_erp.domain.cutting import PACKING_OPTIONS
+from almdina_erp.almdina_erp.domain.cutting.catalog import (
+    MACHINE_TYPES as CANONICAL_MACHINE_TYPES,
+    engine_mode_for_request,
+    is_known_optimization_mode,
+    is_machine_type,
+    machine_type_catalog,
+    optimization_catalog,
+    public_mode_value,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.factory_settings import (
     FactorySettingsSection,
@@ -24,7 +32,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
 )
 
 
-MACHINE_OPTIONS = ("Auto", "CNC Router", "Panel Saw")
+MACHINE_OPTIONS = tuple(machine.id for machine in CANONICAL_MACHINE_TYPES)
 PRINT_IDENTITY_DEFAULTS = {
     "print_factory_name": "مجمع المدينة المنورة التجاري",
     "print_factory_description": "الواح هايغلوس - فورميكا - cnc - ليزر - قشر",
@@ -163,6 +171,20 @@ def _validate_routing(name: Any) -> str:
     return routing_name
 
 
+def _validated_engine_mode(value: Any) -> str:
+    requested = str(value or "").strip()
+    engine_mode = engine_mode_for_request(requested)
+    if engine_mode:
+        return engine_mode
+    if is_known_optimization_mode(requested):
+        frappe.throw(
+            _("Optimization mode {0} is defined in the catalog but is not implemented by the current cutting engine yet.").format(requested),
+            frappe.ValidationError,
+        )
+    frappe.throw(_("Unsupported Packing Mode: {0}").format(requested), frappe.ValidationError)
+    raise AssertionError("unreachable")
+
+
 def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     numeric_non_negative = {
         "default_kerf_mm": _("Default Kerf MM"),
@@ -199,13 +221,10 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
         settings.optimal_search_piece_limit = limit
 
     if "default_packing_mode" in payload:
-        packing_mode = str(payload["default_packing_mode"] or "").strip()
-        if packing_mode not in PACKING_OPTIONS:
-            frappe.throw(_("Unsupported Packing Mode: {0}").format(packing_mode), frappe.ValidationError)
-        settings.default_packing_mode = packing_mode
+        settings.default_packing_mode = _validated_engine_mode(payload["default_packing_mode"])
     if "default_cutting_machine_type" in payload:
         machine_type = str(payload["default_cutting_machine_type"] or "").strip()
-        if machine_type not in MACHINE_OPTIONS:
+        if not is_machine_type(machine_type):
             frappe.throw(_("Unsupported Cutting Machine Type: {0}").format(machine_type), frappe.ValidationError)
         settings.default_cutting_machine_type = machine_type
     if "default_production_routing" in payload:
@@ -258,7 +277,9 @@ def _settings_values(settings: Any) -> dict[str, Any]:
         value = settings.get(fieldname)
         if fieldname in {"allow_stage_override", "allow_unplaced_approval"}:
             value = int(value or 0)
-        elif fieldname not in {"default_packing_mode", "default_cutting_machine_type", "default_production_routing"}:
+        elif fieldname == "default_packing_mode":
+            value = public_mode_value(value)
+        elif fieldname not in {"default_cutting_machine_type", "default_production_routing"}:
             value = flt(value)
             if fieldname == "optimal_search_piece_limit":
                 value = cint(value)
@@ -305,13 +326,18 @@ def get_production_settings() -> dict[str, Any]:
             order_by="routing_name asc",
         )
     values = _settings_values(settings)
+    catalog = optimization_catalog()
+    machines = machine_type_catalog()
     return {
         **values,
         "values": values,
         "legacy_values": _legacy_settings_values(settings),
         "permissions": context,
-        "packing_options": list(PACKING_OPTIONS),
-        "machine_options": list(MACHINE_OPTIONS),
+        "optimization_catalog": catalog,
+        "machine_type_catalog": machines,
+        # Compatibility projections for callers that have not moved to the richer catalog yet.
+        "packing_options": [item["id"] for item in catalog if item["available"]],
+        "machine_options": [item["id"] for item in machines],
         "routing_options": routing_options,
     }
 
