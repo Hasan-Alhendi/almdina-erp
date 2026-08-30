@@ -714,6 +714,15 @@ function runCleanups(frm) {
     assert.equal(fakeFrappe.validated, false, "a stale-revision tab cannot start native insert");
     assert.equal(records.get(staleRevisionId).official_save_state, "ACTIVE");
     assert.equal(records.get(staleRevisionId).recovery_revision, staleRevisionRecord.recovery_revision + 1);
+    assert.equal(
+        Recovery.LocalCheckpoint.markDirty(staleRevisionForm, "DCO"),
+        false,
+        "the stale tab remains quarantined after the rejected Save"
+    );
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(staleRevisionForm);
+    assert.equal(fakeFrappe.validated, false);
+    assert.equal(records.get(staleRevisionId).recovery_revision, staleRevisionRecord.recovery_revision + 1);
 
     const staleTabId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     const staleTabRecord = draft(staleTabId);

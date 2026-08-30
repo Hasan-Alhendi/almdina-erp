@@ -107,6 +107,20 @@
         throw error;
     }
 
+    function quarantineExternalRevision(state, sourceCode, persistedRevision = null) {
+        if (!state) return false;
+        state.externalRevisionConflict = Object.freeze({
+            code: "external_revision_conflict",
+            source_code: String(sourceCode || "stale_revision"),
+            persisted_revision: persistedRevision !== null
+                && persistedRevision !== ""
+                && Number.isInteger(Number(persistedRevision))
+                ? Number(persistedRevision)
+                : null,
+        });
+        return true;
+    }
+
     async function clearProvenSaveAttempt(state, attemptedAt) {
         const expectedAttempt = String(attemptedAt || "").trim();
         if (!state || !state.session || !expectedAttempt) return false;
@@ -154,10 +168,11 @@
                         Number(result.value && result.value.recovery_revision)
                         !== Number(snapshotAfterCas.recovery_revision)
                     ) {
-                        state.externalRevisionConflict = Object.freeze({
-                            code: "external_revision_conflict",
-                            persisted_revision: Number(result.value && result.value.recovery_revision),
-                        });
+                        quarantineExternalRevision(
+                            state,
+                            "stale_revision",
+                            result.value && result.value.recovery_revision
+                        );
                         return true;
                     }
                     return state.session.adoptPersistedOfficialSaveState(
@@ -965,6 +980,7 @@
         if (!flushed || flushed.ok !== true) {
             const code = String(flushed && flushed.error && flushed.error.code || "");
             if (["stale_revision", "revision_conflict"].includes(code)) {
+                quarantineExternalRevision(state, code);
                 frappe.validated = false;
                 showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.");
                 return;
@@ -1000,6 +1016,7 @@
         }
         if (!started || started.ok !== true) {
             if (started && started.error && started.error.code === "stale_revision") {
+                quarantineExternalRevision(state, "stale_revision");
                 frappe.validated = false;
                 showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.");
                 return;
