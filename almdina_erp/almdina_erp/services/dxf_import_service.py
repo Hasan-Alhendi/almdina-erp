@@ -18,6 +18,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     simplify_polygon,
     validate_polygon,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    serialize_geometry_from_cm,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     ContourCandidate,
     DxfTopologyError,
@@ -27,6 +30,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     ResolvedTopology,
     resolve_contour_ownership,
     validate_material_layout,
+)
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    ManufacturingRequirementsError,
+    require_cut_dimension_cm,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
     DxfReadError,
@@ -201,12 +208,24 @@ def _segments_for_layer(rows: list[dict[str, Any]], layer: str) -> list[tuple[tu
 def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
     expected: list[dict[str, Any]] = []
     for group_index, row in enumerate(order.pieces or [], start=1):
+        try:
+            cut_width_cm = require_cut_dimension_cm(
+                getattr(row, "cut_width_cm", None), fieldname="cut_width_cm"
+            )
+            cut_length_cm = require_cut_dimension_cm(
+                getattr(row, "cut_length_cm", None), fieldname="cut_length_cm"
+            )
+        except ManufacturingRequirementsError as exc:
+            raise DxfImportError(
+                f"مقاسات القص التصنيعية للقطعة رقم {group_index} غير محفوظة أو غير صالحة. "
+                "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF."
+            ) from exc
         for copy_no in range(1, cint(row.qty) + 1):
             expected.append(
                 {
                     "label": f"{group_index}.{copy_no}",
-                    "width_cm": flt(row.width_cm),
-                    "length_cm": flt(row.length_cm),
+                    "width_cm": cut_width_cm,
+                    "length_cm": cut_length_cm,
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
                     "source_piece_no": group_index,
@@ -555,7 +574,11 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
 
 
 def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in piece.items() if not key.startswith("_")}
+    public_piece = {key: value for key, value in piece.items() if not key.startswith("_")}
+    public_piece["geometry"] = serialize_geometry_from_cm(
+        _piece_material_geometry(piece, units="cm")
+    )
+    return public_piece
 
 
 def validate_imported_plan(

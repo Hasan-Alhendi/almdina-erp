@@ -8,22 +8,25 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
     PlanMetadataPiece,
     build_plan_metadata_payload,
 )
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    require_cut_dimension_cm,
+)
 from .plan_adapter import FrappeOrderPlanAdapter
 
 
 class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
-    """Feed raw cutting sizes and per-side edge metadata to the plan."""
+    """Feed persisted manufacturing sizes and per-side edge metadata to the plan."""
 
     @staticmethod
     def piece_row_as_dict(row: Any) -> dict[str, Any]:
         data = FrappeOrderPlanAdapter.piece_row_as_dict(row)
         data["final_width_cm"] = flt(row.width_cm)
         data["final_length_cm"] = flt(row.length_cm)
-        data["width_cm"] = flt(getattr(row, "cut_width_cm", 0)) or flt(
-            row.width_cm
+        data["width_cm"] = require_cut_dimension_cm(
+            getattr(row, "cut_width_cm", None), fieldname="cut_width_cm"
         )
-        data["length_cm"] = flt(getattr(row, "cut_length_cm", 0)) or flt(
-            row.length_cm
+        data["length_cm"] = require_cut_dimension_cm(
+            getattr(row, "cut_length_cm", None), fieldname="cut_length_cm"
         )
         for fieldname in (
             "edge_long_right_type_override",
@@ -58,11 +61,12 @@ class FrappeCutDimensionPlanAdapter(FrappeOrderPlanAdapter):
             payload.get("pieces") or [],
             source_document.pieces or [],
         ):
+            cut_piece = self.piece_row_as_dict(row)
             item["width_cm"] = self.access.normalized_number(
-                getattr(row, "cut_width_cm", 0) or row.width_cm
+                cut_piece["width_cm"]
             )
             item["length_cm"] = self.access.normalized_number(
-                getattr(row, "cut_length_cm", 0) or row.length_cm
+                cut_piece["length_cm"]
             )
 
         return payload

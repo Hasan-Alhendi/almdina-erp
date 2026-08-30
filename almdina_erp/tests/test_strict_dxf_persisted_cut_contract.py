@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+from decimal import Decimal
+from types import SimpleNamespace
+
+import pytest
+
+from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
+from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
+    OrderPieceCutSpec,
+)
+from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+    _bind_persisted_cut_dimensions,
+)
+
+
+def _spec(*, cut_width_cm: str = "59.800", cut_length_cm: str = "199.700"):
+    return OrderPieceCutSpec(
+        row_index=1,
+        finished_width_cm=Decimal("60.000"),
+        finished_length_cm=Decimal("200.000"),
+        cut_width_cm=Decimal(cut_width_cm),
+        cut_length_cm=Decimal(cut_length_cm),
+        width_deduction_mm=Decimal("2.000"),
+        length_deduction_mm=Decimal("3.000"),
+        allow_rotation=1,
+        piece_type="Regular",
+        qty=1,
+        side_profiles=(),
+    )
+
+
+def test_strict_import_uses_persisted_cut_dimensions_over_recomputed_spec():
+    order = SimpleNamespace(
+        pieces=[
+            SimpleNamespace(
+                cut_width_cm=59.9,
+                cut_length_cm=199.8,
+            )
+        ]
+    )
+
+    bound = _bind_persisted_cut_dimensions(order, [_spec()])
+
+    assert bound[0].cut_width_cm == Decimal("59.900")
+    assert bound[0].cut_length_cm == Decimal("199.800")
+    assert bound[0].width_deduction_mm == Decimal("1.000")
+    assert bound[0].length_deduction_mm == Decimal("2.000")
+
+
+def test_strict_import_fails_closed_when_persisted_cut_dimension_is_missing():
+    order = SimpleNamespace(
+        pieces=[
+            SimpleNamespace(
+                cut_width_cm=0,
+                cut_length_cm=199.8,
+            )
+        ]
+    )
+
+    with pytest.raises(DxfImportError):
+        _bind_persisted_cut_dimensions(order, [_spec()])
