@@ -12,6 +12,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     snapshot_geometry_index,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    ManufacturingRequirementsError,
+    snapshot_manufacturing_requirement_index,
+)
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
@@ -28,16 +32,18 @@ def _rects_overlap(a: dict[str, float], b: dict[str, float], tol: float = 1e-7) 
     )
 
 
-def _expected_order_pieces(order: Any) -> dict[str, dict[str, Any]]:
-    expected: dict[str, dict[str, Any]] = {}
-    for group_index, row in enumerate(order.pieces or [], start=1):
-        for copy_no in range(1, cint(row.qty) + 1):
-            expected[f"{group_index}.{copy_no}"] = {
-                "width_cm": flt(row.width_cm),
-                "length_cm": flt(row.length_cm),
-                "allow_rotation": cint(row.allow_rotation),
-            }
-    return expected
+def _expected_snapshot_pieces(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    requirements, _ = snapshot_manufacturing_requirement_index(snapshot, require=True)
+    return {
+        label: {
+            "width_cm": flt(piece["cut_width_cm"]),
+            "length_cm": flt(piece["cut_length_cm"]),
+            "allow_rotation": bool(piece["allow_rotation"]),
+            "source_piece_no": cint(piece["source_piece_no"]),
+            "copy_no": cint(piece["copy_no"]),
+        }
+        for label, piece in requirements.items()
+    }
 
 
 def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[str]) -> None:
@@ -202,38 +208,58 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
         errors.append(_("Cutting Plan contains unplaced pieces."))
 
     if (plan.plan_kind or "Order") == "Order":
-        expected = _expected_order_pieces(order)
-        placed_labels = {row.piece_label for row in (plan.placed_pieces or [])}
-        missing = sorted(set(expected) - placed_labels)
-        extra = sorted(placed_labels - set(expected))
-        if missing:
-            errors.append(_("Cutting Plan is missing required pieces: {0}").format(", ".join(missing)))
-        if extra:
-            errors.append(_("Cutting Plan contains unknown pieces: {0}").format(", ".join(extra)))
-
-        for piece in plan.placed_pieces or []:
-            expected_piece = expected.get(piece.piece_label)
-            if not expected_piece:
-                continue
-            width_cm = flt(piece.width_mm) / 10
-            height_cm = flt(piece.height_mm) / 10
-            normal = (
-                abs(width_cm - expected_piece["width_cm"]) <= 0.001
-                and abs(height_cm - expected_piece["length_cm"]) <= 0.001
-            )
-            rotated = (
-                expected_piece["allow_rotation"]
-                and abs(width_cm - expected_piece["length_cm"]) <= 0.001
-                and abs(height_cm - expected_piece["width_cm"]) <= 0.001
-            )
-            if not (normal or rotated):
-                errors.append(
-                    _("Piece {0} dimensions/orientation do not match the order request.").format(
-                        piece.piece_label
-                    )
+        try:
+            expected = _expected_snapshot_pieces(snapshot)
+        except ManufacturingRequirementsError:
+            errors.append(
+                _(
+                    "Saved Cutting Plan has no valid captured manufacturing requirements. "
+                    "Recalculate the plan or re-import the DXF before manufacturing/export."
                 )
-            if cint(piece.rotated) and not expected_piece["allow_rotation"]:
-                errors.append(_("Piece {0} is rotated without permission.").format(piece.piece_label))
+            )
+            expected = {}
+
+        if expected:
+            placed_labels = {row.piece_label for row in (plan.placed_pieces or [])}
+            missing = sorted(set(expected) - placed_labels)
+            extra = sorted(placed_labels - set(expected))
+            if missing:
+                errors.append(_("Cutting Plan is missing required pieces: {0}").format(", ".join(missing)))
+            if extra:
+                errors.append(_("Cutting Plan contains unknown pieces: {0}").format(", ".join(extra)))
+
+            for piece in plan.placed_pieces or []:
+                expected_piece = expected.get(piece.piece_label)
+                if not expected_piece:
+                    continue
+                if (
+                    cint(piece.source_piece_no) != expected_piece["source_piece_no"]
+                    or cint(piece.copy_no) != expected_piece["copy_no"]
+                ):
+                    errors.append(
+                        _("Piece {0} identity does not match the captured manufacturing request.").format(
+                            piece.piece_label
+                        )
+                    )
+                width_cm = flt(piece.width_mm) / 10
+                height_cm = flt(piece.height_mm) / 10
+                normal = (
+                    abs(width_cm - expected_piece["width_cm"]) <= 0.001
+                    and abs(height_cm - expected_piece["length_cm"]) <= 0.001
+                )
+                rotated = (
+                    expected_piece["allow_rotation"]
+                    and abs(width_cm - expected_piece["length_cm"]) <= 0.001
+                    and abs(height_cm - expected_piece["width_cm"]) <= 0.001
+                )
+                if not (normal or rotated):
+                    errors.append(
+                        _("Piece {0} dimensions/orientation do not match the captured manufacturing request.").format(
+                            piece.piece_label
+                        )
+                    )
+                if cint(piece.rotated) and not expected_piece["allow_rotation"]:
+                    errors.append(_("Piece {0} is rotated without permission.").format(piece.piece_label))
 
     return errors
 
