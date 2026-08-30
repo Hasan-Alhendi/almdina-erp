@@ -157,6 +157,7 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_cutting_plan_application \
+            almdina_erp.tests.test_cutting_execution_trace \
             almdina_erp.tests.test_cutting_plan_architecture
 
       - name: Run cutting-domain strategy tests

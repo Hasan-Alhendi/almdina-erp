@@ -7,6 +7,11 @@ from typing import Callable, Literal
 
 TRIM_PRECISION_CM = 0.01  # 0.1 mm
 TrimAxis = Literal["width", "length"]
+TrimReason = Literal[
+    "preferred_retained",
+    "improved_feasibility",
+    "avoided_extra_board",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +62,16 @@ class AdaptiveTrimDecision:
     @property
     def mode(self) -> str:
         return "adaptive" if self.relaxed_axes else "preferred"
+
+    @property
+    def reason(self) -> TrimReason:
+        """Stable business reason for retaining or relaxing Preferred Trim."""
+
+        if not self.relaxed_axes:
+            return "preferred_retained"
+        if self.applied_quality.unplaced_count < self.preferred_quality.unplaced_count:
+            return "improved_feasibility"
+        return "avoided_extra_board"
 
 
 TrimEvaluator = Callable[[AppliedTrim], PlanQuality]
@@ -219,5 +234,6 @@ __all__ = [
     "PlanQuality",
     "TRIM_PRECISION_CM",
     "TrimAxis",
+    "TrimReason",
     "resolve_adaptive_trim",
 ]

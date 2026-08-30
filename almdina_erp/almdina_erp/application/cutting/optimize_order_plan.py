@@ -4,12 +4,19 @@ import math
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.application.cutting.execution_trace import (
+    build_cutting_execution_trace,
+)
 from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
     AdaptiveTrimDecision,
     AppliedTrim,
     PlanQuality,
     TRIM_PRECISION_CM,
     resolve_adaptive_trim,
+)
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettings,
+    normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
 
@@ -89,6 +96,7 @@ class OptimizeOrderPlanCommand:
     board: BoardGeometry
     optimizer: OptimizerOptions
     piece_rows: tuple[dict[str, Any], ...]
+    plan_settings: PlanSettings | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +116,7 @@ def optimize_order_plan(
     """Expand pieces, resolve Adaptive Trim, optimize, validate, and snapshot."""
 
     board = command.board
+    plan_settings = _canonical_trace_settings(command)
     rows = [dict(row) for row in command.piece_rows]
     expanded = engine.expand_pieces(rows)
     preferred_trim = AppliedTrim(
@@ -191,6 +200,12 @@ def optimize_order_plan(
         board=board,
         decision=trim_decision,
     )
+    execution_trace = build_cutting_execution_trace(
+        plan_settings=plan_settings,
+        trim_decision=trim_decision,
+        optimizer_outcome=plan,
+        engine_version=command.engine_version,
+    )
     snapshot = {
         "engine_version": command.engine_version,
         "input_fingerprint": command.input_fingerprint,
@@ -220,6 +235,7 @@ def optimize_order_plan(
         "applied_trim_width_cm": applied_trim.width_trim_cm,
         "applied_trim_length_cm": applied_trim.length_trim_cm,
         "trim_policy": trim_policy,
+        "execution_trace": execution_trace.to_snapshot(),
         # Compatibility metadata retained for print/DXF/readers that still use
         # the pre-ALMADINA-138 margin vocabulary.
         "margin_policy": {
@@ -260,6 +276,25 @@ def optimize_order_plan(
         required_boards=required_boards,
         method_label=method_label,
         expanded_pieces=tuple(expanded),
+    )
+
+
+def _canonical_trace_settings(command: OptimizeOrderPlanCommand) -> PlanSettings:
+    """Return the canonical settings object used as execution-trace input.
+
+    Frappe production callers pass their already-normalized PlanSettings object.
+    The fallback preserves compatibility for application callers that predate
+    ALMADINA-139 while still constructing the trace from a canonical contract.
+    """
+
+    if command.plan_settings is not None:
+        return command.plan_settings
+    return normalize_plan_settings(
+        optimization_mode=command.optimizer.selected_mode,
+        machine_type=command.optimizer.machine_type,
+        optimization_time_limit_sec=command.optimizer.time_limit_sec,
+        kerf_mm=command.board.kerf_cm * 10,
+        preferred_trim_mm=command.board.trim_cm * 10,
     )
 
 
