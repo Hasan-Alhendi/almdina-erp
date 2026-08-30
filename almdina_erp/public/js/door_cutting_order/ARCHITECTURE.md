@@ -68,7 +68,9 @@ presentation-owned Frappe hydration port, which then asks the existing measureme
 owners to rebuild their UI once. It does not restore Plan/Cost/Invoice authority or change scanner,
 Save, Cancel, or EDIT behavior. First-insert safety wraps the native explicit Save
 with a stable hidden unique creation token and a narrow authorized reconciliation
-query; it is not a second insert API.
+query; it is not a second insert API. Cross-tab revision conflicts block the stale
+native insert, and native failure/cancellation cleanup is bound to the originating
+document state plus exact save attempt with bounded compare-and-set retry.
 
 ### Special-shape manufacturing boundary
 

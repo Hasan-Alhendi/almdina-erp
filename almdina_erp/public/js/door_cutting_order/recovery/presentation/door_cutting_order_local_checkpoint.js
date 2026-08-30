@@ -9,6 +9,7 @@
     const DISCOVERY_CLEANUP_EFFECT = "dco-new-recovery-discovery-cleanup";
     const WORKSPACE_SUBSCRIPTIONS_EFFECT = "dco-local-recovery-workspace-subscriptions";
     const INACTIVE_SAVE_ERROR = "recovery_document_inactive";
+    const CLEAR_ATTEMPT_MAX_TRIES = 3;
     const states = new WeakMap();
     const initializations = new WeakMap();
     const dialogs = new WeakMap();
@@ -117,27 +118,34 @@
             if (resumed) return true;
         }
         const repo = repository();
+        if (!repo || typeof repo.read !== "function" || typeof repo.setOfficialSaveState !== "function") {
+            return false;
+        }
         const identity = state.session.identity();
-        const current = await repo.read(identity);
-        if (!current || current.ok !== true) return false;
-        if (!current.value) return true;
-        if (
-            current.value.official_save_state !== "PENDING_RECONCILIATION"
-            || current.value.official_save_attempted_at !== expectedAttempt
-        ) return false;
-        const result = await repo.setOfficialSaveState(
-            identity,
-            "ACTIVE",
-            current.value.recovery_revision,
-            expectedAttempt
-        );
-        return Boolean(
-            result
-            && (
-                result.ok === true
-                || (result.error && result.error.code === "draft_not_found")
-            )
-        );
+        for (let attempt = 0; attempt < CLEAR_ATTEMPT_MAX_TRIES; attempt += 1) {
+            const current = await repo.read(identity);
+            if (!current || current.ok !== true) return false;
+            if (!current.value) return true;
+            if (
+                current.value.official_save_state !== "PENDING_RECONCILIATION"
+                || current.value.official_save_attempted_at !== expectedAttempt
+            ) return false;
+            const result = await repo.setOfficialSaveState(
+                identity,
+                "ACTIVE",
+                current.value.recovery_revision,
+                expectedAttempt
+            );
+            if (
+                result
+                && (
+                    result.ok === true
+                    || (result.error && result.error.code === "draft_not_found")
+                )
+            ) return true;
+            if (!result || !result.error || result.error.code !== "stale_revision") return false;
+        }
+        return false;
     }
 
     function isNew(frm) {
@@ -754,36 +762,79 @@
         );
     }
 
-    async function handleOfficialSaveFailure(frm, error) {
-        const state = currentState(frm);
-        if (!state || !state.saveWasNew || state.mode !== "NEW") return;
+    async function handleOfficialSaveFailure(operation, error) {
+        const state = operation && operation.state;
+        const attemptedAt = String(operation && operation.attemptedAt || "").trim();
+        if (!state || !operation.saveWasNew || state.mode !== "NEW") return;
         if (error && error.code === INACTIVE_SAVE_ERROR) {
             return;
         }
         if (provesNoInsert(error)) {
-            const resumed = await state.session.resumeAfterProvenFailure();
-            if (!resumed) state.session.markPendingReconciliation();
+            if (!attemptedAt) return;
+            const resumed = await clearProvenSaveAttempt(state, attemptedAt);
+            const snapshot = state.session.snapshot();
+            if (
+                !resumed
+                && snapshot.official_save_attempted_at === attemptedAt
+                && snapshot.state !== root.CheckpointSession.STATES.DISPOSED
+            ) state.session.markPendingReconciliation();
             return;
         }
-        state.session.markPendingReconciliation();
+        const snapshot = state.session.snapshot();
+        if (
+            attemptedAt
+            && snapshot.official_save_attempted_at === attemptedAt
+            && snapshot.state !== root.CheckpointSession.STATES.DISPOSED
+        ) state.session.markPendingReconciliation();
+    }
+
+    function bindObservedSaveOperation(frm, state) {
+        const entry = observedSaves.get(frm);
+        if (!entry || !entry.operations) return null;
+        const operation = [...entry.operations].find((candidate) => (
+            candidate.state === state && candidate.beforeSaveBound !== true
+        ));
+        if (!operation) return null;
+        operation.beforeSaveBound = true;
+        return operation;
     }
 
     function installSaveObserver(frm) {
         if (!frm || typeof frm.save !== "function" || observedSaves.has(frm)) return false;
         const original = frm.save;
+        const entry = { original, observed: null, operations: new Set() };
         const observed = function observedRecoverySave(...args) {
+            const state = currentState(frm);
+            const snapshot = state && state.session.snapshot();
+            const operation = {
+                state,
+                saveWasNew: Boolean(
+                    state
+                    && state.saveWasNew
+                    && state.mode === "NEW"
+                    && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
+                ),
+                attemptedAt: snapshot && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
+                    ? snapshot.official_save_attempted_at
+                    : null,
+                beforeSaveBound: false,
+            };
+            entry.operations.add(operation);
             let result;
             try {
                 result = original.apply(this, args);
             } catch (error) {
-                return Promise.resolve(handleOfficialSaveFailure(frm, error)).then(() => { throw error; });
+                return Promise.resolve(handleOfficialSaveFailure(operation, error))
+                    .then(() => { throw error; })
+                    .finally(() => entry.operations.delete(operation));
             }
             return Promise.resolve(result).catch(async (error) => {
-                await handleOfficialSaveFailure(frm, error);
+                await handleOfficialSaveFailure(operation, error);
                 throw error;
-            });
+            }).finally(() => entry.operations.delete(operation));
         };
-        observedSaves.set(frm, { original, observed });
+        entry.observed = observed;
+        observedSaves.set(frm, entry);
         frm.save = observed;
         return true;
     }
@@ -827,8 +878,13 @@
     async function beforeSave(frm) {
         const state = currentState(frm);
         if (!state) return;
+        const saveOperation = bindObservedSaveOperation(frm, state);
         const isCurrent = activeDocumentGuard(frm);
         state.saveWasNew = state.mode === "NEW" && isNew(frm);
+        if (saveOperation) {
+            saveOperation.saveWasNew = state.saveWasNew;
+            saveOperation.attemptedAt = null;
+        }
         if (!state.saveWasNew) return;
 
         if (state.session.snapshot().recovery_revision === 0) {
@@ -837,6 +893,12 @@
         const flushed = await flushState(frm, state);
         if (!isCurrent()) abortInactiveSave();
         if (!flushed || flushed.ok !== true) {
+            const code = String(flushed && flushed.error && flushed.error.code || "");
+            if (["stale_revision", "revision_conflict"].includes(code)) {
+                frappe.validated = false;
+                showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.");
+                return;
+            }
             // Recovery is fail-safe: the native explicit Save remains usable.
             console.debug("Latest NEW checkpoint could not be flushed before official Save", flushed && flushed.error);
         }
@@ -854,6 +916,9 @@
         }
         frm.doc.recovery_creation_token = state.session.snapshot().draft_id;
         const started = await state.session.beginOfficialSave();
+        if (saveOperation && started && started.ok === true) {
+            saveOperation.attemptedAt = started.value && started.value.official_save_attempted_at;
+        }
         if (!isCurrent()) {
             if (started && started.ok === true) {
                 await clearProvenSaveAttempt(
@@ -864,6 +929,11 @@
             abortInactiveSave();
         }
         if (!started || started.ok !== true) {
+            if (started && started.error && started.error.code === "stale_revision") {
+                frappe.validated = false;
+                showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب قبل الحفظ.");
+                return;
+            }
             if (started && started.error && started.error.code === "save_attempt_conflict") {
                 state.session.markPendingReconciliation();
                 frappe.validated = false;

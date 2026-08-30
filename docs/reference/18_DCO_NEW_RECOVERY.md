@@ -104,7 +104,13 @@ attempt remain lexically available until this correction finishes, with a direct
 repository compare-and-set fallback if DocumentContext cleanup disposed the session.
 That fallback re-reads the record, verifies the same pending attempt, and uses its
 latest checkpoint revision so a concurrent payload checkpoint cannot strand an
-otherwise proven-never-inserted attempt.
+otherwise proven-never-inserted attempt. If another checkpoint wins between the
+read and compare-and-set, cleanup re-reads and retries a bounded number of times
+while the exact attempt is still pending. A stale revision before native insert is
+a cross-tab ownership conflict and blocks that insert; it never fails open over a
+newer local payload. Native Save completion/failure handling retains the originating
+state and exact attempt, so reusing the same form object cannot mutate a replacement
+document's recovery session.
 Recovery infrastructure failure is logged/fail-safe and does not remove native
 explicit DCO creation. There is no official autosave, periodic `frm.save()`, remote
 sync, cross-device restore, or product behavior change outside NEW continuity.

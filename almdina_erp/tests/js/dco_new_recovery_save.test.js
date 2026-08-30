@@ -25,6 +25,8 @@ let writeDeferred = null;
 let saveStateDeferred = null;
 let saveStateEntered = null;
 let advanceRevisionOnRead = false;
+let advanceRevisionBeforeActiveCas = false;
+let nativeSaveDeferred = null;
 
 const repository = {
     createIdentity() {
@@ -56,12 +58,17 @@ const repository = {
         return { ok: true, value: next };
     },
     async setOfficialSaveState(identity, state, revision, expectedAttemptedAt) {
-        const current = records.get(identity.draft_id);
+        let current = records.get(identity.draft_id);
         if (saveStateDeferred && state === "PENDING_RECONCILIATION") {
             if (saveStateEntered) saveStateEntered.resolve();
             await saveStateDeferred.promise;
         }
         if (!current) return { ok: false, error: { code: "draft_not_found" } };
+        if (advanceRevisionBeforeActiveCas && state === "ACTIVE") {
+            advanceRevisionBeforeActiveCas = false;
+            current = { ...current, recovery_revision: current.recovery_revision + 1 };
+            records.set(identity.draft_id, current);
+        }
         if (Number(current.recovery_revision) !== Number(revision)) {
             return { ok: false, error: { code: "stale_revision" } };
         }
@@ -252,6 +259,7 @@ function form(name) {
         dirty() {},
         save() {
             nativeSaveCalls += 1;
+            if (nativeSaveDeferred) return nativeSaveDeferred.promise;
             return nativeFailure ? Promise.reject(nativeFailure) : Promise.resolve();
         },
     };
@@ -517,6 +525,7 @@ function runCleanups(frm) {
     fakeWindow.cur_frm = form("new-door-cutting-order-disposed-other-route");
     runCleanups(disposedSaveForm);
     advanceRevisionOnRead = true;
+    advanceRevisionBeforeActiveCas = true;
     saveStateDeferred.resolve();
     await assert.rejects(
         disposedSave,
@@ -529,12 +538,65 @@ function runCleanups(frm) {
     );
     assert.equal(
         records.get(disposedSaveId).recovery_revision,
-        disposedSaveRecord.recovery_revision + 1,
-        "cancellation CAS uses the latest checkpoint revision"
+        disposedSaveRecord.recovery_revision + 2,
+        "cancellation CAS re-reads and retries when a later checkpoint wins after the first read"
     );
     assert.equal(Recovery.LocalCheckpoint.snapshot(disposedSaveForm), null);
     saveStateDeferred = null;
     saveStateEntered = null;
+
+    const reusedFormId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const reusedFormRecord = draft(reusedFormId);
+    const reusedForm = form("new-door-cutting-order-reused-old");
+    fakeWindow.cur_frm = reusedForm;
+    await Recovery.LocalCheckpoint.continueDraft(reusedForm, reusedFormRecord);
+    await handlers["Door Cutting Order"].before_save(reusedForm);
+    const oldAttempt = records.get(reusedFormId).official_save_attempted_at;
+    nativeSaveDeferred = deferred();
+    const oldNativeSave = reusedForm.save();
+    runCleanups(reusedForm);
+    documentGeneration += 1;
+    reusedForm.doc = {
+        doctype: "Door Cutting Order",
+        name: "new-door-cutting-order-reused-new",
+        __islocal: 1,
+        pieces: [],
+    };
+    discoveredRecords = [];
+    await Recovery.LocalCheckpoint.initializeNewForm(reusedForm);
+    const replacementId = Recovery.LocalCheckpoint.snapshot(reusedForm).draft_id;
+    await handlers["Door Cutting Order"].before_save(reusedForm);
+    const replacementAttempt = records.get(replacementId).official_save_attempted_at;
+    nativeSaveDeferred.reject({
+        status: 417,
+        responseJSON: { exc_type: "ValidationError" },
+        message: "old validation failed",
+    });
+    await assert.rejects(oldNativeSave);
+    assert.equal(records.get(reusedFormId).official_save_state, "ACTIVE");
+    assert.equal(records.get(reusedFormId).official_save_attempted_at, oldAttempt);
+    assert.equal(records.get(replacementId).official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(
+        records.get(replacementId).official_save_attempted_at,
+        replacementAttempt,
+        "a late native failure can clear only its originating document and attempt"
+    );
+    nativeSaveDeferred = null;
+
+    const staleRevisionId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const staleRevisionRecord = draft(staleRevisionId);
+    const staleRevisionForm = form("new-door-cutting-order-stale-revision");
+    fakeWindow.cur_frm = staleRevisionForm;
+    await Recovery.LocalCheckpoint.continueDraft(staleRevisionForm, staleRevisionRecord);
+    records.set(staleRevisionId, {
+        ...records.get(staleRevisionId),
+        recovery_revision: staleRevisionRecord.recovery_revision + 1,
+    });
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(staleRevisionForm);
+    assert.equal(fakeFrappe.validated, false, "a stale-revision tab cannot start native insert");
+    assert.equal(records.get(staleRevisionId).official_save_state, "ACTIVE");
+    assert.equal(records.get(staleRevisionId).recovery_revision, staleRevisionRecord.recovery_revision + 1);
 
     const staleTabId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     const staleTabRecord = draft(staleTabId);
