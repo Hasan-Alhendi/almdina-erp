@@ -4,11 +4,18 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from almdina_erp.almdina_erp.domain.cutting.dxf_topology import PartGeometry
+from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
+    DxfTopologyError,
+    PartGeometry,
+    PlacedPartGeometry,
+    validate_material_layout,
+)
 
 GEOMETRY_SCHEMA_VERSION = 1
 GEOMETRY_UNIT = "mm"
 GEOMETRY_COORDINATE_SPACE = "usable_sheet"
+GEOMETRY_TOLERANCE_MM = 0.25
+KERF_NUMERIC_TOLERANCE_MM = 0.1
 
 
 class DxfGeometrySnapshotError(ValueError):
@@ -128,14 +135,109 @@ def canonicalize_snapshot_geometries(value: Any) -> Any:
     return value
 
 
+def snapshot_geometry_index(snapshot: Any) -> tuple[dict[tuple[int, int], dict[str, Any]], bool]:
+    """Index canonical piece geometry by ``(sheet_no, piece_id)``.
+
+    A mixed persisted snapshot is intentionally fail-closed: once any piece has
+    public geometry, every persisted piece must have it and every identity must be
+    unique. Legacy snapshots with no geometry return ``({}, False)``.
+    """
+
+    if not isinstance(snapshot, Mapping):
+        return {}, False
+
+    rows: list[tuple[int, Mapping[str, Any]]] = []
+    has_geometry = False
+    for sheet_index, sheet in enumerate(snapshot.get("sheets") or [], start=1):
+        if not isinstance(sheet, Mapping):
+            raise DxfGeometrySnapshotError("snapshot sheets must be objects.")
+        try:
+            sheet_no = int(sheet.get("sheet_no") or sheet_index)
+        except (TypeError, ValueError) as exc:
+            raise DxfGeometrySnapshotError("sheet_no must be an integer.") from exc
+        for piece in sheet.get("pieces") or []:
+            if not isinstance(piece, Mapping):
+                raise DxfGeometrySnapshotError("snapshot pieces must be objects.")
+            rows.append((sheet_no, piece))
+            has_geometry = has_geometry or "geometry" in piece
+
+    if not has_geometry:
+        return {}, False
+
+    indexed: dict[tuple[int, int], dict[str, Any]] = {}
+    for sheet_no, piece in rows:
+        if "geometry" not in piece:
+            raise DxfGeometrySnapshotError(
+                "persisted DXF topology is incomplete; a piece is missing geometry."
+            )
+        try:
+            piece_id = int(piece.get("id"))
+        except (TypeError, ValueError) as exc:
+            raise DxfGeometrySnapshotError(
+                "persisted DXF topology requires an integer piece id."
+            ) from exc
+        if piece_id <= 0:
+            raise DxfGeometrySnapshotError(
+                "persisted DXF topology requires a positive piece id."
+            )
+        key = (sheet_no, piece_id)
+        if key in indexed:
+            raise DxfGeometrySnapshotError(
+                f"persisted DXF topology contains duplicate piece identity {sheet_no}:{piece_id}."
+            )
+        indexed[key] = serialize_geometry_mm(parse_geometry_mm(piece["geometry"]))
+    return indexed, True
+
+
+def validate_snapshot_material_layout(
+    snapshot: Any,
+    *,
+    required_clearance_mm: float,
+) -> bool:
+    """Validate persisted DXF material topology when present.
+
+    Returns ``False`` for legacy rectangle-only snapshots. Returns ``True`` after
+    topology-aware validation succeeds. Malformed/mixed geometry or a material/
+    Kerf violation raises instead of silently falling back to rectangles.
+    """
+
+    indexed, has_geometry = snapshot_geometry_index(snapshot)
+    if not has_geometry:
+        return False
+
+    for sheet_index, sheet in enumerate(snapshot.get("sheets") or [], start=1):
+        sheet_no = int(sheet.get("sheet_no") or sheet_index)
+        placed: list[PlacedPartGeometry] = []
+        for piece in sheet.get("pieces") or []:
+            piece_id = int(piece.get("id"))
+            placed.append(
+                PlacedPartGeometry(
+                    key=piece.get("label") or piece_id,
+                    geometry=parse_geometry_mm(indexed[(sheet_no, piece_id)]),
+                )
+            )
+        validate_material_layout(
+            placed,
+            required_clearance=max(0.0, float(required_clearance_mm or 0.0)),
+            geometry_tolerance=GEOMETRY_TOLERANCE_MM,
+            numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM,
+        )
+    return True
+
+
 __all__ = [
     "DxfGeometrySnapshotError",
+    "DxfTopologyError",
     "GEOMETRY_COORDINATE_SPACE",
     "GEOMETRY_SCHEMA_VERSION",
+    "GEOMETRY_TOLERANCE_MM",
     "GEOMETRY_UNIT",
+    "KERF_NUMERIC_TOLERANCE_MM",
     "canonicalize_snapshot_geometries",
     "geometry_mm_to_cm",
     "parse_geometry_mm",
     "serialize_geometry_from_cm",
     "serialize_geometry_mm",
+    "snapshot_geometry_index",
+    "validate_snapshot_material_layout",
 ]
