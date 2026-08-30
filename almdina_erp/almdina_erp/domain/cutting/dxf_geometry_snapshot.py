@@ -118,21 +118,42 @@ def geometry_mm_to_cm(geometry: PartGeometry) -> PartGeometry:
 
 
 def canonicalize_snapshot_geometries(value: Any) -> Any:
-    """Validate and canonicalize every public ``geometry`` object in a snapshot."""
+    """Validate/canonicalize only ``sheets[*].pieces[*].geometry`` contracts.
 
-    if isinstance(value, Mapping):
-        normalized = dict(value)
-        if "geometry" in normalized:
-            normalized["geometry"] = serialize_geometry_mm(parse_geometry_mm(normalized["geometry"]))
-        return {
-            key: canonicalize_snapshot_geometries(item)
-            for key, item in normalized.items()
-        }
-    if isinstance(value, list):
-        return [canonicalize_snapshot_geometries(item) for item in value]
-    if isinstance(value, tuple):
-        return [canonicalize_snapshot_geometries(item) for item in value]
-    return value
+    Other snapshot metadata may legitimately use a generic ``geometry`` key for
+    unrelated features. This hotfix owns only uploaded-DXF piece topology and
+    therefore deliberately avoids interpreting geometry outside placed pieces.
+    """
+
+    if not isinstance(value, Mapping):
+        return value
+
+    normalized = dict(value)
+    sheets = normalized.get("sheets")
+    if isinstance(sheets, list):
+        normalized_sheets: list[Any] = []
+        for sheet in sheets:
+            if not isinstance(sheet, Mapping):
+                normalized_sheets.append(sheet)
+                continue
+            normalized_sheet = dict(sheet)
+            pieces = normalized_sheet.get("pieces")
+            if isinstance(pieces, list):
+                normalized_pieces: list[Any] = []
+                for piece in pieces:
+                    if not isinstance(piece, Mapping):
+                        normalized_pieces.append(piece)
+                        continue
+                    normalized_piece = dict(piece)
+                    if "geometry" in normalized_piece:
+                        normalized_piece["geometry"] = serialize_geometry_mm(
+                            parse_geometry_mm(normalized_piece["geometry"])
+                        )
+                    normalized_pieces.append(normalized_piece)
+                normalized_sheet["pieces"] = normalized_pieces
+            normalized_sheets.append(normalized_sheet)
+        normalized["sheets"] = normalized_sheets
+    return normalized
 
 
 def snapshot_geometry_index(snapshot: Any) -> tuple[dict[tuple[int, int], dict[str, Any]], bool]:
