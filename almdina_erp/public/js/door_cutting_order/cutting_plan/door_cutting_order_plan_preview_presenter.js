@@ -4,6 +4,11 @@
     if (window.AlmdinaPlanPreviewPresenter) return;
 
     const STYLE_ID = "almdina-plan-preview-style";
+    const TRIM_REASON_LABELS = Object.freeze({
+        preferred_retained: "تم الاحتفاظ بهامش التشذيب المطلوب",
+        improved_feasibility: "تم تخفيض التشذيب لإتاحة توزيع جميع القطع",
+        avoided_extra_board: "تم تخفيض التشذيب لتجنب لوح إضافي غير ضروري",
+    });
 
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -41,6 +46,12 @@
                 .dco-plan-preview-summary__item.is-cost {
                     border-color:rgba(31,130,82,.24);background:rgba(31,130,82,.055);
                 }
+                .dco-plan-preview-summary__item.is-trace {
+                    border-color:rgba(82,82,91,.18);background:rgba(82,82,91,.035);
+                }
+                .dco-plan-preview-summary__item.is-adaptive {
+                    border-color:rgba(217,119,6,.24);background:rgba(245,158,11,.06);
+                }
                 .dco-plan-preview-summary__item span {
                     display:block;color:var(--text-muted,#687481);font-size:10px;font-weight:700;
                 }
@@ -48,6 +59,7 @@
                     display:block;margin-top:4px;font-size:13px;font-weight:850;
                 }
                 .dco-plan-preview-summary__item.is-cost strong { color:#14653d;direction:ltr;text-align:right; }
+                .dco-plan-preview-summary__item.is-adaptive strong { color:#8a4b08; }
                 .dco-plan-preview-status {
                     padding:12px 14px;border:1px dashed var(--border-color,#ccd3da);
                     border-radius:11px;background:var(--subtle-fg,#fafafa);direction:rtl;
@@ -75,6 +87,14 @@
         return numeric.toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
+        });
+    }
+
+    function numberText(value, decimals = 2) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) return "—";
+        return numeric.toLocaleString("en-US", {
+            maximumFractionDigits: decimals,
         });
     }
 
@@ -150,17 +170,49 @@
         return copy[status] || copy.idle;
     }
 
-    function renderPreviewSummary(frm, summary) {
+    function executionItems(plan) {
+        const trace = plan && plan.execution_trace;
+        if (!trace || Number(trace.version || 0) < 1) return [];
+        const requested = trace.requested || {};
+        const adaptive = trace.adaptive_trim || {};
+        const optimizer = trace.optimizer || {};
+        const items = [
+            ["الخوارزمية المطلوبة", String(requested.optimization_mode || "—"), "is-trace"],
+            ["الاستراتيجية المستخدمة", String(optimizer.method_label || optimizer.method_key || "—"), "is-trace"],
+            ["آلة القص", String(requested.machine_type || "—"), "is-trace"],
+            ["Kerf المستخدم", `${numberText(requested.kerf_mm)} مم`, "is-trace"],
+            ["Trim المطلوب", `${numberText(requested.preferred_trim_mm)} مم`, "is-trace"],
+            [
+                "Trim الفعلي",
+                `عرض ${numberText(adaptive.applied_width_trim_mm)} مم / طول ${numberText(adaptive.applied_length_trim_mm)} مم`,
+                adaptive.applied ? "is-adaptive" : "is-trace",
+            ],
+            ["المحاولات", numberText(optimizer.attempts, 0), "is-trace"],
+            ["وقت الحساب", `${numberText(optimizer.elapsed_sec, 3)} ث`, "is-trace"],
+        ];
+        if (adaptive.reason) {
+            items.push([
+                "قرار التشذيب",
+                TRIM_REASON_LABELS[adaptive.reason] || String(adaptive.reason),
+                adaptive.applied ? "is-adaptive" : "is-trace",
+            ]);
+        }
+        if (optimizer.solver_status) {
+            items.push(["حالة Solver", String(optimizer.solver_status), "is-trace"]);
+        }
+        return items;
+    }
+
+    function renderPreviewSummary(frm, summary, plan) {
         const wrapper = summaryWrapper(frm);
         if (!wrapper) return;
         const totals = (summary && summary.totals) || {};
-        const engine = (summary && summary.engine) || {};
         const quality = (summary && summary.quality) || {};
         const items = [
             ["عدد الألواح", `${Number(totals.required_boards || 0)}`, ""],
             ["نسبة الهدر", `${Number(totals.waste_percent || 0).toFixed(2)}%`, ""],
-            ["الخوارزمية الفعلية", String(engine.method_label || engine.method_key || "—"), ""],
             ["خطوط القص", `${Number(quality.estimated_cut_count || 0)}`, ""],
+            ...executionItems(plan),
         ];
         const cost = summary && summary.cost;
         if (cost) {
@@ -169,7 +221,7 @@
         const markup = items.map(([label, value, className]) => `
             <div class="dco-plan-preview-summary__item ${className}">
                 <span>${escape(label)}</span>
-                <strong>${frappe.utils.escape_html(value)}</strong>
+                <strong>${frappe.utils.escape_html(String(value))}</strong>
             </div>
         `).join("");
         wrapper.html(`<div class="dco-plan-preview-summary">${markup}</div>`);
@@ -254,7 +306,7 @@
             ${renderer.build(frm, plan)}
         `);
         lockSourceTabs(frm);
-        renderPreviewSummary(frm, payload.summary || {});
+        renderPreviewSummary(frm, payload.summary || {}, plan);
         return true;
     }
 
