@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import frappe
 import pytest
 
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
@@ -18,6 +19,14 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_plan_adapter import (
     FrappeCutDimensionPlanAdapter,
+)
+from almdina_erp.almdina_erp.services import dxf_export_service
+from almdina_erp.almdina_erp.services.dxf_import_service import (
+    DxfImportError,
+    _expected_order_pieces,
+)
+from almdina_erp.almdina_erp.services.export_validation_service import (
+    _expected_snapshot_pieces,
 )
 
 
@@ -76,8 +85,8 @@ def _order(piece):
 
 def _plan():
     return SimpleNamespace(
-        optimization_mode="auto_pro",
-        machine_type="Auto",
+        optimization_mode="",
+        machine_type="",
         optimization_time_limit_sec=10,
         kerf_mm=3.2,
         trim_margin_mm=5,
@@ -173,3 +182,63 @@ def test_plan_fingerprint_changes_when_persisted_cut_dimension_changes():
     second = plan_input_fingerprint(order, _plan())
 
     assert first != second
+
+
+def test_dxf_import_matches_persisted_cut_dimensions_not_finished_dimensions():
+    order = _order(
+        _piece(width_cm=60, length_cm=200, cut_width_cm=59.9, cut_length_cm=199.8)
+    )
+    expected = _expected_order_pieces(order)
+
+    assert expected == [
+        {
+            "label": "1.1",
+            "width_cm": 59.9,
+            "length_cm": 199.8,
+            "allow_rotation": 1,
+            "piece_type": "Regular",
+            "source_piece_no": 1,
+            "copy_no": 1,
+        }
+    ]
+
+
+def test_dxf_import_fails_closed_when_persisted_cut_dimensions_are_missing():
+    order = _order(_piece(cut_width_cm=0, width_cm=60))
+    with pytest.raises(DxfImportError):
+        _expected_order_pieces(order)
+
+
+def test_saved_plan_validation_reads_captured_requirement_not_live_order_dimensions():
+    order = _order(_piece(cut_width_cm=59.9, cut_length_cm=199.8))
+    captured = _manufacturing_requirements(order)
+    order.pieces[0].width_cm = 61
+    order.pieces[0].length_cm = 201
+    order.pieces[0].cut_width_cm = 58
+    order.pieces[0].cut_length_cm = 198
+
+    expected = _expected_snapshot_pieces(
+        {"manufacturing_requirements": captured}
+    )
+    assert expected["1.1"]["width_cm"] == 59.9
+    assert expected["1.1"]["length_cm"] == 199.8
+
+
+def test_legacy_saved_plan_without_captured_requirements_fails_closed():
+    with pytest.raises(ManufacturingRequirementsError):
+        _expected_snapshot_pieces({})
+
+
+def test_saved_export_rejects_fingerprint_drift_before_geometry(monkeypatch):
+    order = _order(_piece())
+    plan = _plan()
+    plan.plan_needs_recalculation = 0
+    plan.input_fingerprint = "captured-revision"
+    monkeypatch.setattr(
+        dxf_export_service,
+        "plan_input_fingerprint",
+        lambda _order, _plan: "current-revision",
+    )
+
+    with pytest.raises(frappe.ValidationError):
+        dxf_export_service._assert_saved_plan_fresh(order, plan)
