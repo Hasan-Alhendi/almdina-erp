@@ -98,6 +98,10 @@
         });
     }
 
+    function hasTraceValue(value) {
+        return value !== null && value !== undefined && value !== "";
+    }
+
     function actionWrapper(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.plan_control_actions;
         return field && field.$wrapper && field.$wrapper.length ? field.$wrapper : null;
@@ -187,9 +191,13 @@
                 `عرض ${numberText(adaptive.applied_width_trim_mm)} مم / طول ${numberText(adaptive.applied_length_trim_mm)} مم`,
                 adaptive.applied ? "is-adaptive" : "is-trace",
             ],
-            ["المحاولات", numberText(optimizer.attempts, 0), "is-trace"],
-            ["وقت الحساب", `${numberText(optimizer.elapsed_sec, 3)} ث`, "is-trace"],
         ];
+        if (hasTraceValue(optimizer.attempts)) {
+            items.push(["المحاولات", numberText(optimizer.attempts, 0), "is-trace"]);
+        }
+        if (hasTraceValue(optimizer.elapsed_sec)) {
+            items.push(["وقت الحساب", `${numberText(optimizer.elapsed_sec, 3)} ث`, "is-trace"]);
+        }
         if (adaptive.reason) {
             items.push([
                 "قرار التشذيب",
