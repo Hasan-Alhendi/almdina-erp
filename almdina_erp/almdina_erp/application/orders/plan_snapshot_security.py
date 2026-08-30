@@ -4,6 +4,10 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    canonicalize_snapshot_geometries,
+)
+
 
 # Cutting-plan snapshots are shared with planning, drawing, production, print,
 # and DXF surfaces. They are therefore an operational geometry artifact, never a
@@ -43,26 +47,31 @@ def is_financial_plan_key(key: Any) -> bool:
     return normalized.startswith(_FINANCIAL_PLAN_PREFIXES)
 
 
-def sanitize_plan_snapshot(value: Any) -> Any:
-    """Deep-copy JSON-compatible plan data while removing financial metadata.
-
-    The sanitizer is deliberately recursive because optimization engines may
-    copy piece metadata into nested sheets. A top-level-only filter would leave
-    edge rates, piece costs, or special-shape prices reachable through a plan
-    endpoint even when scalar DocType fields are protected by permlevel 1.
-    """
-
+def _sanitize_plan_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {
-            key: sanitize_plan_snapshot(item)
+            key: _sanitize_plan_value(item)
             for key, item in value.items()
             if not is_financial_plan_key(key)
         }
     if isinstance(value, list):
-        return [sanitize_plan_snapshot(item) for item in value]
+        return [_sanitize_plan_value(item) for item in value]
     if isinstance(value, tuple):
-        return [sanitize_plan_snapshot(item) for item in value]
+        return [_sanitize_plan_value(item) for item in value]
     return value
+
+
+def sanitize_plan_snapshot(value: Any) -> Any:
+    """Return safe operational plan data with trusted persisted DXF geometry.
+
+    Financial metadata is removed recursively. If a public DXF ``geometry``
+    contract is present it is validated and canonicalized; malformed geometry is
+    rejected instead of being silently discarded and reinterpreted as a rectangle.
+    Legacy plans without ``geometry`` remain unchanged.
+    """
+
+    sanitized = _sanitize_plan_value(value)
+    return canonicalize_snapshot_geometries(sanitized)
 
 
 def sanitize_plan_snapshot_json(raw: Any) -> str:

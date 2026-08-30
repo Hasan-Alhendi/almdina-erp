@@ -6,6 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    DxfGeometrySnapshotError,
+    DxfTopologyError,
+    validate_snapshot_material_layout,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     DRAFT,
     SYSTEM,
@@ -70,11 +75,34 @@ def _require_export_access(
     return None
 
 
+def _topology_kerf_error(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    if code:
+        first = getattr(exc, "first_key", None) or "?"
+        second = getattr(exc, "second_key", None) or "?"
+        return _("DXF topology validation failed ({0}) between pieces {1} and {2}.").format(
+            code,
+            first,
+            second,
+        )
+    return _("Persisted DXF topology is invalid: {0}").format(str(exc))
+
+
 def _kerf_errors(snapshot: dict[str, Any], *, fallback_kerf_mm: float = 0.0) -> list[str]:
     required_kerf_cm = max(
         0.0,
         flt(snapshot.get("kerf_cm")) or (max(0.0, flt(fallback_kerf_mm)) / 10.0),
     )
+
+    try:
+        if validate_snapshot_material_layout(
+            snapshot,
+            required_clearance_mm=required_kerf_cm * 10.0,
+        ):
+            return []
+    except (DxfGeometrySnapshotError, DxfTopologyError) as exc:
+        return [_topology_kerf_error(exc)]
+
     if required_kerf_cm <= 0:
         return []
 
@@ -262,7 +290,10 @@ def get_validated_dxf_plan(
                     "\n".join(errors)
                 )
             )
-        snapshot = legacy_export._plan_to_export_snapshot(plan)
+        try:
+            snapshot = legacy_export._plan_to_export_snapshot(plan)
+        except DxfGeometrySnapshotError as exc:
+            frappe.throw(_("DXF export blocked by persisted topology validation: {0}").format(str(exc)))
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
         return {
             "plan": snapshot,
