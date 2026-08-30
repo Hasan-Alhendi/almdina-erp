@@ -22,6 +22,7 @@ let documentGeneration = 1;
 let reconciliationDeferred = null;
 let saveAttemptSequence = 0;
 let writeDeferred = null;
+let writeFailure = null;
 let saveStateDeferred = null;
 let saveStateEntered = null;
 let pendingStateFailure = null;
@@ -49,6 +50,7 @@ const repository = {
     },
     async write(input) {
         if (writeDeferred) await writeDeferred.promise;
+        if (writeFailure) return { ok: false, error: structuredClone(writeFailure) };
         const current = records.get(input.draft_id) || null;
         const revision = Number(input.recovery_revision);
         const expectedRevision = Number(input.expected_recovery_revision);
@@ -483,6 +485,30 @@ function runCleanups(frm) {
         records.has(failOpenId),
         false,
         "fail-open acknowledged insert cleans against the retained pre-attempt fence"
+    );
+
+    const checkpointFailOpenId = "24242424-2424-4242-8242-242424242424";
+    const checkpointFailOpenRecord = draft(checkpointFailOpenId);
+    checkpointFailOpenRecord.official_save_attempted_at = "2026-08-29T10:45:00.000Z";
+    records.set(checkpointFailOpenId, structuredClone(checkpointFailOpenRecord));
+    const checkpointFailOpenForm = form("new-door-cutting-order-checkpoint-failure");
+    checkpointFailOpenForm.save = async function saveAfterRecoveryHook() {
+        await handlers["Door Cutting Order"].before_save(this);
+        nativeSaveCalls += 1;
+    };
+    fakeWindow.cur_frm = checkpointFailOpenForm;
+    await Recovery.LocalCheckpoint.continueDraft(
+        checkpointFailOpenForm,
+        checkpointFailOpenRecord
+    );
+    writeFailure = { code: "quota_exceeded", message: "checkpoint storage failed" };
+    Recovery.LocalCheckpoint.markDirty(checkpointFailOpenForm, "DCO");
+    await checkpointFailOpenForm.save();
+    writeFailure = null;
+    assert.equal(
+        records.has(checkpointFailOpenId),
+        false,
+        "fail-open cleanup uses saved_revision when the in-memory revision was not persisted"
     );
 
     const failedReconcileId = "33333333-3333-4333-8333-333333333333";

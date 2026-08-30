@@ -370,7 +370,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             presentation,
         )
         self.assertIn(
-            "saveOperation.attemptedRevision = preAttempt.recovery_revision",
+            "saveOperation.attemptedRevision = preAttempt.saved_revision",
             presentation,
         )
         self.assertIn('started.error.code === "stale_revision"', presentation)

@@ -117,7 +117,8 @@ observer/session; ownership is rechecked after asynchronous local deletion. The
 delete itself compares both the originating attempt's recovery revision and exact
 attempt timestamp, retaining the draft/assets on either mismatch. When marker
 creation fails but native Save remains fail-safe available, the operation compares
-against the prior ACTIVE attempt fence; a successful marker creation replaces it
+against the prior ACTIVE attempt and persisted `saved_revision` fences, never an
+unpersisted higher in-memory revision; a successful marker creation replaces them
 with the new attempt. A
 fallback CAS may synchronize a live session only when its revision still matches.
 A higher persisted revision represents a different, non-hydrated payload: the

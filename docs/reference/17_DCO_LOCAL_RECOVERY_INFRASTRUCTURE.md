@@ -171,8 +171,9 @@ A higher checkpoint cannot be accepted while the attempt is pending, and any
 cleanup mismatch retains the local record/assets. An unknown transport outcome
 retains them for reconciliation. If persisting a new pending marker fails and the
 existing fail-safe native Save proceeds, its operation keeps the ACTIVE record's
-pre-attempt revision/timestamp fence for acknowledged-success cleanup; a successfully
-created marker replaces that fence with its newly returned values.
+persisted `saved_revision`/timestamp fence for acknowledged-success cleanup; an
+unpersisted higher in-memory revision is never used as the delete fence, and a
+successfully created marker replaces both values with its newly returned fence.
 
 ## 6. Failure and compatibility behavior
 

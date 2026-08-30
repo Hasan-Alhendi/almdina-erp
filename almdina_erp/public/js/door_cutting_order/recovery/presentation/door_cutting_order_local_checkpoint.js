@@ -1046,7 +1046,7 @@
         const preAttempt = state.session.snapshot();
         if (saveOperation) {
             saveOperation.attemptedAt = preAttempt.official_save_attempted_at;
-            saveOperation.attemptedRevision = preAttempt.recovery_revision;
+            saveOperation.attemptedRevision = preAttempt.saved_revision;
         }
         const started = await state.session.beginOfficialSave();
         if (saveOperation && started && started.ok === true) {
