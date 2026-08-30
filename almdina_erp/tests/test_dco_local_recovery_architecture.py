@@ -331,6 +331,14 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "Number(current.recovery_revision) !== expectedRevision",
             repository,
         )
+        self.assertIn(
+            "Recovery checkpoint cannot advance while official Save is pending",
+            repository,
+        )
+        self.assertIn(
+            "Recovery draft changed before confirmed cleanup",
+            repository,
+        )
         self.assertNotIn(
             "recovery_revision: captureRevision,\n                    official_save_state:",
             session,
@@ -351,14 +359,19 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("quarantineExternalRevision", presentation)
         self.assertIn("function flushState(frm, state = currentState(frm))", presentation)
         self.assertIn("quarantineExternalRevision(state, code);", presentation)
-        self.assertIn('["stale_revision", "revision_conflict"].includes(code)', presentation)
+        self.assertIn(
+            '["stale_revision", "revision_conflict", "save_attempt_conflict"].includes(code)',
+            presentation,
+        )
+        self.assertIn("expectedRevision: operation.attemptedRevision", presentation)
+        self.assertIn("expectedRevision: reconciledSnapshot.recovery_revision", presentation)
         self.assertIn('started.error.code === "stale_revision"', presentation)
         self.assertIn("const current = await repo.read(identity)", presentation)
         self.assertIn('"save_attempt_conflict"', repository)
         self.assertIn("official_save_attempted_at", session)
         self.assertLess(
             presentation.index("state.session.complete();"),
-            presentation.index("repository().delete(state.session.identity())"),
+            presentation.index("const result = await repository().delete("),
         )
         self.assertNotIn("frm.save(", presentation)
 

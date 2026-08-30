@@ -69,6 +69,10 @@ exact current revision. Repeating the same revision and payload hash remains
 idempotent even after the first attempt committed; the same revision with different
 content is a conflict. This prevents both a late completion and a stale tab that
 batched several local mutations from replacing a newer checkpoint.
+Once a NEW record is `PENDING_RECONCILIATION`, only an exact same-revision retry is
+idempotent; a higher checkpoint write is rejected with `save_attempt_conflict`.
+The pending revision is therefore the immutable payload boundary for that insert
+attempt.
 
 ### `dco_recovery_assets`
 
@@ -133,10 +137,10 @@ one browser frame coalesce into one write of the latest revision. Writes are
 serialized; a mutation arriving during a write produces the next revision after
 the current write settles. Each write is fenced against the last revision that this
 session actually persisted, not merely against its higher in-memory revision. A
-background `stale_revision` or `revision_conflict` result quarantines that form from
-later checkpoint and official-Save effects until the newer draft is explicitly
-reopened and hydrated. There is no timer cadence and no elapsed-time readiness
-assumption.
+background `stale_revision`, `revision_conflict`, or pending-attempt conflict
+quarantines that form from later checkpoint and official-Save effects until the
+draft is explicitly reopened and reconciled/hydrated. There is no timer cadence and
+no elapsed-time readiness assumption.
 
 When the page becomes hidden or receives `pagehide`, the current dirty session asks
 the local repository to flush on a best-effort basis. No network request and no
@@ -161,8 +165,11 @@ token.
 For a first insert, ALMADINA-129 flushes the latest checkpoint and marks the local
 record pending before the existing explicit Frappe Save proceeds. A hidden unique
 technical creation token on the DCO is the atomic binding; acknowledged or
-server-reconciled success completes and then removes the local record. An unknown
-transport outcome retains it for reconciliation.
+server-reconciled success completes and then removes the local record only through a
+compare-and-delete on the attempted recovery revision and exact attempt timestamp.
+A higher checkpoint cannot be accepted while the attempt is pending, and any
+cleanup mismatch retains the local record/assets. An unknown transport outcome
+retains them for reconciliation.
 
 ## 6. Failure and compatibility behavior
 

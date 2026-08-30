@@ -85,8 +85,10 @@ unused token.
 
 Cleanup ordering is server proof, `COMPLETED`, then local delete. A failed local
 delete leaves a discoverable pending record that resolves idempotently next time.
-Ordinary checkpoint writes preserve any stored `PENDING_RECONCILIATION` marker;
-only the explicit server-proven `NOT_FOUND` transition may return it to `ACTIVE`.
+An exact same-revision retry preserves a stored `PENDING_RECONCILIATION` marker;
+higher checkpoint revisions are refused while that insert attempt is pending, so
+the attempted payload cannot move underneath an acknowledged result. Only the
+explicit server-proven `NOT_FOUND` transition may return the record to `ACTIVE`.
 That transition is compare-and-set against both the recovery revision and the exact
 `official_save_attempted_at` it reconciled. The timestamp is retained as the last
 attempt fence while `ACTIVE`, and each later attempt advances it monotonically, so
@@ -103,16 +105,17 @@ attempt merely observed from another tab is preserved. The originating state and
 attempt remain lexically available until this correction finishes, with a direct
 repository compare-and-set fallback if DocumentContext cleanup disposed the session.
 That fallback re-reads the record, verifies the same pending attempt, and uses its
-latest checkpoint revision so a concurrent payload checkpoint cannot strand an
-otherwise proven-never-inserted attempt. If another checkpoint wins between the
-read and compare-and-set, cleanup re-reads and retries a bounded number of times
-while the exact attempt is still pending. A stale revision before native insert is
+current checkpoint revision as a defensive compatibility fence. If the record
+changes between the read and compare-and-set, cleanup re-reads and retries a bounded
+number of times while the exact attempt is still pending. A stale revision before native insert is
 a cross-tab ownership conflict and blocks that insert; it never fails open over a
 newer local payload. Native Save completion/failure handling retains the originating
 state and exact attempt, so reusing the same form object cannot mutate a replacement
 document's recovery session. This applies to acknowledged success as well as failure:
 success deletes only the originating draft and does not dispose the replacement
-observer/session; ownership is rechecked after asynchronous local deletion. A
+observer/session; ownership is rechecked after asynchronous local deletion. The
+delete itself compares both the originating attempt's recovery revision and exact
+attempt timestamp, retaining the draft/assets on either mismatch. A
 fallback CAS may synchronize a live session only when its revision still matches.
 A higher persisted revision represents a different, non-hydrated payload: the
 current session is quarantined from checkpointing and official Save until the user

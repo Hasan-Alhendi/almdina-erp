@@ -77,7 +77,9 @@ revision is a restore-required conflict, not an implicit payload synchronization
 Every checkpoint write is transactionally fenced against the revision that its
 session last persisted, so coalesced mutations cannot leapfrog another tab. A
 conflict from any foreground, scheduled, visibility, or pagehide flush quarantines
-that form until explicit reopen/restore.
+that form until explicit reopen/restore. `PENDING_RECONCILIATION` also fences out
+higher checkpoint revisions, and confirmed-success cleanup compare-and-deletes only
+the exact attempted revision/save marker; a mismatch retains the local draft/assets.
 
 ### Special-shape manufacturing boundary
 

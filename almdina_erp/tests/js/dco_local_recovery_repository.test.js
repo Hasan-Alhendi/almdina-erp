@@ -305,13 +305,72 @@ function dcoPayload(pieceKey = "piece-local-1") {
         payload: dcoPayload("piece-local-3"),
         asset_refs: [],
     });
-    assert.equal(staleTabCheckpoint.ok, true);
+    assert.equal(staleTabCheckpoint.ok, false);
     assert.equal(
-        staleTabCheckpoint.value.official_save_state,
-        "PENDING_RECONCILIATION",
-        "ordinary higher-revision writes cannot downgrade pending reconciliation"
+        staleTabCheckpoint.error.code,
+        "save_attempt_conflict",
+        "a pending official Save fences out higher checkpoint revisions"
     );
-    assert.equal(staleTabCheckpoint.value.official_save_attempted_at, pendingAttemptedAt);
+    const afterPendingCheckpoint = await repository.read(newIdentity);
+    assert.equal(afterPendingCheckpoint.value.recovery_revision, 2);
+    assert.equal(afterPendingCheckpoint.value.official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(afterPendingCheckpoint.value.official_save_attempted_at, pendingAttemptedAt);
+    assert.equal(afterPendingCheckpoint.value.payload.dco.pieces[0].piece_key, "piece-local-2");
+    const pendingRetry = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        recovery_revision: 2,
+        expected_recovery_revision: 1,
+        payload: dcoPayload("piece-local-2"),
+        asset_refs: [],
+    });
+    assert.equal(pendingRetry.ok, true, "the exact committed revision remains idempotent while pending");
+    assert.equal(
+        (await repository.delete(newIdentity, 1, pendingAttemptedAt)).error.code,
+        "stale_revision",
+        "confirmed cleanup cannot delete a different checkpoint revision"
+    );
+    assert.equal(
+        (await repository.delete(
+            newIdentity,
+            2,
+            "2026-08-29T10:59:00.000Z"
+        )).error.code,
+        "save_attempt_conflict",
+        "confirmed cleanup cannot delete a different official Save attempt"
+    );
+    const active = await repository.setOfficialSaveState(
+        newIdentity,
+        "ACTIVE",
+        2,
+        pendingAttemptedAt
+    );
+    assert.equal(active.ok, true);
+    assert.equal(active.value.official_save_state, "ACTIVE");
+    assert.equal(
+        active.value.official_save_attempted_at,
+        pendingAttemptedAt,
+        "ACTIVE retains the reconciled attempt as a compare-and-set fence"
+    );
+    const thirdWrite = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        recovery_revision: 3,
+        expected_recovery_revision: 2,
+        payload: dcoPayload("piece-local-3"),
+        asset_refs: [],
+    });
+    assert.equal(thirdWrite.ok, true);
     const leapfrog = await repository.write({
         ...newIdentity,
         mode: "NEW",
@@ -330,28 +389,6 @@ function dcoPayload(pieceKey = "piece-local-1") {
     const afterLeapfrog = await repository.read(newIdentity);
     assert.equal(afterLeapfrog.value.recovery_revision, 3);
     assert.equal(afterLeapfrog.value.payload.dco.pieces[0].piece_key, "piece-local-3");
-    assert.equal(
-        (await repository.setOfficialSaveState(
-            newIdentity,
-            "ACTIVE",
-            2,
-            pendingAttemptedAt
-        )).error.code,
-        "stale_revision"
-    );
-    const active = await repository.setOfficialSaveState(
-        newIdentity,
-        "ACTIVE",
-        3,
-        pendingAttemptedAt
-    );
-    assert.equal(active.ok, true);
-    assert.equal(active.value.official_save_state, "ACTIVE");
-    assert.equal(
-        active.value.official_save_attempted_at,
-        pendingAttemptedAt,
-        "ACTIVE retains the reconciled attempt as a compare-and-set fence"
-    );
     const newerPending = await repository.setOfficialSaveState(
         newIdentity,
         "PENDING_RECONCILIATION",
@@ -506,6 +543,19 @@ function dcoPayload(pieceKey = "piece-local-1") {
     assert.equal(assetRead.ok, true);
     assert.equal(await assetRead.value.blob.text(), "scanner bytes");
     assert.equal(assetRead.value.mime_type, "image/jpeg");
+    const fencedCleanup = await repository.delete(
+        newIdentity,
+        3,
+        newerPending.value.official_save_attempted_at
+    );
+    assert.equal(fencedCleanup.ok, false);
+    assert.equal(fencedCleanup.error.code, "stale_revision");
+    assert.equal((await repository.read(newIdentity)).value.recovery_revision, 4);
+    assert.equal(
+        (await assetRepository.read(newIdentity, "asset-scan-1")).value.byte_length,
+        sourceBlob.size,
+        "a failed cleanup fence retains both the newer draft and its assets"
+    );
     const assetStorageKey = [...gateway.records.dco_recovery_assets.keys()][0];
     const validAssetRecord = gateway.records.dco_recovery_assets.get(assetStorageKey);
     gateway.records.dco_recovery_assets.set(assetStorageKey, {

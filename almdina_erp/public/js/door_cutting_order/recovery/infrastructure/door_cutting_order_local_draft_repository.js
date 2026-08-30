@@ -338,6 +338,16 @@
                             if (sameRevisionContent(current, next)) return current;
                             throw new LocalDraftRepositoryError("revision_conflict", "Recovery revision has different content");
                         }
+                        if (
+                            current
+                            && String(current.official_save_state || OFFICIAL_SAVE_STATES.ACTIVE)
+                                === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                        ) {
+                            throw new LocalDraftRepositoryError(
+                                "save_attempt_conflict",
+                                "Recovery checkpoint cannot advance while official Save is pending"
+                            );
+                        }
                         if (!current && expectedRevision !== 0) {
                             throw new LocalDraftRepositoryError("stale_revision", "Recovery draft base no longer exists");
                         }
@@ -487,8 +497,30 @@
             }
         }
 
-        async function remove(identity) {
+        async function remove(
+            identity,
+            expectedRevision = null,
+            expectedAttemptedAt = undefined
+        ) {
             try {
+                if (
+                    expectedRevision !== null
+                    && (!Number.isSafeInteger(Number(expectedRevision)) || Number(expectedRevision) < 1)
+                ) {
+                    throw new LocalDraftRepositoryError(
+                        "invalid_revision",
+                        "Recovery cleanup revision must be a positive integer"
+                    );
+                }
+                const expectedAttempt = expectedAttemptedAt === undefined
+                    ? undefined
+                    : (expectedAttemptedAt == null ? null : String(expectedAttemptedAt));
+                if (expectedAttempt !== undefined && expectedAttempt !== null && !isTimestamp(expectedAttempt)) {
+                    throw new LocalDraftRepositoryError(
+                        "invalid_timestamp",
+                        "Recovery cleanup attempt timestamp is invalid"
+                    );
+                }
                 const key = storageKey(identity);
                 const removed = await gateway.transaction(
                     [indexed.DRAFT_STORE, indexed.ASSET_STORE],
@@ -498,6 +530,24 @@
                         const assets = stores[indexed.ASSET_STORE];
                         const current = await request(drafts.get(key));
                         if (!current) return false;
+                        if (
+                            expectedRevision !== null
+                            && Number(current.recovery_revision) !== Number(expectedRevision)
+                        ) {
+                            throw new LocalDraftRepositoryError(
+                                "stale_revision",
+                                "Recovery draft changed before confirmed cleanup"
+                            );
+                        }
+                        if (
+                            expectedAttempt !== undefined
+                            && (current.official_save_attempted_at || null) !== expectedAttempt
+                        ) {
+                            throw new LocalDraftRepositoryError(
+                                "save_attempt_conflict",
+                                "Recovery official Save attempt changed before confirmed cleanup"
+                            );
+                        }
                         const assetKeys = await request(assets.index("draft_key").getAllKeys(key));
                         for (const assetKey of assetKeys || []) await request(assets.delete(assetKey));
                         await request(drafts.delete(key));
