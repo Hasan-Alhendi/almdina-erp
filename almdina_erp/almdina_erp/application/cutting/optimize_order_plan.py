@@ -14,7 +14,10 @@ from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
     TRIM_PRECISION_CM,
     resolve_adaptive_trim,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    PlanSettings,
+    normalize_plan_settings,
+)
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
 
 
@@ -90,10 +93,10 @@ class OptimizerOptions:
 class OptimizeOrderPlanCommand:
     engine_version: str
     input_fingerprint: str
-    plan_settings: PlanSettings
     board: BoardGeometry
     optimizer: OptimizerOptions
     piece_rows: tuple[dict[str, Any], ...]
+    plan_settings: PlanSettings | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +116,7 @@ def optimize_order_plan(
     """Expand pieces, resolve Adaptive Trim, optimize, validate, and snapshot."""
 
     board = command.board
+    plan_settings = _canonical_trace_settings(command)
     rows = [dict(row) for row in command.piece_rows]
     expanded = engine.expand_pieces(rows)
     preferred_trim = AppliedTrim(
@@ -197,7 +201,7 @@ def optimize_order_plan(
         decision=trim_decision,
     )
     execution_trace = build_cutting_execution_trace(
-        plan_settings=command.plan_settings,
+        plan_settings=plan_settings,
         trim_decision=trim_decision,
         optimizer_outcome=plan,
         engine_version=command.engine_version,
@@ -272,6 +276,25 @@ def optimize_order_plan(
         required_boards=required_boards,
         method_label=method_label,
         expanded_pieces=tuple(expanded),
+    )
+
+
+def _canonical_trace_settings(command: OptimizeOrderPlanCommand) -> PlanSettings:
+    """Return the canonical settings object used as execution-trace input.
+
+    Frappe production callers pass their already-normalized PlanSettings object.
+    The fallback preserves compatibility for application callers that predate
+    ALMADINA-139 while still constructing the trace from a canonical contract.
+    """
+
+    if command.plan_settings is not None:
+        return command.plan_settings
+    return normalize_plan_settings(
+        optimization_mode=command.optimizer.selected_mode,
+        machine_type=command.optimizer.machine_type,
+        optimization_time_limit_sec=command.optimizer.time_limit_sec,
+        kerf_mm=command.board.kerf_cm * 10,
+        preferred_trim_mm=command.board.trim_cm * 10,
     )
 
 
