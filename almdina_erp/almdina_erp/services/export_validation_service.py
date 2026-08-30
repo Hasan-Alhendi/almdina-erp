@@ -6,6 +6,12 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    DxfGeometrySnapshotError,
+    DxfTopologyError,
+    snapshot_geometry_index,
+    validate_snapshot_material_layout,
+)
 from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
@@ -111,12 +117,35 @@ def _validate_source_identity(source: Any, plan: Any, order: Any, errors: list[s
         )
 
 
+def _topology_validation_error(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    if code:
+        first = getattr(exc, "first_key", None) or "?"
+        second = getattr(exc, "second_key", None) or "?"
+        return _("Persisted DXF topology validation failed ({0}) between pieces {1} and {2}.").format(
+            code,
+            first,
+            second,
+        )
+    return _("Persisted DXF topology is invalid: {0}").format(str(exc))
+
+
 def validate_cutting_plan_document(plan: Any) -> list[str]:
     errors: list[str] = []
     order = frappe.get_doc("Door Cutting Order", plan.door_cutting_order)
     source_by_sheet = {int(row.sheet_no): row for row in (plan.sources or [])}
     pieces_by_sheet: dict[int, list[Any]] = {}
     seen_labels: set[str] = set()
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+
+    try:
+        topology_aware = validate_snapshot_material_layout(
+            snapshot,
+            required_clearance_mm=flt(plan.kerf_mm),
+        )
+    except (DxfGeometrySnapshotError, DxfTopologyError) as exc:
+        topology_aware = True
+        errors.append(_topology_validation_error(exc))
 
     if not source_by_sheet:
         errors.append(_("Cutting Plan has no physical sources."))
@@ -141,34 +170,34 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
         if x < -1e-7 or y < -1e-7 or x + width > usable_w + 1e-7 or y + height > usable_h + 1e-7:
             errors.append(_("Piece {0} exceeds source sheet {1} bounds.").format(label, sheet_no))
 
-    for sheet_no, pieces in pieces_by_sheet.items():
-        for index, first in enumerate(pieces):
-            first_rect = {
-                "x": flt(first.x_mm),
-                "y": flt(first.y_mm),
-                "w": flt(first.width_mm),
-                "h": flt(first.height_mm),
-            }
-            for second in pieces[index + 1 :]:
-                second_rect = {
-                    "x": flt(second.x_mm),
-                    "y": flt(second.y_mm),
-                    "w": flt(second.width_mm),
-                    "h": flt(second.height_mm),
+    if not topology_aware:
+        for sheet_no, pieces in pieces_by_sheet.items():
+            for index, first in enumerate(pieces):
+                first_rect = {
+                    "x": flt(first.x_mm),
+                    "y": flt(first.y_mm),
+                    "w": flt(first.width_mm),
+                    "h": flt(first.height_mm),
                 }
-                if _rects_overlap(first_rect, second_rect):
-                    errors.append(
-                        _("Pieces {0} and {1} overlap on source sheet {2}.").format(
-                            first.piece_label,
-                            second.piece_label,
-                            sheet_no,
+                for second in pieces[index + 1 :]:
+                    second_rect = {
+                        "x": flt(second.x_mm),
+                        "y": flt(second.y_mm),
+                        "w": flt(second.width_mm),
+                        "h": flt(second.height_mm),
+                    }
+                    if _rects_overlap(first_rect, second_rect):
+                        errors.append(
+                            _("Pieces {0} and {1} overlap on source sheet {2}.").format(
+                                first.piece_label,
+                                second.piece_label,
+                                sheet_no,
+                            )
                         )
-                    )
 
     for source in plan.sources or []:
         _validate_source_identity(source, plan, order, errors)
 
-    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
     if snapshot.get("unplaced"):
         errors.append(_("Cutting Plan contains unplaced pieces."))
 
@@ -211,46 +240,58 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
 
 def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
     snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    geometry_by_identity, has_geometry = snapshot_geometry_index(snapshot)
+    consumed_geometry: set[tuple[int, int]] = set()
     sheets: list[dict[str, Any]] = []
     pieces_by_sheet: dict[int, list[Any]] = {}
     for piece in plan.placed_pieces or []:
         pieces_by_sheet.setdefault(int(piece.sheet_no), []).append(piece)
 
     for source in sorted(plan.sources or [], key=lambda row: int(row.sheet_no)):
+        sheet_no = int(source.sheet_no)
         sheet_pieces: list[dict[str, Any]] = []
-        for piece in pieces_by_sheet.get(int(source.sheet_no), []):
-            sheet_pieces.append(
-                {
-                    "id": cint(piece.piece_id),
-                    "label": piece.piece_label,
-                    "source_piece_no": cint(piece.source_piece_no),
-                    "copy_no": cint(piece.copy_no),
-                    "x": flt(piece.x_mm) / 10,
-                    "y": flt(piece.y_mm) / 10,
-                    "w": flt(piece.width_mm) / 10,
-                    "h": flt(piece.height_mm) / 10,
-                    "original_w": flt(piece.original_width_cm),
-                    "original_h": flt(piece.original_length_cm),
-                    "piece_type": piece.piece_type or "Regular",
-                    "clipped_corner_position": piece.clipped_corner_position or "",
-                    "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
-                    "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
-                    "special_shape_geometry_json": (
-                        getattr(piece, "special_shape_geometry_json", "") or ""
-                    ),
-                    "rotated": bool(cint(piece.rotated)),
-                    "edge_long_right": cint(piece.edge_long_right),
-                    "edge_long_left": cint(piece.edge_long_left),
-                    "edge_width_top": cint(piece.edge_width_top),
-                    "edge_width_bottom": cint(piece.edge_width_bottom),
-                    "edge_type": piece.edge_type or "",
-                    "notes": piece.notes or "",
-                    "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,
-                }
-            )
+        for piece in pieces_by_sheet.get(sheet_no, []):
+            piece_id = cint(piece.piece_id)
+            public_piece = {
+                "id": piece_id,
+                "label": piece.piece_label,
+                "source_piece_no": cint(piece.source_piece_no),
+                "copy_no": cint(piece.copy_no),
+                "x": flt(piece.x_mm) / 10,
+                "y": flt(piece.y_mm) / 10,
+                "w": flt(piece.width_mm) / 10,
+                "h": flt(piece.height_mm) / 10,
+                "original_w": flt(piece.original_width_cm),
+                "original_h": flt(piece.original_length_cm),
+                "piece_type": piece.piece_type or "Regular",
+                "clipped_corner_position": piece.clipped_corner_position or "",
+                "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
+                "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
+                "special_shape_geometry_json": (
+                    getattr(piece, "special_shape_geometry_json", "") or ""
+                ),
+                "rotated": bool(cint(piece.rotated)),
+                "edge_long_right": cint(piece.edge_long_right),
+                "edge_long_left": cint(piece.edge_long_left),
+                "edge_width_top": cint(piece.edge_width_top),
+                "edge_width_bottom": cint(piece.edge_width_bottom),
+                "edge_type": piece.edge_type or "",
+                "notes": piece.notes or "",
+                "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,
+            }
+            if has_geometry:
+                identity = (sheet_no, piece_id)
+                geometry = geometry_by_identity.get(identity)
+                if geometry is None:
+                    raise DxfGeometrySnapshotError(
+                        f"persisted DXF topology is missing piece identity {sheet_no}:{piece_id}."
+                    )
+                public_piece["geometry"] = geometry
+                consumed_geometry.add(identity)
+            sheet_pieces.append(public_piece)
         sheets.append(
             {
-                "sheet_no": int(source.sheet_no),
+                "sheet_no": sheet_no,
                 "source_type": source.source_type,
                 "remnant": source.remnant,
                 "board_item": source.board_item,
@@ -264,6 +305,12 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "source_area_m2": flt(source.source_area_m2),
                 "pieces": sheet_pieces,
             }
+        )
+
+    if has_geometry and consumed_geometry != set(geometry_by_identity):
+        missing = sorted(set(geometry_by_identity) - consumed_geometry)
+        raise DxfGeometrySnapshotError(
+            f"persisted DXF topology contains geometry not represented by saved pieces: {missing}."
         )
 
     snapshot.update(
