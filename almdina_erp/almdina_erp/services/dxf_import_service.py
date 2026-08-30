@@ -18,6 +18,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     simplify_polygon,
     validate_polygon,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
+    serialize_geometry_from_cm,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     ContourCandidate,
     DxfTopologyError,
@@ -555,7 +558,11 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
 
 
 def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in piece.items() if not key.startswith("_")}
+    public_piece = {key: value for key, value in piece.items() if not key.startswith("_")}
+    public_piece["geometry"] = serialize_geometry_from_cm(
+        _piece_material_geometry(piece, units="cm")
+    )
+    return public_piece
 
 
 def validate_imported_plan(
