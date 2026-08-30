@@ -36,13 +36,17 @@ class CuttingExecutionTrace:
     preferred_board_count: int
     applied_unplaced_count: int
     applied_board_count: int
+    optimizer_selected_mode: str
+    optimizer_machine_type: str
+    optimizer_kerf_mm: float
+    optimizer_time_limit_sec: float
     actual_optimization_mode: str
     method_key: str
     method_label: str
     ordering_strategy: str
     attempts: int
     elapsed_sec: float
-    actual_time_limit_sec: float
+    reported_time_limit_sec: float
     solver_status: str
     solver_wall_time_sec: float
 
@@ -75,13 +79,17 @@ class CuttingExecutionTrace:
                 },
             },
             "optimizer": {
+                "selected_mode": self.optimizer_selected_mode,
+                "machine_type": self.optimizer_machine_type,
+                "kerf_mm": self.optimizer_kerf_mm,
+                "time_limit_sec": self.optimizer_time_limit_sec,
                 "actual_optimization_mode": self.actual_optimization_mode,
                 "method_key": self.method_key,
                 "method_label": self.method_label,
                 "ordering_strategy": self.ordering_strategy,
                 "attempts": self.attempts,
                 "elapsed_sec": self.elapsed_sec,
-                "time_limit_sec": self.actual_time_limit_sec,
+                "reported_time_limit_sec": self.reported_time_limit_sec,
                 "solver_status": self.solver_status,
                 "solver_wall_time_sec": self.solver_wall_time_sec,
             },
@@ -114,13 +122,17 @@ def build_cutting_execution_trace(
         preferred_board_count=int(trim_decision.preferred_quality.board_count),
         applied_unplaced_count=int(trim_decision.applied_quality.unplaced_count),
         applied_board_count=int(trim_decision.applied_quality.board_count),
+        optimizer_selected_mode=plan_settings.optimization_mode,
+        optimizer_machine_type=plan_settings.machine_type,
+        optimizer_kerf_mm=float(plan_settings.kerf_mm),
+        optimizer_time_limit_sec=float(plan_settings.optimization_time_limit_sec),
         actual_optimization_mode=str(optimizer_outcome.get("optimization_mode") or ""),
         method_key=str(optimizer_outcome.get("method_key") or ""),
         method_label=str(optimizer_outcome.get("method_label") or ""),
         ordering_strategy=str(optimizer_outcome.get("ordering_strategy") or ""),
         attempts=_integer(optimizer_outcome.get("attempts")),
         elapsed_sec=_number(optimizer_outcome.get("search_elapsed_sec")),
-        actual_time_limit_sec=_number(optimizer_outcome.get("search_time_limit_sec")),
+        reported_time_limit_sec=_number(optimizer_outcome.get("search_time_limit_sec")),
         solver_status=str(optimizer_outcome.get("solver_status") or ""),
         solver_wall_time_sec=_number(optimizer_outcome.get("solver_wall_time_sec")),
     )
