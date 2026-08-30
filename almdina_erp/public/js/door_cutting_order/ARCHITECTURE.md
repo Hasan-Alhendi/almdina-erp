@@ -70,7 +70,9 @@ Save, Cancel, or EDIT behavior. First-insert safety wraps the native explicit Sa
 with a stable hidden unique creation token and a narrow authorized reconciliation
 query; it is not a second insert API. Cross-tab revision conflicts block the stale
 native insert, and native failure/cancellation cleanup is bound to the originating
-document state plus exact save attempt with bounded compare-and-set retry.
+document state plus exact save attempt with bounded compare-and-set retry. The same
+operation binding owns acknowledged-success cleanup, and a live session adopts the
+persisted revision returned by fallback reconciliation.
 
 ### Special-shape manufacturing boundary
 

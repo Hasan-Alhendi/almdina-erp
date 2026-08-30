@@ -328,6 +328,27 @@
             return true;
         }
 
+        function adoptPersistedOfficialSaveState(record, expectedAttemptedAt) {
+            if (disposed || mode !== "NEW" || !record) return false;
+            const recordRevision = Number(record.recovery_revision);
+            const expectedAttempt = String(expectedAttemptedAt || "").trim();
+            if (
+                !Number.isInteger(recordRevision)
+                || recordRevision < savedRevision
+                || String(record.official_save_state || "") !== OFFICIAL_SAVE_STATES.ACTIVE
+                || String(record.official_save_attempted_at || "").trim() !== expectedAttempt
+            ) return false;
+            if (recordRevision > revision) {
+                revision = recordRevision;
+                dirtyScope = null;
+            }
+            savedRevision = recordRevision;
+            officialSaveState = OFFICIAL_SAVE_STATES.ACTIVE;
+            officialSaveAttemptedAt = record.official_save_attempted_at || null;
+            transition(savedRevision >= revision ? STATES.LOCAL_SAVED : STATES.DIRTY);
+            return true;
+        }
+
         function complete() {
             if (disposed || mode !== "NEW") return false;
             officialSaveState = OFFICIAL_SAVE_STATES.COMPLETED;
@@ -353,6 +374,7 @@
             beginOfficialSave,
             markPendingReconciliation,
             resumeAfterProvenFailure,
+            adoptPersistedOfficialSaveState,
             complete,
             dispose,
         });

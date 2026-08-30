@@ -110,7 +110,11 @@ while the exact attempt is still pending. A stale revision before native insert 
 a cross-tab ownership conflict and blocks that insert; it never fails open over a
 newer local payload. Native Save completion/failure handling retains the originating
 state and exact attempt, so reusing the same form object cannot mutate a replacement
-document's recovery session.
+document's recovery session. This applies to acknowledged success as well as failure:
+success deletes only the originating draft and does not dispose the replacement
+observer/session. When fallback CAS returns a newer persisted revision for a live
+session, the application session adopts that ACTIVE state and revision before
+editing continues, keeping the lifecycle owner synchronized with IndexedDB.
 Recovery infrastructure failure is logged/fail-safe and does not remove native
 explicit DCO creation. There is no official autosave, periodic `frm.save()`, remote
 sync, cross-device restore, or product behavior change outside NEW continuity.

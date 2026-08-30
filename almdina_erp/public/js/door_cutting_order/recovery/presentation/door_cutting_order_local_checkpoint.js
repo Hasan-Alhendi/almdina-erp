@@ -14,6 +14,7 @@
     const initializations = new WeakMap();
     const dialogs = new WeakMap();
     const observedSaves = new WeakMap();
+    const observedSaveOperations = new WeakMap();
     const workspaceSubscriptions = new WeakMap();
     let draftRepository = null;
     let assetRepository = null;
@@ -142,7 +143,20 @@
                     result.ok === true
                     || (result.error && result.error.code === "draft_not_found")
                 )
-            ) return true;
+            ) {
+                const snapshotAfterCas = state.session.snapshot();
+                if (
+                    result.ok === true
+                    && snapshotAfterCas.state !== root.CheckpointSession.STATES.DISPOSED
+                    && typeof state.session.adoptPersistedOfficialSaveState === "function"
+                ) {
+                    return state.session.adoptPersistedOfficialSaveState(
+                        result.value,
+                        expectedAttempt
+                    );
+                }
+                return true;
+            }
             if (!result || !result.error || result.error.code !== "stale_revision") return false;
         }
         return false;
@@ -400,17 +414,20 @@
         if (typeof options.isCurrent === "function" && !options.isCurrent()) {
             return { ok: false, cancelled: true };
         }
+        const ownsCurrentState = states.get(frm) === state;
         state.session.complete();
         const result = await repository().delete(state.session.identity());
         if (!result || result.ok !== true) {
             console.debug("Confirmed DCO recovery cleanup remains pending", result && result.error);
         }
         state.session.dispose();
-        if (states.get(frm) === state) states.delete(frm);
-        restoreSaveObserver(frm);
-        const dialog = dialogs.get(frm);
-        if (dialog && typeof dialog.hide === "function") dialog.hide();
-        dialogs.delete(frm);
+        if (ownsCurrentState) {
+            states.delete(frm);
+            restoreSaveObserver(frm);
+            const dialog = dialogs.get(frm);
+            if (dialog && typeof dialog.hide === "function") dialog.hide();
+            dialogs.delete(frm);
+        }
         const mayRoute = typeof options.isCurrent !== "function" || options.isCurrent();
         if (permanentName && mayRoute && typeof frappe.set_route === "function") {
             frappe.set_route("Form", "Door Cutting Order", permanentName);
@@ -788,10 +805,21 @@
         ) state.session.markPendingReconciliation();
     }
 
+    async function handleOfficialSaveSuccess(frm, operation) {
+        const state = operation && operation.state;
+        if (
+            !state
+            || !operation.saveWasNew
+            || operation.nativeInsertAllowed !== true
+            || state.mode !== "NEW"
+        ) return;
+        await cleanupConfirmedNewDraft(frm, state, null);
+    }
+
     function bindObservedSaveOperation(frm, state) {
-        const entry = observedSaves.get(frm);
-        if (!entry || !entry.operations) return null;
-        const operation = [...entry.operations].find((candidate) => (
+        const operations = observedSaveOperations.get(frm);
+        if (!operations) return null;
+        const operation = [...operations].find((candidate) => (
             candidate.state === state && candidate.beforeSaveBound !== true
         ));
         if (!operation) return null;
@@ -802,7 +830,9 @@
     function installSaveObserver(frm) {
         if (!frm || typeof frm.save !== "function" || observedSaves.has(frm)) return false;
         const original = frm.save;
-        const entry = { original, observed: null, operations: new Set() };
+        const operations = observedSaveOperations.get(frm) || new Set();
+        observedSaveOperations.set(frm, operations);
+        const entry = { original, observed: null, operations };
         const observed = function observedRecoverySave(...args) {
             const state = currentState(frm);
             const snapshot = state && state.session.snapshot();
@@ -817,21 +847,39 @@
                 attemptedAt: snapshot && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
                     ? snapshot.official_save_attempted_at
                     : null,
-                beforeSaveBound: false,
+                beforeSaveBound: Boolean(
+                    snapshot && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
+                ),
+                nativeInsertAllowed: Boolean(
+                    snapshot && snapshot.state === root.CheckpointSession.STATES.OFFICIAL_SAVING
+                ),
             };
             entry.operations.add(operation);
+            const release = () => {
+                entry.operations.delete(operation);
+                if (
+                    entry.operations.size === 0
+                    && observedSaveOperations.get(frm) === entry.operations
+                ) observedSaveOperations.delete(frm);
+            };
             let result;
             try {
                 result = original.apply(this, args);
             } catch (error) {
                 return Promise.resolve(handleOfficialSaveFailure(operation, error))
                     .then(() => { throw error; })
-                    .finally(() => entry.operations.delete(operation));
+                    .finally(release);
             }
-            return Promise.resolve(result).catch(async (error) => {
-                await handleOfficialSaveFailure(operation, error);
-                throw error;
-            }).finally(() => entry.operations.delete(operation));
+            return Promise.resolve(result).then(
+                async (value) => {
+                    await handleOfficialSaveSuccess(frm, operation);
+                    return value;
+                },
+                async (error) => {
+                    await handleOfficialSaveFailure(operation, error);
+                    throw error;
+                }
+            ).finally(release);
         };
         entry.observed = observed;
         observedSaves.set(frm, entry);
@@ -884,6 +932,7 @@
         if (saveOperation) {
             saveOperation.saveWasNew = state.saveWasNew;
             saveOperation.attemptedAt = null;
+            saveOperation.nativeInsertAllowed = false;
         }
         if (!state.saveWasNew) return;
 
@@ -944,12 +993,17 @@
             // local recovery failure must not disable ordinary explicit Save.
             console.debug("NEW official Save could not persist its local reconciliation marker", started && started.error);
         }
+        if (saveOperation) saveOperation.nativeInsertAllowed = true;
     }
 
     async function afterSave(frm) {
         const state = currentState(frm);
         if (!state) return;
-        if (state.saveWasNew) {
+        if (state.saveWasNew && state.mode === "NEW") {
+            const operations = observedSaveOperations.get(frm);
+            if (operations && [...operations].some((operation) => (
+                operation.state === state && operation.saveWasNew
+            ))) return;
             const permanentName = String(frm.doc && frm.doc.name || "").trim();
             if (!isNew(frm) && permanentName) {
                 await cleanupConfirmedNewDraft(frm, state, null);

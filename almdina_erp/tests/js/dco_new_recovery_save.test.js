@@ -583,6 +583,64 @@ function runCleanups(frm) {
     );
     nativeSaveDeferred = null;
 
+    const liveSyncId = "12121212-1212-4212-8212-121212121212";
+    const liveSyncRecord = draft(liveSyncId);
+    const liveSyncForm = form("new-door-cutting-order-live-sync");
+    fakeWindow.cur_frm = liveSyncForm;
+    await Recovery.LocalCheckpoint.continueDraft(liveSyncForm, liveSyncRecord);
+    await handlers["Door Cutting Order"].before_save(liveSyncForm);
+    records.set(liveSyncId, {
+        ...records.get(liveSyncId),
+        recovery_revision: liveSyncRecord.recovery_revision + 1,
+    });
+    nativeFailure = {
+        status: 417,
+        responseJSON: { exc_type: "ValidationError" },
+        message: "validation failed after another checkpoint",
+    };
+    await assert.rejects(liveSyncForm.save());
+    assert.equal(records.get(liveSyncId).official_save_state, "ACTIVE");
+    assert.equal(
+        Recovery.LocalCheckpoint.snapshot(liveSyncForm).recovery_revision,
+        liveSyncRecord.recovery_revision + 1,
+        "a successful fallback CAS synchronizes the live session revision"
+    );
+    assert.equal(Recovery.LocalCheckpoint.snapshot(liveSyncForm).state, "LOCAL_SAVED");
+    nativeFailure = null;
+
+    const reusedSuccessId = "13131313-1313-4313-8313-131313131313";
+    const reusedSuccessRecord = draft(reusedSuccessId);
+    const reusedSuccessForm = form("new-door-cutting-order-reused-success-old");
+    fakeWindow.cur_frm = reusedSuccessForm;
+    await Recovery.LocalCheckpoint.continueDraft(reusedSuccessForm, reusedSuccessRecord);
+    await handlers["Door Cutting Order"].before_save(reusedSuccessForm);
+    nativeSaveDeferred = deferred();
+    const oldSuccessfulSave = reusedSuccessForm.save();
+    runCleanups(reusedSuccessForm);
+    documentGeneration += 1;
+    reusedSuccessForm.doc = {
+        doctype: "Door Cutting Order",
+        name: "new-door-cutting-order-reused-success-new",
+        __islocal: 1,
+        pieces: [],
+    };
+    await Recovery.LocalCheckpoint.initializeNewForm(reusedSuccessForm);
+    const replacementSuccessId = Recovery.LocalCheckpoint.snapshot(reusedSuccessForm).draft_id;
+    await handlers["Door Cutting Order"].before_save(reusedSuccessForm);
+    const replacementSuccessAttempt = records.get(replacementSuccessId).official_save_attempted_at;
+    await handlers["Door Cutting Order"].after_save(reusedSuccessForm);
+    nativeSaveDeferred.resolve();
+    await oldSuccessfulSave;
+    assert.equal(records.has(reusedSuccessId), false, "old success cleans only its originating draft");
+    assert.equal(records.get(replacementSuccessId).official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(records.get(replacementSuccessId).official_save_attempted_at, replacementSuccessAttempt);
+    assert.equal(
+        Recovery.LocalCheckpoint.snapshot(reusedSuccessForm).draft_id,
+        replacementSuccessId,
+        "old success cannot dispose the replacement document session"
+    );
+    nativeSaveDeferred = null;
+
     const staleRevisionId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
     const staleRevisionRecord = draft(staleRevisionId);
     const staleRevisionForm = form("new-door-cutting-order-stale-revision");
