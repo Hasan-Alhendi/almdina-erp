@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from decimal import Decimal, InvalidOperation
-from math import isfinite
 from typing import Any
 
 
@@ -41,21 +40,34 @@ def require_cut_dimension_cm(value: Any, *, fieldname: str) -> float:
 
 
 def _positive_int(value: Any, *, fieldname: str) -> int:
-    if isinstance(value, bool):
+    if value is None or isinstance(value, bool):
+        raise ManufacturingRequirementsError(f"{fieldname} must be a positive integer.")
+    text = str(value).strip()
+    if not text:
         raise ManufacturingRequirementsError(f"{fieldname} must be a positive integer.")
     try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
+        number = Decimal(text)
+    except (InvalidOperation, ValueError) as exc:
         raise ManufacturingRequirementsError(f"{fieldname} must be a positive integer.") from exc
-    if number <= 0:
+    if (
+        not number.is_finite()
+        or number <= 0
+        or number != number.to_integral_value()
+    ):
         raise ManufacturingRequirementsError(f"{fieldname} must be a positive integer.")
-    return number
+    return int(number)
+
+
+def _canonical_bool(value: Any, *, fieldname: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if type(value) is int and value in {0, 1}:
+        return bool(value)
+    raise ManufacturingRequirementsError(f"{fieldname} must be a boolean.")
 
 
 def _canonical_dimension(value: Any, *, fieldname: str) -> str:
     number = require_cut_dimension_cm(value, fieldname=fieldname)
-    if not isfinite(number):  # defensive: Decimal validation above already rejects this
-        raise ManufacturingRequirementsError(f"{fieldname} must be finite.")
     return format(Decimal(str(number)).quantize(_CUT_DIMENSION_QUANTUM), ".3f")
 
 
@@ -67,6 +79,10 @@ def build_manufacturing_requirements(
     canonical_pieces: list[dict[str, Any]] = []
     seen_labels: set[str] = set()
     for raw in pieces:
+        if not isinstance(raw, Mapping):
+            raise ManufacturingRequirementsError(
+                "manufacturing requirement pieces must be objects."
+            )
         label = str(raw.get("label") or "").strip()
         if not label or label in seen_labels:
             raise ManufacturingRequirementsError(
@@ -88,7 +104,9 @@ def build_manufacturing_requirements(
                 "cut_length_cm": _canonical_dimension(
                     raw.get("cut_length_cm"), fieldname="cut_length_cm"
                 ),
-                "allow_rotation": bool(raw.get("allow_rotation")),
+                "allow_rotation": _canonical_bool(
+                    raw.get("allow_rotation"), fieldname="allow_rotation"
+                ),
                 "piece_type": str(raw.get("piece_type") or "Regular"),
             }
         )
@@ -112,7 +130,11 @@ def canonicalize_manufacturing_requirements(value: Any) -> dict[str, Any]:
         raise ManufacturingRequirementsError(
             "manufacturing requirements must be an object."
         )
-    if value.get("schema_version") != MANUFACTURING_REQUIREMENTS_SCHEMA_VERSION:
+    schema_version = value.get("schema_version")
+    if (
+        type(schema_version) is not int
+        or schema_version != MANUFACTURING_REQUIREMENTS_SCHEMA_VERSION
+    ):
         raise ManufacturingRequirementsError(
             "unsupported manufacturing requirements schema version."
         )
