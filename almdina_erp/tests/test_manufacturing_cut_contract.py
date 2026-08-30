@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 
 import frappe
@@ -27,6 +28,12 @@ from almdina_erp.almdina_erp.services.dxf_import_service import (
 )
 from almdina_erp.almdina_erp.services.export_validation_service import (
     _expected_snapshot_pieces,
+)
+from almdina_erp.almdina_erp.services.piece_cut_dimension_service import (
+    OrderPieceCutSpec,
+)
+from almdina_erp.almdina_erp.services.strict_dxf_import_service import (
+    _proxy_order,
 )
 
 
@@ -207,6 +214,30 @@ def test_dxf_import_fails_closed_when_persisted_cut_dimensions_are_missing():
     order = _order(_piece(cut_width_cm=0, width_cm=60))
     with pytest.raises(DxfImportError):
         _expected_order_pieces(order)
+
+
+def test_strict_dxf_import_proxy_preserves_normalized_cut_dimensions():
+    spec = OrderPieceCutSpec(
+        row_index=1,
+        finished_width_cm=Decimal("60.000"),
+        finished_length_cm=Decimal("200.000"),
+        cut_width_cm=Decimal("59.900"),
+        cut_length_cm=Decimal("199.800"),
+        width_deduction_mm=Decimal("1.000"),
+        length_deduction_mm=Decimal("2.000"),
+        allow_rotation=1,
+        piece_type="Regular",
+        qty=1,
+        side_profiles=(),
+    )
+    proxy = _proxy_order(_order(_piece()), [spec], _plan())
+
+    assert proxy.pieces[0].width_cm == 59.9
+    assert proxy.pieces[0].length_cm == 199.8
+    assert proxy.pieces[0].cut_width_cm == 59.9
+    assert proxy.pieces[0].cut_length_cm == 199.8
+    assert _expected_order_pieces(proxy)[0]["width_cm"] == 59.9
+    assert _expected_order_pieces(proxy)[0]["length_cm"] == 199.8
 
 
 def test_saved_plan_validation_reads_captured_requirement_not_live_order_dimensions():
