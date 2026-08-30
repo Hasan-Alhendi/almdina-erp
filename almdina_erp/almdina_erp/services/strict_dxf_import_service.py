@@ -52,8 +52,14 @@ def _proxy_order(
     pieces = [
         SimpleNamespace(
             qty=spec.qty,
+            # The legacy topology parser expects its public width/length inputs in
+            # manufacturing space. Preserve the same canonical values explicitly
+            # under cut_* as well so ALMADINA-143 never relies on a finished-size
+            # fallback while this internal proxy crosses the service boundary.
             width_cm=float(spec.cut_width_cm),
             length_cm=float(spec.cut_length_cm),
+            cut_width_cm=float(spec.cut_width_cm),
+            cut_length_cm=float(spec.cut_length_cm),
             allow_rotation=spec.allow_rotation,
             piece_type=spec.piece_type,
         )
