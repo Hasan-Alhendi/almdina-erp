@@ -7,6 +7,9 @@ from typing import Any
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     canonicalize_snapshot_geometries,
 )
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    canonicalize_snapshot_manufacturing_requirements,
+)
 
 
 # Cutting-plan snapshots are shared with planning, drawing, production, print,
@@ -62,15 +65,17 @@ def _sanitize_plan_value(value: Any) -> Any:
 
 
 def sanitize_plan_snapshot(value: Any) -> Any:
-    """Return safe operational plan data with trusted persisted DXF geometry.
+    """Return safe operational plan data with trusted persisted contracts.
 
-    Financial metadata is removed recursively. If a public DXF ``geometry``
-    contract is present it is validated and canonicalized; malformed geometry is
-    rejected instead of being silently discarded and reinterpreted as a rectangle.
-    Legacy plans without ``geometry`` remain unchanged.
+    Financial metadata is removed recursively. Declared public DXF ``geometry``
+    and manufacturing-requirement contracts are validated and canonicalized;
+    malformed declared contracts are rejected instead of being silently discarded.
+    Legacy plans that do not declare either contract remain unchanged here; the
+    manufacturing/export lifecycle decides whether legacy absence is acceptable.
     """
 
     sanitized = _sanitize_plan_value(value)
+    sanitized = canonicalize_snapshot_manufacturing_requirements(sanitized)
     return canonicalize_snapshot_geometries(sanitized)
 
 
