@@ -80,6 +80,9 @@ conflict from any foreground, scheduled, visibility, or pagehide flush quarantin
 that form until explicit reopen/restore. `PENDING_RECONCILIATION` also fences out
 higher checkpoint revisions, and confirmed-success cleanup compare-and-deletes only
 the exact attempted revision/save marker; a mismatch retains the local draft/assets.
+A stale discovery dialog uses the same revision/attempt fence for explicit Delete,
+and a begin-attempt ownership conflict quarantines rather than adopting another
+tab's pending state without its timestamp.
 The fail-open marker/checkpoint-storage path carries the retained ACTIVE attempt and
 persisted `saved_revision` fences, which are replaced only when a new pending marker
 is durably returned. The retained timestamp is cleanup evidence only; pending-state

@@ -379,6 +379,12 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             presentation,
         )
         self.assertIn('started.error.code === "stale_revision"', presentation)
+        self.assertIn(
+            'quarantineExternalRevision(state, "save_attempt_conflict")',
+            presentation,
+        )
+        self.assertIn("record.recovery_revision", presentation)
+        self.assertIn("record.official_save_attempted_at", presentation)
         self.assertIn("const current = await repo.read(identity)", presentation)
         self.assertIn('"save_attempt_conflict"', repository)
         self.assertIn("official_save_attempted_at", session)

@@ -393,6 +393,36 @@ function runCleanups(frm) {
     assert.equal(cardRemoved, true);
     assert.equal(records.has(deleteId), false, "explicit deletion removes only the selected draft");
 
+    const staleDeleteId = "67676767-6767-4767-8767-676767676767";
+    const staleDeleteRecord = draft(staleDeleteId);
+    discoveredRecords = [staleDeleteRecord];
+    const staleDeleteForm = form("new-door-cutting-order-stale-delete");
+    await Recovery.LocalCheckpoint.initializeNewForm(staleDeleteForm);
+    records.set(staleDeleteId, {
+        ...records.get(staleDeleteId),
+        recovery_revision: staleDeleteRecord.recovery_revision + 1,
+        official_save_state: "PENDING_RECONCILIATION",
+        official_save_attempted_at: "2026-08-29T10:47:00.000Z",
+    });
+    let staleCardRemoved = false;
+    const staleCard = {
+        dataset: { draftId: staleDeleteId },
+        remove() { staleCardRemoved = true; },
+    };
+    const staleDeleteButton = {
+        disabled: false,
+        dataset: { recoveryAction: "delete" },
+        closest: () => staleCard,
+    };
+    lastDialog.listener({ target: { closest: () => staleDeleteButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(staleCardRemoved, false);
+    assert.equal(
+        records.get(staleDeleteId).official_save_state,
+        "PENDING_RECONCILIATION",
+        "a stale discovery dialog cannot delete a newer pending attempt"
+    );
+
     discoveredRecords = [];
     const activeId = "11111111-1111-4111-8111-111111111111";
     const activeRecord = draft(activeId);
@@ -952,8 +982,16 @@ function runCleanups(frm) {
         "save-attempt conflict preserves the newer tab's marker"
     );
     assert.equal(
-        Recovery.LocalCheckpoint.snapshot(staleTabForm).state,
-        "PENDING_RECONCILIATION"
+        Recovery.LocalCheckpoint.markDirty(staleTabForm, "DCO"),
+        false,
+        "a begin-attempt ownership conflict quarantines the stale form"
+    );
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(staleTabForm);
+    assert.equal(fakeFrappe.validated, false, "the quarantined form stays blocked");
+    assert.equal(
+        records.get(staleTabId).official_save_attempted_at,
+        "2026-08-29T10:59:00.000Z"
     );
 
     const raceId = "77777777-7777-4777-8777-777777777777";

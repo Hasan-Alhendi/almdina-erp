@@ -127,7 +127,10 @@ A higher persisted revision represents a different, non-hydrated payload: the
 current session is quarantined from checkpointing and official Save until the user
 reopens the draft and restores that newer payload. The same quarantine applies when
 the conflict is discovered by a scheduled, visibility, or pagehide checkpoint
-flush. Each checkpoint command compares the session's last persisted base revision,
+flush or while beginning an attempt owned by another tab; the stale session never
+manufactures ownership of the other tab's attempt timestamp. Discovery-dialog
+deletion is likewise compare-and-delete against the revision and attempt shown to
+the user, so a stale dialog retains a newer draft for reopen. Each checkpoint command compares the session's last persisted base revision,
 so accumulating multiple in-memory mutations cannot leapfrog another tab's newer
 record.
 Recovery infrastructure failure is logged/fail-safe and does not remove native

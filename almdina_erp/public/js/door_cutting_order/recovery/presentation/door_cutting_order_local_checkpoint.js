@@ -638,10 +638,27 @@
             if (action === "delete") {
                 const remove = async () => {
                     button.disabled = true;
-                    const result = await repository().delete(recoveryIdentity(record.draft_id));
+                    const repo = repository();
+                    const identity = recoveryIdentity(record.draft_id);
+                    const result = await repo.delete(
+                        identity,
+                        record.recovery_revision,
+                        record.official_save_attempted_at
+                    );
                     if (!result || result.ok !== true) {
+                        const code = String(result && result.error && result.error.code || "");
+                        if (["stale_revision", "save_attempt_conflict"].includes(code)) {
+                            const refreshed = await repo.read(identity);
+                            if (refreshed && refreshed.ok === true && refreshed.value) {
+                                accepted.set(record.draft_id, refreshed.value);
+                            }
+                        }
                         button.disabled = false;
-                        showRecoveryError("تعذر حذف المسودة المحلية.");
+                        showRecoveryError(
+                            ["stale_revision", "save_attempt_conflict"].includes(code)
+                                ? "تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل حذفها."
+                                : "تعذر حذف المسودة المحلية."
+                        );
                         return;
                     }
                     accepted.delete(record.draft_id);
@@ -1077,7 +1094,7 @@
                 return;
             }
             if (started && started.error && started.error.code === "save_attempt_conflict") {
-                state.session.markPendingReconciliation();
+                quarantineExternalRevision(state, "save_attempt_conflict");
                 frappe.validated = false;
                 showRecoveryError("توجد محاولة حفظ أحدث لهذه المسودة في تبويب آخر. أعد فتح الطلب للتحقق منها.");
                 return;
