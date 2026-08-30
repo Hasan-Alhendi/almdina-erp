@@ -119,7 +119,9 @@ attempt timestamp, retaining the draft/assets on either mismatch. When marker
 creation fails but native Save remains fail-safe available, the operation compares
 against the prior ACTIVE attempt and persisted `saved_revision` fences, never an
 unpersisted higher in-memory revision; a successful marker creation replaces them
-with the new attempt. A
+with the new attempt. That prior timestamp is cleanup evidence only; failure
+handling treats an operation as pending only when that operation durably created
+its own pending marker. A
 fallback CAS may synchronize a live session only when its revision still matches.
 A higher persisted revision represents a different, non-hydrated payload: the
 current session is quarantined from checkpointing and official Save until the user

@@ -574,6 +574,13 @@ function dcoPayload(pieceKey = "piece-local-1") {
     assert.equal((await repository.delete(newIdentity)).value, true);
     assert.equal(gateway.records.dco_recovery_assets.size, 0);
     assert.equal((await repository.read(newIdentity)).value, null);
+    const missingRevisionZeroCleanup = await repository.delete(newIdentity, 0, null);
+    assert.equal(missingRevisionZeroCleanup.ok, true);
+    assert.equal(
+        missingRevisionZeroCleanup.value,
+        false,
+        "revision zero represents a fail-open operation with no persisted draft"
+    );
 
     const editKey = repository.storageKey(editIdentity);
     const validEditRecord = gateway.records.dco_recovery_drafts.get(editKey);

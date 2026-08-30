@@ -505,11 +505,11 @@
             try {
                 if (
                     expectedRevision !== null
-                    && (!Number.isSafeInteger(Number(expectedRevision)) || Number(expectedRevision) < 1)
+                    && (!Number.isSafeInteger(Number(expectedRevision)) || Number(expectedRevision) < 0)
                 ) {
                     throw new LocalDraftRepositoryError(
                         "invalid_revision",
-                        "Recovery cleanup revision must be a positive integer"
+                        "Recovery cleanup revision must be a non-negative integer"
                     );
                 }
                 const expectedAttempt = expectedAttemptedAt === undefined

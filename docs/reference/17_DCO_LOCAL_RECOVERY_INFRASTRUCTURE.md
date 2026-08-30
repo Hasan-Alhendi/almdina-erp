@@ -174,6 +174,9 @@ existing fail-safe native Save proceeds, its operation keeps the ACTIVE record's
 persisted `saved_revision`/timestamp fence for acknowledged-success cleanup; an
 unpersisted higher in-memory revision is never used as the delete fence, and a
 successfully created marker replaces both values with its newly returned fence.
+The retained cleanup timestamp does not grant pending-attempt ownership to the
+current operation; only a durably returned pending marker may drive failure-state
+reconciliation for that operation.
 
 ## 6. Failure and compatibility behavior
 

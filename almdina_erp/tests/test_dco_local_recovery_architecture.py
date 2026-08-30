@@ -322,6 +322,23 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("beginOfficialSave", session)
         self.assertIn("markPendingReconciliation", session)
         self.assertIn("resumeAfterProvenFailure", session)
+        self.assertIn(
+            "expected_recovery_revision: expectedRecoveryRevision",
+            session,
+        )
+        self.assertIn('"invalid_expected_revision"', repository)
+        self.assertIn(
+            "Number(current.recovery_revision) !== expectedRevision",
+            repository,
+        )
+        self.assertIn(
+            "Recovery checkpoint cannot advance while official Save is pending",
+            repository,
+        )
+        self.assertIn(
+            "Recovery draft changed before confirmed cleanup",
+            repository,
+        )
         self.assertNotIn(
             "recovery_revision: captureRevision,\n                    official_save_state:",
             session,
@@ -340,14 +357,34 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("adoptPersistedOfficialSaveState", session)
         self.assertIn("external_revision_conflict", presentation)
         self.assertIn("quarantineExternalRevision", presentation)
-        self.assertIn('["stale_revision", "revision_conflict"].includes(code)', presentation)
+        self.assertIn("function flushState(frm, state = currentState(frm))", presentation)
+        self.assertIn("quarantineExternalRevision(state, code);", presentation)
+        self.assertIn(
+            '["stale_revision", "revision_conflict", "save_attempt_conflict"].includes(code)',
+            presentation,
+        )
+        self.assertIn("expectedRevision: operation.attemptedRevision", presentation)
+        self.assertIn("expectedAttemptedAt: operation.cleanupAttemptedAt", presentation)
+        self.assertIn("expectedRevision: reconciledSnapshot.recovery_revision", presentation)
+        self.assertIn(
+            "saveOperation.cleanupAttemptedAt = preAttempt.official_save_attempted_at",
+            presentation,
+        )
+        self.assertNotIn(
+            "saveOperation.attemptedAt = preAttempt.official_save_attempted_at",
+            presentation,
+        )
+        self.assertIn(
+            "saveOperation.attemptedRevision = preAttempt.saved_revision",
+            presentation,
+        )
         self.assertIn('started.error.code === "stale_revision"', presentation)
         self.assertIn("const current = await repo.read(identity)", presentation)
         self.assertIn('"save_attempt_conflict"', repository)
         self.assertIn("official_save_attempted_at", session)
         self.assertLess(
             presentation.index("state.session.complete();"),
-            presentation.index("repository().delete(state.session.identity())"),
+            presentation.index("const result = await repository().delete("),
         )
         self.assertNotIn("frm.save(", presentation)
 

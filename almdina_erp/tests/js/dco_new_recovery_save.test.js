@@ -22,8 +22,10 @@ let documentGeneration = 1;
 let reconciliationDeferred = null;
 let saveAttemptSequence = 0;
 let writeDeferred = null;
+let writeFailure = null;
 let saveStateDeferred = null;
 let saveStateEntered = null;
+let pendingStateFailure = null;
 let advanceRevisionOnRead = false;
 let advanceRevisionBeforeActiveCas = false;
 let nativeSaveDeferred = null;
@@ -48,12 +50,49 @@ const repository = {
     },
     async write(input) {
         if (writeDeferred) await writeDeferred.promise;
-        const current = records.get(input.draft_id) || {};
+        if (writeFailure) return { ok: false, error: structuredClone(writeFailure) };
+        const current = records.get(input.draft_id) || null;
+        const revision = Number(input.recovery_revision);
+        const expectedRevision = Number(input.expected_recovery_revision);
+        if (current && Number(current.recovery_revision) > revision) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        if (current && Number(current.recovery_revision) === revision) {
+            const comparableFields = [
+                "mode",
+                "dirty_scope",
+                "target_name",
+                "session_origin_modified",
+                "expected_server_modified",
+                "tab_session_id",
+                "recovery_revision",
+                "payload",
+                "asset_refs",
+            ];
+            const sameContent = comparableFields.every(
+                (fieldname) => JSON.stringify(current[fieldname] ?? null)
+                    === JSON.stringify(input[fieldname] ?? null)
+            );
+            return sameContent
+                ? { ok: true, value: structuredClone(current) }
+                : { ok: false, error: { code: "revision_conflict" } };
+        }
+        if (current && current.official_save_state === "PENDING_RECONCILIATION") {
+            return { ok: false, error: { code: "save_attempt_conflict" } };
+        }
+        if (!current && expectedRevision !== 0) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        if (current && Number(current.recovery_revision) !== expectedRevision) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        const recordInput = structuredClone(input);
+        delete recordInput.expected_recovery_revision;
         const next = {
-            ...current,
-            ...structuredClone(input),
-            official_save_state: input.official_save_state || current.official_save_state || "ACTIVE",
-            created_at: current.created_at || "2026-08-29T09:00:00.000Z",
+            ...(current || {}),
+            ...recordInput,
+            official_save_state: input.official_save_state || (current && current.official_save_state) || "ACTIVE",
+            created_at: (current && current.created_at) || "2026-08-29T09:00:00.000Z",
             captured_at: "2026-08-29T10:00:00.000Z",
         };
         records.set(input.draft_id, next);
@@ -61,6 +100,11 @@ const repository = {
     },
     async setOfficialSaveState(identity, state, revision, expectedAttemptedAt) {
         let current = records.get(identity.draft_id);
+        if (pendingStateFailure && state === "PENDING_RECONCILIATION") {
+            const error = pendingStateFailure;
+            pendingStateFailure = null;
+            return { ok: false, error };
+        }
         if (saveStateDeferred && state === "PENDING_RECONCILIATION") {
             if (saveStateEntered) saveStateEntered.resolve();
             await saveStateDeferred.promise;
@@ -95,10 +139,25 @@ const repository = {
         saveStates.push({ draft_id: identity.draft_id, state, attempted_at: attemptedAt });
         return { ok: true, value: structuredClone(next) };
     },
-    async delete(identity) {
+    async delete(identity, expectedRevision = null, expectedAttemptedAt = undefined) {
         if (deleteDeferred) {
             if (deleteEntered) deleteEntered.resolve();
             await deleteDeferred.promise;
+        }
+        const current = records.get(identity.draft_id) || null;
+        if (
+            current
+            && expectedRevision !== null
+            && Number(current.recovery_revision) !== Number(expectedRevision)
+        ) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        if (
+            current
+            && expectedAttemptedAt !== undefined
+            && (current.official_save_attempted_at || null) !== expectedAttemptedAt
+        ) {
+            return { ok: false, error: { code: "save_attempt_conflict" } };
         }
         deleted.push(identity.draft_id);
         records.delete(identity.draft_id);
@@ -408,6 +467,85 @@ function runCleanups(frm) {
     await handlers["Door Cutting Order"].after_save(retryForm);
     assert.equal(records.has(pendingId), false, "acknowledged success cleans up after binding");
     assert.equal(Recovery.LocalCheckpoint.snapshot(retryForm), null);
+
+    const failOpenId = "23232323-2323-4232-8232-232323232323";
+    const failOpenRecord = draft(failOpenId);
+    failOpenRecord.official_save_attempted_at = "2026-08-29T10:44:00.000Z";
+    records.set(failOpenId, structuredClone(failOpenRecord));
+    const failOpenForm = form("new-door-cutting-order-marker-failure");
+    failOpenForm.save = async function saveAfterRecoveryHook() {
+        await handlers["Door Cutting Order"].before_save(this);
+        nativeSaveCalls += 1;
+    };
+    fakeWindow.cur_frm = failOpenForm;
+    await Recovery.LocalCheckpoint.continueDraft(failOpenForm, failOpenRecord);
+    pendingStateFailure = { code: "quota_exceeded", message: "marker storage failed" };
+    await failOpenForm.save();
+    assert.equal(
+        records.has(failOpenId),
+        false,
+        "fail-open acknowledged insert cleans against the retained pre-attempt fence"
+    );
+
+    const validationFailOpenId = "25252525-2525-4252-8252-252525252525";
+    const validationFailOpenRecord = draft(validationFailOpenId);
+    validationFailOpenRecord.official_save_attempted_at = "2026-08-29T10:46:00.000Z";
+    records.set(validationFailOpenId, structuredClone(validationFailOpenRecord));
+    const validationFailOpenForm = form("new-door-cutting-order-marker-validation-failure");
+    validationFailOpenForm.save = async function saveAfterRecoveryHook() {
+        await handlers["Door Cutting Order"].before_save(this);
+        nativeSaveCalls += 1;
+        if (nativeFailure) throw nativeFailure;
+    };
+    fakeWindow.cur_frm = validationFailOpenForm;
+    await Recovery.LocalCheckpoint.continueDraft(
+        validationFailOpenForm,
+        validationFailOpenRecord
+    );
+    pendingStateFailure = { code: "quota_exceeded", message: "marker storage failed" };
+    nativeFailure = {
+        status: 417,
+        responseJSON: { exc_type: "ValidationError" },
+        message: "validation failed after marker storage failure",
+    };
+    await assert.rejects(validationFailOpenForm.save());
+    assert.equal(records.get(validationFailOpenId).official_save_state, "ACTIVE");
+    assert.equal(
+        Recovery.LocalCheckpoint.snapshot(validationFailOpenForm).official_save_state,
+        "ACTIVE",
+        "a retained cleanup fence does not claim durable pending-attempt ownership"
+    );
+    nativeFailure = null;
+    await validationFailOpenForm.save();
+    assert.equal(
+        records.has(validationFailOpenId),
+        false,
+        "the next explicit Save can create its own marker and clean up"
+    );
+
+    const checkpointFailOpenId = "24242424-2424-4242-8242-242424242424";
+    const checkpointFailOpenRecord = draft(checkpointFailOpenId);
+    checkpointFailOpenRecord.official_save_attempted_at = "2026-08-29T10:45:00.000Z";
+    records.set(checkpointFailOpenId, structuredClone(checkpointFailOpenRecord));
+    const checkpointFailOpenForm = form("new-door-cutting-order-checkpoint-failure");
+    checkpointFailOpenForm.save = async function saveAfterRecoveryHook() {
+        await handlers["Door Cutting Order"].before_save(this);
+        nativeSaveCalls += 1;
+    };
+    fakeWindow.cur_frm = checkpointFailOpenForm;
+    await Recovery.LocalCheckpoint.continueDraft(
+        checkpointFailOpenForm,
+        checkpointFailOpenRecord
+    );
+    writeFailure = { code: "quota_exceeded", message: "checkpoint storage failed" };
+    Recovery.LocalCheckpoint.markDirty(checkpointFailOpenForm, "DCO");
+    await checkpointFailOpenForm.save();
+    writeFailure = null;
+    assert.equal(
+        records.has(checkpointFailOpenId),
+        false,
+        "fail-open cleanup uses saved_revision when the in-memory revision was not persisted"
+    );
 
     const failedReconcileId = "33333333-3333-4333-8333-333333333333";
     const failedRecord = draft(failedReconcileId, "PENDING_RECONCILIATION");
@@ -723,6 +861,77 @@ function runCleanups(frm) {
     await handlers["Door Cutting Order"].before_save(staleRevisionForm);
     assert.equal(fakeFrappe.validated, false);
     assert.equal(records.get(staleRevisionId).recovery_revision, staleRevisionRecord.recovery_revision + 1);
+
+    const backgroundConflictId = "abababab-abab-4bab-8bab-abababababab";
+    const backgroundConflictRecord = draft(backgroundConflictId);
+    const backgroundConflictForm = form("new-door-cutting-order-background-conflict");
+    fakeWindow.cur_frm = backgroundConflictForm;
+    await Recovery.LocalCheckpoint.continueDraft(backgroundConflictForm, backgroundConflictRecord);
+    records.set(backgroundConflictId, {
+        ...records.get(backgroundConflictId),
+        recovery_revision: backgroundConflictRecord.recovery_revision + 1,
+    });
+    assert.equal(Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"), true);
+    assert.equal(Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"), true);
+    assert.equal(Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"), true);
+    await Recovery.LocalCheckpoint.flush(backgroundConflictForm);
+    assert.equal(
+        records.get(backgroundConflictId).recovery_revision,
+        backgroundConflictRecord.recovery_revision + 1,
+        "a stale tab cannot leapfrog a newer persisted base by batching local mutations"
+    );
+    assert.equal(
+        Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"),
+        false,
+        "a background flush conflict quarantines later local mutations"
+    );
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(backgroundConflictForm);
+    assert.equal(fakeFrappe.validated, false, "a background-conflicted tab cannot start native insert");
+    assert.equal(
+        records.get(backgroundConflictId).recovery_revision,
+        backgroundConflictRecord.recovery_revision + 1
+    );
+
+    const cleanupFenceId = "acacacac-acac-4cac-8cac-acacacacacac";
+    const cleanupFenceRecord = draft(cleanupFenceId);
+    const cleanupOwnerForm = form("new-door-cutting-order-cleanup-owner");
+    const cleanupStaleForm = form("new-door-cutting-order-cleanup-stale-tab");
+    fakeWindow.cur_frm = cleanupOwnerForm;
+    await Recovery.LocalCheckpoint.continueDraft(cleanupOwnerForm, cleanupFenceRecord);
+    fakeWindow.cur_frm = cleanupStaleForm;
+    await Recovery.LocalCheckpoint.continueDraft(cleanupStaleForm, cleanupFenceRecord);
+    fakeWindow.cur_frm = cleanupOwnerForm;
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(cleanupOwnerForm);
+    const cleanupAttempt = records.get(cleanupFenceId).official_save_attempted_at;
+    assert.equal(records.get(cleanupFenceId).recovery_revision, cleanupFenceRecord.recovery_revision);
+    fakeWindow.cur_frm = cleanupStaleForm;
+    assert.equal(Recovery.LocalCheckpoint.markDirty(cleanupStaleForm, "DCO"), true);
+    await Recovery.LocalCheckpoint.flush(cleanupStaleForm);
+    assert.equal(
+        records.get(cleanupFenceId).recovery_revision,
+        cleanupFenceRecord.recovery_revision,
+        "a pending insert fences out a stale tab's higher checkpoint"
+    );
+    assert.equal(
+        Recovery.LocalCheckpoint.markDirty(cleanupStaleForm, "DCO"),
+        false,
+        "the rejected post-attempt checkpoint quarantines the stale tab"
+    );
+    records.set(cleanupFenceId, {
+        ...records.get(cleanupFenceId),
+        recovery_revision: cleanupFenceRecord.recovery_revision + 1,
+        official_save_attempted_at: cleanupAttempt,
+    });
+    fakeWindow.cur_frm = cleanupOwnerForm;
+    await cleanupOwnerForm.save();
+    assert.equal(records.has(cleanupFenceId), true);
+    assert.equal(
+        records.get(cleanupFenceId).recovery_revision,
+        cleanupFenceRecord.recovery_revision + 1,
+        "acknowledged revision-R success cannot delete a raced revision R+1 checkpoint"
+    );
 
     const staleTabId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     const staleTabRecord = draft(staleTabId);
