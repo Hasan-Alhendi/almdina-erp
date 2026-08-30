@@ -116,7 +116,11 @@ observer/session; ownership is rechecked after asynchronous local deletion. A
 fallback CAS may synchronize a live session only when its revision still matches.
 A higher persisted revision represents a different, non-hydrated payload: the
 current session is quarantined from checkpointing and official Save until the user
-reopens the draft and restores that newer payload.
+reopens the draft and restores that newer payload. The same quarantine applies when
+the conflict is discovered by a scheduled, visibility, or pagehide checkpoint
+flush. Each checkpoint command compares the session's last persisted base revision,
+so accumulating multiple in-memory mutations cannot leapfrog another tab's newer
+record.
 Recovery infrastructure failure is logged/fail-safe and does not remove native
 explicit DCO creation. There is no official autosave, periodic `frm.save()`, remote
 sync, cross-device restore, or product behavior change outside NEW continuity.

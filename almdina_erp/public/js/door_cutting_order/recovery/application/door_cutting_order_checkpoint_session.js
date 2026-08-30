@@ -189,6 +189,7 @@
                 return { ok: true, value: null };
             }
             const captureRevision = revision;
+            const expectedRecoveryRevision = savedRevision;
             const captureScope = dirtyScope;
             transition(STATES.LOCAL_SAVING);
             let capture;
@@ -213,6 +214,7 @@
                     expected_server_modified: expectedServerModified,
                     tab_session_id: tabSessionId,
                     recovery_revision: captureRevision,
+                    expected_recovery_revision: expectedRecoveryRevision,
                     payload: capture && capture.payload,
                     asset_refs: capture && capture.asset_refs || [],
                 });

@@ -18,6 +18,16 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     simplify_polygon,
     validate_polygon,
 )
+from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
+    ContourCandidate,
+    DxfTopologyError,
+    ExpectedPieceEvidence,
+    PartGeometry,
+    PlacedPartGeometry,
+    ResolvedTopology,
+    resolve_contour_ownership,
+    validate_material_layout,
+)
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
     DxfReadError,
     SUPPORTED_DXF_ENTITY_TYPES,
@@ -56,6 +66,47 @@ def _format_cm(value: float) -> str:
 
 def _format_mm(value: float) -> str:
     return f"{value:.1f}".rstrip("0").rstrip(".")
+
+
+def _topology_error_message(error: DxfTopologyError, *, kerf_mm: float = 0.0) -> str:
+    first = error.first_key if error.first_key is not None else "؟"
+    second = error.second_key if error.second_key is not None else "؟"
+    if error.code == "EXPECTED_PIECE_MISMATCH":
+        return (
+            "لا يمكن مطابقة محيطات CUT_PATH المغلقة مع قطع الطلب المطلوبة. "
+            "تأكد من مقاسات محيطات القطع ومن أن المسارات الإضافية هي فتحات داخلية فقط."
+        )
+    if error.code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
+        return (
+            "تركيب مسارات CUT_PATH ملتبس: توجد أكثر من طريقة صالحة لاعتبار المسارات قطعًا أو فتحات داخلية. "
+            "اجعل كل فتحة مغلقة وموجودة بالكامل داخل قطعة واحدة فقط ثم أعد الرفع."
+        )
+    if error.code == "UNRESOLVED_CONTOUR_OWNERSHIP":
+        return (
+            "تعذر تحديد القطع والفتحات الداخلية في CUT_PATH بشكل مؤكد. "
+            "تأكد أن كل فتحة مغلقة بالكامل داخل قطعة واحدة، وأن أي قطعة موضوعة داخل الفتحة لا تلامس حافتها ولا تتقاطع مع مادة القطعة."
+        )
+    if error.code == "INVALID_PART_TOPOLOGY":
+        return (
+            "بنية إحدى القطع أو فتحاتها الداخلية غير صالحة. "
+            "يجب أن تكون الحدود مغلقة، غير متقاطعة، وأن تبقى كل فتحة بالكامل داخل محيط القطعة."
+        )
+    if error.code == "MATERIAL_FOOTPRINT_OVERLAP":
+        return (
+            f"القطعتان {first} و{second} تتداخلان في مادة اللوح. "
+            "وجود القطعة داخل المستطيل الخارجي لقطعة أخرى مسموح فقط عندما تكون بالكامل داخل فتحة داخلية صالحة."
+        )
+    if error.code == "HOLE_CLEARANCE_VIOLATION":
+        return (
+            f"القطعتان {first} و{second}: القطعة الموضوعة داخل الفتحة قريبة من حافة الفتحة أكثر من المسموح. "
+            f"حافظ على مسافة Kerf لا تقل عن {_format_mm(kerf_mm)} مم من حدود الفتحة."
+        )
+    if error.code == "PART_CLEARANCE_VIOLATION":
+        return (
+            f"المسافة بين القطعتين {first} و{second} أقل من Kerf المطلوب "
+            f"({_format_mm(kerf_mm)} مم). افصل القطعتين ثم أعد الرفع."
+        )
+    return "تعذر التحقق من بنية القطع والفتحات الداخلية في DXF. صحح الرسم ثم أعد الرفع."
 
 
 def _parse_r12_lines(content: str) -> list[dict[str, Any]]:
@@ -165,6 +216,17 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
     return expected
 
 
+def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]:
+    return tuple(
+        ExpectedPieceEvidence(
+            width=piece["width_cm"] * 10.0,
+            height=piece["length_cm"] * 10.0,
+            allow_rotation=bool(piece["allow_rotation"]),
+        )
+        for piece in _expected_order_pieces(order)
+    )
+
+
 def _direct_dimensions_match(piece_w: float, piece_h: float, expected_w: float, expected_h: float) -> bool:
     tolerance_cm = DIMENSION_TOLERANCE_MM / 10.0
     return abs(piece_w - expected_w) <= tolerance_cm and abs(piece_h - expected_h) <= tolerance_cm
@@ -241,7 +303,10 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
         piece["original_h"] = candidate["length_cm"]
         piece["rotated"] = rotated
         piece["piece_type"] = candidate["piece_type"]
-        piece["area_m2"] = round((width_cm * height_cm) / 10000.0, 4)
+        if "_material_area_m2" in piece:
+            piece["area_m2"] = round(_num(piece["_material_area_m2"]), 4)
+        else:
+            piece["area_m2"] = round((width_cm * height_cm) / 10000.0, 4)
         labeled.append(piece)
 
     if unmatched:
@@ -345,8 +410,56 @@ def _to_plan_points(
     ]
 
 
+def _validated_cut_candidates(contours: list[dict[str, object]]) -> tuple[ContourCandidate, ...]:
+    errors: list[str] = []
+    candidates: list[ContourCandidate] = []
+    for contour_no, contour in enumerate(contours, start=1):
+        raw_points = contour.get("points") or []
+        if contour.get("branched"):
+            errors.append(f"مسار القطعة/الفتحة رقم {contour_no} يحتوي على تفرع أو خطوط زائدة ولا يشكل محيطًا واحدًا.")
+            continue
+        if not contour.get("closed"):
+            errors.append(
+                f"مسار القطعة/الفتحة رقم {contour_no} غير مغلق على طبقة {CUT_PATH_LAYER}. "
+                "أغلق المحيط بالكامل ثم أعد الرفع."
+            )
+            continue
+        points_mm = simplify_polygon(raw_points, GEOMETRY_TOLERANCE_MM)
+        geometry_errors = validate_polygon(points_mm, GEOMETRY_TOLERANCE_MM)
+        if "self_intersection" in geometry_errors:
+            errors.append(
+                f"هندسة القطعة/الفتحة رقم {contour_no} تتقاطع مع نفسها. "
+                "عدّل المحيط بحيث لا تتقاطع أضلاعه/منحنياته."
+            )
+            continue
+        if geometry_errors:
+            errors.append(
+                f"هندسة القطعة/الفتحة رقم {contour_no} غير صالحة: المحيط لا يكوّن مساحة قطع مغلقة صحيحة."
+            )
+            continue
+        candidates.append(ContourCandidate(key=contour_no, polygon=tuple(points_mm)))
+    if errors:
+        raise DxfImportError(errors)
+    return tuple(candidates)
+
+
+def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> ResolvedTopology:
+    candidates = _validated_cut_candidates(contours)
+    try:
+        return resolve_contour_ownership(
+            candidates,
+            _expected_topology_evidence(order),
+            dimension_tolerance=DIMENSION_TOLERANCE_MM,
+            geometry_tolerance=GEOMETRY_TOLERANCE_MM,
+        )
+    except DxfTopologyError as exc:
+        raise DxfImportError(
+            _topology_error_message(exc, kerf_mm=max(0.0, flt(order.kerf_mm)))
+        ) from exc
+
+
 def _extract_pieces(
-    contours: list[dict[str, object]],
+    topology: ResolvedTopology,
     *,
     sheets: list[dict[str, Any]],
     trim_mm: float,
@@ -355,25 +468,13 @@ def _extract_pieces(
 ) -> list[dict[str, Any]]:
     errors: list[str] = []
     pieces: list[dict[str, Any]] = []
-    for piece_no, contour in enumerate(contours, start=1):
-        raw_points = contour.get("points") or []
-        if contour.get("branched"):
-            errors.append(f"مسار القطعة رقم {piece_no} يحتوي على تفرع أو خطوط زائدة ولا يشكل محيط قطعة واحدًا.")
-            continue
-        if not contour.get("closed"):
-            errors.append(f"مسار القطعة رقم {piece_no} غير مغلق على طبقة {CUT_PATH_LAYER}. أغلق محيط القطعة بالكامل ثم أعد الرفع.")
-            continue
-        points_mm = simplify_polygon(raw_points, GEOMETRY_TOLERANCE_MM)
-        geometry_errors = validate_polygon(points_mm, GEOMETRY_TOLERANCE_MM)
-        if "self_intersection" in geometry_errors:
-            errors.append(f"هندسة القطعة رقم {piece_no} تتقاطع مع نفسها. عدّل المحيط بحيث لا تتقاطع أضلاعه/منحنياته.")
-            continue
-        if "too_few_vertices" in geometry_errors or "zero_area" in geometry_errors:
-            errors.append(f"هندسة القطعة رقم {piece_no} غير صالحة: المحيط لا يكوّن مساحة قطع صحيحة.")
-            continue
+    for piece_no, part in enumerate(topology.parts, start=1):
+        points_mm = list(part.geometry.outer)
         target_sheet = _sheet_for_piece(points_mm, sheets)
         if target_sheet is None:
-            errors.append(f"القطعة رقم {piece_no} ليست موجودة بالكامل داخل حدود لوح واحد من طبقة {SHEET_OUTLINE_LAYER}.")
+            errors.append(
+                f"القطعة رقم {piece_no} ليست موجودة بالكامل داخل حدود لوح واحد من طبقة {SHEET_OUTLINE_LAYER}."
+            )
             continue
         plan_points = _to_plan_points(points_mm, sheet=target_sheet, trim_mm=trim_mm)
         if not polygon_inside_rect(
@@ -388,6 +489,12 @@ def _extract_pieces(
                 f"القطعة رقم {piece_no} تتجاوز المساحة القابلة للاستخدام من اللوح بعد احتساب هامش التشذيب {_format_mm(trim_mm)} مم."
             )
             continue
+
+        holes_mm = [list(hole) for hole in part.geometry.holes]
+        holes_cm = [
+            _to_plan_points(hole, sheet=target_sheet, trim_mm=trim_mm)
+            for hole in holes_mm
+        ]
         min_x, min_y, max_x, max_y = bbox(plan_points)
         piece = {
             "id": piece_no,
@@ -397,9 +504,14 @@ def _extract_pieces(
             "h": max_y - min_y,
             "piece_type": "Regular" if is_axis_aligned_rectangle(points_mm, CONNECTIVITY_TOLERANCE_MM) else "Special",
             "_outline_mm": points_mm,
+            "_holes_mm": holes_mm,
             "_outline_cm": plan_points,
+            "_holes_cm": holes_cm,
             "_sheet_no": target_sheet["sheet_no"],
         }
+        if holes_mm:
+            material_area_mm2 = polygon_area(points_mm) - sum(polygon_area(hole) for hole in holes_mm)
+            piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
         pieces.append(piece)
         target_sheet["pieces"].append(piece)
     if errors:
@@ -407,31 +519,39 @@ def _extract_pieces(
     return pieces
 
 
+def _piece_material_geometry(piece: dict[str, Any], *, units: str) -> PartGeometry:
+    outer_key = f"_outline_{units}"
+    holes_key = f"_holes_{units}"
+    return PartGeometry(
+        outer=tuple(tuple(point) for point in piece.get(outer_key) or ()),
+        holes=tuple(
+            tuple(tuple(point) for point in hole)
+            for hole in (piece.get(holes_key) or ())
+        ),
+    )
+
+
 def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> None:
-    errors: list[str] = []
     by_sheet: dict[int, list[dict[str, Any]]] = {}
     for piece in pieces:
         by_sheet.setdefault(int(piece["_sheet_no"]), []).append(piece)
-    for sheet_no, sheet_pieces in by_sheet.items():
-        for index, first in enumerate(sheet_pieces):
-            for second in sheet_pieces[index + 1 :]:
-                first_outline = first["_outline_mm"]
-                second_outline = second["_outline_mm"]
-                if polygons_overlap(first_outline, second_outline, tolerance=1e-6):
-                    errors.append(
-                        f"القطعتان {first['id']} و{second['id']} متداخلتان على اللوح رقم {sheet_no}. افصل القطعتين قبل الرفع."
-                    )
-                    continue
-                if kerf_mm <= 0:
-                    continue
-                distance = polygon_distance(first_outline, second_outline, tolerance=1e-6)
-                if distance + KERF_NUMERIC_TOLERANCE_MM < kerf_mm:
-                    errors.append(
-                        f"المسافة بين القطعتين {first['id']} و{second['id']} على اللوح رقم {sheet_no} هي "
-                        f"{_format_mm(distance)} مم، بينما سماكة القص (Kerf) المطلوبة {_format_mm(kerf_mm)} مم."
-                    )
-    if errors:
-        raise DxfImportError(errors)
+    for sheet_pieces in by_sheet.values():
+        placed = tuple(
+            PlacedPartGeometry(
+                key=int(piece["id"]),
+                geometry=_piece_material_geometry(piece, units="mm"),
+            )
+            for piece in sheet_pieces
+        )
+        try:
+            validate_material_layout(
+                placed,
+                required_clearance=max(0.0, kerf_mm),
+                geometry_tolerance=GEOMETRY_TOLERANCE_MM,
+                numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM,
+            )
+        except DxfTopologyError as exc:
+            raise DxfImportError(_topology_error_message(exc, kerf_mm=kerf_mm)) from exc
 
 
 def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
@@ -443,6 +563,7 @@ def validate_imported_plan(
     order: Any,
     *,
     geometry_by_piece_id: dict[int, list[tuple[float, float]]] | None = None,
+    topology_by_piece_id: dict[int, PartGeometry] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     expected_count = sum(cint(row.qty) for row in (order.pieces or []))
@@ -463,6 +584,27 @@ def validate_imported_plan(
                 errors.append(f"القطعة {label} لها أبعاد غير صالحة.")
             if x < -0.01 or y < -0.01 or x + w > usable_w + 0.01 or y + h > usable_h + 0.01:
                 errors.append(f"القطعة {label} تتجاوز حدود المساحة القابلة للاستخدام من اللوح.")
+
+        if topology_by_piece_id is not None:
+            placed: list[PlacedPartGeometry] = []
+            for piece in pieces:
+                piece_id = int(piece.get("id") or 0)
+                geometry = topology_by_piece_id.get(piece_id)
+                if geometry is None:
+                    errors.append(f"تعذر التحقق من هندسة القطعة {piece.get('label') or piece_id} في خطة DXF.")
+                    continue
+                placed.append(PlacedPartGeometry(key=piece.get("label") or piece_id, geometry=geometry))
+            if len(placed) == len(pieces):
+                try:
+                    validate_material_layout(
+                        placed,
+                        required_clearance=kerf_cm,
+                        geometry_tolerance=GEOMETRY_TOLERANCE_MM / 10.0,
+                        numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM / 10.0,
+                    )
+                except DxfTopologyError as exc:
+                    errors.append(_topology_error_message(exc, kerf_mm=kerf_cm * 10.0))
+            continue
 
         for index, first in enumerate(pieces):
             first_outline = (geometry_by_piece_id or {}).get(int(first.get("id") or 0))
@@ -534,8 +676,9 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         expected_height_mm=full_board_length_cm * 10.0,
     )
     cut_contours = assemble_contours(cut_segments, CONNECTIVITY_TOLERANCE_MM)
+    topology = _resolve_cut_topology(cut_contours, order)
     pieces = _extract_pieces(
-        cut_contours,
+        topology,
         sheets=sheets,
         trim_mm=trim_mm,
         usable_width_cm=usable_board_width_cm,
@@ -545,7 +688,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     expected_count = len(_expected_order_pieces(order))
     if len(pieces) != expected_count:
         raise DxfImportError(
-            f"عدد مسارات القطع المغلقة في DXF هو {len(pieces)} بينما الطلب يتطلب {expected_count} قطعة بالضبط."
+            f"عدد مسارات القطع الفعلية في DXF هو {len(pieces)} بينما الطلب يتطلب {expected_count} قطعة بالضبط."
         )
 
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
@@ -562,6 +705,10 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         sheet["source_type"] = "Full Board"
 
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}
+    topology_by_piece_id = {
+        int(piece["id"]): _piece_material_geometry(piece, units="cm")
+        for piece in labeled
+    }
     all_public_pieces = [_public_piece(piece) for piece in labeled]
     public_by_id = {int(piece["id"]): piece for piece in all_public_pieces}
     used_area_m2 = sum(flt(piece.get("area_m2")) for piece in all_public_pieces)
@@ -604,6 +751,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
         snapshot,
         order,
         geometry_by_piece_id=geometry_by_piece_id,
+        topology_by_piece_id=topology_by_piece_id,
     )
     if not snapshot["validation"]["is_valid"]:
         raise DxfImportError(snapshot["validation"]["errors"])

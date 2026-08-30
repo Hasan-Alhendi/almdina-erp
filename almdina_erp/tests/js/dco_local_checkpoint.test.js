@@ -199,6 +199,7 @@ function runFrame(frm) {
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(editForm);
     assert.equal(writes.length, 1);
     assert.equal(writes[0].recovery_revision, 2);
+    assert.equal(writes[0].expected_recovery_revision, 0);
     assert.equal(writes[0].mode, "EDIT");
     assert.equal(writes[0].target_name, "DCO-2026-00001");
     assert.equal(writes[0].session_origin_modified, "2026-08-29 08:00:00.000000");
@@ -214,6 +215,7 @@ function runFrame(frm) {
     runFrame(editForm);
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(editForm);
     assert.equal(writes.length, 2);
+    assert.equal(writes[1].expected_recovery_revision, writes[0].recovery_revision);
     assert.equal(writes[1].session_origin_modified, "2026-08-29 08:00:00.000000");
     assert.equal(writes[1].expected_server_modified, "2026-08-29 09:00:00.000000");
     assert.equal(officialSaveCalls, 0, "local checkpoint integration never invokes frm.save()");
@@ -229,6 +231,7 @@ function runFrame(frm) {
     assert.equal(firstNew.target_name, null);
     assert.equal(firstNew.session_origin_modified, null);
     assert.equal(firstNew.expected_server_modified, null);
+    assert.equal(firstNew.expected_recovery_revision, 0);
     assert.equal(Object.hasOwn(firstNew, "official_save_state"), false);
     assert.match(firstNew.draft_id, /^00000000-0000-4000-8000-/);
     assert.match(firstNew.payload.dco.pieces[0].piece_key, /^00000000-0000-4000-8000-/);
@@ -242,6 +245,7 @@ function runFrame(frm) {
     assert.equal(secondNew.draft_id, stableDraftId);
     assert.equal(secondNew.payload.dco.pieces[0].piece_key, stablePieceKey);
     assert.equal(secondNew.recovery_revision, firstNew.recovery_revision + 1);
+    assert.equal(secondNew.expected_recovery_revision, firstNew.recovery_revision);
 
     const writesBeforePromotion = writes.length;
     await handlers["Door Cutting Order"].before_save(newForm);

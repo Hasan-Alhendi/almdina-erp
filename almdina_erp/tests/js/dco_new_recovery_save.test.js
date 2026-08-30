@@ -48,12 +48,45 @@ const repository = {
     },
     async write(input) {
         if (writeDeferred) await writeDeferred.promise;
-        const current = records.get(input.draft_id) || {};
+        const current = records.get(input.draft_id) || null;
+        const revision = Number(input.recovery_revision);
+        const expectedRevision = Number(input.expected_recovery_revision);
+        if (current && Number(current.recovery_revision) > revision) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        if (current && Number(current.recovery_revision) === revision) {
+            const comparableFields = [
+                "mode",
+                "dirty_scope",
+                "target_name",
+                "session_origin_modified",
+                "expected_server_modified",
+                "tab_session_id",
+                "recovery_revision",
+                "payload",
+                "asset_refs",
+            ];
+            const sameContent = comparableFields.every(
+                (fieldname) => JSON.stringify(current[fieldname] ?? null)
+                    === JSON.stringify(input[fieldname] ?? null)
+            );
+            return sameContent
+                ? { ok: true, value: structuredClone(current) }
+                : { ok: false, error: { code: "revision_conflict" } };
+        }
+        if (!current && expectedRevision !== 0) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        if (current && Number(current.recovery_revision) !== expectedRevision) {
+            return { ok: false, error: { code: "stale_revision" } };
+        }
+        const recordInput = structuredClone(input);
+        delete recordInput.expected_recovery_revision;
         const next = {
-            ...current,
-            ...structuredClone(input),
-            official_save_state: input.official_save_state || current.official_save_state || "ACTIVE",
-            created_at: current.created_at || "2026-08-29T09:00:00.000Z",
+            ...(current || {}),
+            ...recordInput,
+            official_save_state: input.official_save_state || (current && current.official_save_state) || "ACTIVE",
+            created_at: (current && current.created_at) || "2026-08-29T09:00:00.000Z",
             captured_at: "2026-08-29T10:00:00.000Z",
         };
         records.set(input.draft_id, next);
@@ -723,6 +756,37 @@ function runCleanups(frm) {
     await handlers["Door Cutting Order"].before_save(staleRevisionForm);
     assert.equal(fakeFrappe.validated, false);
     assert.equal(records.get(staleRevisionId).recovery_revision, staleRevisionRecord.recovery_revision + 1);
+
+    const backgroundConflictId = "abababab-abab-4bab-8bab-abababababab";
+    const backgroundConflictRecord = draft(backgroundConflictId);
+    const backgroundConflictForm = form("new-door-cutting-order-background-conflict");
+    fakeWindow.cur_frm = backgroundConflictForm;
+    await Recovery.LocalCheckpoint.continueDraft(backgroundConflictForm, backgroundConflictRecord);
+    records.set(backgroundConflictId, {
+        ...records.get(backgroundConflictId),
+        recovery_revision: backgroundConflictRecord.recovery_revision + 1,
+    });
+    assert.equal(Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"), true);
+    assert.equal(Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"), true);
+    assert.equal(Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"), true);
+    await Recovery.LocalCheckpoint.flush(backgroundConflictForm);
+    assert.equal(
+        records.get(backgroundConflictId).recovery_revision,
+        backgroundConflictRecord.recovery_revision + 1,
+        "a stale tab cannot leapfrog a newer persisted base by batching local mutations"
+    );
+    assert.equal(
+        Recovery.LocalCheckpoint.markDirty(backgroundConflictForm, "DCO"),
+        false,
+        "a background flush conflict quarantines later local mutations"
+    );
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(backgroundConflictForm);
+    assert.equal(fakeFrappe.validated, false, "a background-conflicted tab cannot start native insert");
+    assert.equal(
+        records.get(backgroundConflictId).recovery_revision,
+        backgroundConflictRecord.recovery_revision + 1
+    );
 
     const staleTabId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     const staleTabRecord = draft(staleTabId);

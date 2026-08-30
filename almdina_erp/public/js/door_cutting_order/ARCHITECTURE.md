@@ -74,6 +74,10 @@ document state plus exact save attempt with bounded compare-and-set retry. The s
 operation binding owns acknowledged-success cleanup, and a live session adopts the
 persisted official state only at the same payload revision. A higher external
 revision is a restore-required conflict, not an implicit payload synchronization.
+Every checkpoint write is transactionally fenced against the revision that its
+session last persisted, so coalesced mutations cannot leapfrog another tab. A
+conflict from any foreground, scheduled, visibility, or pagehide flush quarantines
+that form until explicit reopen/restore.
 
 ### Special-shape manufacturing boundary
 

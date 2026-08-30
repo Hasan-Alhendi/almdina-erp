@@ -322,6 +322,15 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("beginOfficialSave", session)
         self.assertIn("markPendingReconciliation", session)
         self.assertIn("resumeAfterProvenFailure", session)
+        self.assertIn(
+            "expected_recovery_revision: expectedRecoveryRevision",
+            session,
+        )
+        self.assertIn('"invalid_expected_revision"', repository)
+        self.assertIn(
+            "Number(current.recovery_revision) !== expectedRevision",
+            repository,
+        )
         self.assertNotIn(
             "recovery_revision: captureRevision,\n                    official_save_state:",
             session,
@@ -340,6 +349,8 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("adoptPersistedOfficialSaveState", session)
         self.assertIn("external_revision_conflict", presentation)
         self.assertIn("quarantineExternalRevision", presentation)
+        self.assertIn("function flushState(frm, state = currentState(frm))", presentation)
+        self.assertIn("quarantineExternalRevision(state, code);", presentation)
         self.assertIn('["stale_revision", "revision_conflict"].includes(code)', presentation)
         self.assertIn('started.error.code === "stale_revision"', presentation)
         self.assertIn("const current = await repo.read(identity)", presentation)

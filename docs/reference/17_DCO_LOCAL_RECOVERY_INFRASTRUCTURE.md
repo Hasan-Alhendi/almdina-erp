@@ -61,9 +61,14 @@ Database: `almdina_erp_dco_recovery`, version `1`.
 
 An unreconciled NEW record requires all server identity/version fields to be null.
 An EDIT record requires the DCO name and both modified tokens. A write with an
-older revision is rejected. Repeating the same revision and payload hash is
-idempotent; the same revision with different content is a conflict. This prevents
-a late local completion from replacing a newer checkpoint.
+older revision is rejected. Every write command also carries the session's last
+persisted revision as `expected_recovery_revision`; the repository checks that base
+inside the write transaction but does not store it as a record field. A missing
+record therefore accepts only base `0`, and an existing record accepts only its
+exact current revision. Repeating the same revision and payload hash remains
+idempotent even after the first attempt committed; the same revision with different
+content is a conflict. This prevents both a late completion and a stale tab that
+batched several local mutations from replacing a newer checkpoint.
 
 ### `dco_recovery_assets`
 
@@ -126,7 +131,11 @@ Document navigation disposes the session through `AlmdinaDocumentContext` cleanu
 Every accepted mutation increments the recovery revision. Multiple mutations in
 one browser frame coalesce into one write of the latest revision. Writes are
 serialized; a mutation arriving during a write produces the next revision after
-the current write settles. There is no timer cadence and no elapsed-time readiness
+the current write settles. Each write is fenced against the last revision that this
+session actually persisted, not merely against its higher in-memory revision. A
+background `stale_revision` or `revision_conflict` result quarantines that form from
+later checkpoint and official-Save effects until the newer draft is explicitly
+reopened and hydrated. There is no timer cadence and no elapsed-time readiness
 assumption.
 
 When the page becomes hidden or receives `pagehide`, the current dirty session asks

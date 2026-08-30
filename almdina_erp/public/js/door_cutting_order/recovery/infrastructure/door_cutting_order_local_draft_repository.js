@@ -249,6 +249,7 @@
                 const draftId = required(input && input.draft_id, "draft_id");
                 const tabSessionId = required(input && input.tab_session_id, "tab_session_id");
                 const revision = Number(input && input.recovery_revision);
+                const expectedRevision = Number(input && input.expected_recovery_revision);
                 const capturedAt = String(input && input.captured_at || clock());
                 if (!["NEW", "EDIT"].includes(mode)) {
                     throw new LocalDraftRepositoryError("invalid_mode", "Recovery mode is invalid");
@@ -258,6 +259,16 @@
                 }
                 if (!Number.isSafeInteger(revision) || revision < 1) {
                     throw new LocalDraftRepositoryError("invalid_revision", "Recovery revision must be a positive integer");
+                }
+                if (
+                    !Number.isSafeInteger(expectedRevision)
+                    || expectedRevision < 0
+                    || expectedRevision >= revision
+                ) {
+                    throw new LocalDraftRepositoryError(
+                        "invalid_expected_revision",
+                        "Expected recovery revision must precede the write revision"
+                    );
                 }
                 if (!isTimestamp(capturedAt)) {
                     throw new LocalDraftRepositoryError("invalid_timestamp", "Recovery capture timestamp is invalid");
@@ -326,6 +337,12 @@
                         if (current && Number(current.recovery_revision) === revision) {
                             if (sameRevisionContent(current, next)) return current;
                             throw new LocalDraftRepositoryError("revision_conflict", "Recovery revision has different content");
+                        }
+                        if (!current && expectedRevision !== 0) {
+                            throw new LocalDraftRepositoryError("stale_revision", "Recovery draft base no longer exists");
+                        }
+                        if (current && Number(current.recovery_revision) !== expectedRevision) {
+                            throw new LocalDraftRepositoryError("stale_revision", "Recovery draft changed from its expected base");
                         }
                         if (current) next.created_at = current.created_at;
                         await request(drafts.put(next));

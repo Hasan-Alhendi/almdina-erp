@@ -242,6 +242,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 1,
+        expected_recovery_revision: 0,
         payload: dcoPayload(),
         asset_refs: [],
     });
@@ -270,6 +271,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload("piece-local-2"),
         asset_refs: [],
     });
@@ -297,6 +299,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
         recovery_revision: 3,
+        expected_recovery_revision: 2,
         official_save_state: "ACTIVE",
         official_save_attempted_at: null,
         payload: dcoPayload("piece-local-3"),
@@ -309,6 +312,24 @@ function dcoPayload(pieceKey = "piece-local-1") {
         "ordinary higher-revision writes cannot downgrade pending reconciliation"
     );
     assert.equal(staleTabCheckpoint.value.official_save_attempted_at, pendingAttemptedAt);
+    const leapfrog = await repository.write({
+        ...newIdentity,
+        mode: "NEW",
+        dirty_scope: "DCO",
+        target_name: null,
+        session_origin_modified: null,
+        expected_server_modified: null,
+        tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        recovery_revision: 5,
+        expected_recovery_revision: 2,
+        payload: dcoPayload("piece-stale-leapfrog"),
+        asset_refs: [],
+    });
+    assert.equal(leapfrog.ok, false);
+    assert.equal(leapfrog.error.code, "stale_revision");
+    const afterLeapfrog = await repository.read(newIdentity);
+    assert.equal(afterLeapfrog.value.recovery_revision, 3);
+    assert.equal(afterLeapfrog.value.payload.dco.pieces[0].piece_key, "piece-local-3");
     assert.equal(
         (await repository.setOfficialSaveState(
             newIdentity,
@@ -366,6 +387,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
         recovery_revision: 3,
+        expected_recovery_revision: 2,
         payload: dcoPayload("piece-local-3"),
         asset_refs: [],
     });
@@ -381,6 +403,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
         recovery_revision: 3,
+        expected_recovery_revision: 2,
         payload: dcoPayload("different-at-same-revision"),
         asset_refs: [],
     });
@@ -396,6 +419,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload(),
         asset_refs: [],
     });
@@ -417,6 +441,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: "2026-08-29 09:00:00.000000",
         tab_session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         recovery_revision: 1,
+        expected_recovery_revision: 0,
         payload: dcoPayload("ROW-EXISTING"),
         asset_refs: [],
     });
@@ -461,6 +486,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: null,
         tab_session_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         recovery_revision: 4,
+        expected_recovery_revision: 3,
         payload: specialPayload,
         asset_refs: ["asset-scan-1"],
     });
@@ -537,6 +563,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: "2026-08-29 09:00:00.000000",
         tab_session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         recovery_revision: 2,
+        expected_recovery_revision: 1,
         payload: dcoPayload("ROW-EXISTING"),
         asset_refs: [],
     });
@@ -571,6 +598,7 @@ function dcoPayload(pieceKey = "piece-local-1") {
         expected_server_modified: "2026-08-29 09:00:00.000000",
         tab_session_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         recovery_revision: 3,
+        expected_recovery_revision: 1,
         payload: oversizedPayload,
         asset_refs: [],
     });

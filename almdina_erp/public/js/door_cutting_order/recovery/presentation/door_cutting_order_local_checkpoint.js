@@ -699,10 +699,18 @@
 
     function flushState(frm, state = currentState(frm)) {
         if (!state) return Promise.resolve({ ok: true, value: null });
-        return state.session.flush().catch((error) => ({
-            ok: false,
-            error: { code: String(error && error.code || "storage_failure"), message: String(error && error.message || error) },
-        }));
+        return state.session.flush()
+            .catch((error) => ({
+                ok: false,
+                error: { code: String(error && error.code || "storage_failure"), message: String(error && error.message || error) },
+            }))
+            .then((result) => {
+                const code = String(result && result.error && result.error.code || "");
+                if (["stale_revision", "revision_conflict"].includes(code)) {
+                    quarantineExternalRevision(state, code);
+                }
+                return result;
+            });
     }
 
     function scheduleFlush(frm, state) {
