@@ -358,6 +358,8 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("external_revision_conflict", presentation)
         self.assertIn("quarantineExternalRevision", presentation)
         self.assertIn("function flushState(frm, state = currentState(frm))", presentation)
+        self.assertIn("setCardActionsDisabled", presentation)
+        self.assertIn("const current = await repository().read", presentation)
         self.assertIn("quarantineExternalRevision(state, code);", presentation)
         self.assertIn(
             '["stale_revision", "revision_conflict", "save_attempt_conflict"].includes(code)',

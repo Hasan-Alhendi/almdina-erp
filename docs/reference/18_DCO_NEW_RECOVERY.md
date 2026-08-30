@@ -131,7 +131,10 @@ flush or while beginning an attempt owned by another tab; the stale session neve
 manufactures ownership of the other tab's attempt timestamp. Discovery-dialog
 deletion is likewise compare-and-delete against the revision and attempt shown to
 the user; a mismatch disables that card's actions instead of adopting an unseen
-revision behind the old summary, so the newer draft is retained for reopen. Each checkpoint command compares the session's last persisted base revision,
+revision behind the old summary, so the newer draft is retained for reopen.
+Continue also re-reads and matches the displayed revision/attempt before creating a
+session, and Continue/Delete lock every action on their card for the full async
+operation. Each checkpoint command compares the session's last persisted base revision,
 so accumulating multiple in-memory mutations cannot leapfrog another tab's newer
 record.
 Recovery infrastructure failure is logged/fail-safe and does not remove native

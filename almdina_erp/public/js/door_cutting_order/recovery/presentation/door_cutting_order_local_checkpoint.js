@@ -610,6 +610,13 @@
             const close = wrapper.querySelector(".modal-header .btn-modal-close, .modal-header .close");
             if (close) close.hidden = true;
         }
+        const setCardActionsDisabled = (card, clickedButton, disabled) => {
+            if (clickedButton) clickedButton.disabled = disabled;
+            if (!card || typeof card.querySelectorAll !== "function") return;
+            card.querySelectorAll("[data-recovery-action]").forEach((actionButton) => {
+                actionButton.disabled = disabled;
+            });
+        };
         wrapper.addEventListener("click", (event) => {
             const button = event.target.closest("[data-recovery-action]");
             if (!button || button.disabled) return;
@@ -626,18 +633,36 @@
             const record = card && accepted.get(card.dataset.draftId);
             if (!record) return;
             if (action === "continue") {
-                button.disabled = true;
-                Promise.resolve(continueDraft(frm, record))
-                    .then(() => initializations.delete(frm))
+                setCardActionsDisabled(card, button, true);
+                Promise.resolve().then(async () => {
+                    const current = await repository().read(recoveryIdentity(record.draft_id));
+                    if (!current || current.ok !== true) {
+                        throw new Error("تعذر التحقق من المسودة المحلية.");
+                    }
+                    const currentRecord = current.value;
+                    if (
+                        !currentRecord
+                        || Number(currentRecord.recovery_revision) !== Number(record.recovery_revision)
+                        || (currentRecord.official_save_attempted_at || null)
+                            !== (record.official_save_attempted_at || null)
+                    ) {
+                        accepted.delete(record.draft_id);
+                        showRecoveryError("تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل متابعتها.");
+                        return false;
+                    }
+                    await continueDraft(frm, currentRecord);
+                    initializations.delete(frm);
+                    return true;
+                })
                     .catch((error) => {
-                        button.disabled = false;
+                        setCardActionsDisabled(card, button, false);
                         showRecoveryError(error && error.message);
                     });
                 return;
             }
             if (action === "delete") {
+                setCardActionsDisabled(card, button, true);
                 const remove = async () => {
-                    button.disabled = true;
                     const repo = repository();
                     const identity = recoveryIdentity(record.draft_id);
                     const result = await repo.delete(
@@ -651,13 +676,8 @@
                         if (ownershipConflict) {
                             await repo.read(identity);
                             accepted.delete(record.draft_id);
-                            if (card && typeof card.querySelectorAll === "function") {
-                                card.querySelectorAll("[data-recovery-action]").forEach((actionButton) => {
-                                    actionButton.disabled = true;
-                                });
-                            }
                         } else {
-                            button.disabled = false;
+                            setCardActionsDisabled(card, button, false);
                         }
                         showRecoveryError(
                             ownershipConflict
@@ -677,7 +697,11 @@
                     }
                 };
                 if (meaningful(recovery.summarize(record)) && typeof frappe.confirm === "function") {
-                    frappe.confirm("هل تريد حذف هذه المسودة المحلية نهائيًا؟", remove);
+                    frappe.confirm(
+                        "هل تريد حذف هذه المسودة المحلية نهائيًا؟",
+                        remove,
+                        () => setCardActionsDisabled(card, button, false)
+                    );
                 } else {
                     remove();
                 }

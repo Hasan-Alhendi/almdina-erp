@@ -382,13 +382,21 @@ function runCleanups(frm) {
     const deleteForm = form("new-door-cutting-order-delete");
     await Recovery.LocalCheckpoint.initializeNewForm(deleteForm);
     let cardRemoved = false;
-    const card = { dataset: { draftId: deleteId }, remove() { cardRemoved = true; } };
+    let deleteCardActions = [];
+    const card = {
+        dataset: { draftId: deleteId },
+        querySelectorAll: () => deleteCardActions,
+        remove() { cardRemoved = true; },
+    };
     const deleteButton = {
         disabled: false,
         dataset: { recoveryAction: "delete" },
         closest: () => card,
     };
+    const deleteSiblingButton = { disabled: false };
+    deleteCardActions = [deleteButton, deleteSiblingButton];
     lastDialog.listener({ target: { closest: () => deleteButton } });
+    assert.equal(deleteSiblingButton.disabled, true, "Delete locks every action on its card");
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(cardRemoved, true);
     assert.equal(records.has(deleteId), false, "explicit deletion removes only the selected draft");
@@ -431,6 +439,75 @@ function runCleanups(frm) {
         "PENDING_RECONCILIATION",
         "even a forced second click cannot adopt and delete the unseen revision"
     );
+
+    const staleContinueId = "68686868-6868-4868-8868-686868686868";
+    const staleContinueRecord = draft(staleContinueId);
+    discoveredRecords = [staleContinueRecord];
+    const staleContinueForm = form("new-door-cutting-order-stale-continue");
+    fakeWindow.cur_frm = staleContinueForm;
+    await Recovery.LocalCheckpoint.initializeNewForm(staleContinueForm);
+    records.set(staleContinueId, {
+        ...records.get(staleContinueId),
+        recovery_revision: staleContinueRecord.recovery_revision + 1,
+        official_save_state: "PENDING_RECONCILIATION",
+        official_save_attempted_at: "2026-08-29T10:48:00.000Z",
+    });
+    let staleContinueActions = [];
+    const staleContinueCard = {
+        dataset: { draftId: staleContinueId },
+        querySelectorAll: () => staleContinueActions,
+    };
+    const staleContinueButton = {
+        disabled: false,
+        dataset: { recoveryAction: "continue" },
+        closest: () => staleContinueCard,
+    };
+    const staleContinueDelete = { disabled: false };
+    staleContinueActions = [staleContinueButton, staleContinueDelete];
+    lastDialog.listener({ target: { closest: () => staleContinueButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(Recovery.LocalCheckpoint.snapshot(staleContinueForm), null);
+    assert.equal(staleContinueButton.disabled, true);
+    assert.equal(staleContinueDelete.disabled, true);
+    assert.equal(
+        records.get(staleContinueId).official_save_attempted_at,
+        "2026-08-29T10:48:00.000Z",
+        "Continue never hydrates the stale displayed revision"
+    );
+
+    const lockedContinueId = "69696969-6969-4969-8969-696969696969";
+    const lockedContinueRecord = draft(lockedContinueId, "PENDING_RECONCILIATION");
+    discoveredRecords = [lockedContinueRecord];
+    const lockedContinueForm = form("new-door-cutting-order-locked-continue");
+    fakeWindow.cur_frm = lockedContinueForm;
+    await Recovery.LocalCheckpoint.initializeNewForm(lockedContinueForm);
+    reconciliationDeferred = deferred();
+    let lockedActions = [];
+    const lockedCard = {
+        dataset: { draftId: lockedContinueId },
+        querySelectorAll: () => lockedActions,
+    };
+    const lockedContinueButton = {
+        disabled: false,
+        dataset: { recoveryAction: "continue" },
+        closest: () => lockedCard,
+    };
+    const lockedDeleteButton = {
+        disabled: false,
+        dataset: { recoveryAction: "delete" },
+        closest: () => lockedCard,
+    };
+    lockedActions = [lockedContinueButton, lockedDeleteButton];
+    lastDialog.listener({ target: { closest: () => lockedContinueButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(lockedContinueButton.disabled, true);
+    assert.equal(lockedDeleteButton.disabled, true, "Continue locks Delete while reconciliation is in flight");
+    lastDialog.listener({ target: { closest: () => lockedDeleteButton } });
+    assert.equal(records.has(lockedContinueId), true);
+    reconciliationDeferred.resolve({ status: "NOT_FOUND" });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    reconciliationDeferred = null;
 
     discoveredRecords = [];
     const activeId = "11111111-1111-4111-8111-111111111111";
