@@ -78,7 +78,24 @@ flowchart LR
 - Preview والحساب النهائي يستهلكان نفس `PlanSettings` validated contract؛ لا يملك أي منهما قواعد normalization مستقلة.
 - Frappe metadata ليست سلطة Business Validation. حقل التخزين التاريخي `trim_margin_mm` يمثل `preferred_trim_mm` عند حدود Frappe فقط ولا يغيّر معنى العقد في Domain.
 
-## 8. Plan immutability
+## 8. Adaptive Trim
+
+Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.py`، وليس Strategy قص مستقلة ولا سلوكًا مخفيًا داخل optimizer.
+
+- **Preferred Trim** هو `preferred_trim_mm` القادم من `PlanSettings` والمملوك لـCutting Plan lineage.
+- **Applied Trim** هو الهامش الفعلي الذي استُخدم في الخطة المحسوبة بعد تطبيق Adaptive Trim.
+- يبدأ القرار دائمًا بالـPreferred Trim كاملًا على محوري العرض والطول.
+- لا يُخفّض الهامش إلا إذا كان ذلك يحسن feasibility أو يمنع لوحًا إضافيًا غير ضروري.
+- عند الحاجة إلى relaxation، يُخفّض محور العرض أو الطول فقط إذا كان هذا المحور هو الذي يحتاجه الحل؛ لا يُخفّض المحوران معًا إلا إذا تطلبت الهندسة ذلك.
+- يحتفظ القرار بأكبر Applied Trim ممكن بدقة `0.1 mm` بدل القفز مباشرة إلى الصفر.
+- ترتيب القرار deterministic: width-only ثم length-only ثم both، وبعدها refinement للمحاور التي ثبت أنها تحتاج relaxation.
+- كل probe/refinement/final evaluation يستخدم **نفس `optimization_mode` الذي اختاره المستخدم** ونفس machine/time-limit/options. Adaptive Trim لا يبدّل الخوارزمية سرًا إلى `Auto` أو غيرها.
+- `kerf_mm` لا يُخفّض ولا يُعدّل مطلقًا بواسطة Adaptive Trim؛ كل evaluations تستخدم Kerf نفسها.
+- أبعاد اللوح الفيزيائية `full_*` لا تتغير. الذي يتغير فقط هو `usable_*` الناتج عن Applied Trim.
+- نتيجة القرار تُحفظ داخل Plan snapshot في `trim_policy` مع Preferred Trim، Applied width/length trim، المحاور المخفّضة، precision، وجودة الخطة قبل/بعد. وتبقى مفاتيح `applied_trim_*` و`margin_policy` القديمة للتوافق مع القراء الحاليين.
+- أي validation أو DXF path يعتمد حدود المساحة القابلة للاستخدام يجب أن يستهلك **Applied Trim / usable dimensions** من نتيجة الخطة، وألا يعيد فرض Preferred Trim بعد الحساب.
+
+## 9. Plan immutability
 
 بعد اعتماد Production plan:
 
@@ -87,7 +104,7 @@ flowchart LR
 - أي تغيير Geometry جوهري لاحق يجب أن يعلّم الخطة بحاجة لإعادة حساب/اعتماد وفق workflow.
 - Operational snapshots لا تستخدم كقناة لتسريب التكلفة الداخلية.
 
-## 9. DXF layers والعقد الهندسي
+## 10. DXF layers والعقد الهندسي
 
 العقد الحالي يستخدم طبقات واضحة مثل:
 
@@ -107,7 +124,7 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 
 لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
 
-## 10. Drawing/DXF authorization
+## 11. Drawing/DXF authorization
 
 لأفعال عامل الرسم لا تكفي Capability وحدها دائمًا. العقد الحالي يجمع:
 
@@ -119,11 +136,11 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 
 Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم لمجرد معرفته بالطلب.
 
-## 11. Files ليست سلطة
+## 12. Files ليست سلطة
 
 أي File/DXF مرتبط بالطلب يجب التحقق من parent/order scope وprivate/attachment behavior المعتمد. لا تنشئ endpoint يأخذ `file_url` أو `file_name` ثم يقرأه بدون إثبات علاقته بالـDCO المسموح للمستخدم.
 
-## 12. أين أعدل؟
+## 13. أين أعدل؟
 
 | نوع التغيير | المكان المفضل |
 |---|---|
@@ -134,7 +151,7 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 | Endpoint/auth wiring | `services/dxf_*`, `drawing_*`, plan services |
 | Canvas/UI behavior | presentation/JS بعد تثبيت contract server-side |
 
-## 13. اختبارات مطلوبة عادة
+## 14. اختبارات مطلوبة عادة
 
 أي تغيير في هذه المنطقة يجب أن يفكر في:
 
