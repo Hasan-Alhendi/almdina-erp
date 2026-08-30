@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -44,11 +45,11 @@ class CuttingExecutionTrace:
     method_key: str
     method_label: str
     ordering_strategy: str
-    attempts: int
-    elapsed_sec: float
-    reported_time_limit_sec: float
+    attempts: int | None
+    elapsed_sec: float | None
+    reported_time_limit_sec: float | None
     solver_status: str
-    solver_wall_time_sec: float
+    solver_wall_time_sec: float | None
 
     def to_snapshot(self) -> dict[str, Any]:
         """Return the stable JSON-compatible representation stored in the plan snapshot."""
@@ -130,26 +131,31 @@ def build_cutting_execution_trace(
         method_key=str(optimizer_outcome.get("method_key") or ""),
         method_label=str(optimizer_outcome.get("method_label") or ""),
         ordering_strategy=str(optimizer_outcome.get("ordering_strategy") or ""),
-        attempts=_integer(optimizer_outcome.get("attempts")),
-        elapsed_sec=_number(optimizer_outcome.get("search_elapsed_sec")),
-        reported_time_limit_sec=_number(optimizer_outcome.get("search_time_limit_sec")),
+        attempts=_optional_integer(optimizer_outcome.get("attempts")),
+        elapsed_sec=_optional_number(optimizer_outcome.get("search_elapsed_sec")),
+        reported_time_limit_sec=_optional_number(
+            optimizer_outcome.get("search_time_limit_sec")
+        ),
         solver_status=str(optimizer_outcome.get("solver_status") or ""),
-        solver_wall_time_sec=_number(optimizer_outcome.get("solver_wall_time_sec")),
+        solver_wall_time_sec=_optional_number(
+            optimizer_outcome.get("solver_wall_time_sec")
+        ),
     )
 
 
-def _number(value: Any) -> float:
+def _optional_number(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
     try:
-        return float(value) if value is not None else 0.0
+        resolved = float(value)
     except (TypeError, ValueError):
-        return 0.0
+        return None
+    return resolved if math.isfinite(resolved) else None
 
 
-def _integer(value: Any) -> int:
-    try:
-        return int(float(value)) if value is not None else 0
-    except (TypeError, ValueError):
-        return 0
+def _optional_integer(value: Any) -> int | None:
+    resolved = _optional_number(value)
+    return int(resolved) if resolved is not None else None
 
 
 __all__ = [
