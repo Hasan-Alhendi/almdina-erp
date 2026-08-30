@@ -95,7 +95,25 @@ Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.p
 - نتيجة القرار تُحفظ داخل Plan snapshot في `trim_policy` مع Preferred Trim، Applied width/length trim، المحاور المخفّضة، precision، وجودة الخطة قبل/بعد. وتبقى مفاتيح `applied_trim_*` و`margin_policy` القديمة للتوافق مع القراء الحاليين.
 - أي validation أو DXF path يعتمد حدود المساحة القابلة للاستخدام يجب أن يستهلك **Applied Trim / usable dimensions** من نتيجة الخطة، وألا يعيد فرض Preferred Trim بعد الحساب.
 
-## 9. Plan immutability
+## 9. CuttingExecutionTrace
+
+كل System Cutting Plan محسوبة تملك عقد Application واحدًا immutable وversioned باسم `CuttingExecutionTrace` تحت `application/cutting/execution_trace.py`.
+
+قواعد الملكية والتنفيذ:
+
+- يُبنى الـTrace **مرة واحدة فقط** بعد اكتمال التنفيذ الفعلي، من نفس `PlanSettings` canonical التي دخلت الحساب + `AdaptiveTrimDecision` الحقيقي + نتيجة الـoptimizer النهائية الحقيقية.
+- لا تعيد Service أو Preview أو Commit أو JavaScript بناء الـTrace أو استنتاجه من حقول متفرقة.
+- يُحفظ داخل الـPlan snapshot تحت `execution_trace`؛ لا توجد له DocType أو table أو persistence model مستقلة.
+- Preview يجمد الـsnapshot كاملة بما فيها `execution_trace` داخل Preview Session الموثوقة.
+- Commit يثبت **نفس snapshot ونفس execution_trace حرفيًا** ولا يعيد تشغيل optimizer.
+- `execution_trace.version` هو version عقد الـTrace وليس engine version. `engine_version` يبقى محفوظًا بشكل مستقل.
+- `requested` يسجل القيم canonical التي طلبها المستخدم/الخطة: optimization mode، machine type، Kerf، Preferred Trim، وtime limit.
+- `optimizer` يسجل نفس inputs التي دخلت التنفيذ بالإضافة إلى النتيجة الفعلية: actual optimization mode، winning low-level `method_key`/`method_label`، ordering strategy، attempts، elapsed time، reported search limit، solver status/wall time عند توفرها.
+- `adaptive_trim` يسجل Applied Trim لكل محور، هل تم relaxation، المحاور المتأثرة، جودة الخطة قبل/بعد، وسبب القرار المستقر: `preferred_retained` أو `improved_feasibility` أو `avoided_extra_board`.
+- الواجهة تعرض هذا العقد Presentation فقط، ولا تقارن Preferred/Applied Trim بنفسها ولا تستنتج سبب القرار.
+- الحقول التاريخية الحالية في snapshot مثل `optimization_mode`, `method_key`, `method_label`, `attempts`, `trim_policy`, `margin_policy`, و`applied_trim_*` تبقى للتوافق الخلفي ولا تُزال ضمن هذا العقد.
+
+## 10. Plan immutability
 
 بعد اعتماد Production plan:
 
@@ -104,7 +122,7 @@ Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.p
 - أي تغيير Geometry جوهري لاحق يجب أن يعلّم الخطة بحاجة لإعادة حساب/اعتماد وفق workflow.
 - Operational snapshots لا تستخدم كقناة لتسريب التكلفة الداخلية.
 
-## 10. DXF layers والعقد الهندسي
+## 11. DXF layers والعقد الهندسي
 
 العقد الحالي يستخدم طبقات واضحة مثل:
 
@@ -124,7 +142,7 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 
 لا تعتبر “الملف فتح في AutoCAD” دليلاً كافيًا أنه صالح للإنتاج.
 
-## 11. Drawing/DXF authorization
+## 12. Drawing/DXF authorization
 
 لأفعال عامل الرسم لا تكفي Capability وحدها دائمًا. العقد الحالي يجمع:
 
@@ -136,11 +154,11 @@ DXF importer يدعم قراءة Geometry ثم يطبق validation مستقلً�
 
 Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم لمجرد معرفته بالطلب.
 
-## 12. Files ليست سلطة
+## 13. Files ليست سلطة
 
 أي File/DXF مرتبط بالطلب يجب التحقق من parent/order scope وprivate/attachment behavior المعتمد. لا تنشئ endpoint يأخذ `file_url` أو `file_name` ثم يقرأه بدون إثبات علاقته بالـDCO المسموح للمستخدم.
 
-## 13. أين أعدل؟
+## 14. أين أعدل؟
 
 | نوع التغيير | المكان المفضل |
 |---|---|
@@ -151,7 +169,7 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 | Endpoint/auth wiring | `services/dxf_*`, `drawing_*`, plan services |
 | Canvas/UI behavior | presentation/JS بعد تثبيت contract server-side |
 
-## 14. اختبارات مطلوبة عادة
+## 15. اختبارات مطلوبة عادة
 
 أي تغيير في هذه المنطقة يجب أن يفكر في:
 
