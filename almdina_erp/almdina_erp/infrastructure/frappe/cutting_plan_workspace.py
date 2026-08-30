@@ -18,6 +18,9 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    build_manufacturing_requirements,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -49,6 +52,27 @@ def _piece_rows(order: Any) -> tuple[dict[str, Any], ...]:
         FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
         for row in (order.pieces or [])
     )
+
+
+def _manufacturing_requirements(order: Any) -> dict[str, Any]:
+    """Capture persisted cut requirements for the exact plan revision."""
+
+    requirements: list[dict[str, Any]] = []
+    for source_piece_no, row in enumerate(order.pieces or [], start=1):
+        piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        for copy_no in range(1, cint(row.qty) + 1):
+            requirements.append(
+                {
+                    "label": f"{source_piece_no}.{copy_no}",
+                    "source_piece_no": source_piece_no,
+                    "copy_no": copy_no,
+                    "cut_width_cm": piece["width_cm"],
+                    "cut_length_cm": piece["length_cm"],
+                    "allow_rotation": bool(cint(row.allow_rotation)),
+                    "piece_type": str(row.piece_type or "Regular"),
+                }
+            )
+    return build_manufacturing_requirements(requirements)
 
 
 def _numeric_or_default(value: Any, default: float) -> Any:
@@ -161,6 +185,8 @@ def _apply_snapshot(
     method_label_fallback: str = "",
     engine_version_fallback: str = "",
 ) -> None:
+    snapshot = dict(snapshot)
+    snapshot["manufacturing_requirements"] = _manufacturing_requirements(order)
     validation = snapshot.get("validation") or {}
     metrics = snapshot.get("industrial_metrics") or {}
     width_mm, length_mm = _board_dimensions_mm(order)
