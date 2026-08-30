@@ -128,6 +128,7 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
         OptimizeOrderPlanCommand(
             engine_version=ENGINE_VERSION,
             input_fingerprint=fingerprint,
+            plan_settings=plan_settings,
             board=BoardGeometry(
                 full_width_cm=width_mm / 10,
                 full_length_cm=length_mm / 10,
