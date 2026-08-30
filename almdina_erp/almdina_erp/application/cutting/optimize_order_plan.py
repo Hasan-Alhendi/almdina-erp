@@ -4,6 +4,9 @@ import math
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from almdina_erp.almdina_erp.application.cutting.execution_trace import (
+    build_cutting_execution_trace,
+)
 from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
     AdaptiveTrimDecision,
     AppliedTrim,
@@ -11,6 +14,7 @@ from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
     TRIM_PRECISION_CM,
     resolve_adaptive_trim,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
 
 
@@ -86,6 +90,7 @@ class OptimizerOptions:
 class OptimizeOrderPlanCommand:
     engine_version: str
     input_fingerprint: str
+    plan_settings: PlanSettings
     board: BoardGeometry
     optimizer: OptimizerOptions
     piece_rows: tuple[dict[str, Any], ...]
@@ -191,6 +196,12 @@ def optimize_order_plan(
         board=board,
         decision=trim_decision,
     )
+    execution_trace = build_cutting_execution_trace(
+        plan_settings=command.plan_settings,
+        trim_decision=trim_decision,
+        optimizer_outcome=plan,
+        engine_version=command.engine_version,
+    )
     snapshot = {
         "engine_version": command.engine_version,
         "input_fingerprint": command.input_fingerprint,
@@ -220,6 +231,7 @@ def optimize_order_plan(
         "applied_trim_width_cm": applied_trim.width_trim_cm,
         "applied_trim_length_cm": applied_trim.length_trim_cm,
         "trim_policy": trim_policy,
+        "execution_trace": execution_trace.to_snapshot(),
         # Compatibility metadata retained for print/DXF/readers that still use
         # the pre-ALMADINA-138 margin vocabulary.
         "margin_policy": {
