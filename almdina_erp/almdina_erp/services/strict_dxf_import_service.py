@@ -141,10 +141,10 @@ def _proxy_order(
     ]
     return SimpleNamespace(
         pieces=pieces,
-        # ALMADINA-141: geometry ingestion validates the uploaded layout first in
-        # physical board coordinates. Preferred Trim is resolved afterwards by
-        # the canonical ALMADINA-138 adaptive-trim contract, not treated as if it
-        # were already Applied Trim.
+        # Before ALMADINA-141 this boundary used
+        # trim_margin_mm=settings.trim_margin_mm directly. Geometry ingestion now
+        # validates physical coordinates with zero inset, then the canonical
+        # ALMADINA-138 resolver derives the Applied Trim from the same settings.
         trim_margin_mm=0.0,
         board_width_cm=getattr(order, "board_width_cm", 0),
         board_length_cm=getattr(order, "board_length_cm", 0),
