@@ -72,7 +72,8 @@ query; it is not a second insert API. Cross-tab revision conflicts block the sta
 native insert, and native failure/cancellation cleanup is bound to the originating
 document state plus exact save attempt with bounded compare-and-set retry. The same
 operation binding owns acknowledged-success cleanup, and a live session adopts the
-persisted revision returned by fallback reconciliation.
+persisted official state only at the same payload revision. A higher external
+revision is a restore-required conflict, not an implicit payload synchronization.
 
 ### Special-shape manufacturing boundary
 

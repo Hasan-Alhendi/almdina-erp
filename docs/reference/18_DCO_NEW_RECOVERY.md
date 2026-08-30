@@ -112,9 +112,11 @@ newer local payload. Native Save completion/failure handling retains the origina
 state and exact attempt, so reusing the same form object cannot mutate a replacement
 document's recovery session. This applies to acknowledged success as well as failure:
 success deletes only the originating draft and does not dispose the replacement
-observer/session. When fallback CAS returns a newer persisted revision for a live
-session, the application session adopts that ACTIVE state and revision before
-editing continues, keeping the lifecycle owner synchronized with IndexedDB.
+observer/session; ownership is rechecked after asynchronous local deletion. A
+fallback CAS may synchronize a live session only when its revision still matches.
+A higher persisted revision represents a different, non-hydrated payload: the
+current session is quarantined from checkpointing and official Save until the user
+reopens the draft and restores that newer payload.
 Recovery infrastructure failure is logged/fail-safe and does not remove native
 explicit DCO creation. There is no official autosave, periodic `frm.save()`, remote
 sync, cross-device restore, or product behavior change outside NEW continuity.

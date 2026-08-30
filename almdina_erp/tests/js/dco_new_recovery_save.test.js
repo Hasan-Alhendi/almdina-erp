@@ -27,6 +27,8 @@ let saveStateEntered = null;
 let advanceRevisionOnRead = false;
 let advanceRevisionBeforeActiveCas = false;
 let nativeSaveDeferred = null;
+let deleteDeferred = null;
+let deleteEntered = null;
 
 const repository = {
     createIdentity() {
@@ -94,6 +96,10 @@ const repository = {
         return { ok: true, value: structuredClone(next) };
     },
     async delete(identity) {
+        if (deleteDeferred) {
+            if (deleteEntered) deleteEntered.resolve();
+            await deleteDeferred.promise;
+        }
         deleted.push(identity.draft_id);
         records.delete(identity.draft_id);
         return { ok: true, value: true };
@@ -600,12 +606,15 @@ function runCleanups(frm) {
     };
     await assert.rejects(liveSyncForm.save());
     assert.equal(records.get(liveSyncId).official_save_state, "ACTIVE");
+    assert.equal(Recovery.LocalCheckpoint.snapshot(liveSyncForm).recovery_revision, liveSyncRecord.recovery_revision);
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(liveSyncForm);
     assert.equal(
-        Recovery.LocalCheckpoint.snapshot(liveSyncForm).recovery_revision,
-        liveSyncRecord.recovery_revision + 1,
-        "a successful fallback CAS synchronizes the live session revision"
+        fakeFrappe.validated,
+        false,
+        "a divergent higher-revision payload is quarantined until the draft is reopened and hydrated"
     );
-    assert.equal(Recovery.LocalCheckpoint.snapshot(liveSyncForm).state, "LOCAL_SAVED");
+    assert.equal(records.get(liveSyncId).recovery_revision, liveSyncRecord.recovery_revision + 1);
     nativeFailure = null;
 
     const reusedSuccessId = "13131313-1313-4313-8313-131313131313";
@@ -640,6 +649,56 @@ function runCleanups(frm) {
         "old success cannot dispose the replacement document session"
     );
     nativeSaveDeferred = null;
+
+    const cleanupRaceId = "14141414-1414-4414-8414-141414141414";
+    const cleanupRaceRecord = draft(cleanupRaceId);
+    const cleanupRaceForm = form("new-door-cutting-order-cleanup-race-old");
+    fakeWindow.cur_frm = cleanupRaceForm;
+    await Recovery.LocalCheckpoint.continueDraft(cleanupRaceForm, cleanupRaceRecord);
+    await handlers["Door Cutting Order"].before_save(cleanupRaceForm);
+    nativeSaveDeferred = deferred();
+    const cleanupRaceSave = cleanupRaceForm.save();
+    deleteDeferred = deferred();
+    deleteEntered = deferred();
+    nativeSaveDeferred.resolve();
+    await deleteEntered.promise;
+    runCleanups(cleanupRaceForm);
+    documentGeneration += 1;
+    cleanupRaceForm.doc = {
+        doctype: "Door Cutting Order",
+        name: "new-door-cutting-order-cleanup-race-new",
+        __islocal: 1,
+        pieces: [],
+    };
+    cleanupRaceForm.save = async function saveWithRecoveryLifecycle() {
+        await handlers["Door Cutting Order"].before_save(this);
+        nativeSaveCalls += 1;
+        if (nativeFailure) throw nativeFailure;
+    };
+    await Recovery.LocalCheckpoint.initializeNewForm(cleanupRaceForm);
+    const cleanupReplacementId = Recovery.LocalCheckpoint.snapshot(cleanupRaceForm).draft_id;
+    deleteDeferred.resolve();
+    await cleanupRaceSave;
+    assert.equal(
+        Recovery.LocalCheckpoint.snapshot(cleanupRaceForm).draft_id,
+        cleanupReplacementId,
+        "cleanup rechecks ownership after asynchronous deletion"
+    );
+    nativeSaveDeferred = null;
+    deleteDeferred = null;
+    deleteEntered = null;
+    nativeFailure = {
+        status: 417,
+        responseJSON: { exc_type: "ValidationError" },
+        message: "replacement validation failed",
+    };
+    await assert.rejects(cleanupRaceForm.save());
+    assert.equal(
+        records.get(cleanupReplacementId).official_save_state,
+        "ACTIVE",
+        "the replacement observer retains its operation registry after the old operation settles"
+    );
+    nativeFailure = null;
 
     const staleRevisionId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
     const staleRevisionRecord = draft(staleRevisionId);

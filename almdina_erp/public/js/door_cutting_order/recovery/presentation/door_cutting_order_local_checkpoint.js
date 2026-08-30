@@ -150,6 +150,16 @@
                     && snapshotAfterCas.state !== root.CheckpointSession.STATES.DISPOSED
                     && typeof state.session.adoptPersistedOfficialSaveState === "function"
                 ) {
+                    if (
+                        Number(result.value && result.value.recovery_revision)
+                        !== Number(snapshotAfterCas.recovery_revision)
+                    ) {
+                        state.externalRevisionConflict = Object.freeze({
+                            code: "external_revision_conflict",
+                            persisted_revision: Number(result.value && result.value.recovery_revision),
+                        });
+                        return true;
+                    }
                     return state.session.adoptPersistedOfficialSaveState(
                         result.value,
                         expectedAttempt
@@ -275,6 +285,7 @@
             documentToken: token,
             pieceKeys: new WeakMap(),
             saveWasNew: false,
+            externalRevisionConflict: null,
             restored: Boolean(recovered),
             session: null,
         };
@@ -414,14 +425,13 @@
         if (typeof options.isCurrent === "function" && !options.isCurrent()) {
             return { ok: false, cancelled: true };
         }
-        const ownsCurrentState = states.get(frm) === state;
         state.session.complete();
         const result = await repository().delete(state.session.identity());
         if (!result || result.ok !== true) {
             console.debug("Confirmed DCO recovery cleanup remains pending", result && result.error);
         }
         state.session.dispose();
-        if (ownsCurrentState) {
+        if (states.get(frm) === state) {
             states.delete(frm);
             restoreSaveObserver(frm);
             const dialog = dialogs.get(frm);
@@ -700,6 +710,7 @@
         }
         state = state || ensureState(frm, dirtyScope);
         if (!state) return false;
+        if (state.externalRevisionConflict) return false;
         try {
             if (state.session.snapshot().state === root.CheckpointSession.STATES.RESTORING) return false;
             state.session.markDirty(dirtyScope);
@@ -860,6 +871,7 @@
                 if (
                     entry.operations.size === 0
                     && observedSaveOperations.get(frm) === entry.operations
+                    && !observedSaves.has(frm)
                 ) observedSaveOperations.delete(frm);
             };
             let result;
@@ -892,6 +904,9 @@
         if (!entry) return false;
         if (frm.save === entry.observed) frm.save = entry.original;
         observedSaves.delete(frm);
+        if (entry.operations.size === 0 && observedSaveOperations.get(frm) === entry.operations) {
+            observedSaveOperations.delete(frm);
+        }
         return true;
     }
 
@@ -928,6 +943,12 @@
         if (!state) return;
         const saveOperation = bindObservedSaveOperation(frm, state);
         const isCurrent = activeDocumentGuard(frm);
+        if (state.externalRevisionConflict) {
+            if (!isCurrent()) abortInactiveSave();
+            frappe.validated = false;
+            showRecoveryError("توجد نسخة أحدث من هذه المسودة في تبويب آخر. أعد فتح الطلب لاستعادتها قبل الحفظ.");
+            return;
+        }
         state.saveWasNew = state.mode === "NEW" && isNew(frm);
         if (saveOperation) {
             saveOperation.saveWasNew = state.saveWasNew;

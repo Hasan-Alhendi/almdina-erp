@@ -334,18 +334,15 @@
             const expectedAttempt = String(expectedAttemptedAt || "").trim();
             if (
                 !Number.isInteger(recordRevision)
-                || recordRevision < savedRevision
+                || recordRevision !== revision
                 || String(record.official_save_state || "") !== OFFICIAL_SAVE_STATES.ACTIVE
                 || String(record.official_save_attempted_at || "").trim() !== expectedAttempt
             ) return false;
-            if (recordRevision > revision) {
-                revision = recordRevision;
-                dirtyScope = null;
-            }
             savedRevision = recordRevision;
+            dirtyScope = null;
             officialSaveState = OFFICIAL_SAVE_STATES.ACTIVE;
             officialSaveAttemptedAt = record.official_save_attempted_at || null;
-            transition(savedRevision >= revision ? STATES.LOCAL_SAVED : STATES.DIRTY);
+            transition(STATES.LOCAL_SAVED);
             return true;
         }
 

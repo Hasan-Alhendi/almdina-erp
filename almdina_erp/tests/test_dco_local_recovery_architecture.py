@@ -338,6 +338,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("const state = operation && operation.state;", presentation)
         self.assertIn("adoptPersistedOfficialSaveState", presentation)
         self.assertIn("adoptPersistedOfficialSaveState", session)
+        self.assertIn("external_revision_conflict", presentation)
         self.assertIn('["stale_revision", "revision_conflict"].includes(code)', presentation)
         self.assertIn('started.error.code === "stale_revision"', presentation)
         self.assertIn("const current = await repo.read(identity)", presentation)
