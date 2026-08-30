@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
+from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+    ManufacturingRequirementsError,
+    require_cut_dimension_cm,
+)
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     CutDimensionError,
     dimensions_match_exact,
@@ -26,6 +31,7 @@ _EDGE_FIELD_BY_SIDE = {
     "width_top": "edge_width_top",
     "width_bottom": "edge_width_bottom",
 }
+_CUT_QUANTUM_CM = Decimal("0.001")
 
 
 def _format_decimal(value: Decimal) -> str:
@@ -42,6 +48,70 @@ def _format_spec(spec: OrderPieceCutSpec) -> str:
         f"مقاس القص المطلوب {_format_decimal(spec.cut_width_cm)} × "
         f"{_format_decimal(spec.cut_length_cm)} سم"
     )
+
+
+def _bind_persisted_cut_dimensions(
+    order: Any,
+    specs: list[OrderPieceCutSpec],
+) -> list[OrderPieceCutSpec]:
+    """Make saved DCO cut fields authoritative for strict DXF identity matching.
+
+    ``build_order_piece_cut_specs`` still owns the existing edge-print metadata
+    contract. Its calculated dimensions are intentionally discarded here because
+    ALMADINA-143 requires a newly uploaded DXF to match the cut dimensions already
+    persisted on the saved DCO, not a recomputation from current edge master data.
+    """
+
+    rows = list(getattr(order, "pieces", None) or [])
+    if len(rows) != len(specs):
+        raise DxfImportError(
+            "تعذر ربط مقاسات القص التصنيعية المحفوظة بقطع الطلب بشكل موثوق. "
+            "احفظ الطلب ثم أعد رفع DXF."
+        )
+
+    persisted_specs: list[OrderPieceCutSpec] = []
+    for row_index, (row, spec) in enumerate(zip(rows, specs), start=1):
+        if spec.row_index != row_index:
+            raise DxfImportError(
+                "تعذر ربط مقاسات القص التصنيعية المحفوظة بقطع الطلب بشكل موثوق. "
+                "احفظ الطلب ثم أعد رفع DXF."
+            )
+        try:
+            cut_width_cm = Decimal(
+                str(
+                    require_cut_dimension_cm(
+                        getattr(row, "cut_width_cm", None),
+                        fieldname="cut_width_cm",
+                    )
+                )
+            ).quantize(_CUT_QUANTUM_CM)
+            cut_length_cm = Decimal(
+                str(
+                    require_cut_dimension_cm(
+                        getattr(row, "cut_length_cm", None),
+                        fieldname="cut_length_cm",
+                    )
+                )
+            ).quantize(_CUT_QUANTUM_CM)
+        except ManufacturingRequirementsError as exc:
+            raise DxfImportError(
+                f"مقاسات القص التصنيعية للقطعة رقم {row_index} غير محفوظة أو غير صالحة. "
+                "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF."
+            ) from exc
+
+        persisted_specs.append(
+            replace(
+                spec,
+                cut_width_cm=cut_width_cm,
+                cut_length_cm=cut_length_cm,
+                width_deduction_mm=(spec.finished_width_cm - cut_width_cm)
+                * Decimal("10"),
+                length_deduction_mm=(spec.finished_length_cm - cut_length_cm)
+                * Decimal("10"),
+            )
+        )
+
+    return persisted_specs
 
 
 def _proxy_order(
@@ -263,6 +333,7 @@ def parse_production_dxf(
         specs = build_order_piece_cut_specs(order)
     except CutDimensionError as exc:
         raise DxfImportError(exc.errors) from exc
+    specs = _bind_persisted_cut_dimensions(order, specs)
 
     try:
         snapshot = _legacy_parse_production_dxf(
@@ -277,7 +348,7 @@ def parse_production_dxf(
             )
             suffix = " ..." if len(specs) > 8 else ""
             raise DxfImportError(
-                "مقاسات القطع في DXF لا تطابق مقاسات القص الدقيقة المحسوبة من الطلب والقشاط. "
+                "مقاسات القطع في DXF لا تطابق مقاسات القص التصنيعية المحفوظة في الطلب. "
                 f"{expected}{suffix}. لا توجد سماحية لتغيير مقاس الدرفة."
             ) from exc
         raise
@@ -287,7 +358,7 @@ def parse_production_dxf(
         raise DxfImportError(exact_errors)
 
     snapshot["dimension_contract"] = {
-        "mode": "exact-edge-adjusted",
+        "mode": "exact-persisted-cut",
         "precision_cm": "0.001",
         "finished_dimensions_immutable": True,
     }
