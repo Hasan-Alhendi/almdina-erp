@@ -4,10 +4,16 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
+    polygon_distance,
+    polygons_overlap,
+    validate_polygon,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     DxfTopologyError,
     PartGeometry,
     PlacedPartGeometry,
+    polygon_strictly_contains_polygon,
     validate_material_layout,
 )
 
@@ -46,6 +52,42 @@ def _polygon(value: Any, *, field: str) -> tuple[tuple[float, float], ...]:
             )
         )
     return tuple(points)
+
+
+def _validate_part_geometry(geometry: PartGeometry) -> None:
+    """Reject malformed persisted material topology before pairwise layout checks."""
+
+    outer_errors = validate_polygon(geometry.outer, GEOMETRY_TOLERANCE_MM)
+    if outer_errors:
+        raise DxfGeometrySnapshotError(
+            "geometry.outer is invalid: " + ", ".join(outer_errors)
+        )
+
+    for hole_index, hole in enumerate(geometry.holes):
+        hole_errors = validate_polygon(hole, GEOMETRY_TOLERANCE_MM)
+        if hole_errors:
+            raise DxfGeometrySnapshotError(
+                f"geometry.holes[{hole_index}] is invalid: " + ", ".join(hole_errors)
+            )
+        if not polygon_strictly_contains_polygon(
+            geometry.outer,
+            hole,
+            tolerance=GEOMETRY_TOLERANCE_MM,
+        ):
+            raise DxfGeometrySnapshotError(
+                f"geometry.holes[{hole_index}] must be strictly inside geometry.outer."
+            )
+
+    for first_index, first in enumerate(geometry.holes):
+        for second_index, second in enumerate(geometry.holes[first_index + 1 :], start=first_index + 1):
+            if polygons_overlap(first, second, tolerance=GEOMETRY_TOLERANCE_MM):
+                raise DxfGeometrySnapshotError(
+                    f"geometry holes {first_index} and {second_index} overlap."
+                )
+            if polygon_distance(first, second, GEOMETRY_TOLERANCE_MM) <= GEOMETRY_TOLERANCE_MM:
+                raise DxfGeometrySnapshotError(
+                    f"geometry holes {first_index} and {second_index} touch or are too close."
+                )
 
 
 def serialize_geometry_mm(geometry: PartGeometry) -> dict[str, Any]:
@@ -98,13 +140,15 @@ def parse_geometry_mm(value: Any) -> PartGeometry:
     if isinstance(holes_value, (str, bytes)) or not isinstance(holes_value, Sequence):
         raise DxfGeometrySnapshotError("geometry.holes must be an array.")
 
-    return PartGeometry(
+    geometry = PartGeometry(
         outer=_polygon(value.get("outer"), field="geometry.outer"),
         holes=tuple(
             _polygon(hole, field=f"geometry.holes[{index}]")
             for index, hole in enumerate(holes_value)
         ),
     )
+    _validate_part_geometry(geometry)
+    return geometry
 
 
 def geometry_mm_to_cm(geometry: PartGeometry) -> PartGeometry:
