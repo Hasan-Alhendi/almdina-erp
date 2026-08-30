@@ -28,6 +28,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import normalize_plan_
 
 
 class TraceEngine:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
     def expand_pieces(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [dict(row) for row in rows]
 
@@ -39,6 +42,14 @@ class TraceEngine:
         kerf_cm: float,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        self.calls.append(
+            {
+                "board_width_cm": board_width_cm,
+                "board_length_cm": board_length_cm,
+                "kerf_cm": kerf_cm,
+                **kwargs,
+            }
+        )
         return {
             "optimization_mode": "Auto Pro",
             "method_key": "MaxRects-BSSF",
@@ -117,13 +128,17 @@ class TestCuttingExecutionTrace(unittest.TestCase):
         self.assertEqual(snapshot["adaptive_trim"]["applied_width_trim_mm"], 5)
         self.assertEqual(snapshot["adaptive_trim"]["applied_length_trim_mm"], 3)
         self.assertEqual(snapshot["adaptive_trim"]["relaxed_axes"], ["length"])
+        self.assertEqual(snapshot["optimizer"]["selected_mode"], "auto_pro")
+        self.assertEqual(snapshot["optimizer"]["machine_type"], "Panel Saw")
+        self.assertEqual(snapshot["optimizer"]["kerf_mm"], 0)
+        self.assertEqual(snapshot["optimizer"]["time_limit_sec"], 17)
         self.assertEqual(snapshot["optimizer"]["actual_optimization_mode"], "Auto Pro")
         self.assertEqual(snapshot["optimizer"]["method_key"], "MaxRects-BSSF")
         self.assertEqual(snapshot["optimizer"]["attempts"], 23)
         self.assertEqual(snapshot["optimizer"]["elapsed_sec"], 1.25)
         self.assertEqual(snapshot["optimizer"]["solver_status"], "HEURISTIC")
 
-    def test_optimizer_builds_trace_once_from_canonical_settings_and_keeps_legacy_fields(self) -> None:
+    def test_optimizer_receives_exact_settings_and_snapshot_keeps_legacy_fields(self) -> None:
         settings = normalize_plan_settings(
             optimization_mode="auto_pro",
             machine_type="Panel Saw",
@@ -131,6 +146,7 @@ class TestCuttingExecutionTrace(unittest.TestCase):
             kerf_mm=0,
             preferred_trim_mm=5,
         )
+        engine = TraceEngine()
         outcome = optimize_order_plan(
             OptimizeOrderPlanCommand(
                 engine_version="trace-test",
@@ -160,8 +176,17 @@ class TestCuttingExecutionTrace(unittest.TestCase):
                 ),
                 plan_settings=settings,
             ),
-            engine=TraceEngine(),
+            engine=engine,
         )
+
+        self.assertEqual(len(engine.calls), 1)
+        call = engine.calls[0]
+        self.assertEqual(call["selected_mode"], "auto_pro")
+        self.assertEqual(call["machine_type"], "Panel Saw")
+        self.assertEqual(call["kerf_cm"], 0)
+        self.assertEqual(call["time_limit_sec"], 17)
+        self.assertEqual(call["board_width_cm"], 121)
+        self.assertEqual(call["board_length_cm"], 243)
 
         snapshot = outcome.snapshot
         trace = snapshot["execution_trace"]
@@ -169,6 +194,9 @@ class TestCuttingExecutionTrace(unittest.TestCase):
         self.assertEqual(trace["requested"]["kerf_mm"], 0)
         self.assertEqual(trace["requested"]["preferred_trim_mm"], 5)
         self.assertEqual(trace["requested"]["optimization_time_limit_sec"], 17)
+        self.assertEqual(trace["optimizer"]["selected_mode"], "auto_pro")
+        self.assertEqual(trace["optimizer"]["kerf_mm"], 0)
+        self.assertEqual(trace["optimizer"]["time_limit_sec"], 17)
         self.assertEqual(trace["optimizer"]["actual_optimization_mode"], "Auto Pro")
         self.assertEqual(trace["optimizer"]["method_label"], "MaxRects Best Short Side")
         self.assertEqual(trace["adaptive_trim"]["reason"], "preferred_retained")
@@ -247,12 +275,23 @@ class TestCuttingExecutionTrace(unittest.TestCase):
             / "services"
             / "cutting_plan_preview_service.py"
         ).read_text(encoding="utf-8")
+        presenter_source = (
+            root
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "cutting_plan"
+            / "door_cutting_order_plan_preview_presenter.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("snapshot=session.snapshot", preview_source)
         self.assertIn("trusted_snapshot = dict(snapshot)", commit_source)
         self.assertIn("snapshot=trusted_snapshot", commit_source)
         self.assertNotIn("optimize_order_plan(", commit_source)
         self.assertNotIn("calculate_system_plan(", commit_source)
+        self.assertIn("plan.execution_trace", presenter_source)
+        self.assertIn("adaptive.applied", presenter_source)
+        self.assertIn("TRIM_REASON_LABELS", presenter_source)
 
 
 if __name__ == "__main__":
