@@ -360,7 +360,6 @@ def _classify_selection(
         holes_by_owner[owners[0].key].append(hole)
 
     parts: list[ResolvedPartGeometry] = []
-    selected_by_key = {contour.key: contour for contour in selected}
     for contour in selected:
         owned_holes = sorted(
             holes_by_owner[contour.key],
@@ -383,14 +382,10 @@ def _classify_selection(
             )
         )
 
-    return ResolvedTopology(
-        parts=tuple(
-            sorted(
-                parts,
-                key=lambda part: _contour_sort_key(selected_by_key[part.contour_key]),
-            )
-        )
-    )
+    # Keep the original CUT_PATH contour order for downstream piece IDs/labels.
+    # Ownership itself does not depend on this order; it is only a compatibility
+    # guarantee for existing no-hole DXF snapshots and equal-dimension pieces.
+    return ResolvedTopology(parts=tuple(sorted(parts, key=lambda part: part.contour_key)))
 
 
 def resolve_contour_ownership(

@@ -178,10 +178,10 @@ def test_many_internal_openings_resolve_without_subset_search():
     assert all(len(part.geometry.holes) == 1 for part in topology.parts)
 
 
-def test_legacy_no_hole_topology_keeps_one_actual_contour_per_expected_piece():
+def test_legacy_no_hole_topology_keeps_original_contour_order():
     contours = [
-        _candidate(1, 0, 0, 100, 200),
-        _candidate(2, 150, 0, 250, 200),
+        _candidate(1, 200, 0, 300, 200),
+        _candidate(2, 0, 0, 100, 200),
     ]
     topology = resolve_contour_ownership(
         contours,
