@@ -1043,6 +1043,11 @@
             }
         }
         frm.doc.recovery_creation_token = state.session.snapshot().draft_id;
+        const preAttempt = state.session.snapshot();
+        if (saveOperation) {
+            saveOperation.attemptedAt = preAttempt.official_save_attempted_at;
+            saveOperation.attemptedRevision = preAttempt.recovery_revision;
+        }
         const started = await state.session.beginOfficialSave();
         if (saveOperation && started && started.ok === true) {
             saveOperation.attemptedAt = started.value && started.value.official_save_attempted_at;

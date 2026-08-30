@@ -115,7 +115,10 @@ document's recovery session. This applies to acknowledged success as well as fai
 success deletes only the originating draft and does not dispose the replacement
 observer/session; ownership is rechecked after asynchronous local deletion. The
 delete itself compares both the originating attempt's recovery revision and exact
-attempt timestamp, retaining the draft/assets on either mismatch. A
+attempt timestamp, retaining the draft/assets on either mismatch. When marker
+creation fails but native Save remains fail-safe available, the operation compares
+against the prior ACTIVE attempt fence; a successful marker creation replaces it
+with the new attempt. A
 fallback CAS may synchronize a live session only when its revision still matches.
 A higher persisted revision represents a different, non-hydrated payload: the
 current session is quarantined from checkpointing and official Save until the user

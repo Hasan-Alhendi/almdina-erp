@@ -24,6 +24,7 @@ let saveAttemptSequence = 0;
 let writeDeferred = null;
 let saveStateDeferred = null;
 let saveStateEntered = null;
+let pendingStateFailure = null;
 let advanceRevisionOnRead = false;
 let advanceRevisionBeforeActiveCas = false;
 let nativeSaveDeferred = null;
@@ -97,6 +98,11 @@ const repository = {
     },
     async setOfficialSaveState(identity, state, revision, expectedAttemptedAt) {
         let current = records.get(identity.draft_id);
+        if (pendingStateFailure && state === "PENDING_RECONCILIATION") {
+            const error = pendingStateFailure;
+            pendingStateFailure = null;
+            return { ok: false, error };
+        }
         if (saveStateDeferred && state === "PENDING_RECONCILIATION") {
             if (saveStateEntered) saveStateEntered.resolve();
             await saveStateDeferred.promise;
@@ -459,6 +465,25 @@ function runCleanups(frm) {
     await handlers["Door Cutting Order"].after_save(retryForm);
     assert.equal(records.has(pendingId), false, "acknowledged success cleans up after binding");
     assert.equal(Recovery.LocalCheckpoint.snapshot(retryForm), null);
+
+    const failOpenId = "23232323-2323-4232-8232-232323232323";
+    const failOpenRecord = draft(failOpenId);
+    failOpenRecord.official_save_attempted_at = "2026-08-29T10:44:00.000Z";
+    records.set(failOpenId, structuredClone(failOpenRecord));
+    const failOpenForm = form("new-door-cutting-order-marker-failure");
+    failOpenForm.save = async function saveAfterRecoveryHook() {
+        await handlers["Door Cutting Order"].before_save(this);
+        nativeSaveCalls += 1;
+    };
+    fakeWindow.cur_frm = failOpenForm;
+    await Recovery.LocalCheckpoint.continueDraft(failOpenForm, failOpenRecord);
+    pendingStateFailure = { code: "quota_exceeded", message: "marker storage failed" };
+    await failOpenForm.save();
+    assert.equal(
+        records.has(failOpenId),
+        false,
+        "fail-open acknowledged insert cleans against the retained pre-attempt fence"
+    );
 
     const failedReconcileId = "33333333-3333-4333-8333-333333333333";
     const failedRecord = draft(failedReconcileId, "PENDING_RECONCILIATION");

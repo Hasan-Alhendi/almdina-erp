@@ -80,6 +80,8 @@ conflict from any foreground, scheduled, visibility, or pagehide flush quarantin
 that form until explicit reopen/restore. `PENDING_RECONCILIATION` also fences out
 higher checkpoint revisions, and confirmed-success cleanup compare-and-deletes only
 the exact attempted revision/save marker; a mismatch retains the local draft/assets.
+The fail-open marker-storage path carries the retained ACTIVE pre-attempt fence,
+which is replaced only when a new pending marker is durably returned.
 
 ### Special-shape manufacturing boundary
 

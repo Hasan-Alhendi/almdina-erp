@@ -365,6 +365,14 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         )
         self.assertIn("expectedRevision: operation.attemptedRevision", presentation)
         self.assertIn("expectedRevision: reconciledSnapshot.recovery_revision", presentation)
+        self.assertIn(
+            "saveOperation.attemptedAt = preAttempt.official_save_attempted_at",
+            presentation,
+        )
+        self.assertIn(
+            "saveOperation.attemptedRevision = preAttempt.recovery_revision",
+            presentation,
+        )
         self.assertIn('started.error.code === "stale_revision"', presentation)
         self.assertIn("const current = await repo.read(identity)", presentation)
         self.assertIn('"save_attempt_conflict"', repository)

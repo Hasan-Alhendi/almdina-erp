@@ -169,7 +169,10 @@ server-reconciled success completes and then removes the local record only throu
 compare-and-delete on the attempted recovery revision and exact attempt timestamp.
 A higher checkpoint cannot be accepted while the attempt is pending, and any
 cleanup mismatch retains the local record/assets. An unknown transport outcome
-retains them for reconciliation.
+retains them for reconciliation. If persisting a new pending marker fails and the
+existing fail-safe native Save proceeds, its operation keeps the ACTIVE record's
+pre-attempt revision/timestamp fence for acknowledged-success cleanup; a successfully
+created marker replaces that fence with its newly returned values.
 
 ## 6. Failure and compatibility behavior
 
