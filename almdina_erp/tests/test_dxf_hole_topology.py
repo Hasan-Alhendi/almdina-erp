@@ -137,6 +137,47 @@ def test_unowned_extra_contour_fails_closed_instead_of_becoming_phantom_hole():
     assert exc_info.value.code == "UNRESOLVED_CONTOUR_OWNERSHIP"
 
 
+def test_piece_like_extra_contour_fails_closed_as_ambiguous():
+    contours = [
+        _candidate(1, 0, 0, 100, 100),
+        _candidate(2, 20, 20, 40, 40),  # could be a 20x20 hole or a real piece
+        _candidate(3, 150, 0, 170, 20),
+    ]
+
+    with pytest.raises(DxfTopologyError) as exc_info:
+        resolve_contour_ownership(
+            contours,
+            [_expected(100, 100), _expected(20, 20)],
+            dimension_tolerance=0.2,
+            geometry_tolerance=0.01,
+        )
+
+    assert exc_info.value.code == "AMBIGUOUS_CONTOUR_OWNERSHIP"
+
+
+def test_many_internal_openings_resolve_without_subset_search():
+    contours = []
+    expected = []
+    for index in range(12):
+        x = index * 150
+        owner_key = (index * 2) + 1
+        hole_key = owner_key + 1
+        contours.append(_candidate(owner_key, x, 0, x + 100, 100))
+        contours.append(_candidate(hole_key, x + 30, 30, x + 70, 70))
+        expected.append(_expected(100, 100))
+
+    topology = resolve_contour_ownership(
+        contours,
+        expected,
+        dimension_tolerance=0.2,
+        geometry_tolerance=0.01,
+    )
+
+    assert len(topology.parts) == 12
+    assert len(topology.hole_contour_keys) == 12
+    assert all(len(part.geometry.holes) == 1 for part in topology.parts)
+
+
 def test_legacy_no_hole_topology_keeps_one_actual_contour_per_expected_piece():
     contours = [
         _candidate(1, 0, 0, 100, 200),

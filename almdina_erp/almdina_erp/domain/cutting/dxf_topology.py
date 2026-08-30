@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import combinations
 from typing import Sequence
 
 from .dxf_geometry import (
@@ -145,7 +144,12 @@ def material_footprints_overlap(
     *,
     tolerance: float = EPSILON,
 ) -> bool:
-    """Collision of MDF material, preserving ordinary solid containment as overlap."""
+    """Return whether the two MDF material footprints overlap.
+
+    A part nested wholly inside exactly one owned hole does not collide with the
+    hole owner because the owner's material is ``outer - holes``. Ordinary solid
+    containment remains an overlap.
+    """
     if not polygons_overlap(first.outer, second.outer, tolerance=tolerance):
         return False
     if containing_hole(first, second.outer, tolerance=tolerance) is not None:
@@ -240,12 +244,29 @@ def _dimensions_match(
     )
 
 
+def _matches_any_expected(
+    contour: ContourCandidate,
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+) -> bool:
+    return any(
+        _dimensions_match(
+            contour,
+            expected_piece,
+            dimension_tolerance=dimension_tolerance,
+        )
+        for expected_piece in expected
+    )
+
+
 def _inventory_can_match(
     selected: Sequence[ContourCandidate],
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
 ) -> bool:
+    """Return whether selected contours admit a one-to-one expected-piece match."""
     if len(selected) != len(expected):
         return False
 
@@ -315,6 +336,12 @@ def _classify_selection(
     *,
     geometry_tolerance: float,
 ) -> ResolvedTopology | None:
+    """Attach each proven hole to exactly one selected outer contour.
+
+    This function resolves structural ownership only. Material overlap and Kerf
+    remain a separate domain validation step so classification never hides a
+    placement error behind a generic ownership failure.
+    """
     holes_by_owner: dict[int, list[ContourCandidate]] = {
         contour.key: [] for contour in selected
     }
@@ -333,6 +360,7 @@ def _classify_selection(
         holes_by_owner[owners[0].key].append(hole)
 
     parts: list[ResolvedPartGeometry] = []
+    selected_by_key = {contour.key: contour for contour in selected}
     for contour in selected:
         owned_holes = sorted(
             holes_by_owner[contour.key],
@@ -355,22 +383,13 @@ def _classify_selection(
             )
         )
 
-    try:
-        validate_material_layout(
-            tuple(
-                PlacedPartGeometry(key=part.contour_key, geometry=part.geometry)
-                for part in parts
-            ),
-            required_clearance=0.0,
-            geometry_tolerance=geometry_tolerance,
-        )
-    except DxfTopologyError:
-        return None
-
     return ResolvedTopology(
-        parts=tuple(sorted(parts, key=lambda part: _contour_sort_key(
-            next(contour for contour in selected if contour.key == part.contour_key)
-        )))
+        parts=tuple(
+            sorted(
+                parts,
+                key=lambda part: _contour_sort_key(selected_by_key[part.contour_key]),
+            )
+        )
     )
 
 
@@ -383,11 +402,18 @@ def resolve_contour_ownership(
 ) -> ResolvedTopology:
     """Resolve actual DCO contours and owned holes from expected-piece evidence.
 
-    Extra closed contours are never assumed to be holes. The resolver accepts a
-    classification only when the expected DCO inventory can be matched exactly,
-    every remaining contour has exactly one proven owner, and the resulting MDF
-    material footprints are structurally valid. Multiple valid classifications
-    fail closed instead of using contour order, nesting parity, or size guesses.
+    The decision is deterministic and intentionally fail-closed:
+
+    * a contour that matches an expected piece dimension is treated as an actual
+      piece candidate;
+    * a contour that matches no expected dimension can be considered a hole only
+      when it is strictly contained by exactly one selected outer contour;
+    * if there are more piece-like contours than expected pieces, ownership is
+      ambiguous and the DXF is rejected instead of guessing from contour order,
+      nesting parity, or size.
+
+    This avoids combinatorial contour-subset searches on plans with many internal
+    openings while preserving exact order-piece identity as the source of truth.
     """
     ordered_contours = tuple(sorted(contours, key=_contour_sort_key))
     expected = tuple(expected_pieces)
@@ -398,64 +424,41 @@ def resolve_contour_ownership(
             raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
         return ResolvedTopology(parts=())
 
-    extra_count = len(ordered_contours) - len(expected)
-    if extra_count <= 0:
-        if not _inventory_can_match(
-            ordered_contours,
+    selected = tuple(
+        contour
+        for contour in ordered_contours
+        if _matches_any_expected(
+            contour,
             expected,
             dimension_tolerance=dimension_tolerance,
-        ):
-            raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
-        topology = _classify_selection(
-            ordered_contours,
-            (),
-            geometry_tolerance=geometry_tolerance,
         )
-        if topology is None:
-            raise DxfTopologyError("INVALID_PART_TOPOLOGY")
-        return topology
+    )
+    selected_keys = {contour.key for contour in selected}
+    leftovers = tuple(
+        contour for contour in ordered_contours if contour.key not in selected_keys
+    )
 
-    valid: dict[
-        tuple[tuple[int, tuple[int, ...]], ...],
-        ResolvedTopology,
-    ] = {}
-    indexes = range(len(ordered_contours))
-    for leftover_indexes in combinations(indexes, extra_count):
-        leftover_set = frozenset(leftover_indexes)
-        selected = tuple(
-            contour
-            for index, contour in enumerate(ordered_contours)
-            if index not in leftover_set
-        )
-        if not _inventory_can_match(
-            selected,
-            expected,
-            dimension_tolerance=dimension_tolerance,
-        ):
-            continue
-        leftovers = tuple(
-            contour
-            for index, contour in enumerate(ordered_contours)
-            if index in leftover_set
-        )
-        topology = _classify_selection(
-            selected,
-            leftovers,
-            geometry_tolerance=geometry_tolerance,
-        )
-        if topology is None:
-            continue
-        signature = tuple(
-            (part.contour_key, tuple(sorted(part.hole_contour_keys)))
-            for part in topology.parts
-        )
-        valid.setdefault(signature, topology)
-        if len(valid) > 1:
-            raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
+    if len(selected) < len(expected):
+        raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
+    if len(selected) > len(expected):
+        raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
+    if not _inventory_can_match(
+        selected,
+        expected,
+        dimension_tolerance=dimension_tolerance,
+    ):
+        raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
 
-    if not valid:
-        raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
-    return next(iter(valid.values()))
+    topology = _classify_selection(
+        selected,
+        leftovers,
+        geometry_tolerance=geometry_tolerance,
+    )
+    if topology is None:
+        raise DxfTopologyError(
+            "UNRESOLVED_CONTOUR_OWNERSHIP" if leftovers else "INVALID_PART_TOPOLOGY"
+        )
+    return topology
 
 
 __all__ = [
