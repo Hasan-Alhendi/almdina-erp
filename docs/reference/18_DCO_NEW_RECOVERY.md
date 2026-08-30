@@ -130,7 +130,8 @@ the conflict is discovered by a scheduled, visibility, or pagehide checkpoint
 flush or while beginning an attempt owned by another tab; the stale session never
 manufactures ownership of the other tab's attempt timestamp. Discovery-dialog
 deletion is likewise compare-and-delete against the revision and attempt shown to
-the user, so a stale dialog retains a newer draft for reopen. Each checkpoint command compares the session's last persisted base revision,
+the user; a mismatch disables that card's actions instead of adopting an unseen
+revision behind the old summary, so the newer draft is retained for reopen. Each checkpoint command compares the session's last persisted base revision,
 so accumulating multiple in-memory mutations cannot leapfrog another tab's newer
 record.
 Recovery infrastructure failure is logged/fail-safe and does not remove native

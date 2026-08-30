@@ -647,15 +647,20 @@
                     );
                     if (!result || result.ok !== true) {
                         const code = String(result && result.error && result.error.code || "");
-                        if (["stale_revision", "save_attempt_conflict"].includes(code)) {
-                            const refreshed = await repo.read(identity);
-                            if (refreshed && refreshed.ok === true && refreshed.value) {
-                                accepted.set(record.draft_id, refreshed.value);
+                        const ownershipConflict = ["stale_revision", "save_attempt_conflict"].includes(code);
+                        if (ownershipConflict) {
+                            await repo.read(identity);
+                            accepted.delete(record.draft_id);
+                            if (card && typeof card.querySelectorAll === "function") {
+                                card.querySelectorAll("[data-recovery-action]").forEach((actionButton) => {
+                                    actionButton.disabled = true;
+                                });
                             }
+                        } else {
+                            button.disabled = false;
                         }
-                        button.disabled = false;
                         showRecoveryError(
-                            ["stale_revision", "save_attempt_conflict"].includes(code)
+                            ownershipConflict
                                 ? "تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل حذفها."
                                 : "تعذر حذف المسودة المحلية."
                         );

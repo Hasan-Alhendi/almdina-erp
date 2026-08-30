@@ -422,6 +422,15 @@ function runCleanups(frm) {
         "PENDING_RECONCILIATION",
         "a stale discovery dialog cannot delete a newer pending attempt"
     );
+    assert.equal(staleDeleteButton.disabled, true, "stale Delete stays disabled until reopen");
+    staleDeleteButton.disabled = false;
+    lastDialog.listener({ target: { closest: () => staleDeleteButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+        records.get(staleDeleteId).official_save_state,
+        "PENDING_RECONCILIATION",
+        "even a forced second click cannot adopt and delete the unseen revision"
+    );
 
     discoveredRecords = [];
     const activeId = "11111111-1111-4111-8111-111111111111";
