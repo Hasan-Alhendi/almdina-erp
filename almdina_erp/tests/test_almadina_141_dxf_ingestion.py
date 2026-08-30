@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import math
 import tempfile
 import unittest
 from pathlib import Path
 
 import ezdxf
 
+from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
+    apply_adaptive_trim_to_fixed_dxf_layout,
+)
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
     DxfReadError,
     read_dxf_geometry,
@@ -160,6 +162,83 @@ class TestAlmadina141DxfReader(unittest.TestCase):
         self.assertIn(CUT, diagnostics["detected_layers"])
         self.assertIn(CUT, diagnostics["relevant_layers"])
         self.assertEqual(diagnostics["entity_counts"]["LINE"], 2)
+
+
+class TestAlmadina141AppliedTrim(unittest.TestCase):
+    def _snapshot(self, *, x: float, y: float, w: float, h: float) -> dict:
+        return {
+            "full_board_width_cm": 100.0,
+            "full_board_length_cm": 200.0,
+            "usable_board_width_cm": 100.0,
+            "usable_board_length_cm": 200.0,
+            "trim_cm": 0.0,
+            "sheets": [
+                {
+                    "sheet_no": 1,
+                    "full_width_cm": 100.0,
+                    "full_length_cm": 200.0,
+                    "usable_width_cm": 100.0,
+                    "usable_length_cm": 200.0,
+                    "w": 100.0,
+                    "h": 200.0,
+                    "pieces": [
+                        {
+                            "id": 1,
+                            "x": x,
+                            "y": y,
+                            "w": w,
+                            "h": h,
+                            "geometry": {
+                                "schema_version": 1,
+                                "unit": "mm",
+                                "coordinate_space": "usable_sheet",
+                                "outer": [
+                                    [x * 10, y * 10],
+                                    [(x + w) * 10, y * 10],
+                                    [(x + w) * 10, (y + h) * 10],
+                                    [x * 10, (y + h) * 10],
+                                ],
+                                "holes": [],
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def test_preferred_trim_is_retained_when_fixed_layout_fits(self) -> None:
+        result = apply_adaptive_trim_to_fixed_dxf_layout(
+            self._snapshot(x=1.0, y=1.0, w=20.0, h=30.0),
+            preferred_trim_mm=5.0,
+        )
+
+        self.assertEqual(result["applied_trim_width_cm"], 0.5)
+        self.assertEqual(result["applied_trim_length_cm"], 0.5)
+        self.assertEqual(result["trim_policy"]["mode"], "preferred")
+        self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["x"], 0.5)
+        self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["y"], 0.5)
+
+    def test_only_blocked_axis_is_relaxed_and_refined(self) -> None:
+        result = apply_adaptive_trim_to_fixed_dxf_layout(
+            self._snapshot(x=0.2, y=1.0, w=20.0, h=30.0),
+            preferred_trim_mm=5.0,
+        )
+
+        self.assertAlmostEqual(result["applied_trim_width_cm"], 0.2)
+        self.assertAlmostEqual(result["applied_trim_length_cm"], 0.5)
+        self.assertEqual(result["trim_policy"]["relaxed_axes"], ["width"])
+        self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["x"], 0.0)
+        self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["y"], 0.5)
+
+    def test_physical_layout_is_not_repacked_when_trim_relaxes(self) -> None:
+        source = self._snapshot(x=0.0, y=0.0, w=100.0, h=200.0)
+        result = apply_adaptive_trim_to_fixed_dxf_layout(source, preferred_trim_mm=5.0)
+
+        self.assertEqual(result["applied_trim_width_cm"], 0.0)
+        self.assertEqual(result["applied_trim_length_cm"], 0.0)
+        self.assertEqual(result["sheets"][0]["pieces"][0]["w"], 100.0)
+        self.assertEqual(result["sheets"][0]["pieces"][0]["h"], 200.0)
+        self.assertEqual(source["sheets"][0]["pieces"][0]["x"], 0.0)
 
 
 if __name__ == "__main__":
