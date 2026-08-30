@@ -138,6 +138,38 @@ class TestCuttingExecutionTrace(unittest.TestCase):
         self.assertEqual(snapshot["optimizer"]["elapsed_sec"], 1.25)
         self.assertEqual(snapshot["optimizer"]["solver_status"], "HEURISTIC")
 
+    def test_unavailable_optimizer_metrics_remain_null_in_trace(self) -> None:
+        settings = normalize_plan_settings(
+            optimization_mode="auto_pro",
+            machine_type="Auto",
+            optimization_time_limit_sec=10,
+            kerf_mm=3,
+            preferred_trim_mm=5,
+        )
+        decision = AdaptiveTrimDecision(
+            preferred=AppliedTrim(0.5, 0.5),
+            applied=AppliedTrim(0.5, 0.5),
+            preferred_quality=PlanQuality(0, 1),
+            applied_quality=PlanQuality(0, 1),
+        )
+        trace = build_cutting_execution_trace(
+            plan_settings=settings,
+            trim_decision=decision,
+            optimizer_outcome={
+                "optimization_mode": "Auto Pro",
+                "method_key": "MaxRects-BSSF",
+                "method_label": "MaxRects Best Short Side",
+            },
+            engine_version="trace-test",
+        ).to_snapshot()
+
+        optimizer = trace["optimizer"]
+        self.assertIsNone(optimizer["attempts"])
+        self.assertIsNone(optimizer["elapsed_sec"])
+        self.assertIsNone(optimizer["reported_time_limit_sec"])
+        self.assertIsNone(optimizer["solver_wall_time_sec"])
+        self.assertEqual(optimizer["time_limit_sec"], 10)
+
     def test_optimizer_receives_exact_settings_and_snapshot_keeps_legacy_fields(self) -> None:
         settings = normalize_plan_settings(
             optimization_mode="auto_pro",
@@ -292,6 +324,7 @@ class TestCuttingExecutionTrace(unittest.TestCase):
         self.assertIn("plan.execution_trace", presenter_source)
         self.assertIn("adaptive.applied", presenter_source)
         self.assertIn("TRIM_REASON_LABELS", presenter_source)
+        self.assertIn("hasTraceValue(optimizer.elapsed_sec)", presenter_source)
 
 
 if __name__ == "__main__":
