@@ -61,10 +61,14 @@ DCO field events, subscribes to the existing Plan/Cost `WorkspaceStore` mutation
 notifications, batches local writes through `AlmdinaDocumentContext.scheduleFrame()`,
 and requests a best-effort local flush on `visibilitychange`/`pagehide`.
 
-This overlay never calls `frm.save()`, never uses arbitrary timeout readiness,
-never restores data, and never changes the current scanner, Plan, Cost, Save, Cancel,
-or first-insert behavior. Restore/reconciliation remains a later-story consumer of
-the repositories.
+This overlay never calls `frm.save()` and never uses arbitrary timeout readiness.
+ALMADINA-129 restores only an explicitly selected NEW `DcoInputProjection` into the
+current form while `RESTORING`: its framework-free application use case invokes a
+presentation-owned Frappe hydration port, which then asks the existing measurement
+owners to rebuild their UI once. It does not restore Plan/Cost/Invoice authority or change scanner,
+Save, Cancel, or EDIT behavior. First-insert safety wraps the native explicit Save
+with a stable hidden unique creation token and a narrow authorized reconciliation
+query; it is not a second insert API.
 
 ### Special-shape manufacturing boundary
 

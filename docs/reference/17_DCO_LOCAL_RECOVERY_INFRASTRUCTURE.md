@@ -9,8 +9,10 @@
 ## 1. Scope
 
 ALMADINA-128 adds browser-local checkpoint infrastructure for Door Cutting Order.
-It does not add restore/discard UX, automatic hydration, first-insert server
-reconciliation, remote recovery, or cross-device synchronization. A local
+Its ALMADINA-129 consumer now adds bounded NEW discovery/hydration and first-insert
+reconciliation as specified by
+[18 — NEW DCO Recovery](18_DCO_NEW_RECOVERY.md). It still does not add EDIT
+recovery, remote recovery, or cross-device synchronization. A local
 checkpoint is temporary recovery state; it is not an official DCO Save and is not
 a new business source of truth.
 
@@ -41,7 +43,7 @@ Database: `almdina_erp_dco_recovery`, version `1`.
   `(site, authenticated user, Door Cutting Order, draft_id)`
 - indexes: `namespace_key`, `target_key`, `captured_at`
 - record contract:
-  - `schema_version = 1`
+  - `schema_version = 2` (`v1` remains readable as `official_save_state=ACTIVE`)
   - stable `draft_id`
   - `mode = NEW | EDIT`
   - single `dirty_scope`
@@ -50,6 +52,9 @@ Database: `almdina_erp_dco_recovery`, version `1`.
   - `tab_session_id`
   - monotonic `recovery_revision`
   - `created_at` and `captured_at`
+  - `official_save_state = ACTIVE | PENDING_RECONCILIATION`
+  - nullable `official_save_attempted_at`; once used, it is retained as the last
+    reconciled attempt fence while `ACTIVE`
   - lowercase SHA-256 `payload_hash`
   - explicit `RecoveryProjection v1`
   - lightweight `asset_refs`
@@ -109,8 +114,13 @@ The recovery-only status contract is:
 
 `READY_CLEAN -> DIRTY -> LOCAL_SAVING -> LOCAL_SAVED`
 
+ALMADINA-129 activates the NEW-only extensions `RESTORING`, `OFFICIAL_SAVING`,
+`PENDING_RECONCILIATION`, and `COMPLETED`. While `RESTORING`, user-mutation
+checkpoint effects are suppressed; it is not a second form lifecycle.
+
 Failure transitions to `ERROR` without throwing into Frappe editing or Save.
-`RESTORING` is reserved as a later-story seam; ALMADINA-128 never enters it.
+ALMADINA-128 itself did not enter `RESTORING`; only the explicit ALMADINA-129 NEW
+continuation action may enter it.
 Document navigation disposes the session through `AlmdinaDocumentContext` cleanup.
 
 Every accepted mutation increments the recovery revision. Multiple mutations in
@@ -139,10 +149,11 @@ recovery neither calls it nor creates a cadence around it. The presentation adap
 only observes its acknowledged `after_save` result and records the advanced expected
 token.
 
-After a normal first insert, the local NEW session stops writing under the promoted
-form identity. It intentionally does not bind or delete the local record. Atomic
-`draft_id -> target_name` server reconciliation and unknown insert-outcome handling
-remain ALMADINA-129 work.
+For a first insert, ALMADINA-129 flushes the latest checkpoint and marks the local
+record pending before the existing explicit Frappe Save proceeds. A hidden unique
+technical creation token on the DCO is the atomic binding; acknowledged or
+server-reconciled success completes and then removes the local record. An unknown
+transport outcome retains it for reconciliation.
 
 ## 6. Failure and compatibility behavior
 
@@ -151,25 +162,24 @@ unavailable APIs, open/blocked/schema/transaction failures, quota exhaustion,
 invalid identities/revisions, oversized payloads/assets, corrupt records/assets,
 hash mismatches, and missing owning drafts.
 
-Record reads accept only schema version 1:
+Record reads accept schema versions 1 and 2:
 
 - a greater version returns `unknown_schema`;
-- an older version returns `incompatible_schema`;
+- v1 is read deterministically as active and is upgraded on the next write/state transition;
+- versions older than v1 return `incompatible_schema`;
 - invalid shape/hash returns an explicit corruption/integrity error;
 - discovery returns valid records and reports rejected record identities/codes
   without reinterpreting them.
 
 No failure is allowed to block form editing, current Save/Cancel, Plan/Cost behavior,
-or scanner/crop behavior. No automatic migration is defined in v1.
+or scanner/crop behavior. Record v1 is compatibility-read and lazily rewritten as
+v2 only by a later checkpoint or official-save state transition.
 
 ## 7. Deferred behavior
 
-The following remain explicitly deferred to ALMADINA-129 and later stories:
+The following remain explicitly deferred to later stories:
 
-- checkpoint discovery UX, restore/discard prompt, and hydration;
-- NEW first-insert idempotency and server reconciliation;
 - EDIT restore/conflict UX and external edit resolution;
-- official-save cleanup/retention policy;
 - activation of local assets in Special Shape recovery;
 - invoice, canonical Cutting Plan, lost calculation, and remote recovery behavior;
 - BroadcastChannel/soft-lease multi-tab hints.

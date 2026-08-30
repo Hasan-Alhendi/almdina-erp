@@ -4,9 +4,14 @@
     const root = window.AlmdinaDcoRecovery = window.AlmdinaDcoRecovery || Object.create(null);
     if (root.LocalDraftRepository) return;
 
-    const RECORD_SCHEMA_VERSION = 1;
+    const RECORD_SCHEMA_VERSION = 2;
+    const LEGACY_RECORD_SCHEMA_VERSION = 1;
     const DEFAULT_MAX_PAYLOAD_BYTES = 512 * 1024;
     const TARGET_DOCTYPE = "Door Cutting Order";
+    const OFFICIAL_SAVE_STATES = Object.freeze({
+        ACTIVE: "ACTIVE",
+        PENDING_RECONCILIATION: "PENDING_RECONCILIATION",
+    });
 
     class LocalDraftRepositoryError extends Error {
         constructor(code, message, cause = null) {
@@ -85,6 +90,8 @@
             recovery_revision: record.recovery_revision,
             created_at: record.created_at,
             captured_at: record.captured_at,
+            official_save_state: record.official_save_state,
+            official_save_attempted_at: record.official_save_attempted_at,
             payload_hash: record.payload_hash,
             payload: record.payload,
             asset_refs: Object.freeze([...(record.asset_refs || [])]),
@@ -121,11 +128,30 @@
                 expected_server_modified: record.expected_server_modified,
                 tab_session_id: record.tab_session_id,
                 recovery_revision: record.recovery_revision,
+                official_save_state: record.official_save_state,
+                official_save_attempted_at: record.official_save_attempted_at,
                 payload_hash: record.payload_hash,
                 asset_refs: record.asset_refs || [],
             });
             return projection.canonicalStringify(comparable(left))
                 === projection.canonicalStringify(comparable(right));
+        }
+
+        function nextSaveAttemptTimestamp(previousAttemptedAt) {
+            const current = String(clock() || "");
+            if (!isTimestamp(current)) {
+                throw new LocalDraftRepositoryError(
+                    "invalid_timestamp",
+                    "Recovery official Save timestamp is invalid"
+                );
+            }
+            if (
+                previousAttemptedAt
+                && Date.parse(current) <= Date.parse(previousAttemptedAt)
+            ) {
+                return new Date(Date.parse(previousAttemptedAt) + 1).toISOString();
+            }
+            return current;
         }
 
         async function verifyRecord(record, expectedNamespace = null) {
@@ -135,8 +161,29 @@
             if (Number(record.schema_version) > RECORD_SCHEMA_VERSION) {
                 throw new LocalDraftRepositoryError("unknown_schema", "Recovery record uses a newer schema");
             }
-            if (Number(record.schema_version) !== RECORD_SCHEMA_VERSION) {
+            if (![LEGACY_RECORD_SCHEMA_VERSION, RECORD_SCHEMA_VERSION].includes(Number(record.schema_version))) {
                 throw new LocalDraftRepositoryError("incompatible_schema", "Recovery record schema is incompatible");
+            }
+            const officialSaveState = Number(record.schema_version) === LEGACY_RECORD_SCHEMA_VERSION
+                ? OFFICIAL_SAVE_STATES.ACTIVE
+                : String(record.official_save_state || "");
+            const officialSaveAttemptedAt = Number(record.schema_version) === LEGACY_RECORD_SCHEMA_VERSION
+                ? null
+                : record.official_save_attempted_at;
+            if (!Object.values(OFFICIAL_SAVE_STATES).includes(officialSaveState)) {
+                throw new LocalDraftRepositoryError("corrupt_record", "Recovery official Save state is invalid");
+            }
+            if (officialSaveAttemptedAt !== null && !isTimestamp(officialSaveAttemptedAt)) {
+                throw new LocalDraftRepositoryError("corrupt_record", "Recovery official Save timestamp is invalid");
+            }
+            if (
+                officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                && officialSaveAttemptedAt === null
+            ) {
+                throw new LocalDraftRepositoryError(
+                    "corrupt_record",
+                    "Pending recovery is missing its official Save attempt"
+                );
             }
             const namespace = namespaceOf(record);
             if (expectedNamespace && namespace.namespace_key !== expectedNamespace) {
@@ -186,7 +233,12 @@
             if (digest !== record.payload_hash) {
                 throw new LocalDraftRepositoryError("integrity_mismatch", "Recovery payload integrity check failed");
             }
-            return { ...record, payload };
+            return {
+                ...record,
+                official_save_state: officialSaveState,
+                official_save_attempted_at: officialSaveAttemptedAt,
+                payload,
+            };
         }
 
         async function write(input) {
@@ -250,6 +302,8 @@
                     recovery_revision: revision,
                     created_at: now,
                     captured_at: now,
+                    official_save_state: OFFICIAL_SAVE_STATES.ACTIVE,
+                    official_save_attempted_at: null,
                     payload_hash: payloadHash,
                     payload,
                     asset_refs: [...new Set((input.asset_refs || []).map((item) => required(item, "asset_id")))].sort(),
@@ -260,6 +314,12 @@
                     async (stores, request) => {
                         const drafts = stores[indexed.DRAFT_STORE];
                         const current = await request(drafts.get(key));
+                        if (current) {
+                            next.official_save_state = String(
+                                current.official_save_state || OFFICIAL_SAVE_STATES.ACTIVE
+                            );
+                            next.official_save_attempted_at = current.official_save_attempted_at || null;
+                        }
                         if (current && Number(current.recovery_revision) > revision) {
                             throw new LocalDraftRepositoryError("stale_revision", "A newer local checkpoint already exists");
                         }
@@ -328,6 +388,88 @@
             }
         }
 
+        async function setOfficialSaveState(
+            identity,
+            saveState,
+            expectedRevision = null,
+            expectedAttemptedAt = undefined
+        ) {
+            try {
+                const resolvedState = String(saveState || "");
+                if (!Object.values(OFFICIAL_SAVE_STATES).includes(resolvedState)) {
+                    throw new LocalDraftRepositoryError("invalid_save_state", "Recovery official Save state is invalid");
+                }
+                if (expectedAttemptedAt === undefined) {
+                    throw new LocalDraftRepositoryError(
+                        "invalid_save_attempt",
+                        "Recovery official Save transition requires its expected attempt"
+                    );
+                }
+                const expectedAttempt = expectedAttemptedAt == null
+                    ? null
+                    : String(expectedAttemptedAt);
+                if (expectedAttempt !== null && !isTimestamp(expectedAttempt)) {
+                    throw new LocalDraftRepositoryError(
+                        "invalid_timestamp",
+                        "Recovery expected official Save timestamp is invalid"
+                    );
+                }
+                const key = storageKey(identity);
+                const stored = await gateway.transaction(
+                    [indexed.DRAFT_STORE],
+                    "readwrite",
+                    async (stores, request) => {
+                        const drafts = stores[indexed.DRAFT_STORE];
+                        const current = await request(drafts.get(key));
+                        if (!current) {
+                            throw new LocalDraftRepositoryError("draft_not_found", "Recovery draft does not exist");
+                        }
+                        if (current.mode !== "NEW") {
+                            throw new LocalDraftRepositoryError("invalid_mode", "Official Save reconciliation is NEW-only");
+                        }
+                        if (
+                            expectedRevision !== null
+                            && Number(current.recovery_revision) !== Number(expectedRevision)
+                        ) {
+                            throw new LocalDraftRepositoryError("stale_revision", "Recovery draft changed before official Save");
+                        }
+                        const currentState = Number(current.schema_version) === LEGACY_RECORD_SCHEMA_VERSION
+                            ? OFFICIAL_SAVE_STATES.ACTIVE
+                            : String(current.official_save_state || "");
+                        const currentAttempt = Number(current.schema_version) === LEGACY_RECORD_SCHEMA_VERSION
+                            ? null
+                            : (current.official_save_attempted_at || null);
+                        const requiredCurrentState = resolvedState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                            ? OFFICIAL_SAVE_STATES.ACTIVE
+                            : OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION;
+                        if (
+                            currentState !== requiredCurrentState
+                            || currentAttempt !== expectedAttempt
+                        ) {
+                            throw new LocalDraftRepositoryError(
+                                "save_attempt_conflict",
+                                "Recovery official Save attempt changed before reconciliation"
+                            );
+                        }
+                        const attemptedAt = resolvedState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                            ? nextSaveAttemptTimestamp(currentAttempt)
+                            : currentAttempt;
+                        const next = {
+                            ...current,
+                            schema_version: RECORD_SCHEMA_VERSION,
+                            official_save_state: resolvedState,
+                            official_save_attempted_at: attemptedAt,
+                        };
+                        await request(drafts.put(next));
+                        return next;
+                    }
+                );
+                return succeed(recordEnvelope(stored));
+            } catch (error) {
+                return fail(error);
+            }
+        }
+
         async function remove(identity) {
             try {
                 const key = storageKey(identity);
@@ -360,6 +502,7 @@
             write,
             read,
             discover,
+            setOfficialSaveState,
             delete: remove,
             requestPersistence: () => gateway.requestPersistence(),
         });
@@ -367,8 +510,10 @@
 
     root.LocalDraftRepository = Object.freeze({
         RECORD_SCHEMA_VERSION,
+        LEGACY_RECORD_SCHEMA_VERSION,
         DEFAULT_MAX_PAYLOAD_BYTES,
         TARGET_DOCTYPE,
+        OFFICIAL_SAVE_STATES,
         LocalDraftRepositoryError,
         create,
         storageKey,
