@@ -6,6 +6,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
+from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
+    DxfAppliedTrimError,
+    apply_adaptive_trim_to_fixed_dxf_layout,
+)
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     require_cut_dimension_cm,
@@ -137,7 +141,11 @@ def _proxy_order(
     ]
     return SimpleNamespace(
         pieces=pieces,
-        trim_margin_mm=settings.trim_margin_mm,
+        # Before ALMADINA-141 this boundary used
+        # trim_margin_mm=settings.trim_margin_mm directly. Geometry ingestion now
+        # validates physical coordinates with zero inset, then the canonical
+        # ALMADINA-138 resolver derives the Applied Trim from the same settings.
+        trim_margin_mm=0.0,
         board_width_cm=getattr(order, "board_width_cm", 0),
         board_length_cm=getattr(order, "board_length_cm", 0),
         full_board_width_mm=getattr(order, "full_board_width_mm", 0),
@@ -293,6 +301,9 @@ def _apply_strict_dimension_contract(
             piece["source_piece_no"] = spec.row_index
             piece["copy_no"] = candidate["copy_no"]
             piece["rotated"] = rotated
+            # DCO business identity is authoritative. The imported contour stays
+            # physical geometry truth for bounds/topology but cannot reclassify a
+            # Special door as Regular merely because its bbox is rectangular.
             piece["piece_type"] = spec.piece_type
             piece["original_w"] = float(spec.cut_width_cm)
             piece["original_h"] = float(spec.cut_length_cm)
@@ -325,9 +336,9 @@ def parse_production_dxf(
 ) -> dict[str, Any]:
     """Validate DXF against order pieces and canonical Cutting Plan settings.
 
-    Topology/layers/board bounds/kerf remain owned by the geometry importer.
-    Final acceptance is exact at 0.001 cm. Kerf and trim are supplied explicitly
-    from Cutting Plan lineage instead of being read from DCO compatibility fields.
+    Topology/layers/physical board bounds/kerf remain owned by the geometry
+    importer. Applied Trim is resolved over that fixed physical layout through
+    ALMADINA-138. Final manufacturing identity remains exact at 0.001 cm.
     """
     try:
         specs = build_order_piece_cut_specs(order)
@@ -352,6 +363,16 @@ def parse_production_dxf(
                 f"{expected}{suffix}. لا توجد سماحية لتغيير مقاس الدرفة."
             ) from exc
         raise
+
+    try:
+        snapshot = apply_adaptive_trim_to_fixed_dxf_layout(
+            snapshot,
+            preferred_trim_mm=settings.preferred_trim_mm,
+        )
+    except DxfAppliedTrimError as exc:
+        raise DxfImportError(
+            "هندسة DXF تتجاوز حدود اللوح الفيزيائية ولا يمكن جعلها صالحة حتى بعد تطبيق سياسة التشذيب التكيفية."
+        ) from exc
 
     exact_errors = _apply_strict_dimension_contract(snapshot, specs)
     if exact_errors:
