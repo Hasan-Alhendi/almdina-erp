@@ -393,6 +393,27 @@ function runCleanups(frm) {
     discoveryDeferred = null;
     fakeWindow.cur_frm = null;
 
+    discoveryDeferred = deferred();
+    const blockedDiscoverySaveForm = form("new-door-cutting-order-blocked-discovery-save");
+    fakeWindow.cur_frm = blockedDiscoverySaveForm;
+    Recovery.LocalCheckpoint.initializeNewForm(blockedDiscoverySaveForm);
+    blockedDiscoverySaveForm.doc.customer = "CUST-SAVE-WHILE-DISCOVERING";
+    Recovery.LocalCheckpoint.markDirty(blockedDiscoverySaveForm, "DCO");
+    fakeFrappe.validated = true;
+    const blockedDiscoverySave = handlers["Door Cutting Order"].before_save(blockedDiscoverySaveForm);
+    discoveryDeferred.resolve({ ok: true, value: { records: [], rejected: [] } });
+    await blockedDiscoverySave;
+    const blockedDiscoveryState = Recovery.LocalCheckpoint.snapshot(blockedDiscoverySaveForm);
+    assert.equal(fakeFrappe.validated, false, "Save waits for discovery and requires a fresh explicit click");
+    assert.equal(blockedDiscoverySaveForm.doc.recovery_creation_token, blockedDiscoveryState.draft_id);
+    assert.equal(blockedDiscoveryState.official_save_state, "ACTIVE");
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(blockedDiscoverySaveForm);
+    assert.equal(blockedDiscoverySaveForm.doc.recovery_creation_token, blockedDiscoveryState.draft_id);
+    assert.equal(records.get(blockedDiscoveryState.draft_id).official_save_state, "PENDING_RECONCILIATION");
+    discoveryDeferred = null;
+    fakeWindow.cur_frm = null;
+
     discoveredRecords = [];
     const pristineForm = form("new-door-cutting-order-pristine-save");
     await Recovery.LocalCheckpoint.initializeNewForm(pristineForm);
@@ -515,6 +536,54 @@ function runCleanups(frm) {
         "PENDING_RECONCILIATION",
         "even a forced second click cannot adopt and delete the unseen revision"
     );
+
+    const frozenDeleteId = "58585858-5858-4585-8585-585858585858";
+    const actionableDeleteId = "59595959-5959-4595-8595-595959595959";
+    const frozenDeleteRecord = draft(frozenDeleteId);
+    const actionableDeleteRecord = draft(actionableDeleteId);
+    discoveredRecords = [frozenDeleteRecord, actionableDeleteRecord];
+    const mixedDeleteForm = form("new-door-cutting-order-mixed-delete");
+    fakeWindow.cur_frm = mixedDeleteForm;
+    await Recovery.LocalCheckpoint.initializeNewForm(mixedDeleteForm);
+    const mixedDeleteDialog = lastDialog;
+    records.set(frozenDeleteId, {
+        ...records.get(frozenDeleteId),
+        recovery_revision: frozenDeleteRecord.recovery_revision + 1,
+    });
+    let frozenDeleteActions = [];
+    const frozenDeleteCard = {
+        dataset: { draftId: frozenDeleteId },
+        querySelectorAll: () => frozenDeleteActions,
+        remove() {},
+    };
+    const frozenDeleteButton = {
+        disabled: false,
+        dataset: { recoveryAction: "delete" },
+        closest: () => frozenDeleteCard,
+    };
+    frozenDeleteActions = [frozenDeleteButton];
+    mixedDeleteDialog.listener({ target: { closest: () => frozenDeleteButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    let actionableCardRemoved = false;
+    let actionableDeleteActions = [];
+    const actionableDeleteCard = {
+        dataset: { draftId: actionableDeleteId },
+        querySelectorAll: () => actionableDeleteActions,
+        remove() { actionableCardRemoved = true; },
+    };
+    const actionableDeleteButton = {
+        disabled: false,
+        dataset: { recoveryAction: "delete" },
+        closest: () => actionableDeleteCard,
+    };
+    actionableDeleteActions = [actionableDeleteButton];
+    mixedDeleteDialog.listener({ target: { closest: () => actionableDeleteButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(actionableCardRemoved, true);
+    assert.equal(records.has(actionableDeleteId), false);
+    assert.equal(records.has(frozenDeleteId), true);
+    assert.equal(mixedDeleteDialog.visible, true, "a frozen displayed draft keeps discovery open");
+    assert.equal(Recovery.LocalCheckpoint.snapshot(mixedDeleteForm), null);
 
     const staleContinueId = "68686868-6868-4868-8868-686868686868";
     const staleContinueRecord = draft(staleContinueId);

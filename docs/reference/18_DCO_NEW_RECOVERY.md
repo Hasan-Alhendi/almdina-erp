@@ -38,6 +38,13 @@ current form. A late final-card Delete after navigation may finish its repositor
 transaction, but it cannot hide or initialize the replacement document. If discovery
 fails safely after the user has already edited the form, that queued first mutation
 is replayed into the fail-open recovery session instead of being dropped.
+Native first Save is blocked while discovery or its required explicit choice still
+owns the form. If discovery settles into a new local session during that Save, the
+originating click is still cancelled and the user explicitly saves again so the
+normal checkpoint/observer/reconciliation chain owns the insert. A revision-conflicted
+card remains part of the displayed discovery set even after it is removed from the
+actionable set; deleting other cards cannot close the dialog while that frozen draft
+still requires reopen or an explicit Start New choice.
 
 `draft_id` is the stable UUID across checkpoint, reopen, restore, temporary Frappe
 names, first Save, and reconciliation. Row `piece_key` values are restored into the

@@ -361,8 +361,12 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("setCardActionsDisabled", presentation)
         self.assertIn("let actionInFlight = false;", presentation)
         self.assertIn("setDiscoveryActionsDisabled", presentation)
+        self.assertIn("const displayedDraftIds = new Set", presentation)
+        self.assertIn("if (!displayedDraftIds.size)", presentation)
         self.assertIn("initializations.get(frm) !== initialization", presentation)
         self.assertIn("if (!ownsDiscovery()) return;", presentation)
+        self.assertIn("await initialization.promise;", presentation)
+        self.assertIn("اكتمل تجهيز الحفظ المحلي", presentation)
         self.assertGreaterEqual(
             presentation.count('if (initialization.pendingDirty && state) markDirty(frm, "DCO");'),
             5,

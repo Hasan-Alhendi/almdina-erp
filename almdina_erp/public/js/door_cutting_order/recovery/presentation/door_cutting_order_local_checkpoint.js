@@ -595,6 +595,7 @@
             if (initialization.pendingDirty && state) markDirty(frm, "DCO");
             return null;
         }
+        const displayedDraftIds = new Set(summaries.map((summary) => summary.draft_id));
         const dialog = new frappe.ui.Dialog({
             title: "استعادة طلب قص غير مكتمل",
             static: true,
@@ -727,8 +728,9 @@
                         return;
                     }
                     accepted.delete(record.draft_id);
+                    displayedDraftIds.delete(record.draft_id);
                     card.remove();
-                    if (!accepted.size) {
+                    if (!displayedDraftIds.size) {
                         dialog.hide();
                         dialogs.delete(frm);
                         initializations.delete(frm);
@@ -1089,7 +1091,22 @@
     }
 
     async function beforeSave(frm) {
-        const state = currentState(frm);
+        let state = currentState(frm);
+        if (!state && isNew(frm) && !initializations.has(frm)) initializeNewForm(frm);
+        const initialization = !state && isNew(frm) ? initializations.get(frm) : null;
+        if (initialization) {
+            const isCurrent = activeDocumentGuard(frm);
+            await initialization.promise;
+            if (!isCurrent()) abortInactiveSave();
+            state = currentState(frm);
+            frappe.validated = false;
+            showRecoveryError(
+                state
+                    ? "اكتمل تجهيز الحفظ المحلي. اضغط حفظ مرة أخرى لإتمام إنشاء الطلب."
+                    : "اختر متابعة مسودة محلية أو بدء طلب جديد قبل الحفظ."
+            );
+            return;
+        }
         if (!state) return;
         const saveOperation = bindObservedSaveOperation(frm, state);
         const isCurrent = activeDocumentGuard(frm);

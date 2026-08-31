@@ -87,6 +87,9 @@ revision/attempt before hydration. One mutually exclusive discovery action owns 
 dialog at a time, and Continue/Delete completion also rechecks the source document
 token before changing the dialog or initializing a session. A queued first mutation
 is replayed if discovery fails safely, preserving the existing checkpoint behavior.
+Native first Save is cancelled until discovery establishes a session and the user
+explicitly saves again; frozen conflicted cards remain displayed discovery ownership
+even when no actionable card remains.
 The fail-open marker/checkpoint-storage path carries the retained ACTIVE attempt and
 persisted `saved_revision` fences, which are replaced only when a new pending marker
 is durably returned. The retained timestamp is cleanup evidence only; pending-state
