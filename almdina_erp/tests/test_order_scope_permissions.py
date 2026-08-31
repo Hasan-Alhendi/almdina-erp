@@ -82,7 +82,7 @@ class TestOrderScopePermissions(unittest.TestCase):
                 permissions._requires_assigned_scope("worker@example.com")
             )
 
-    def test_worker_visible_orders_union_actionable_and_completed(self) -> None:
+    def test_worker_visible_orders_exclude_completed_without_history(self) -> None:
         granted = {Capability.START_ASSIGNED_STAGE, Capability.VIEW_ORDERS}
         with patch.object(
             permissions,
@@ -90,9 +90,35 @@ class TestOrderScopePermissions(unittest.TestCase):
             side_effect=self.capability_checker(granted),
         ):
             with patch.object(
-                permissions.frappe,
-                "get_roles",
-                return_value=["عامل رسم"],
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل رسم",),
+            ):
+                subquery = permissions._worker_visible_orders_subquery(
+                    "worker@example.com"
+                )
+        self.assertNotIn("union", subquery.lower())
+        self.assertIn("current_production_stage", subquery)
+        self.assertNotIn("status = 'Completed'", subquery)
+        self.assertIn("Draft", subquery)
+        self.assertIn("Pending Review", subquery)
+        self.assertIn("عامل رسم", subquery)
+
+    def test_worker_visible_orders_include_completed_with_history(self) -> None:
+        granted = {
+            Capability.START_ASSIGNED_STAGE,
+            Capability.VIEW_ORDERS,
+            Capability.VIEW_SHOP_FLOOR_HISTORY,
+        }
+        with patch.object(
+            permissions,
+            "doctype_has_capability",
+            side_effect=self.capability_checker(granted),
+        ):
+            with patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل رسم",),
             ):
                 subquery = permissions._worker_visible_orders_subquery(
                     "worker@example.com"
@@ -100,9 +126,6 @@ class TestOrderScopePermissions(unittest.TestCase):
         self.assertIn("union", subquery.lower())
         self.assertIn("current_production_stage", subquery)
         self.assertIn("status = 'Completed'", subquery)
-        self.assertIn("Draft", subquery)
-        self.assertIn("Pending Review", subquery)
-        self.assertIn("عامل رسم", subquery)
 
     def test_order_editing_grant_does_not_open_scope_for_floor_workers(self) -> None:
         # The drawing role carries edit_order so it can save plan settings. That
@@ -155,7 +178,7 @@ class TestOrderScopePermissions(unittest.TestCase):
                 permissions._requires_assigned_scope("drawing@example.com")
             )
 
-    def test_worker_can_view_order_allows_completed_or_actionable_only(self) -> None:
+    def test_worker_cannot_open_completed_order_without_history(self) -> None:
         granted = {Capability.START_ASSIGNED_STAGE, Capability.VIEW_ORDERS}
         with patch.object(
             permissions,
@@ -163,9 +186,9 @@ class TestOrderScopePermissions(unittest.TestCase):
             side_effect=self.capability_checker(granted),
         ):
             with patch.object(
-                permissions.frappe,
-                "get_roles",
-                return_value=["عامل رسم"],
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل رسم",),
             ):
                 delivered_order = {
                     "status": "Delivered",
@@ -181,6 +204,42 @@ class TestOrderScopePermissions(unittest.TestCase):
                         "get_value",
                         return_value=delivered_order,
                     ):
+                        self.assertFalse(
+                            permissions.worker_can_view_order(
+                                "worker@example.com",
+                                "DCO-DONE",
+                            )
+                        )
+
+    def test_worker_can_open_completed_order_with_history(self) -> None:
+        granted = {
+            Capability.START_ASSIGNED_STAGE,
+            Capability.VIEW_ORDERS,
+            Capability.VIEW_SHOP_FLOOR_HISTORY,
+        }
+        with patch.object(
+            permissions,
+            "doctype_has_capability",
+            side_effect=self.capability_checker(granted),
+        ):
+            with patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل رسم",),
+            ):
+                with patch.object(
+                    permissions.frappe.db,
+                    "exists",
+                    return_value=True,
+                ):
+                    with patch.object(
+                        permissions.frappe.db,
+                        "get_value",
+                        return_value={
+                            "status": "Delivered",
+                            "current_production_stage": None,
+                        },
+                    ):
                         self.assertTrue(
                             permissions.worker_can_view_order(
                                 "worker@example.com",
@@ -188,6 +247,18 @@ class TestOrderScopePermissions(unittest.TestCase):
                             )
                         )
 
+    def test_worker_can_open_current_assignment_without_history(self) -> None:
+        granted = {Capability.START_ASSIGNED_STAGE, Capability.VIEW_ORDERS}
+        with patch.object(
+            permissions,
+            "doctype_has_capability",
+            side_effect=self.capability_checker(granted),
+        ):
+            with patch.object(
+                permissions,
+                "_worker_operational_roles",
+                return_value=("عامل رسم",),
+            ):
                 with patch.object(
                     permissions.frappe.db,
                     "exists",
