@@ -63,6 +63,44 @@
     background: #bbf7d0 !important;
 }
 
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .list-row,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .level-left,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .level-right,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .list-row-col {
+    background: #ecfdf3 !important;
+    background-color: #ecfdf3 !important;
+    border-color: #16a34a !important;
+}
+
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .list-row,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .level-left,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .level-right,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .list-row-col {
+    background: #bbf7d0 !important;
+    background-color: #bbf7d0 !important;
+}
+
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .list-row,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .level-left,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .level-right,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .list-row-col {
+    background: #a7f3d0 !important;
+    background-color: #a7f3d0 !important;
+    border-color: #047857 !important;
+}
+
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .list-row,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .level-left,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .level-right,
+.dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .list-row-col {
+    background: #6ee7b7 !important;
+    background-color: #6ee7b7 !important;
+}
+
 .dco-order-list .dco-mobile-order-card.dco-list-row-completed {
     background: #dcfce7 !important;
     border-color: #86efac !important;

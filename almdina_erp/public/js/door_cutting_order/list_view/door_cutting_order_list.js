@@ -6,7 +6,7 @@
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=6";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -89,6 +89,14 @@
         ready: Object.freeze({ rank: 1, field: "assignment_time", direction: 1 }),
         completed: Object.freeze({ rank: 2, field: "completion_time", direction: -1 }),
     });
+    const DESKTOP_DELIVERY_ROW_CLASS = Object.freeze({
+        ready_for_delivery: "dco-list-row-ready-for-delivery",
+        delivered: "dco-list-row-delivered",
+    });
+    const DESKTOP_DELIVERY_ROW_CLASSES = Object.freeze([
+        DESKTOP_DELIVERY_ROW_CLASS.ready_for_delivery,
+        DESKTOP_DELIVERY_ROW_CLASS.delivered,
+    ]);
 
     frappe.listview_settings = frappe.listview_settings || {};
     const existing = frappe.listview_settings[METHODS.doctype] || {};
@@ -354,6 +362,7 @@
             canDeliver: authorized.canDeliver === true,
             assignmentState: authorized.assignmentState || "",
             queueState: authorized.queueState || "",
+            overview: authorized.overview === true,
         };
     }
 
@@ -392,6 +401,16 @@
         return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
     }
 
+    function overviewStageLabel(doc) {
+        const status = String(doc && doc.status || "").trim();
+        if (status === "Delivered" || status === "Ready for Delivery") {
+            return __(STATUS_LABELS[status] || status);
+        }
+        const department = String(doc && doc.current_department || "").trim();
+        if (department) return department;
+        return fallbackStatusLabel(doc);
+    }
+
     function cardStateDefinition(key) {
         const definition = MOBILE_CARD_STATES[key];
         if (!definition) return null;
@@ -409,9 +428,11 @@
         if (status === "Delivered") return cardStateDefinition("delivered");
         if (status === "Ready for Delivery") return cardStateDefinition("ready_for_delivery");
 
-        const completed = context.queueState === "completed"
-            || context.assignmentState === "completed"
-            || status === "Completed";
+        const completed = context.overview
+            ? status === "Completed"
+            : context.queueState === "completed"
+                || context.assignmentState === "completed"
+                || status === "Completed";
         if (completed) return cardStateDefinition("completed");
 
         const inProgress = context.queueState === "in_progress"
@@ -444,6 +465,7 @@
         const candidateAction = quickActions && quickActions.actionFor(context);
         const state = cardState(doc, context, candidateAction);
         const action = state.history ? null : candidateAction;
+        const overview = context.overview === true;
         return Object.freeze({
             orderId: displayValue(doc.name),
             customer: displayValue(doc.customer),
@@ -455,6 +477,8 @@
             action,
             state,
             history: state.history,
+            overview,
+            stageLabel: overview ? overviewStageLabel(doc) : "",
         });
     }
 
@@ -553,6 +577,14 @@
                 </footer>
             `;
         }
+        if (model.overview) {
+            return `
+                <div class="dco-card-complete-state" role="status">
+                    <span>${escapeHtml(model.stageLabel)}</span>
+                    <span class="dco-card-complete-icon" aria-hidden="true">${iconSvg(model.state.icon)}</span>
+                </div>
+            `;
+        }
         if (model.history) {
             return `
                 <div class="dco-card-complete-state" role="status">
@@ -607,6 +639,8 @@
             model.context.stage || "",
             model.context.assignmentState || "",
             model.context.queueState || "",
+            model.overview ? 1 : 0,
+            model.stageLabel || "",
             hasSelection ? 1 : 0,
             String(doc.department_status || ""),
         ]);
@@ -729,28 +763,52 @@
     function clearOperationalRoleRows(listview) {
         const root = rootNode(listview);
         if (!root) return;
-        root.querySelectorAll(".dco-list-row-other-role,.dco-list-row-completed").forEach(node => {
+        root.querySelectorAll(
+            ".dco-list-row-other-role,.dco-list-row-completed,.dco-list-row-ready-for-delivery,.dco-list-row-delivered"
+        ).forEach(node => {
             node.classList.remove("dco-list-row-other-role");
             node.classList.remove("dco-list-row-completed");
+            DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => node.classList.remove(className));
         });
     }
 
-    function deliveryStatusClass(doc) {
+    function desktopDeliveryRowState(doc) {
         const status = String(doc && doc.status || "").trim();
-        if (status === "Delivered") return "dco-list-row-delivered";
-        if (status === "Ready for Delivery") return "dco-list-row-ready-for-delivery";
+        if (status === "Delivered") return "delivered";
+        if (status === "Ready for Delivery") return "ready_for_delivery";
+        const department = String(doc && doc.current_department || "").trim();
+        if (department === "تم التسليم") return "delivered";
+        if (department === "جاهز للتسليم") return "ready_for_delivery";
         return "";
     }
 
-    function applyDeliveryStatusRows(listview) {
+    function applyDesktopDeliveryRowColors(listview) {
         const root = rootNode(listview);
         if (!root) return;
+
+        const result = root.querySelector(".result") || root;
+        const mobileLayout = root.classList.contains("dco-order-card-layout");
         const docs = orderDocuments(listview);
-        root.querySelectorAll(".list-row-container").forEach(container => {
-            container.classList.remove("dco-list-row-ready-for-delivery", "dco-list-row-delivered");
+        [...result.querySelectorAll(".list-row-container")].forEach(container => {
             const name = rowDocumentName(container);
-            const statusClass = deliveryStatusClass(name && docs.get(name));
-            if (statusClass) container.classList.add(statusClass);
+            const state = name && !mobileLayout
+                ? desktopDeliveryRowState(docs.get(name) || {})
+                : "";
+            container.classList.toggle(
+                DESKTOP_DELIVERY_ROW_CLASS.ready_for_delivery,
+                state === "ready_for_delivery"
+            );
+            container.classList.toggle(
+                DESKTOP_DELIVERY_ROW_CLASS.delivered,
+                state === "delivered"
+            );
+            if (state) {
+                container.classList.remove("dco-list-row-completed");
+            }
+            const card = container.querySelector(".dco-mobile-order-card");
+            if (card) {
+                DESKTOP_DELIVERY_ROW_CLASSES.forEach(className => card.classList.remove(className));
+            }
         });
     }
 
@@ -842,12 +900,13 @@
                 canDeliver: flag.can_mark_delivered === true,
                 assignmentState: flag.assignment_state || "",
                 queueState: personalQueueState(doc, flag),
+                overview: !personalView,
             };
         });
         renderMobileCards(listview);
         if (!personalView) {
             clearOperationalRoleRows(listview);
-            applyDeliveryStatusRows(listview);
+            applyDesktopDeliveryRowColors(listview);
             return;
         }
 
@@ -862,9 +921,8 @@
             const isHistory = mobileLayout
                 ? isHistoryQueueState(queueState)
                 : desktopQueueState(doc, flag) === "completed";
-            const deliveryPainted = Boolean(deliveryStatusClass(doc));
             container.classList.remove("dco-list-row-other-role");
-            container.classList.toggle("dco-list-row-completed", isHistory && !deliveryPainted);
+            container.classList.toggle("dco-list-row-completed", isHistory);
             const card = container.querySelector(".dco-mobile-order-card");
             if (card) {
                 card.classList.remove("dco-list-row-other-role");
@@ -872,6 +930,7 @@
             }
             queueItems.push({ container, flag, name, doc });
         });
+        applyDesktopDeliveryRowColors(listview);
 
         const orderedItems = mobileLayout
             ? sortPersonalQueueItems(queueItems)
@@ -887,7 +946,6 @@
                 listview._dcoApplyingRolePresentation = false;
             });
         }
-        applyDeliveryStatusRows(listview);
     }
 
     function roleFlagNames(listview) {
@@ -933,6 +991,7 @@
         }).catch(error => {
             if (Number(listview._dcoRoleFlagGeneration || 0) === generation) {
                 console.debug("Could not classify Door Cutting Order list rows by operational role", error);
+                applyDesktopDeliveryRowColors(listview);
             }
             return null;
         }).finally(() => {
@@ -960,7 +1019,7 @@
         if (refreshRoleFlags) {
             invalidateRoleFlags(listview);
             renderMobileCards(listview);
-            applyDeliveryStatusRows(listview);
+            applyDesktopDeliveryRowColors(listview);
             applyOperationalRoleRows(listview);
             return;
         }
@@ -974,7 +1033,7 @@
             return;
         }
         renderMobileCards(listview);
-        applyDeliveryStatusRows(listview);
+        applyDesktopDeliveryRowColors(listview);
     }
 
     function schedulePresentation(listview, { refreshRoleFlags = false } = {}) {
@@ -1055,11 +1114,12 @@
     });
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
-        applyDeliveryStatusRows,
+        applyDesktopDeliveryRowColors,
         buildCard,
         cardViewModel,
-        deliveryStatusClass,
+        desktopDeliveryRowState,
         isPhoneLayout,
+        overviewStageLabel,
         personalQueueState,
         quickActionContext,
         renderMobileCards,

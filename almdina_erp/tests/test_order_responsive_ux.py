@@ -223,6 +223,8 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert ".dco-card-production-action.is-finish" in mobile_css
     assert ".dco-card-production-action.is-deliver" in mobile_css
     assert ".dco-card-complete-state" in mobile_css
+    assert "function overviewStageLabel(doc)" in list_source
+    assert "overview: !personalView" in list_source
     assert ".dco-mobile-order-card.is-ready" in mobile_css
     assert ".dco-mobile-order-card.is-in-progress" in mobile_css
     assert ".dco-mobile-order-card.is-ready-for-delivery" in mobile_css
@@ -282,3 +284,36 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert ".list-row-container.dco-list-row-completed > .list-row" in css
     assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
     assert "background: #dcfce7 !important;" in css
+
+
+def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():
+    css = source(RESPONSIVE_CSS)
+    mobile_css = source(MOBILE_LIST_CSS)
+    list_source = source(LIST_UX)
+
+    assert "function desktopDeliveryRowState(doc)" in list_source
+    assert "function applyDesktopDeliveryRowColors(listview)" in list_source
+    assert "applyDesktopDeliveryRowColors(listview)" in list_source
+    assert 'dco-list-row-ready-for-delivery' in list_source
+    assert 'dco-list-row-delivered' in list_source
+    assert "root.classList.contains(\"dco-order-card-layout\")" in list_source
+
+    desktop_ready = ".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery"
+    desktop_delivered = ".dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered"
+    assert desktop_ready in css
+    assert desktop_delivered in css
+    assert ".list-row-container.dco-list-row-ready-for-delivery .level-right" in css
+    assert ".list-row-container.dco-list-row-delivered .level-right" in css
+    assert "background: #ecfdf3 !important;" in css
+    assert "background: #a7f3d0 !important;" in css
+    assert "border-color: #16a34a !important;" in css
+    assert "border-color: #047857 !important;" in css
+    assert "applyDesktopDeliveryRowColors(listview)" in list_source
+    assert 'department === "جاهز للتسليم"' in list_source
+    assert 'department === "تم التسليم"' in list_source
+
+    assert ".dco-mobile-order-card.is-ready-for-delivery" in mobile_css
+    assert "#7c3aed" in mobile_css
+    assert ".dco-mobile-order-card.is-delivered" in mobile_css
+    assert desktop_ready not in mobile_css
+    assert desktop_delivered not in mobile_css
