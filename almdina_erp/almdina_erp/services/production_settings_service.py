@@ -426,7 +426,7 @@ def get_factory_settings_audit(limit: int = 30) -> list[dict[str, Any]]:
     _require_view()
     rows = frappe.get_all(
         "Almdina Master Data Audit",
-        filters={"target_doctype": "Almdina Master Data Audit"},
+        filters={"target_doctype": "Almdina ERP Settings"},
         fields=["name", "action", "changed_by", "changed_on", "changed_fields", "source"],
         order_by="changed_on desc",
         limit_page_length=max(1, min(cint(limit or 30), 100)),
