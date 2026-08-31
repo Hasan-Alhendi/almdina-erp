@@ -403,6 +403,85 @@
         }
     }
 
+    function cloneHydrationValue(value) {
+        if (value === undefined) return undefined;
+        const clone = typeof window.structuredClone === "function"
+            ? window.structuredClone.bind(window)
+            : (typeof structuredClone === "function" ? structuredClone : null);
+        if (clone) {
+            try { return clone(value); } catch (error) { /* fall back to JSON-safe form data */ }
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function captureHydrationSnapshot(frm) {
+        const doc = frm && frm.doc || {};
+        const headers = Object.create(null);
+        root.Projection.HEADER_FIELDS.forEach((fieldname) => {
+            const present = Object.prototype.hasOwnProperty.call(doc, fieldname);
+            headers[fieldname] = Object.freeze({
+                present,
+                value: present ? cloneHydrationValue(doc[fieldname]) : undefined,
+            });
+        });
+        const technical = Object.create(null);
+        ["recovery_creation_token", "__unsaved"].forEach((fieldname) => {
+            const present = Object.prototype.hasOwnProperty.call(doc, fieldname);
+            technical[fieldname] = Object.freeze({
+                present,
+                value: present ? cloneHydrationValue(doc[fieldname]) : undefined,
+            });
+        });
+        return Object.freeze({
+            headers,
+            technical,
+            pieces: Array.isArray(doc.pieces)
+                ? doc.pieces.map((row) => cloneHydrationValue(row))
+                : [],
+        });
+    }
+
+    function restoreHydrationSnapshot(frm, snapshot) {
+        if (!frm || !frm.doc || !snapshot) return false;
+        const doc = frm.doc;
+        Object.entries(snapshot.headers || {}).forEach(([fieldname, entry]) => {
+            if (entry && entry.present) doc[fieldname] = cloneHydrationValue(entry.value);
+            else delete doc[fieldname];
+        });
+        Object.entries(snapshot.technical || {}).forEach(([fieldname, entry]) => {
+            if (entry && entry.present) doc[fieldname] = cloneHydrationValue(entry.value);
+            else delete doc[fieldname];
+        });
+        try {
+            if (frappe.model && typeof frappe.model.clear_table === "function") {
+                frappe.model.clear_table(doc, "pieces");
+            }
+        } catch (error) {
+            console.debug("DCO failed hydration partial rows could not be cleared through Frappe", error);
+        }
+        const restoredPieces = (snapshot.pieces || []).map((row) => cloneHydrationValue(row));
+        doc.pieces = restoredPieces;
+        const localRegistry = typeof locals !== "undefined" ? locals : window.locals;
+        if (localRegistry && typeof localRegistry === "object") {
+            restoredPieces.forEach((row) => {
+                const doctype = String(row && row.doctype || "").trim();
+                const name = String(row && row.name || "").trim();
+                if (!doctype || !name) return;
+                localRegistry[doctype] = localRegistry[doctype] || {};
+                localRegistry[doctype][name] = row;
+            });
+        }
+        try {
+            if (typeof frm.refresh_fields === "function") {
+                frm.refresh_fields(root.Projection.HEADER_FIELDS);
+            }
+            if (typeof frm.refresh_field === "function") frm.refresh_field("pieces");
+        } catch (error) {
+            console.debug("DCO pre-hydration form was restored but refresh failed safely", error);
+        }
+        return true;
+    }
+
     async function hydrateNewProjection(frm, state, dco, isCurrent = () => true) {
         if (!isCurrent()) return false;
         root.Projection.HEADER_FIELDS.forEach((fieldname) => {
@@ -482,12 +561,13 @@
         return api.reconcileNewCreation(record.draft_id);
     }
 
-    function discardFailedHydration(frm, state) {
+    function discardFailedHydration(frm, state, hydrationSnapshot = null) {
         const draftId = state.session.snapshot().draft_id;
         state.session.dispose();
         if (states.get(frm) !== state) return;
         states.delete(frm);
         restoreSaveObserver(frm);
+        if (hydrationSnapshot && restoreHydrationSnapshot(frm, hydrationSnapshot)) return;
         if (frm.doc && frm.doc.recovery_creation_token === draftId) {
             frm.doc.recovery_creation_token = null;
         }
@@ -528,6 +608,7 @@
             selected = resumed.value;
         }
         if (!isCurrent()) return { cancelled: true };
+        const hydrationSnapshot = captureHydrationSnapshot(frm);
         const state = createState(frm, { record: selected });
         if (!state) throw new Error("Recovery session is unavailable");
         let hydration;
@@ -537,11 +618,11 @@
                 hydrationPort: (dco) => hydrateNewProjection(frm, state, dco, isCurrent),
             });
         } catch (error) {
-            discardFailedHydration(frm, state);
+            discardFailedHydration(frm, state, hydrationSnapshot);
             throw error;
         }
         if (!hydration.restored || !isCurrent()) {
-            discardFailedHydration(frm, state);
+            discardFailedHydration(frm, state, hydrationSnapshot);
             return { cancelled: true };
         }
         const dialog = dialogs.get(frm);
