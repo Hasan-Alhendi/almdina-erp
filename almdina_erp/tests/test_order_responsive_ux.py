@@ -208,7 +208,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'if (!applyCardLayoutClass(listview)) {' in list_source
     assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=6"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     scoped_result_rule = mobile_css.split(
         ".dco-order-list.dco-order-card-layout .result {",
