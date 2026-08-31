@@ -48,6 +48,9 @@ still requires reopen or an explicit Start New choice.
 If the recovery infrastructure cannot create any session and no discovery dialog
 still owns the form, this gate fails open to the existing native explicit Save; local
 recovery unavailability must never make DCO creation permanently unavailable.
+That includes a failed session creation after an explicit Start New choice: the
+choice remains valid for the current document generation, old drafts remain retained,
+and Save does not reopen discovery into a cancellation loop.
 
 `draft_id` is the stable UUID across checkpoint, reopen, restore, temporary Frappe
 names, first Save, and reconciliation. Row `piece_key` values are restored into the

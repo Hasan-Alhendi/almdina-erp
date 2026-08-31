@@ -659,8 +659,8 @@
                 if (!beginDiscoveryAction(null, button)) return;
                 dialog.hide();
                 dialogs.delete(frm);
-                initializations.delete(frm);
                 const state = createState(frm);
+                if (state) initializations.delete(frm);
                 if (initialization.pendingDirty && state) markDirty(frm, "DCO");
                 return;
             }

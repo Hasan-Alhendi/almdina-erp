@@ -90,7 +90,8 @@ is replayed if discovery fails safely, preserving the existing checkpoint behavi
 Native first Save is cancelled until discovery establishes a session and the user
 explicitly saves again; frozen conflicted cards remain displayed discovery ownership
 even when no actionable card remains. If no recovery session or dialog can be
-established, native explicit Save remains fail-safe available.
+established, native explicit Save remains fail-safe available; a failed explicit
+Start New choice does not reopen discovery or delete retained drafts.
 The fail-open marker/checkpoint-storage path carries the retained ACTIVE attempt and
 persisted `saved_revision` fences, which are replaced only when a new pending marker
 is durably returned. The retained timestamp is cleanup evidence only; pending-state

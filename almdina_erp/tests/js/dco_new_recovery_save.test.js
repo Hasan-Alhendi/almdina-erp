@@ -428,6 +428,25 @@ function runCleanups(frm) {
     identityFailure = null;
     fakeWindow.cur_frm = null;
 
+    const retainedFailSafeRecord = draft("45454545-4545-4545-8545-454545454545");
+    discoveredRecords = [retainedFailSafeRecord];
+    identityFailure = new Error("secure identity unavailable after choice");
+    const chosenFailSafeForm = form("new-door-cutting-order-chosen-fail-safe-save");
+    fakeWindow.cur_frm = chosenFailSafeForm;
+    await Recovery.LocalCheckpoint.initializeNewForm(chosenFailSafeForm);
+    const failedStartNewDialog = lastDialog;
+    const failedStartNewButton = { disabled: false, dataset: { recoveryAction: "new" } };
+    failedStartNewDialog.listener({ target: { closest: () => failedStartNewButton } });
+    assert.equal(failedStartNewDialog.visible, false);
+    assert.equal(Recovery.LocalCheckpoint.snapshot(chosenFailSafeForm), null);
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(chosenFailSafeForm);
+    assert.equal(fakeFrappe.validated, true, "failed Start New preserves native fail-safe Save");
+    assert.equal(records.has(retainedFailSafeRecord.draft_id), true, "Start New still retains old drafts");
+    assert.equal(chosenFailSafeForm.doc.recovery_creation_token, undefined);
+    identityFailure = null;
+    fakeWindow.cur_frm = null;
+
     discoveredRecords = [];
     const pristineForm = form("new-door-cutting-order-pristine-save");
     await Recovery.LocalCheckpoint.initializeNewForm(pristineForm);
