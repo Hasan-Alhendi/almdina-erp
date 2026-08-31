@@ -202,7 +202,14 @@ def _worker_completed_orders_subquery(user: str) -> str:
 
 
 def _worker_visible_orders_subquery(user: str) -> str:
-    return _worker_actionable_orders_subquery(user) + " union " + _worker_completed_orders_subquery(user)
+    actionable = _worker_actionable_orders_subquery(user)
+    if not _has(user, Capability.VIEW_SHOP_FLOOR_HISTORY):
+        return actionable
+    return (
+        actionable
+        + " union "
+        + _worker_completed_orders_subquery(user)
+    )
 
 
 def worker_can_view_order(user: str, order_name: str | None) -> bool:
@@ -215,7 +222,7 @@ def worker_can_view_order(user: str, order_name: str | None) -> bool:
     if not order:
         return False
 
-    if frappe.db.exists(
+    if _has(user, Capability.VIEW_SHOP_FLOOR_HISTORY) and frappe.db.exists(
         "Production Stage",
         {
             "door_cutting_order": order_name,
