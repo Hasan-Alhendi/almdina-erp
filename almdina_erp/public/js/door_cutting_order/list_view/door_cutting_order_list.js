@@ -6,7 +6,7 @@
         roleFlags: "almdina_erp.almdina_erp.services.shop_floor_query_service.get_order_operational_role_flags",
     });
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=6";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=7";
     const STATUS_LABELS = Object.freeze({
         Draft: "مسودة",
         "Pending Review": "بانتظار المراجعة",
@@ -127,6 +127,64 @@
         return normalized || "—";
     }
 
+    function isEmailLike(value) {
+        return String(value || "").includes("@");
+    }
+
+    function assigneeLabel(userId) {
+        const id = String(userId || "").trim();
+        if (!id) return "";
+        let name = "";
+        if (frappe.user && typeof frappe.user.full_name === "function") {
+            name = String(frappe.user.full_name(id) || "").trim();
+        }
+        if (!name && typeof frappe.user_info === "function") {
+            const info = frappe.user_info(id) || {};
+            name = String(info.fullname || info.full_name || "").trim();
+        }
+        if (!name || name === id || isEmailLike(name)) return "";
+        return name;
+    }
+
+    function rememberAssigneeNames(rows) {
+        const map = {};
+        (rows || []).forEach((row) => {
+            const id = String(row && row.name || "").trim();
+            const fullname = String(row && row.full_name || "").trim();
+            if (!id || !fullname || fullname === id || isEmailLike(fullname)) return;
+            map[id] = { fullname, email: id };
+        });
+        if (!Object.keys(map).length) return;
+        if (typeof frappe.update_user_info === "function") {
+            frappe.update_user_info(map);
+            return;
+        }
+        frappe.boot = frappe.boot || {};
+        frappe.boot.user_info = Object.assign({}, frappe.boot.user_info || {}, map);
+    }
+
+    function resolveAssigneeNames(listview) {
+        if (!listview || !frappe.db || typeof frappe.db.get_list !== "function") return;
+        const missing = [...new Set(
+            (listview.data || [])
+                .map(doc => String(doc && doc.current_assignee || "").trim())
+                .filter(Boolean)
+        )].filter(id => !assigneeLabel(id));
+        if (!missing.length) return;
+        if (listview._dcoAssigneeNamesKey === missing.join("\u001f")) return;
+        listview._dcoAssigneeNamesKey = missing.join("\u001f");
+        frappe.db.get_list("User", {
+            filters: { name: ["in", missing] },
+            fields: ["name", "full_name"],
+            limit: missing.length,
+        }).then((rows) => {
+            rememberAssigneeNames(rows);
+            if (typeof listview.render_list === "function") listview.render_list();
+        }).catch(() => {
+            listview._dcoAssigneeNamesKey = null;
+        });
+    }
+
     function searchField(listview) {
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict.name
@@ -245,6 +303,36 @@
             if (segment) return decodeURIComponent(segment);
         }
         return String((fallback && fallback.name) || "");
+    }
+
+    function columnFieldname(column) {
+        return String(column && column.df && column.df.fieldname || "").trim();
+    }
+
+    function applyOrderNotesColumnOrder(listview) {
+        const columns = listview && listview.columns;
+        if (!Array.isArray(columns) || !columns.length) return false;
+        const notesIdx = columns.findIndex(column => columnFieldname(column) === "order_notes");
+        const edgeIdx = columns.findIndex(column => columnFieldname(column) === "edge_color");
+        if (notesIdx < 0 || edgeIdx < 0 || notesIdx === edgeIdx + 1) return false;
+        const [notes] = columns.splice(notesIdx, 1);
+        const nextEdgeIdx = columns.findIndex(column => columnFieldname(column) === "edge_color");
+        columns.splice(nextEdgeIdx + 1, 0, notes);
+        return true;
+    }
+
+    function installOrderNotesColumnOrder(listview) {
+        if (!listview || listview._dcoOrderNotesColumnInstalled) return;
+        if (typeof listview.setup_columns !== "function") return;
+        listview._dcoOrderNotesColumnInstalled = true;
+        const originalSetup = listview.setup_columns.bind(listview);
+        listview.setup_columns = function dcoSetupColumns() {
+            originalSetup();
+            applyOrderNotesColumnOrder(this);
+        };
+        if (applyOrderNotesColumnOrder(listview) && typeof listview.render_header === "function") {
+            listview.render_header();
+        }
     }
 
     function dateLabel(value) {
@@ -647,6 +735,25 @@
         });
     }
 
+    function deliveryStatusClass(doc) {
+        const status = String(doc && doc.status || "").trim();
+        if (status === "Delivered") return "dco-list-row-delivered";
+        if (status === "Ready for Delivery") return "dco-list-row-ready-for-delivery";
+        return "";
+    }
+
+    function applyDeliveryStatusRows(listview) {
+        const root = rootNode(listview);
+        if (!root) return;
+        const docs = orderDocuments(listview);
+        root.querySelectorAll(".list-row-container").forEach(container => {
+            container.classList.remove("dco-list-row-ready-for-delivery", "dco-list-row-delivered");
+            const name = rowDocumentName(container);
+            const statusClass = deliveryStatusClass(name && docs.get(name));
+            if (statusClass) container.classList.add(statusClass);
+        });
+    }
+
     function queueTimeValue(item, fieldname) {
         if (fieldname === "modified") {
             return String(item.doc && item.doc.modified || item.flag && item.flag.completion_time || "");
@@ -740,6 +847,7 @@
         renderMobileCards(listview);
         if (!personalView) {
             clearOperationalRoleRows(listview);
+            applyDeliveryStatusRows(listview);
             return;
         }
 
@@ -754,8 +862,9 @@
             const isHistory = mobileLayout
                 ? isHistoryQueueState(queueState)
                 : desktopQueueState(doc, flag) === "completed";
+            const deliveryPainted = Boolean(deliveryStatusClass(doc));
             container.classList.remove("dco-list-row-other-role");
-            container.classList.toggle("dco-list-row-completed", isHistory);
+            container.classList.toggle("dco-list-row-completed", isHistory && !deliveryPainted);
             const card = container.querySelector(".dco-mobile-order-card");
             if (card) {
                 card.classList.remove("dco-list-row-other-role");
@@ -778,6 +887,7 @@
                 listview._dcoApplyingRolePresentation = false;
             });
         }
+        applyDeliveryStatusRows(listview);
     }
 
     function roleFlagNames(listview) {
@@ -846,9 +956,11 @@
         listview._dcoPresentationNeedsRoleRefresh = false;
 
         applySearchHint(listview);
+        resolveAssigneeNames(listview);
         if (refreshRoleFlags) {
             invalidateRoleFlags(listview);
             renderMobileCards(listview);
+            applyDeliveryStatusRows(listview);
             applyOperationalRoleRows(listview);
             return;
         }
@@ -862,6 +974,7 @@
             return;
         }
         renderMobileCards(listview);
+        applyDeliveryStatusRows(listview);
     }
 
     function schedulePresentation(listview, { refreshRoleFlags = false } = {}) {
@@ -896,6 +1009,7 @@
     function installListRuntime(listview) {
         const root = rootNode(listview);
         if (root) root.classList.add("dco-order-list");
+        installOrderNotesColumnOrder(listview);
         installCombinedSearch(listview);
         installResponsiveObserver(listview);
         installRowsObserver(listview);
@@ -906,7 +1020,8 @@
             ...(existing.add_fields || []),
             "customer", "order_date", "status",
             "board_description", "edge_color", "default_edge_type", "production_path",
-            "current_department", "current_assignee", "department_status",
+            "order_notes",
+            "current_department", "current_assignee",
             "current_production_stage",
         ])],
         formatters: Object.assign({}, existing.formatters || {}, {
@@ -922,6 +1037,10 @@
             edge_color(value) {
                 return value ? `<span class="dco-list-edge-color">${escapeHtml(value)}</span>` : "";
             },
+            current_assignee(value) {
+                const label = assigneeLabel(value);
+                return label ? escapeHtml(label) : "";
+            },
         }),
         onload(listview) {
             if (typeof originalOnload === "function") originalOnload(listview);
@@ -936,8 +1055,10 @@
     });
 
     window.AlmdinaDoorCuttingOrderListUX = Object.freeze({
+        applyDeliveryStatusRows,
         buildCard,
         cardViewModel,
+        deliveryStatusClass,
         isPhoneLayout,
         personalQueueState,
         quickActionContext,
