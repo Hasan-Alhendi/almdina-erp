@@ -41,6 +41,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.legacy_endpoint_service", F, ("retired_product_endpoint",)),
     ("almdina_erp.almdina_erp.services.master_data_service", C, ("delete_master_data_record", "delete_production_routing", "get_master_data_console", "get_production_routing_console", "save_production_routing", "search_operational_roles", "set_master_data_disabled", "set_production_routing_disabled")),
     ("almdina_erp.almdina_erp.services.master_data_service", S, ("can_open_master_data",)),
+    ("almdina_erp.almdina_erp.services.new_order_recovery_service", C, ("reconcile_new_order_creation",)),
     ("almdina_erp.almdina_erp.services.order_approval_service", C, ("approve_order",)),
     ("almdina_erp.almdina_erp.services.order_cancellation", C, ("cancel_order",)),
     ("almdina_erp.almdina_erp.services.order_defaults_service", C, ("get_order_defaults",)),

@@ -46,6 +46,11 @@ const repository = {
         }
         return { ok: true, value: record };
     },
+    async discover() { return { ok: true, value: { records: [], rejected: [] } }; },
+    async setOfficialSaveState(identityValue, state) {
+        return { ok: true, value: { ...identityValue, official_save_state: state } };
+    },
+    async delete() { return { ok: true, value: true }; },
     async hashCanonical(value) { return `hash:${JSON.stringify(value)}`; },
     async requestPersistence() { return false; },
 };
@@ -55,8 +60,8 @@ function identity(frm) {
 }
 
 const DocumentContext = {
-    capture(frm) { return Object.freeze({ identity: identity(frm), generation: 1 }); },
-    isSameDocument(frm, token) { return token && token.identity === identity(frm); },
+    capture(frm) { return Object.freeze({ form: frm, generation: 1 }); },
+    isSameDocument(frm, token) { return token && token.form === frm; },
     formIdentity(frm) { return identity(frm); },
     registerCleanup(frm, key, cleanup) {
         cleanups.set(frm, { key, cleanup });
@@ -95,6 +100,17 @@ const fakeWindow = {
 const fakeFrappe = {
     boot: { sitename: "erp.example.test" },
     session: { user: "operator@example.test" },
+    utils: {},
+    datetime: {},
+    model: {
+        clear_table(doc, fieldname) { doc[fieldname] = []; },
+        add_child(doc, doctype, fieldname) {
+            const row = { doctype, name: `new-row-${(doc[fieldname] || []).length + 1}`, __islocal: 1 };
+            doc[fieldname] = doc[fieldname] || [];
+            doc[fieldname].push(row);
+            return row;
+        },
+    },
     ui: {
         form: {
             on(doctype, events) {
@@ -130,6 +146,7 @@ function run(relative) {
 
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_recovery_projection.js");
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js");
+run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_new_recovery.js");
 fakeWindow.AlmdinaDcoRecovery.LocalDraftRepository = Object.freeze({ create: () => repository });
 fakeWindow.AlmdinaDcoRecovery.LocalAssetRepository = Object.freeze({ create: () => ({}) });
 run("../../public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js");
@@ -182,6 +199,7 @@ function runFrame(frm) {
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(editForm);
     assert.equal(writes.length, 1);
     assert.equal(writes[0].recovery_revision, 2);
+    assert.equal(writes[0].expected_recovery_revision, 0);
     assert.equal(writes[0].mode, "EDIT");
     assert.equal(writes[0].target_name, "DCO-2026-00001");
     assert.equal(writes[0].session_origin_modified, "2026-08-29 08:00:00.000000");
@@ -191,19 +209,20 @@ function runFrame(frm) {
     assert.equal(officialSaveCalls, 0);
 
     editForm.__almdina_preserve_edit_session_after_save = true;
-    handlers["Door Cutting Order"].before_save(editForm);
+    await handlers["Door Cutting Order"].before_save(editForm);
     editForm.doc.modified = "2026-08-29 09:00:00.000000";
-    handlers["Door Cutting Order"].after_save(editForm);
+    await handlers["Door Cutting Order"].after_save(editForm);
     runFrame(editForm);
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(editForm);
     assert.equal(writes.length, 2);
+    assert.equal(writes[1].expected_recovery_revision, writes[0].recovery_revision);
     assert.equal(writes[1].session_origin_modified, "2026-08-29 08:00:00.000000");
     assert.equal(writes[1].expected_server_modified, "2026-08-29 09:00:00.000000");
     assert.equal(officialSaveCalls, 0, "local checkpoint integration never invokes frm.save()");
 
     const newForm = form("new-door-cutting-order-1", true);
     fakeWindow.cur_frm = newForm;
-    handlers["Door Cutting Order"].onload(newForm);
+    await handlers["Door Cutting Order"].onload(newForm);
     handlers["Door Cutting Order Detail"].width_cm(newForm);
     runFrame(newForm);
     await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(newForm);
@@ -212,6 +231,8 @@ function runFrame(frm) {
     assert.equal(firstNew.target_name, null);
     assert.equal(firstNew.session_origin_modified, null);
     assert.equal(firstNew.expected_server_modified, null);
+    assert.equal(firstNew.expected_recovery_revision, 0);
+    assert.equal(Object.hasOwn(firstNew, "official_save_state"), false);
     assert.match(firstNew.draft_id, /^00000000-0000-4000-8000-/);
     assert.match(firstNew.payload.dco.pieces[0].piece_key, /^00000000-0000-4000-8000-/);
     const stableDraftId = firstNew.draft_id;
@@ -224,18 +245,19 @@ function runFrame(frm) {
     assert.equal(secondNew.draft_id, stableDraftId);
     assert.equal(secondNew.payload.dco.pieces[0].piece_key, stablePieceKey);
     assert.equal(secondNew.recovery_revision, firstNew.recovery_revision + 1);
+    assert.equal(secondNew.expected_recovery_revision, firstNew.recovery_revision);
 
     const writesBeforePromotion = writes.length;
-    handlers["Door Cutting Order"].before_save(newForm);
+    await handlers["Door Cutting Order"].before_save(newForm);
     newForm.doc.name = "DCO-2026-00999";
     newForm.doc.__islocal = 0;
     newForm.doc.modified = "2026-08-29 10:00:00.000000";
-    handlers["Door Cutting Order"].after_save(newForm);
+    await handlers["Door Cutting Order"].after_save(newForm);
     assert.equal(writes.length, writesBeforePromotion);
     assert.equal(
         fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(newForm),
         null,
-        "first-insert reconciliation remains deferred"
+        "acknowledged first insert completes and removes the local session"
     );
 
     fakeWindow.cur_frm = editForm;

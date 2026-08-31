@@ -11,7 +11,15 @@
         LOCAL_SAVED: "LOCAL_SAVED",
         ERROR: "ERROR",
         RESTORING: "RESTORING",
+        OFFICIAL_SAVING: "OFFICIAL_SAVING",
+        PENDING_RECONCILIATION: "PENDING_RECONCILIATION",
+        COMPLETED: "COMPLETED",
         DISPOSED: "DISPOSED",
+    });
+    const OFFICIAL_SAVE_STATES = Object.freeze({
+        ACTIVE: "ACTIVE",
+        PENDING_RECONCILIATION: "PENDING_RECONCILIATION",
+        COMPLETED: "COMPLETED",
     });
 
     class CheckpointSessionError extends Error {
@@ -56,10 +64,38 @@
             : null;
         const notify = typeof options.onStateChange === "function" ? options.onStateChange : () => {};
 
-        let state = STATES.READY_CLEAN;
-        let revision = 0;
-        let savedRevision = 0;
-        let dirtyScope = null;
+        let revision = Number(options.recoveryRevision || 0);
+        let savedRevision = Number(options.savedRevision == null ? revision : options.savedRevision);
+        let dirtyScope = options.dirtyScope == null
+            ? null
+            : String(options.dirtyScope).toUpperCase();
+        let officialSaveState = String(
+            options.officialSaveState || OFFICIAL_SAVE_STATES.ACTIVE
+        );
+        let officialSaveAttemptedAt = options.officialSaveAttemptedAt == null
+            ? null
+            : required(options.officialSaveAttemptedAt, "official_save_attempted_at");
+        if (
+            !Number.isSafeInteger(revision)
+            || !Number.isSafeInteger(savedRevision)
+            || revision < 0
+            || savedRevision < 0
+            || savedRevision > revision
+        ) {
+            throw new CheckpointSessionError("invalid_session", "Recovery revisions are invalid");
+        }
+        if (
+            dirtyScope !== null
+            && (!root.Projection || !root.Projection.DIRTY_SCOPES.includes(dirtyScope))
+        ) {
+            throw new CheckpointSessionError("invalid_dirty_scope", "Recovery dirty scope is invalid");
+        }
+        if (!Object.values(OFFICIAL_SAVE_STATES).includes(officialSaveState)) {
+            throw new CheckpointSessionError("invalid_session", "Official Save state is invalid");
+        }
+        let state = officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+            ? STATES.PENDING_RECONCILIATION
+            : (savedRevision > 0 ? STATES.LOCAL_SAVED : STATES.READY_CLEAN);
         let lastError = null;
         let inFlight = null;
         let disposed = false;
@@ -76,6 +112,8 @@
                 recovery_revision: revision,
                 saved_revision: savedRevision,
                 dirty_scope: dirtyScope,
+                official_save_state: officialSaveState,
+                official_save_attempted_at: officialSaveAttemptedAt,
                 error: lastError,
             });
         }
@@ -90,6 +128,9 @@
 
         function markDirty(scope = "DCO") {
             if (disposed) return snapshot();
+            if (state === STATES.RESTORING || officialSaveState === OFFICIAL_SAVE_STATES.COMPLETED) {
+                return snapshot();
+            }
             const resolved = String(scope || "").toUpperCase();
             const projection = root.Projection;
             if (!projection || !projection.DIRTY_SCOPES.includes(resolved)) {
@@ -103,7 +144,27 @@
             }
             dirtyScope = resolved;
             revision += 1;
+            if (officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION) {
+                return transition(STATES.PENDING_RECONCILIATION);
+            }
             return transition(STATES.DIRTY);
+        }
+
+        function beginRestore() {
+            if (disposed || mode !== "NEW") return false;
+            if (officialSaveState === OFFICIAL_SAVE_STATES.COMPLETED) return false;
+            transition(STATES.RESTORING);
+            return true;
+        }
+
+        function completeRestore() {
+            if (disposed || state !== STATES.RESTORING) return false;
+            transition(
+                officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                    ? STATES.PENDING_RECONCILIATION
+                    : STATES.READY_CLEAN
+            );
+            return true;
         }
 
         function advanceExpectedServerModified(modified) {
@@ -118,10 +179,17 @@
         async function runFlush() {
             if (disposed) return { ok: false, error: { code: "disposed", message: "Recovery session is disposed" } };
             if (!dirtyScope || savedRevision >= revision) {
-                if (state !== STATES.LOCAL_SAVED) transition(STATES.READY_CLEAN);
+                if (![STATES.RESTORING, STATES.OFFICIAL_SAVING, STATES.COMPLETED].includes(state)) {
+                    transition(
+                        officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                            ? STATES.PENDING_RECONCILIATION
+                            : (savedRevision > 0 ? STATES.LOCAL_SAVED : STATES.READY_CLEAN)
+                    );
+                }
                 return { ok: true, value: null };
             }
             const captureRevision = revision;
+            const expectedRecoveryRevision = savedRevision;
             const captureScope = dirtyScope;
             transition(STATES.LOCAL_SAVING);
             let capture;
@@ -146,6 +214,7 @@
                     expected_server_modified: expectedServerModified,
                     tab_session_id: tabSessionId,
                     recovery_revision: captureRevision,
+                    expected_recovery_revision: expectedRecoveryRevision,
                     payload: capture && capture.payload,
                     asset_refs: capture && capture.asset_refs || [],
                 });
@@ -157,12 +226,33 @@
                 transition(STATES.ERROR, Object.freeze({ ...error }));
                 return result || { ok: false, error };
             }
+            const storedOfficialSaveState = String(
+                result.value && result.value.official_save_state || ""
+            );
+            if (
+                mode === "NEW"
+                && [
+                    OFFICIAL_SAVE_STATES.ACTIVE,
+                    OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION,
+                ].includes(storedOfficialSaveState)
+            ) {
+                officialSaveState = storedOfficialSaveState;
+                officialSaveAttemptedAt = result.value.official_save_attempted_at || null;
+            }
             savedRevision = Math.max(savedRevision, captureRevision);
             if (revision === captureRevision) {
-                transition(STATES.LOCAL_SAVED);
+                transition(
+                    officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                        ? STATES.PENDING_RECONCILIATION
+                        : STATES.LOCAL_SAVED
+                );
                 return result;
             }
-            transition(STATES.DIRTY);
+            transition(
+                officialSaveState === OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION
+                    ? STATES.PENDING_RECONCILIATION
+                    : STATES.DIRTY
+            );
             return runFlush();
         }
 
@@ -186,6 +276,85 @@
             return inFlight;
         }
 
+        async function beginOfficialSave() {
+            if (disposed || mode !== "NEW") {
+                return { ok: false, error: { code: "invalid_mode", message: "Official first Save is NEW-only" } };
+            }
+            if (savedRevision < revision) {
+                return { ok: false, error: { code: "checkpoint_required", message: "Latest recovery checkpoint is not saved" } };
+            }
+            if (typeof repository.setOfficialSaveState !== "function") {
+                return { ok: false, error: { code: "storage_failure", message: "Official Save state storage is unavailable" } };
+            }
+            const result = await repository.setOfficialSaveState(
+                identity,
+                OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION,
+                revision,
+                officialSaveAttemptedAt
+            );
+            if (!result || result.ok !== true) return result;
+            if (disposed) return { ...result, disposed: true };
+            officialSaveState = OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION;
+            officialSaveAttemptedAt = result.value.official_save_attempted_at;
+            transition(STATES.OFFICIAL_SAVING);
+            return result;
+        }
+
+        function markPendingReconciliation() {
+            if (disposed || mode !== "NEW") return false;
+            officialSaveState = OFFICIAL_SAVE_STATES.PENDING_RECONCILIATION;
+            transition(STATES.PENDING_RECONCILIATION);
+            return true;
+        }
+
+        async function resumeAfterProvenFailure() {
+            if (disposed || mode !== "NEW") return false;
+            const reconciledAttempt = officialSaveAttemptedAt;
+            const result = typeof repository.setOfficialSaveState === "function"
+                ? await repository.setOfficialSaveState(
+                    identity,
+                    OFFICIAL_SAVE_STATES.ACTIVE,
+                    revision,
+                    reconciledAttempt
+                )
+                : { ok: false };
+            if (
+                !result
+                || (result.ok !== true && (!result.error || result.error.code !== "draft_not_found"))
+            ) return false;
+            officialSaveState = OFFICIAL_SAVE_STATES.ACTIVE;
+            officialSaveAttemptedAt = result.value
+                ? result.value.official_save_attempted_at || null
+                : reconciledAttempt;
+            transition(savedRevision >= revision ? STATES.LOCAL_SAVED : STATES.DIRTY);
+            return true;
+        }
+
+        function adoptPersistedOfficialSaveState(record, expectedAttemptedAt) {
+            if (disposed || mode !== "NEW" || !record) return false;
+            const recordRevision = Number(record.recovery_revision);
+            const expectedAttempt = String(expectedAttemptedAt || "").trim();
+            if (
+                !Number.isInteger(recordRevision)
+                || recordRevision !== revision
+                || String(record.official_save_state || "") !== OFFICIAL_SAVE_STATES.ACTIVE
+                || String(record.official_save_attempted_at || "").trim() !== expectedAttempt
+            ) return false;
+            savedRevision = recordRevision;
+            dirtyScope = null;
+            officialSaveState = OFFICIAL_SAVE_STATES.ACTIVE;
+            officialSaveAttemptedAt = record.official_save_attempted_at || null;
+            transition(STATES.LOCAL_SAVED);
+            return true;
+        }
+
+        function complete() {
+            if (disposed || mode !== "NEW") return false;
+            officialSaveState = OFFICIAL_SAVE_STATES.COMPLETED;
+            transition(STATES.COMPLETED);
+            return true;
+        }
+
         function dispose() {
             if (disposed) return false;
             disposed = true;
@@ -197,11 +366,23 @@
             identity: () => identity,
             snapshot,
             markDirty,
+            beginRestore,
+            completeRestore,
             advanceExpectedServerModified,
             flush,
+            beginOfficialSave,
+            markPendingReconciliation,
+            resumeAfterProvenFailure,
+            adoptPersistedOfficialSaveState,
+            complete,
             dispose,
         });
     }
 
-    root.CheckpointSession = Object.freeze({ STATES, CheckpointSessionError, create });
+    root.CheckpointSession = Object.freeze({
+        STATES,
+        OFFICIAL_SAVE_STATES,
+        CheckpointSessionError,
+        create,
+    });
 })();
