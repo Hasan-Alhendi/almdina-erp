@@ -104,6 +104,7 @@ PLAN_CONTROLS = (
 )
 FACTORY_DIALOGS = ROOT / "public" / "js" / "factory_production_settings" / "dialogs.js"
 ENGINE_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "cutting" / "domain_engine.py"
+PRODUCTION_SETTINGS = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 
 
 class FakePlanRepository:
@@ -314,6 +315,7 @@ def test_frontend_consumes_payload_catalog_and_blocks_disabled_modes() -> None:
     controls_source = PLAN_CONTROLS.read_text(encoding="utf-8")
     factory_source = FACTORY_DIALOGS.read_text(encoding="utf-8")
     adapter_source = ENGINE_ADAPTER.read_text(encoding="utf-8")
+    production_settings_source = PRODUCTION_SETTINGS.read_text(encoding="utf-8")
 
     assert 'catalog: "optimization_catalog"' in edit_source
     assert 'catalog: "machine_type_catalog"' in edit_source
@@ -323,6 +325,11 @@ def test_frontend_consumes_payload_catalog_and_blocks_disabled_modes() -> None:
     assert "optimization_catalog" in factory_source
     assert "machine_type_catalog" in factory_source
     assert "require_engine_mode(selected_mode)" in adapter_source
+    assert 'if "default_packing_mode" in payload:' in production_settings_source
+    assert (
+        "require_executable_optimization_mode(normalized.optimization_mode)"
+        in production_settings_source
+    )
 
     # The old post-render patch was a duplicate catalog and a lifecycle race.
     assert "ADVANCED_MODES" not in controls_source
