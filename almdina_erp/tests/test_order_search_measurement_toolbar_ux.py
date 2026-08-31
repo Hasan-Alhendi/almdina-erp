@@ -85,8 +85,11 @@ def test_measurement_table_has_print_and_editable_full_screen_actions():
 def test_full_screen_entry_reuses_live_grid_and_preserves_all_existing_editing_behaviour():
     source = text(MEASUREMENT_UX)
     assert 'root.querySelector(".dco-fast-entry-shell")' in source
-    assert "dco-entry-window-save" in source
-    assert "await Promise.resolve(frm.save())" in source
+    assert "dco-entry-window-order-edit-action" in source
+    assert "dco-inline-order-edit-save" in source
+    assert "revision.commitEditSession(frm)" in source
+    assert "dco-inline-order-edit-cancel" in source
+    assert "revision.lockEditSession(frm, { silent: true })" in source
     assert "dco-entry-window-print" in source
     assert "dco-entry-window-close" in source
     assert "إغلاق والعودة" in source

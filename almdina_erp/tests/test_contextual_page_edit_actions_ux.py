@@ -76,9 +76,9 @@ def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     assert 'order_tab: "order"' in coordinator
     assert 'results_tab: "plan"' in coordinator
     assert 'cost_tab: "cost"' in coordinator
-    assert 'anchor: "order_details_section"' in coordinator
-    assert 'anchor: "plan_actions_section"' in coordinator
-    assert 'anchor: "cost_settings_section"' in coordinator
+    assert "function toolbarSlotHost(frm)" in coordinator
+    assert "function ensureToolbarSlot(frm)" in coordinator
+    assert "slot.replaceChildren(toolbar)" in coordinator
     assert 'const EDIT_LABEL = "تعديل"' in coordinator
     assert 'const SAVE_LABEL = "حفظ"' in coordinator
     assert 'const CANCEL_LABEL = "إلغاء"' in coordinator
@@ -86,7 +86,7 @@ def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     assert 'dco-tab-edit-start' in coordinator
     assert 'dco-tab-edit-save' in coordinator
     assert 'dco-tab-edit-cancel' in coordinator
-    assert '["order", "plan", "cost"].forEach((kind) => renderToolbar(frm, kind))' in coordinator
+    assert "renderToolbar(frm, activeKind(frm));" in coordinator
 
     # Existing domain/session owners remain authoritative; the local toolbar only
     # delegates to them instead of re-implementing capability or persistence rules.
@@ -133,7 +133,8 @@ def test_plan_tab_keeps_local_edit_affordance_and_plan_session_ownership() -> No
     # The regression requested by the product owner is explicit: Plan editing
     # must be visible inside the Plan tab, not hidden in favor of a global toolbar.
     assert ".dco-plan-settings-edit-toolbar { display:none !important; }" not in coordinator
-    assert 'anchor: "plan_actions_section"' in coordinator
+    assert "renderToolbar(frm, activeKind(frm));" in coordinator
+    assert "frm.fields_dict && frm.fields_dict.plan_control_actions" in coordinator
     assert 'data-almdina-tab-edit-kind' in coordinator
     assert "window.AlmdinaPlanEditSessionUX" in plan_session
     assert "startEditing," in plan_session
