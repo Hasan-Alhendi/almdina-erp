@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import frappe
 import pytest
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
@@ -24,6 +25,15 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import (
     require_engine_mode,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
+from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
+    _requested_updates,
+)
+from almdina_erp.almdina_erp.services.plan_settings_edit_service import (
+    normalize_plan_settings_updates,
+)
 
 
 EXPECTED_ACTIVE_IDS = (
@@ -180,6 +190,7 @@ def test_current_engine_paths_are_mapped_without_optimizer_changes() -> None:
         assert engine_mode_for_request(engine_mode) == engine_mode
         assert public_mode_value(engine_mode) == public_id
         assert require_engine_mode(public_id) == engine_mode
+        assert require_executable_optimization_mode(public_id) == engine_mode
 
 
 def test_cp_sat_remains_known_but_disabled_until_it_has_an_independent_contract() -> None:
@@ -195,6 +206,35 @@ def test_cp_sat_remains_known_but_disabled_until_it_has_an_independent_contract(
         match="optimization_mode_not_implemented:cp_sat_ortools",
     ):
         require_engine_mode("cp_sat_ortools")
+
+
+def test_disabled_public_modes_fail_closed_at_user_request_boundaries() -> None:
+    for mode_id in EXPECTED_DISABLED_IDS:
+        label = EXPECTED_LABELS[mode_id]
+        message = f"خوارزمية {label} غير متاحة للتنفيذ حاليًا. يرجى اختيار خوارزمية متاحة."
+
+        with pytest.raises(frappe.ValidationError, match=message):
+            require_executable_optimization_mode(mode_id)
+
+        with pytest.raises(frappe.ValidationError, match=message):
+            normalize_plan_settings_updates({"packing_mode": mode_id})
+
+        with pytest.raises(frappe.ValidationError, match=message):
+            _requested_updates(
+                packing_mode=mode_id,
+                cutting_machine_type=None,
+                kerf_mm=None,
+                trim_margin_mm=None,
+                optimization_time_limit_sec=None,
+            )
+
+
+def test_unknown_public_mode_has_a_distinct_fail_closed_error() -> None:
+    with pytest.raises(
+        frappe.ValidationError,
+        match="خوارزمية التحسين المحددة غير معروفة. يرجى اختيار خوارزمية متاحة.",
+    ):
+        require_executable_optimization_mode("unknown_solver")
 
 
 def test_advanced_modes_are_canonical_not_legacy() -> None:
