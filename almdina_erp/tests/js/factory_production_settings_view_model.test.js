@@ -32,6 +32,7 @@ const current = {
         default_special_manual_edge_fee_usd: 4,
         default_special_margin_percent: 10,
         default_extra_double_unit_price_usd: 4,
+        default_extra_full_door_double_unit_price_usd: 6,
         default_extra_liner_unit_price_usd: 2.5,
         default_extra_recessed_handle_cutout_unit_price_usd: 1.25,
         default_production_routing: "Drawing",
@@ -87,7 +88,8 @@ assert.deepEqual(
 );
 assert.equal(sections[0].rows[0].value, 5);
 assert.equal(sections[1].rows[0].value, "3 USD");
-assert.equal(sections[2].rows[1].value, "2.5 USD");
+assert.equal(sections[2].rows[1].value, "6 USD");
+assert.equal(sections[2].rows[2].value, "2.5 USD");
 assert.equal(sections[3].rows[1].value, "غير مسموح");
 assert.equal(sections[3].rows[2].value, "مسموح");
 assert.equal(sections[4].rows[3].multiline, true);

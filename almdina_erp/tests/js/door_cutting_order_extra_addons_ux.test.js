@@ -49,6 +49,9 @@ assert.deepEqual(
     ["extra_double", "extra_recessed_handle_cutout"]
 );
 
+assert.equal(api.physicalCutQuantity({ qty: 3, extra_full_door_double: 1 }), 6);
+assert.equal(api.physicalCutQuantity({ qty: 3 }), 3);
+
 const regularPicker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
 assert.match(regularPicker, /<select class="dco-fast-select dco-piece-type-select"/);
 assert.match(regularPicker, /data-field="piece_type"/);
@@ -72,14 +75,15 @@ const selectedExtra = api.renderTypePicker(
     { piece_type: "Extra", extra_liner: 1, extra_double: 1 },
     { editable: true }
 );
-assert.match(selectedExtra, /لاينر، دبل/);
+assert.match(selectedExtra, /دبل قشاط، لاينر/);
 assert.match(selectedExtra, /dco-extra-open-count">2<\/b>/);
 
 const submenu = api.renderSubmenu({ piece_type: "Extra" });
 assert.match(submenu, /إضافات Extra/);
 assert.match(submenu, /لاينر/);
-assert.match(submenu, /دبل/);
-assert.match(submenu, /مسكة غطس/);
+assert.match(submenu, /دبل قشاط/);
+assert.match(submenu, /دبل كامل الدرفة/);
+assert.match(submenu, /حفر مسكة غطس/);
 assert.match(submenu, /يمكن اختيار أكثر من خيار/);
 assert.doesNotMatch(submenu, /data-piece-type-option/);
 assert.doesNotMatch(submenu, /تطبيق/);

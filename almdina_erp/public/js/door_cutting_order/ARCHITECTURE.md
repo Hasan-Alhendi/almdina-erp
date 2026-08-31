@@ -118,19 +118,21 @@ images, canvas pixels or presentation state.
 ### Extra-door commercial boundary
 
 `Extra` is a rectangular customer requirement, not a special-shape geometry type.
-Its three fixed selections (`Double`, `Liner`, and recessed-handle cutout) invalidate
-Cost only; changing the piece type itself retains the normal Plan + Cost impact.
-Pricing is calculated by the server Domain from factory settings and quantity. The
-child row stores protected unit/total snapshots so later factory-price changes do
-not rewrite historical orders. A `Special` door never carries Extra flags: e.g. a
-special door with Liner records Liner in notes/drawing and uses its inclusive custom
-special price.
+`Double Edge Banding` (`دبل قشاط`), `Liner`, and recessed-handle cutout invalidate
+Cost only. `Full Door Double` (`دبل كامل الدرفة`) invalidates Plan + Cost because it
+doubles physical cut quantity without changing the stored customer `qty`. Changing
+the piece type itself retains the normal Plan + Cost impact.
+Pricing is calculated by the server Domain from factory settings and original
+quantity. The child row stores protected unit/total snapshots so later factory-price
+changes do not rewrite historical orders. A `Special` door never carries Extra flags:
+e.g. a special door with Liner records Liner in notes/drawing and uses its inclusive
+custom special price.
 
 The measurement type cell remains the native HTML `select` used by the table. The
 visible Arabic order is `عادية / خاصة / زاوية / Extra`; the persisted values remain
 `Regular / Special / Clipped Corner / Extra` according to the existing DocType
 contract. Selecting `Extra` opens a small feature-owned multi-select flyout anchored
-to that row for `Liner`, `Double`, and recessed-handle cutout. A compact Extra-only
+to that row for `دبل قشاط`, `دبل كامل الدرفة`, `Liner`, and recessed-handle cutout. A compact Extra-only
 button reopens the flyout for an existing Extra row. The add-on module does not own or
 reimplement the general piece-type menu. It owns only Extra add-on presentation,
 document cleanup, focus, and flyout positioning; `AlmdinaTablePerformanceUX` remains

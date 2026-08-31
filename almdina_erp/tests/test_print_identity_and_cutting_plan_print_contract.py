@@ -89,6 +89,26 @@ def test_cutting_plan_print_uses_landscape_dynamic_pages_of_at_most_ten_boards()
         assert label in source
 
 
+def test_section_scoped_settings_save_does_not_require_unrelated_mandatory_fields() -> None:
+    """Extra/pricing saves must not fail when print identity columns are empty.
+
+    Print identity fields are reqd on the Single DocType, but the unified
+    console saves one section at a time. Read path substitutes defaults;
+    write path must ignore unrelated mandatory fields and must not backfill
+    print identity without edit_factory_print_identity.
+    """
+    source = SETTINGS_SERVICE.read_text(encoding="utf-8")
+    update = source.split("def update_production_settings", 1)[1].split(
+        "def get_factory_settings_audit", 1
+    )[0]
+    apply_values = source.split("def _apply_values", 1)[1].split(
+        "def _print_identity_values", 1
+    )[0]
+    assert "settings.flags.ignore_mandatory = True" in update
+    assert "settings.save(ignore_permissions=True)" in update
+    assert "PRINT_IDENTITY_DEFAULTS" not in apply_values
+
+
 def test_cutting_plan_print_is_workshop_monochrome_and_preserves_board_aspect():
     source = CUTTING_PRINT_JS.read_text(encoding="utf-8")
     required = [

@@ -47,6 +47,7 @@ const row = {
     piece_type:"Regular",
     extra_liner:0,
     extra_double:0,
+    extra_full_door_double:0,
     extra_recessed_handle_cutout:0,
 };
 const frm = {
@@ -98,10 +99,12 @@ assert.equal(classes.has("dco-extra-row"), true);
 
 row.extra_liner = 1;
 row.extra_double = 1;
+row.extra_full_door_double = 1;
 assert.equal(performance.setPieceType(frm, tr, "Regular"), row);
 assert.equal(row.piece_type, "Regular");
 assert.equal(row.extra_liner, 0);
 assert.equal(row.extra_double, 0);
+assert.equal(row.extra_full_door_double, 0);
 assert.equal(classes.has("dco-extra-row"), false);
 assert.ok(frm.dirtyCalls >= 2);
 
@@ -109,5 +112,6 @@ setTimeout(() => {
     assert.ok(triggered.includes("piece_type"));
     assert.ok(triggered.includes("extra_liner"));
     assert.ok(triggered.includes("extra_double"));
+    assert.ok(triggered.includes("extra_full_door_double"));
     console.log("Extra add-ons in-place row integration passed");
 }, 5);

@@ -113,6 +113,9 @@ class FrappeOrderCostingAdapter:
                         qty=cint(row.qty),
                         notes=str(getattr(row, "notes", None) or ""),
                         double=bool(cint(getattr(row, "extra_double", 0))),
+                        full_door_double=bool(
+                            cint(getattr(row, "extra_full_door_double", 0))
+                        ),
                         liner=bool(cint(getattr(row, "extra_liner", 0))),
                         recessed_handle_cutout=bool(
                             cint(
@@ -127,6 +130,11 @@ class FrappeOrderCostingAdapter:
                             row,
                             "extra_double",
                             "extra_double_unit_price_usd",
+                        ),
+                        full_door_double_snapshot_unit_price_usd=preserved_rate(
+                            row,
+                            "extra_full_door_double",
+                            "extra_full_door_double_unit_price_usd",
                         ),
                         liner_snapshot_unit_price_usd=preserved_rate(
                             row,
@@ -145,6 +153,13 @@ class FrappeOrderCostingAdapter:
                     double_usd=flt(
                         getattr(settings, "default_extra_double_unit_price_usd", 0)
                     ),
+                    full_door_double_usd=flt(
+                        getattr(
+                            settings,
+                            "default_extra_full_door_double_unit_price_usd",
+                            0,
+                        )
+                    ),
                     liner_usd=flt(
                         getattr(settings, "default_extra_liner_unit_price_usd", 0)
                     ),
@@ -159,7 +174,8 @@ class FrappeOrderCostingAdapter:
             )
         except ExtraAddonError as error:
             labels = {
-                "double": _("Double"),
+                "double": _("Double Edge Banding"),
+                "full_door_double": _("Full Door Double"),
                 "liner": _("Liner"),
                 "recessed_handle_cutout": _("Recessed Handle Cutout"),
             }
@@ -198,6 +214,7 @@ class FrappeOrderCostingAdapter:
                         cint(getattr(old_row, fieldname, 0))
                         for fieldname in (
                             "extra_double",
+                            "extra_full_door_double",
                             "extra_liner",
                             "extra_recessed_handle_cutout",
                         )
@@ -209,6 +226,10 @@ class FrappeOrderCostingAdapter:
             )
             row.extra_double_unit_price_usd = result.double_unit_price_usd
             row.extra_double_total_usd = result.double_total_usd
+            row.extra_full_door_double_unit_price_usd = (
+                result.full_door_double_unit_price_usd
+            )
+            row.extra_full_door_double_total_usd = result.full_door_double_total_usd
             row.extra_liner_unit_price_usd = result.liner_unit_price_usd
             row.extra_liner_total_usd = result.liner_total_usd
             row.extra_recessed_handle_cutout_unit_price_usd = (

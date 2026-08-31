@@ -156,6 +156,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         piece_contract = {
             "piece_type",
             "extra_double",
+            "extra_full_door_double",
             "extra_liner",
             "extra_recessed_handle_cutout",
             "clipped_corner_position",

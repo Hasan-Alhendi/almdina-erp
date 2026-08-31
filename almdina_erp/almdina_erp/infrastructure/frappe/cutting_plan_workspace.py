@@ -60,7 +60,7 @@ def _manufacturing_requirements(order: Any) -> dict[str, Any]:
     requirements: list[dict[str, Any]] = []
     for source_piece_no, row in enumerate(order.pieces or [], start=1):
         piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
-        for copy_no in range(1, cint(row.qty) + 1):
+        for copy_no in range(1, cint(piece["qty"]) + 1):
             requirements.append(
                 {
                     "label": f"{source_piece_no}.{copy_no}",

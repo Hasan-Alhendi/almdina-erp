@@ -35,6 +35,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
     require_cut_dimension_cm,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
     DxfReadError,
     SUPPORTED_DXF_ENTITY_TYPES,
@@ -246,7 +247,14 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                 f"مقاسات القص التصنيعية للقطعة رقم {group_index} غير محفوظة أو غير صالحة. "
                 "احفظ الطلب لإعادة تثبيت مقاسات القص ثم أعد رفع DXF."
             ) from exc
-        for copy_no in range(1, cint(row.qty) + 1):
+        for copy_no in range(
+            1,
+            physical_cut_quantity(
+                cint(row.qty),
+                full_door_double=bool(cint(getattr(row, "extra_full_door_double", 0))),
+            )
+            + 1,
+        ):
             expected.append(
                 {
                     "label": f"{group_index}.{copy_no}",
@@ -615,7 +623,13 @@ def validate_imported_plan(
     topology_by_piece_id: dict[int, PartGeometry] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
-    expected_count = sum(cint(row.qty) for row in (order.pieces or []))
+    expected_count = sum(
+        physical_cut_quantity(
+            cint(row.qty),
+            full_door_double=bool(cint(getattr(row, "extra_full_door_double", 0))),
+        )
+        for row in (order.pieces or [])
+    )
     placed_count = sum(len(sheet.get("pieces") or []) for sheet in (plan.get("sheets") or []))
     if placed_count != expected_count:
         errors.append(f"عدد القطع في خطة DXF هو {placed_count} بينما الطلب يتطلب {expected_count} قطعة بالضبط.")
