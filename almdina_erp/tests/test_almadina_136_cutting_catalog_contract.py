@@ -28,8 +28,8 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
 from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
     require_executable_optimization_mode,
 )
-from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
-    _requested_updates,
+from almdina_erp.almdina_erp.services.order_plan_permission_service import (
+    recalculate_order,
 )
 from almdina_erp.almdina_erp.services.plan_settings_edit_service import (
     normalize_plan_settings_updates,
@@ -219,14 +219,10 @@ def test_disabled_public_modes_fail_closed_at_user_request_boundaries() -> None:
         with pytest.raises(frappe.ValidationError, match=message):
             normalize_plan_settings_updates({"packing_mode": mode_id})
 
+        # The whitelisted recalculation facade rejects the mode before any DB
+        # read/mutation, so a crafted direct request cannot bypass the catalog.
         with pytest.raises(frappe.ValidationError, match=message):
-            _requested_updates(
-                packing_mode=mode_id,
-                cutting_machine_type=None,
-                kerf_mm=None,
-                trim_margin_mm=None,
-                optimization_time_limit_sec=None,
-            )
+            recalculate_order(order_name="DCO-1", packing_mode=mode_id)
 
 
 def test_unknown_public_mode_has_a_distinct_fail_closed_error() -> None:
