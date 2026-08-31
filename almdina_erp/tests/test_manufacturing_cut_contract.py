@@ -182,6 +182,23 @@ def test_plan_revision_captures_expanded_persisted_manufacturing_requirements():
     assert all(piece["cut_length_cm"] == "199.800" for piece in contract["pieces"])
 
 
+def test_full_door_double_expands_manufacturing_copies_without_changing_stored_qty():
+    row = _piece(qty=3, extra_full_door_double=1)
+    data = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+
+    assert row.qty == 3
+    assert data["qty"] == 6
+    contract = _manufacturing_requirements(_order(row))
+    assert [piece["label"] for piece in contract["pieces"]] == [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.5",
+        "1.6",
+    ]
+
+
 def test_plan_fingerprint_changes_when_persisted_cut_dimension_changes():
     order = _order(_piece(cut_width_cm=59.9))
     first = plan_input_fingerprint(order, _plan())

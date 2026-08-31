@@ -75,9 +75,15 @@
             extraAddons: [
                 {
                     selected: Boolean(number(source.extra_double)),
-                    label: "Double",
+                    label: "دبل قشاط",
                     rate: number(source.extra_double_unit_price_usd),
                     amount: number(source.extra_double_total_usd),
+                },
+                {
+                    selected: Boolean(number(source.extra_full_door_double)),
+                    label: "دبل كامل الدرفة",
+                    rate: number(source.extra_full_door_double_unit_price_usd),
+                    amount: number(source.extra_full_door_double_total_usd),
                 },
                 {
                     selected: Boolean(number(source.extra_liner)),
@@ -87,7 +93,7 @@
                 },
                 {
                     selected: Boolean(number(source.extra_recessed_handle_cutout)),
-                    label: "تفريغ مسكة مخفية",
+                    label: "حفر مسكة غطس",
                     rate: number(source.extra_recessed_handle_cutout_unit_price_usd),
                     amount: number(source.extra_recessed_handle_cutout_total_usd),
                 },

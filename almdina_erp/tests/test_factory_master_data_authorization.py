@@ -41,6 +41,19 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertTrue(extra.allowed)
 
+        full_door_double = decide_settings_update(
+            {Capability.EDIT_FACTORY_COST_DEFAULTS},
+            {"default_extra_full_door_double_unit_price_usd": 6},
+        )
+        self.assertTrue(full_door_double.allowed)
+
+        full_door_double_denied = decide_settings_update(
+            {Capability.EDIT_FACTORY_CUTTING_DEFAULTS},
+            {"default_extra_full_door_double_unit_price_usd": 6},
+        )
+        self.assertFalse(full_door_double_denied.allowed)
+        self.assertEqual(full_door_double_denied.code, "missing_capability")
+
     def test_all_granular_settings_grants_make_every_section_editable(self) -> None:
         expanded = expand_factory_settings_capabilities(
             {

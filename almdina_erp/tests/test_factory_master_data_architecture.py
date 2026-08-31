@@ -69,6 +69,7 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
         self.assertIn("decide_settings_update", source)
         self.assertIn("record_master_data_audit", source)
         self.assertIn("for update", source.lower())
+        self.assertIn("settings.flags.ignore_mandatory = True", source)
         self.assertNotIn("Production Manager", source)
         self.assertNotIn("System Manager", source)
         self.assertNotIn("frappe.user_roles", source)

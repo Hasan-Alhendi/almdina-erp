@@ -76,6 +76,7 @@
                 ], current),
                 section("extra_addons", t("إضافات الدرف Extra"), t("أسعار بيع ثابتة لكل درفة. يحفظ الطلب نسخة السعر وقت إنشائه ولا تتأثر الطلبات القديمة لاحقًا."), [
                     [t("Double / درفة"), `${display(source.default_extra_double_unit_price_usd)} USD`],
+                    [t("أجرة دبل كامل الدرفة"), `${display(source.default_extra_full_door_double_unit_price_usd)} USD`],
                     [t("Liner / درفة"), `${display(source.default_extra_liner_unit_price_usd)} USD`],
                     [t("تفريغ مسكة مخفية / درفة"), `${display(source.default_extra_recessed_handle_cutout_unit_price_usd)} USD`],
                 ], current),

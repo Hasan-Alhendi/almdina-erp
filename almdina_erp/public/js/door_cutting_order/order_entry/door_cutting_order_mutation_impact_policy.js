@@ -34,6 +34,7 @@
         "clipped_corner_width_cm",
         "clipped_corner_length_cm",
         "special_shape_geometry_json",
+        "extra_full_door_double",
     ];
     const PIECE_COST_ONLY_FIELDS = [
         "extra_double",

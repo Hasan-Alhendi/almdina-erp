@@ -117,6 +117,12 @@ def _serialize_order_preview(
                     "special_shape_price_approved_on": row.special_shape_price_approved_on,
                     "extra_double_unit_price_usd": getattr(row, "extra_double_unit_price_usd", 0),
                     "extra_double_total_usd": getattr(row, "extra_double_total_usd", 0),
+                    "extra_full_door_double_unit_price_usd": getattr(
+                        row, "extra_full_door_double_unit_price_usd", 0
+                    ),
+                    "extra_full_door_double_total_usd": getattr(
+                        row, "extra_full_door_double_total_usd", 0
+                    ),
                     "extra_liner_unit_price_usd": getattr(row, "extra_liner_unit_price_usd", 0),
                     "extra_liner_total_usd": getattr(row, "extra_liner_total_usd", 0),
                     "extra_recessed_handle_cutout_unit_price_usd": getattr(

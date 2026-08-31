@@ -61,6 +61,8 @@ PIECE_COST_FIELDS = (
     "clipped_corner_edge_price_set_on",
     "extra_double_unit_price_usd",
     "extra_double_total_usd",
+    "extra_full_door_double_unit_price_usd",
+    "extra_full_door_double_total_usd",
     "extra_liner_unit_price_usd",
     "extra_liner_total_usd",
     "extra_recessed_handle_cutout_unit_price_usd",

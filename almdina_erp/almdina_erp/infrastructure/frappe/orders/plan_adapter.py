@@ -31,6 +31,7 @@ from almdina_erp.almdina_erp.application.orders.plan_payloads import (
 from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
 from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import (
     fingerprint_payload,
 )
@@ -60,7 +61,10 @@ class FrappeOrderPlanAdapter:
         return {
             "width_cm": flt(row.width_cm),
             "length_cm": flt(row.length_cm),
-            "qty": cint(row.qty),
+            "qty": physical_cut_quantity(
+                cint(row.qty),
+                full_door_double=bool(cint(getattr(row, "extra_full_door_double", 0))),
+            ),
             "allow_rotation": cint(row.allow_rotation),
             "edge_long_right": cint(row.edge_long_right),
             "edge_long_left": cint(row.edge_long_left),

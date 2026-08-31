@@ -11,11 +11,20 @@
         Object.freeze({ value: TYPE, labelAr: "Extra", labelEn: "Extra" }),
     ]);
     const FIELDS = Object.freeze([
+        Object.freeze({
+            fieldname: "extra_double",
+            labelAr: "دبل قشاط",
+            labelEn: "Double Edge Banding",
+        }),
+        Object.freeze({
+            fieldname: "extra_full_door_double",
+            labelAr: "دبل كامل الدرفة",
+            labelEn: "Full Door Double",
+        }),
         Object.freeze({ fieldname: "extra_liner", labelAr: "لاينر", labelEn: "Liner" }),
-        Object.freeze({ fieldname: "extra_double", labelAr: "دبل", labelEn: "Double" }),
         Object.freeze({
             fieldname: "extra_recessed_handle_cutout",
-            labelAr: "مسكة غطس",
+            labelAr: "حفر مسكة غطس",
             labelEn: "Recessed handle cutout",
         }),
     ]);
@@ -52,6 +61,12 @@
 
     function selectedFields(row) {
         return FIELDS.filter(item => Boolean(Number(row && row[item.fieldname] || 0)));
+    }
+
+    function physicalCutQuantity(row) {
+        const qty = Math.max(0, Math.floor(Number(row && row.qty || 0)));
+        if (!qty) return 0;
+        return Number(row && row.extra_full_door_double) ? qty * 2 : qty;
     }
 
     function renderSelectedAddons(row) {
@@ -489,6 +504,7 @@
         PIECE_TYPES,
         FIELDS,
         selectedFields,
+        physicalCutQuantity,
         pieceTypeLabel,
         renderTypePicker,
         renderSubmenu,
