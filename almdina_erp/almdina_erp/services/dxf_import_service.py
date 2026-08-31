@@ -49,6 +49,8 @@ CONNECTIVITY_TOLERANCE_MM = 1.5
 DIMENSION_TOLERANCE_MM = 2.0
 KERF_NUMERIC_TOLERANCE_MM = 0.1
 GEOMETRY_TOLERANCE_MM = 0.25
+MAX_DIAGNOSTIC_LAYERS = 8
+MAX_DIAGNOSTIC_LAYER_NAME_LENGTH = 64
 TOLERANCE_MM = CONNECTIVITY_TOLERANCE_MM  # backward-compatible public constant
 
 
@@ -171,7 +173,7 @@ def _read_legacy_content(file_path: str) -> str:
         raise DxfImportError("تعذر قراءة ملف DXF من الخادم. أعد رفع الملف ثم حاول مرة أخرى.") from exc
 
 
-def _normalized_segments(file_path: str) -> list[dict[str, Any]]:
+def _read_normalized_geometry(file_path: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     content_cache: str | None = None
 
     def legacy_parser() -> list[dict[str, Any]]:
@@ -198,7 +200,31 @@ def _normalized_segments(file_path: str) -> list[dict[str, Any]]:
             + "، ".join(unique)
             + f". العناصر المدعومة هي: {supported}."
         )
-    return result.get("segments") or []
+    return result.get("segments") or [], result.get("diagnostics") or {}
+
+
+def _normalized_segments(file_path: str) -> list[dict[str, Any]]:
+    rows, _diagnostics = _read_normalized_geometry(file_path)
+    return rows
+
+
+def _detected_layers_message(diagnostics: dict[str, Any]) -> str:
+    detected: list[str] = []
+    for layer in diagnostics.get("detected_layers") or []:
+        value = str(layer or "").strip()
+        if not value:
+            continue
+        if len(value) > MAX_DIAGNOSTIC_LAYER_NAME_LENGTH:
+            value = value[: MAX_DIAGNOSTIC_LAYER_NAME_LENGTH - 3] + "..."
+        detected.append(value)
+
+    if not detected:
+        return "الطبقات المكتشفة: لا توجد."
+
+    visible = detected[:MAX_DIAGNOSTIC_LAYERS]
+    hidden_count = len(detected) - len(visible)
+    suffix = f" (+{hidden_count})" if hidden_count > 0 else ""
+    return f"الطبقات المكتشفة: {'، '.join(visible)}{suffix}."
 
 
 def _segments_for_layer(rows: list[dict[str, Any]], layer: str) -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -670,7 +696,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     if not os.path.exists(file_path):
         raise DxfImportError("تعذر العثور على ملف DXF المرفوع على الخادم. أعد رفع الملف ثم حاول مرة أخرى.")
 
-    rows = _normalized_segments(file_path)
+    rows, diagnostics = _read_normalized_geometry(file_path)
     sheet_segments = _segments_for_layer(rows, SHEET_OUTLINE_LAYER)
     cut_segments = _segments_for_layer(rows, CUT_PATH_LAYER)
     missing: list[str] = []
@@ -679,6 +705,7 @@ def parse_production_dxf(file_url: str, order: Any) -> dict[str, Any]:
     if not cut_segments:
         missing.append(f"الطبقة {CUT_PATH_LAYER} الخاصة بمسارات القطع غير موجودة أو فارغة.")
     if missing:
+        missing.append(_detected_layers_message(diagnostics))
         raise DxfImportError(missing)
 
     trim_mm = max(0.0, flt(order.trim_margin_mm))
