@@ -31,13 +31,17 @@ let advanceRevisionBeforeActiveCas = false;
 let nativeSaveDeferred = null;
 let deleteDeferred = null;
 let deleteEntered = null;
+let discoveryDeferred = null;
 
 const repository = {
     createIdentity() {
         uuidSequence += 1;
         return `99999999-9999-4999-8999-${String(uuidSequence).padStart(12, "0")}`;
     },
-    async discover() { return { ok: true, value: { records: discoveredRecords, rejected: [] } }; },
+    async discover() {
+        if (discoveryDeferred) return discoveryDeferred.promise;
+        return { ok: true, value: { records: discoveredRecords, rejected: [] } };
+    },
     async read(identity) {
         const current = records.get(identity.draft_id) || null;
         if (current && advanceRevisionOnRead) {
@@ -365,6 +369,30 @@ function runCleanups(frm) {
     assert.equal(records.has(choiceB.draft_id), true, "Start New never deletes unfinished drafts");
     assert.notEqual(Recovery.LocalCheckpoint.snapshot(startNewForm).draft_id, choiceA.draft_id);
 
+    discoveryDeferred = deferred();
+    const failedDiscoveryForm = form("new-door-cutting-order-failed-discovery");
+    fakeWindow.cur_frm = failedDiscoveryForm;
+    const failedDiscovery = Recovery.LocalCheckpoint.initializeNewForm(failedDiscoveryForm);
+    failedDiscoveryForm.doc.customer = "CUST-EARLY-EDIT";
+    assert.equal(
+        Recovery.LocalCheckpoint.markDirty(failedDiscoveryForm, "DCO"),
+        false,
+        "an edit waits for the active discovery owner"
+    );
+    discoveryDeferred.resolve({ ok: false, error: { code: "api_unavailable" } });
+    await failedDiscovery;
+    const failedDiscoveryId = Recovery.LocalCheckpoint.snapshot(failedDiscoveryForm).draft_id;
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(records.get(failedDiscoveryId).recovery_revision, 1);
+    assert.equal(
+        records.get(failedDiscoveryId).payload.dco.customer,
+        "CUST-EARLY-EDIT",
+        "the first edit is checkpointed when discovery fails safely"
+    );
+    discoveryDeferred = null;
+    fakeWindow.cur_frm = null;
+
     discoveredRecords = [];
     const pristineForm = form("new-door-cutting-order-pristine-save");
     await Recovery.LocalCheckpoint.initializeNewForm(pristineForm);
@@ -400,6 +428,54 @@ function runCleanups(frm) {
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(cardRemoved, true);
     assert.equal(records.has(deleteId), false, "explicit deletion removes only the selected draft");
+
+    const departedDeleteId = "56565656-5656-4565-8565-565656565656";
+    const departedDeleteRecord = draft(departedDeleteId);
+    discoveredRecords = [departedDeleteRecord];
+    const departedDeleteForm = form("new-door-cutting-order-departed-delete");
+    fakeWindow.cur_frm = departedDeleteForm;
+    await Recovery.LocalCheckpoint.initializeNewForm(departedDeleteForm);
+    const departedDeleteDialog = lastDialog;
+    let departedDeleteButton;
+    const departedDeleteCard = {
+        dataset: { draftId: departedDeleteId },
+        querySelectorAll: () => [departedDeleteButton],
+        remove() {},
+    };
+    departedDeleteButton = {
+        disabled: false,
+        dataset: { recoveryAction: "delete" },
+        closest: () => departedDeleteCard,
+    };
+    deleteDeferred = deferred();
+    deleteEntered = deferred();
+    departedDeleteDialog.listener({ target: { closest: () => departedDeleteButton } });
+    await deleteEntered.promise;
+    runCleanups(departedDeleteForm);
+    documentGeneration += 1;
+    departedDeleteForm.doc = {
+        doctype: "Door Cutting Order",
+        name: "new-door-cutting-order-after-departed-delete",
+        __islocal: 1,
+        pieces: [],
+    };
+    const replacementDiscoveryId = "57575757-5757-4575-8575-575757575757";
+    discoveredRecords = [draft(replacementDiscoveryId)];
+    await Recovery.LocalCheckpoint.initializeNewForm(departedDeleteForm);
+    const replacementDiscoveryDialog = lastDialog;
+    deleteDeferred.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(replacementDiscoveryDialog.visible, true);
+    assert.equal(
+        Recovery.LocalCheckpoint.snapshot(departedDeleteForm),
+        null,
+        "a late final-card deletion cannot initialize the replacement document"
+    );
+    assert.equal(records.has(departedDeleteId), false);
+    deleteDeferred = null;
+    deleteEntered = null;
+    fakeWindow.cur_frm = null;
 
     const staleDeleteId = "67676767-6767-4767-8767-676767676767";
     const staleDeleteRecord = draft(staleDeleteId);
@@ -503,10 +579,18 @@ function runCleanups(frm) {
     assert.equal(lockedContinueButton.disabled, true);
     assert.equal(lockedDeleteButton.disabled, true, "Continue locks Delete while reconciliation is in flight");
     lastDialog.listener({ target: { closest: () => lockedDeleteButton } });
+    const lockedStartNewButton = { disabled: false, dataset: { recoveryAction: "new" } };
+    lastDialog.listener({ target: { closest: () => lockedStartNewButton } });
+    assert.equal(
+        Recovery.LocalCheckpoint.snapshot(lockedContinueForm),
+        null,
+        "a second discovery choice cannot replace an in-flight Continue"
+    );
     assert.equal(records.has(lockedContinueId), true);
     reconciliationDeferred.resolve({ status: "NOT_FOUND" });
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(Recovery.LocalCheckpoint.snapshot(lockedContinueForm).draft_id, lockedContinueId);
     reconciliationDeferred = null;
 
     discoveredRecords = [];

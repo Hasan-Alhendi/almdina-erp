@@ -359,6 +359,14 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn("quarantineExternalRevision", presentation)
         self.assertIn("function flushState(frm, state = currentState(frm))", presentation)
         self.assertIn("setCardActionsDisabled", presentation)
+        self.assertIn("let actionInFlight = false;", presentation)
+        self.assertIn("setDiscoveryActionsDisabled", presentation)
+        self.assertIn("initializations.get(frm) !== initialization", presentation)
+        self.assertIn("if (!ownsDiscovery()) return;", presentation)
+        self.assertGreaterEqual(
+            presentation.count('if (initialization.pendingDirty && state) markDirty(frm, "DCO");'),
+            5,
+        )
         self.assertIn("const current = await repository().read", presentation)
         self.assertIn("quarantineExternalRevision(state, code);", presentation)
         self.assertIn(

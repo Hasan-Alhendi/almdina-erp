@@ -606,10 +606,26 @@
             ? dialog.$wrapper.get(0)
             : dialog.$wrapper;
         if (!wrapper || typeof wrapper.addEventListener !== "function") return dialog;
+        const context = documentContext();
+        const ownsDiscovery = () => {
+            if (initializations.get(frm) !== initialization || dialogs.get(frm) !== dialog) return false;
+            const token = initialization.documentToken;
+            if (!context || !token) return true;
+            if (typeof context.isCurrent === "function") return context.isCurrent(frm, token);
+            return typeof context.isSameDocument !== "function" || context.isSameDocument(frm, token);
+        };
         if (typeof wrapper.querySelector === "function") {
             const close = wrapper.querySelector(".modal-header .btn-modal-close, .modal-header .close");
             if (close) close.hidden = true;
         }
+        let actionInFlight = false;
+        const frozenCards = new Set();
+        const setDiscoveryActionsDisabled = (disabled) => {
+            if (typeof wrapper.querySelectorAll !== "function") return;
+            wrapper.querySelectorAll("[data-recovery-action]").forEach((actionButton) => {
+                actionButton.disabled = disabled;
+            });
+        };
         const setCardActionsDisabled = (card, clickedButton, disabled) => {
             if (clickedButton) clickedButton.disabled = disabled;
             if (!card || typeof card.querySelectorAll !== "function") return;
@@ -617,11 +633,29 @@
                 actionButton.disabled = disabled;
             });
         };
+        const beginDiscoveryAction = (card, button) => {
+            if (actionInFlight || !ownsDiscovery()) return false;
+            actionInFlight = true;
+            setDiscoveryActionsDisabled(true);
+            setCardActionsDisabled(card, button, true);
+            return true;
+        };
+        const releaseDiscoveryAction = (card, button) => {
+            actionInFlight = false;
+            setDiscoveryActionsDisabled(false);
+            setCardActionsDisabled(card, button, false);
+            frozenCards.forEach((frozenCard) => setCardActionsDisabled(frozenCard, null, true));
+        };
+        const freezeCardActions = (card, button) => {
+            frozenCards.add(card);
+            setCardActionsDisabled(card, button, true);
+        };
         wrapper.addEventListener("click", (event) => {
             const button = event.target.closest("[data-recovery-action]");
             if (!button || button.disabled) return;
             const action = button.dataset.recoveryAction;
             if (action === "new") {
+                if (!beginDiscoveryAction(null, button)) return;
                 dialog.hide();
                 dialogs.delete(frm);
                 initializations.delete(frm);
@@ -631,11 +665,11 @@
             }
             const card = button.closest("[data-draft-id]");
             const record = card && accepted.get(card.dataset.draftId);
-            if (!record) return;
+            if (!record || !beginDiscoveryAction(card, button)) return;
             if (action === "continue") {
-                setCardActionsDisabled(card, button, true);
                 Promise.resolve().then(async () => {
                     const current = await repository().read(recoveryIdentity(record.draft_id));
+                    if (!ownsDiscovery()) return false;
                     if (!current || current.ok !== true) {
                         throw new Error("تعذر التحقق من المسودة المحلية.");
                     }
@@ -647,21 +681,23 @@
                             !== (record.official_save_attempted_at || null)
                     ) {
                         accepted.delete(record.draft_id);
+                        releaseDiscoveryAction(card, button);
+                        freezeCardActions(card, button);
                         showRecoveryError("تغيرت المسودة في تبويب آخر. أعد فتح الطلب قبل متابعتها.");
                         return false;
                     }
                     await continueDraft(frm, currentRecord);
-                    initializations.delete(frm);
+                    if (initializations.get(frm) === initialization) initializations.delete(frm);
                     return true;
                 })
                     .catch((error) => {
-                        setCardActionsDisabled(card, button, false);
+                        if (!ownsDiscovery()) return;
+                        releaseDiscoveryAction(card, button);
                         showRecoveryError(error && error.message);
                     });
                 return;
             }
             if (action === "delete") {
-                setCardActionsDisabled(card, button, true);
                 const remove = async () => {
                     const repo = repository();
                     const identity = recoveryIdentity(record.draft_id);
@@ -670,14 +706,18 @@
                         record.recovery_revision,
                         record.official_save_attempted_at
                     );
+                    if (!ownsDiscovery()) return;
                     if (!result || result.ok !== true) {
                         const code = String(result && result.error && result.error.code || "");
                         const ownershipConflict = ["stale_revision", "save_attempt_conflict"].includes(code);
                         if (ownershipConflict) {
                             await repo.read(identity);
+                            if (!ownsDiscovery()) return;
                             accepted.delete(record.draft_id);
+                            releaseDiscoveryAction(card, button);
+                            freezeCardActions(card, button);
                         } else {
-                            setCardActionsDisabled(card, button, false);
+                            releaseDiscoveryAction(card, button);
                         }
                         showRecoveryError(
                             ownershipConflict
@@ -694,13 +734,17 @@
                         initializations.delete(frm);
                         const state = createState(frm);
                         if (initialization.pendingDirty && state) markDirty(frm, "DCO");
+                    } else {
+                        releaseDiscoveryAction(card, button);
                     }
                 };
                 if (meaningful(recovery.summarize(record)) && typeof frappe.confirm === "function") {
                     frappe.confirm(
                         "هل تريد حذف هذه المسودة المحلية نهائيًا؟",
                         remove,
-                        () => setCardActionsDisabled(card, button, false)
+                        () => {
+                            if (ownsDiscovery()) releaseDiscoveryAction(card, button);
+                        }
                     );
                 } else {
                     remove();
@@ -737,8 +781,10 @@
                             || context.isSameDocument(frm, documentToken)));
                 if (!stillCurrent || !isNew(frm) || currentState(frm)) return currentState(frm);
                 if (!result || result.ok !== true) {
-                    initializations.delete(frm);
-                    return createState(frm);
+                    if (initializations.get(frm) === initialization) initializations.delete(frm);
+                    const state = createState(frm);
+                    if (initialization.pendingDirty && state) markDirty(frm, "DCO");
+                    return state;
                 }
                 return showDiscoveryDialog(
                     frm,
@@ -749,13 +795,16 @@
             })
             .catch((error) => {
                 console.debug("DCO NEW recovery discovery failed safely", error);
-                initializations.delete(frm);
+                if (initializations.get(frm) === initialization) initializations.delete(frm);
                 const stillCurrent = !context
                     || (typeof context.isCurrent === "function"
                         ? context.isCurrent(frm, documentToken)
                         : (typeof context.isSameDocument !== "function"
                             || context.isSameDocument(frm, documentToken)));
-                return stillCurrent && isNew(frm) ? createState(frm) : null;
+                if (!stillCurrent || !isNew(frm)) return null;
+                const state = createState(frm);
+                if (initialization.pendingDirty && state) markDirty(frm, "DCO");
+                return state;
             });
         initializations.set(frm, initialization);
         return initialization.promise;

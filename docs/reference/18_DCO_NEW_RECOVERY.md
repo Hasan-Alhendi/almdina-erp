@@ -29,6 +29,16 @@ The actions are:
 - `حذف المسودة`: confirms meaningful work, then deletes only that draft and its
   local assets through the repository transaction.
 
+These choices are mutually exclusive for the discovery dialog: while one Continue,
+Delete, or Start New action owns the dialog, every discovery action is disabled and
+a second choice is ignored until the active operation settles. Async Continue/Delete
+completion may update that dialog or initialize an empty NEW recovery session only
+while the original initialization and `AlmdinaDocumentContext` token still own the
+current form. A late final-card Delete after navigation may finish its repository
+transaction, but it cannot hide or initialize the replacement document. If discovery
+fails safely after the user has already edited the form, that queued first mutation
+is replayed into the fail-open recovery session instead of being dropped.
+
 `draft_id` is the stable UUID across checkpoint, reopen, restore, temporary Frappe
 names, first Save, and reconciliation. Row `piece_key` values are restored into the
 existing checkpoint owner's out-of-document WeakMap and retain row order.
@@ -133,8 +143,9 @@ deletion is likewise compare-and-delete against the revision and attempt shown t
 the user; a mismatch disables that card's actions instead of adopting an unseen
 revision behind the old summary, so the newer draft is retained for reopen.
 Continue also re-reads and matches the displayed revision/attempt before creating a
-session, and Continue/Delete lock every action on their card for the full async
-operation. Each checkpoint command compares the session's last persisted base revision,
+session, and each discovery choice locks all mutually exclusive dialog actions for
+the full async operation. Continue/Delete additionally retain their selected card's
+revision/attempt fence. Each checkpoint command compares the session's last persisted base revision,
 so accumulating multiple in-memory mutations cannot leapfrog another tab's newer
 record.
 Recovery infrastructure failure is logged/fail-safe and does not remove native
