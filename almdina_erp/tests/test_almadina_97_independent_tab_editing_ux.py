@@ -148,9 +148,9 @@ def test_each_tab_has_its_own_local_edit_save_cancel_toolbar():
     assert 'order_tab: "order"' in source
     assert 'results_tab: "plan"' in source
     assert 'cost_tab: "cost"' in source
-    assert 'anchor: "order_details_section"' in source
-    assert 'anchor: "plan_actions_section"' in source
-    assert 'anchor: "cost_settings_section"' in source
+    assert "function toolbarSlotHost(frm)" in source
+    assert "function ensureToolbarSlot(frm)" in source
+    assert "slot.replaceChildren(toolbar)" in source
     assert 'const EDIT_LABEL = "تعديل"' in source
     assert 'const SAVE_LABEL = "حفظ"' in source
     assert 'const CANCEL_LABEL = "إلغاء"' in source
@@ -158,7 +158,7 @@ def test_each_tab_has_its_own_local_edit_save_cancel_toolbar():
     assert 'dco-tab-edit-start' in source
     assert 'dco-tab-edit-save' in source
     assert 'dco-tab-edit-cancel' in source
-    assert '["order", "plan", "cost"].forEach((kind) => renderToolbar(frm, kind))' in source
+    assert "renderToolbar(frm, activeKind(frm));" in source
 
 
 def test_persisted_dco_no_longer_uses_global_primary_action_for_tab_editing():
