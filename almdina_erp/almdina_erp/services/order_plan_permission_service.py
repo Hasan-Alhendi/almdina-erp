@@ -18,6 +18,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     cutting_plan_capability_allowed,
     require_cutting_plan_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.optimization_mode_validation import (
+    require_executable_optimization_mode,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access import (
     require_stage_assignment_access,
 )
@@ -162,6 +165,7 @@ def _requested_optimizer_updates(
 ) -> dict[str, Any]:
     updates: dict[str, Any] = {}
     if packing_mode is not None:
+        require_executable_optimization_mode(packing_mode)
         updates["packing_mode"] = str(packing_mode).strip()
     if cutting_machine_type is not None:
         updates["cutting_machine_type"] = str(cutting_machine_type).strip()
@@ -215,6 +219,12 @@ def recalculate_order(
     name = str(order_name or "").strip()
     if not name:
         frappe.throw(_("يجب تحديد طلب القص."), frappe.ValidationError)
+    if packing_mode is not None:
+        # Validate the public choice before loading/mutating any plan. The normal
+        # workspace always sends its selected mode, so historical unavailable
+        # values receive the same clear choose-an-available-mode message.
+        require_executable_optimization_mode(packing_mode)
+
     order = frappe.get_doc("Door Cutting Order", name)
     order.check_permission("read")
     require_stage_assignment_access(order)
