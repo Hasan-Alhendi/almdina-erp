@@ -19,30 +19,52 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import (
     engine_mode_for_request,
     machine_type_catalog,
     optimization_catalog,
+    optimization_mode,
     public_mode_value,
     require_engine_mode,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
 
 
-EXPECTED_IDS = (
+EXPECTED_ACTIVE_IDS = (
     "auto",
     "auto_pro",
     "deep_search",
     "optimal",
+    "maxrects",
+    "guillotine",
+    "shelf",
+    "skyline",
+)
+EXPECTED_DISABLED_IDS = (
     "cp_sat_ortools",
     "mip_cbc",
     "scip",
     "highs",
     "gecode",
     "chuffed",
-    "maxrects",
-    "guillotine",
-    "shelf",
-    "skyline",
     "genetic",
     "simulated_annealing",
 )
+EXPECTED_IDS = EXPECTED_ACTIVE_IDS + EXPECTED_DISABLED_IDS
+EXPECTED_LABELS = {
+    "auto": "تلقائي",
+    "auto_pro": "تلقائي متقدم (موصى به)",
+    "deep_search": "بحث معمّق",
+    "optimal": "بحث أمثل",
+    "maxrects": "تعبئة المستطيلات القصوى",
+    "guillotine": "القص المقصلي",
+    "shelf": "التعبئة بالرفوف",
+    "skyline": "التعبئة بخط الأفق",
+    "cp_sat_ortools": "البرمجة بالقيود — CP-SAT",
+    "mip_cbc": "البرمجة الصحيحة المختلطة — CBC",
+    "scip": "محلّل SCIP",
+    "highs": "محلّل HiGHS",
+    "gecode": "محلّل القيود Gecode",
+    "chuffed": "محلّل القيود Chuffed",
+    "genetic": "الخوارزمية الجينية",
+    "simulated_annealing": "التلدين المُحاكى",
+}
 EXPECTED_IMPLEMENTED_MAPPINGS = {
     "auto": "Auto",
     "auto_pro": "Auto Pro",
@@ -52,16 +74,6 @@ EXPECTED_IMPLEMENTED_MAPPINGS = {
     "guillotine": "Guillotine Short Axis",
     "shelf": "Shelf Horizontal",
     "skyline": "Skyline Bottom Left",
-}
-EXPECTED_UNIMPLEMENTED_IDS = {
-    "cp_sat_ortools",
-    "mip_cbc",
-    "scip",
-    "highs",
-    "gecode",
-    "chuffed",
-    "genetic",
-    "simulated_annealing",
 }
 ROOT = Path(__file__).resolve().parents[1]
 PLAN_EDIT_SESSION = (
@@ -138,8 +150,21 @@ def test_canonical_catalog_contains_exactly_the_sixteen_story_ids() -> None:
 
     catalog = optimization_catalog()
     assert [entry["id"] for entry in catalog] == list(EXPECTED_IDS)
-    assert all(entry["available"] for entry in catalog)
-    assert {entry["id"] for entry in catalog if not entry["implemented"]} == EXPECTED_UNIMPLEMENTED_IDS
+    assert [entry["id"] for entry in catalog if entry["available"]] == list(
+        EXPECTED_ACTIVE_IDS
+    )
+    assert [entry["id"] for entry in catalog if not entry["available"]] == list(
+        EXPECTED_DISABLED_IDS
+    )
+    assert all(
+        entry["available"] == entry["implemented"] == entry["executable"]
+        for entry in catalog
+    )
+
+
+def test_all_public_algorithm_labels_are_canonical_arabic_labels() -> None:
+    catalog = optimization_catalog()
+    assert {entry["id"]: entry["label"] for entry in catalog} == EXPECTED_LABELS
 
 
 def test_current_engine_paths_are_mapped_without_optimizer_changes() -> None:
@@ -155,6 +180,21 @@ def test_current_engine_paths_are_mapped_without_optimizer_changes() -> None:
         assert engine_mode_for_request(engine_mode) == engine_mode
         assert public_mode_value(engine_mode) == public_id
         assert require_engine_mode(public_id) == engine_mode
+
+
+def test_cp_sat_remains_known_but_disabled_until_it_has_an_independent_contract() -> None:
+    mode = optimization_mode("cp_sat_ortools")
+    assert mode is not None
+    assert mode.engine_mode is None
+    assert mode.implemented is False
+    assert mode.executable is False
+    assert optimization_catalog()[len(EXPECTED_ACTIVE_IDS)]["id"] == "cp_sat_ortools"
+
+    with pytest.raises(
+        OptimizationModeUnavailableError,
+        match="optimization_mode_not_implemented:cp_sat_ortools",
+    ):
+        require_engine_mode("cp_sat_ortools")
 
 
 def test_advanced_modes_are_canonical_not_legacy() -> None:
@@ -198,7 +238,7 @@ def test_public_id_is_persisted_as_canonical_identifier() -> None:
     assert result.settings.optimization_mode == "auto_pro"
 
 
-def test_unimplemented_story_mode_is_selectable_and_persisted_but_fails_at_engine_boundary() -> None:
+def test_known_unavailable_mode_remains_persistable_for_history_but_is_not_executable() -> None:
     repository = FakePlanRepository()
     result = update_settings(
         UpdatePlanSettingsCommand(
@@ -210,6 +250,8 @@ def test_unimplemented_story_mode_is_selectable_and_persisted_but_fails_at_engin
     assert repository.saved is not None
     assert repository.saved.optimization_mode == "scip"
     assert result.settings.optimization_mode == "scip"
+    assert optimization_mode("scip") is not None
+    assert optimization_mode("scip").executable is False
 
     with pytest.raises(
         OptimizationModeUnavailableError,
@@ -231,7 +273,7 @@ def test_machine_types_share_one_domain_contract() -> None:
     ]
 
 
-def test_frontend_consumes_payload_catalog_instead_of_hardcoded_algorithm_list() -> None:
+def test_frontend_consumes_payload_catalog_and_blocks_disabled_modes() -> None:
     edit_source = PLAN_EDIT_SESSION.read_text(encoding="utf-8")
     controls_source = PLAN_CONTROLS.read_text(encoding="utf-8")
     factory_source = FACTORY_DIALOGS.read_text(encoding="utf-8")
@@ -240,6 +282,8 @@ def test_frontend_consumes_payload_catalog_instead_of_hardcoded_algorithm_list()
     assert 'catalog: "optimization_catalog"' in edit_source
     assert 'catalog: "machine_type_catalog"' in edit_source
     assert "data[catalogName]" in edit_source
+    assert 'option.available === false ? " disabled"' in edit_source
+    assert "selected.available === false" in edit_source
     assert "optimization_catalog" in factory_source
     assert "machine_type_catalog" in factory_source
     assert "require_engine_mode(selected_mode)" in adapter_source
@@ -252,3 +296,5 @@ def test_frontend_consumes_payload_catalog_instead_of_hardcoded_algorithm_list()
         assert 'value: "Auto Pro"' not in source
         assert 'value: "Deep Search"' not in source
         assert 'value: "Optimal Search"' not in source
+        for mode_id in EXPECTED_IDS:
+            assert f'value: "{mode_id}"' not in source
