@@ -33,6 +33,7 @@ let deleteDeferred = null;
 let deleteEntered = null;
 let discoveryDeferred = null;
 let identityFailure = null;
+let hydrationFailure = null;
 
 const repository = {
     createIdentity() {
@@ -214,6 +215,7 @@ const fakeFrappe = {
     model: {
         clear_table(doc, fieldname) { doc[fieldname] = []; },
         add_child(doc, doctype, fieldname) {
+            if (hydrationFailure) throw hydrationFailure;
             const row = { doctype, name: `new-detail-${doc[fieldname].length + 1}`, __islocal: 1 };
             doc[fieldname].push(row);
             return row;
@@ -445,6 +447,37 @@ function runCleanups(frm) {
     assert.equal(records.has(retainedFailSafeRecord.draft_id), true, "Start New still retains old drafts");
     assert.equal(chosenFailSafeForm.doc.recovery_creation_token, undefined);
     identityFailure = null;
+    fakeWindow.cur_frm = null;
+
+    const failedHydrationRecord = draft("46464646-4646-4646-8646-464646464646");
+    discoveredRecords = [failedHydrationRecord];
+    const failedHydrationForm = form("new-door-cutting-order-failed-hydration");
+    fakeWindow.cur_frm = failedHydrationForm;
+    await Recovery.LocalCheckpoint.initializeNewForm(failedHydrationForm);
+    const failedHydrationDialog = lastDialog;
+    let failedHydrationActions = [];
+    const failedHydrationCard = {
+        dataset: { draftId: failedHydrationRecord.draft_id },
+        querySelectorAll: () => failedHydrationActions,
+    };
+    const failedHydrationButton = {
+        disabled: false,
+        dataset: { recoveryAction: "continue" },
+        closest: () => failedHydrationCard,
+    };
+    failedHydrationActions = [failedHydrationButton];
+    hydrationFailure = new Error("Frappe row hydration failed");
+    failedHydrationDialog.listener({ target: { closest: () => failedHydrationButton } });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(Recovery.LocalCheckpoint.snapshot(failedHydrationForm), null);
+    assert.equal(failedHydrationForm.doc.recovery_creation_token, null);
+    assert.equal(failedHydrationDialog.visible, true, "failed hydration leaves discovery in control");
+    assert.equal(records.has(failedHydrationRecord.draft_id), true, "failed hydration retains the draft");
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(failedHydrationForm);
+    assert.equal(fakeFrappe.validated, false, "partially hydrated state cannot reach native Save");
+    hydrationFailure = null;
     fakeWindow.cur_frm = null;
 
     discoveredRecords = [];

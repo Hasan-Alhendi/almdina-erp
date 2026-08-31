@@ -67,6 +67,11 @@ does not depend on Frappe or `frm`. Normal
 mutation checkpoints are ignored while `RESTORING`; after completion the native
 form is dirty and normal editing resumes.
 
+If the hydration port throws or reports an incomplete restore, the provisional
+session and Save observer are disposed, its creation token is cleared, and the
+discovery dialog retains Save ownership. The local record is retained and a
+partially hydrated form cannot enter official Save.
+
 Plan workspace drafts, Cost workspace drafts, canonical plan objects, previews,
 invoice output, workflow fields, and derived totals are rejected at this boundary.
 No Save or network command is issued by hydration. Invalid/corrupt records fail

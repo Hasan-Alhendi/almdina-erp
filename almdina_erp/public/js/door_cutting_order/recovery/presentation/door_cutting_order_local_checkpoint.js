@@ -482,6 +482,17 @@
         return api.reconcileNewCreation(record.draft_id);
     }
 
+    function discardFailedHydration(frm, state) {
+        const draftId = state.session.snapshot().draft_id;
+        state.session.dispose();
+        if (states.get(frm) !== state) return;
+        states.delete(frm);
+        restoreSaveObserver(frm);
+        if (frm.doc && frm.doc.recovery_creation_token === draftId) {
+            frm.doc.recovery_creation_token = null;
+        }
+    }
+
     async function continueDraft(frm, record) {
         const repo = repository();
         const isCurrent = activeDocumentGuard(frm);
@@ -519,11 +530,20 @@
         if (!isCurrent()) return { cancelled: true };
         const state = createState(frm, { record: selected });
         if (!state) throw new Error("Recovery session is unavailable");
-        const hydration = await root.NewRecovery.hydrate(selected, {
-            session: state.session,
-            hydrationPort: (dco) => hydrateNewProjection(frm, state, dco, isCurrent),
-        });
-        if (!hydration.restored || !isCurrent()) return { cancelled: true };
+        let hydration;
+        try {
+            hydration = await root.NewRecovery.hydrate(selected, {
+                session: state.session,
+                hydrationPort: (dco) => hydrateNewProjection(frm, state, dco, isCurrent),
+            });
+        } catch (error) {
+            discardFailedHydration(frm, state);
+            throw error;
+        }
+        if (!hydration.restored || !isCurrent()) {
+            discardFailedHydration(frm, state);
+            return { cancelled: true };
+        }
         const dialog = dialogs.get(frm);
         if (dialog && typeof dialog.hide === "function") dialog.hide();
         dialogs.delete(frm);

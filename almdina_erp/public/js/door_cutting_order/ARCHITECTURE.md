@@ -92,6 +92,9 @@ explicitly saves again; frozen conflicted cards remain displayed discovery owner
 even when no actionable card remains. If no recovery session or dialog can be
 established, native explicit Save remains fail-safe available; a failed explicit
 Start New choice does not reopen discovery or delete retained drafts.
+If hydration fails or reports incomplete, the provisional session and Save observer
+are disposed, the creation token is cleared, and the discovery dialog retains Save
+ownership without deleting the local draft.
 The fail-open marker/checkpoint-storage path carries the retained ACTIVE attempt and
 persisted `saved_revision` fences, which are replaced only when a new pending marker
 is durably returned. The retained timestamp is cleanup evidence only; pending-state

@@ -262,6 +262,8 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
         self.assertIn('frappe.model.clear_table(frm.doc, "pieces")', presentation)
         self.assertIn("frappe.model.add_child(", presentation)
         self.assertIn("hydrateNewProjection", presentation)
+        self.assertIn("function discardFailedHydration(frm, state)", presentation)
+        self.assertIn("discardFailedHydration(frm, state);", presentation)
         self.assertIn("AlmdinaDoorCuttingFastEntry", presentation)
         self.assertIn("AlmdinaFastEntryKeyboardUX", presentation)
         self.assertNotIn("AlmdinaPlanWorkspaceState", application)
